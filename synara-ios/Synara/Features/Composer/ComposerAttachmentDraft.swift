@@ -24,13 +24,28 @@ struct ComposerAttachmentDraft: Identifiable, Equatable {
     var isImage: Bool {
         mimeType.hasPrefix("image/")
     }
+
+    var isVideo: Bool {
+        mimeType.hasPrefix("video/")
+    }
+
+    var previewSystemImage: String {
+        if isImage {
+            return "photo"
+        }
+        if isVideo {
+            return "film"
+        }
+        return "doc"
+    }
 }
 
-enum ComposerAttachmentDraftRejection: Equatable {
+enum ComposerAttachmentDraftRejection: Error, Equatable {
     case empty
     case tooLarge
     case unsupportedType
     case limitReached
+    case couldNotLoad
 }
 
 struct ComposerAttachmentDraftAddOutcome: Equatable {
@@ -47,6 +62,14 @@ enum ComposerAttachmentDraftList {
     static func canSend(text: String, drafts: [ComposerAttachmentDraft]) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty == false || drafts.isEmpty == false
+    }
+
+    static func canBeginSend(
+        isSending: Bool,
+        text: String,
+        drafts: [ComposerAttachmentDraft]
+    ) -> Bool {
+        isSending == false && canSend(text: text, drafts: drafts)
     }
 
     static func remove(
@@ -100,7 +123,37 @@ enum ComposerAttachmentDraftList {
     }
 
     static func isAllowedMimeType(_ mimeType: String) -> Bool {
-        mimeType.hasPrefix("image/") || mimeType.hasPrefix("video/")
+        mimeType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
+
+    static func draft(fromFileURL url: URL) -> Result<ComposerAttachmentDraft, ComposerAttachmentDraftRejection> {
+        let didAccess = url.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                url.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            if let fileSize = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize,
+               fileSize > maxBytesPerItem {
+                return .failure(.tooLarge)
+            }
+
+            let data = try Data(contentsOf: url)
+            let draft = ComposerAttachmentDraft(
+                displayName: MediaAttachmentSupport.displayName(for: url),
+                mimeType: MediaAttachmentSupport.mimeType(for: url),
+                data: data,
+                source: .file
+            )
+            if let rejection = validate(draft, against: []) {
+                return .failure(rejection)
+            }
+            return .success(draft)
+        } catch {
+            return .failure(.couldNotLoad)
+        }
     }
 
     static func userMessage(for rejection: ComposerAttachmentDraftRejection) -> String {
@@ -112,7 +165,9 @@ enum ComposerAttachmentDraftList {
         case .unsupportedType:
             return "This file type cannot be attached."
         case .limitReached:
-            return "You can attach up to \(maxCount) images."
+            return "You can attach up to \(maxCount) attachments."
+        case .couldNotLoad:
+            return "Attachment could not be loaded. Try again."
         }
     }
 }

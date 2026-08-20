@@ -241,6 +241,7 @@ struct RoomTimelineView: View {
     @State private var viewerResource: MediaResource?
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachmentDrafts: [ComposerAttachmentDraft] = []
+    @State private var isSendingMessage = false
     @State private var agentActionMessage: String?
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
@@ -324,8 +325,8 @@ struct RoomTimelineView: View {
                 sendError: sendError,
                 onCancelRelation: clearComposerRelation,
                 onSend: sendMessage,
-                onMockMediaUpload: draftOrUploadMockMedia,
-                onFileURL: uploadPickedFile,
+                onMockMediaUpload: draftMockMedia,
+                onFileURL: draftPickedFile,
                 onCameraImage: draftCameraImage,
                 onUploadFailed: { message in
                     uploadState = .failed(message)
@@ -333,6 +334,7 @@ struct RoomTimelineView: View {
                 onOpenStickers: { isStickerPackPresented = true },
                 selectedPhotos: $selectedPhotos,
                 attachmentDrafts: $attachmentDrafts,
+                isSending: isSendingMessage,
                 onPasteImages: draftPastedImages,
                 isFocusedExternally: $isComposerFocused
             )
@@ -1084,6 +1086,7 @@ struct RoomTimelineView: View {
         viewerResource = nil
         selectedPhotos = []
         attachmentDrafts = []
+        isSendingMessage = false
         agentActionMessage = nil
         cryptoStatus = .unknown
         cryptoActionMessage = nil
@@ -1481,14 +1484,22 @@ struct RoomTimelineView: View {
     private func sendMessage(body rawBody: String) {
         let trimmed = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         let drafts = attachmentDrafts
-        guard ComposerAttachmentDraftList.canSend(text: trimmed, drafts: drafts) else {
-            sendError = MessageSendError.emptyMessage.localizedDescription
+        guard ComposerAttachmentDraftList.canBeginSend(
+            isSending: isSendingMessage,
+            text: trimmed,
+            drafts: drafts
+        ) else {
+            if isSendingMessage == false {
+                sendError = MessageSendError.emptyMessage.localizedDescription
+            }
             return
         }
 
         sendError = nil
+        isSendingMessage = true
         if drafts.isEmpty {
             performSend(body: rawBody, replyToEventID: replyTarget?.eventID, editEventID: editTarget?.eventID)
+            isSendingMessage = false
             return
         }
 
@@ -1509,19 +1520,19 @@ struct RoomTimelineView: View {
                     append(item)
                 }
             )
-            guard uploaded else {
-                return
-            }
-            if trimmed.isEmpty == false {
-                performSend(
-                    body: rawBody,
-                    replyToEventID: replyTarget?.eventID,
-                    editEventID: editTarget?.eventID
-                )
-            } else {
-                await MainActor.run {
-                    uploadState = .idle
+            await MainActor.run {
+                if uploaded {
+                    if trimmed.isEmpty == false {
+                        performSend(
+                            body: rawBody,
+                            replyToEventID: replyTarget?.eventID,
+                            editEventID: editTarget?.eventID
+                        )
+                    } else {
+                        uploadState = .idle
+                    }
                 }
+                isSendingMessage = false
             }
         }
     }
@@ -1688,112 +1699,40 @@ struct RoomTimelineView: View {
         state = .loaded(withoutPending + [confirmed], isPaginating: isPaginating)
     }
 
-    private func draftOrUploadMockMedia(source: MediaUploadSource) {
+    private func draftMockMedia(source: MediaUploadSource) {
+        let draft: ComposerAttachmentDraft
         switch source {
-        case .file:
-            uploadMockMedia(source: source)
-        case .photoLibrary, .camera:
-            let displayName = source == .camera ? "synara-camera.jpg" : "synara-upload.jpg"
-            let data = source == .camera
-                ? Data("Synara test camera image".utf8)
-                : Data("Synara test image".utf8)
-            applyIncomingDrafts([
-                ComposerAttachmentDraft(
-                    displayName: displayName,
-                    mimeType: "image/jpeg",
-                    data: data,
-                    source: source
-                )
-            ])
-        }
-    }
-
-    private func uploadMockMedia(source: MediaUploadSource) {
-        uploadState = .uploading(progress: 0.5)
-        Task {
-            let signpostID = PerformanceTrace.begin("MediaUpload")
-            defer {
-                PerformanceTrace.end("MediaUpload", id: signpostID)
-            }
-            let displayName: String
-            let mimeType: String
-            let data: Data
-            switch source {
-            case .photoLibrary:
-                displayName = "synara-upload.jpg"
-                mimeType = "image/jpeg"
-                data = Data("Synara test image".utf8)
-            case .file:
-                displayName = "synara-upload.pdf"
-                mimeType = "application/pdf"
-                data = Data("Synara test file".utf8)
-            case .camera:
-                displayName = "synara-camera.jpg"
-                mimeType = "image/jpeg"
-                data = Data("Synara test camera image".utf8)
-            }
-            let result = await environment.mediaUploader.upload(
-                MediaUploadRequest(
-                    roomID: roomID,
-                    source: source,
-                    displayName: displayName,
-                    data: data,
-                    mimeType: mimeType
-                )
+        case .photoLibrary:
+            draft = ComposerAttachmentDraft(
+                displayName: "synara-upload.jpg",
+                mimeType: "image/jpeg",
+                data: Data("Synara test image".utf8),
+                source: source
             )
-            await MainActor.run {
-                uploadState = result
-                if case let .uploaded(item) = result {
-                    append(item)
-                }
-            }
+        case .file:
+            draft = ComposerAttachmentDraft(
+                displayName: "synara-upload.pdf",
+                mimeType: "application/pdf",
+                data: Data("Synara test file".utf8),
+                source: source
+            )
+        case .camera:
+            draft = ComposerAttachmentDraft(
+                displayName: "synara-camera.jpg",
+                mimeType: "image/jpeg",
+                data: Data("Synara test camera image".utf8),
+                source: source
+            )
         }
+        applyIncomingDrafts([draft])
     }
 
-    private func uploadPickedFile(_ url: URL) {
-        uploadState = .uploading(progress: 0.25)
-        Task {
-            let signpostID = PerformanceTrace.begin("FilePickerUpload")
-            defer {
-                PerformanceTrace.end("FilePickerUpload", id: signpostID)
-            }
-
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if didAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            do {
-                let data = try Data(contentsOf: url)
-                guard data.isEmpty == false else {
-                    await MainActor.run {
-                        uploadState = .failed("Attachment is empty.")
-                    }
-                    return
-                }
-
-                let result = await environment.mediaUploader.upload(
-                    MediaUploadRequest(
-                        roomID: roomID,
-                        source: .file,
-                        displayName: MediaAttachmentSupport.displayName(for: url),
-                        data: data,
-                        mimeType: MediaAttachmentSupport.mimeType(for: url)
-                    )
-                )
-                await MainActor.run {
-                    uploadState = result
-                    if case let .uploaded(item) = result {
-                        append(item)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
-                }
-            }
+    private func draftPickedFile(_ url: URL) {
+        switch ComposerAttachmentDraftList.draft(fromFileURL: url) {
+        case let .success(draft):
+            applyIncomingDrafts([draft])
+        case let .failure(rejection):
+            uploadState = .failed(ComposerAttachmentDraftList.userMessage(for: rejection))
         }
     }
 
@@ -1876,6 +1815,9 @@ struct RoomTimelineView: View {
     }
 
     private func applyIncomingDrafts(_ incoming: [ComposerAttachmentDraft]) {
+        guard isSendingMessage == false else {
+            return
+        }
         let outcome = ComposerAttachmentDraftList.appending(incoming, to: attachmentDrafts)
         attachmentDrafts = outcome.drafts
         if let rejection = outcome.rejection {
@@ -2775,6 +2717,7 @@ struct ThreadTimelineView: View {
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachmentDrafts: [ComposerAttachmentDraft] = []
+    @State private var isSendingMessage = false
     @State private var isComposerFocused = false
     @State private var threadUpdatesTask: Task<Void, Never>?
 
@@ -2798,14 +2741,15 @@ struct ThreadTimelineView: View {
                 sendError: sendError,
                 onCancelRelation: {},
                 onSend: sendThreadReply,
-                onMockMediaUpload: draftOrUploadMockThreadAttachment,
-                onFileURL: uploadThreadFile,
+                onMockMediaUpload: draftMockThreadAttachment,
+                onFileURL: draftThreadFile,
                 onCameraImage: draftThreadCameraImage,
                 onUploadFailed: { message in
                     uploadState = .failed(message)
                 },
                 selectedPhotos: $selectedPhotos,
                 attachmentDrafts: $attachmentDrafts,
+                isSending: isSendingMessage,
                 onPasteImages: draftThreadPastedImages,
                 isFocusedExternally: $isComposerFocused
             )
@@ -2920,16 +2864,24 @@ struct ThreadTimelineView: View {
     private func sendThreadReply(body rawBody: String) {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         let drafts = attachmentDrafts
-        guard ComposerAttachmentDraftList.canSend(text: body, drafts: drafts) else {
-            sendError = MessageSendError.emptyMessage.localizedDescription
+        guard ComposerAttachmentDraftList.canBeginSend(
+            isSending: isSendingMessage,
+            text: body,
+            drafts: drafts
+        ) else {
+            if isSendingMessage == false {
+                sendError = MessageSendError.emptyMessage.localizedDescription
+            }
             return
         }
 
         sendError = nil
+        isSendingMessage = true
         Task {
+            var uploaded = true
             if drafts.isEmpty == false {
                 let uploadSignpostID = PerformanceTrace.begin("ThreadComposerAttachmentDraftSend")
-                let uploaded = await ComposerAttachmentSend.uploadAll(
+                uploaded = await ComposerAttachmentSend.uploadAll(
                     drafts,
                     roomID: roomID,
                     uploader: environment.mediaUploader,
@@ -2942,14 +2894,19 @@ struct ThreadTimelineView: View {
                     }
                 )
                 PerformanceTrace.end("ThreadComposerAttachmentDraftSend", id: uploadSignpostID)
-                guard uploaded else {
-                    return
+            }
+
+            guard uploaded else {
+                await MainActor.run {
+                    isSendingMessage = false
                 }
+                return
             }
 
             guard body.isEmpty == false else {
                 await MainActor.run {
                     uploadState = .idle
+                    isSendingMessage = false
                 }
                 return
             }
@@ -2971,79 +2928,48 @@ struct ThreadTimelineView: View {
                 await MainActor.run {
                     draft = ""
                     append(item)
+                    isSendingMessage = false
                 }
             } catch let error as MessageSendError {
                 await MainActor.run {
                     sendError = error.localizedDescription
+                    isSendingMessage = false
                 }
             } catch {
                 await MainActor.run {
                     sendError = MessageSendError.failed.localizedDescription
+                    isSendingMessage = false
                 }
             }
         }
     }
 
-    private func draftOrUploadMockThreadAttachment(source: MediaUploadSource) {
+    private func draftMockThreadAttachment(source: MediaUploadSource) {
+        let draft: ComposerAttachmentDraft
         switch source {
-        case .file:
-            uploadMockThreadAttachment(source: source)
-        case .photoLibrary, .camera:
-            let displayName = source == .camera ? "thread-camera.jpg" : "thread-attachment.jpg"
-            let data = source == .camera
-                ? Data("Synara thread camera image".utf8)
-                : Data("Synara thread attachment".utf8)
-            applyThreadIncomingDrafts([
-                ComposerAttachmentDraft(
-                    displayName: displayName,
-                    mimeType: "image/jpeg",
-                    data: data,
-                    source: source
-                )
-            ])
-        }
-    }
-
-    private func uploadMockThreadAttachment(source: MediaUploadSource) {
-        uploadState = .uploading(progress: 0.5)
-        Task {
-            let signpostID = PerformanceTrace.begin("ThreadMediaUpload")
-            defer {
-                PerformanceTrace.end("ThreadMediaUpload", id: signpostID)
-            }
-            let displayName: String
-            let mimeType: String
-            let data: Data
-            switch source {
-            case .photoLibrary:
-                displayName = "thread-attachment.jpg"
-                mimeType = "image/jpeg"
-                data = Data("Synara thread attachment".utf8)
-            case .file:
-                displayName = "thread-attachment.pdf"
-                mimeType = "application/pdf"
-                data = Data("Synara thread file".utf8)
-            case .camera:
-                displayName = "thread-camera.jpg"
-                mimeType = "image/jpeg"
-                data = Data("Synara thread camera image".utf8)
-            }
-            let result = await environment.mediaUploader.upload(
-                MediaUploadRequest(
-                    roomID: roomID,
-                    source: source,
-                    displayName: displayName,
-                    data: data,
-                    mimeType: mimeType
-                )
+        case .photoLibrary:
+            draft = ComposerAttachmentDraft(
+                displayName: "thread-attachment.jpg",
+                mimeType: "image/jpeg",
+                data: Data("Synara thread attachment".utf8),
+                source: source
             )
-            await MainActor.run {
-                uploadState = result
-                if case let .uploaded(item) = result {
-                    append(item)
-                }
-            }
+        case .file:
+            draft = ComposerAttachmentDraft(
+                displayName: "thread-attachment.pdf",
+                mimeType: "application/pdf",
+                data: Data("Synara thread file".utf8),
+                source: source
+            )
+        case .camera:
+            draft = ComposerAttachmentDraft(
+                displayName: "thread-camera.jpg",
+                mimeType: "image/jpeg",
+                data: Data("Synara thread camera image".utf8),
+                source: source
+            )
         }
+        applyThreadIncomingDrafts([draft])
     }
 
     private func draftThreadPickedPhotos(_ items: [PhotosPickerItem]) {
@@ -3084,6 +3010,9 @@ struct ThreadTimelineView: View {
     }
 
     private func applyThreadIncomingDrafts(_ incoming: [ComposerAttachmentDraft]) {
+        guard isSendingMessage == false else {
+            return
+        }
         let outcome = ComposerAttachmentDraftList.appending(incoming, to: attachmentDrafts)
         attachmentDrafts = outcome.drafts
         if let rejection = outcome.rejection {
@@ -3093,50 +3022,12 @@ struct ThreadTimelineView: View {
         }
     }
 
-    private func uploadThreadFile(_ url: URL) {
-        uploadState = .uploading(progress: 0.25)
-        Task {
-            let signpostID = PerformanceTrace.begin("ThreadFilePickerUpload")
-            defer {
-                PerformanceTrace.end("ThreadFilePickerUpload", id: signpostID)
-            }
-
-            let didAccess = url.startAccessingSecurityScopedResource()
-            defer {
-                if didAccess {
-                    url.stopAccessingSecurityScopedResource()
-                }
-            }
-
-            do {
-                let data = try Data(contentsOf: url)
-                guard data.isEmpty == false else {
-                    await MainActor.run {
-                        uploadState = .failed("Attachment is empty.")
-                    }
-                    return
-                }
-
-                let result = await environment.mediaUploader.upload(
-                    MediaUploadRequest(
-                        roomID: roomID,
-                        source: .file,
-                        displayName: MediaAttachmentSupport.displayName(for: url),
-                        data: data,
-                        mimeType: MediaAttachmentSupport.mimeType(for: url)
-                    )
-                )
-                await MainActor.run {
-                    uploadState = result
-                    if case let .uploaded(item) = result {
-                        append(item)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    uploadState = .failed("Attachment could not be loaded. Try again.")
-                }
-            }
+    private func draftThreadFile(_ url: URL) {
+        switch ComposerAttachmentDraftList.draft(fromFileURL: url) {
+        case let .success(draft):
+            applyThreadIncomingDrafts([draft])
+        case let .failure(rejection):
+            uploadState = .failed(ComposerAttachmentDraftList.userMessage(for: rejection))
         }
     }
 
@@ -5111,6 +5002,7 @@ private struct ComposerView: View {
     var onOpenStickers: (() -> Void)? = nil
     @Binding var selectedPhotos: [PhotosPickerItem]
     @Binding var attachmentDrafts: [ComposerAttachmentDraft]
+    var isSending = false
     #if canImport(UIKit)
         var onPasteImages: ([UIImage]) -> Void = { _ in }
     #endif
@@ -5180,6 +5072,7 @@ private struct ComposerView: View {
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
+                .disabled(isSending)
                 .accessibilityLabel("Attach")
                 .accessibilityIdentifier("AttachmentButton")
 
@@ -5241,8 +5134,13 @@ private struct ComposerView: View {
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
+                    .disabled(isSending)
                     .accessibilityLabel("Send")
-                    .accessibilityHint("Sends the current message and attachments")
+                    .accessibilityHint(
+                        isSending
+                            ? "Sending the current message and attachments"
+                            : "Sends the current message and attachments"
+                    )
                     .accessibilityIdentifier("ComposerSendButton")
                 }
             }
@@ -5284,10 +5182,18 @@ private struct ComposerView: View {
                 },
                 onFile: {
                     isAttachmentSheetPresented = false
+                    guard remainingAttachmentSlots > 0 else {
+                        onUploadFailed(ComposerAttachmentDraftList.userMessage(for: .limitReached))
+                        return
+                    }
                     isFileImporterPresented = true
                 },
                 onCamera: {
                     isAttachmentSheetPresented = false
+                    guard remainingAttachmentSlots > 0 else {
+                        onUploadFailed(ComposerAttachmentDraftList.userMessage(for: .limitReached))
+                        return
+                    }
                     #if canImport(UIKit)
                         if CameraCaptureSupport.isAvailable {
                             isCameraPresented = true
@@ -5314,7 +5220,7 @@ private struct ComposerView: View {
         ) { result in
             switch result {
             case let .success(urls):
-                guard let url = urls.first else {
+                guard isSending == false, let url = urls.first else {
                     return
                 }
                 onFileURL(url)
@@ -5339,7 +5245,7 @@ private struct ComposerView: View {
     }
 
     private var sendButtonTint: Color {
-        canSubmit ? SynaraColor.accent : SynaraColor.secondarySurface
+        canSubmit && isSending == false ? SynaraColor.accent : SynaraColor.secondarySurface
     }
 
     private var canSubmit: Bool {
@@ -5354,7 +5260,10 @@ private struct ComposerView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: SynaraSpacing.small) {
                 ForEach(attachmentDrafts) { draft in
-                    ComposerAttachmentDraftChip(draft: draft) {
+                    ComposerAttachmentDraftChip(draft: draft, isSending: isSending) {
+                        guard isSending == false else {
+                            return
+                        }
                         attachmentDrafts = ComposerAttachmentDraftList.remove(
                             id: draft.id,
                             from: attachmentDrafts
@@ -5448,6 +5357,9 @@ private struct ComposerView: View {
     }
 
     private func submitMessage() {
+        guard isSending == false else {
+            return
+        }
         #if canImport(UIKit)
             ComposerTextInputRegistry.dismissKeyboard()
         #endif
@@ -5569,6 +5481,9 @@ private struct AttachmentOptionsSheet: View {
             }
         case .file:
             Button {
+                if maxSelectionCount == 0 {
+                    return
+                }
                 if isUITestEnvironment {
                     onMockMediaUpload(.file)
                 } else {
@@ -5578,9 +5493,14 @@ private struct AttachmentOptionsSheet: View {
                 AttachmentOptionLabel(option: option)
             }
             .buttonStyle(.plain)
+            .disabled(maxSelectionCount == 0)
+            .opacity(maxSelectionCount == 0 ? 0.45 : 1)
             .accessibilityIdentifier("AttachmentOption-\(option.title)")
         case .camera:
             Button {
+                if maxSelectionCount == 0 {
+                    return
+                }
                 if isUITestEnvironment {
                     onMockMediaUpload(.camera)
                 } else {
@@ -5590,6 +5510,8 @@ private struct AttachmentOptionsSheet: View {
                 AttachmentOptionLabel(option: option)
             }
             .buttonStyle(.plain)
+            .disabled(maxSelectionCount == 0)
+            .opacity(maxSelectionCount == 0 ? 0.45 : 1)
             .accessibilityIdentifier("AttachmentOption-\(option.title)")
         }
     }
@@ -5597,6 +5519,7 @@ private struct AttachmentOptionsSheet: View {
 
 private struct ComposerAttachmentDraftChip: View {
     let draft: ComposerAttachmentDraft
+    var isSending = false
     let onRemove: () -> Void
 
     var body: some View {
@@ -5609,6 +5532,7 @@ private struct ComposerAttachmentDraftChip: View {
                         .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
                         .allowsHitTesting(false)
                 )
+                .accessibilityLabel(draft.displayName)
 
             Button(action: onRemove) {
                 Image(systemName: "xmark.circle.fill")
@@ -5617,6 +5541,7 @@ private struct ComposerAttachmentDraftChip: View {
                     .foregroundStyle(Color.white, Color.black.opacity(0.72))
             }
             .buttonStyle(.plain)
+            .disabled(isSending)
             .offset(x: 6, y: -6)
             .accessibilityLabel("Remove \(draft.displayName)")
             .accessibilityIdentifier("ComposerAttachmentDraftRemove-\(draft.displayName)")
@@ -5643,7 +5568,7 @@ private struct ComposerAttachmentDraftChip: View {
     private var placeholder: some View {
         ZStack {
             SynaraColor.secondarySurface
-            Image(systemName: draft.isImage ? "photo" : "film")
+            Image(systemName: draft.previewSystemImage)
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundStyle(SynaraColor.secondaryText)
         }
