@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2.1.3 - 2026-08-20
+
+- Completed the native SAS device-verification path: incoming requests stay
+  on the app chrome, Confirm waits for emoji or decimal codes, and trust
+  refreshes without a restart. iOS cannot swipe away an in-progress SAS
+  sheet, and Security settings hide Verify This Device once verified.
+- Tightened desktop chrome so the chat pane matches the rest of the window,
+  title-cased Rooms, and made Favorites and Rooms sort independently.
+- Removed Twitter Emoji from Appearance, showed the real theme accent
+  instead of unused mint, and held Connection Lost until Offline lasts.
+- Jump to latest stays available until the loaded window is the live tail.
+- See [`docs/releases/v2.1.3.md`](docs/releases/v2.1.3.md) for details.
+
 ## 2.1.2 - 2026-08-20
 
 - Highlighted fenced chat code with Prism tokens, a matching line-number

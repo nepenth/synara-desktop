@@ -1,0 +1,12 @@
+Synara 2.1.3 completes live SAS device verification and polishes room lists, Appearance, and Jump to latest.
+
+What to test:
+- Upgrade from 2.1.2 and confirm your session restores without another login.
+- Start Verify This Device from Security, compare emoji or numbers with another verified client, confirm both sides, and confirm this device shows Verified without leaving Settings.
+- Incoming verification while you are in a room: the sheet must appear; do not swipe it away until you confirm or cancel.
+- Favorite a room and sort Favorites by name while Rooms stays on recent (and the reverse).
+- Open Appearance: Accent Color should match buttons/links (not mint). Twitter Emoji should be gone.
+- In a room with unread history, confirm Jump to latest is available and lands on new messages.
+- Sign out, relaunch, and sign in again.
+
+Please report the room type, action, and approximate time for any verification, sort, theme, or timeline issue. Do not include access tokens or recovery keys.
