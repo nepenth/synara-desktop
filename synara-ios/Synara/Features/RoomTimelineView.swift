@@ -3172,6 +3172,14 @@ private struct ThreadMessageRow: View {
             Divider()
                 .padding(.leading, 46)
         }
+        .contextMenu {
+            if let copyText = TimelineMessageCopy.payload(for: item) {
+                Button("Copy") {
+                    TimelineMessageCopy.copyToPasteboard(copyText)
+                }
+                .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+            }
+        }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("ThreadItem-\(item.eventID)")
     }
@@ -3183,6 +3191,7 @@ private struct ThreadMessageRow: View {
             Text(body)
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.primaryText)
+                .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case let .formattedText(body, html):
             MatrixFormattedMessageView(fallbackBody: body, html: html, font: SynaraTypography.messageBody)
@@ -3250,6 +3259,7 @@ private struct MatrixFormattedMessageView: View {
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
             .lineLimit(nil)
+            .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
     }
@@ -3271,6 +3281,7 @@ private struct MatrixQuoteBlockView: View {
             .font(font)
             .foregroundStyle(SynaraColor.secondaryText)
             .lineLimit(nil)
+            .textSelection(.enabled)
             .fixedSize(horizontal: false, vertical: true)
             .padding(.leading, SynaraSpacing.medium)
             .overlay(alignment: .leading) {
@@ -4083,6 +4094,12 @@ private struct TimelineRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
         .contextMenu {
+            if let copyText = TimelineMessageCopy.payload(for: item) {
+                Button("Copy") {
+                    TimelineMessageCopy.copyToPasteboard(copyText)
+                }
+                .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+            }
             if availability.canReply {
                 Button("Reply", action: onReply)
             }
@@ -4104,19 +4121,8 @@ private struct TimelineRow: View {
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
 
-        let animatedRow = row
+        row
             .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
-
-        if item.deliveryStatus == .failed {
-            Button(action: onRetryFailedSend) {
-                animatedRow
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Tap to retry sending this message")
-            .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
-        } else {
-            animatedRow
-        }
     }
 
     @ViewBuilder
@@ -4183,7 +4189,9 @@ private struct TimelineRow: View {
                     text: body,
                     alignment: bubbleAlignment,
                     isGrouped: isGroupedWithPrevious,
-                    deliveryStatus: item.deliveryStatus
+                    deliveryStatus: item.deliveryStatus,
+                    onRetryFailedSend: onRetryFailedSend,
+                    retryAccessibilityIdentifier: "TimelineItemRetry-\(item.eventID)"
                 )
             case let .formattedText(body, html):
                 SynaraMessageBubble(
@@ -4191,7 +4199,9 @@ private struct TimelineRow: View {
                     variant: .standard,
                     isGrouped: isGroupedWithPrevious,
                     showsBackground: false,
-                    deliveryStatus: item.deliveryStatus
+                    deliveryStatus: item.deliveryStatus,
+                    onRetryFailedSend: onRetryFailedSend,
+                    retryAccessibilityIdentifier: "TimelineItemRetry-\(item.eventID)"
                 ) {
                     MatrixFormattedMessageView(
                         fallbackBody: body,

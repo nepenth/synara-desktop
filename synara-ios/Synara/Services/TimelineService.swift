@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 enum TimelineSearchFilter {
     static func searchableText(for item: TimelineItem) -> String {
@@ -169,6 +172,21 @@ struct TimelineItem: Identifiable, Equatable {
             reactions: [:],
             deliveryStatus: deliveryStatus
         )
+    }
+}
+
+enum TimelineMessageCopy {
+    static func payload(for item: TimelineItem) -> String? {
+        guard let body = TimelinePendingReconciler.messageBody(for: item), body.isEmpty == false else {
+            return nil
+        }
+        return body
+    }
+
+    static func copyToPasteboard(_ text: String) {
+        #if canImport(UIKit)
+            UIPasteboard.general.string = text
+        #endif
     }
 }
 
