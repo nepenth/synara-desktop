@@ -265,8 +265,7 @@ final class ComposerPasteTextView: UITextView {
     }
 
     private func pasteboardImages() -> [UIImage] {
-        let images = UIPasteboard.general.images
-        if images.isEmpty == false {
+        if let images = UIPasteboard.general.images, images.isEmpty == false {
             return images
         }
         if let image = UIPasteboard.general.image {
