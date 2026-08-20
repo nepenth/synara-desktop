@@ -309,11 +309,30 @@ private struct NotificationSettingsView: View {
 }
 
 private struct AppearanceSettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @State private var baseColor = Color(synaraHex: SynaraThemeRamp.defaultBaseHex)
+    @State private var hasCustomBaseColor = false
+    @State private var didLoadBaseColor = false
+
     var body: some View {
         Form {
             Section("Theme") {
                 SettingsInfoRow(title: "Appearance", value: "System")
                     .accessibilityIdentifier("AppearanceThemeRow")
+                ColorPicker("Base Color", selection: $baseColor, supportsOpacity: false)
+                    .accessibilityIdentifier("AppearanceBaseColorPicker")
+                    .onChange(of: baseColor) { newValue in
+                        guard didLoadBaseColor else { return }
+                        persistBaseColor(newValue.synaraHexString())
+                    }
+                Button("Reset Base Color") {
+                    persistBaseColor(nil)
+                    baseColor = Color(synaraHex: SynaraThemeRamp.defaultBaseHex)
+                }
+                .disabled(hasCustomBaseColor == false)
+                .accessibilityIdentifier("AppearanceBaseColorReset")
+            } footer: {
+                Text("Tint sidebar, room list, and chat surfaces. Darker and lighter ramps are derived from this color.")
             }
             Section {
                 SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
@@ -327,6 +346,21 @@ private struct AppearanceSettingsView: View {
         .settingsTabBarClearance()
         .navigationTitle("Appearance")
         .accessibilityIdentifier("AppearanceSettingsScreen")
+        .onAppear {
+            let stored = environment.settings.string(for: SynaraThemeRamp.storageKey)
+            hasCustomBaseColor = stored != nil
+            baseColor = Color(synaraHex: SynaraThemeRamp.resolve(stored))
+            DispatchQueue.main.async {
+                didLoadBaseColor = true
+            }
+        }
+    }
+
+    private func persistBaseColor(_ hex: String?) {
+        let normalized = SynaraThemeRamp.normalize(hex)
+        environment.settings.setString(normalized, for: SynaraThemeRamp.storageKey)
+        SynaraThemeRamp.persist(normalized)
+        hasCustomBaseColor = normalized != nil
     }
 }
 

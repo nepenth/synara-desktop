@@ -73,6 +73,7 @@
 		56E15BC20C25F32A6D25BA18 /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */; };
 		5A36E29F3977C4EC325B3449 /* SharedCoreEditMessage.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7F1E8B46A978F812C97EE0D /* SharedCoreEditMessage.swift */; };
 		5B00A849754CCEB409B6544E /* SynaraCoreBindingsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */; };
+		7E2B80B1C3D54A6F70891B2C /* SynaraThemeRampTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F3A91C2D4E65B70819A2C3D /* SynaraThemeRampTests.swift */; };
 		5CD57F32E8A5C70A06AF5877 /* SharedCoreDirectoryVisibility.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE57C952A0B60F23459D8883 /* SharedCoreDirectoryVisibility.swift */; };
 		5E3BB592850C098A87A159B5 /* SharedCoreRoomLeaveJoin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E4908118613950CF3162D88 /* SharedCoreRoomLeaveJoin.swift */; };
 		5E3FD90EE6250575D8926C38 /* SharedCoreDirectorySearch.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F331E5FF94D7423E1E23C82 /* SharedCoreDirectorySearch.swift */; };
@@ -249,6 +250,7 @@
 		4F84F97D77A9A566CA405225 /* SharedCoreTimelinePin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTimelinePin.swift; sourceTree = "<group>"; };
 		5160F29A03489EC72ED66FE4 /* SynaraHaptics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraHaptics.swift; sourceTree = "<group>"; };
 		54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraCoreBindingsTests.swift; sourceTree = "<group>"; };
+		8F3A91C2D4E65B70819A2C3D /* SynaraThemeRampTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraThemeRampTests.swift; sourceTree = "<group>"; };
 		57076E7E82206F1492033846 /* RootShellView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootShellView.swift; sourceTree = "<group>"; };
 		5C5A1A5A848D9C043A64F128 /* SharedCoreImagePacks.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreImagePacks.swift; sourceTree = "<group>"; };
 		5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppRouter.swift; sourceTree = "<group>"; };
@@ -636,6 +638,7 @@
 				311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */,
 				EE92B48EA7FF49B2D9FED1FE /* SynaraContractsTests.swift */,
 				54B5B55419769DE9EA2EE1F9 /* SynaraCoreBindingsTests.swift */,
+				8F3A91C2D4E65B70819A2C3D /* SynaraThemeRampTests.swift */,
 				90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */,
 				633F1D9CBE601BF3E42E4B1B /* TimelineServiceTests.swift */,
 			);
@@ -825,6 +828,7 @@
 				1F2AE40317C7704B4ADD16F8 /* StableTimelineViewportTests.swift in Sources */,
 				504E908432E2659D05DE87F8 /* SynaraContractsTests.swift in Sources */,
 				5B00A849754CCEB409B6544E /* SynaraCoreBindingsTests.swift in Sources */,
+				7E2B80B1C3D54A6F70891B2C /* SynaraThemeRampTests.swift in Sources */,
 				94C8E8F56034DCA1284A9A13 /* TimelineReplyPreviewTests.swift in Sources */,
 				70328744CB4C90A1526E9E28 /* TimelineServiceTests.swift in Sources */,
 			);

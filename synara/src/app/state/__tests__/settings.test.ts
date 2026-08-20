@@ -134,6 +134,23 @@ test('desktop diagnostic settings stay out of the shared settings payload', () =
   assert.equal(platform?.desktopDiagnosticsRoomState, true);
 });
 
+test('shared settings persist a user-selected theme base color', () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+
+  store.setSettings({
+    ...defaultSettings,
+    themeBaseColor: '#5865f2',
+  });
+
+  const shared = storage.getObject('settings');
+  const platform = storage.getObject('platformSettings');
+
+  assert.equal(shared?.themeBaseColor, '#5865f2');
+  assert.equal(platform?.themeBaseColor, undefined);
+  assert.equal(store.getSharedSettings().themeBaseColor, '#5865f2');
+});
+
 test('splitSettings and mergeSettingsSnapshot round-trip known settings', () => {
   const settings = {
     ...defaultSettings,

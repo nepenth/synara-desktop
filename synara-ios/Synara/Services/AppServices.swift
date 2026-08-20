@@ -578,6 +578,8 @@ extension RoomManagementServicing {
 protocol SettingsStoring {
     func bool(for key: String) -> Bool
     func set(_ value: Bool, for key: String)
+    func string(for key: String) -> String?
+    func setString(_ value: String?, for key: String)
 }
 
 final class AppSessionStore: ObservableObject {
@@ -1027,10 +1029,23 @@ final class UserDefaultsSettingsStore: SettingsStoring {
     func set(_ value: Bool, for key: String) {
         defaults.set(value, forKey: key)
     }
+
+    func string(for key: String) -> String? {
+        defaults.string(forKey: key)
+    }
+
+    func setString(_ value: String?, for key: String) {
+        if let value {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
 }
 
 final class InMemorySettingsStore: SettingsStoring {
     private var values: [String: Bool] = [:]
+    private var strings: [String: String] = [:]
 
     func bool(for key: String) -> Bool {
         values[key] ?? false
@@ -1038,6 +1053,18 @@ final class InMemorySettingsStore: SettingsStoring {
 
     func set(_ value: Bool, for key: String) {
         values[key] = value
+    }
+
+    func string(for key: String) -> String? {
+        strings[key]
+    }
+
+    func setString(_ value: String?, for key: String) {
+        if let value {
+            strings[key] = value
+        } else {
+            strings.removeValue(forKey: key)
+        }
     }
 }
 

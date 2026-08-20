@@ -23,6 +23,7 @@ export interface SharedSettings {
   darkThemeId?: string;
   monochromeMode?: boolean;
   customAccentColor?: string;
+  themeBaseColor?: string;
   isMarkdown: boolean;
   editorToolbar: boolean;
   twitterEmoji: boolean;
@@ -89,6 +90,7 @@ export const defaultSharedSettings: SharedSettings = {
   darkThemeId: undefined,
   monochromeMode: false,
   customAccentColor: undefined,
+  themeBaseColor: undefined,
   isMarkdown: true,
   editorToolbar: false,
   twitterEmoji: false,

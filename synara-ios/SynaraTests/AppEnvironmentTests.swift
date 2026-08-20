@@ -293,6 +293,23 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(second.bool(for: "largeText"))
     }
 
+    func testUserDefaultsSettingsStorePersistsThemeBaseColor() {
+        let suiteName = "synara.settings.theme.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer {
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let first = UserDefaultsSettingsStore(defaults: defaults)
+        first.setString("#5865f2", for: SynaraThemeRamp.storageKey)
+
+        let second = UserDefaultsSettingsStore(defaults: defaults)
+        XCTAssertEqual(second.string(for: SynaraThemeRamp.storageKey), "#5865f2")
+
+        second.setString(nil, for: SynaraThemeRamp.storageKey)
+        XCTAssertNil(second.string(for: SynaraThemeRamp.storageKey))
+    }
+
     func testSettingsStorePersistsBooleansInMemory() {
         let settings = InMemorySettingsStore()
 
@@ -301,6 +318,9 @@ final class AppEnvironmentTests: XCTestCase {
         settings.set(true, for: "largeText")
 
         XCTAssertTrue(settings.bool(for: "largeText"))
+
+        settings.setString("#2b2d31", for: SynaraThemeRamp.storageKey)
+        XCTAssertEqual(settings.string(for: SynaraThemeRamp.storageKey), "#2b2d31")
     }
 
     func testNotificationPermissionStatusMapsAuthorizationStates() {

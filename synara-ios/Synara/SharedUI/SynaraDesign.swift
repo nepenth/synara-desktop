@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 enum SynaraSpacing {
     static let xSmall: CGFloat = 4
@@ -8,26 +11,260 @@ enum SynaraSpacing {
     static let xLarge: CGFloat = 24
 }
 
+struct SynaraThemeTokens: Equatable {
+    let groupedSurface: String
+    let secondarySurface: String
+    let surface: String
+    let elevatedSurface: String
+    let primaryText: String
+    let secondaryText: String
+    let tertiaryText: String
+    let separator: String
+    let mutedControl: String
+    let agentReviewBackground: String
+    let agentReviewSurface: String
+}
+
+enum SynaraThemeRamp {
+    static let defaultBaseHex = "#2b2d31"
+    static let storageKey = SynaraSharedConstants.themeBaseColorKey
+    static let didChangeNotification = Notification.Name("synaraThemeBaseColorDidChange")
+
+    static func normalize(_ value: String?) -> String? {
+        guard var hex = value?.trimmingCharacters(in: .whitespacesAndNewlines), hex.isEmpty == false else {
+            return nil
+        }
+        if hex.hasPrefix("#") == false {
+            hex = "#\(hex)"
+        }
+        guard hex.count == 7, hex.unicodeScalars.dropFirst().allSatisfy({ CharacterSet(charactersIn: "0123456789abcdefABCDEF").contains($0) }) else {
+            return nil
+        }
+        return hex.lowercased()
+    }
+
+    static func resolve(_ value: String?) -> String {
+        normalize(value) ?? defaultBaseHex
+    }
+
+    static func storedBaseHex(
+        defaults: UserDefaults = SynaraSharedConstants.appGroupDefaults() ?? .standard
+    ) -> String {
+        resolve(defaults.string(forKey: storageKey))
+    }
+
+    static func persist(
+        _ value: String?,
+        defaults: UserDefaults = SynaraSharedConstants.appGroupDefaults() ?? .standard
+    ) {
+        if let hex = normalize(value) {
+            defaults.set(hex, forKey: storageKey)
+        } else {
+            defaults.removeObject(forKey: storageKey)
+        }
+        NotificationCenter.default.post(name: didChangeNotification, object: nil)
+    }
+
+    static func tokens(baseHex: String, dark: Bool) -> SynaraThemeTokens {
+        let resolved = resolve(baseHex)
+        let hsl = synaraHSL(from: resolved)
+        let hue = hsl.hue.isNaN ? 220.0 : hsl.hue
+
+        if dark {
+            let saturation = min(0.145, max(0.045, hsl.saturation * 0.45))
+            return SynaraThemeTokens(
+                groupedSurface: synaraHex(hue: hue, saturation: saturation, lightness: 0.07),
+                secondarySurface: synaraHex(hue: hue, saturation: saturation * 0.92, lightness: 0.155),
+                surface: synaraHex(hue: hue, saturation: saturation * 0.85, lightness: 0.20),
+                elevatedSurface: synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.24),
+                primaryText: synaraHex(hue: hue, saturation: saturation * 0.22, lightness: 0.95),
+                secondaryText: synaraHex(hue: hue, saturation: saturation * 0.18, lightness: 0.72),
+                tertiaryText: synaraHex(hue: hue, saturation: saturation * 0.14, lightness: 0.58),
+                separator: synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.31),
+                mutedControl: synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.24),
+                agentReviewBackground: synaraHex(hue: hue, saturation: min(0.22, saturation + 0.06), lightness: 0.08),
+                agentReviewSurface: synaraHex(hue: hue, saturation: min(0.24, saturation + 0.08), lightness: 0.13)
+            )
+        }
+
+        let saturation = min(0.09, max(0.02, hsl.saturation * 0.28))
+        return SynaraThemeTokens(
+            groupedSurface: synaraHex(hue: hue, saturation: saturation, lightness: 0.895),
+            secondarySurface: synaraHex(hue: hue, saturation: saturation * 0.75, lightness: 0.952),
+            surface: synaraHex(hue: hue, saturation: saturation * 0.45, lightness: 1.0),
+            elevatedSurface: synaraHex(hue: hue, saturation: saturation * 0.55, lightness: 0.975),
+            primaryText: synaraHex(hue: hue, saturation: min(saturation * 1.4, 0.12), lightness: 0.09),
+            secondaryText: synaraHex(hue: hue, saturation: saturation, lightness: 0.36),
+            tertiaryText: synaraHex(hue: hue, saturation: saturation, lightness: 0.48),
+            separator: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.83),
+            mutedControl: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.91),
+            agentReviewBackground: synaraHex(hue: 196, saturation: 0.12, lightness: 0.94),
+            agentReviewSurface: synaraHex(hue: 196, saturation: 0.14, lightness: 0.90)
+        )
+    }
+
+    static func relativeLuminance(hex: String) -> Double {
+        guard let color = synaraRGB(from: hex) else { return 0 }
+        func channel(_ value: Double) -> Double {
+            value <= 0.03928 ? value / 12.92 : pow((value + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(color.red) + 0.7152 * channel(color.green) + 0.0722 * channel(color.blue)
+    }
+
+    static func contrastRatio(foreground: String, background: String) -> Double {
+        let first = relativeLuminance(hex: foreground)
+        let second = relativeLuminance(hex: background)
+        let lighter = max(first, second)
+        let darker = min(first, second)
+        return (lighter + 0.05) / (darker + 0.05)
+    }
+}
+
 enum SynaraColor {
-    static let surface = Color(.systemBackground)
-    static let secondarySurface = Color(.secondarySystemBackground)
-    static let elevatedSurface = Color(.tertiarySystemBackground)
-    static let groupedSurface = Color(.systemGroupedBackground)
-    static let primaryText = Color(.label)
-    static let secondaryText = Color(.secondaryLabel)
-    static let tertiaryText = Color(.tertiaryLabel)
+    static let surface = synaraAdaptive(\.surface)
+    static let secondarySurface = synaraAdaptive(\.secondarySurface)
+    static let elevatedSurface = synaraAdaptive(\.elevatedSurface)
+    static let groupedSurface = synaraAdaptive(\.groupedSurface)
+    static let primaryText = synaraAdaptive(\.primaryText)
+    static let secondaryText = synaraAdaptive(\.secondaryText)
+    static let tertiaryText = synaraAdaptive(\.tertiaryText)
     static let accent = Color.accentColor
     static let agent = Color(.systemTeal)
     static let success = Color(.systemGreen)
     static let warning = Color(.systemOrange)
     static let critical = Color(.systemRed)
-    static let separator = Color(.separator)
+    static let separator = synaraAdaptive(\.separator)
     static let secure = Color(.systemOrange)
     static let design = Color(.systemPurple)
     static let ops = Color(.systemTeal)
-    static let mutedControl = Color(.systemGray5)
-    static let agentReviewBackground = Color(red: 0.06, green: 0.10, blue: 0.13)
-    static let agentReviewSurface = Color(red: 0.10, green: 0.16, blue: 0.20)
+    static let mutedControl = synaraAdaptive(\.mutedControl)
+    static let agentReviewBackground = synaraAdaptive(\.agentReviewBackground)
+    static let agentReviewSurface = synaraAdaptive(\.agentReviewSurface)
+}
+
+#if canImport(UIKit)
+private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>) -> Color {
+    Color(uiColor: UIColor { traits in
+        let tokens = SynaraThemeRamp.tokens(
+            baseHex: SynaraThemeRamp.storedBaseHex(),
+            dark: traits.userInterfaceStyle == .dark
+        )
+        return UIColor(synaraHex: tokens[keyPath: keyPath]) ?? .systemBackground
+    })
+}
+
+private extension UIColor {
+    convenience init?(synaraHex: String) {
+        guard let rgb = synaraRGB(from: synaraHex) else { return nil }
+        self.init(red: rgb.red, green: rgb.green, blue: rgb.blue, alpha: 1)
+    }
+}
+
+extension Color {
+    init(synaraHex: String) {
+        self.init(uiColor: UIColor(synaraHex: synaraHex) ?? .label)
+    }
+
+    func synaraHexString() -> String? {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return nil
+        }
+        return String(
+            format: "#%02x%02x%02x",
+            Int((red * 255).rounded()),
+            Int((green * 255).rounded()),
+            Int((blue * 255).rounded())
+        )
+    }
+}
+#else
+private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>) -> Color {
+    Color(synaraHex: SynaraThemeRamp.tokens(baseHex: SynaraThemeRamp.defaultBaseHex, dark: false)[keyPath: keyPath])
+}
+#endif
+
+private struct SynaraRGB {
+    let red: Double
+    let green: Double
+    let blue: Double
+}
+
+private struct SynaraHSL {
+    let hue: Double
+    let saturation: Double
+    let lightness: Double
+}
+
+private func synaraRGB(from hex: String) -> SynaraRGB? {
+    var value = hex.trimmingCharacters(in: .whitespacesAndNewlines)
+    if value.hasPrefix("#") {
+        value.removeFirst()
+    }
+    guard value.count == 6, let int = UInt32(value, radix: 16) else {
+        return nil
+    }
+    return SynaraRGB(
+        red: Double((int >> 16) & 0xff) / 255,
+        green: Double((int >> 8) & 0xff) / 255,
+        blue: Double(int & 0xff) / 255
+    )
+}
+
+private func synaraHSL(from hex: String) -> SynaraHSL {
+    guard let rgb = synaraRGB(from: hex) else {
+        return SynaraHSL(hue: 220, saturation: 0.06, lightness: 0.18)
+    }
+    let maxChannel = max(rgb.red, rgb.green, rgb.blue)
+    let minChannel = min(rgb.red, rgb.green, rgb.blue)
+    let lightness = (maxChannel + minChannel) / 2
+    let delta = maxChannel - minChannel
+    guard delta > 0 else {
+        return SynaraHSL(hue: 220, saturation: 0, lightness: lightness)
+    }
+    let saturation = delta / (1 - abs(2 * lightness - 1))
+    let hue: Double
+    if maxChannel == rgb.red {
+        hue = 60 * (((rgb.green - rgb.blue) / delta).truncatingRemainder(dividingBy: 6))
+    } else if maxChannel == rgb.green {
+        hue = 60 * (((rgb.blue - rgb.red) / delta) + 2)
+    } else {
+        hue = 60 * (((rgb.red - rgb.green) / delta) + 4)
+    }
+    return SynaraHSL(hue: hue < 0 ? hue + 360 : hue, saturation: saturation, lightness: lightness)
+}
+
+private func synaraHex(hue: Double, saturation: Double, lightness: Double) -> String {
+    let clampedSaturation = min(max(saturation, 0), 1)
+    let clampedLightness = min(max(lightness, 0), 1)
+    let chroma = (1 - abs(2 * clampedLightness - 1)) * clampedSaturation
+    let huePrime = (hue.isNaN ? 220 : hue) / 60
+    let x = chroma * (1 - abs(huePrime.truncatingRemainder(dividingBy: 2) - 1))
+    let match = clampedLightness - chroma / 2
+    let rgb: SynaraRGB
+    switch huePrime {
+    case 0..<1:
+        rgb = SynaraRGB(red: chroma, green: x, blue: 0)
+    case 1..<2:
+        rgb = SynaraRGB(red: x, green: chroma, blue: 0)
+    case 2..<3:
+        rgb = SynaraRGB(red: 0, green: chroma, blue: x)
+    case 3..<4:
+        rgb = SynaraRGB(red: 0, green: x, blue: chroma)
+    case 4..<5:
+        rgb = SynaraRGB(red: x, green: 0, blue: chroma)
+    default:
+        rgb = SynaraRGB(red: chroma, green: 0, blue: x)
+    }
+    return String(
+        format: "#%02x%02x%02x",
+        Int(((rgb.red + match) * 255).rounded()),
+        Int(((rgb.green + match) * 255).rounded()),
+        Int(((rgb.blue + match) * 255).rounded())
+    )
 }
 
 enum SynaraRadius {
