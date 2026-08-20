@@ -166,6 +166,11 @@ final class ConnectionStatusStore: ObservableObject {
         connectedFlashWork?.cancel()
     }
 
+    /// Empty-state / placeholder copy follows held chrome, not the live SDK blip.
+    var emptyStateMessage: String {
+        ConnectionStatusCopy.banner(status)
+    }
+
     func update(_ status: MatrixSyncStatus) {
         if Thread.isMainThread {
             apply(status)
@@ -211,27 +216,6 @@ final class ConnectionStatusStore: ObservableObject {
         }
     }
 
-    private func scheduleLost(_ status: MatrixSyncStatus) {
-        pendingLost = status
-        lostHoldWork?.cancel()
-        if lostHold <= 0 {
-            let toPresent = pendingLost ?? status
-            pendingLost = nil
-            lostHoldWork = nil
-            present(toPresent)
-            return
-        }
-        let work = DispatchWorkItem { [weak self] in
-            guard let self else { return }
-            let toPresent = self.pendingLost ?? status
-            self.pendingLost = nil
-            self.lostHoldWork = nil
-            self.present(toPresent)
-        }
-        lostHoldWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + lostHold, execute: work)
-    }
-
     private func present(_ status: MatrixSyncStatus) {
         connectedFlashWork?.cancel()
         connectedFlashWork = nil
@@ -254,6 +238,36 @@ final class ConnectionStatusStore: ObservableObject {
         }
 
         isBannerVisible = ConnectionStatusCopy.presentsBanner(status)
+    }
+
+    private func scheduleLost(_ status: MatrixSyncStatus) {
+        pendingLost = status
+        lostHoldWork?.cancel()
+        hideConnectedFlashForNewHold()
+        if lostHold <= 0 {
+            let toPresent = pendingLost ?? status
+            pendingLost = nil
+            lostHoldWork = nil
+            present(toPresent)
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            let toPresent = self.pendingLost ?? status
+            self.pendingLost = nil
+            self.lostHoldWork = nil
+            self.present(toPresent)
+        }
+        lostHoldWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + lostHold, execute: work)
+    }
+
+    private func hideConnectedFlashForNewHold() {
+        connectedFlashWork?.cancel()
+        connectedFlashWork = nil
+        guard status == .connected, isBannerVisible else { return }
+        isBannerVisible = false
+        recoveredFromVisibleDisconnect = false
     }
 
     private func scheduleConnectedFlashHide() {

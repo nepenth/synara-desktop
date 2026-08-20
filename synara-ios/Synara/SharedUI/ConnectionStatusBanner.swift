@@ -76,3 +76,18 @@ struct ConnectionStatusBanner: View {
         }
     }
 }
+
+/// Empty-state copy from held connection chrome so SDK blips stay silent.
+struct HeldConnectionEmptyState: View {
+    let title: String
+    let systemImage: String
+    @ObservedObject var store: ConnectionStatusStore
+
+    var body: some View {
+        SynaraEmptyState(
+            title: title,
+            systemImage: systemImage,
+            message: store.emptyStateMessage
+        )
+    }
+}

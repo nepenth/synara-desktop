@@ -194,6 +194,60 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertFalse(store.isBannerVisible)
     }
 
+    func testEmptyStateCopyUsesHeldStatusNotLiveLost() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+
+        store.update(.reconnecting)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertNotEqual(store.emptyStateMessage, ConnectionStatusCopy.reconnecting)
+        XCTAssertNotEqual(store.emptyStateMessage, MatrixSyncStatus.reconnecting.description)
+
+        store.update(.disconnected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertNotEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+
+        store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertFalse(store.emptyStateMessage.contains("https://"))
+
+        store.update(.restoreFailed)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.restoreFailed)
+    }
+
+    func testConnectedFlashHidesWhenLostHoldStarts() {
+        let store = ConnectionStatusStore(reconnectingHold: 4, connectedFlash: 4)
+        store.update(.restoreFailed)
+        XCTAssertTrue(store.isBannerVisible)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertTrue(store.isBannerVisible)
+
+        store.update(.reconnecting)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+    }
+
+    func testEmptyStatesReadHeldConnectionStatusNotLiveMatrixDescription() throws {
+        let root = repositoryRoot()
+        let roomList = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/RoomListView.swift",
+            encoding: .utf8
+        )
+        let placeholder = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/PlaceholderScreen.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(roomList.contains("matrix.syncStatusDescription"))
+        XCTAssertFalse(placeholder.contains("matrix.syncStatusDescription"))
+        XCTAssertTrue(roomList.contains("HeldConnectionEmptyState"))
+        XCTAssertTrue(placeholder.contains("HeldConnectionEmptyState"))
+        XCTAssertTrue(roomList.contains("environment.connectionStatus"))
+        XCTAssertTrue(placeholder.contains("environment.connectionStatus"))
+    }
+
     func testMatrixSyncStatusDescriptionUsesPrivacySafeCopy() {
         XCTAssertEqual(MatrixSyncStatus.syncing.description, "Syncing history…")
         XCTAssertEqual(MatrixSyncStatus.starting.description, "Connecting…")
@@ -212,5 +266,16 @@ final class ConnectionStatusCopyTests: XCTestCase {
             .restoreFailed,
             .failed("syt_secret_token")
         ]
+    }
+
+    private func repositoryRoot() -> String {
+        var url = URL(fileURLWithPath: #filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("synara-ios").path) {
+                return url.path
+            }
+        }
+        return url.path
     }
 }
