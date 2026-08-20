@@ -7,11 +7,11 @@ const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.ts
 test('native timeline rows show timestamps and formatted HTML without the legacy event graph', () => {
   assert.match(presenter, /rowOriginServerTs/);
   assert.match(presenter, /<Time\s/);
-  assert.match(presenter, /htmlCss\.FormattedBody/);
+  assert.match(presenter, /NativeFormattedBody/);
   assert.match(presenter, /htmlCss\.MessageBody/);
   assert.match(presenter, /NativeTimelineSenderAvatar/);
   assert.match(presenter, /followingLiveRef/);
-  assert.match(presenter, /sanitizeCustomHtml/);
+  assert.doesNotMatch(presenter, /dangerouslySetInnerHTML/);
 });
 
 test('native timeline rows retain hover/focus action access without restoring the legacy owner', () => {

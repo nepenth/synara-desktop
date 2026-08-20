@@ -1379,6 +1379,14 @@ enum MatrixHTMLRenderer {
         segments.append(.markdown(markdown))
     }
 
+    static func codeLineCount(_ code: String) -> Int {
+        let normalized = code.hasSuffix("\n") ? String(code.dropLast()) : code
+        if normalized.isEmpty {
+            return 1
+        }
+        return normalized.split(separator: "\n", omittingEmptySubsequences: false).count
+    }
+
     private static func codeBlock(html: String) -> String? {
         let rawCode = firstHTMLCapture(
             in: html,

@@ -3322,6 +3322,11 @@ private struct MatrixDetailsBlockView: View {
 private struct MatrixCodeBlockView: View {
     let code: String
 
+    private var lineNumbers: String {
+        let count = MatrixHTMLRenderer.codeLineCount(code)
+        return (1 ... count).map(String.init).joined(separator: "\n")
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack {
@@ -3347,12 +3352,22 @@ private struct MatrixCodeBlockView: View {
             Divider()
 
             ScrollView(.horizontal, showsIndicators: false) {
-                Text(code)
-                    .font(SynaraTypography.monoBody)
-                    .foregroundStyle(SynaraColor.primaryText)
-                    .textSelection(.enabled)
-                    .padding(SynaraSpacing.medium)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                    Text(lineNumbers)
+                        .font(SynaraTypography.monoBody)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                        .fixedSize(horizontal: true, vertical: true)
+                        .accessibilityHidden(true)
+
+                    Text(code)
+                        .font(SynaraTypography.monoBody)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .textSelection(.enabled)
+                        .fixedSize(horizontal: true, vertical: true)
+                }
+                .padding(SynaraSpacing.medium)
             }
             .background(SynaraColor.secondarySurface)
         }
