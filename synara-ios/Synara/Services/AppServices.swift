@@ -39,19 +39,14 @@ enum MatrixSyncStatus: Equatable {
     case stopped
     case starting
     case syncing
+    case connected
+    case reconnecting
+    case disconnected
+    case restoreFailed
     case failed(String)
 
     var description: String {
-        switch self {
-        case .stopped:
-            return "Not connected"
-        case .starting:
-            return "Starting sync"
-        case .syncing:
-            return "Syncing"
-        case .failed(let message):
-            return message
-        }
+        ConnectionStatusCopy.banner(self)
     }
 }
 

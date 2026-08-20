@@ -12,6 +12,7 @@ final class SessionCoordinatorTests: XCTestCase {
 
         XCTAssertEqual(matrix.startedSessions, [session])
         XCTAssertEqual(matrix.syncStatus, .syncing)
+        XCTAssertEqual(environment.connectionStatus.status, .syncing)
         XCTAssertEqual(push.configureCallCount, 1)
     }
 

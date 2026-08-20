@@ -256,9 +256,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
 
         XCTAssertFalse(outcome.restored)
+        XCTAssertFalse(outcome.skippedRestore)
         XCTAssertFalse(outcome.attached)
+        XCTAssertFalse(outcome.skippedAttach)
         XCTAssertFalse(outcome.started)
         XCTAssertNil(outcome.readiness)
+        XCTAssertEqual(outcome.failure, .restoreFailed)
         let publicError = String(describing: outcome)
         for forbidden in ["password", "syt_", userID, "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
@@ -279,7 +282,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             accessToken: "syt_secret_token"
         )
         await service.resumeFromForeground(session: session)
-        XCTAssertEqual(service.syncStatus, .stopped)
+        XCTAssertEqual(service.syncStatus, .restoreFailed)
         let publicError = String(describing: service.syncStatus)
         for forbidden in ["password", "syt_secret_token", "@alice:example.org", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))

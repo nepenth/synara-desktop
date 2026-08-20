@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SynaraCore
 
 /// Caller-owned SharedCore used by live product services after S10 leftover retirement.
@@ -80,18 +81,25 @@ struct SharedCoreAuthService: AuthServicing {
 
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
+    private let connectionStatus: ConnectionStatusStore
+    private let applyLock = NSLock()
+    private var applyChain: Task<Void, Never> = Task {}
+    private var lastSession: AuthenticatedSession?
+    private var pathMonitor: NWPathMonitor?
+    private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
     private(set) var syncStatus: MatrixSyncStatus = .stopped
 
     var syncStatusDescription: String {
         syncStatus.description
     }
 
-    init(host: SharedCoreProductHost) {
+    init(host: SharedCoreProductHost, connectionStatus: ConnectionStatusStore = ConnectionStatusStore()) {
         self.host = host
+        self.connectionStatus = connectionStatus
     }
 
     func start(session: AuthenticatedSession) async {
-        await applyLiveSession(session)
+        await enqueueLiveSession(session)
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -109,29 +117,96 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func stop() async {
-        syncStatus = .stopped
+        stopPathMonitor()
+        await publish(.stopped)
     }
 
     func pauseForBackground() async {}
 
     func resumeFromForeground(session: AuthenticatedSession) async {
-        await applyLiveSession(session)
+        await enqueueLiveSession(session)
+    }
+
+    private func enqueueLiveSession(_ session: AuthenticatedSession) async {
+        let queued: Task<Void, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task { [weak self] in
+                await previous.value
+                await self?.applyLiveSession(session)
+            }
+            applyChain = next
+            return next
+        }
+        await queued.value
     }
 
     private func applyLiveSession(_ session: AuthenticatedSession) async {
-        syncStatus = .starting
+        lastSession = session
+        await publish(.starting)
         let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
             userID: session.userID,
             homeserverURL: session.homeserverURL.absoluteString,
             storeRoot: host.storeRoot,
             core: host.core
         )
-        if outcome.started {
-            syncStatus = .syncing
-        } else if outcome.attached || outcome.restored {
-            syncStatus = .starting
-        } else {
-            syncStatus = .stopped
+        if let failure = outcome.failure {
+            await publish(failure.syncStatus)
+            if failure == .restoreFailed || failure == .attachFailed {
+                stopPathMonitor()
+            } else {
+                startPathMonitor()
+            }
+            return
+        }
+        await publish(ConnectionStatusCopy.fromReadiness(outcome.readiness))
+        startPathMonitor()
+    }
+
+    private func publish(_ status: MatrixSyncStatus) async {
+        syncStatus = status
+        await MainActor.run {
+            connectionStatus.update(status)
+        }
+    }
+
+    private func startPathMonitor() {
+        if pathMonitor != nil {
+            return
+        }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { await self?.handlePath(path) }
+        }
+        monitor.start(queue: pathQueue)
+        pathMonitor = monitor
+    }
+
+    private func stopPathMonitor() {
+        pathMonitor?.cancel()
+        pathMonitor = nil
+    }
+
+    private func handlePath(_ path: NWPath) async {
+        switch syncStatus {
+        case .restoreFailed, .stopped:
+            return
+        default:
+            break
+        }
+        switch path.status {
+        case .unsatisfied, .requiresConnection:
+            switch syncStatus {
+            case .connected, .syncing, .starting:
+                await publish(.reconnecting)
+            default:
+                break
+            }
+        case .satisfied:
+            if syncStatus == .reconnecting, let lastSession {
+                await enqueueLiveSession(lastSession)
+            }
+        @unknown default:
+            break
         }
     }
 

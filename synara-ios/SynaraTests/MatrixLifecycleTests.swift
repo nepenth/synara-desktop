@@ -9,7 +9,7 @@ final class MatrixLifecycleTests: XCTestCase {
         await matrix.start(session: session)
 
         XCTAssertEqual(matrix.syncStatus, .syncing)
-        XCTAssertEqual(matrix.syncStatusDescription, "Syncing")
+        XCTAssertEqual(matrix.syncStatusDescription, "Syncing history…")
         XCTAssertEqual(matrix.startedSessions, [session])
     }
 

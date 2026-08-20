@@ -220,6 +220,8 @@ const MATERIAL_MISSING_CODE: &str = "p4-s3b-session-material-missing";
 const MATERIAL_MISSING_DESCRIPTION: &str = "No restorable session is available.";
 const RESTORE_FAILED_CODE: &str = "p4-s3b-restore-failed";
 const RESTORE_FAILED_DESCRIPTION: &str = "The persisted session could not be restored.";
+const ALREADY_RESTORED_CODE: &str = "p4-s3b-session-already-restored";
+const ALREADY_RESTORED_DESCRIPTION: &str = "A live session is already restored.";
 const LOGIN_VAULT_UNAVAILABLE_CODE: &str = "p4-s3c-secret-vault-unavailable";
 const LOGIN_VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
 const LOGIN_IDENTITY_INVALID_CODE: &str = "p4-s3c-identity-invalid";
@@ -3246,9 +3248,11 @@ impl SharedCore {
         Ok(SyncStartDto {
             readiness: snapshot.readiness.as_str().to_owned(),
             session_generation: snapshot.session_generation,
+            // `start()` is requested before this snapshot. Idle means the SDK
+            // has not yet transitioned to Running; that is still a live start.
             started: matches!(
                 snapshot.readiness,
-                SyncReadiness::Running | SyncReadiness::Offline
+                SyncReadiness::Running | SyncReadiness::Offline | SyncReadiness::Idle
             ),
             offline_mode_enabled: snapshot.offline_mode_enabled,
         })
@@ -10303,7 +10307,11 @@ impl<'a> RestoreClaim<'a> {
                     committed: false,
                 })
             }
-            RestoredClientSlot::InFlight | RestoredClientSlot::Ready(_) => Err(restore_failed(
+            RestoredClientSlot::Ready(_) => Err(restore_failed(
+                ALREADY_RESTORED_CODE,
+                ALREADY_RESTORED_DESCRIPTION,
+            )),
+            RestoredClientSlot::InFlight => Err(restore_failed(
                 RESTORE_FAILED_CODE,
                 RESTORE_FAILED_DESCRIPTION,
             )),
@@ -10892,7 +10900,8 @@ mod tests {
                 root.to_string_lossy().into_owned(),
             ))
             .expect_err("second restore");
-        assert!(format!("{second:?}").contains(RESTORE_FAILED_CODE));
+        assert!(format!("{second:?}").contains(ALREADY_RESTORED_CODE));
+        assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
         assert!(matches!(
             *shared.restored_client.lock().expect("client"),
             RestoredClientSlot::Ready(_)

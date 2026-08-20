@@ -4,6 +4,7 @@ struct RootShellView: View {
     let environment: AppEnvironment
     @ObservedObject private var router: AppRouter
     @ObservedObject private var session: AppSessionStore
+    @ObservedObject private var connectionStatus: ConnectionStatusStore
     @State private var tabBadgeCounts = TabBadgeCounts()
     @State private var tabBadgeUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationState: CryptoVerificationState?
@@ -14,6 +15,7 @@ struct RootShellView: View {
         self.environment = environment
         self.router = environment.router
         self.session = environment.session
+        self.connectionStatus = environment.connectionStatus
     }
 
     var body: some View {
@@ -54,11 +56,29 @@ struct RootShellView: View {
     }
 
     private func signedInShell(session authenticatedSession: AuthenticatedSession) -> some View {
-        TabView(selection: $router.selectedTab) {
-            tab(.rooms)
-            tab(.later)
-            tab(.notifications)
-            tab(.settings)
+        VStack(spacing: 0) {
+            ConnectionStatusBanner(
+                store: connectionStatus,
+                onRetry: {
+                    Task {
+                        await environment.matrix.start(session: authenticatedSession)
+                        await MainActor.run {
+                            environment.connectionStatus.update(environment.matrix.syncStatus)
+                        }
+                    }
+                },
+                onSignOut: {
+                    Task {
+                        try? await environment.wipe.logoutAndWipe()
+                    }
+                }
+            )
+            TabView(selection: $router.selectedTab) {
+                tab(.rooms)
+                tab(.later)
+                tab(.notifications)
+                tab(.settings)
+            }
         }
         .task(id: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)") {
             let signpostID = PerformanceTrace.begin("SignedInSessionStart")
