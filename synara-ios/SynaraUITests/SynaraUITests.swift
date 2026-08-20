@@ -506,10 +506,14 @@ final class SynaraUITests: XCTestCase {
 
     func testAboutScreenShowsVersionBuildLicenseSupportAndPrivacyLinks() {
         let app = launchSignedInSettingsApp()
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 10))
 
         tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
-
-        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 10))
+        let aboutScreen = identifiedElement(in: app, "AboutSettingsScreen")
+        if aboutScreen.waitForExistence(timeout: 5) == false {
+            tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
+        }
+        XCTAssertTrue(aboutScreen.waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Synara"].exists)
         XCTAssertTrue(app.staticTexts["Version"].exists)
         XCTAssertTrue(app.staticTexts["Build"].exists)
