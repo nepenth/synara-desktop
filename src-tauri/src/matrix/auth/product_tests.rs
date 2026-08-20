@@ -1237,6 +1237,10 @@ fn own_profile_writes_route_through_core_without_desktop_client_io() {
             "matrix_set_own_avatar",
             "crate::bridge::own_profile::set_own_avatar",
         ),
+        (
+            "matrix_get_own_profile",
+            "crate::bridge::own_profile::get_own_profile",
+        ),
     ] {
         let command = product
             .split(&format!("pub async fn {name}"))
@@ -1526,6 +1530,22 @@ fn room_leave_command_owns_sdk_leave_without_a_js_fallback() {
         .expect("room leave command body");
     assert!(command.contains("crate::bridge::room_leave_join::room_leave"));
     assert!(!command.contains("mx.leave"));
+}
+
+#[test]
+fn room_set_favorite_command_owns_sdk_tag_write_without_a_js_fallback() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_set_favorite")
+        .nth(1)
+        .expect("room set-favorite command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room set-favorite command body");
+    assert!(command.contains("crate::bridge::room_leave_join::room_set_favorite"));
+    assert!(!command.contains("localStorage"));
+    assert!(!command.contains("setRoomTag"));
 }
 
 #[test]

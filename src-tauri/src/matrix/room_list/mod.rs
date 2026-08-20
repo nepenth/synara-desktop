@@ -19,7 +19,7 @@
 #![allow(unused_imports)]
 
 pub use synara_core::app::room_list::{
-    contains_bad_word, filter_rooms_by_scope, matrix_room_list_markers, recent_joined_rooms,
+    contains_bad_word, filter_rooms_by_scope, matrix_room_list_markers, partition_favorite_rooms,
     reconstruct, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
     snapshot_from_sync_owner, snapshot_invites, sort_rooms, sort_rooms_in_place,
     InviteAvatarHandles, InviteAvatarSource, NativeInvite, NativeInviteSnapshot,

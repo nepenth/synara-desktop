@@ -25,6 +25,7 @@ const roomSnapshot = (
       isDirect: false,
       isSpace: false,
       isCall: false,
+      isFavorite: false,
       isEncrypted: false,
       unreadCount: 0,
       highlightCount: 0,
@@ -640,7 +641,30 @@ test('P4-S36 downloadMedia prefers timeline handles over leftover mxc', async ()
   assert.notEqual(seen[0]?.args?.contentUri, 'mxc://example.org/f1');
 });
 
-test('F4 getProfileInfo returns session identity', async () => {
+test('F4 getProfileInfo loads own profile from the native owner', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_session_snapshot: {
+      status: 'logged_in',
+      user_id: '@alice:example.org',
+      device_id: 'DEV',
+      homeserver_url: 'https://matrix.example.org',
+      sessionGeneration: 5,
+    },
+    matrix_get_own_profile: {
+      userId: '@alice:example.org',
+      displayName: 'Alice',
+      avatarUrl: 'mxc://example.org/avatar',
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  const profile = await client.getProfileInfo('@alice:example.org');
+  assert.equal(profile.avatar_url, 'mxc://example.org/avatar');
+  assert.equal(profile.displayname, 'Alice');
+  assert.equal(callLog.includes('matrix_get_own_profile'), true);
+});
+
+test('F4 getProfileInfo rejects non-mxc avatars', async () => {
   const { invoke } = invokingWith({
     matrix_session_snapshot: {
       status: 'logged_in',
@@ -649,12 +673,17 @@ test('F4 getProfileInfo returns session identity', async () => {
       homeserver_url: 'https://matrix.example.org',
       sessionGeneration: 5,
     },
+    matrix_get_own_profile: {
+      userId: '@alice:example.org',
+      displayName: 'Alice',
+      avatarUrl: 'data:image/png;base64,AAAA',
+    },
   });
   const client = createNativeMatrixClient(invoke);
   await client.refresh();
   const profile = await client.getProfileInfo('@alice:example.org');
   assert.equal(profile.avatar_url, undefined);
-  assert.equal(profile.displayname, undefined);
+  assert.equal(profile.displayname, 'Alice');
 });
 test('F5 getIdentity snapshot preserves userId/deviceId', async () => {
   const { invoke } = invokingWith({

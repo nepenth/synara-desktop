@@ -39,19 +39,14 @@ enum MatrixSyncStatus: Equatable {
     case stopped
     case starting
     case syncing
+    case connected
+    case reconnecting
+    case disconnected
+    case restoreFailed
     case failed(String)
 
     var description: String {
-        switch self {
-        case .stopped:
-            return "Not connected"
-        case .starting:
-            return "Starting sync"
-        case .syncing:
-            return "Syncing"
-        case .failed(let message):
-            return message
-        }
+        ConnectionStatusCopy.banner(self)
     }
 }
 
@@ -298,6 +293,8 @@ enum CryptoVerificationState: Equatable, Identifiable {
     case sasStarted
     case emojis([CryptoVerificationEmoji])
     case decimals([UInt16])
+    case confirmed
+    case mismatched
     case finished
     case cancelled
     case failed
@@ -308,9 +305,9 @@ enum CryptoVerificationState: Equatable, Identifiable {
 
     var isTerminal: Bool {
         switch self {
-        case .finished, .cancelled, .failed:
+        case .finished, .cancelled, .failed, .mismatched:
             return true
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
             return false
         }
     }
@@ -329,6 +326,10 @@ enum CryptoVerificationState: Equatable, Identifiable {
             return "emojis:\(emojis.count)"
         case .decimals(let values):
             return "decimals:\(values.count)"
+        case .confirmed:
+            return "confirmed"
+        case .mismatched:
+            return "mismatched"
         case .finished:
             return "finished"
         case .cancelled:
@@ -558,6 +559,7 @@ protocol RoomManagementServicing {
     func createDirectMessage(_ request: DirectMessageCreateRequest) async throws -> RoomOperationResult
     func joinRoom(_ request: RoomJoinRequest) async throws -> RoomOperationResult
     func leaveRoom(roomID: String) async throws
+    func setRoomFavorite(_ favorite: Bool, roomID: String) async throws
     func inviteUser(roomID: String, userID: String) async throws
     func searchPublicRooms(query: String) async throws -> [PublicRoomSummary]
     func roomDetails(roomID: String) async -> RoomDetails?
@@ -576,6 +578,8 @@ extension RoomManagementServicing {
 protocol SettingsStoring {
     func bool(for key: String) -> Bool
     func set(_ value: Bool, for key: String)
+    func string(for key: String) -> String?
+    func setString(_ value: String?, for key: String)
 }
 
 final class AppSessionStore: ObservableObject {
@@ -844,6 +848,11 @@ final class MockRoomManagementService: RoomManagementServicing {
         leftRoomIDs.append(roomID)
     }
 
+    func setRoomFavorite(_ favorite: Bool, roomID: String) async throws {
+        _ = favorite
+        _ = roomID
+    }
+
     func inviteUser(roomID: String, userID: String) async throws {
         let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard Self.isValidMatrixID(trimmedUserID) else {
@@ -1020,10 +1029,23 @@ final class UserDefaultsSettingsStore: SettingsStoring {
     func set(_ value: Bool, for key: String) {
         defaults.set(value, forKey: key)
     }
+
+    func string(for key: String) -> String? {
+        defaults.string(forKey: key)
+    }
+
+    func setString(_ value: String?, for key: String) {
+        if let value {
+            defaults.set(value, forKey: key)
+        } else {
+            defaults.removeObject(forKey: key)
+        }
+    }
 }
 
 final class InMemorySettingsStore: SettingsStoring {
     private var values: [String: Bool] = [:]
+    private var strings: [String: String] = [:]
 
     func bool(for key: String) -> Bool {
         values[key] ?? false
@@ -1031,6 +1053,18 @@ final class InMemorySettingsStore: SettingsStoring {
 
     func set(_ value: Bool, for key: String) {
         values[key] = value
+    }
+
+    func string(for key: String) -> String? {
+        strings[key]
+    }
+
+    func setString(_ value: String?, for key: String) {
+        if let value {
+            strings[key] = value
+        } else {
+            strings.removeValue(forKey: key)
+        }
     }
 }
 

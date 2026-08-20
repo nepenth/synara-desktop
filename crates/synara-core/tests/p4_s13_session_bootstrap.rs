@@ -98,12 +98,78 @@ fn cold_start_restore_attach_start_on_fresh_core_is_privacy_safe() {
         .expect("start after restore+attach");
     let started_text = format!("{started:?}");
     assert!(started.session_generation > 0);
+    assert_eq!(
+        started.started,
+        started.readiness == "running" || started.readiness == "offline",
+        "Idle is not a live start: {}",
+        started.readiness
+    );
     assert!(!started_text.contains(access));
     assert!(!started_text.contains(refresh));
     assert!(!started_text.contains("@alice"));
     assert!(!started_text.contains("https://"));
 
     drop(fresh);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn retained_login_client_skips_restore_then_attach_start() {
+    let access = "syt_s13_login_skip_restore_access";
+    let refresh = "syr_s13_login_skip_restore_refresh";
+    let identity = alice();
+    let map = Arc::new(Mutex::new(HashMap::new()));
+    let root = temp_root("login-skip-restore");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::clone(&map))));
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        access.to_owned(),
+        Some(refresh.to_owned()),
+    ))
+    .expect("planted persist retains a Client");
+
+    let restore = rt
+        .block_on(shared.restore_persisted_session(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root.to_string_lossy().into_owned(),
+        ))
+        .expect_err("retained login client must skip restore");
+    let restore_text = format!("{restore:?}");
+    assert!(restore_text.contains("p4-s3b-session-already-restored"));
+    assert!(!restore_text.contains("p4-s3b-restore-failed"));
+    assert!(!restore_text.contains(access));
+    assert!(!restore_text.contains(refresh));
+
+    rt.block_on(shared.attach_session_owners())
+        .expect("attach after retained login");
+    let started = rt
+        .block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(15), shared.start_sync())
+                .await
+                .expect("start_sync timed out")
+        })
+        .expect("start after login-retain skip restore");
+    let started_text = format!("{started:?}");
+    assert!(started.session_generation > 0);
+    assert_eq!(
+        started.started,
+        started.readiness == "running" || started.readiness == "offline",
+        "Idle is not a live start: {}",
+        started.readiness
+    );
+    assert!(!started_text.contains(access));
+    assert!(!started_text.contains("@alice"));
+
+    drop(shared);
     drop(_enter);
     drop(rt);
     let _ = fs::remove_dir_all(&root);

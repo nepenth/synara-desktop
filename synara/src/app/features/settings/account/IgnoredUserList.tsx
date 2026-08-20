@@ -8,6 +8,7 @@ import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { isUserId } from '../../../utils/matrix';
 import { useIgnoredUsers } from '../../../hooks/useIgnoredUsers';
 import { useAlive } from '../../../hooks/useAlive';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 function IgnoreUserInput({ userList }: { userList: string[] }) {
   const mx = useMatrixClient();
@@ -129,6 +130,30 @@ function IgnoredUserChip({ userId, userList }: { userId: string; userList: strin
 }
 
 export function IgnoredUserList() {
+  if (isNativeMatrixSession()) {
+    return (
+      <Box direction="Column" gap="100">
+        <Box alignItems="Center" justifyContent="SpaceBetween" gap="200">
+          <Text size="L400">Blocked Users</Text>
+        </Box>
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Block list"
+            description="Ignored-user management is not available in this native session."
+          />
+        </SequenceCard>
+      </Box>
+    );
+  }
+  return <LegacyIgnoredUserList />;
+}
+
+function LegacyIgnoredUserList() {
   const ignoredUsers = useIgnoredUsers();
 
   return (

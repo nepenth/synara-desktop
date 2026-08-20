@@ -9,23 +9,23 @@ import {
   useSystemThemeKind,
 } from '../hooks/useTheme';
 import { useSetting } from '../state/hooks/settings';
-import { settingsAtom } from '../state/settings';
+import { getSharedSettings, settingsAtom } from '../state/settings';
 import { normalizeAccentColor } from '../utils/themeAccent';
+import {
+  deriveThemeSurfaceRamp,
+  resolveThemeBaseColor,
+  shouldApplyDerivedThemeRamp,
+  type ThemeSurfaceScale,
+} from '../utils/themeBase';
 
-const THEME_CHROME_COLOR: Record<ThemeKind, string> = {
-  [ThemeKind.Light]: '#ffffff',
-  [ThemeKind.Dark]: '#1b1b1b',
-};
-
-const syncDocumentThemeChrome = (themeKind: ThemeKind) => {
-  const themeColor = THEME_CHROME_COLOR[themeKind];
+const syncDocumentThemeChrome = (themeKind: ThemeKind, chromeColor: string) => {
   const themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
 
   document.documentElement.style.colorScheme = themeKind;
-  document.documentElement.style.backgroundColor = themeColor;
+  document.documentElement.style.backgroundColor = chromeColor;
   document.body.style.colorScheme = themeKind;
-  document.body.style.backgroundColor = themeColor;
-  themeColorMeta?.setAttribute('content', themeColor);
+  document.body.style.backgroundColor = chromeColor;
+  themeColorMeta?.setAttribute('content', chromeColor);
 };
 
 const cssVarName = (value: string): string | undefined => value.match(/^var\((--[^)]+)\)$/)?.[1];
@@ -38,6 +38,59 @@ const setColorVar = (target: HTMLElement, token: string, value: string) => {
 const clearColorVar = (target: HTMLElement, token: string) => {
   const varName = cssVarName(token);
   if (varName) target.style.removeProperty(varName);
+};
+
+const applyContainerScale = (
+  target: HTMLElement,
+  tokens: ThemeSurfaceScale,
+  scale: ThemeSurfaceScale
+) => {
+  setColorVar(target, tokens.Container, scale.Container);
+  setColorVar(target, tokens.ContainerHover, scale.ContainerHover);
+  setColorVar(target, tokens.ContainerActive, scale.ContainerActive);
+  setColorVar(target, tokens.ContainerLine, scale.ContainerLine);
+  setColorVar(target, tokens.OnContainer, scale.OnContainer);
+};
+
+const CONTAINER_TOKENS: ThemeSurfaceScale[] = [
+  color.Background,
+  color.Surface,
+  color.SurfaceVariant,
+  color.Secondary,
+];
+
+const clearContainerScale = (target: HTMLElement, tokens: ThemeSurfaceScale) => {
+  clearColorVar(target, tokens.Container);
+  clearColorVar(target, tokens.ContainerHover);
+  clearColorVar(target, tokens.ContainerActive);
+  clearColorVar(target, tokens.ContainerLine);
+  clearColorVar(target, tokens.OnContainer);
+};
+
+const syncThemeBaseColor = (
+  baseColor: string | undefined,
+  themeKind: ThemeKind,
+  themeId?: string
+): string => {
+  const target = document.body;
+  if (!shouldApplyDerivedThemeRamp(themeId)) {
+    CONTAINER_TOKENS.forEach((tokens) => clearContainerScale(target, tokens));
+    clearColorVar(target, color.Other.FocusRing);
+    clearColorVar(target, color.Other.Shadow);
+    clearColorVar(target, color.Other.Overlay);
+    return themeKind === ThemeKind.Dark ? '#1e1f22' : '#ffffff';
+  }
+
+  const ramp = deriveThemeSurfaceRamp(resolveThemeBaseColor(baseColor), themeKind);
+  applyContainerScale(target, color.Background, ramp.background);
+  applyContainerScale(target, color.Surface, ramp.surface);
+  applyContainerScale(target, color.SurfaceVariant, ramp.surfaceVariant);
+  applyContainerScale(target, color.Secondary, ramp.secondaryContainer);
+  setColorVar(target, color.Other.FocusRing, ramp.focusRing);
+  setColorVar(target, color.Other.Shadow, ramp.shadow);
+  setColorVar(target, color.Other.Overlay, ramp.overlay);
+
+  return ramp.chrome;
 };
 
 const syncAccentColor = (accentColor: string | undefined, themeKind: ThemeKind) => {
@@ -96,13 +149,16 @@ export function UnAuthRouteThemeManager() {
   useEffect(() => {
     document.body.className = '';
     document.body.classList.add(configClass, varsClass);
-    syncDocumentThemeChrome(systemThemeKind);
     if (systemThemeKind === ThemeKind.Dark) {
       document.body.classList.add(...DarkTheme.classNames);
     }
     if (systemThemeKind === ThemeKind.Light) {
       document.body.classList.add(...LightTheme.classNames);
     }
+    const storedBase = getSharedSettings().themeBaseColor;
+    const themeId = systemThemeKind === ThemeKind.Dark ? DarkTheme.id : LightTheme.id;
+    const chrome = syncThemeBaseColor(storedBase, systemThemeKind, themeId);
+    syncDocumentThemeChrome(systemThemeKind, chrome);
   }, [systemThemeKind]);
 
   return null;
@@ -112,13 +168,15 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
   const activeTheme = useActiveTheme();
   const [monochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor] = useSetting(settingsAtom, 'customAccentColor');
+  const [themeBaseColor] = useSetting(settingsAtom, 'themeBaseColor');
 
   useEffect(() => {
     document.body.className = '';
     document.body.classList.add(configClass, varsClass);
 
     document.body.classList.add(...activeTheme.classNames);
-    syncDocumentThemeChrome(activeTheme.kind);
+    const chrome = syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
+    syncDocumentThemeChrome(activeTheme.kind, chrome);
     syncAccentColor(customAccentColor, activeTheme.kind);
 
     if (monochromeMode) {
@@ -126,7 +184,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     } else {
       document.body.style.filter = '';
     }
-  }, [activeTheme, monochromeMode, customAccentColor]);
+  }, [activeTheme, monochromeMode, customAccentColor, themeBaseColor]);
 
   return <ThemeContextProvider value={activeTheme}>{children}</ThemeContextProvider>;
 }

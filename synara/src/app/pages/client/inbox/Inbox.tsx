@@ -22,7 +22,7 @@ function InvitesNavItem() {
 
   return (
     <NavItem
-      variant="Background"
+      variant="Surface"
       radii="400"
       highlight={inviteCount > 0}
       aria-selected={invitesSelected}
@@ -59,12 +59,7 @@ function LaterNavItem() {
     .join(' / ');
 
   return (
-    <NavItem
-      variant="Background"
-      radii="400"
-      highlight={laterCount > 0}
-      aria-selected={laterSelected}
-    >
+    <NavItem variant="Surface" radii="400" highlight={laterCount > 0} aria-selected={laterSelected}>
       <NavLink to={getInboxLaterPath()}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -110,7 +105,7 @@ export function Inbox() {
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>
-            <NavItem variant="Background" radii="400" aria-selected={notificationsSelected}>
+            <NavItem variant="Surface" radii="400" aria-selected={notificationsSelected}>
               <NavLink to={getInboxNotificationsPath()}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">

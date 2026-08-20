@@ -185,7 +185,9 @@ use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
 };
-use crate::app::sync::{build_sync_service, SyncReadiness, SyncServiceConfig};
+use crate::app::sync::{
+    build_sync_service, SyncReadiness, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
+};
 use crate::app::timeline::{
     NativeComposerReplyDraft, NativeDecryptionState, NativeReactionMutation,
     NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
@@ -220,6 +222,8 @@ const MATERIAL_MISSING_CODE: &str = "p4-s3b-session-material-missing";
 const MATERIAL_MISSING_DESCRIPTION: &str = "No restorable session is available.";
 const RESTORE_FAILED_CODE: &str = "p4-s3b-restore-failed";
 const RESTORE_FAILED_DESCRIPTION: &str = "The persisted session could not be restored.";
+const ALREADY_RESTORED_CODE: &str = "p4-s3b-session-already-restored";
+const ALREADY_RESTORED_DESCRIPTION: &str = "A live session is already restored.";
 const LOGIN_VAULT_UNAVAILABLE_CODE: &str = "p4-s3c-secret-vault-unavailable";
 const LOGIN_VAULT_UNAVAILABLE_DESCRIPTION: &str = "The secret store is unavailable.";
 const LOGIN_IDENTITY_INVALID_CODE: &str = "p4-s3c-identity-invalid";
@@ -545,8 +549,10 @@ const DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
 const ROOM_MEMBERSHIP_COMMAND_GENERATION: u64 = 0;
 const ROOM_LEAVE_COMMAND: &str = "matrix_room_leave";
 const ROOM_JOIN_COMMAND: &str = "matrix_room_join";
+const ROOM_SET_FAVORITE_COMMAND: &str = "matrix_room_set_favorite";
 const ROOM_LEAVE_NO_SESSION_CODE: &str = "p2-room-leave-no-session";
 const ROOM_JOIN_NO_SESSION_CODE: &str = "p2-room-join-no-session";
+const ROOM_SET_FAVORITE_NO_SESSION_CODE: &str = "p2-room-set-favorite-no-session";
 const ROOM_MEMBERSHIP_NO_SESSION_DESCRIPTION: &str = "No room-membership session is available.";
 const ROOM_MEMBERSHIP_FAILED_CODE: &str = "p4-s9-12-room-membership-failed";
 const ROOM_MEMBERSHIP_FAILED_DESCRIPTION: &str =
@@ -3243,15 +3249,11 @@ impl SharedCore {
             }
         })?;
         self.spawn_room_list_live();
-        Ok(SyncStartDto {
-            readiness: snapshot.readiness.as_str().to_owned(),
-            session_generation: snapshot.session_generation,
-            started: matches!(
-                snapshot.readiness,
-                SyncReadiness::Running | SyncReadiness::Offline
-            ),
-            offline_mode_enabled: snapshot.offline_mode_enabled,
-        })
+        let snapshot = match self.core.attached_sync_owner() {
+            Some(owner) => wait_for_started_readiness(owner.as_ref(), snapshot).await,
+            None => snapshot,
+        };
+        Ok(sync_start_dto_from_snapshot(snapshot))
     }
 
     fn spawn_room_list_live(&self) {
@@ -4465,6 +4467,23 @@ impl SharedCore {
             .await
     }
 
+    pub async fn room_set_favorite(
+        &self,
+        room_id: String,
+        favorite: bool,
+    ) -> Result<RoomMembershipWriteDto, RoomMembershipCommandError> {
+        let payload = room_membership_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "favorite": favorite,
+        }))?;
+        self.room_membership_command(
+            ROOM_SET_FAVORITE_COMMAND,
+            ROOM_SET_FAVORITE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+    }
+
     pub async fn room_invite(
         &self,
         room_id: String,
@@ -5280,6 +5299,9 @@ impl SharedCore {
     }
 
     pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
+        if let Some(owner) = self.core.attached_sync_owner() {
+            return sync_status_from_owner_snapshot(owner.observe());
+        }
         let payload = self.session_status_command(SYNC_STATUS_COMMAND).await?;
         sync_status_dto(payload)
     }
@@ -7720,6 +7742,7 @@ fn map_room_membership_core_error(
         Some(code)
             if code.starts_with("v-rooms-room-leave-")
                 || code.starts_with("v-rooms-room-join-")
+                || code.starts_with("v-rooms-room-favorite-")
                 || code == "v-send.r-room-profile-join-rule-requires-session" =>
         {
             room_membership_failed(code, ROOM_MEMBERSHIP_OWNER_DESCRIPTION)
@@ -9915,6 +9938,52 @@ fn session_snapshot_dto(
     }
 }
 
+const START_OBSERVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+const START_OBSERVE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
+fn product_live_readiness(readiness: SyncReadiness) -> bool {
+    matches!(readiness, SyncReadiness::Running | SyncReadiness::Offline)
+}
+
+fn sync_start_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> SyncStartDto {
+    SyncStartDto {
+        readiness: snapshot.readiness.as_str().to_owned(),
+        session_generation: snapshot.session_generation,
+        started: product_live_readiness(snapshot.readiness),
+        offline_mode_enabled: snapshot.offline_mode_enabled,
+    }
+}
+
+async fn wait_for_started_readiness(
+    owner: &SyncServiceOwner,
+    mut snapshot: SyncReadinessSnapshot,
+) -> SyncReadinessSnapshot {
+    let deadline = tokio::time::Instant::now() + START_OBSERVE_TIMEOUT;
+    while snapshot.readiness == SyncReadiness::Idle && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(START_OBSERVE_POLL).await;
+        snapshot = owner.observe();
+    }
+    snapshot
+}
+
+fn sync_status_from_owner_snapshot(
+    snapshot: SyncReadinessSnapshot,
+) -> Result<SyncStatusDto, SessionStatusError> {
+    if !snapshot.is_valid_public_sync_status() {
+        return Err(session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(SyncStatusDto {
+        readiness: snapshot.readiness.as_str().to_owned(),
+        session_generation: snapshot.session_generation,
+        offline_mode_enabled: snapshot.offline_mode_enabled,
+        failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
+        sliding_sync_capable: snapshot.sliding_sync_capable,
+    })
+}
+
 fn sync_status_dto(payload: serde_json::Value) -> Result<SyncStatusDto, SessionStatusError> {
     let result: SyncStatusResultWire = serde_json::from_value(payload).map_err(|_| {
         session_status_failed(
@@ -10303,7 +10372,11 @@ impl<'a> RestoreClaim<'a> {
                     committed: false,
                 })
             }
-            RestoredClientSlot::InFlight | RestoredClientSlot::Ready(_) => Err(restore_failed(
+            RestoredClientSlot::Ready(_) => Err(restore_failed(
+                ALREADY_RESTORED_CODE,
+                ALREADY_RESTORED_DESCRIPTION,
+            )),
+            RestoredClientSlot::InFlight => Err(restore_failed(
                 RESTORE_FAILED_CODE,
                 RESTORE_FAILED_DESCRIPTION,
             )),
@@ -10892,7 +10965,8 @@ mod tests {
                 root.to_string_lossy().into_owned(),
             ))
             .expect_err("second restore");
-        assert!(format!("{second:?}").contains(RESTORE_FAILED_CODE));
+        assert!(format!("{second:?}").contains(ALREADY_RESTORED_CODE));
+        assert!(!format!("{second:?}").contains(RESTORE_FAILED_CODE));
         assert!(matches!(
             *shared.restored_client.lock().expect("client"),
             RestoredClientSlot::Ready(_)

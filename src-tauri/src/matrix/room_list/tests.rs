@@ -458,10 +458,60 @@ fn p4_4_recent_and_priority_sorts() {
     let low_last = sort_rooms(&rooms, RoomListSort::LowPriorityLast);
     assert_eq!(low_last.last().unwrap().room_id.as_str(), "!c:example.org");
 
-    let top2 = recent_joined_rooms(&rooms, 2);
-    assert_eq!(top2.len(), 2);
-    assert_eq!(top2[0].room_id.as_str(), "!c:example.org");
-    assert_eq!(top2[1].room_id.as_str(), "!d:example.org");
+    let by_name = sort_rooms(&rooms, RoomListSort::ByName);
+    assert_eq!(
+        by_name
+            .iter()
+            .map(|r| r.room_id.as_str())
+            .collect::<Vec<_>>(),
+        vec![
+            "!a:example.org",
+            "!b:example.org",
+            "!c:example.org",
+            "!d:example.org"
+        ]
+    );
+}
+
+#[test]
+fn p4_4_favorites_partition_leaves_remaining_rooms_sortable() {
+    let rooms = vec![
+        RoomSummaryBuilder::new("!fav:example.org")
+            .name("Fav")
+            .favorite(true)
+            .last_activity_ts(1)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!zeta:example.org")
+            .name("Zeta")
+            .last_activity_ts(50)
+            .build()
+            .unwrap(),
+        RoomSummaryBuilder::new("!alpha:example.org")
+            .name("Alpha")
+            .last_activity_ts(10)
+            .build()
+            .unwrap(),
+    ];
+    let (favorites, remaining) = partition_favorite_rooms(&rooms);
+    assert_eq!(favorites.len(), 1);
+    assert_eq!(favorites[0].room_id.as_str(), "!fav:example.org");
+    let remaining_by_name = sort_rooms(&remaining, RoomListSort::ByName);
+    assert_eq!(
+        remaining_by_name
+            .iter()
+            .map(|r| r.room_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["!alpha:example.org", "!zeta:example.org"]
+    );
+    let remaining_recent = sort_rooms(&remaining, RoomListSort::RecentActivity);
+    assert_eq!(
+        remaining_recent
+            .iter()
+            .map(|r| r.room_id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["!zeta:example.org", "!alpha:example.org"]
+    );
 }
 
 /// SNC-P1-5b: `invite_avatars.rs`, `invites.rs`, and `live.rs` (with their

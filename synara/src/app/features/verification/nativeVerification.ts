@@ -50,6 +50,13 @@ export const verificationRequestNeedsSasStart = (request: NativeVerificationRequ
   (request.direction === 'outgoing' && request.phase === 'ready') ||
   (request.direction === 'incoming' && request.phase === 'started');
 
+export const verificationRequestHasSasCodes = (request: NativeVerificationRequest): boolean => {
+  const emoji = request.sas?.emoji;
+  if (Array.isArray(emoji) && emoji.length > 0) return true;
+  const decimals = request.sas?.decimals;
+  return Array.isArray(decimals) && decimals.length === 3;
+};
+
 export const nativeVerificationErrorMessage = (): string =>
   'Native device verification is unavailable. Restart Synara or try again from a connected device.';
 

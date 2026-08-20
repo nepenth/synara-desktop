@@ -5,8 +5,31 @@ import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 export function ContactInformation() {
+  if (isNativeMatrixSession()) {
+    return (
+      <Box direction="Column" gap="100">
+        <Text size="L400">Contact Information</Text>
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Email Address"
+            description="Homeserver contact addresses are not available in this native session."
+          />
+        </SequenceCard>
+      </Box>
+    );
+  }
+  return <LegacyContactInformation />;
+}
+
+function LegacyContactInformation() {
   const mx = useMatrixClient();
   const [threePIdsState, loadThreePIds] = useAsyncCallback(
     useCallback(() => mx.getThreePids(), [mx])

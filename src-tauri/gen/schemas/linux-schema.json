@@ -459,6 +459,12 @@
           "markdownDescription": "Enables the matrix_get_global_image_packs command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_get_own_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-get-own-profile",
+          "markdownDescription": "Enables the matrix_get_own_profile command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_get_room_directory_visibility command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-get-room-directory-visibility",
@@ -809,6 +815,7 @@
         {
           "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
           "type": "string",
+          "const": "allow-matrix-room-set-favorite",
           "const": "allow-matrix-room-set-power-level",
           "markdownDescription": "Enables the matrix_room_set_power_level command without any pre-configured scope."
         },
@@ -1437,6 +1444,12 @@
           "markdownDescription": "Denies the matrix_get_global_image_packs command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_get_own_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-get-own-profile",
+          "markdownDescription": "Denies the matrix_get_own_profile command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_get_room_directory_visibility command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-get-room-directory-visibility",
@@ -1787,6 +1800,7 @@
         {
           "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
           "type": "string",
+          "const": "deny-matrix-room-set-favorite",
           "const": "deny-matrix-room-set-power-level",
           "markdownDescription": "Denies the matrix_room_set_power_level command without any pre-configured scope."
         },

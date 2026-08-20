@@ -7,7 +7,11 @@ use crate::dto::RoomSummary;
 /// Sort keys for product room lists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum RoomListSort {
-    /// Newest `last_activity_ts` first; missing ts sorts last; stable by room_id.
+    /// Case-insensitive display name; missing name sorts last; stable by room_id.
+    ByName,
+    /// Newest SDK `last_activity_ts` (`latest_event_timestamp`) first.
+    /// Missing ts sorts last; stable by room_id. This is latest-event time,
+    /// including encrypted events when the SDK has a timestamp — not a recents rail.
     RecentActivity,
     /// Favorites first, then recent activity among the rest.
     FavoritesThenRecent,
@@ -16,8 +20,16 @@ pub enum RoomListSort {
 }
 
 impl RoomListSort {
+    pub const ALL: &'static [RoomListSort] = &[
+        Self::ByName,
+        Self::RecentActivity,
+        Self::FavoritesThenRecent,
+        Self::LowPriorityLast,
+    ];
+
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::ByName => "by_name",
             Self::RecentActivity => "recent_activity",
             Self::FavoritesThenRecent => "favorites_then_recent",
             Self::LowPriorityLast => "low_priority_last",
@@ -36,6 +48,13 @@ pub fn sort_rooms(rooms: &[RoomSummary], sort: RoomListSort) -> Vec<RoomSummary>
 pub fn sort_rooms_in_place(rooms: &mut [RoomSummary], sort: RoomListSort) {
     rooms.sort_by(|a, b| {
         use std::cmp::Ordering;
+        let by_name =
+            |x: &RoomSummary, y: &RoomSummary| match (normalized_name(x), normalized_name(y)) {
+                (Some(nx), Some(ny)) => nx.cmp(&ny),
+                (Some(_), None) => Ordering::Less,
+                (None, Some(_)) => Ordering::Greater,
+                (None, None) => x.room_id.cmp(&y.room_id),
+            };
         let by_recent =
             |x: &RoomSummary, y: &RoomSummary| match (x.last_activity_ts, y.last_activity_ts) {
                 (Some(tx), Some(ty)) => ty.cmp(&tx), // newer first
@@ -44,6 +63,7 @@ pub fn sort_rooms_in_place(rooms: &mut [RoomSummary], sort: RoomListSort) {
                 (None, None) => x.room_id.cmp(&y.room_id),
             };
         match sort {
+            RoomListSort::ByName => by_name(a, b).then_with(|| a.room_id.cmp(&b.room_id)),
             RoomListSort::RecentActivity => by_recent(a, b).then_with(|| a.room_id.cmp(&b.room_id)),
             RoomListSort::FavoritesThenRecent => match (a.is_favorite, b.is_favorite) {
                 (true, false) => Ordering::Less,
@@ -59,16 +79,100 @@ pub fn sort_rooms_in_place(rooms: &mut [RoomSummary], sort: RoomListSort) {
     });
 }
 
-/// Top-N recent joined rooms by activity (for "recent" rail).
-pub fn recent_joined_rooms(rooms: &[RoomSummary], limit: usize) -> Vec<RoomSummary> {
-    let mut joined: Vec<RoomSummary> = rooms
-        .iter()
-        .filter(|r| r.membership == crate::dto::Membership::Join)
-        .cloned()
-        .collect();
-    sort_rooms_in_place(&mut joined, RoomListSort::RecentActivity);
-    if joined.len() > limit {
-        joined.truncate(limit);
+fn normalized_name(room: &RoomSummary) -> Option<String> {
+    let name = room.name.as_deref()?.trim();
+    if name.is_empty() {
+        return None;
     }
-    joined
+    Some(name.replace('#', "").to_lowercase())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::room_list::summary::RoomSummaryBuilder;
+
+    fn named(id: &str, name: &str, ts: u64) -> RoomSummary {
+        RoomSummaryBuilder::new(id)
+            .name(name)
+            .last_activity_ts(ts)
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn by_name_is_case_insensitive_and_ignores_hash() {
+        let rooms = vec![
+            named("!c:example.org", "#zeta", 1),
+            named("!a:example.org", "Alpha", 9),
+            named("!b:example.org", "beta", 5),
+        ];
+        let sorted = sort_rooms(&rooms, RoomListSort::ByName);
+        assert_eq!(
+            sorted
+                .iter()
+                .map(|r| r.room_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["!a:example.org", "!b:example.org", "!c:example.org"]
+        );
+    }
+
+    #[test]
+    fn recent_activity_orders_newest_first() {
+        let rooms = vec![
+            named("!old:example.org", "Old", 10),
+            named("!new:example.org", "New", 30),
+            named("!mid:example.org", "Mid", 20),
+        ];
+        let sorted = sort_rooms(&rooms, RoomListSort::RecentActivity);
+        assert_eq!(
+            sorted
+                .iter()
+                .map(|r| r.room_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["!new:example.org", "!mid:example.org", "!old:example.org"]
+        );
+    }
+
+    #[test]
+    fn missing_last_activity_ts_sorts_last() {
+        let rooms = vec![
+            named("!new:example.org", "New", 30),
+            RoomSummaryBuilder::new("!none:example.org")
+                .name("None")
+                .build()
+                .unwrap(),
+            named("!old:example.org", "Old", 10),
+        ];
+        let sorted = sort_rooms(&rooms, RoomListSort::RecentActivity);
+        assert_eq!(
+            sorted
+                .iter()
+                .map(|r| r.room_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["!new:example.org", "!old:example.org", "!none:example.org"]
+        );
+        assert!(sorted[2].last_activity_ts.is_none());
+    }
+
+    #[test]
+    fn encrypted_room_orders_by_native_last_activity_ts() {
+        let rooms = vec![
+            RoomSummaryBuilder::new("!plain:example.org")
+                .name("Plain")
+                .last_activity_ts(10)
+                .build()
+                .unwrap(),
+            RoomSummaryBuilder::new("!encrypted:example.org")
+                .name("Encrypted")
+                .encrypted(true)
+                .last_activity_ts(40)
+                .build()
+                .unwrap(),
+        ];
+        let sorted = sort_rooms(&rooms, RoomListSort::RecentActivity);
+        assert_eq!(sorted[0].room_id.as_str(), "!encrypted:example.org");
+        assert!(sorted[0].is_encrypted);
+        assert_eq!(sorted[0].last_activity_ts, Some(40));
+    }
 }

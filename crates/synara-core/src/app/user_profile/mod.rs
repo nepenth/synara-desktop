@@ -18,9 +18,10 @@ pub use index::{
     UserProfile, UserProfileIndex, MAX_AVATAR_URL_CHARS, MAX_CACHED_PROFILES,
     MAX_DISPLAY_NAME_CHARS, MAX_IGNORED_USERS,
 };
-pub use ipc::MatrixProfileWriteResult;
+pub use ipc::{MatrixOwnProfile, MatrixProfileWriteResult};
 pub use live::{
-    parse_own_avatar_mxc, parse_own_display_name, set_own_avatar, set_own_display_name,
+    get_own_profile, parse_own_avatar_mxc, parse_own_display_name, set_own_avatar,
+    set_own_display_name,
 };
 
 /// Static marker for link / schema smoke.

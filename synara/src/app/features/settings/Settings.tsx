@@ -21,14 +21,11 @@ import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { Account } from './account';
 import { useUserProfile } from '../../hooks/useUserProfile';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { getMxIdLocalPart } from '../../utils/matrix';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { UserAvatar } from '../../components/user-avatar';
 import { nameInitials } from '../../utils/common';
 import { Notifications } from './notifications';
 import { Devices } from './devices';
-import { EmojisStickers } from './emojis-stickers';
 import { DeveloperTools } from './developer-tools';
 import { Diagnostics } from './diagnostics';
 import { About } from './about';
@@ -42,7 +39,6 @@ export enum SettingsPages {
   AccountPage,
   NotificationPage,
   DevicesPage,
-  EmojisStickersPage,
   DiagnosticsPage,
   DeveloperToolsPage,
   AboutPage,
@@ -77,11 +73,6 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         name: 'Devices',
         icon: Icons.Monitor,
       },
-      {
-        page: SettingsPages.EmojisStickersPage,
-        name: 'Emojis & Stickers',
-        icon: Icons.Smile,
-      },
       ...(isDesktopPlatform()
         ? [
             {
@@ -111,13 +102,10 @@ type SettingsProps = {
 };
 export function Settings({ initialPage, requestClose }: SettingsProps) {
   const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const userId = mx.getUserId()!;
   const profile = useUserProfile(userId);
   const displayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
-  const avatarUrl = profile.avatarUrl
-    ? resolveMatrixThumbnailUrl(mx, profile.avatarUrl, 96, { useAuthentication })
-    : undefined;
+  const avatarUrl = profile.avatarUrl;
 
   const screenSize = useScreenSizeContext();
   const [activePage, setActivePage] = useState<SettingsPages | undefined>(() => {
@@ -154,7 +142,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
               </Box>
               <Box shrink="No">
                 {screenSize === ScreenSize.Mobile && (
-                  <IconButton onClick={requestClose} variant="Background">
+                  <IconButton onClick={requestClose} variant="Surface">
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 )}
@@ -166,7 +154,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                   {menuItems.map((item) => (
                     <MenuItem
                       key={item.name}
-                      variant="Background"
+                      variant="Surface"
                       radii="400"
                       aria-pressed={activePage === item.page}
                       before={<Icon src={item.icon} size="100" filled={activePage === item.page} />}
@@ -234,9 +222,6 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
       )}
       {activePage === SettingsPages.DevicesPage && (
         <Devices requestClose={handlePageRequestClose} />
-      )}
-      {activePage === SettingsPages.EmojisStickersPage && (
-        <EmojisStickers requestClose={handlePageRequestClose} />
       )}
       {activePage === SettingsPages.DiagnosticsPage && (
         <Diagnostics requestClose={handlePageRequestClose} />

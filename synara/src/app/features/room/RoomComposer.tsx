@@ -65,7 +65,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
         bottom={
           toolbarVisible ? (
             <div className={css.RoomComposerToolbar}>
-              <Line variant="SurfaceVariant" size="300" />
+              <Line variant="Secondary" size="300" />
               {toolbar ?? <Toolbar />}
             </div>
           ) : undefined

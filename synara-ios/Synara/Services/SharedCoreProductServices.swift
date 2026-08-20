@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SynaraCore
 
 /// Caller-owned SharedCore used by live product services after S10 leftover retirement.
@@ -80,18 +81,26 @@ struct SharedCoreAuthService: AuthServicing {
 
 final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let host: SharedCoreProductHost
+    private let connectionStatus: ConnectionStatusStore
+    private let applyLock = NSLock()
+    private var applyChain: Task<Void, Never> = Task {}
+    private var lastSession: AuthenticatedSession?
+    private var pathMonitor: NWPathMonitor?
+    private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
+    private var statusWatchTask: Task<Void, Never>?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
 
     var syncStatusDescription: String {
         syncStatus.description
     }
 
-    init(host: SharedCoreProductHost) {
+    init(host: SharedCoreProductHost, connectionStatus: ConnectionStatusStore = ConnectionStatusStore()) {
         self.host = host
+        self.connectionStatus = connectionStatus
     }
 
     func start(session: AuthenticatedSession) async {
-        await applyLiveSession(session)
+        await enqueueLiveSession(session)
     }
 
     func warmSync(session: AuthenticatedSession) async {
@@ -109,29 +118,133 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func stop() async {
-        syncStatus = .stopped
+        stopStatusWatch()
+        stopPathMonitor()
+        await publish(.stopped)
     }
 
     func pauseForBackground() async {}
 
     func resumeFromForeground(session: AuthenticatedSession) async {
-        await applyLiveSession(session)
+        await enqueueLiveSession(session)
+    }
+
+    private func enqueueLiveSession(_ session: AuthenticatedSession) async {
+        let queued: Task<Void, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task { [weak self] in
+                await previous.value
+                await self?.applyLiveSession(session)
+            }
+            applyChain = next
+            return next
+        }
+        await queued.value
     }
 
     private func applyLiveSession(_ session: AuthenticatedSession) async {
-        syncStatus = .starting
+        lastSession = session
+        await publish(.starting)
         let outcome = await SharedCoreSessionBootstrap.prepareLiveSession(
             userID: session.userID,
             homeserverURL: session.homeserverURL.absoluteString,
             storeRoot: host.storeRoot,
             core: host.core
         )
-        if outcome.started {
-            syncStatus = .syncing
-        } else if outcome.attached || outcome.restored {
-            syncStatus = .starting
-        } else {
-            syncStatus = .stopped
+        if let failure = outcome.failure {
+            await publish(failure.syncStatus)
+            if failure == .restoreFailed || failure == .attachFailed {
+                stopStatusWatch()
+                stopPathMonitor()
+            } else {
+                startStatusWatch()
+                startPathMonitor()
+            }
+            return
+        }
+        await publish(ConnectionStatusCopy.fromReadiness(outcome.readiness, previous: .starting))
+        startStatusWatch()
+        startPathMonitor()
+    }
+
+    private func startStatusWatch() {
+        if statusWatchTask != nil {
+            return
+        }
+        statusWatchTask = Task { [weak self] in
+            while Task.isCancelled == false {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await self?.refreshLiveSyncStatus()
+            }
+        }
+    }
+
+    private func stopStatusWatch() {
+        statusWatchTask?.cancel()
+        statusWatchTask = nil
+    }
+
+    private func refreshLiveSyncStatus() async {
+        switch syncStatus {
+        case .restoreFailed, .stopped:
+            return
+        default:
+            break
+        }
+        guard let dto = try? await SharedCoreSessionStatus.syncStatus(core: host.core) else {
+            return
+        }
+        await publish(ConnectionStatusCopy.fromReadiness(dto.readiness, previous: syncStatus))
+    }
+
+    private func publish(_ status: MatrixSyncStatus) async {
+        syncStatus = status
+        await MainActor.run {
+            connectionStatus.update(status)
+        }
+    }
+
+    private func startPathMonitor() {
+        if pathMonitor != nil {
+            return
+        }
+        let monitor = NWPathMonitor()
+        monitor.pathUpdateHandler = { [weak self] path in
+            Task { await self?.handlePath(path) }
+        }
+        monitor.start(queue: pathQueue)
+        pathMonitor = monitor
+    }
+
+    private func stopPathMonitor() {
+        pathMonitor?.cancel()
+        pathMonitor = nil
+    }
+
+    private func handlePath(_ path: NWPath) async {
+        switch syncStatus {
+        case .restoreFailed, .stopped:
+            return
+        default:
+            break
+        }
+        switch path.status {
+        case .unsatisfied, .requiresConnection:
+            switch syncStatus {
+            case .connected, .syncing, .starting:
+                await publish(.reconnecting)
+            default:
+                break
+            }
+        case .satisfied:
+            if syncStatus == .reconnecting, let lastSession {
+                await enqueueLiveSession(lastSession)
+            }
+        @unknown default:
+            break
         }
     }
 
@@ -211,7 +324,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         highlightCount: Int($0.highlightCount),
                         markedUnread: $0.markedUnread,
                         lastActivityTs: $0.lastActivityTs,
-                        lastMessagePreview: $0.lastMessagePreview
+                        lastMessagePreview: $0.lastMessagePreview,
+                        isFavorite: $0.isFavorite
                     )
                 },
                 invites: invites.map {
@@ -808,16 +922,37 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
         let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
         let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
-        guard crypto != nil || backup != nil || secretStorage != nil else {
+        let devices = (try? await SharedCoreDevices.deviceSnapshot(core: host.core))?.devices ?? []
+        guard crypto != nil || backup != nil || secretStorage != nil || devices.isEmpty == false else {
             return .unknown
         }
-        return SharedCoreSessionCrypto.status(
+        let mapped = SharedCoreSessionCrypto.status(
             crossSigningState: crypto?.crossSigningState,
             backupEnabled: backup?.enabled,
             backupAvailability: backup?.availability,
             backupDeviceState: backup?.deviceState,
             recoveryState: backup?.recoveryState,
             secretStorageState: secretStorage?.state
+        )
+        let current = devices.first(where: \.isCurrent)
+        let hasOtherDevices = devices.contains { $0.isCurrent == false }
+        let hasVerifiedPeer = devices.contains { $0.isCurrent == false && $0.trust == "verified" }
+        let verification: SynaraCryptoVerificationStatus
+        switch current?.trust {
+        case "verified":
+            verification = .verified
+        case "unverified":
+            verification = .unverified
+        default:
+            verification = .unknown
+        }
+        return SessionCryptoStatus(
+            verification: verification,
+            recovery: mapped.recovery,
+            backup: mapped.backup,
+            hasDevicesToVerifyAgainst: hasVerifiedPeer,
+            isLastDevice: devices.isEmpty ? nil : hasOtherDevices == false,
+            unableToDecryptCount: mapped.unableToDecryptCount
         )
     }
 
@@ -1072,6 +1207,18 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
     func leaveRoom(roomID: String) async throws {
         do {
             _ = try await SharedCoreRoomLeaveJoin.roomLeave(core: host.core, roomId: roomID)
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func setRoomFavorite(_ favorite: Bool, roomID: String) async throws {
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomSetFavorite(
+                core: host.core,
+                roomId: roomID,
+                favorite: favorite
+            )
         } catch {
             throw RoomManagementError.failed
         }

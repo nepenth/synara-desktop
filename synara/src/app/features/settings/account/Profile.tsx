@@ -30,10 +30,8 @@ import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { UserProfile, useUserProfile } from '../../../hooks/useUserProfile';
-import { resolveMatrixThumbnailUrl } from '../../../matrix/media';
 import { getMxIdLocalPart } from '../../../utils/matrix';
 import { UserAvatar } from '../../../components/user-avatar';
-import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { nameInitials } from '../../../utils/common';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useFilePicker } from '../../../hooks/useFilePicker';
@@ -44,7 +42,12 @@ import { ModalWide } from '../../../styles/Modal.css';
 import { createUploadAtom, UploadSuccess } from '../../../state/upload';
 import { CompactUploadCardRenderer } from '../../../components/upload-card';
 import { useCapabilities } from '../../../hooks/useCapabilities';
-import { setOwnAvatarNative, setOwnDisplayNameNative, uploadMediaNative } from './nativeProfile';
+import {
+  notifyOwnProfileChanged,
+  setOwnAvatarNative,
+  setOwnDisplayNameNative,
+  uploadMediaNative,
+} from './nativeProfile';
 import { isSynaraDesktop } from '../../../utils/desktop';
 
 type ProfileProps = {
@@ -53,15 +56,12 @@ type ProfileProps = {
 };
 function ProfileAvatar({ profile, userId }: ProfileProps) {
   const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const capabilities = useCapabilities();
   const [alertRemove, setAlertRemove] = useState(false);
   const disableSetAvatar = capabilities['m.set_avatar_url']?.enabled === false;
 
   const defaultDisplayName = profile.displayName ?? getMxIdLocalPart(userId) ?? userId;
-  const avatarUrl = profile.avatarUrl
-    ? resolveMatrixThumbnailUrl(mx, profile.avatarUrl, 96, { useAuthentication })
-    : undefined;
+  const avatarUrl = profile.avatarUrl;
 
   const [imageFile, setImageFile] = useState<File>();
   const imageFileURL = useObjectURL(imageFile);
@@ -89,6 +89,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
       if (result === 'legacy') {
         await mx.setAvatarUrl(mxc);
       }
+      notifyOwnProfileChanged();
       handleRemoveUpload();
     },
     [mx, handleRemoveUpload]
@@ -119,6 +120,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
           setNativeUploading(false);
           return;
         }
+        notifyOwnProfileChanged();
         handleRemoveUpload();
         setNativeUploading(false);
       } catch {
@@ -138,6 +140,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
     if (result === 'legacy') {
       await mx.setAvatarUrl('');
     }
+    notifyOwnProfileChanged();
     setAlertRemove(false);
   };
 
@@ -284,6 +287,7 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
         if (result === 'legacy') {
           await mx.setDisplayName(name);
         }
+        notifyOwnProfileChanged();
       },
       [mx]
     )

@@ -181,6 +181,7 @@ test('valid_room_summary parses', () => {
   assert.equal(r.notificationMode, 'mentions');
   assert.equal(r.lastMessagePreview, undefined);
   assert.equal(r.heroes?.length, 1);
+  assert.equal(r.isFavorite, false);
 });
 
 test('room summary rejects invalid membership', () => {

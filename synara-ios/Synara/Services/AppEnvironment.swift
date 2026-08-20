@@ -46,6 +46,7 @@ struct AppEnvironment {
     let crypto: CryptoStatusServicing
     let roomManagement: RoomManagementServicing
     let sessionReadiness: SignedInSessionReadinessServicing
+    let connectionStatus: ConnectionStatusStore
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -73,7 +74,8 @@ struct AppEnvironment {
             storeRoot: storeRoot,
             sessionStore: session
         )
-        let matrix = SharedCoreMatrixClientService(host: host)
+        let connectionStatus = ConnectionStatusStore()
+        let matrix = SharedCoreMatrixClientService(host: host, connectionStatus: connectionStatus)
         let pusherService = SharedCorePusherService(
             host: host,
             gatewayURL: resolvedPushGatewayURL(),
@@ -127,7 +129,8 @@ struct AppEnvironment {
             mediaUploader: SharedCoreMediaUploadService(host: host),
             crypto: crypto,
             roomManagement: roomManagement,
-            sessionReadiness: sessionReadiness
+            sessionReadiness: sessionReadiness,
+            connectionStatus: connectionStatus
         )
     }
 
@@ -159,7 +162,8 @@ struct AppEnvironment {
         crypto: CryptoStatusServicing = MockCryptoStatusService(),
         roomManagement: RoomManagementServicing = MockRoomManagementService(),
         sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness(),
-        settings: SettingsStoring = InMemorySettingsStore()
+        settings: SettingsStoring = InMemorySettingsStore(),
+        connectionStatus: ConnectionStatusStore = ConnectionStatusStore()
     ) -> AppEnvironment {
         AppEnvironment(
             session: session,
@@ -194,7 +198,8 @@ struct AppEnvironment {
             mediaUploader: mediaUploader,
             crypto: crypto,
             roomManagement: roomManagement,
-            sessionReadiness: sessionReadiness
+            sessionReadiness: sessionReadiness,
+            connectionStatus: connectionStatus
         )
     }
 

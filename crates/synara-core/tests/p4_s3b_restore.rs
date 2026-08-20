@@ -153,7 +153,8 @@ fn restore_from_vault_installs_session_without_password_or_token_leak() {
             root.to_string_lossy().into_owned(),
         ))
         .expect_err("second restore");
-    assert!(format!("{second:?}").contains("p4-s3b-restore-failed"));
+    assert!(format!("{second:?}").contains("p4-s3b-session-already-restored"));
+    assert!(!format!("{second:?}").contains("p4-s3b-restore-failed"));
     drop(shared);
     drop(_enter);
     drop(rt);

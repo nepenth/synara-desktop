@@ -256,9 +256,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
 
         XCTAssertFalse(outcome.restored)
+        XCTAssertFalse(outcome.skippedRestore)
         XCTAssertFalse(outcome.attached)
+        XCTAssertFalse(outcome.skippedAttach)
         XCTAssertFalse(outcome.started)
         XCTAssertNil(outcome.readiness)
+        XCTAssertEqual(outcome.failure, .restoreFailed)
         let publicError = String(describing: outcome)
         for forbidden in ["password", "syt_", userID, "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
@@ -279,7 +282,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             accessToken: "syt_secret_token"
         )
         await service.resumeFromForeground(session: session)
-        XCTAssertEqual(service.syncStatus, .stopped)
+        XCTAssertEqual(service.syncStatus, .restoreFailed)
         let publicError = String(describing: service.syncStatus)
         for forbidden in ["password", "syt_secret_token", "@alice:example.org", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
@@ -791,7 +794,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     highlightCount: 0,
                     markedUnread: false,
                     lastActivityTs: 1_700_000_000_000,
-                    lastMessagePreview: nil
+                    lastMessagePreview: nil,
+                    isFavorite: false
                 ),
                 SharedCoreRoomListRows.RoomRow(
                     roomId: "!space:example.org",
@@ -803,7 +807,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     highlightCount: 0,
                     markedUnread: false,
                     lastActivityTs: 0,
-                    lastMessagePreview: "Hello from Alice"
+                    lastMessagePreview: "Hello from Alice",
+                    isFavorite: true
                 ),
             ],
             invites: [
@@ -826,6 +831,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.last?.lastMessagePreview, "Hello from Alice")
         XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
         XCTAssertEqual(rooms.first?.membership, .invited)
+        XCTAssertEqual(rooms.first?.isFavorite, false)
+        XCTAssertEqual(rooms.last?.isFavorite, true)
         XCTAssertEqual(rooms.last?.lastActivityAt, .distantPast)
         let publicError = String(describing: rooms)
         for forbidden in ["password", "syt_", "token"] {
@@ -1104,6 +1111,91 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 otherDeviceId: nil
             ),
             .finished
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "confirmed",
+                direction: "outgoing",
+                flowId: "flow-5",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .confirmed
+        )
+        XCTAssertNotEqual(
+            SharedCoreVerificationLive.state(
+                phase: "confirmed",
+                direction: "outgoing",
+                flowId: "flow-5",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .finished
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "mismatched",
+                direction: "outgoing",
+                flowId: "flow-6",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .mismatched
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "sas_ready",
+                direction: "outgoing",
+                flowId: "flow-7",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .sasStarted
+        )
+        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
+        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "ready",
+                direction: "outgoing",
+                flowId: "flow-8",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "ready",
+                direction: "incoming",
+                flowId: "flow-9",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .sasStarted
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "started",
+                direction: "incoming",
+                flowId: "flow-10",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "started",
+                direction: "outgoing",
+                flowId: "flow-11",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .sasStarted
         )
     }
 
@@ -1758,6 +1850,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         } catch {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-room-join-no-session"))
+            for forbidden in ["syt_", "token", roomId, alias, via] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreRoomLeaveJoin.roomSetFavorite(
+                core: core,
+                roomId: roomId,
+                favorite: true
+            )
+            XCTFail("Fail-closed SharedCore must not favorite a room without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-room-set-favorite-no-session"))
             for forbidden in ["syt_", "token", roomId, alias, via] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }

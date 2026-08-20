@@ -1,4 +1,6 @@
 import { atom } from 'jotai';
+import { normalizeAccentColor } from '../utils/themeAccent';
+import { normalizeThemeBaseColor } from '../utils/themeBase';
 
 const SHARED_SETTINGS_STORAGE_KEY = 'settings';
 const PLATFORM_SETTINGS_STORAGE_KEY = 'platformSettings';
@@ -23,6 +25,7 @@ export interface SharedSettings {
   darkThemeId?: string;
   monochromeMode?: boolean;
   customAccentColor?: string;
+  themeBaseColor?: string;
   isMarkdown: boolean;
   editorToolbar: boolean;
   twitterEmoji: boolean;
@@ -89,6 +92,7 @@ export const defaultSharedSettings: SharedSettings = {
   darkThemeId: undefined,
   monochromeMode: false,
   customAccentColor: undefined,
+  themeBaseColor: undefined,
   isMarkdown: true,
   editorToolbar: false,
   twitterEmoji: false,
@@ -175,13 +179,23 @@ const pickKnownSettings = <T extends object>(defaults: T, source: object | undef
   return settings;
 };
 
+const sanitizeSharedSettings = (settings: SharedSettings): SharedSettings => ({
+  ...settings,
+  customAccentColor: normalizeAccentColor(
+    typeof settings.customAccentColor === 'string' ? settings.customAccentColor : undefined
+  ),
+  themeBaseColor: normalizeThemeBaseColor(
+    typeof settings.themeBaseColor === 'string' ? settings.themeBaseColor : undefined
+  ),
+});
+
 export const mergeSettingsSnapshot = (snapshot: SettingsSnapshot): Settings => ({
   ...snapshot.shared,
   ...snapshot.platform,
 });
 
 export const splitSettings = (settings: Settings): SettingsSnapshot => ({
-  shared: pickKnownSettings(defaultSharedSettings, settings),
+  shared: sanitizeSharedSettings(pickKnownSettings(defaultSharedSettings, settings)),
   platform: pickKnownSettings(defaultPlatformSettings, settings),
 });
 
@@ -191,7 +205,9 @@ export const createLocalStorageSettingsStore = (storage: SettingsStorage): Setti
     const platformSettings = readStoredSettings(storage, PLATFORM_SETTINGS_STORAGE_KEY);
 
     return {
-      shared: pickKnownSettings(defaultSharedSettings, legacyOrSharedSettings),
+      shared: sanitizeSharedSettings(
+        pickKnownSettings(defaultSharedSettings, legacyOrSharedSettings)
+      ),
       platform: pickKnownSettings(defaultPlatformSettings, {
         ...legacyOrSharedSettings,
         ...platformSettings,
@@ -200,7 +216,10 @@ export const createLocalStorageSettingsStore = (storage: SettingsStorage): Setti
   };
 
   const setSnapshot = (snapshot: SettingsSnapshot): void => {
-    storage.setItem(SHARED_SETTINGS_STORAGE_KEY, JSON.stringify(snapshot.shared));
+    storage.setItem(
+      SHARED_SETTINGS_STORAGE_KEY,
+      JSON.stringify(sanitizeSharedSettings(snapshot.shared))
+    );
     storage.setItem(PLATFORM_SETTINGS_STORAGE_KEY, JSON.stringify(snapshot.platform));
   };
 

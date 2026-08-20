@@ -10,7 +10,7 @@
 //! - ordered delta ops with monotonic sequence + session generation
 //! - gap / stale generation → resync (full snapshot reset)
 //! - P4.3: scope filters (joined/invites/unread/mentions/direct) + badge counts
-//! - P4.4: favorite / low-priority / folder filters + recent-activity sorts
+//! - P4.4: favorite / low-priority / folder filters + name/recent-activity sorts
 //!
 //! D0.2 adds a production snapshot projection backed only by matrix-sdk-ui's
 //! room-list service. There is no JS room-list fallback while a native session
@@ -44,8 +44,8 @@ pub use counts::{
 pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
 pub use error::RoomListError;
 pub use filters::{
-    filter_rooms_by_scope, room_matches_scope, select_rooms_by_scope, select_rooms_in_folder,
-    RoomListScope,
+    filter_rooms_by_scope, partition_favorite_rooms, room_matches_scope, select_rooms_by_scope,
+    select_rooms_in_folder, RoomListScope,
 };
 pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVATAR_HANDLES};
 pub use invites::{
@@ -60,7 +60,7 @@ pub use live::{
     NativeRoomListUpdateSignal, RoomListUpdateEmit,
 };
 pub use projection::{reconstruct, RoomListProjection};
-pub use sort::{recent_joined_rooms, sort_rooms, sort_rooms_in_place, RoomListSort};
+pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;
 
 /// Static marker for link / schema smoke.

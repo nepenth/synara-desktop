@@ -116,6 +116,8 @@ struct SettingsView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(SynaraChrome.settings)
         .settingsTabBarClearance()
         .navigationTitle("Settings")
         .accessibilityIdentifier("SettingsScreen")
@@ -309,11 +311,37 @@ private struct NotificationSettingsView: View {
 }
 
 private struct AppearanceSettingsView: View {
+    @Environment(\.appEnvironment) private var environment
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var baseColor = Color(synaraHex: SynaraThemeRamp.defaultBaseHex)
+    @State private var hasCustomBaseColor = false
+    @State private var didLoadBaseColor = false
+    @State private var isBaseColorDirty = false
+    @State private var persistTask: Task<Void, Never>?
+
     var body: some View {
         Form {
-            Section("Theme") {
+            Section {
                 SettingsInfoRow(title: "Appearance", value: "System")
                     .accessibilityIdentifier("AppearanceThemeRow")
+                themeRampPreview
+                ColorPicker("Base Color", selection: $baseColor, supportsOpacity: false)
+                    .accessibilityIdentifier("AppearanceBaseColorPicker")
+                    .onChange(of: baseColor) { newValue in
+                        guard didLoadBaseColor else { return }
+                        isBaseColorDirty = true
+                        schedulePersist(newValue)
+                    }
+                Button("Reset Base Color") {
+                    persistTask?.cancel()
+                    resetBaseColor()
+                }
+                .disabled(hasCustomBaseColor == false)
+                .accessibilityIdentifier("AppearanceBaseColorReset")
+            } header: {
+                Text("Theme")
+            } footer: {
+                Text("Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.")
             }
             Section {
                 SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
@@ -324,9 +352,85 @@ private struct AppearanceSettingsView: View {
                 Text("Adjust text size in iOS Settings. Synara follows your system accessibility preferences.")
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(SynaraChrome.settings)
         .settingsTabBarClearance()
         .navigationTitle("Appearance")
         .accessibilityIdentifier("AppearanceSettingsScreen")
+        .onAppear {
+            let stored = environment.settings.string(for: SynaraThemeRamp.storageKey)
+            hasCustomBaseColor = SynaraThemeRamp.normalize(stored) != nil
+            baseColor = Color(synaraHex: SynaraThemeRamp.resolve(stored))
+            DispatchQueue.main.async {
+                didLoadBaseColor = true
+            }
+        }
+        .onDisappear {
+            persistTask?.cancel()
+            if isBaseColorDirty {
+                commitBaseColor(baseColor)
+            }
+        }
+    }
+
+    private var themeRampPreview: some View {
+        let tokens = SynaraThemeRamp.tokens(
+            baseHex: SynaraThemeRamp.normalize(baseColor.synaraHexString()) ?? SynaraThemeRamp.defaultBaseHex,
+            dark: colorScheme == .dark
+        )
+        return HStack(spacing: SynaraSpacing.medium) {
+            rampSwatch(title: "Rail", hex: tokens.groupedSurface)
+            rampSwatch(title: "List", hex: tokens.secondarySurface)
+            rampSwatch(title: "Chat", hex: tokens.surface)
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Theme ramp preview")
+    }
+
+    private func rampSwatch(title: String, hex: String) -> some View {
+        VStack(spacing: SynaraSpacing.xSmall) {
+            RoundedRectangle(cornerRadius: 4, style: .continuous)
+                .fill(Color(synaraHex: hex))
+                .frame(width: 28, height: 36)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .stroke(SynaraColor.separator.opacity(0.4), lineWidth: 0.5)
+                )
+            Text(title)
+                .font(SynaraTypography.fineMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+    }
+
+    private func schedulePersist(_ color: Color) {
+        persistTask?.cancel()
+        persistTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 280_000_000)
+            guard Task.isCancelled == false else { return }
+            commitBaseColor(color)
+        }
+    }
+
+    private func commitBaseColor(_ color: Color) {
+        guard let hex = color.synaraHexString() else { return }
+        persistBaseColor(hex)
+    }
+
+    private func persistBaseColor(_ hex: String) {
+        guard let normalized = SynaraThemeRamp.normalize(hex) else { return }
+        environment.settings.setString(normalized, for: SynaraThemeRamp.storageKey)
+        SynaraThemePaint.shared.reload()
+        hasCustomBaseColor = true
+        isBaseColorDirty = false
+    }
+
+    private func resetBaseColor() {
+        persistTask?.cancel()
+        environment.settings.setString(nil, for: SynaraThemeRamp.storageKey)
+        SynaraThemePaint.shared.reload()
+        hasCustomBaseColor = false
+        isBaseColorDirty = false
+        baseColor = Color(synaraHex: SynaraThemeRamp.defaultBaseHex)
     }
 }
 
@@ -354,7 +458,9 @@ private struct SecuritySettingsView: View {
                     .accessibilityIdentifier("SecurityDecryptionIssuesRow")
             }
 
-            if sessionCryptoStatus.hasDevicesToVerifyAgainst == true {
+            if sessionCryptoStatus.verification != .verified,
+               sessionCryptoStatus.hasDevicesToVerifyAgainst == true
+            {
                 Section {
                     Button {
                         runCryptoAction {
@@ -365,6 +471,8 @@ private struct SecuritySettingsView: View {
                     }
                     .disabled(isRunningCryptoAction)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
+                } footer: {
+                    Text("Compare emoji or number codes with another already verified session. Synara does not mark this device verified until both sides confirm.")
                 }
             }
 

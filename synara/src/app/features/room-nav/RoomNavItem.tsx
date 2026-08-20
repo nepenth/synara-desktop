@@ -52,6 +52,9 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { useRoomName } from '../../hooks/useRoomMeta';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -63,6 +66,11 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const mx = useMatrixClient();
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
     const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+    const nativeRooms = useNativeRoomListSnapshot();
+    const isFavorite =
+      nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)?.isFavorite === true;
+    const [favoriteError, setFavoriteError] = useState<string>();
+    const [favoriteBusy, setFavoriteBusy] = useState(false);
     const powerLevels = usePowerLevels(room);
     const creators = useRoomCreators(room);
 
@@ -81,6 +89,25 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const handleMarkAsUnread = () => {
       markAsUnread(mx, room.roomId);
       requestClose();
+    };
+
+    const handleToggleFavorite = async () => {
+      if (favoriteBusy) return;
+      setFavoriteError(undefined);
+      setFavoriteBusy(true);
+      try {
+        await setRoomFavoriteWithNativeOwner(
+          room.roomId,
+          !isFavorite,
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
+        requestClose();
+      } catch {
+        setFavoriteError('Could not update favorite.');
+      } finally {
+        setFavoriteBusy(false);
+      }
     };
 
     const handleInvite = () => {
@@ -121,6 +148,30 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
               {unread ? 'Mark as Read' : 'Mark as Unread'}
             </Text>
           </MenuItem>
+          <MenuItem
+            onClick={() => {
+              void handleToggleFavorite();
+            }}
+            size="300"
+            disabled={favoriteBusy}
+            after={
+              favoriteBusy ? (
+                <Spinner size="100" variant="Secondary" />
+              ) : (
+                <Icon size="100" src={Icons.Pin} filled={isFavorite} />
+              )
+            }
+            radii="300"
+          >
+            <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+              {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
+            </Text>
+          </MenuItem>
+          {favoriteError && (
+            <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+              {favoriteError}
+            </Text>
+          )}
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
             {(handleOpen, opened, changing) => (
               <MenuItem
@@ -262,7 +313,7 @@ function RoomNavItemImpl({
 
   return (
     <NavItem
-      variant="Background"
+      variant="Surface"
       radii="400"
       highlight={unread !== undefined}
       aria-selected={selected}

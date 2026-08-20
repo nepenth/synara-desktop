@@ -151,30 +151,31 @@ extension RoomSummary {
 
     private var avatarPalette: [Color] {
         if kind == .directMessage {
-            return [Color(red: 0.35, green: 0.42, blue: 0.53), Color(red: 0.12, green: 0.16, blue: 0.24)]
+            return [Color(synaraHex: "#2a3350"), Color(synaraHex: "#1e2438")]
         }
         if isAgentRoom {
-            return [Color(red: 0.58, green: 0.32, blue: 0.94), Color(red: 0.20, green: 0.63, blue: 0.86)]
+            return [Color(synaraHex: "#163a40"), Color(synaraHex: "#122e33")]
         }
         if isSecureRoom {
-            return [Color(red: 0.05, green: 0.55, blue: 0.43), Color(red: 0.02, green: 0.26, blue: 0.25)]
+            return [Color(synaraHex: "#1c3d32"), Color(synaraHex: "#163129")]
         }
         if name.localizedCaseInsensitiveContains("alert") || name.localizedCaseInsensitiveContains("incident") {
-            return [Color(red: 0.97, green: 0.42, blue: 0.22), Color(red: 0.78, green: 0.12, blue: 0.24)]
+            return [Color(synaraHex: "#3b2b22"), Color(synaraHex: "#30231c")]
         }
         if name.localizedCaseInsensitiveContains("design") || name.localizedCaseInsensitiveContains("creative") {
-            return [Color(red: 0.49, green: 0.29, blue: 0.95), Color(red: 0.95, green: 0.32, blue: 0.58)]
+            return [Color(synaraHex: "#3d2a4d"), Color(synaraHex: "#322240")]
         }
         if name.localizedCaseInsensitiveContains("ops") || name.localizedCaseInsensitiveContains("infra") {
-            return [Color(red: 0.04, green: 0.48, blue: 0.46), Color(red: 0.05, green: 0.23, blue: 0.38)]
+            return [Color(synaraHex: "#163a40"), Color(synaraHex: "#1c3d32")]
         }
 
         let palettes: [[Color]] = [
-            [Color(red: 0.12, green: 0.45, blue: 0.91), Color(red: 0.26, green: 0.24, blue: 0.77)],
-            [Color(red: 0.04, green: 0.58, blue: 0.74), Color(red: 0.02, green: 0.31, blue: 0.58)],
-            [Color(red: 0.80, green: 0.25, blue: 0.43), Color(red: 0.48, green: 0.20, blue: 0.74)],
-            [Color(red: 0.12, green: 0.60, blue: 0.38), Color(red: 0.08, green: 0.35, blue: 0.42)],
-            [Color(red: 0.90, green: 0.45, blue: 0.16), Color(red: 0.68, green: 0.20, blue: 0.34)]
+            [Color(synaraHex: "#1e3a5f"), Color(synaraHex: "#16304d")],
+            [Color(synaraHex: "#163a40"), Color(synaraHex: "#122e33")],
+            [Color(synaraHex: "#3d2a4d"), Color(synaraHex: "#322240")],
+            [Color(synaraHex: "#1c3d32"), Color(synaraHex: "#163129")],
+            [Color(synaraHex: "#3b2b22"), Color(synaraHex: "#30231c")],
+            [Color(synaraHex: "#2a3350"), Color(synaraHex: "#222943")]
         ]
         let seed = "\(id)|\(name)".unicodeScalars.reduce(0) { partial, scalar in
             (partial &* 31 &+ Int(scalar.value)) & 0x7fffffff

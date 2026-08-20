@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import type { DesktopInvokeResult } from '../../../../utils/desktop';
 import {
+  getOwnProfileWithNativeOwner,
   setOwnAvatarWithNativeOwner,
   setOwnDisplayNameWithNativeOwner,
   uploadMediaWithNativeOwner,
@@ -51,6 +52,58 @@ test('avatar set fails closed without fallthrough', async () => {
     () => setOwnAvatarWithNativeOwner('mxc://ex/x', true, invoke),
     /unavailable/i
   );
+});
+
+test('own profile read uses native owner and keeps mxc only', async () => {
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') return loggedIn;
+    if (command === 'matrix_get_own_profile') {
+      return {
+        available: true,
+        value: {
+          userId: '@alice:example.org',
+          displayName: 'Alice',
+          avatarUrl: 'mxc://example.org/abc',
+        },
+      };
+    }
+    throw new Error(`unexpected ${command}`);
+  };
+  assert.deepEqual(await getOwnProfileWithNativeOwner(true, invoke), {
+    userId: '@alice:example.org',
+    displayName: 'Alice',
+    avatarUrl: 'mxc://example.org/abc',
+  });
+});
+
+test('own profile read drops non-mxc avatars', async () => {
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') return loggedIn;
+    if (command === 'matrix_get_own_profile') {
+      return {
+        available: true,
+        value: {
+          userId: '@alice:example.org',
+          displayName: 'Alice',
+          avatarUrl: 'https://example.org/secret.png',
+        },
+      };
+    }
+    throw new Error(`unexpected ${command}`);
+  };
+  assert.deepEqual(await getOwnProfileWithNativeOwner(true, invoke), {
+    userId: '@alice:example.org',
+    displayName: 'Alice',
+    avatarUrl: undefined,
+  });
+});
+
+test('own profile read fails closed when native command is unavailable', async () => {
+  const invoke: NativeInvoke = async (command) => {
+    if (command === 'matrix_session_snapshot') return loggedIn;
+    return { available: false };
+  };
+  await assert.rejects(() => getOwnProfileWithNativeOwner(true, invoke), /unavailable/i);
 });
 
 test('upload media returns mxc on native path', async () => {

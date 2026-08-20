@@ -113,6 +113,12 @@ fn start_sync_after_planted_attach_returns_privacy_safe_readiness() {
         .expect("start after attach");
     let dto_text = format!("{dto:?}");
     assert!(!dto.readiness.is_empty());
+    assert_eq!(
+        dto.started,
+        dto.readiness == "running" || dto.readiness == "offline",
+        "Idle is not a live start: {}",
+        dto.readiness
+    );
     assert!(dto.session_generation > 0);
     assert!(dto.offline_mode_enabled);
     assert!(!dto_text.contains(access));
@@ -128,6 +134,12 @@ fn start_sync_after_planted_attach_returns_privacy_safe_readiness() {
         })
         .expect("second start is a restart");
     let second_text = format!("{second:?}");
+    assert_eq!(
+        second.started,
+        second.readiness == "running" || second.readiness == "offline",
+        "Idle is not a live start: {}",
+        second.readiness
+    );
     assert!(!second_text.contains(access));
     assert!(!second_text.contains(refresh));
     drop(shared);

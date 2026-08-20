@@ -617,15 +617,19 @@ const assertions = [
   [sharedCoreFfi, "room_leave", "P4-S9-12 typed room-leave FFI"],
   [sharedCoreFfi, "matrix_room_leave", "P4-S9-12 calls the registered room-leave command"],
   [sharedCoreFfi, "matrix_room_join", "P4-S9-12 calls the registered room-join command"],
+  [sharedCoreFfi, "matrix_room_set_favorite", "P4-S9-12 calls the registered room-favorite command"],
   [udl, "RoomMembershipWriteDto room_leave(", "P4-S9-12 SharedCore room leave"],
   [udl, "RoomMembershipWriteDto room_join(", "P4-S9-12 SharedCore room join"],
+  [udl, "RoomMembershipWriteDto room_set_favorite(", "P4-S9-12 SharedCore room favorite"],
   [udl, "dictionary RoomMembershipWriteDto", "P4-S9-12 privacy-safe room-membership write DTO"],
   [udl, "interface RoomMembershipCommandError", "P4-S9-12 static room-membership error"],
   [swiftBindingsTests, "testSharedCoreRoomLeaveJoinWithoutSessionFailsClosed", "Swift P4-S9-12 fail-closed room leave/join test"],
   [sharedCoreRoomLeaveJoin, "roomLeave", "P4-S9-12 product room-leave helper"],
   [sharedCoreRoomLeaveJoin, "roomJoin", "P4-S9-12 product room-join helper"],
+  [sharedCoreRoomLeaveJoin, "roomSetFavorite", "P4-S9-12 product room-favorite helper"],
   [sharedCoreRoomLeaveJoin, "core: SharedCore", "P4-S9-12 helper takes an already-constructed SharedCore"],
   [sharedCoreRoomLeaveJoin, "core.roomLeave", "P4-S9-12 helper leaves on the caller-owned instance"],
+  [sharedCoreRoomLeaveJoin, "core.roomSetFavorite", "P4-S9-12 helper favorites on the caller-owned instance"],
   [sharedCoreFfi, "room_invite", "P4-S9-13 typed room-invite FFI"],
   [sharedCoreFfi, "matrix_room_invite", "P4-S9-13 calls the registered room-invite command"],
   [sharedCoreFfi, "matrix_room_kick", "P4-S9-13 calls the registered room-kick command"],
@@ -1809,7 +1813,7 @@ for (const required of ["room_directory_protocols", "room_directory_search", "ro
     throw new Error(`P4-S9-11 SharedCore must expose ${required}`);
   }
 }
-for (const required of ["room_leave", "room_join("]) {
+for (const required of ["room_leave", "room_join(", "room_set_favorite"]) {
   if (!sharedCoreBody.includes(required)) {
     throw new Error(`P4-S9-12 SharedCore must expose ${required}`);
   }

@@ -48,7 +48,7 @@ export const PageNavHeader = as<'header', css.PageNavHeaderVariants>(
   ({ className, outlined, ...props }, ref) => (
     <Header
       className={classNames(css.PageNavHeader({ outlined }), className)}
-      variant="Background"
+      variant="Surface"
       size="600"
       {...props}
       ref={ref}
@@ -67,7 +67,7 @@ export function PageNavContent({
     <Box grow="Yes" direction="Column">
       <Scroll
         ref={scrollRef}
-        variant="Background"
+        variant="Surface"
         direction="Vertical"
         size="300"
         hideTrack
@@ -83,7 +83,7 @@ export const Page = as<'div'>(({ className, ...props }, ref) => (
   <Box
     grow="Yes"
     direction="Column"
-    className={classNames(ContainerColor({ variant: 'Surface' }), className)}
+    className={classNames(ContainerColor({ variant: 'SurfaceVariant' }), className)}
     {...props}
     ref={ref}
   />

@@ -369,7 +369,15 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
         tap(app.buttons["AttachmentOption-Photo or Video"])
 
+        let draftList = identifiedElement(in: app, "ComposerAttachmentDraftList")
+        XCTAssertTrue(draftList.waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "ComposerAttachmentDraft-synara-upload.jpg").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["MediaPlaceholder-synara-upload.jpg"].exists)
+        XCTAssertTrue(app.buttons["ComposerSendButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.jpg"].waitForExistence(timeout: 5))
+        XCTAssertFalse(draftList.exists)
     }
 
     func testFileUploadAddsAttachmentPlaceholder() {
@@ -379,7 +387,15 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
         tap(app.buttons["AttachmentOption-File"])
 
+        let draftList = identifiedElement(in: app, "ComposerAttachmentDraftList")
+        XCTAssertTrue(draftList.waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "ComposerAttachmentDraft-synara-upload.pdf").waitForExistence(timeout: 5))
+        XCTAssertFalse(app.buttons["MediaPlaceholder-synara-upload.pdf"].exists)
+        XCTAssertTrue(app.buttons["ComposerSendButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.pdf"].waitForExistence(timeout: 5))
+        XCTAssertFalse(draftList.exists)
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {
@@ -493,7 +509,7 @@ final class SynaraUITests: XCTestCase {
 
         tapSettingsElement(app.buttons["AboutSettingsLink"], app: app, timeout: 10)
 
-        XCTAssertTrue(app.collectionViews["AboutSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 10))
         XCTAssertTrue(app.staticTexts["Synara"].exists)
         XCTAssertTrue(app.staticTexts["Version"].exists)
         XCTAssertTrue(app.staticTexts["Build"].exists)
@@ -1075,7 +1091,7 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "13-live-settings-lower")
 
         tap(app.buttons["AboutSettingsLink"])
-        XCTAssertTrue(app.collectionViews["AboutSettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(identifiedElement(in: app, "AboutSettingsScreen").waitForExistence(timeout: 10))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "14-live-settings-about")
         navigateBack(app: app)
 
@@ -1396,8 +1412,12 @@ final class SynaraUITests: XCTestCase {
     }
 
     private func composerField(in app: XCUIApplication) -> XCUIElement {
+        identifiedElement(in: app, "ComposerTextField")
+    }
+
+    private func identifiedElement(in app: XCUIApplication, _ identifier: String) -> XCUIElement {
         app.descendants(matching: .any)
-            .matching(identifier: "ComposerTextField")
+            .matching(identifier: identifier)
             .firstMatch
     }
 

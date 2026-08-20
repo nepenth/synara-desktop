@@ -459,6 +459,12 @@ impl NativeImagePackOwner {
     ) -> Result<crate::app::user_profile::MatrixProfileWriteResult, &'static str> {
         crate::app::user_profile::set_own_avatar(&self.client, mxc).await
     }
+
+    pub async fn get_own_profile(
+        &self,
+    ) -> Result<crate::app::user_profile::MatrixOwnProfile, &'static str> {
+        crate::app::user_profile::get_own_profile(&self.client).await
+    }
 }
 
 #[cfg(test)]

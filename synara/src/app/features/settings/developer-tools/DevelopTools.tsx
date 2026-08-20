@@ -7,6 +7,7 @@ import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import {
   AccountDataEditor,
   AccountDataSubmitCallback,
@@ -143,12 +144,28 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                   </SequenceCard>
                 )}
               </Box>
-              {developerTools && (
+              {developerTools && !isNativeMatrixSession() && (
                 <AccountData
                   expand={expand}
                   onExpandToggle={setExpend}
                   onSelect={setAccountDataType}
                 />
+              )}
+              {developerTools && isNativeMatrixSession() && (
+                <Box direction="Column" gap="100">
+                  <Text size="L400">Account Data</Text>
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                    gap="400"
+                  >
+                    <SettingTile
+                      title="Global"
+                      description="Account-data browsing is not available in this native session."
+                    />
+                  </SequenceCard>
+                </Box>
               )}
             </Box>
           </PageContent>

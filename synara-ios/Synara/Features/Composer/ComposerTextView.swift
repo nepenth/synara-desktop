@@ -38,6 +38,7 @@ struct ComposerTextView: UIViewRepresentable {
     var placeholder: String
     var formattingRevision: Int
     var isFocused: FocusState<Bool>.Binding
+    var onPasteImages: ([UIImage]) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -68,6 +69,7 @@ struct ComposerTextView: UIViewRepresentable {
             applySelection(to: textView)
         }
         textView.delegate = context.coordinator
+        textView.onPasteImages = onPasteImages
         container.onWidthChange = { [weak coordinator = context.coordinator] in
             guard let coordinator, let textView = coordinator.container?.textView else {
                 return
@@ -83,6 +85,7 @@ struct ComposerTextView: UIViewRepresentable {
     func updateUIView(_ uiView: ComposerTextContainer, context: Context) {
         let textView = uiView.textView
         context.coordinator.parent = self
+        textView.onPasteImages = onPasteImages
         context.coordinator.performProgrammaticUpdate {
             uiView.placeholderLabel.text = placeholder
             applyTextAppearance(to: textView)
@@ -242,8 +245,38 @@ struct ComposerTextView: UIViewRepresentable {
     }
 }
 
+final class ComposerPasteTextView: UITextView {
+    var onPasteImages: (([UIImage]) -> Void)?
+
+    override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
+        if action == #selector(paste(_:)), pasteboardImages().isEmpty == false {
+            return true
+        }
+        return super.canPerformAction(action, withSender: sender)
+    }
+
+    override func paste(_ sender: Any?) {
+        let images = pasteboardImages()
+        if images.isEmpty == false {
+            onPasteImages?(images)
+            return
+        }
+        super.paste(sender)
+    }
+
+    private func pasteboardImages() -> [UIImage] {
+        if let images = UIPasteboard.general.images, images.isEmpty == false {
+            return images
+        }
+        if let image = UIPasteboard.general.image {
+            return [image]
+        }
+        return []
+    }
+}
+
 final class ComposerTextContainer: UIView {
-    let textView = UITextView()
+    let textView = ComposerPasteTextView()
     let placeholderLabel = UILabel()
     private var lastMeasuredWidth: CGFloat = 0
     var onWidthChange: (() -> Void)?

@@ -1306,7 +1306,7 @@ interface InviteActionError {
 // P4-S9-10 adds typed get/set room directory visibility.
 // P4-S9-11 adds typed directory protocols/search/cancel.
 // Search results stay metadata (ids/names/aliases/mxc). No avatar bytes.
-// P4-S9-12 adds typed room_leave / room_join.
+// P4-S9-12 adds typed room_leave / room_join / room_set_favorite.
 // Write ack is status only. Failed errors stay static and must not echo
 // room id, alias, or via servers.
 // P4-S9-13 adds typed room_invite / room_kick / room_ban / room_unban.
@@ -1555,6 +1555,9 @@ interface SharedCore {
 
   [Async, Throws=RoomMembershipCommandError]
   RoomMembershipWriteDto room_join(string room_id_or_alias, sequence<string>? via_servers);
+
+  [Async, Throws=RoomMembershipCommandError]
+  RoomMembershipWriteDto room_set_favorite(string room_id, boolean favorite);
 
   [Async, Throws=RoomModerationCommandError]
   RoomModerationWriteDto room_invite(string room_id, string user_id, string? reason);

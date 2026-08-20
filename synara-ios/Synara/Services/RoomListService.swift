@@ -26,6 +26,7 @@ struct RoomSummary: Identifiable, Equatable {
     let latestAgentCard: SynaraAgentCard?
     let latestAgentCardEventID: String?
     let pendingAgentApprovals: [PendingAgentCardRef]
+    let isFavorite: Bool
 
     init(
         id: String,
@@ -41,7 +42,8 @@ struct RoomSummary: Identifiable, Equatable {
         hasAgentActivity: Bool = false,
         latestAgentCard: SynaraAgentCard? = nil,
         latestAgentCardEventID: String? = nil,
-        pendingAgentApprovals: [PendingAgentCardRef] = []
+        pendingAgentApprovals: [PendingAgentCardRef] = [],
+        isFavorite: Bool = false
     ) {
         self.id = id
         self.name = name
@@ -57,6 +59,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.latestAgentCard = latestAgentCard
         self.latestAgentCardEventID = latestAgentCardEventID
         self.pendingAgentApprovals = pendingAgentApprovals
+        self.isFavorite = isFavorite
     }
 
     var isAgentRoom: Bool {
@@ -85,44 +88,77 @@ struct SpaceSummary: Identifiable, Equatable, Hashable {
     let name: String
 }
 
-enum RoomListRecentActivity {
-    static let window: TimeInterval = 86400
+enum RoomListSortOrder: String, CaseIterable, Identifiable {
+    /// Device-local chrome. Same key/default as desktop `synara.roomListSort`.
+    static let storageKey = "synara.roomListSort"
+    static let defaultOrder: RoomListSortOrder = .recent
 
+    case recent
+    case name
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .recent:
+            return "Sort by recent activity"
+        case .name:
+            return "Sort by name"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .recent:
+            return "Recent"
+        case .name:
+            return "Name"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .recent:
+            return "clock"
+        case .name:
+            return "textformat"
+        }
+    }
+}
+
+enum RoomListFavorites {
     struct Partition: Equatable {
-        let recent: [RoomSummary]
+        let favorites: [RoomSummary]
         let remaining: [RoomSummary]
     }
 
-    static func recent(from rooms: [RoomSummary], referenceDate: Date = Date()) -> [RoomSummary] {
-        partition(from: rooms, referenceDate: referenceDate).recent
-    }
-
-    static func partition(from rooms: [RoomSummary], referenceDate: Date = Date()) -> Partition {
-        let cutoff = referenceDate.addingTimeInterval(-window)
-        let recent = rooms
-            .filter { $0.lastActivityAt > cutoff }
-            .sorted {
-                if $0.lastActivityAt != $1.lastActivityAt {
-                    return $0.lastActivityAt > $1.lastActivityAt
-                }
-                let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return $0.id < $1.id
-            }
-        let recentIDs = Set(recent.map(\.id))
-        return Partition(
-            recent: recent,
-            remaining: rooms.filter { recentIDs.contains($0.id) == false }
+    static func partition(from rooms: [RoomSummary]) -> Partition {
+        Partition(
+            favorites: rooms.filter { $0.membership == .joined && $0.isFavorite },
+            remaining: rooms.filter { $0.membership != .joined || $0.isFavorite == false }
         )
     }
 
-    static func nextExpirationDate(from rooms: [RoomSummary], referenceDate: Date = Date()) -> Date? {
-        rooms
-            .map { $0.lastActivityAt.addingTimeInterval(window) }
-            .filter { $0 > referenceDate }
-            .min()
+    static func sorted(_ rooms: [RoomSummary], order: RoomListSortOrder) -> [RoomSummary] {
+        rooms.sorted { lhs, rhs in
+            switch order {
+            case .name:
+                let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            case .recent:
+                if lhs.lastActivityAt != rhs.lastActivityAt {
+                    return lhs.lastActivityAt > rhs.lastActivityAt
+                }
+                let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
+                if nameOrder != .orderedSame {
+                    return nameOrder == .orderedAscending
+                }
+                return lhs.id < rhs.id
+            }
+        }
     }
 }
 

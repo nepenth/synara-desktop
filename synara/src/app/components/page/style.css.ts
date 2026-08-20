@@ -28,13 +28,13 @@ export const PageNavHeader = recipe({
         cursor: 'pointer',
       },
       'button&[aria-pressed=true]': {
-        backgroundColor: color.Background.ContainerActive,
+        backgroundColor: color.Surface.ContainerActive,
       },
       'button&:hover, button&:focus-visible': {
-        backgroundColor: color.Background.ContainerHover,
+        backgroundColor: color.Surface.ContainerHover,
       },
       'button&:active': {
-        backgroundColor: color.Background.ContainerActive,
+        backgroundColor: color.Surface.ContainerActive,
       },
     },
   },

@@ -4,6 +4,7 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   Icon,
   IconButton,
   Icons,
@@ -18,7 +19,6 @@ import {
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
-import { factoryRoomIdByActivity, factoryRoomIdByAtoZ } from '../../../utils/sort';
 import {
   NavButton,
   NavCategory,
@@ -44,7 +44,16 @@ import {
   useHomeSearchSelected,
 } from '../../../hooks/router/useHomeSelected';
 import { useHomeRooms } from './useHomeRooms';
+import {
+  favoriteRoomIdSet,
+  partitionHomeRooms,
+  readRoomListSort,
+  sortHomeRoomIds,
+  writeRoomListSort,
+  type RoomListSort,
+} from './homeRoomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
+import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
 import { VirtualTile } from '../../../components/virtualizer';
 import { RoomNavCategoryButton, RoomNavItem } from '../../../features/room-nav';
 import { makeNavCategoryId } from '../../../state/closedNavCategories';
@@ -62,7 +71,6 @@ import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
-import { useRecentRoomPartition } from '../../../hooks/useRoomActivity';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -98,7 +106,13 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
   );
 });
 
-function HomeHeader() {
+function HomeHeader({
+  roomSort,
+  onRoomSort,
+}: {
+  roomSort: RoomListSort;
+  onRoomSort: (sort: RoomListSort) => void;
+}) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -118,8 +132,26 @@ function HomeHeader() {
               Home
             </Text>
           </Box>
-          <Box>
-            <IconButton aria-pressed={!!menuAnchor} variant="Background" onClick={handleOpenMenu}>
+          <Box alignItems="Center" gap="100">
+            <Chip
+              variant={roomSort === 'recent' ? 'Primary' : 'Surface'}
+              radii="Pill"
+              aria-pressed={roomSort === 'recent'}
+              aria-label="Sort by recent activity"
+              onClick={() => onRoomSort('recent')}
+            >
+              <Text size="O400">Recent</Text>
+            </Chip>
+            <Chip
+              variant={roomSort === 'name' ? 'Primary' : 'Surface'}
+              radii="Pill"
+              aria-pressed={roomSort === 'name'}
+              aria-label="Sort by name"
+              onClick={() => onRoomSort('name')}
+            >
+              <Text size="O400">Name</Text>
+            </Chip>
+            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -209,19 +241,43 @@ export function Home() {
   const noRoomToDisplay = rooms.length === 0;
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
-  const { recentRoomIds, nonRecentRoomIds } = useRecentRoomPartition(mx, rooms);
+  const nativeRoomList = useNativeRoomListSnapshot();
+  const [roomSort, setRoomSort] = useState<RoomListSort>(() =>
+    readRoomListSort(typeof localStorage === 'undefined' ? undefined : localStorage)
+  );
+  const favoriteIds = useMemo(
+    () => favoriteRoomIdSet(nativeRoomList.rooms),
+    [nativeRoomList.rooms]
+  );
+  const { favoriteRoomIds, remainingRoomIds } = useMemo(
+    () => partitionHomeRooms(rooms, favoriteIds),
+    [rooms, favoriteIds]
+  );
+
+  const sortedFavoriteRoomIds = useMemo(
+    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.rooms, roomSort),
+    [favoriteRoomIds, nativeRoomList.rooms, roomSort]
+  );
 
   const mainRoomIds = useMemo(() => {
-    const items = Array.from(nonRecentRoomIds).sort(
-      closedCategories.has(DEFAULT_CATEGORY_ID)
-        ? factoryRoomIdByActivity(mx)
-        : factoryRoomIdByAtoZ(mx)
-    );
+    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.rooms, roomSort);
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, nonRecentRoomIds, closedCategories, roomToUnread, selectedRoomId]);
+  }, [
+    remainingRoomIds,
+    nativeRoomList.rooms,
+    roomSort,
+    closedCategories,
+    roomToUnread,
+    selectedRoomId,
+  ]);
+
+  const handleRoomSort = (sort: RoomListSort) => {
+    setRoomSort(sort);
+    writeRoomListSort(typeof localStorage === 'undefined' ? undefined : localStorage, sort);
+  };
 
   const virtualizer = useVirtualizer({
     count: mainRoomIds.length,
@@ -236,14 +292,14 @@ export function Home() {
 
   return (
     <PageNav>
-      <HomeHeader />
+      <HomeHeader roomSort={roomSort} onRoomSort={handleRoomSort} />
       {noRoomToDisplay ? (
         <HomeEmpty />
       ) : (
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
-              <NavItem variant="Background" radii="400" aria-selected={createRoomSelected}>
+              <NavItem variant="Surface" radii="400" aria-selected={createRoomSelected}>
                 <NavButton onClick={() => navigate(getHomeCreatePath())}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -259,7 +315,7 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
-              <NavItem variant="Background" radii="400" aria-selected={joinSelected}>
+              <NavItem variant="Surface" radii="400" aria-selected={joinSelected}>
                 <NavButton onClick={() => navigate(getHomeJoinPath())}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -275,7 +331,7 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
-              <NavItem variant="Background" radii="400" aria-selected={searchSelected}>
+              <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
                 <NavLink to={getHomeSearchPath()}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -293,12 +349,12 @@ export function Home() {
               </NavItem>
             </NavCategory>
 
-            {recentRoomIds.length > 0 && (
+            {sortedFavoriteRoomIds.length > 0 && (
               <NavCategory>
                 <NavCategoryHeader>
-                  <Text size="B300">Recent (24h)</Text>
+                  <Text size="B300">Favorites</Text>
                 </NavCategoryHeader>
-                {recentRoomIds.map((roomId) => {
+                {sortedFavoriteRoomIds.map((roomId) => {
                   const room = mx.getRoom(roomId);
                   if (!room) return null;
                   const selected = selectedRoomId === roomId;
