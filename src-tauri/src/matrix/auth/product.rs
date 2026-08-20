@@ -122,7 +122,8 @@ use crate::matrix::timeline::{
     NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
     NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRedactRequest,
+    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineRedactRequest,
     NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
     TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };

@@ -94,8 +94,15 @@ test('native timeline navigation uses contextual controls and edge pagination', 
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
   assert.doesNotMatch(presenter, />\s*Mark unread\s*</);
-  assert.doesNotMatch(presenter, />\s*Load older messages\s*</);
-  assert.doesNotMatch(presenter, />\s*Load newer messages\s*</);
+});
+
+test('native live tail marks the open stream read through the native owner', () => {
+  assert.match(presenter, /controller\.setReadState\('mark_read'\)/);
+  assert.match(presenter, /selectedPosition\.kind === 'live_bottom'/);
+  assert.match(presenter, /capabilities\.markRead/);
+  assert.doesNotMatch(presenter, /markAsReadInBackground/);
+  assert.doesNotMatch(presenter, /sendReadReceipt/);
+  assert.doesNotMatch(presenter, /setRoomReadMarkers/);
 });
 
 test('room read state stays a single contextual overflow action', () => {

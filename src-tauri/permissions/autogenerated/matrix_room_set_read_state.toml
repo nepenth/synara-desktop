@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-room-set-read-state"
+description = "Enables the matrix_room_set_read_state command without any pre-configured scope."
+commands.allow = ["matrix_room_set_read_state"]
+
+[[permission]]
+identifier = "deny-matrix-room-set-read-state"
+description = "Denies the matrix_room_set_read_state command without any pre-configured scope."
+commands.deny = ["matrix_room_set_read_state"]
