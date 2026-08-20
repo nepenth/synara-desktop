@@ -321,7 +321,7 @@ private struct AppearanceSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Theme") {
+            Section {
                 SettingsInfoRow(title: "Appearance", value: "System")
                     .accessibilityIdentifier("AppearanceThemeRow")
                 themeRampPreview
@@ -338,6 +338,8 @@ private struct AppearanceSettingsView: View {
                 }
                 .disabled(hasCustomBaseColor == false)
                 .accessibilityIdentifier("AppearanceBaseColorReset")
+            } header: {
+                Text("Theme")
             } footer: {
                 Text("Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.")
             }
