@@ -157,7 +157,7 @@ final class OutgoingSendServiceTests: XCTestCase {
     }
 
     @MainActor
-    func testFailedSendWhileConnectedStaysFailedAndRetryable() async {
+    func testFailedSendWhileConnectedStaysFailedAndRetryable() async throws {
         let sender = RecordingMessageSendService()
         sender.error = MessageSendError.failed
         let connection = ConnectionStatusStore(reconnectingHold: 0)
