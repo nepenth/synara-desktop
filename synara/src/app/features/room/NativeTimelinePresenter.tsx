@@ -163,8 +163,9 @@ const displayNameForRow = (row: NativeTimelineViewRow): string => {
 
 const isGroupedWithPrevious = (
   previous: NativeTimelineViewRow | undefined,
-  row: NativeTimelineViewRow
+  row: NativeTimelineViewRow | undefined
 ): boolean => {
+  if (!previous || !row) return false;
   const previousId = rowSenderId(previous);
   const senderId = rowSenderId(row);
   const previousTs = previous ? rowOriginServerTs(previous) : undefined;

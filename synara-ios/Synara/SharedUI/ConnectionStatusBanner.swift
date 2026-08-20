@@ -13,6 +13,7 @@ struct ConnectionStatusBanner: View {
         }
     }
 
+    @ViewBuilder
     private var banner: some View {
         let status = store.status
         let variant = ConnectionStatusCopy.variant(status)
