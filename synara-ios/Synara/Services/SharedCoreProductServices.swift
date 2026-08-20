@@ -292,28 +292,6 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             statusMsg: snapshot.statusMsg
         )
     }
-
-    func ownProfile(userID: String) async -> SettingsOwnProfile? {
-        guard let rooms = try? await SharedCoreRoomList.roomListSnapshot(core: host.core) else {
-            return nil
-        }
-        for room in rooms.rooms.prefix(8) {
-            guard let snapshot = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
-                core: host.core,
-                roomId: room.roomId
-            ) else {
-                continue
-            }
-            guard let member = snapshot.members.first(where: { $0.userId == userID }) else {
-                continue
-            }
-            let avatarMXC = member.avatarUrl.flatMap { candidate in
-                candidate.hasPrefix("mxc://") ? candidate : nil
-            }
-            return SettingsOwnProfile(displayName: member.displayName, avatarMXC: avatarMXC)
-        }
-        return nil
-    }
 }
 
 final class SharedCoreRoomListService: RoomListServicing {
@@ -958,6 +936,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         )
         let current = devices.first(where: \.isCurrent)
         let hasOtherDevices = devices.contains { $0.isCurrent == false }
+        let hasVerifiedPeer = devices.contains { $0.isCurrent == false && $0.trust == "verified" }
         let verification: SynaraCryptoVerificationStatus
         switch current?.trust {
         case "verified":
@@ -971,7 +950,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             verification: verification,
             recovery: mapped.recovery,
             backup: mapped.backup,
-            hasDevicesToVerifyAgainst: hasOtherDevices,
+            hasDevicesToVerifyAgainst: hasVerifiedPeer,
             isLastDevice: devices.isEmpty ? nil : hasOtherDevices == false,
             unableToDecryptCount: mapped.unableToDecryptCount
         )

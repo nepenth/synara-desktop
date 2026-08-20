@@ -50,11 +50,6 @@ enum MatrixSyncStatus: Equatable {
     }
 }
 
-struct SettingsOwnProfile: Equatable {
-    let displayName: String?
-    let avatarMXC: String?
-}
-
 protocol MatrixClientServicing: AnyObject {
     var syncStatusDescription: String { get }
     var syncStatus: MatrixSyncStatus { get }
@@ -73,7 +68,6 @@ protocol MatrixClientServicing: AnyObject {
     /// session/credential ownership.
     func coreSessionIdentity() async -> CoreSessionIdentity?
     func presence(userID: String) async -> SharedCorePresence?
-    func ownProfile(userID: String) async -> SettingsOwnProfile?
 }
 
 extension MatrixClientServicing {
@@ -82,11 +76,6 @@ extension MatrixClientServicing {
     }
 
     func presence(userID: String) async -> SharedCorePresence? {
-        _ = userID
-        return nil
-    }
-
-    func ownProfile(userID: String) async -> SettingsOwnProfile? {
         _ = userID
         return nil
     }

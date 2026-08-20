@@ -1152,6 +1152,51 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             .sasStarted
         )
+        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
+        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "ready",
+                direction: "outgoing",
+                flowId: "flow-8",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "ready",
+                direction: "incoming",
+                flowId: "flow-9",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .sasStarted
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "started",
+                direction: "incoming",
+                flowId: "flow-10",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "started",
+                direction: "outgoing",
+                flowId: "flow-11",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .sasStarted
+        )
     }
 
     func testSharedCoreVerificationActionsWithoutSessionFailClosedWithoutEcho() async {

@@ -10,6 +10,13 @@ import {
 const invoke = (command: string, args?: Record<string, unknown>) =>
   invokeDesktopWithAvailability(command, args);
 
+export const OWN_PROFILE_CHANGED_EVENT = 'synara-own-profile-changed';
+
+export const notifyOwnProfileChanged = (): void => {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(OWN_PROFILE_CHANGED_EVENT));
+};
+
 export const setOwnDisplayNameNative = (displayName: string): Promise<'native' | 'legacy'> =>
   setOwnDisplayNameWithNativeOwner(displayName, isSynaraDesktop(), invoke);
 

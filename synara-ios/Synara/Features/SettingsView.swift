@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
@@ -14,7 +13,11 @@ struct SettingsView: View {
                     NavigationLink {
                         AccountSettingsView(session: session)
                     } label: {
-                        SettingsAccountHeaderRow(session: session)
+                        SettingsSummaryRow(
+                            title: session.userID,
+                            subtitle: session.homeserverURL.host ?? session.homeserverURL.absoluteString,
+                            systemImage: "person.crop.circle.fill"
+                        )
                     }
                     .accessibilityIdentifier("AccountSettingsLink")
                 case .signedOut:
@@ -148,8 +151,6 @@ private struct AccountSettingsView: View {
     var body: some View {
         Form {
             Section("Account") {
-                SettingsAccountHeaderRow(session: session)
-                    .accessibilityIdentifier("SettingsAccountHeader")
                 let displayIdentity = SettingsAccountIdentitySelection.matchingCoreIdentity(
                     coreSessionIdentity,
                     for: session
@@ -367,7 +368,7 @@ private struct SecuritySettingsView: View {
                     .disabled(isRunningCryptoAction)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
                 } footer: {
-                    Text("Compare emoji or number codes with another signed-in session. Synara does not mark this device verified until both sides confirm.")
+                    Text("Compare emoji or number codes with another already verified session. Synara does not mark this device verified until both sides confirm.")
                 }
             }
 
@@ -457,52 +458,17 @@ private struct SettingsInfoRow: View {
     }
 }
 
-private struct SettingsAccountHeaderRow: View {
-    @Environment(\.appEnvironment) private var environment
-    let session: AuthenticatedSession
-    @State private var profile: SettingsOwnProfile?
-    @State private var avatarImage: UIImage?
-
-    var body: some View {
-        SettingsSummaryRow(
-            title: profile?.displayName?.isEmpty == false ? profile?.displayName ?? session.userID : session.userID,
-            subtitle: session.homeserverURL.host ?? session.homeserverURL.absoluteString,
-            systemImage: "person.crop.circle.fill",
-            avatarImage: avatarImage
-        )
-        .task(id: session.userID) {
-            let loaded = await environment.matrix.ownProfile(userID: session.userID)
-            await MainActor.run {
-                profile = loaded
-            }
-            guard let mxc = loaded?.avatarMXC, let url = URL(string: mxc), url.scheme == "mxc" else {
-                return
-            }
-            let resource = MediaResource(
-                id: session.userID,
-                filename: "account-avatar",
-                authenticatedURL: url,
-                requiresAuthentication: true,
-                mimeType: "image/jpeg"
-            )
-            if let data = await environment.mediaLoader.loadThumbnailData(for: resource, width: 96, height: 96) {
-                await MainActor.run {
-                    avatarImage = UIImage(data: data)
-                }
-            }
-        }
-    }
-}
-
 private struct SettingsSummaryRow: View {
     let title: String
     let subtitle: String
     let systemImage: String
-    var avatarImage: UIImage? = nil
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            avatar
+            Image(systemName: systemImage)
+                .font(.title2)
+                .foregroundStyle(SynaraColor.accent)
+                .frame(width: 32, height: 32)
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 Text(title)
                     .font(SynaraTypography.body)
@@ -515,23 +481,6 @@ private struct SettingsSummaryRow: View {
             }
         }
         .padding(.vertical, SynaraSpacing.xSmall)
-    }
-
-    @ViewBuilder
-    private var avatar: some View {
-        if let avatarImage {
-            Image(uiImage: avatarImage)
-                .resizable()
-                .scaledToFill()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .accessibilityHidden(true)
-        } else {
-            Image(systemName: systemImage)
-                .font(.title2)
-                .foregroundStyle(SynaraColor.accent)
-                .frame(width: 32, height: 32)
-        }
     }
 }
 

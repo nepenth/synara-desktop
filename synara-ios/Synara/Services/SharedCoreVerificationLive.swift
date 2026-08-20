@@ -48,9 +48,12 @@ enum SharedCoreVerificationLive {
                 )
             }
             return .requestSent
-        case "ready":
-            return .accepted
-        case "started":
+        case "ready", "started":
+            // Match desktop SAS ownership: only the side that should call
+            // begin_sas gets `.accepted` (Start Comparison). Everyone else waits.
+            if needsSasStart(phase: phase, direction: direction) {
+                return .accepted
+            }
             return .sasStarted
         case "sas_ready":
             if emoji.isEmpty == false {
@@ -71,5 +74,11 @@ enum SharedCoreVerificationLive {
         default:
             return .failed
         }
+    }
+
+    /// Same rule as desktop `verificationRequestNeedsSasStart`.
+    static func needsSasStart(phase: String, direction: String) -> Bool {
+        (direction == "outgoing" && phase == "ready")
+            || (direction == "incoming" && phase == "started")
     }
 }

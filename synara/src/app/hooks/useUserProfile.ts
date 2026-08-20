@@ -1,5 +1,8 @@
-import { useEffect, useState } from 'react';
-import { getOwnProfileNative } from '../features/settings/account/nativeProfile';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  getOwnProfileNative,
+  OWN_PROFILE_CHANGED_EVENT,
+} from '../features/settings/account/nativeProfile';
 import { UserEvent } from '../utils/roomEvents';
 import { useMatrixClient } from './useMatrixClient';
 
@@ -28,6 +31,8 @@ export const useUserProfile = (userId: string): UserProfile => {
       displayName: user?.displayName,
     };
   });
+  const [refreshGeneration, setRefreshGeneration] = useState(0);
+  const refresh = useCallback(() => setRefreshGeneration((generation) => generation + 1), []);
 
   useEffect(() => {
     const user = mx.getUser(userId) as unknown as UserEventedReading | null;
@@ -59,18 +64,22 @@ export const useUserProfile = (userId: string): UserProfile => {
             return;
           }
         } catch {
-          // Fall through to the facade profile read.
+          return;
         }
       }
-      const info = await mx.getProfileInfo(userId);
-      if (cancelled) return;
-      setProfile({
-        avatarUrl: info.avatar_url,
-        displayName: info.displayname,
-      });
+      try {
+        const info = await mx.getProfileInfo(userId);
+        if (cancelled) return;
+        setProfile({
+          avatarUrl: info.avatar_url,
+          displayName: info.displayname,
+        });
+      } catch {
+        // Keep the last known profile. Native own-profile already failed above.
+      }
     };
 
-    void load().catch(() => undefined);
+    void load();
 
     user?.on(UserEvent.AvatarUrl, onAvatarChange);
     user?.on(UserEvent.DisplayName, onDisplayNameChange);
@@ -79,7 +88,13 @@ export const useUserProfile = (userId: string): UserProfile => {
       user?.removeListener(UserEvent.AvatarUrl, onAvatarChange);
       user?.removeListener(UserEvent.DisplayName, onDisplayNameChange);
     };
-  }, [mx, userId]);
+  }, [mx, userId, refreshGeneration]);
+
+  useEffect(() => {
+    if (!isOwnUser(mx, userId)) return undefined;
+    window.addEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
+    return () => window.removeEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
+  }, [mx, refresh, userId]);
 
   return profile;
 };

@@ -52,21 +52,23 @@ export function Notifications({ requestClose }: NotificationsProps) {
                   <AllMessagesNotifications />
                   <SpecialMessagesNotifications />
                   <KeywordMessagesNotifications />
+                  <Box direction="Column" gap="100">
+                    <Text size="L400">Block Messages</Text>
+                    <SequenceCard
+                      className={SequenceCardStyle}
+                      variant="SurfaceVariant"
+                      direction="Column"
+                      gap="400"
+                    >
+                      <SettingTile
+                        description={
+                          'This option has been moved to "Account > Blocked Users" section.'
+                        }
+                      />
+                    </SequenceCard>
+                  </Box>
                 </>
               )}
-              <Box direction="Column" gap="100">
-                <Text size="L400">Block Messages</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <SettingTile
-                    description={'This option has been moved to "Account > Block Users" section.'}
-                  />
-                </SequenceCard>
-              </Box>
             </Box>
           </PageContent>
         </Scroll>

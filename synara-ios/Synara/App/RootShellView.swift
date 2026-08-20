@@ -352,10 +352,10 @@ private struct CryptoVerificationSheet: View {
                 Button("Accept", action: onAccept)
                     .buttonStyle(.borderedProminent)
             }
-        case .requestSent:
+        case .requestSent, .sasStarted:
             Button("Cancel Verification", role: .cancel, action: onCancel)
                 .buttonStyle(.bordered)
-        case .accepted, .sasStarted:
+        case .accepted:
             HStack(spacing: SynaraSpacing.small) {
                 Button("Cancel", role: .cancel, action: onCancel)
                     .buttonStyle(.bordered)
@@ -387,7 +387,7 @@ private struct CryptoVerificationSheet: View {
         case .accepted:
             return "Ready to compare"
         case .sasStarted:
-            return "Preparing comparison"
+            return "Waiting"
         case .emojis, .decimals:
             return "Compare on both devices"
         case .confirmed:
@@ -410,9 +410,9 @@ private struct CryptoVerificationSheet: View {
         case .requestSent:
             return "Approve the request from one of your already trusted sessions."
         case .accepted:
-            return "Start a secure emoji or number comparison on both devices."
+            return "Start a secure emoji or number comparison. Only this device should start."
         case .sasStarted:
-            return "Waiting for short authentication strings from the Matrix SDK."
+            return "Waiting for the other device to start comparison, or for codes to appear."
         case .emojis, .decimals:
             return "Only approve if the values match exactly on both devices."
         case .confirmed:
