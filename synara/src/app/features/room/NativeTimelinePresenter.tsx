@@ -179,9 +179,18 @@ const mediaStyle = (media?: NativeTimelineMediaHandle): React.CSSProperties => {
   return { maxWidth, maxHeight, width: 'auto', height: 'auto' };
 };
 
+const hasMessageSurface = (kind: NativeTimelineViewRow['kind']): boolean =>
+  kind === 'message' ||
+  kind === 'sticker' ||
+  kind === 'poll' ||
+  kind === 'call' ||
+  kind === 'redacted' ||
+  kind === 'encrypted_unavailable';
+
 type NativeTimelineRowProps = {
   row: NativeTimelineViewRow;
   grouped: boolean;
+  groupsNext: boolean;
   roomId: string;
   pinnedEventIds?: string[];
   sourceEncrypted?: boolean;
@@ -649,18 +658,10 @@ const NativeTimelineRowActionSurface = ({
       tabIndex={hasActionMenu ? 0 : undefined}
       role={hasActionMenu ? 'group' : undefined}
       aria-label={hasActionMenu ? 'Message actions' : undefined}
-      style={{ position: 'relative' }}
+      className={htmlCss.MessageActionSurface}
     >
       {showActionRail && (
-        <div
-          data-native-timeline-action-rail="true"
-          style={{
-            position: 'absolute',
-            top: config.space.S100,
-            right: config.space.S200,
-            zIndex: 2,
-          }}
-        >
+        <div data-native-timeline-action-rail="true" className={htmlCss.MessageActionRail}>
           <Menu variant="SurfaceVariant" style={{ padding: config.space.S100 }}>
             <Box gap="100">
               {capabilities?.react && (
@@ -824,6 +825,7 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
 const NativeTimelineRow = ({
   row,
   grouped,
+  groupsNext,
   roomId,
   pinnedEventIds,
   sourceEncrypted,
@@ -833,6 +835,12 @@ const NativeTimelineRow = ({
 }: NativeTimelineRowProps) => {
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
+  const surface = hasMessageSurface(row.kind);
+  const rowClassName = htmlCss.MessageRow({
+    surface,
+    grouped: surface && grouped,
+    groupsNext: surface && groupsNext,
+  });
   const capabilities = rowCapabilities(row);
   const eventId = rowEventId(row);
   const originServerTs = rowOriginServerTs(row);
@@ -894,7 +902,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+          <Box direction="Column" gap="100" className={rowClassName}>
             <Box gap="300" alignItems="Start">
               <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
                 {grouped ? (
@@ -1030,7 +1038,7 @@ const NativeTimelineRow = ({
     case 'membership':
     case 'state':
       return (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">{row.summary}</Text>
         </Box>
       );
@@ -1049,7 +1057,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+          <Box direction="Column" gap="100" className={rowClassName}>
             {originServerTs ? (
               <Time
                 ts={originServerTs}
@@ -1076,7 +1084,7 @@ const NativeTimelineRow = ({
       );
     case 'call':
       return (
-        <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+        <Box direction="Column" gap="100" className={rowClassName}>
           <Text size="T300">{row.callKind}</Text>
           {capabilities?.declineCall && (
             <Button size="300" fill="Soft" onClick={runDecline}>
@@ -1087,43 +1095,43 @@ const NativeTimelineRow = ({
       );
     case 'date_separator':
       return row.timestampMs && Number.isFinite(row.timestampMs) ? (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">{new Date(row.timestampMs).toLocaleDateString()}</Text>
         </Box>
       ) : null;
     case 'read_marker':
       return (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">Read up to here</Text>
         </Box>
       );
     case 'unread_marker':
       return (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">New messages</Text>
         </Box>
       );
     case 'timeline_start':
       return (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">Beginning of timeline</Text>
         </Box>
       );
     case 'redacted':
       return (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">{row.summary ?? 'Message removed'}</Text>
         </Box>
       );
     case 'encrypted_unavailable':
       return (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">This encrypted message is not available on this device.</Text>
         </Box>
       );
     case 'other':
       return row.summary ? (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Text size="T300">{row.summary}</Text>
         </Box>
       ) : null;
@@ -1143,7 +1151,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box direction="Column" gap="100" className={htmlCss.MessageRow}>
+          <Box direction="Column" gap="100" className={rowClassName}>
             <Box gap="200" alignItems="Baseline">
               <Text size="L400">{row.event.senderName}</Text>
               {originServerTs ? (
@@ -1166,7 +1174,7 @@ const NativeTimelineRow = ({
     }
     case 'pagination':
       return row.state === 'loading' ? (
-        <Box className={htmlCss.MessageRow}>
+        <Box className={rowClassName}>
           <Box justifyContent="Center">
             <Spinner size="200" aria-label="Loading messages" />
           </Box>
@@ -1549,6 +1557,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                     grouped={isGroupedWithPrevious(
                       virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
                       row
+                    )}
+                    groupsNext={isGroupedWithPrevious(
+                      row,
+                      virtualItem.index + 1 < rows.length
+                        ? rows[virtualItem.index + 1]
+                        : undefined
                     )}
                     roomId={roomId}
                     pinnedEventIds={snapshot.pinnedEventIds}

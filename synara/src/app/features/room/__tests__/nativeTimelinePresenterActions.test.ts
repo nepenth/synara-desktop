@@ -3,6 +3,22 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+const htmlCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
+
+const hexChannel = (hex: string, index: number): number => {
+  const value = parseInt(hex.slice(1 + index * 2, 3 + index * 2), 16) / 255;
+  return value <= 0.03928 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+};
+
+const relativeLuminance = (hex: string): number =>
+  0.2126 * hexChannel(hex, 0) + 0.7152 * hexChannel(hex, 1) + 0.0722 * hexChannel(hex, 2);
+
+const contrastRatio = (foreground: string, background: string): number => {
+  const [higher, lower] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
+    (left, right) => right - left,
+  );
+  return (higher + 0.05) / (lower + 0.05);
+};
 
 test('native timeline rows show timestamps and formatted HTML without the legacy event graph', () => {
   assert.match(presenter, /rowOriginServerTs/);
@@ -67,7 +83,7 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /Icons\.ChevronBottom/);
   assert.match(
     presenter,
-    /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/
+    /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/,
   );
   assert.match(presenter, /const jumpToLatest = \(\) =>/);
   assert.match(presenter, /followingLiveRef\.current = true/);
@@ -88,4 +104,53 @@ test('room read state stays a single contextual overflow action', () => {
   assert.match(header, /aria-label="More Options"/);
   assert.match(header, /unread \? 'Mark as Read' : 'Mark as Unread'/);
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
+});
+
+test('native timeline message rows use a full-width surface, not a text-only chip', () => {
+  const messageRowCss = htmlCss.slice(
+    htmlCss.indexOf('export const MessageRow'),
+    htmlCss.indexOf('export const MessageBody'),
+  );
+  const messageBodyCss = htmlCss.slice(
+    htmlCss.indexOf('export const MessageBody'),
+    htmlCss.indexOf('export const FormattedBody'),
+  );
+
+  assert.match(messageRowCss, /export const MessageRow = recipe\(/);
+  assert.match(messageRowCss, /backgroundColor: color\.SurfaceVariant\.ContainerHover/);
+  assert.match(messageRowCss, /backgroundColor: color\.SurfaceVariant\.ContainerActive/);
+  assert.match(messageRowCss, /borderRadius: config\.radii\.R400/);
+  assert.match(messageRowCss, /marginLeft: config\.space\.S400/);
+  assert.match(messageRowCss, /marginRight: config\.space\.S400/);
+  assert.match(messageRowCss, /color: color\.SurfaceVariant\.OnContainer/);
+  assert.doesNotMatch(messageRowCss, /['"]transparent['"]/);
+  assert.match(messageBodyCss, /background: 'transparent'/);
+  assert.match(messageBodyCss, /color: color\.SurfaceVariant\.OnContainer/);
+
+  assert.match(presenter, /htmlCss\.MessageRow\(\{/);
+  assert.match(presenter, /hasMessageSurface/);
+  assert.match(presenter, /groupsNext/);
+  assert.match(presenter, /htmlCss\.MessageActionSurface/);
+  assert.doesNotMatch(presenter, /htmlCss\.MessageBody[\s\S]{0,80}backgroundColor/);
+});
+
+test('message surface stays readable against OnContainer in light and dark', () => {
+  const lightChat = '#FFFFFF';
+  const lightPanel = '#F2F3F5';
+  const lightHover = '#E8EAED';
+  const lightOn = '#060607';
+  const darkChat = '#313338';
+  const darkPanel = '#383A40';
+  const darkHover = '#404249';
+  const darkOn = '#F2F3F5';
+  const colors = readFileSync('src/colors.css.ts', 'utf8');
+
+  assert.match(colors, /ContainerHover: '#F2F3F5'/);
+  assert.match(colors, /ContainerHover: '#383A40'/);
+  assert.ok(relativeLuminance(lightPanel) < relativeLuminance(lightChat));
+  assert.ok(relativeLuminance(darkPanel) > relativeLuminance(darkChat));
+  assert.ok(contrastRatio(lightOn, lightPanel) >= 7);
+  assert.ok(contrastRatio(lightOn, lightHover) >= 7);
+  assert.ok(contrastRatio(darkOn, darkPanel) >= 7);
+  assert.ok(contrastRatio(darkOn, darkHover) >= 7);
 });
