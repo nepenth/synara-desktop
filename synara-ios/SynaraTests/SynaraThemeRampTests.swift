@@ -64,6 +64,35 @@ final class SynaraThemeRampTests: XCTestCase {
         )
     }
 
+    func testChromeRolesReadThePassedBaseHexNotTheStoredDefault() {
+        let stored = SynaraThemeRamp.colorHex(
+            SynaraChrome.chatToken,
+            baseHex: SynaraThemeRamp.defaultBaseHex,
+            dark: true
+        )
+        let live = SynaraThemeRamp.colorHex(
+            SynaraChrome.chatToken,
+            baseHex: "#5865f2",
+            dark: true
+        )
+        let tokens = SynaraThemeRamp.tokens(baseHex: "#5865f2", dark: true)
+
+        XCTAssertNotEqual(stored, live)
+        XCTAssertEqual(live, tokens.surface)
+        XCTAssertEqual(
+            SynaraThemeRamp.colorHex(SynaraChrome.roomListToken, baseHex: "#5865f2", dark: true),
+            tokens.secondarySurface
+        )
+        XCTAssertEqual(
+            SynaraThemeRamp.colorHex(SynaraChrome.composerToken, baseHex: "#5865f2", dark: true),
+            tokens.elevatedSurface
+        )
+        XCTAssertEqual(
+            SynaraThemeRamp.colorHex(SynaraChrome.settingsToken, baseHex: "#5865f2", dark: true),
+            tokens.groupedSurface
+        )
+    }
+
     func testInvalidHexDoesNotClearStoredBaseColor() {
         let suiteName = "synara.theme.invalid.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!

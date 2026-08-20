@@ -123,6 +123,14 @@ enum SynaraThemeRamp {
         let darker = min(first, second)
         return (lighter + 0.05) / (darker + 0.05)
     }
+
+    static func colorHex(
+        _ keyPath: KeyPath<SynaraThemeTokens, String>,
+        baseHex: String,
+        dark: Bool
+    ) -> String {
+        tokens(baseHex: baseHex, dark: dark)[keyPath: keyPath]
+    }
 }
 
 private struct SynaraThemeBaseHexKey: EnvironmentKey {
@@ -153,12 +161,40 @@ final class SynaraThemePaint: ObservableObject {
     }
 }
 
+struct SynaraTokenFill: View {
+    @Environment(\.synaraThemeBaseHex) private var baseHex
+    @Environment(\.colorScheme) private var colorScheme
+    let keyPath: KeyPath<SynaraThemeTokens, String>
+
+    init(_ keyPath: KeyPath<SynaraThemeTokens, String>) {
+        self.keyPath = keyPath
+    }
+
+    var body: some View {
+        Color(
+            synaraHex: SynaraThemeRamp.colorHex(
+                keyPath,
+                baseHex: baseHex,
+                dark: colorScheme == .dark
+            )
+        )
+    }
+}
+
 enum SynaraChrome {
-    static var rail: Color { SynaraColor.groupedSurface }
-    static var roomList: Color { SynaraColor.secondarySurface }
-    static var chat: Color { SynaraColor.surface }
-    static var composer: Color { SynaraColor.elevatedSurface }
-    static var settings: Color { SynaraColor.groupedSurface }
+    static let railToken = \SynaraThemeTokens.groupedSurface
+    static let roomListToken = \SynaraThemeTokens.secondarySurface
+    static let chatToken = \SynaraThemeTokens.surface
+    static let composerToken = \SynaraThemeTokens.elevatedSurface
+    static let settingsToken = \SynaraThemeTokens.groupedSurface
+    static let agentReviewToken = \SynaraThemeTokens.agentReviewBackground
+
+    static var rail: SynaraTokenFill { SynaraTokenFill(railToken) }
+    static var roomList: SynaraTokenFill { SynaraTokenFill(roomListToken) }
+    static var chat: SynaraTokenFill { SynaraTokenFill(chatToken) }
+    static var composer: SynaraTokenFill { SynaraTokenFill(composerToken) }
+    static var settings: SynaraTokenFill { SynaraTokenFill(settingsToken) }
+    static var agentReview: SynaraTokenFill { SynaraTokenFill(agentReviewToken) }
 }
 
 enum SynaraColor {
@@ -184,10 +220,24 @@ enum SynaraColor {
 }
 
 #if canImport(UIKit)
+extension SynaraThemeRamp {
+    static func uiColor(
+        _ keyPath: KeyPath<SynaraThemeTokens, String>,
+        baseHex: String,
+        dark: Bool
+    ) -> UIColor {
+        UIColor(synaraHex: colorHex(keyPath, baseHex: baseHex, dark: dark)) ?? .systemBackground
+    }
+}
+
 private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>) -> Color {
+    synaraAdaptive(keyPath, baseHex: SynaraThemePaint.shared.baseHex)
+}
+
+private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>, baseHex: String) -> Color {
     Color(uiColor: UIColor { traits in
         let tokens = SynaraThemeRamp.tokens(
-            baseHex: SynaraThemeRamp.storedBaseHex(),
+            baseHex: baseHex,
             dark: traits.userInterfaceStyle == .dark
         )
         return UIColor(synaraHex: tokens[keyPath: keyPath]) ?? .systemBackground
@@ -224,7 +274,13 @@ extension Color {
 }
 #else
 private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>) -> Color {
-    Color(synaraHex: SynaraThemeRamp.tokens(baseHex: SynaraThemeRamp.defaultBaseHex, dark: false)[keyPath: keyPath])
+    Color(
+        synaraHex: SynaraThemeRamp.colorHex(
+            keyPath,
+            baseHex: SynaraThemePaint.shared.baseHex,
+            dark: false
+        )
+    )
 }
 #endif
 
