@@ -109,23 +109,61 @@ enum ConnectionStatusCopy {
             return .starting
         }
     }
+
+    /// Offline-equivalent statuses wait this long before Connection Lost chrome.
+    static let lostHold: TimeInterval = 4
+    /// Connected is a recovery flash, not steady-state chrome.
+    static let connectedFlash: TimeInterval = 4
+
+    static func holdsBeforeBanner(_ status: MatrixSyncStatus) -> Bool {
+        switch status {
+        case .reconnecting, .disconnected, .failed:
+            return true
+        case .connected, .syncing, .starting, .stopped, .restoreFailed:
+            return false
+        }
+    }
+
+    static func presentsBanner(
+        _ status: MatrixSyncStatus,
+        connectedFlashVisible: Bool = false
+    ) -> Bool {
+        switch status {
+        case .connected:
+            return connectedFlashVisible
+        case .stopped:
+            return false
+        case .syncing, .starting, .reconnecting, .disconnected, .restoreFailed, .failed:
+            return true
+        }
+    }
 }
 
 /// Published chrome state for the signed-in connection/sync indicator.
 final class ConnectionStatusStore: ObservableObject {
     @Published private(set) var status: MatrixSyncStatus = .stopped
+    @Published private(set) var isBannerVisible = false
 
-    /// Native SyncService reports Offline during short sliding-sync gaps.
-    /// Hold reconnecting until that state lasts so the banner does not bounce.
-    private let reconnectingHold: TimeInterval
-    private var reconnectingWork: DispatchWorkItem?
+    /// Native SyncService reports Offline/idle/failed during short sliding-sync
+    /// gaps. Hold Lost-equivalent chrome until that state lasts.
+    private let lostHold: TimeInterval
+    private let connectedFlash: TimeInterval
+    private var lostHoldWork: DispatchWorkItem?
+    private var connectedFlashWork: DispatchWorkItem?
+    private var pendingLost: MatrixSyncStatus?
+    private var recoveredFromVisibleDisconnect = false
 
-    init(reconnectingHold: TimeInterval = 4) {
-        self.reconnectingHold = reconnectingHold
+    init(
+        reconnectingHold: TimeInterval = ConnectionStatusCopy.lostHold,
+        connectedFlash: TimeInterval = ConnectionStatusCopy.connectedFlash
+    ) {
+        self.lostHold = reconnectingHold
+        self.connectedFlash = connectedFlash
     }
 
     deinit {
-        reconnectingWork?.cancel()
+        lostHoldWork?.cancel()
+        connectedFlashWork?.cancel()
     }
 
     func update(_ status: MatrixSyncStatus) {
@@ -139,28 +177,94 @@ final class ConnectionStatusStore: ObservableObject {
     }
 
     private func apply(_ status: MatrixSyncStatus) {
-        if status == .reconnecting {
-            if self.status == .reconnecting { return }
-            scheduleReconnecting()
+        if shouldDelay(status) {
+            if ConnectionStatusCopy.holdsBeforeBanner(self.status) {
+                present(status)
+                return
+            }
+            if pendingLost != nil {
+                pendingLost = status
+                return
+            }
+            scheduleLost(status)
             return
         }
-        reconnectingWork?.cancel()
-        reconnectingWork = nil
-        self.status = status
+
+        pendingLost = nil
+        lostHoldWork?.cancel()
+        lostHoldWork = nil
+        present(status)
     }
 
-    private func scheduleReconnecting() {
-        reconnectingWork?.cancel()
-        if reconnectingHold <= 0 {
-            status = .reconnecting
-            reconnectingWork = nil
+    private func shouldDelay(_ status: MatrixSyncStatus) -> Bool {
+        if ConnectionStatusCopy.holdsBeforeBanner(status) {
+            return true
+        }
+        guard status == .starting else {
+            return false
+        }
+        switch self.status {
+        case .connected, .syncing:
+            return true
+        default:
+            return pendingLost != nil
+        }
+    }
+
+    private func scheduleLost(_ status: MatrixSyncStatus) {
+        pendingLost = status
+        lostHoldWork?.cancel()
+        if lostHold <= 0 {
+            let toPresent = pendingLost ?? status
+            pendingLost = nil
+            lostHoldWork = nil
+            present(toPresent)
             return
         }
         let work = DispatchWorkItem { [weak self] in
-            self?.status = .reconnecting
-            self?.reconnectingWork = nil
+            guard let self else { return }
+            let toPresent = self.pendingLost ?? status
+            self.pendingLost = nil
+            self.lostHoldWork = nil
+            self.present(toPresent)
         }
-        reconnectingWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + reconnectingHold, execute: work)
+        lostHoldWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + lostHold, execute: work)
+    }
+
+    private func present(_ status: MatrixSyncStatus) {
+        connectedFlashWork?.cancel()
+        connectedFlashWork = nil
+
+        if ConnectionStatusCopy.holdsBeforeBanner(status) || status == .restoreFailed {
+            recoveredFromVisibleDisconnect = true
+        }
+
+        self.status = status
+
+        if status == .connected {
+            if recoveredFromVisibleDisconnect, connectedFlash > 0 {
+                isBannerVisible = true
+                scheduleConnectedFlashHide()
+            } else {
+                isBannerVisible = false
+                recoveredFromVisibleDisconnect = false
+            }
+            return
+        }
+
+        isBannerVisible = ConnectionStatusCopy.presentsBanner(status)
+    }
+
+    private func scheduleConnectedFlashHide() {
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.connectedFlashWork = nil
+            guard self.status == .connected, self.pendingLost == nil else { return }
+            self.isBannerVisible = false
+            self.recoveredFromVisibleDisconnect = false
+        }
+        connectedFlashWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + connectedFlash, execute: work)
     }
 }
