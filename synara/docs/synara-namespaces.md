@@ -22,6 +22,7 @@ Synara uses namespaced `in.synara.*` account data and event-content fields for c
 
 - `in.synara.room_draft.<userId>.<roomId>`: browser `localStorage` key for per-room composer drafts. Drafts are local to the device/browser profile, capped in size, and are not written to Matrix account data.
 - `settings.customAccentColor`: browser `localStorage` setting for the optional constrained theme accent. It accepts only full hex colors and is not written to Matrix account data.
+- `settings.themeBaseColor`: browser `localStorage` setting for the optional chrome hue tint. It accepts only full `#rrggbb` colors and is not written to Matrix account data. iOS stores the same key in app-group UserDefaults independently; there is no cross-device sync yet.
 
 ## Matrix-Native Events
 

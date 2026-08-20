@@ -43,19 +43,19 @@ struct RoomListView: View {
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
                     .padding(.bottom, SynaraSpacing.small)
-                    .background(SynaraColor.surface)
+                    .background(SynaraChrome.roomList)
 
                     List {
                         Section {
                             SynaraSkeletonList(rowCount: 9)
                                 .listRowSeparator(.hidden)
                                 .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
-                                .listRowBackground(SynaraColor.surface)
+                                .listRowBackground(SynaraChrome.roomList)
                         }
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .background(SynaraColor.surface)
+                    .background(SynaraChrome.roomList)
                     .accessibilityIdentifier("RoomListLoading")
                 }
             case .empty:
@@ -135,7 +135,7 @@ struct RoomListView: View {
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
                     .padding(.bottom, SynaraSpacing.small)
-                    .background(SynaraColor.surface)
+                    .background(SynaraChrome.roomList)
 
                     List {
                         if searchQuery.isEmpty == false && filteredRooms.isEmpty {
@@ -212,7 +212,7 @@ struct RoomListView: View {
                     }
                     .listStyle(.plain)
                     .scrollContentBackground(.hidden)
-                    .background(SynaraColor.surface)
+                    .background(SynaraChrome.roomList)
                     .refreshable {
                         await reloadRoomsForRefresh()
                     }
@@ -497,7 +497,7 @@ struct RoomListView: View {
                 onReject: { updateInvite(roomID: room.id, accept: false) }
             )
             .listRowSeparator(.hidden)
-            .listRowBackground(SynaraColor.surface)
+            .listRowBackground(SynaraChrome.roomList)
         } else {
             Button {
                 dismissSearch(clearQuery: false)
@@ -517,7 +517,7 @@ struct RoomListView: View {
             .accessibilityIdentifier("RoomRow-\(room.id)")
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
-            .listRowBackground(SynaraColor.surface)
+            .listRowBackground(SynaraChrome.roomList)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button {
                     toggleFavorite(room)

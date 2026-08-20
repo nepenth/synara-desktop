@@ -313,7 +313,7 @@ function RoomNavItemImpl({
 
   return (
     <NavItem
-      variant="Background"
+      variant="Surface"
       radii="400"
       highlight={unread !== undefined}
       aria-selected={selected}

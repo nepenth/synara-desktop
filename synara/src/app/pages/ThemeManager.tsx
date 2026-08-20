@@ -9,11 +9,12 @@ import {
   useSystemThemeKind,
 } from '../hooks/useTheme';
 import { useSetting } from '../state/hooks/settings';
-import { settingsAtom } from '../state/settings';
+import { getSharedSettings, settingsAtom } from '../state/settings';
 import { normalizeAccentColor } from '../utils/themeAccent';
 import {
   deriveThemeSurfaceRamp,
   resolveThemeBaseColor,
+  shouldApplyDerivedThemeRamp,
   type ThemeSurfaceScale,
 } from '../utils/themeBase';
 
@@ -51,10 +52,36 @@ const applyContainerScale = (
   setColorVar(target, tokens.OnContainer, scale.OnContainer);
 };
 
-const syncThemeBaseColor = (baseColor: string | undefined, themeKind: ThemeKind): string => {
-  const ramp = deriveThemeSurfaceRamp(resolveThemeBaseColor(baseColor), themeKind);
-  const target = document.body;
+const CONTAINER_TOKENS: ThemeSurfaceScale[] = [
+  color.Background,
+  color.Surface,
+  color.SurfaceVariant,
+  color.Secondary,
+];
 
+const clearContainerScale = (target: HTMLElement, tokens: ThemeSurfaceScale) => {
+  clearColorVar(target, tokens.Container);
+  clearColorVar(target, tokens.ContainerHover);
+  clearColorVar(target, tokens.ContainerActive);
+  clearColorVar(target, tokens.ContainerLine);
+  clearColorVar(target, tokens.OnContainer);
+};
+
+const syncThemeBaseColor = (
+  baseColor: string | undefined,
+  themeKind: ThemeKind,
+  themeId?: string
+): string => {
+  const target = document.body;
+  if (!shouldApplyDerivedThemeRamp(themeId)) {
+    CONTAINER_TOKENS.forEach((tokens) => clearContainerScale(target, tokens));
+    clearColorVar(target, color.Other.FocusRing);
+    clearColorVar(target, color.Other.Shadow);
+    clearColorVar(target, color.Other.Overlay);
+    return themeKind === ThemeKind.Dark ? '#1e1f22' : '#ffffff';
+  }
+
+  const ramp = deriveThemeSurfaceRamp(resolveThemeBaseColor(baseColor), themeKind);
   applyContainerScale(target, color.Background, ramp.background);
   applyContainerScale(target, color.Surface, ramp.surface);
   applyContainerScale(target, color.SurfaceVariant, ramp.surfaceVariant);
@@ -128,7 +155,9 @@ export function UnAuthRouteThemeManager() {
     if (systemThemeKind === ThemeKind.Light) {
       document.body.classList.add(...LightTheme.classNames);
     }
-    const chrome = syncThemeBaseColor(undefined, systemThemeKind);
+    const storedBase = getSharedSettings().themeBaseColor;
+    const themeId = systemThemeKind === ThemeKind.Dark ? DarkTheme.id : LightTheme.id;
+    const chrome = syncThemeBaseColor(storedBase, systemThemeKind, themeId);
     syncDocumentThemeChrome(systemThemeKind, chrome);
   }, [systemThemeKind]);
 
@@ -146,7 +175,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     document.body.classList.add(configClass, varsClass);
 
     document.body.classList.add(...activeTheme.classNames);
-    const chrome = syncThemeBaseColor(themeBaseColor, activeTheme.kind);
+    const chrome = syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
     syncDocumentThemeChrome(activeTheme.kind, chrome);
     syncAccentColor(customAccentColor, activeTheme.kind);
 

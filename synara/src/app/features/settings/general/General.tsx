@@ -49,6 +49,7 @@ import {
   Theme,
   ThemeKind,
   useSystemThemeKind,
+  useTheme,
   useThemeNames,
   useThemes,
 } from '../../../hooks/useTheme';
@@ -60,7 +61,12 @@ import { SequenceCardStyle } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
 import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../../../utils/themeAccent';
-import { DEFAULT_THEME_BASE_COLOR, normalizeThemeBaseColor } from '../../../utils/themeBase';
+import {
+  chromeColorsForRamp,
+  DEFAULT_THEME_BASE_COLOR,
+  deriveThemeSurfaceRamp,
+  normalizeThemeBaseColor,
+} from '../../../utils/themeBase';
 import {
   getPlatformIntegrationStatus,
   buildShortcutFailureMessage,
@@ -333,8 +339,38 @@ function PageZoomInput() {
   );
 }
 
+function ThemeRampPreview({ baseColor, kind }: { baseColor: string; kind: ThemeKind }) {
+  const chrome = chromeColorsForRamp(deriveThemeSurfaceRamp(baseColor, kind));
+  return (
+    <Box gap="200" alignItems="Center">
+      {(
+        [
+          ['Rail', chrome.rail],
+          ['List', chrome.roomList],
+          ['Chat', chrome.chat],
+        ] as const
+      ).map(([label, fill]) => (
+        <Box key={label} direction="Column" gap="100" alignItems="Center">
+          <div
+            aria-hidden
+            style={{
+              width: toRem(28),
+              height: toRem(36),
+              borderRadius: toRem(4),
+              backgroundColor: fill,
+              boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.18)',
+            }}
+          />
+          <Text size="T200">{label}</Text>
+        </Box>
+      ))}
+    </Box>
+  );
+}
+
 function Appearance() {
   const { t } = useTranslation();
+  const activeTheme = useTheme();
   const [systemTheme, setSystemTheme] = useSetting(settingsAtom, 'useSystemTheme');
   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor, setCustomAccentColor] = useSetting(settingsAtom, 'customAccentColor');
@@ -379,17 +415,21 @@ function Appearance() {
           title={t('modernization.settings.base_color.title', 'Base Color')}
           description={t(
             'modernization.settings.base_color.description',
-            'Tint sidebar, room list, and chat surfaces. Darker and lighter ramps are derived from this color.'
+            'Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.'
           )}
           after={
-            <Box gap="100" alignItems="Center">
+            <Box gap="200" alignItems="Center">
+              <ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />
               <Input
                 style={{ width: toRem(56), padding: 0 }}
                 size="300"
                 radii="300"
                 type="color"
                 value={baseColor}
-                onChange={(evt) => setThemeBaseColor(evt.currentTarget.value)}
+                onChange={(evt) => {
+                  const next = normalizeThemeBaseColor(evt.currentTarget.value);
+                  if (next) setThemeBaseColor(next);
+                }}
                 aria-label={t('modernization.settings.base_color.aria_label', 'Theme base color')}
               />
               <Button

@@ -110,7 +110,7 @@ export function Inbox() {
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>
-            <NavItem variant="Background" radii="400" aria-selected={notificationsSelected}>
+            <NavItem variant="Surface" radii="400" aria-selected={notificationsSelected}>
               <NavLink to={getInboxNotificationsPath()}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">

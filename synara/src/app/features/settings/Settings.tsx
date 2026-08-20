@@ -142,7 +142,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
               </Box>
               <Box shrink="No">
                 {screenSize === ScreenSize.Mobile && (
-                  <IconButton onClick={requestClose} variant="Background">
+                  <IconButton onClick={requestClose} variant="Surface">
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 )}
@@ -154,7 +154,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                   {menuItems.map((item) => (
                     <MenuItem
                       key={item.name}
-                      variant="Background"
+                      variant="Surface"
                       radii="400"
                       aria-pressed={activePage === item.page}
                       before={<Icon src={item.icon} size="100" filled={activePage === item.page} />}

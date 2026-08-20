@@ -338,10 +338,10 @@ struct RoomTimelineView: View {
                 onPasteImages: draftPastedImages,
                 isFocusedExternally: $isComposerFocused
             )
-            .background(SynaraColor.surface)
+            .background(SynaraChrome.composer)
             .shadow(color: Color.black.opacity(isAgentRoom ? 0.22 : 0.06), radius: 10, x: 0, y: -3)
         }
-        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraChrome.chat)
         .navigationTitle(roomTitle ?? "Room")
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -444,7 +444,7 @@ struct RoomTimelineView: View {
                     .padding(.top, SynaraSpacing.medium)
                     .padding(.bottom, SynaraSpacing.small)
             }
-            .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+            .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraChrome.chat)
             .accessibilityIdentifier("TimelineLoading")
         case .empty:
             SynaraEmptyState(title: "No Messages", systemImage: "text.bubble", message: "Messages will appear here.")
@@ -568,7 +568,7 @@ struct RoomTimelineView: View {
                         .padding(.bottom, SynaraSpacing.small)
                     }
                     .scrollDismissesKeyboard(.interactively)
-                    .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+                    .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraChrome.chat)
                     .accessibilityIdentifier("TimelineList")
                     .simultaneousGesture(
                         DragGesture(minimumDistance: 8)
@@ -661,7 +661,7 @@ struct RoomTimelineView: View {
             command: stableViewportCommand,
             isLive: timelineProviderIsLive,
             isPaginating: isPaginating,
-            backgroundColor: UIColor(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface),
+            backgroundColor: UIColor(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraChrome.chat),
             rowContent: { row in
                 AnyView(stableViewportRowContent(row))
             },
@@ -700,7 +700,7 @@ struct RoomTimelineView: View {
             }
         )
         .id(routeID)
-        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraColor.surface)
+        .background(isAgentRoom ? SynaraColor.agentReviewBackground : SynaraChrome.chat)
         .overlay(alignment: .bottomTrailing) {
             if RoomTimelineJumpLatestPolicy.shouldShow(
                 isLive: timelineProviderIsLive,
@@ -5162,7 +5162,7 @@ private struct ComposerView: View {
         .padding(.horizontal, SynaraSpacing.small)
         .padding(.top, SynaraSpacing.xSmall)
         .padding(.bottom, SynaraSpacing.xSmall)
-        .background(SynaraColor.surface)
+        .background(SynaraChrome.composer)
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .onChange(of: isComposerFocused) { focused in

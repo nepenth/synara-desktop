@@ -134,7 +134,7 @@ function HomeHeader({
           </Box>
           <Box alignItems="Center" gap="100">
             <Chip
-              variant={roomSort === 'recent' ? 'Primary' : 'Background'}
+              variant={roomSort === 'recent' ? 'Primary' : 'Surface'}
               radii="Pill"
               aria-pressed={roomSort === 'recent'}
               aria-label="Sort by recent activity"
@@ -143,7 +143,7 @@ function HomeHeader({
               <Text size="O400">Recent</Text>
             </Chip>
             <Chip
-              variant={roomSort === 'name' ? 'Primary' : 'Background'}
+              variant={roomSort === 'name' ? 'Primary' : 'Surface'}
               radii="Pill"
               aria-pressed={roomSort === 'name'}
               aria-label="Sort by name"
@@ -151,7 +151,7 @@ function HomeHeader({
             >
               <Text size="O400">Name</Text>
             </Chip>
-            <IconButton aria-pressed={!!menuAnchor} variant="Background" onClick={handleOpenMenu}>
+            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -299,7 +299,7 @@ export function Home() {
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
-              <NavItem variant="Background" radii="400" aria-selected={createRoomSelected}>
+              <NavItem variant="Surface" radii="400" aria-selected={createRoomSelected}>
                 <NavButton onClick={() => navigate(getHomeCreatePath())}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -315,7 +315,7 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
-              <NavItem variant="Background" radii="400" aria-selected={joinSelected}>
+              <NavItem variant="Surface" radii="400" aria-selected={joinSelected}>
                 <NavButton onClick={() => navigate(getHomeJoinPath())}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -331,7 +331,7 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
-              <NavItem variant="Background" radii="400" aria-selected={searchSelected}>
+              <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
                 <NavLink to={getHomeSearchPath()}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">

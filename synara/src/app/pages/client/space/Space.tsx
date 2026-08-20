@@ -282,7 +282,7 @@ function SpaceHeader() {
             {joinRules?.join_rule !== 'public' && <Icon src={Icons.Lock} size="50" />}
           </Box>
           <Box shrink="No">
-            <IconButton aria-pressed={!!menuAnchor} variant="Background" onClick={handleOpenMenu}>
+            <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
           </Box>
@@ -462,7 +462,7 @@ export function Space() {
             />
           )}
           <NavCategory>
-            <NavItem variant="Background" radii="400" aria-selected={lobbySelected}>
+            <NavItem variant="Surface" radii="400" aria-selected={lobbySelected}>
               <NavLink to={getSpaceLobbyPath(getCanonicalAliasOrRoomId(mx, space.roomId))}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -478,7 +478,7 @@ export function Space() {
                 </NavItemContent>
               </NavLink>
             </NavItem>
-            <NavItem variant="Background" radii="400" aria-selected={searchSelected}>
+            <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
               <NavLink to={getSpaceSearchPath(getCanonicalAliasOrRoomId(mx, space.roomId))}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">

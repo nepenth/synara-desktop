@@ -346,7 +346,7 @@ export function RoomViewHeader({
 
   return (
     <PageHeader
-      className={ContainerColor({ variant: 'Surface' })}
+      className={ContainerColor({ variant: 'SurfaceVariant' })}
       balance={screenSize === ScreenSize.Mobile}
     >
       <Box grow="Yes" gap="300">

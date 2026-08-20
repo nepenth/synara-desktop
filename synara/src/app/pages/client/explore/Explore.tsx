@@ -162,7 +162,7 @@ export function Explore() {
       <PageNavContent>
         <Box direction="Column" gap="300">
           <NavCategory>
-            <NavItem variant="Background" radii="400" aria-selected={featuredSelected}>
+            <NavItem variant="Surface" radii="400" aria-selected={featuredSelected}>
               <NavLink to={getExploreFeaturedPath()}>
                 <NavItemContent>
                   <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -180,7 +180,7 @@ export function Explore() {
             </NavItem>
             {userServer && (
               <NavItem
-                variant="Background"
+                variant="Surface"
                 radii="400"
                 aria-selected={selectedServer === userServer}
               >
@@ -215,7 +215,7 @@ export function Explore() {
               {servers.map((server) => (
                 <NavItem
                   key={server}
-                  variant="Background"
+                  variant="Surface"
                   radii="400"
                   aria-selected={server === selectedServer}
                 >

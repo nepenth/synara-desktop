@@ -98,6 +98,7 @@ type SettingsFixtures = {
   invalid: {
     sharedContainsDesktopShortcut: unknown;
     badMessageSpacing: unknown;
+    badThemeBaseColor: unknown;
     desktopPlatformContainsSharedField: unknown;
   };
 };
@@ -526,6 +527,7 @@ test('Settings compatibility schemas validate shared and desktop platform split'
     validateWithSchema(fixtures.invalid.sharedContainsDesktopShortcut, sharedSchema).length > 0
   );
   assert.ok(validateWithSchema(fixtures.invalid.badMessageSpacing, sharedSchema).length > 0);
+  assert.ok(validateWithSchema(fixtures.invalid.badThemeBaseColor, sharedSchema).length > 0);
   assert.ok(
     validateWithSchema(fixtures.invalid.desktopPlatformContainsSharedField, desktopSchema).length >
       0

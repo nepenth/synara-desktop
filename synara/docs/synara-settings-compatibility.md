@@ -53,6 +53,11 @@ Desktop-only shortcut and diagnostic fields are not shared settings:
   domain, not the desktop `platformSettings` shortcut schema.
 - New shared settings must be added to this document and schema before iOS
   consumes them.
+- `themeBaseColor` is a shared *schema* field (full `#rrggbb` only). Desktop
+  persists it in the `settings` localStorage blob. iOS persists the same key
+  in app-group UserDefaults. Those stores are not synced; they will drift
+  until a real shared settings transport exists. Do not treat the matching
+  key name as a shared runtime.
 
 ## Acceptance Criteria
 

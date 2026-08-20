@@ -11,7 +11,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationActionError: String?
     @State private var signOutError: String?
-    @State private var themeRevision = 0
+    @ObservedObject private var themePaint = SynaraThemePaint.shared
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -23,10 +23,7 @@ struct RootShellView: View {
     var body: some View {
         content
             .environment(\.appEnvironment, environment)
-            .id(themeRevision)
-            .onReceive(NotificationCenter.default.publisher(for: SynaraThemeRamp.didChangeNotification)) { _ in
-                themeRevision += 1
-            }
+            .environment(\.synaraThemeBaseHex, themePaint.baseHex)
             .sheet(item: $router.sheetDestination) { destination in
                 SheetPlaceholderView(destination: destination)
             }
