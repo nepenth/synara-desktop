@@ -175,12 +175,7 @@ function hasIosTestBuildStep(jobLines) {
   });
 }
 
-const REQUIRED_APPLE_RUST_TARGETS = [
-  "aarch64-apple-ios",
-  "aarch64-apple-ios-sim",
-  "x86_64-apple-ios",
-  "aarch64-apple-darwin",
-];
+const REQUIRED_APPLE_RUST_TARGETS = ["aarch64-apple-ios"];
 
 function hasAppleRustToolchainStep(jobLines) {
   return parseSteps(jobLines ?? []).some((step) => {
@@ -615,11 +610,15 @@ export function inspectQualityGates({
       "linux-arch",
       "macos",
       "updater-metadata",
-      "ios-testflight",
     ])
   ) {
     errors.push(
-      "Release publication needs must include exactly every client artifact and updater metadata job."
+      "Release publication needs must include exactly the desktop artifacts and updater metadata job."
+    );
+  }
+  if (getList(publishJob, "needs", 4).includes("ios-testflight")) {
+    errors.push(
+      "GitHub Release must not wait on TestFlight promotion."
     );
   }
   if (
@@ -684,7 +683,7 @@ export function inspectQualityGates({
 
   if (!hasAppleRustToolchainStep(testflightUpload)) {
     errors.push(
-      "TestFlight upload must install Rust 1.93 with aarch64-apple-ios, aarch64-apple-ios-sim, x86_64-apple-ios, and aarch64-apple-darwin before archive."
+      "TestFlight upload must install Rust 1.93 with aarch64-apple-ios before archive."
     );
   }
 

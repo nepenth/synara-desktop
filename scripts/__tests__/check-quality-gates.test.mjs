@@ -230,7 +230,7 @@ ${iosBuildStep.replace("    steps:\n", "")}
         uses: dtolnay/rust-toolchain@fixture
         with:
           toolchain: 1.93
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin
+          targets: aarch64-apple-ios
       - run: scripts/generate-synara-core-swift.sh
       - id: upload_ios
         run: synara-ios/scripts/upload-testflight-internal.sh
@@ -260,7 +260,7 @@ ${iosBuildStep.replace("    steps:\n", "")}
   updater-metadata:
     needs: [macos]
   publish-gh-release:
-    needs: [linux-deb, linux-arch, macos, updater-metadata, ios-testflight]
+    needs: [linux-deb, linux-arch, macos, updater-metadata]
     environment:
       name: production-release
 `;
@@ -549,7 +549,7 @@ test("rejects exact-tag commands hidden in dead control flow", () => {
 test("rejects incomplete publication and updater dependencies", () => {
   for (const workflow of [
     releaseWorkflow.replace(
-      "needs: [linux-deb, linux-arch, macos, updater-metadata, ios-testflight]",
+      "needs: [linux-deb, linux-arch, macos, updater-metadata]",
       "needs: [linux-deb, linux-arch, macos, ios-testflight]"
     ),
     releaseWorkflow.replace(
@@ -591,7 +591,7 @@ test("rejects TestFlight upload that archives without UniFFI generate", () => {
     ],
     [
       releaseWorkflow.replace(
-        "          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin",
+        "          targets: aarch64-apple-ios",
         "          targets: aarch64-apple-darwin"
       ),
       /Rust 1\.93/i,

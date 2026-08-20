@@ -68,26 +68,29 @@ test("requires task PR validation on the Matrix Rust integration branch", () => 
   }
 });
 
-test("requires event- and pull-request-specific cancellable validation lanes", () => {
+test("requires a shared cancellable validation lane per branch", () => {
   for (const workflowName of validationWorkflows) {
-    const noEvent = inspect(workflowName, (workflow) =>
-      workflow.replace("-${{ github.event_name }}", "")
+    const splitByEvent = inspect(workflowName, (workflow) =>
+      workflow.replace(
+        "${{ github.head_ref || github.ref_name }}",
+        "${{ github.event_name }}-${{ github.head_ref || github.ref_name }}"
+      )
     );
     assert.match(
-      noEvent.errors.join("\n"),
-      /must separate workflow event types/,
+      splitByEvent.errors.join("\n"),
+      /must not split push and pull_request/,
       workflowName
     );
 
-    const noPullRequest = inspect(workflowName, (workflow) =>
+    const noBranchLane = inspect(workflowName, (workflow) =>
       workflow.replace(
-        "${{ github.event.pull_request.number || github.ref }}",
+        "${{ github.head_ref || github.ref_name }}",
         "${{ github.ref }}"
       )
     );
     assert.match(
-      noPullRequest.errors.join("\n"),
-      /must isolate each pull request/,
+      noBranchLane.errors.join("\n"),
+      /share one cancellable lane per branch/,
       workflowName
     );
 
@@ -96,7 +99,7 @@ test("requires event- and pull-request-specific cancellable validation lanes", (
     );
     assert.match(
       noCancellation.errors.join("\n"),
-      /must cancel obsolete runs only within the same event/,
+      /must cancel obsolete runs within the same branch lane/,
       workflowName
     );
   }

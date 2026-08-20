@@ -79,12 +79,14 @@ for generated_ffi_file in synara_coreFFI.h module.modulemap; do
   fi
 done
 
-# This catches a malformed local binary target before XcodeGen. xcodebuild
-# below still validates the actual unsigned simulator app and test bundles.
-(
-  cd SynaraCore
-  swift build
-)
+# Host `swift build` links the darwin XCFramework slice. CI simulator/device
+# generates omit that slice; xcodebuild below is the product check.
+if [[ "${SYNARA_CORE_APPLE_SLICES:-all}" == "all" ]]; then
+  (
+    cd SynaraCore
+    swift build
+  )
+fi
 
 mkdir -p \
   "$DERIVED_DATA_PATH" \
@@ -111,16 +113,6 @@ cp "$PACKAGE_RESOLVED_PATH" "$PACKAGE_RESOLVED_BACKUP"
 xcodegen generate --spec project.yml
 mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
 cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
-
-xcodebuild \
-  -project Synara.xcodeproj \
-  -scheme Synara \
-  -destination "$BUILD_DESTINATION" \
-  -derivedDataPath "$DERIVED_DATA_PATH" \
-  -resultBundlePath "$RESULT_BUNDLE_DIR/build-$RESULT_STAMP.xcresult" \
-  "${PACKAGE_ARGS[@]}" \
-  build \
-  "${UNSIGNED_BUILD_ARGS[@]}"
 
 xcodebuild \
   -project Synara.xcodeproj \

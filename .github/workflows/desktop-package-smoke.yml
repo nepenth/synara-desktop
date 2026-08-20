@@ -18,7 +18,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: package-smoke-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  group: package-smoke-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
@@ -42,16 +42,24 @@ jobs:
         id: scope
         shell: bash
         env:
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
-          # Always-on full smoke: manual runs and release pushes.
+          # Always-on full smoke: manual runs.
           if [[ "$GITHUB_EVENT_NAME" == "workflow_dispatch" ]]; then
             echo "packages=true" >> "$GITHUB_OUTPUT"
             echo "reason=workflow_dispatch"
             exit 0
+          fi
+
+          if [[ -n "${BASE_SHA:-}" && "${BASE_SHA}" != "0000000000000000000000000000000000000000" && -n "${HEAD_SHA:-}" ]]; then
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-metadata-only.mjs; then
+              echo "packages=false" >> "$GITHUB_OUTPUT"
+              echo "reason=metadata-only"
+              exit 0
+            fi
           fi
 
           if [[ "$GITHUB_EVENT_NAME" != "pull_request" ]]; then
