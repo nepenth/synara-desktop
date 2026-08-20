@@ -56,15 +56,15 @@ test('native unread projection drops a room after receipts clear counts and mark
   assert.deepEqual(after, []);
   assert.equal(
     unreadFromNativeRoom(
-      room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 0, markedUnread: false }),
+      room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 0, markedUnread: false })
     ),
-    undefined,
+    undefined
   );
 });
 
 test('nav unread comes from native unreadCount, not a leftover jotai total', () => {
   const unread = unreadFromNativeRoom(
-    room({ roomId: '!a:example.org', unreadCount: 4, highlightCount: 1 }),
+    room({ roomId: '!a:example.org', unreadCount: 4, highlightCount: 1 })
   );
   assert.deepEqual(unread, { highlight: 1, total: 4, from: null });
 });

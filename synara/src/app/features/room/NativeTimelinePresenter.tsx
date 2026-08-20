@@ -1581,9 +1581,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                     )}
                     groupsNext={isGroupedWithPrevious(
                       row,
-                      virtualItem.index + 1 < rows.length
-                        ? rows[virtualItem.index + 1]
-                        : undefined
+                      virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
                     )}
                     roomId={roomId}
                     pinnedEventIds={snapshot.pinnedEventIds}

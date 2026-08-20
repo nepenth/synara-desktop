@@ -8,7 +8,7 @@ export type NativeRoomReadAction = 'mark_read' | 'mark_unread';
 
 export type NativeInvoke = (
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<unknown>>;
 
 async function requireLoggedIn(invoke: NativeInvoke): Promise<void> {
@@ -30,7 +30,7 @@ export async function setRoomReadStateWithNativeOwner(
   roomId: string,
   action: NativeRoomReadAction,
   desktopAvailable: boolean,
-  invoke: NativeInvoke,
+  invoke: NativeInvoke
 ): Promise<void> {
   if (!desktopAvailable) {
     throw new Error('Native Matrix room read state is unavailable.');

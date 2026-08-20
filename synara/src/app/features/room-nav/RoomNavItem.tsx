@@ -82,7 +82,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         room.roomId,
         'mark_read',
         isSynaraDesktop(),
-        invokeDesktopWithAvailability,
+        invokeDesktopWithAvailability
       ).catch(() => undefined);
       requestClose();
     };
@@ -92,7 +92,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         room.roomId,
         'mark_unread',
         isSynaraDesktop(),
-        invokeDesktopWithAvailability,
+        invokeDesktopWithAvailability
       ).catch(() => undefined);
       requestClose();
     };
@@ -106,7 +106,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
           room.roomId,
           !isFavorite,
           isSynaraDesktop(),
-          invokeDesktopWithAvailability,
+          invokeDesktopWithAvailability
         );
         requestClose();
       } catch {
@@ -268,7 +268,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         </Box>
       </Menu>
     );
-  },
+  }
 );
 
 type RoomNavItemProps = {
@@ -295,10 +295,10 @@ function RoomNavItemImpl({
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const nativeRooms = useNativeRoomListSnapshot();
   const unread = unreadFromNativeRoom(
-    nativeRooms.rooms.find((summary) => summary.roomId === room.roomId),
+    nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)
   );
   const typingMember = useRoomTypingMember(room.roomId).filter(
-    (receipt) => receipt.userId !== mx.getUserId(),
+    (receipt) => receipt.userId !== mx.getUserId()
   );
 
   const roomName = useRoomName(room);

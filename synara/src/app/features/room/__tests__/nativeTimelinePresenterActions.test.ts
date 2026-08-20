@@ -15,7 +15,7 @@ const relativeLuminance = (hex: string): number =>
 
 const contrastRatio = (foreground: string, background: string): number => {
   const [higher, lower] = [relativeLuminance(foreground), relativeLuminance(background)].sort(
-    (left, right) => right - left,
+    (left, right) => right - left
   );
   return (higher + 0.05) / (lower + 0.05);
 };
@@ -83,7 +83,7 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /Icons\.ChevronBottom/);
   assert.match(
     presenter,
-    /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/,
+    /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/
   );
   assert.match(presenter, /const jumpToLatest = \(\) =>/);
   assert.match(presenter, /followingLiveRef\.current = true/);
@@ -116,11 +116,11 @@ test('room read state stays a single contextual overflow action', () => {
 test('native timeline message rows use a full-width surface, not a text-only chip', () => {
   const messageRowCss = htmlCss.slice(
     htmlCss.indexOf('export const MessageRow'),
-    htmlCss.indexOf('export const MessageBody'),
+    htmlCss.indexOf('export const MessageBody')
   );
   const messageBodyCss = htmlCss.slice(
     htmlCss.indexOf('export const MessageBody'),
-    htmlCss.indexOf('export const FormattedBody'),
+    htmlCss.indexOf('export const FormattedBody')
   );
 
   assert.match(messageRowCss, /export const MessageRow = recipe\(/);
