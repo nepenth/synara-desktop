@@ -63,6 +63,18 @@ pub async fn matrix_room_set_favorite(
         .await
 }
 
+/// Persist receipts and the unread flag through the native Matrix SDK.
+/// Fail-closed: desktop Mark as Read must not use the JS-sdk no-op facade.
+#[tauri::command]
+pub async fn matrix_room_set_read_state(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    action: NativeTimelineReadAction,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::room_read_state::room_set_read_state(core.inner().as_ref(), room_id, action)
+        .await
+}
+
 /// V-ROOMS members moderation: invite a user through the live native Matrix SDK.
 /// Fail-closed: desktop moderation must not use the JS SDK membership methods.
 #[tauri::command]

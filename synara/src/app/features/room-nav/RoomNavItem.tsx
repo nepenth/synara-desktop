@@ -24,11 +24,10 @@ import { RoomAvatar } from '../../components/room-avatar';
 import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
 import { roomAvatarTone, roomNameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { useRoomUnread } from '../../state/hooks/unread';
-import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
-import { markAsReadInBackground, markAsUnread } from '../../utils/notifications';
+import { unreadFromNativeRoom } from '../../state/room/roomToUnread';
+import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
@@ -39,8 +38,6 @@ import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { getViaServers } from '../../plugins/via-servers';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
-import { useSetting } from '../../state/hooks/settings';
-import { settingsAtom } from '../../state/settings';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import {
@@ -64,11 +61,10 @@ type RoomNavItemMenuProps = {
 const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
   ({ room, requestClose, notificationMode }, ref) => {
     const mx = useMatrixClient();
-    const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
-    const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
     const nativeRooms = useNativeRoomListSnapshot();
-    const isFavorite =
-      nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)?.isFavorite === true;
+    const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
+    const unread = unreadFromNativeRoom(nativeRoom);
+    const isFavorite = nativeRoom?.isFavorite === true;
     const [favoriteError, setFavoriteError] = useState<string>();
     const [favoriteBusy, setFavoriteBusy] = useState(false);
     const powerLevels = usePowerLevels(room);
@@ -82,12 +78,22 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const [invitePrompt, setInvitePrompt] = useState(false);
 
     const handleMarkAsRead = () => {
-      markAsReadInBackground(mx, room.roomId, hideActivity);
+      void setRoomReadStateWithNativeOwner(
+        room.roomId,
+        'mark_read',
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability,
+      ).catch(() => undefined);
       requestClose();
     };
 
     const handleMarkAsUnread = () => {
-      markAsUnread(mx, room.roomId);
+      void setRoomReadStateWithNativeOwner(
+        room.roomId,
+        'mark_unread',
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability,
+      ).catch(() => undefined);
       requestClose();
     };
 
@@ -100,7 +106,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
           room.roomId,
           !isFavorite,
           isSynaraDesktop(),
-          invokeDesktopWithAvailability
+          invokeDesktopWithAvailability,
         );
         requestClose();
       } catch {
@@ -262,7 +268,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         </Box>
       </Menu>
     );
-  }
+  },
 );
 
 type RoomNavItemProps = {
@@ -287,9 +293,12 @@ function RoomNavItemImpl({
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
+  const nativeRooms = useNativeRoomListSnapshot();
+  const unread = unreadFromNativeRoom(
+    nativeRooms.rooms.find((summary) => summary.roomId === room.roomId),
+  );
   const typingMember = useRoomTypingMember(room.roomId).filter(
-    (receipt) => receipt.userId !== mx.getUserId()
+    (receipt) => receipt.userId !== mx.getUserId(),
   );
 
   const roomName = useRoomName(room);

@@ -987,9 +987,14 @@
           "markdownDescription": "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
+          "description": "Enables the matrix_room_set_favorite command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-set-favorite",
+          "markdownDescription": "Enables the matrix_room_set_favorite command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
+          "type": "string",
           "const": "allow-matrix-room-set-power-level",
           "markdownDescription": "Enables the matrix_room_set_power_level command without any pre-configured scope."
         },
@@ -1004,6 +1009,12 @@
           "type": "string",
           "const": "allow-matrix-room-set-power-levels",
           "markdownDescription": "Enables the matrix_room_set_power_levels command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_room_set_read_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-set-read-state",
+          "markdownDescription": "Enables the matrix_room_set_read_state command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_room_unban command without any pre-configured scope.",
@@ -1984,9 +1995,14 @@
           "markdownDescription": "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
+          "description": "Denies the matrix_room_set_favorite command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-set-favorite",
+          "markdownDescription": "Denies the matrix_room_set_favorite command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
+          "type": "string",
           "const": "deny-matrix-room-set-power-level",
           "markdownDescription": "Denies the matrix_room_set_power_level command without any pre-configured scope."
         },
@@ -2001,6 +2017,12 @@
           "type": "string",
           "const": "deny-matrix-room-set-power-levels",
           "markdownDescription": "Denies the matrix_room_set_power_levels command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_room_set_read_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-set-read-state",
+          "markdownDescription": "Denies the matrix_room_set_read_state command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_room_unban command without any pre-configured scope.",

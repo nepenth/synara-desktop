@@ -1549,6 +1549,23 @@ fn room_set_favorite_command_owns_sdk_tag_write_without_a_js_fallback() {
 }
 
 #[test]
+fn room_set_read_state_command_owns_native_receipts_without_a_js_fallback() {
+    let product = PRODUCT_SOURCE;
+    let command = product
+        .split("pub async fn matrix_room_set_read_state")
+        .nth(1)
+        .expect("room set-read-state command");
+    let command = command
+        .split("#[tauri::command]")
+        .next()
+        .expect("room set-read-state command body");
+    assert!(command.contains("crate::bridge::room_read_state::room_set_read_state"));
+    assert!(!command.contains("sendReadReceipt"));
+    assert!(!command.contains("setRoomReadMarkers"));
+    assert!(!command.contains("dual_backend"));
+}
+
+#[test]
 fn room_create_builds_sdk_request_and_native_initial_state() {
     let request = build_room_create_request(MatrixRoomCreateRequest {
         name: Some("  Native room  ".into()),

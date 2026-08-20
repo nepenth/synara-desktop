@@ -1272,6 +1272,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     });
   }, [roomId, rows, virtualizer]);
 
+  const liveTailMarkedKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     userInitiatedScrollRef.current = false;
     followingLiveRef.current = false;
@@ -1279,8 +1280,27 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     initialPlacementRef.current = undefined;
     lastTotalSizeRef.current = 0;
     pendingBackwardGrowRef.current = false;
+    liveTailMarkedKeyRef.current = undefined;
     setAtLiveBottom(false);
   }, [roomId]);
+
+  const liveTailMarkReadKey =
+    readyState &&
+    atLiveBottom &&
+    readyState.selectedPosition.kind === 'live_bottom' &&
+    readyState.snapshot.capabilities.markRead
+      ? `${roomId}:${readyState.snapshot.revision}`
+      : undefined;
+  useEffect(() => {
+    if (!liveTailMarkReadKey) return;
+    if (liveTailMarkedKeyRef.current === liveTailMarkReadKey) return;
+    liveTailMarkedKeyRef.current = liveTailMarkReadKey;
+    void controller.setReadState('mark_read').catch(() => {
+      if (liveTailMarkedKeyRef.current === liveTailMarkReadKey) {
+        liveTailMarkedKeyRef.current = undefined;
+      }
+    });
+  }, [controller, liveTailMarkReadKey]);
 
   useEffect(() => {
     if (!readyState) return undefined;
@@ -1469,6 +1489,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       if (rows.length > 0) {
         virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
       }
+      await controller.setReadState('mark_read');
     });
   };
 

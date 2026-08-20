@@ -414,6 +414,7 @@ pub fn run() {
             matrix::auth::product::matrix_room_leave,
             matrix::auth::product::matrix_room_join,
             matrix::auth::product::matrix_room_set_favorite,
+            matrix::auth::product::matrix_room_set_read_state,
             matrix::auth::product::matrix_room_invite,
             matrix::auth::product::matrix_room_kick,
             matrix::auth::product::matrix_room_ban,

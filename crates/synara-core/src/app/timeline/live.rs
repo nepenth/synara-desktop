@@ -184,6 +184,20 @@ impl NativeTimelineOwner {
             .await
     }
 
+    /// Mark a room read or unread without requiring an already-open view stream.
+    /// Context-menu Mark as Read uses this while the room is not mounted.
+    pub async fn set_room_read_state(
+        &self,
+        room_id: &str,
+        action: NativeTimelineReadAction,
+    ) -> Result<(), &'static str> {
+        self.registry
+            .lock()
+            .await
+            .set_room_read_state(&self.client, room_id, action)
+            .await
+    }
+
     pub async fn toggle_reaction(
         &self,
         room_id: &str,
@@ -1274,12 +1288,18 @@ impl NativeTimelineRegistry {
             .timeline
             .clone();
         let receipt_sent = match request.action {
-            NativeTimelineReadAction::MarkRead => Some(
-                timeline
+            NativeTimelineReadAction::MarkRead => {
+                let sent = timeline
                     .mark_as_read(ReceiptType::ReadPrivate)
                     .await
-                    .map_err(|_| "v-timeline-view-mark-read-failed")?,
-            ),
+                    .map_err(|_| "v-timeline-view-mark-read-failed")?;
+                timeline
+                    .room()
+                    .set_unread_flag(false)
+                    .await
+                    .map_err(|_| "v-timeline-view-clear-unread-failed")?;
+                Some(sent)
+            }
             NativeTimelineReadAction::MarkUnread => {
                 timeline
                     .room()
@@ -1297,6 +1317,44 @@ impl NativeTimelineRegistry {
             receipt_sent,
             snapshot,
         })
+    }
+
+    /// Send receipts and/or the unread flag for a room that may not have a view.
+    pub async fn set_room_read_state(
+        &mut self,
+        client: &Client,
+        room_id: &str,
+        action: NativeTimelineReadAction,
+    ) -> Result<(), &'static str> {
+        let room_id = parse_room_id(room_id)?;
+        let room_id_string = room_id.to_string();
+        let room = client
+            .get_room(&room_id)
+            .ok_or("v-rooms-room-read-state-room-not-found")?;
+        match action {
+            NativeTimelineReadAction::MarkRead => {
+                self.open(client, &room_id_string).await?;
+                let timeline = self
+                    .entries
+                    .get(&room_id_string)
+                    .ok_or("d0.3-timeline-open-failed")?
+                    .timeline
+                    .clone();
+                timeline
+                    .mark_as_read(ReceiptType::ReadPrivate)
+                    .await
+                    .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
+                room.set_unread_flag(false)
+                    .await
+                    .map_err(|_| "v-rooms-room-read-state-clear-unread-failed")?;
+            }
+            NativeTimelineReadAction::MarkUnread => {
+                room.set_unread_flag(true)
+                    .await
+                    .map_err(|_| "v-rooms-room-read-state-mark-unread-failed")?;
+            }
+        }
+        Ok(())
     }
 
     pub async fn view_snapshot_for_stream(
@@ -3110,6 +3168,17 @@ mod tests {
         .unwrap();
         assert_eq!(request.stream_id, "live:!room:example.org");
         assert_eq!(request.action, NativeTimelineReadAction::MarkUnread);
+    }
+
+    #[test]
+    fn room_read_state_sends_receipts_and_clears_marked_unread_without_a_view_stream() {
+        let source = include_str!("live.rs");
+        assert!(source.contains("pub async fn set_room_read_state"));
+        assert!(source.contains("self.open(client, &room_id_string).await?"));
+        assert!(source.contains("mark_as_read(ReceiptType::ReadPrivate)"));
+        assert!(source.contains("set_unread_flag(false)"));
+        assert!(source.contains("set_unread_flag(true)"));
+        assert!(source.contains("v-rooms-room-read-state-room-not-found"));
     }
 
     #[test]

@@ -1040,6 +1040,14 @@ struct MatrixRoomSetFavoriteRequest {
     favorite: bool,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_set_read_state`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomSetReadStateRequest {
+    room_id: String,
+    action: NativeTimelineReadAction,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixRoomJoinRequest {
@@ -1768,6 +1776,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_room_set_favorite", matrix_room_set_favorite)
         .expect("built-in matrix_room_set_favorite must remain in the command census");
+    registry
+        .register("matrix_room_set_read_state", matrix_room_set_read_state)
+        .expect("built-in matrix_room_set_read_state must remain in the command census");
     registry
         .register("matrix_room_invite", matrix_room_invite)
         .expect("built-in matrix_room_invite must remain in the command census");
@@ -3366,6 +3377,32 @@ fn matrix_room_set_favorite(state: Arc<CoreState>, request: CommandEnvelope) -> 
             .map_err(room_leave_join_owner_error)?;
         Ok(serde_json::Value::Null)
     })
+}
+
+fn matrix_room_set_read_state(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomSetReadStateRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-set-read-state-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-set-read-state-no-session")
+        })?;
+        owner
+            .set_room_read_state(&payload.room_id, payload.action)
+            .await
+            .map_err(room_read_state_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn room_read_state_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id" | "v-rooms-room-read-state-room-not-found" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn room_leave_join_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
@@ -5117,6 +5154,7 @@ mod tests {
                 "matrix_room_set_power_level",
                 "matrix_room_set_power_level_tags",
                 "matrix_room_set_power_levels",
+                "matrix_room_set_read_state",
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
                 "matrix_send_poll",
@@ -7401,6 +7439,54 @@ mod tests {
             error.diagnostic_id.as_deref(),
             Some("p2-room-set-favorite-no-session")
         );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_set_read_state_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_set_read_state".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","action":"mark_read"}),
+            })
+            .await
+            .expect_err("room set-read-state without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-set-read-state-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("!r:example.org"));
+        assert!(!text.contains("token"));
+    }
+
+    #[tokio::test]
+    async fn matrix_room_set_read_state_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_set_read_state".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "action":"mark_read",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("room set-read-state must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-set-read-state-invalid-payload")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("!r:example.org"));
+        assert!(!text.contains("token"));
     }
 
     #[tokio::test]
