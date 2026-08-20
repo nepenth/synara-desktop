@@ -236,7 +236,7 @@ struct RoomTimelineView: View {
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
     @State private var replyTarget: ComposerRelationTarget?
-    @State private var editTarget: ComposerRelationTarget?
+    @State private var editSession: ComposerEditSession?
     @State private var sendError: String?
     @State private var hasAnchoredEvent = false
     @State private var uploadState: MediaUploadState = .idle
@@ -319,10 +319,10 @@ struct RoomTimelineView: View {
             Divider()
             ComposerView(
                 text: $draft,
-                placeholder: isAgentRoom ? "Reply to the agent workflow..." : "Send a message...",
+                placeholder: composerPlaceholder,
                 showsPromptMetrics: isAgentRoom,
                 replyTarget: replyTarget,
-                editTarget: editTarget,
+                editTarget: editSession?.editTarget,
                 uploadState: uploadState,
                 sendError: sendError,
                 onCancelRelation: clearComposerRelation,
@@ -499,13 +499,7 @@ struct RoomTimelineView: View {
                                     replyPreview: item.replyToEventID.flatMap { replyPreviewsByEventID[$0] },
                                     replyCount: threadReplyCounts[item.eventID] ?? 0,
                                     availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
-                                    onReply: {
-                                        replyTarget = ComposerRelationTarget(
-                                            item: item,
-                                            kind: .reply,
-                                            currentUserID: currentUserID
-                                        )
-                                    },
+                                    onReply: { beginReply(item) },
                                     onOpenThread: { openThread(root: item) },
                                     onEdit: { beginEdit(item) },
                                     onRedact: { applyAction(.redact, to: item) },
@@ -755,13 +749,7 @@ struct RoomTimelineView: View {
                 replyPreview: eventRow.replyPreview,
                 replyCount: eventRow.replyCount,
                 availability: eventRow.availability,
-                onReply: {
-                    replyTarget = ComposerRelationTarget(
-                        item: eventRow.item,
-                        kind: .reply,
-                        currentUserID: currentUserID
-                    )
-                },
+                onReply: { beginReply(eventRow.item) },
                 onOpenThread: { openThread(root: eventRow.item) },
                 onEdit: { beginEdit(eventRow.item) },
                 onRedact: { applyAction(.redact, to: eventRow.item) },
@@ -1059,6 +1047,13 @@ struct RoomTimelineView: View {
         horizontalSizeClass == .compact ? SynaraSpacing.small : SynaraSpacing.medium
     }
 
+    private var composerPlaceholder: String {
+        if let editTarget = editSession?.editTarget {
+            return editTarget.isLocalPending ? "Edit unsent message..." : "Edit message..."
+        }
+        return isAgentRoom ? "Reply to the agent workflow..." : "Send a message..."
+    }
+
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
         guard index > 0 else {
             return false
@@ -1085,7 +1080,7 @@ struct RoomTimelineView: View {
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
         replyTarget = nil
-        editTarget = nil
+        editSession = nil
         sendError = nil
         hasAnchoredEvent = false
         uploadState = .idle
@@ -1504,7 +1499,7 @@ struct RoomTimelineView: View {
         sendError = nil
         isSendingMessage = true
         if drafts.isEmpty {
-            performSend(body: rawBody, replyToEventID: replyTarget?.eventID, editEventID: editTarget?.eventID)
+            sendComposerText(rawBody)
             isSendingMessage = false
             return
         }
@@ -1529,11 +1524,7 @@ struct RoomTimelineView: View {
             await MainActor.run {
                 if uploaded {
                     if trimmed.isEmpty == false {
-                        performSend(
-                            body: rawBody,
-                            replyToEventID: replyTarget?.eventID,
-                            editEventID: editTarget?.eventID
-                        )
+                        sendComposerText(rawBody)
                     } else {
                         uploadState = .idle
                     }
@@ -1560,7 +1551,7 @@ struct RoomTimelineView: View {
                 _ = try await environment.messageSender.sendSticker(request)
                 await MainActor.run {
                     sendError = nil
-                    clearComposerRelation()
+                    completeComposerRelation()
                 }
             } catch {
                 await MainActor.run {
@@ -1628,7 +1619,7 @@ struct RoomTimelineView: View {
 
             draft = ""
             environment.drafts.clearDraft(roomID: roomID)
-            clearComposerRelation()
+            completeComposerRelation()
             sendError = nil
         } else {
             pendingLocalID = nil
@@ -1646,7 +1637,7 @@ struct RoomTimelineView: View {
                         replace(item)
                         draft = ""
                         environment.drafts.clearDraft(roomID: roomID)
-                        clearComposerRelation()
+                        completeComposerRelation()
                     } else if let pendingLocalID {
                         markPendingSendSent(localID: pendingLocalID)
                         if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
@@ -2321,19 +2312,45 @@ struct RoomTimelineView: View {
         #endif
     }
 
-    private func beginEdit(_ item: TimelineItem) {
-        editTarget = ComposerRelationTarget(
+    private func beginReply(_ item: TimelineItem) {
+        if editSession != nil {
+            cancelEdit(restoreDraft: true)
+        }
+        replyTarget = ComposerRelationTarget(
             item: item,
-            kind: .edit,
+            kind: .reply,
             currentUserID: currentUserID
         )
-        if case let .text(body) = item.kind {
-            draft = body
-            environment.drafts.setDraft(body, roomID: roomID)
-        } else if case let .formattedText(body, _) = item.kind {
-            draft = body
-            environment.drafts.setDraft(body, roomID: roomID)
+    }
+
+    private func beginEdit(_ item: TimelineItem) {
+        let currentDraft = editSession?.previousDraft ?? draft
+        let session = ComposerEditFlow.begin(
+            item: item,
+            currentUserID: currentUserID,
+            currentDraft: currentDraft
+        )
+        replyTarget = nil
+        editSession = session
+        if TimelinePendingReconciler.messageBody(for: item) != nil {
+            draft = session.draft
+            environment.drafts.setDraft(session.draft, roomID: roomID)
         }
+        isComposerFocused = true
+    }
+
+    private func sendComposerText(_ rawBody: String) {
+        let intent = ComposerEditFlow.sendIntent(
+            body: rawBody,
+            replyToEventID: replyTarget?.eventID,
+            session: editSession
+        )
+        performSend(
+            body: intent.body,
+            replyToEventID: intent.replyToEventID,
+            editEventID: intent.editEventID,
+            retrying: intent.retrying
+        )
     }
 
     private func applyAction(_ action: EventActionType, to item: TimelineItem) {
@@ -2352,8 +2369,23 @@ struct RoomTimelineView: View {
     }
 
     private func clearComposerRelation() {
+        if editSession != nil {
+            cancelEdit(restoreDraft: true)
+        }
         replyTarget = nil
-        editTarget = nil
+    }
+
+    private func completeComposerRelation() {
+        replyTarget = nil
+        editSession = nil
+    }
+
+    private func cancelEdit(restoreDraft: Bool) {
+        if restoreDraft, let session = editSession {
+            draft = ComposerEditFlow.cancel(session)
+            environment.drafts.setDraft(draft, roomID: roomID)
+        }
+        editSession = nil
     }
 
     private func append(_ item: TimelineItem) {
@@ -4082,40 +4114,73 @@ private struct TimelineRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
+
+        let animatedRow = row
+            .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
+
+        Group {
+            if item.deliveryStatus == .failed {
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                    Button(action: onRetryFailedSend) {
+                        animatedRow
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityHint("Tap to retry sending this message")
+                    .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
+
+                    if availability.canEdit {
+                        failedMessageEditButton
+                    }
+                }
+            } else {
+                animatedRow
+            }
+        }
         .contextMenu {
-            if availability.canReply {
-                Button("Reply", action: onReply)
-            }
-            if replyCount > 0 {
-                Button("Open Thread", action: onOpenThread)
-            }
-            if availability.canEdit {
-                Button("Edit", action: onEdit)
-            }
-            if availability.canReact {
-                Button("React", action: onReact)
-            }
-            if availability.canRedact {
-                Button("Redact", role: .destructive, action: onRedact)
-            }
+            messageContextMenu
         }
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
+    }
 
-        let animatedRow = row
-            .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
+    @ViewBuilder
+    private var messageContextMenu: some View {
+        if availability.canReply {
+            Button("Reply", action: onReply)
+        }
+        if replyCount > 0 {
+            Button("Open Thread", action: onOpenThread)
+        }
+        if availability.canEdit {
+            Button("Edit", action: onEdit)
+        }
+        if availability.canReact {
+            Button("React", action: onReact)
+        }
+        if availability.canRedact {
+            Button("Redact", role: .destructive, action: onRedact)
+        }
+    }
 
-        if item.deliveryStatus == .failed {
-            Button(action: onRetryFailedSend) {
-                animatedRow
+    private var failedMessageEditButton: some View {
+        HStack(spacing: rowHorizontalSpacing) {
+            Color.clear
+                .frame(width: isGroupedWithPrevious ? groupedLeadingGutter : avatarSize, height: 1)
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
+                    .font(SynaraTypography.chipLabel)
+                    .foregroundStyle(SynaraColor.accent)
+                    .padding(.horizontal, SynaraSpacing.small)
+                    .padding(.vertical, SynaraSpacing.xSmall)
+                    .background(SynaraColor.accent.opacity(0.12))
+                    .clipShape(Capsule())
             }
             .buttonStyle(.plain)
-            .accessibilityHint("Tap to retry sending this message")
-            .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
-        } else {
-            animatedRow
+            .accessibilityLabel("Edit unsent message")
+            .accessibilityIdentifier("TimelineItemEdit-\(item.eventID)")
+            Spacer(minLength: 0)
         }
     }
 
@@ -4317,6 +4382,10 @@ private struct TimelineRow: View {
             return .contain
         }
 
+        if item.deliveryStatus == .failed {
+            return .contain
+        }
+
         return .combine
     }
 
@@ -4329,6 +4398,11 @@ private struct TimelineRow: View {
         case .agentCard:
             return "Review available agent actions"
         default:
+            if item.deliveryStatus == .failed {
+                return availability.canEdit
+                    ? "Tap to retry sending this message. Edit is also available."
+                    : "Tap to retry sending this message"
+            }
             return "Long press for message actions"
         }
     }
@@ -5156,12 +5230,8 @@ private struct ComposerView: View {
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())
                     .disabled(isSending)
-                    .accessibilityLabel("Send")
-                    .accessibilityHint(
-                        isSending
-                            ? "Sending the current message and attachments"
-                            : "Sends the current message and attachments"
-                    )
+                    .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
+                    .accessibilityHint(composerSendAccessibilityHint)
                     .accessibilityIdentifier("ComposerSendButton")
                 }
             }
@@ -5273,6 +5343,22 @@ private struct ComposerView: View {
         ComposerAttachmentDraftList.canSend(text: text, drafts: attachmentDrafts)
     }
 
+    private var resolvedPlaceholder: String {
+        if let editTarget {
+            return editTarget.isLocalPending ? "Edit unsent message..." : "Edit message..."
+        }
+        return placeholder
+    }
+
+    private var composerSendAccessibilityHint: String {
+        if editTarget != nil {
+            return isSending ? "Saving the edited message" : "Saves the edited message"
+        }
+        return isSending
+            ? "Sending the current message and attachments"
+            : "Sends the current message and attachments"
+    }
+
     private var remainingAttachmentSlots: Int {
         max(0, ComposerAttachmentDraftList.maxCount - attachmentDrafts.count)
     }
@@ -5326,14 +5412,14 @@ private struct ComposerView: View {
                 text: $text,
                 selection: $composerSelection,
                 height: $composerFieldHeight,
-                placeholder: placeholder,
+                placeholder: resolvedPlaceholder,
                 formattingRevision: formattingRevision,
                 isFocused: $isComposerFocused,
                 onPasteImages: onPasteImages
             )
             .frame(height: composerFieldHeight)
         #else
-            TextField(placeholder, text: $text, axis: .vertical)
+            TextField(resolvedPlaceholder, text: $text, axis: .vertical)
                 .font(SynaraTypography.body)
                 .focused($isComposerFocused)
                 .lineLimit(1 ... 5)
@@ -5686,6 +5772,7 @@ private struct ComposerRelationBanner: View {
                     .font(SynaraTypography.supporting.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
                     .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
                 Text(target.snippet)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)

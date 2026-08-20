@@ -10,6 +10,7 @@ struct ComposerRelationTarget: Equatable {
     let senderName: String
     let snippet: String
     let kind: Kind
+    let isLocalPending: Bool
 
     init(item: TimelineItem, kind: Kind, currentUserID: String) {
         let preview = TimelineReplyPreview.from(item: item, currentUserID: currentUserID)
@@ -17,6 +18,7 @@ struct ComposerRelationTarget: Equatable {
         senderName = preview.senderName
         snippet = preview.snippet
         self.kind = kind
+        isLocalPending = item.isLocalPending
     }
 
     var bannerTitle: String {
@@ -24,7 +26,7 @@ struct ComposerRelationTarget: Equatable {
         case .reply:
             return "Replying to \(senderName)"
         case .edit:
-            return "Editing your message"
+            return isLocalPending ? "Editing unsent message" : "Editing your message"
         }
     }
 }

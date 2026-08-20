@@ -14,7 +14,7 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertTrue(availability.canReact)
     }
 
-    func testPendingLocalMessagesHaveNoActions() {
+    func testFailedLocalTextMessagesCanBeEdited() {
         let service = MockEventActionService()
         let item = TimelineItem.pendingMessage(
             body: "Retry me",
@@ -26,9 +26,40 @@ final class EventActionServiceTests: XCTestCase {
         let availability = service.availability(for: item, currentUserID: "@alice:matrix.org")
 
         XCTAssertFalse(availability.canReply)
+        XCTAssertTrue(availability.canEdit)
+        XCTAssertFalse(availability.canRedact)
+        XCTAssertFalse(availability.canReact)
+    }
+
+    func testSendingLocalMessagesHaveNoActions() {
+        let service = MockEventActionService()
+        let item = TimelineItem.pendingMessage(
+            body: "Still sending",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .sending
+        )
+
+        let availability = service.availability(for: item, currentUserID: "@alice:matrix.org")
+
+        XCTAssertFalse(availability.canReply)
         XCTAssertFalse(availability.canEdit)
         XCTAssertFalse(availability.canRedact)
         XCTAssertFalse(availability.canReact)
+    }
+
+    func testFailedLocalMessagesFromOthersCannotBeEdited() {
+        let service = MockEventActionService()
+        let item = TimelineItem.pendingMessage(
+            body: "Retry me",
+            senderID: "@bob:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .failed
+        )
+
+        let availability = service.availability(for: item, currentUserID: "@alice:matrix.org")
+
+        XCTAssertFalse(availability.canEdit)
     }
 
     func testRedactedEventsHaveNoActions() {
