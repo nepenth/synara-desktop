@@ -1,5 +1,10 @@
 import { isTag, isText, type ChildNode } from 'domhandler';
 import Prism from 'prismjs';
+import 'prismjs/components/prism-clike';
+import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-bash';
+import 'prismjs/components/prism-javascript';
+import 'prismjs/components/prism-rust';
 
 const LANGUAGE_CLASS_RE = /(^|\s)(language-[\w+-]+)(\s|$)/;
 const PRISM_LANGUAGE_ALIASES: Record<string, string> = {
@@ -46,8 +51,36 @@ export const prismLanguageClass = (languageClass?: string): string | undefined =
   return language ? `language-${language}` : languageClassFromClassName(languageClass);
 };
 
-export const displayCodeLanguage = (languageClass?: string): string =>
-  normalizePrismLanguage(languageClass) ?? 'code';
+export const inferCodeLanguage = (code: string, languageClass?: string): string | undefined => {
+  const declared = normalizePrismLanguage(languageClass);
+  if (declared && declared !== 'text' && declared !== 'plaintext' && declared !== 'plain') {
+    return declared;
+  }
+  const sample = code.slice(0, 8000);
+  if (
+    /\bfrom\s+[\w.]+(?:\s+import|\s+import\b)/m.test(sample) ||
+    /(^|\n)\s*(def|class)\s+\w+/m.test(sample) ||
+    /\b(print|Path|None|True|False)\b/.test(sample)
+  ) {
+    return 'python';
+  }
+  if (
+    /(^|\n)\s*(#!\/bin\/(?:ba)?sh|curl\s|sudo\s|export\s|chmod\s)/m.test(sample) ||
+    /<<['"]?\w+['"]?/.test(sample)
+  ) {
+    return 'bash';
+  }
+  if (/\b(const|let|function)\b/.test(sample) && /=>|[{};]/.test(sample)) {
+    return 'javascript';
+  }
+  if (/\b(fn\s+\w+|let mut |impl )/.test(sample)) {
+    return 'rust';
+  }
+  return declared;
+};
+
+export const displayCodeLanguage = (languageClass?: string, code?: string): string =>
+  inferCodeLanguage(code ?? '', languageClass) ?? 'code';
 
 /** Strip one trailing newline so gutter count matches `white-space: pre` paint. */
 export const displayCodeText = (code: string): string => code.replace(/\n$/, '');
@@ -78,7 +111,7 @@ export const escapeCodeHtml = (code: string): string =>
   code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 export const highlightNativeCode = (code: string, languageClass?: string): string => {
-  const language = normalizePrismLanguage(languageClass);
+  const language = inferCodeLanguage(code, languageClass);
   const grammar = language ? Prism.languages[language] : undefined;
   if (!language || !grammar) {
     return escapeCodeHtml(code);

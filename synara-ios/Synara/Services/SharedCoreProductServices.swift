@@ -994,6 +994,23 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
     }
 
+    func dismissVerification() async -> CryptoActionResult {
+        guard let flowId = resolvedFlowId() else {
+            return .completed("Verification closed.")
+        }
+        do {
+            try await SharedCoreVerificationSas.verificationDismiss(
+                core: host.core,
+                flowId: flowId
+            )
+            clearFlow()
+            return .completed("Verification closed.")
+        } catch {
+            clearFlow()
+            return .completed("Verification closed.")
+        }
+    }
+
     func acceptVerificationRequest() async -> CryptoActionResult {
         await runVerification(requiresFlow: true) { flowId in
             _ = try await SharedCoreVerificationSas.verificationAccept(
@@ -1081,14 +1098,19 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         return invites.invites.first { $0.roomId == roomID }?.isEncrypted
     }
 
-    private func currentVerificationState() async -> CryptoVerificationState? {
+    func currentVerificationState() async -> CryptoVerificationState? {
         guard let inbox = try? await SharedCoreVerificationList.verificationList(core: host.core) else {
             return nil
         }
-        if let first = inbox.requests.first {
-            storeFlow(first.flowId)
+        guard let request = SharedCoreVerificationLive.selectRequest(
+            from: inbox,
+            preferring: resolvedFlowId()
+        ) else {
+            clearFlow()
+            return nil
         }
-        return SharedCoreVerificationLive.state(from: inbox)
+        storeFlow(request.flowId)
+        return SharedCoreVerificationLive.state(from: request)
     }
 
     private func runVerification(
@@ -1119,6 +1141,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     private func storeFlow(_ flowId: String) {
         flowLock.lock()
         self.flowId = flowId
+        flowLock.unlock()
+    }
+
+    private func clearFlow() {
+        flowLock.lock()
+        flowId = nil
         flowLock.unlock()
     }
 

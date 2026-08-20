@@ -357,6 +357,7 @@ protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
     func sessionStatus() async -> SessionCryptoStatus
     func verificationUpdates() -> AsyncStream<CryptoVerificationState>
+    func currentVerificationState() async -> CryptoVerificationState?
     func retryDecryption(roomID: String) async -> CryptoActionResult
     func requestDeviceVerification() async -> CryptoActionResult
     func acceptVerificationRequest() async -> CryptoActionResult
@@ -366,11 +367,20 @@ protocol CryptoStatusServicing {
     func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
     func sessionDevices() async -> [SharedCoreSessionDevice]
+    func dismissVerification() async -> CryptoActionResult
 }
 
 extension CryptoStatusServicing {
     func sessionDevices() async -> [SharedCoreSessionDevice] {
         []
+    }
+
+    func dismissVerification() async -> CryptoActionResult {
+        .completed("Verification closed.")
+    }
+
+    func currentVerificationState() async -> CryptoVerificationState? {
+        nil
     }
 }
 

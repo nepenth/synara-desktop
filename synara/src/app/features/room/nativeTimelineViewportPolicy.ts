@@ -54,3 +54,16 @@ export const shouldRestoreNativeTimelineViewport = (
   if (Math.max(0, nowMs - updatedAtMs) > maxAgeMs) return false;
   return isValidEventIdHint(viewport.restoredAnchorEventId);
 };
+
+/**
+ * Jump-to-latest is the way back to the live tail. Scroll-bottom of the
+ * currently loaded window is not enough: an unread/focused/restored window
+ * can be fully visible while newer messages live on a different timeline.
+ */
+export const shouldShowJumpToLatest = (
+  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | undefined,
+  scrolledToVisualBottom: boolean
+): boolean => {
+  if (positionKind && positionKind !== 'live_bottom') return true;
+  return scrolledToVisualBottom === false;
+};

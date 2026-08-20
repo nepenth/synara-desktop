@@ -25,6 +25,10 @@ pub use native::{
     NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
 };
 
+/// Tauri event: verification inbox/SAS may have changed. Signal only; UI
+/// re-lists via `matrix_verification_list`. Never carries keys, MACs, or tokens.
+pub const VERIFICATION_UPDATED_EVENT: &str = "matrix-verification-updated";
+
 /// Static marker for link / schema smoke.
 pub const MATRIX_VERIFICATION_MARKER: &str = "matrix-verification-p8.3";
 

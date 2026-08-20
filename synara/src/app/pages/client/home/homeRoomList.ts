@@ -1,15 +1,21 @@
 import type { RoomSummary } from '../../../features/matrix-dto/room';
 
 /**
- * Device-local room-list sort chrome. Same key and default as iOS
- * `UserDefaults` (`synara.roomListSort`). Not Matrix account data; favorites
- * sync via `m.favourite`, sort stays per-device.
+ * Device-local room-list sort chrome. Legacy key `synara.roomListSort` is the
+ * fallback when a section has no preference yet. Favorites and Rooms (and iOS
+ * Channels / Direct messages) each persist their own order. Not Matrix account
+ * data; favorites sync via `m.favourite`, sort stays per-device.
  */
 export const ROOM_LIST_SORT_STORAGE_KEY = 'synara.roomListSort';
 
 export type RoomListSort = 'recent' | 'name';
 
+export type RoomListSection = 'favorites' | 'rooms' | 'directs';
+
 export const DEFAULT_ROOM_LIST_SORT: RoomListSort = 'recent';
+
+export const roomListSortStorageKey = (section: RoomListSection): string =>
+  `${ROOM_LIST_SORT_STORAGE_KEY}.${section}`;
 
 export const partitionHomeRooms = (
   roomIds: readonly string[],
@@ -30,16 +36,26 @@ export const partitionHomeRooms = (
 export const favoriteRoomIdSet = (rooms: readonly RoomSummary[]): Set<string> =>
   new Set(rooms.filter((room) => room.isFavorite).map((room) => room.roomId));
 
-export const readRoomListSort = (storage: Pick<Storage, 'getItem'> | undefined): RoomListSort => {
-  const value = storage?.getItem(ROOM_LIST_SORT_STORAGE_KEY);
-  return value === 'name' ? 'name' : DEFAULT_ROOM_LIST_SORT;
+const parseRoomListSort = (value: string | null | undefined): RoomListSort | undefined =>
+  value === 'name' || value === 'recent' ? value : undefined;
+
+export const readRoomListSort = (
+  storage: Pick<Storage, 'getItem'> | undefined,
+  section?: RoomListSection
+): RoomListSort => {
+  if (section) {
+    const scoped = parseRoomListSort(storage?.getItem(roomListSortStorageKey(section)));
+    if (scoped) return scoped;
+  }
+  return parseRoomListSort(storage?.getItem(ROOM_LIST_SORT_STORAGE_KEY)) ?? DEFAULT_ROOM_LIST_SORT;
 };
 
 export const writeRoomListSort = (
   storage: Pick<Storage, 'setItem'> | undefined,
-  sort: RoomListSort
+  sort: RoomListSort,
+  section?: RoomListSection
 ): void => {
-  storage?.setItem(ROOM_LIST_SORT_STORAGE_KEY, sort);
+  storage?.setItem(section ? roomListSortStorageKey(section) : ROOM_LIST_SORT_STORAGE_KEY, sort);
 };
 
 const compareNames = (left?: string, right?: string, leftId?: string, rightId?: string): number => {
@@ -52,8 +68,8 @@ const compareNames = (left?: string, right?: string, leftId?: string, rightId?: 
 };
 
 /**
- * One global sort for Favorites and Rooms. Recent uses native
- * `lastActivityTs` only — missing timestamps sort last and are not invented.
+ * Sort one section's room ids. Recent uses native `lastActivityTs` only —
+ * missing timestamps sort last and are not invented.
  */
 export const sortHomeRoomIds = (
   roomIds: readonly string[],

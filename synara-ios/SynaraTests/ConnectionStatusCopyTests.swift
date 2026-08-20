@@ -67,6 +67,22 @@ final class ConnectionStatusCopyTests: XCTestCase {
         }
     }
 
+    func testReconnectingHoldDoesNotBounceConnectedOnABlip() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.reconnecting)
+        XCTAssertEqual(store.status, .connected)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+    }
+
+    func testReconnectingHoldZeroAppliesImmediately() {
+        let store = ConnectionStatusStore(reconnectingHold: 0)
+        store.update(.connected)
+        store.update(.reconnecting)
+        XCTAssertEqual(store.status, .reconnecting)
+    }
+
     func testMatrixSyncStatusDescriptionUsesPrivacySafeCopy() {
         XCTAssertEqual(MatrixSyncStatus.syncing.description, "Syncing history…")
         XCTAssertEqual(MatrixSyncStatus.starting.description, "Connecting…")

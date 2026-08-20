@@ -29,6 +29,14 @@ struct SynaraThemeTokens: Equatable {
 enum SynaraThemeRamp {
     static let defaultBaseHex = "#2b2d31"
     static let storageKey = SynaraSharedConstants.themeBaseColorKey
+    static let presets: [(label: String, hex: String)] = [
+        ("Graphite", "#2b2d31"),
+        ("Blurple", "#5865f2"),
+        ("Teal", "#0d9488"),
+        ("Slate", "#64748b"),
+        ("Amber", "#b45309"),
+        ("Rose", "#be123c"),
+    ]
 
 
     static func normalize(_ value: String?) -> String? {
@@ -77,10 +85,10 @@ enum SynaraThemeRamp {
             let saturation = min(0.145, max(0.045, hsl.saturation * 0.45))
             let mixRatio = min(0.22, max(0.1, 0.1 + hsl.saturation * 0.12))
             return SynaraThemeTokens(
-                groupedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation, lightness: 0.07), resolved, mixRatio),
-                secondarySurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.92, lightness: 0.155), resolved, mixRatio),
-                surface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.85, lightness: 0.20), resolved, mixRatio),
-                elevatedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.24), resolved, mixRatio),
+                groupedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation, lightness: 0.075), resolved, mixRatio),
+                secondarySurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.92, lightness: 0.10), resolved, mixRatio),
+                surface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.88, lightness: 0.104), resolved, mixRatio),
+                elevatedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.135), resolved, mixRatio),
                 primaryText: synaraHex(hue: hue, saturation: saturation * 0.22, lightness: 0.95),
                 secondaryText: synaraHex(hue: hue, saturation: saturation * 0.18, lightness: 0.72),
                 tertiaryText: synaraHex(hue: hue, saturation: saturation * 0.14, lightness: 0.58),
@@ -257,18 +265,27 @@ extension Color {
     }
 
     func synaraHexString() -> String? {
+        let uiColor = UIColor(self)
+        let srgb = uiColor.cgColor.converted(
+            to: CGColorSpaceCreateDeviceRGB(),
+            intent: .defaultIntent,
+            options: nil
+        ).map(UIColor.init(cgColor:)) ?? uiColor
         var red: CGFloat = 0
         var green: CGFloat = 0
         var blue: CGFloat = 0
         var alpha: CGFloat = 0
-        guard UIColor(self).getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+        guard srgb.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
             return nil
         }
+        let clampedRed = min(max(red, 0), 1)
+        let clampedGreen = min(max(green, 0), 1)
+        let clampedBlue = min(max(blue, 0), 1)
         return String(
             format: "#%02x%02x%02x",
-            Int((red * 255).rounded()),
-            Int((green * 255).rounded()),
-            Int((blue * 255).rounded())
+            Int((clampedRed * 255).rounded()),
+            Int((clampedGreen * 255).rounded()),
+            Int((clampedBlue * 255).rounded())
         )
     }
 }
@@ -390,9 +407,9 @@ enum SynaraTypography {
     static let body = Font.body
     static let supporting = Font.callout
     static let emphasis = Font.body.weight(.semibold)
-    static let messageBody = Font.callout
+    static let messageBody = Font.subheadline
     static let messageMeta = Font.caption
-    static let roomPreview = Font.callout
+    static let roomPreview = Font.subheadline
     static let chipLabel = Font.caption.weight(.semibold)
     static let fineMeta = Font.caption2
     static let fineMetaBold = Font.caption2.weight(.bold)

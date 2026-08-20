@@ -10,6 +10,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationState: CryptoVerificationState?
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationActionError: String?
+    @State private var autoStartedSas = false
     @State private var signOutError: String?
     @ObservedObject private var themePaint = SynaraThemePaint.shared
 
@@ -98,7 +99,13 @@ struct RootShellView: View {
                     onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
                     onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
                     onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
-                    onDismissTerminal: { self.cryptoVerificationState = nil }
+                    onDismissTerminal: {
+                        runCryptoVerificationAction { await environment.crypto.dismissVerification() }
+                        self.cryptoVerificationState = nil
+                    }
+                )
+                .interactiveDismissDisabled(
+                    CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(cryptoVerificationState) == false
                 )
             }
         }
@@ -132,9 +139,12 @@ struct RootShellView: View {
         Binding(
             get: { cryptoVerificationState != nil },
             set: { isPresented in
-                if isPresented == false {
-                    cryptoVerificationState = nil
+                guard isPresented == false else { return }
+                guard CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(cryptoVerificationState) else {
+                    return
                 }
+                runCryptoVerificationAction { await environment.crypto.dismissVerification() }
+                cryptoVerificationState = nil
             }
         )
     }
@@ -207,28 +217,75 @@ struct RootShellView: View {
     private func startCryptoVerificationUpdates() {
         cryptoVerificationUpdatesTask?.cancel()
         cryptoVerificationUpdatesTask = Task {
-            for await update in environment.crypto.verificationUpdates() {
-                guard Task.isCancelled == false else {
-                    return
+            await withTaskGroup(of: Void.self) { group in
+                group.addTask {
+                    await self.consumeCryptoVerificationUpdates()
                 }
+                group.addTask {
+                    await self.pollClearedCryptoVerification()
+                }
+            }
+        }
+    }
+
+    private func consumeCryptoVerificationUpdates() async {
+        for await update in environment.crypto.verificationUpdates() {
+            guard Task.isCancelled == false else {
+                return
+            }
+            let shouldStartSas = await MainActor.run { () -> Bool in
+                cryptoVerificationState = update
+                switch update {
+                case .requestReceived, .requestSent:
+                    autoStartedSas = false
+                    return false
+                case .accepted:
+                    if autoStartedSas == false {
+                        autoStartedSas = true
+                        return true
+                    }
+                    return false
+                default:
+                    return false
+                }
+            }
+            if shouldStartSas {
+                _ = await environment.crypto.startSasVerification()
+            }
+            if update.isTerminal {
+                await MainActor.run { autoStartedSas = false }
+                if case .finished = update {
+                    // Verification succeeded — kick a crypto status refresh.
+                    // Any open timeline that is showing the "Encrypted history" / "Retry Decryption"
+                    // banner will re-compute on its next status poll and should clear or become actionable.
+                    Task {
+                        _ = await environment.crypto.sessionStatus()
+                    }
+                }
+                try? await Task.sleep(nanoseconds: 1_500_000_000)
+                _ = await environment.crypto.dismissVerification()
                 await MainActor.run {
-                    cryptoVerificationState = update
+                    if cryptoVerificationState == update {
+                        cryptoVerificationState = nil
+                    }
                 }
-                if update.isTerminal {
-                    if case .finished = update {
-                        // Verification succeeded — kick a crypto status refresh.
-                        // Any open timeline that is showing the "Encrypted history" / "Retry Decryption"
-                        // banner will re-compute on its next status poll and should clear or become actionable.
-                        Task {
-                            _ = await environment.crypto.sessionStatus()
-                        }
-                    }
-                    try? await Task.sleep(nanoseconds: 1_500_000_000)
-                    await MainActor.run {
-                        if cryptoVerificationState == update {
-                            cryptoVerificationState = nil
-                        }
-                    }
+            }
+        }
+    }
+
+    private func pollClearedCryptoVerification() async {
+        while Task.isCancelled == false {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            guard Task.isCancelled == false else {
+                return
+            }
+            let latest = await environment.crypto.currentVerificationState()
+            await MainActor.run {
+                if let restored = CryptoVerificationPresentationPolicy.restoredStateIfCleared(
+                    presented: cryptoVerificationState,
+                    latest: latest
+                ), restored != cryptoVerificationState {
+                    cryptoVerificationState = restored
                 }
             }
         }

@@ -80,3 +80,12 @@ export const isNativeCrossSigningPublished = (status: NativeCrossSigningStatus):
   status.masterSigning === 'published' &&
   status.selfSigning === 'published' &&
   status.userSigning === 'published';
+
+export const canOfferNativeDeviceVerification = (status?: NativeCrossSigningStatus): boolean => {
+  if (!status) return false;
+  return (
+    isNativeCrossSigningPublished(status) ||
+    status.readiness === 'verification_required' ||
+    status.bootstrap === 'not_needed'
+  );
+};

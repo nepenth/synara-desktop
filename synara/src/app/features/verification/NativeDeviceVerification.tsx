@@ -16,6 +16,7 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import { NATIVE_CROSS_SIGNING_CHANGED } from '../cross-signing/nativeCrossSigning';
 import {
   acceptNativeVerification,
   beginNativeVerificationSas,
@@ -26,7 +27,9 @@ import {
   mismatchNativeVerification,
   nativeVerificationErrorMessage,
   NativeVerificationRequest,
+  selectNativeVerificationRequest,
   startNativeVerification,
+  subscribeNativeVerificationUpdates,
   verificationRequestHasSasCodes,
   verificationRequestNeedsSasStart,
 } from './nativeVerification';
@@ -66,7 +69,8 @@ function NativeSas({
   };
   const emoji = request.sas?.emoji;
   const decimals = request.sas?.decimals;
-  if (!verificationRequestHasSasCodes(request)) {
+  const hasCodes = verificationRequestHasSasCodes(request);
+  if (!hasCodes) {
     return (
       <Box direction="Column" gap="200">
         <Text>
@@ -120,7 +124,7 @@ function NativeSas({
         <Button
           variant="Primary"
           fill="Soft"
-          disabled={submitting}
+          disabled={submitting || !hasCodes}
           onClick={() => void act(confirmNativeVerification)}
         >
           <Text size="B400">They Match</Text>
@@ -128,7 +132,7 @@ function NativeSas({
         <Button
           variant="Critical"
           fill="Soft"
-          disabled={submitting}
+          disabled={submitting || !hasCodes}
           onClick={() => void act(mismatchNativeVerification)}
         >
           <Text size="B400">Do Not Match</Text>
@@ -155,23 +159,35 @@ export function NativeDeviceVerification({
   useEffect(() => setRequest(initialRequest), [initialRequest]);
 
   useEffect(() => {
+    if (request.phase !== 'done') return;
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(NATIVE_CROSS_SIGNING_CHANGED));
+    }
+  }, [request.phase]);
+
+  useEffect(() => {
     let disposed = false;
     const poll = async () => {
       try {
         const inbox = await listNativeVerificationRequests();
         if (disposed) return;
-        const refreshed = inbox.requests.find((item) => item.flowId === request.flowId);
+        const refreshed = inbox.requests.find((item) => item.flowId === requestFlowId);
         if (refreshed) setRequest(refreshed);
       } catch {
         if (!disposed) setError(true);
       }
     };
+    void poll();
     const interval = window.setInterval(() => void poll(), POLL_INTERVAL_MS);
+    const unsubscribe = subscribeNativeVerificationUpdates(() => {
+      void poll();
+    });
     return () => {
       disposed = true;
       window.clearInterval(interval);
+      unsubscribe();
     };
-  }, [request.flowId]);
+  }, [requestFlowId]);
 
   useEffect(() => {
     if (!shouldBeginSas) return;
@@ -327,38 +343,35 @@ export function NativeDeviceVerification({
 export function NativeVerificationInboxRenderer() {
   const [request, setRequest] = useState<NativeVerificationRequest>();
   const [unavailable, setUnavailable] = useState(false);
+  const handleExit = useCallback(() => setRequest(undefined), []);
 
   useEffect(() => {
     let disposed = false;
     const poll = async () => {
       try {
         const inbox = await listNativeVerificationRequests();
-        if (!disposed) {
-          setRequest(inbox.requests[0]);
-          setUnavailable(false);
-        }
+        if (disposed) return;
+        setRequest((current) => selectNativeVerificationRequest(inbox.requests, current?.flowId));
+        setUnavailable(false);
       } catch {
         if (!disposed) setUnavailable(true);
       }
     };
     void poll();
     const interval = window.setInterval(() => void poll(), POLL_INTERVAL_MS);
+    const unsubscribe = subscribeNativeVerificationUpdates(() => {
+      void poll();
+    });
     return () => {
       disposed = true;
       window.clearInterval(interval);
+      unsubscribe();
     };
   }, []);
 
   if (unavailable) return null;
   if (!request) return null;
-  return (
-    <NativeDeviceVerification
-      initialRequest={request}
-      onExit={() => {
-        setRequest(undefined);
-      }}
-    />
-  );
+  return <NativeDeviceVerification initialRequest={request} onExit={handleExit} />;
 }
 
 export function NativeStartVerification({
@@ -368,7 +381,6 @@ export function NativeStartVerification({
   deviceId?: string;
   onExit: () => void;
 }) {
-  const [request, setRequest] = useState<NativeVerificationRequest>();
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState(false);
 
@@ -376,7 +388,9 @@ export function NativeStartVerification({
     setStarting(true);
     setError(false);
     try {
-      setRequest(await startNativeVerification(deviceId));
+      await startNativeVerification(deviceId);
+      // The app-chrome inbox presents the live flow so it survives Settings.
+      onExit();
     } catch {
       setError(true);
     } finally {
@@ -385,25 +399,12 @@ export function NativeStartVerification({
   };
 
   return (
-    <>
-      {!request && (
-        <Box direction="Column" gap="200" alignItems="End">
-          <Button variant="Warning" disabled={starting} onClick={() => void start()}>
-            {starting && <Spinner size="100" variant="Warning" />}
-            <Text size="B300">{deviceId ? 'Verify' : 'Verify from Another Device'}</Text>
-          </Button>
-          {error && <Text size="T200">{nativeVerificationErrorMessage()}</Text>}
-        </Box>
-      )}
-      {request && (
-        <NativeDeviceVerification
-          initialRequest={request}
-          onExit={() => {
-            setRequest(undefined);
-            onExit();
-          }}
-        />
-      )}
-    </>
+    <Box direction="Column" gap="200" alignItems="End">
+      <Button variant="Warning" disabled={starting} onClick={() => void start()}>
+        {starting && <Spinner size="100" variant="Warning" />}
+        <Text size="B300">{deviceId ? 'Verify' : 'Verify from Another Device'}</Text>
+      </Button>
+      {error && <Text size="T200">{nativeVerificationErrorMessage()}</Text>}
+    </Box>
   );
 }

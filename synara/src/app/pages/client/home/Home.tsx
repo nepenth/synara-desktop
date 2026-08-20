@@ -4,7 +4,6 @@ import {
   Avatar,
   Box,
   Button,
-  Chip,
   Icon,
   IconButton,
   Icons,
@@ -67,10 +66,12 @@ import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCatego
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
+import SynaraPNG from '../../../../../public/res/png/synara.png';
 import {
   getRoomNotificationMode,
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
+import * as css from './Home.css';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -106,13 +107,60 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
   );
 });
 
-function HomeHeader({
+function RoomListSortIcons({
+  sectionLabel,
   roomSort,
   onRoomSort,
 }: {
+  sectionLabel: string;
   roomSort: RoomListSort;
   onRoomSort: (sort: RoomListSort) => void;
 }) {
+  const recentLabel = `Sort ${sectionLabel} by recent activity`;
+  const nameLabel = `Sort ${sectionLabel} by name`;
+  return (
+    <Box shrink="No" alignItems="Center" gap="0">
+      <IconButton
+        className={css.SortIconButton}
+        size="300"
+        variant="Surface"
+        radii="300"
+        fill={roomSort === 'recent' ? 'Soft' : 'None'}
+        aria-pressed={roomSort === 'recent'}
+        aria-label={recentLabel}
+        title={recentLabel}
+        onClick={() => onRoomSort('recent')}
+      >
+        <Icon
+          className={css.SortIcon}
+          size="50"
+          src={Icons.RecentClock}
+          filled={roomSort === 'recent'}
+        />
+      </IconButton>
+      <IconButton
+        className={css.SortIconButton}
+        size="300"
+        variant="Surface"
+        radii="300"
+        fill={roomSort === 'name' ? 'Soft' : 'None'}
+        aria-pressed={roomSort === 'name'}
+        aria-label={nameLabel}
+        title={nameLabel}
+        onClick={() => onRoomSort('name')}
+      >
+        <Icon
+          className={css.SortIcon}
+          size="50"
+          src={Icons.Alphabet}
+          filled={roomSort === 'name'}
+        />
+      </IconButton>
+    </Box>
+  );
+}
+
+function HomeHeader() {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -127,30 +175,19 @@ function HomeHeader({
     <>
       <PageNavHeader>
         <Box alignItems="Center" grow="Yes" gap="300">
-          <Box grow="Yes">
+          <Box grow="Yes" alignItems="Center" gap="200">
+            <img
+              src={SynaraPNG}
+              alt=""
+              width={22}
+              height={22}
+              style={{ borderRadius: 6, display: 'block' }}
+            />
             <Text size="H4" truncate>
               Home
             </Text>
           </Box>
-          <Box alignItems="Center" gap="100">
-            <Chip
-              variant={roomSort === 'recent' ? 'Primary' : 'Surface'}
-              radii="Pill"
-              aria-pressed={roomSort === 'recent'}
-              aria-label="Sort by recent activity"
-              onClick={() => onRoomSort('recent')}
-            >
-              <Text size="O400">Recent</Text>
-            </Chip>
-            <Chip
-              variant={roomSort === 'name' ? 'Primary' : 'Surface'}
-              radii="Pill"
-              aria-pressed={roomSort === 'name'}
-              aria-label="Sort by name"
-              onClick={() => onRoomSort('name')}
-            >
-              <Text size="O400">Name</Text>
-            </Chip>
+          <Box>
             <IconButton aria-pressed={!!menuAnchor} variant="Surface" onClick={handleOpenMenu}>
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
@@ -242,8 +279,12 @@ export function Home() {
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
   const nativeRoomList = useNativeRoomListSnapshot();
-  const [roomSort, setRoomSort] = useState<RoomListSort>(() =>
-    readRoomListSort(typeof localStorage === 'undefined' ? undefined : localStorage)
+  const sortStorage = typeof localStorage === 'undefined' ? undefined : localStorage;
+  const [favoriteSort, setFavoriteSort] = useState<RoomListSort>(() =>
+    readRoomListSort(sortStorage, 'favorites')
+  );
+  const [roomsSort, setRoomsSort] = useState<RoomListSort>(() =>
+    readRoomListSort(sortStorage, 'rooms')
   );
   const favoriteIds = useMemo(
     () => favoriteRoomIdSet(nativeRoomList.rooms),
@@ -255,12 +296,12 @@ export function Home() {
   );
 
   const sortedFavoriteRoomIds = useMemo(
-    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.rooms, roomSort),
-    [favoriteRoomIds, nativeRoomList.rooms, roomSort]
+    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.rooms, favoriteSort),
+    [favoriteRoomIds, nativeRoomList.rooms, favoriteSort]
   );
 
   const mainRoomIds = useMemo(() => {
-    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.rooms, roomSort);
+    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.rooms, roomsSort);
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
@@ -268,15 +309,20 @@ export function Home() {
   }, [
     remainingRoomIds,
     nativeRoomList.rooms,
-    roomSort,
+    roomsSort,
     closedCategories,
     roomToUnread,
     selectedRoomId,
   ]);
 
-  const handleRoomSort = (sort: RoomListSort) => {
-    setRoomSort(sort);
-    writeRoomListSort(typeof localStorage === 'undefined' ? undefined : localStorage, sort);
+  const handleFavoriteSort = (sort: RoomListSort) => {
+    setFavoriteSort(sort);
+    writeRoomListSort(sortStorage, sort, 'favorites');
+  };
+
+  const handleRoomsSort = (sort: RoomListSort) => {
+    setRoomsSort(sort);
+    writeRoomListSort(sortStorage, sort, 'rooms');
   };
 
   const virtualizer = useVirtualizer({
@@ -292,7 +338,7 @@ export function Home() {
 
   return (
     <PageNav>
-      <HomeHeader roomSort={roomSort} onRoomSort={handleRoomSort} />
+      <HomeHeader />
       {noRoomToDisplay ? (
         <HomeEmpty />
       ) : (
@@ -352,7 +398,15 @@ export function Home() {
             {sortedFavoriteRoomIds.length > 0 && (
               <NavCategory>
                 <NavCategoryHeader>
-                  <Text size="B300">Favorites</Text>
+                  <Box grow="Yes" alignItems="Center" gap="200">
+                    <Text size="B300">Favorites</Text>
+                    <Box grow="Yes" />
+                    <RoomListSortIcons
+                      sectionLabel="Favorites"
+                      roomSort={favoriteSort}
+                      onRoomSort={handleFavoriteSort}
+                    />
+                  </Box>
                 </NavCategoryHeader>
                 {sortedFavoriteRoomIds.map((roomId) => {
                   const room = mx.getRoom(roomId);
@@ -377,13 +431,21 @@ export function Home() {
 
             <NavCategory>
               <NavCategoryHeader>
-                <RoomNavCategoryButton
-                  closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
-                  data-category-id={DEFAULT_CATEGORY_ID}
-                  onClick={handleCategoryClick}
-                >
-                  Rooms
-                </RoomNavCategoryButton>
+                <Box grow="Yes" alignItems="Center" gap="200">
+                  <RoomNavCategoryButton
+                    closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
+                    data-category-id={DEFAULT_CATEGORY_ID}
+                    onClick={handleCategoryClick}
+                  >
+                    Rooms
+                  </RoomNavCategoryButton>
+                  <Box grow="Yes" />
+                  <RoomListSortIcons
+                    sectionLabel="Rooms"
+                    roomSort={roomsSort}
+                    onRoomSort={handleRoomsSort}
+                  />
+                </Box>
               </NavCategoryHeader>
               <div
                 style={{

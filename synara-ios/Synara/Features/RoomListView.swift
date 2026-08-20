@@ -16,10 +16,9 @@ struct RoomListView: View {
     @State private var roomPendingLeave: RoomSummary?
     @State private var isResettingSession = false
     @State private var sessionRecoveryError: String?
-    @State private var selectedSort: RoomListSortOrder = {
-        RoomListSortOrder(rawValue: UserDefaults.standard.string(forKey: RoomListSortOrder.storageKey) ?? "")
-            ?? RoomListSortOrder.defaultOrder
-    }()
+    @State private var favoriteSort: RoomListSortOrder = RoomListSortOrder.stored(for: .favorites)
+    @State private var roomsSort: RoomListSortOrder = RoomListSortOrder.stored(for: .rooms)
+    @State private var directsSort: RoomListSortOrder = RoomListSortOrder.stored(for: .directs)
     @FocusState private var isSearchFocused: Bool
 
     var body: some View {
@@ -30,7 +29,6 @@ struct RoomListView: View {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
                             title: accountMenuTitle,
-                            selectedSort: $selectedSort,
                             onAccount: { environment.router.present(.accountSwitcher) },
                             onSearch: { presentSearch() },
                             onNewRoom: { isRoomManagementSheetPresented = true }
@@ -89,14 +87,17 @@ struct RoomListView: View {
                 let favoritesPartition = RoomListFavorites.partition(from: filteredRooms)
                 let favoriteRooms = RoomListFavorites.sorted(
                     favoritesPartition.favorites,
-                    order: selectedSort
+                    order: favoriteSort
                 )
-                let remainingRooms = RoomListFavorites.sorted(
-                    favoritesPartition.remaining,
-                    order: selectedSort
+                let remainingRooms = favoritesPartition.remaining
+                let channelRooms = RoomListFavorites.sorted(
+                    remainingRooms.filter { $0.kind == .room },
+                    order: roomsSort
                 )
-                let channelRooms = remainingRooms.filter { $0.kind == .room }
-                let directRooms = remainingRooms.filter { $0.kind == .directMessage }
+                let directRooms = RoomListFavorites.sorted(
+                    remainingRooms.filter { $0.kind == .directMessage },
+                    order: directsSort
+                )
                 let spaces = spaces(from: rooms)
                 let spaceUnreadCounts = RoomListSpaceGrouping.unreadCountsBySpaceID(from: rooms)
                 let selectedSpaceTitle = RoomListSpaceGrouping.selectedSpaceName(
@@ -109,7 +110,6 @@ struct RoomListView: View {
                     VStack(spacing: SynaraSpacing.medium) {
                         RoomListHeader(
                             title: accountMenuTitle,
-                            selectedSort: $selectedSort,
                             onAccount: { environment.router.present(.accountSwitcher) },
                             onSearch: { presentSearch() },
                             onNewRoom: { isRoomManagementSheetPresented = true }
@@ -153,7 +153,11 @@ struct RoomListView: View {
                                     roomRow(room)
                                 }
                             } header: {
-                                RoomSectionHeader(title: "Favorites", count: favoriteRooms.count)
+                                RoomSectionHeader(
+                                    title: "Favorites",
+                                    count: favoriteRooms.count,
+                                    selectedSort: $favoriteSort
+                                )
                             }
                         }
 
@@ -195,7 +199,11 @@ struct RoomListView: View {
                                         roomRow(room)
                                     }
                                 } header: {
-                                    RoomSectionHeader(title: "Channels", count: ungroupedChannelRooms.count)
+                                    RoomSectionHeader(
+                                        title: "Channels",
+                                        count: ungroupedChannelRooms.count,
+                                        selectedSort: $roomsSort
+                                    )
                                 }
                             }
                         }
@@ -206,7 +214,11 @@ struct RoomListView: View {
                                     roomRow(room)
                                 }
                             } header: {
-                                RoomSectionHeader(title: "Direct messages", count: directRooms.count)
+                                RoomSectionHeader(
+                                    title: "Direct messages",
+                                    count: directRooms.count,
+                                    selectedSort: $directsSort
+                                )
                             }
                         }
                     }
@@ -303,8 +315,14 @@ struct RoomListView: View {
             loadRoomsTask?.cancel()
             roomUpdatesTask?.cancel()
         }
-        .onChange(of: selectedSort) { sort in
-            UserDefaults.standard.set(sort.rawValue, forKey: RoomListSortOrder.storageKey)
+        .onChange(of: favoriteSort) { sort in
+            RoomListSortOrder.persist(sort, for: .favorites)
+        }
+        .onChange(of: roomsSort) { sort in
+            RoomListSortOrder.persist(sort, for: .rooms)
+        }
+        .onChange(of: directsSort) { sort in
+            RoomListSortOrder.persist(sort, for: .directs)
         }
     }
 
@@ -694,7 +712,6 @@ private enum RoomListFilter: String, CaseIterable, Identifiable {
 
 private struct RoomListHeader: View {
     let title: String
-    @Binding var selectedSort: RoomListSortOrder
     let onAccount: () -> Void
     let onSearch: () -> Void
     let onNewRoom: () -> Void
@@ -722,30 +739,6 @@ private struct RoomListHeader: View {
             .accessibilityIdentifier("RoomHeaderAccountMenuButton")
 
             Spacer()
-
-            Menu {
-                ForEach(RoomListSortOrder.allCases) { sort in
-                    Button {
-                        selectedSort = sort
-                    } label: {
-                        Label(sort.title, systemImage: sort.systemImage)
-                    }
-                }
-            } label: {
-                HStack(spacing: SynaraSpacing.xSmall) {
-                    Image(systemName: selectedSort.systemImage)
-                    Text(selectedSort.shortTitle)
-                }
-                .font(.system(size: 15, weight: .semibold))
-                .padding(.horizontal, SynaraSpacing.small)
-                .frame(height: 42)
-                .background(SynaraColor.secondaryText.opacity(0.10))
-                .foregroundStyle(SynaraColor.secondaryText)
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
-            }
-            .accessibilityLabel("Sort rooms")
-            .accessibilityValue(selectedSort.title)
-            .accessibilityIdentifier("RoomListSortMenu")
 
             Button(action: onSearch) {
                 Image(systemName: "magnifyingglass")
@@ -1064,6 +1057,7 @@ private struct SpaceFilterStrip: View {
 private struct RoomSectionHeader: View {
     let title: String
     let count: Int
+    var selectedSort: Binding<RoomListSortOrder>?
 
     var body: some View {
         HStack {
@@ -1072,10 +1066,39 @@ private struct RoomSectionHeader: View {
                 .textCase(nil)
                 .foregroundStyle(SynaraColor.primaryText)
             Spacer()
+            if let selectedSort {
+                RoomListSortIcons(sectionTitle: title, selectedSort: selectedSort)
+            }
             Text("\(count)")
                 .font(SynaraTypography.chipLabel)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
+    }
+}
+
+private struct RoomListSortIcons: View {
+    let sectionTitle: String
+    @Binding var selectedSort: RoomListSortOrder
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.xSmall) {
+            ForEach(RoomListSortOrder.allCases) { sort in
+                Button {
+                    selectedSort = sort
+                } label: {
+                    Image(systemName: sort.systemImage)
+                        .font(.system(size: 11, weight: selectedSort == sort ? .semibold : .regular))
+                        .foregroundStyle(
+                            selectedSort == sort ? SynaraColor.primaryText : SynaraColor.secondaryText
+                        )
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(sort.title(for: sectionTitle))
+                .accessibilityAddTraits(selectedSort == sort ? .isSelected : [])
+            }
+        }
+        .accessibilityIdentifier("RoomListSortMenu")
     }
 }
 
@@ -1184,7 +1207,7 @@ private struct RoomListRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            SynaraRoomAvatarTile(room: room, size: 42)
+            SynaraRoomAvatarTile(room: room, size: 32)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {

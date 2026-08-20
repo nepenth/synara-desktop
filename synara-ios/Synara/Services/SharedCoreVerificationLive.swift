@@ -6,8 +6,36 @@ import SynaraCore
 /// Uses list/SAS commands only. No tokens, MACs, or recovery secrets.
 /// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreVerificationLive {
-    static func state(from inbox: VerificationInboxDto) -> CryptoVerificationState? {
-        guard let request = inbox.requests.first else {
+    static func isTerminal(phase: String) -> Bool {
+        phase == "done" || phase == "mismatched" || phase == "cancelled"
+    }
+
+    static func selectedFlowId(
+        requests: [(flowId: String, phase: String)],
+        preferring preferredFlowId: String?
+    ) -> String? {
+        if let preferredFlowId, requests.contains(where: { $0.flowId == preferredFlowId }) {
+            return preferredFlowId
+        }
+        return requests.first { isTerminal(phase: $0.phase) == false }?.flowId
+            ?? requests.first?.flowId
+    }
+
+    static func selectRequest(
+        from inbox: VerificationInboxDto,
+        preferring flowId: String?
+    ) -> VerificationRequestDto? {
+        guard let selected = selectedFlowId(
+            requests: inbox.requests.map { ($0.flowId, $0.phase) },
+            preferring: flowId
+        ) else {
+            return nil
+        }
+        return inbox.requests.first { $0.flowId == selected }
+    }
+
+    static func state(from inbox: VerificationInboxDto, preferring flowId: String? = nil) -> CryptoVerificationState? {
+        guard let request = selectRequest(from: inbox, preferring: flowId) else {
             return nil
         }
         return state(from: request)

@@ -152,12 +152,12 @@ export const roomNameInitials = (str: string | undefined | null): string => {
 };
 
 const ROOM_AVATAR_PALETTE = [
-  { background: '#1e3a5f', color: '#f4f7fb' },
-  { background: '#163a40', color: '#eef6f4' },
-  { background: '#3d2a4d', color: '#f6f1fb' },
-  { background: '#1c3d32', color: '#eef7f2' },
-  { background: '#3b2b22', color: '#f7f1ea' },
-  { background: '#2a3350', color: '#eef1f8' },
+  { background: '#3a3d43', color: '#d8dbe0' },
+  { background: '#3d4046', color: '#d8dbe0' },
+  { background: '#404349', color: '#d8dbe0' },
+  { background: '#373a40', color: '#d8dbe0' },
+  { background: '#3b3e44', color: '#d8dbe0' },
+  { background: '#41444a', color: '#d8dbe0' },
 ] as const;
 
 export const roomAvatarTone = (roomId: string): { background: string; color: string } => {

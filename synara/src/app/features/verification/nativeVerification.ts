@@ -1,5 +1,5 @@
 import { getSessionBootstrapResult } from '../../state/sessionBootstrap';
-import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { invokeDesktopWithAvailability, isSynaraDesktop, listen } from '../../utils/desktop';
 
 export type NativeVerificationDirection = 'incoming' | 'outgoing';
 export type NativeVerificationPhase =
@@ -46,15 +46,70 @@ export type NativeCryptoStatus = {
 export const isNativeMatrixSession = (): boolean =>
   isSynaraDesktop() && getSessionBootstrapResult().source === 'native';
 
-export const verificationRequestNeedsSasStart = (request: NativeVerificationRequest): boolean =>
-  (request.direction === 'outgoing' && request.phase === 'ready') ||
-  (request.direction === 'incoming' && request.phase === 'started');
+export const NATIVE_VERIFICATION_CHANGED = 'synara-native-verification-changed';
+export const VERIFICATION_UPDATED_EVENT = 'matrix-verification-updated';
+
+export const isNativeVerificationTerminal = (phase: NativeVerificationPhase): boolean =>
+  phase === 'done' || phase === 'mismatched' || phase === 'cancelled';
+
+export const selectNativeVerificationRequest = (
+  requests: NativeVerificationRequest[],
+  currentFlowId?: string
+): NativeVerificationRequest | undefined => {
+  if (currentFlowId) {
+    const current = requests.find((item) => item.flowId === currentFlowId);
+    if (current) return current;
+  }
+  return requests.find((item) => !isNativeVerificationTerminal(item.phase)) ?? requests[0];
+};
 
 export const verificationRequestHasSasCodes = (request: NativeVerificationRequest): boolean => {
   const emoji = request.sas?.emoji;
   if (Array.isArray(emoji) && emoji.length > 0) return true;
   const decimals = request.sas?.decimals;
   return Array.isArray(decimals) && decimals.length === 3;
+};
+
+export const verificationRequestNeedsSasStart = (request: NativeVerificationRequest): boolean =>
+  (request.direction === 'outgoing' && request.phase === 'ready') ||
+  (request.direction === 'incoming' && request.phase === 'started') ||
+  (request.phase === 'sas_ready' && !verificationRequestHasSasCodes(request));
+
+export const announceNativeVerificationChanged = (): void => {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(NATIVE_VERIFICATION_CHANGED));
+  }
+};
+
+export const subscribeNativeVerificationUpdates = (onUpdate: () => void): (() => void) => {
+  let disposed = false;
+  let unlisten: (() => void) | undefined;
+  const onWindow = (): void => {
+    onUpdate();
+  };
+  if (typeof window !== 'undefined') {
+    window.addEventListener(NATIVE_VERIFICATION_CHANGED, onWindow);
+  }
+  void listen<{ sessionGeneration: number }>(VERIFICATION_UPDATED_EVENT, () => {
+    onUpdate();
+  })
+    .then((cleanup) => {
+      if (disposed) {
+        void cleanup?.();
+        return;
+      }
+      unlisten = () => {
+        void cleanup?.();
+      };
+    })
+    .catch(() => undefined);
+  return () => {
+    disposed = true;
+    if (typeof window !== 'undefined') {
+      window.removeEventListener(NATIVE_VERIFICATION_CHANGED, onWindow);
+    }
+    unlisten?.();
+  };
 };
 
 export const nativeVerificationErrorMessage = (): string =>
@@ -74,26 +129,35 @@ const invokeNativeVerification = async <T>(
 export const listNativeVerificationRequests = (): Promise<NativeVerificationInbox> =>
   invokeNativeVerification('matrix_verification_list');
 
+const mutateNativeVerification = async <T>(
+  command: string,
+  args?: Record<string, unknown>
+): Promise<T> => {
+  const value = await invokeNativeVerification<T>(command, args);
+  announceNativeVerificationChanged();
+  return value;
+};
+
 export const startNativeVerification = (deviceId?: string): Promise<NativeVerificationRequest> =>
-  invokeNativeVerification('matrix_verification_start', { deviceId });
+  mutateNativeVerification('matrix_verification_start', { deviceId });
 
 export const acceptNativeVerification = (flowId: string): Promise<NativeVerificationRequest> =>
-  invokeNativeVerification('matrix_verification_accept', { flowId });
+  mutateNativeVerification('matrix_verification_accept', { flowId });
 
 export const beginNativeVerificationSas = (flowId: string): Promise<NativeVerificationRequest> =>
-  invokeNativeVerification('matrix_verification_begin_sas', { flowId });
+  mutateNativeVerification('matrix_verification_begin_sas', { flowId });
 
 export const confirmNativeVerification = (flowId: string): Promise<NativeVerificationRequest> =>
-  invokeNativeVerification('matrix_verification_confirm', { flowId });
+  mutateNativeVerification('matrix_verification_confirm', { flowId });
 
 export const mismatchNativeVerification = (flowId: string): Promise<NativeVerificationRequest> =>
-  invokeNativeVerification('matrix_verification_mismatch', { flowId });
+  mutateNativeVerification('matrix_verification_mismatch', { flowId });
 
 export const cancelNativeVerification = (flowId: string): Promise<NativeVerificationRequest> =>
-  invokeNativeVerification('matrix_verification_cancel', { flowId });
+  mutateNativeVerification('matrix_verification_cancel', { flowId });
 
 export const dismissNativeVerification = (flowId: string): Promise<void> =>
-  invokeNativeVerification('matrix_verification_dismiss', { flowId });
+  mutateNativeVerification('matrix_verification_dismiss', { flowId });
 
 export const getNativeCryptoStatus = (): Promise<NativeCryptoStatus> =>
   invokeNativeVerification('matrix_crypto_status');

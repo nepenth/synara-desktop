@@ -1,24 +1,25 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import parse, { Element, HTMLReactParserOptions } from 'html-react-parser';
 import { sanitizeCustomHtml } from '../../utils/sanitize';
+import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
   countCodeLines,
-  displayCodeLanguage,
   displayCodeText,
   formatLineNumbers,
   highlightNativeCode,
+  inferCodeLanguage,
   nativeCodeBlockFromPreChildren,
-  prismLanguageClass,
 } from './nativeTimelineCodeHighlight';
 import * as htmlCss from './nativeTimelineHtml.css';
 
-function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
+export function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
   const displayCode = displayCodeText(code);
   const lineCount = countCodeLines(displayCode);
   const lineNumbers = formatLineNumbers(lineCount);
-  const languageLabel = displayCodeLanguage(languageClass);
-  const className = prismLanguageClass(languageClass);
+  const inferred = inferCodeLanguage(displayCode, languageClass);
+  const languageLabel = inferred ?? 'code';
+  const className = inferred ? `language-${inferred}` : undefined;
   const largeCode = displayCode.length > NATIVE_PRISM_CHAR_LIMIT;
   const [highlightedHtml, setHighlightedHtml] = useState<string | undefined>(undefined);
 
@@ -34,7 +35,7 @@ function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?
       .then(() => {
         if (cancelled) return;
         try {
-          const html = highlightNativeCode(displayCode, languageClass);
+          const html = highlightNativeCode(displayCode, className);
           if (cancelled) return;
           setHighlightedHtml(html);
         } catch {
@@ -48,7 +49,7 @@ function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?
     return () => {
       cancelled = true;
     };
-  }, [displayCode, languageClass, largeCode]);
+  }, [displayCode, className, largeCode]);
 
   return (
     <pre className={htmlCss.CodePanel} data-native-code-block="true">

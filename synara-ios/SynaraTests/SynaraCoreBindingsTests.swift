@@ -1157,6 +1157,40 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
+        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "done"))
+        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "cancelled"))
+        XCTAssertFalse(SharedCoreVerificationLive.isTerminal(phase: "sas_ready"))
+        XCTAssertEqual(
+            SharedCoreVerificationLive.selectedFlowId(
+                requests: [("incoming", "requested"), ("sas", "sas_ready")],
+                preferring: "sas"
+            ),
+            "sas"
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.selectedFlowId(
+                requests: [("incoming", "requested"), ("sas", "sas_ready")],
+                preferring: nil
+            ),
+            "incoming"
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.selectedFlowId(
+                requests: [("done", "done"), ("incoming", "requested")],
+                preferring: "done"
+            ),
+            "done"
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.selectedFlowId(
+                requests: [("done", "done")],
+                preferring: nil
+            ),
+            "done"
+        )
+        XCTAssertNil(
+            SharedCoreVerificationLive.selectedFlowId(requests: [], preferring: "missing")
+        )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(
                 phase: "ready",

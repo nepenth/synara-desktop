@@ -5,6 +5,7 @@ import {
   NativeDevice,
   NativeDeviceSnapshot,
 } from '../features/settings/devices/nativeDevices';
+import { subscribeNativeVerificationUpdates } from '../features/verification/nativeVerification';
 import { getActiveSession } from '../state/sessionBootstrap';
 
 const DEVICE_LIST_UPDATED_EVENT = 'matrix-device-list-updated';
@@ -43,6 +44,9 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    const unsubscribeVerification = subscribeNativeVerificationUpdates(() => {
+      void refreshDeviceList();
+    });
     void import('@tauri-apps/api/event')
       .then(({ listen }) =>
         listen<{ sessionGeneration: number }>(DEVICE_LIST_UPDATED_EVENT, (event) => {
@@ -62,6 +66,7 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
     return () => {
       disposed = true;
       unlisten?.();
+      unsubscribeVerification();
     };
   }, [refreshDeviceList, snapshot]);
 

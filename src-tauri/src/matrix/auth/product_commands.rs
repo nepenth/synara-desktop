@@ -99,7 +99,11 @@ pub async fn matrix_login_password(
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
-    let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
+    let verification = Arc::new(crate::matrix::verification::start_verification_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    ));
     let devices = Arc::new(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
@@ -514,7 +518,11 @@ pub(super) async fn install_session_from_register_secrets(
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
-    let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
+    let verification = Arc::new(crate::matrix::verification::start_verification_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    ));
     let devices = Arc::new(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
@@ -743,7 +751,11 @@ pub async fn matrix_restore_session(
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
-    let verification = Arc::new(NativeVerificationOwner::new(&client, session_generation));
+    let verification = Arc::new(crate::matrix::verification::start_verification_owner(
+        &client,
+        app.clone(),
+        session_generation,
+    ));
     let devices = Arc::new(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
