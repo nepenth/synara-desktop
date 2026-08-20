@@ -7,13 +7,14 @@
 
 use std::{
     collections::HashMap,
-    sync::Arc,
+    sync::{Arc, Mutex as StdMutex},
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use futures_util::StreamExt;
 use matrix_sdk::{
     encryption::verification::{
-        SasVerification, Verification, VerificationRequest, VerificationRequestState,
+        SasState, SasVerification, Verification, VerificationRequest, VerificationRequestState,
     },
     event_handler::EventHandlerHandle,
     ruma::{
@@ -25,7 +26,8 @@ use matrix_sdk::{
     },
     Client,
 };
-use tokio::sync::Mutex;
+use serde::{Deserialize, Serialize};
+use tokio::{sync::Mutex, task::JoinHandle};
 
 use super::{
     phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
@@ -33,8 +35,9 @@ use super::{
 };
 
 /// Privacy-safe verification wake-up. No user ids, tokens, or SAS secrets.
-/// iOS re-fetches via the existing list command.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Desktop maps this to `VERIFICATION_UPDATED_EVENT`; iOS re-fetches via list.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct NativeVerificationUpdateSignal {
     pub session_generation: u64,
 }
@@ -61,9 +64,11 @@ struct VerificationRegistry {
 pub struct NativeVerificationOwner {
     client: Client,
     registry: Arc<Mutex<VerificationRegistry>>,
+    watches: Arc<StdMutex<HashMap<String, JoinHandle<()>>>>,
     emit: VerificationUpdateEmit,
     session_generation: u64,
     _request_handler: EventHandlerHandle,
+    _wake_handler: EventHandlerHandle,
 }
 
 impl NativeVerificationOwner {
@@ -80,25 +85,50 @@ impl NativeVerificationOwner {
             session_generation,
             requests: HashMap::new(),
         }));
+        let watches = Arc::new(StdMutex::new(HashMap::new()));
         let handler_registry = registry.clone();
+        let handler_watches = Arc::clone(&watches);
         let handler_emit = Arc::clone(&emit);
         let request_handler = client.add_event_handler(
             move |event: ToDeviceKeyVerificationRequestEvent, client: Client| {
                 let registry = handler_registry.clone();
+                let watches = Arc::clone(&handler_watches);
                 let emit = Arc::clone(&handler_emit);
                 async move {
-                    if register_incoming_request(&registry, &client, event).await {
+                    if let Some(request) =
+                        register_incoming_request(&registry, &client, event).await
+                    {
+                        let flow_id = request.flow_id().to_owned();
+                        arm_watch(
+                            watches.as_ref(),
+                            request,
+                            flow_id,
+                            registry,
+                            Arc::clone(&emit),
+                            session_generation,
+                        );
                         emit(NativeVerificationUpdateSignal { session_generation });
                     }
                 }
             },
         );
+        let wake_emit = Arc::clone(&emit);
+        let wake_handler = client.add_event_handler(move |event: AnyToDeviceEvent| {
+            let emit = Arc::clone(&wake_emit);
+            async move {
+                if is_verification_to_device(&event) {
+                    emit(NativeVerificationUpdateSignal { session_generation });
+                }
+            }
+        });
         Self {
             client: client.clone(),
             registry,
+            watches,
             emit,
             session_generation,
             _request_handler: request_handler,
+            _wake_handler: wake_handler,
         }
     }
 
@@ -179,6 +209,7 @@ impl NativeVerificationOwner {
             user_confirmed: false,
             user_mismatched: false,
         };
+        let request_for_watch = managed.request.clone();
         let mut registry = self.registry.lock().await;
         registry.requests.insert(flow_id.clone(), managed);
         let projected = project_request(
@@ -188,6 +219,14 @@ impl NativeVerificationOwner {
                 .expect("verification was inserted"),
         );
         drop(registry);
+        arm_watch(
+            self.watches.as_ref(),
+            request_for_watch,
+            flow_id,
+            self.registry.clone(),
+            Arc::clone(&self.emit),
+            self.session_generation,
+        );
         self.signal();
         Ok(projected)
     }
@@ -234,9 +273,18 @@ impl NativeVerificationOwner {
             .get_mut(flow_id)
             .ok_or("v-crypto.1-flow-not-found")?;
         managed.other_device_id = Some(sas.other_device().device_id().to_owned());
+        let request_for_watch = managed.request.clone();
         managed.sas = Some(sas);
         let projected = project_request(managed);
         drop(registry);
+        arm_watch(
+            self.watches.as_ref(),
+            request_for_watch,
+            flow_id.to_owned(),
+            self.registry.clone(),
+            Arc::clone(&self.emit),
+            self.session_generation,
+        );
         self.signal();
         Ok(projected)
     }
@@ -319,6 +367,7 @@ impl NativeVerificationOwner {
         }
         registry.requests.remove(flow_id);
         drop(registry);
+        abort_watch(self.watches.as_ref(), flow_id);
         self.signal();
         Ok(())
     }
@@ -352,26 +401,34 @@ impl NativeVerificationOwner {
     }
 }
 
+impl Drop for NativeVerificationOwner {
+    fn drop(&mut self) {
+        if let Ok(mut watches) = self.watches.lock() {
+            for (_, handle) in watches.drain() {
+                handle.abort();
+            }
+        }
+    }
+}
+
 async fn register_incoming_request(
     registry: &Arc<Mutex<VerificationRegistry>>,
     client: &Client,
     event: ToDeviceKeyVerificationRequestEvent,
-) -> bool {
+) -> Option<VerificationRequest> {
     let flow_id = event.content.transaction_id.to_string();
-    let Some(request) = client
+    let request = client
         .encryption()
         .get_verification_request(&event.sender, &flow_id)
-        .await
-    else {
-        return false;
-    };
+        .await?;
     if !request.is_self_verification() {
-        return false;
+        return None;
     }
     let mut registry = registry.lock().await;
     if registry.requests.contains_key(&flow_id) {
-        return false;
+        return None;
     }
+    let cloned = request.clone();
     registry.requests.insert(
         flow_id,
         ManagedVerification {
@@ -385,7 +442,103 @@ async fn register_incoming_request(
             user_mismatched: false,
         },
     );
-    true
+    Some(cloned)
+}
+
+fn is_verification_to_device(event: &AnyToDeviceEvent) -> bool {
+    event
+        .event_type()
+        .to_string()
+        .starts_with("m.key.verification.")
+}
+
+fn abort_watch(watches: &StdMutex<HashMap<String, JoinHandle<()>>>, flow_id: &str) {
+    if let Ok(mut watches) = watches.lock() {
+        if let Some(handle) = watches.remove(flow_id) {
+            handle.abort();
+        }
+    }
+}
+
+fn arm_watch(
+    watches: &StdMutex<HashMap<String, JoinHandle<()>>>,
+    request: VerificationRequest,
+    flow_id: String,
+    registry: Arc<Mutex<VerificationRegistry>>,
+    emit: VerificationUpdateEmit,
+    session_generation: u64,
+) {
+    let watch_id = flow_id.clone();
+    let handle = tokio::spawn(async move {
+        watch_request(request, registry, emit, session_generation, watch_id).await;
+    });
+    if let Ok(mut watches) = watches.lock() {
+        if let Some(previous) = watches.insert(flow_id, handle) {
+            previous.abort();
+        }
+    }
+}
+
+async fn watch_request(
+    request: VerificationRequest,
+    registry: Arc<Mutex<VerificationRegistry>>,
+    emit: VerificationUpdateEmit,
+    session_generation: u64,
+    flow_id: String,
+) {
+    let mut request_changes = request.changes();
+    let mut sas_stream = None;
+    {
+        let mut registry = registry.lock().await;
+        if let Some(managed) = registry.requests.get_mut(&flow_id) {
+            refresh_sas(managed);
+            if let Some(sas) = managed.sas.as_ref() {
+                sas_stream = Some(sas.changes());
+            }
+        }
+    }
+    loop {
+        tokio::select! {
+            maybe_state = request_changes.next() => {
+                let Some(state) = maybe_state else {
+                    break;
+                };
+                if let VerificationRequestState::Transitioned {
+                    verification: Verification::SasV1(sas),
+                } = &state
+                {
+                    let mut registry = registry.lock().await;
+                    if let Some(managed) = registry.requests.get_mut(&flow_id) {
+                        managed.other_device_id =
+                            Some(sas.other_device().device_id().to_owned());
+                        managed.sas = Some(sas.clone());
+                    }
+                    drop(registry);
+                    sas_stream = Some(sas.changes());
+                }
+                emit(NativeVerificationUpdateSignal { session_generation });
+                if matches!(
+                    state,
+                    VerificationRequestState::Done | VerificationRequestState::Cancelled(_)
+                ) {
+                    break;
+                }
+            }
+            maybe_sas = async {
+                if let Some(stream) = sas_stream.as_mut() {
+                    stream.next().await
+                } else {
+                    std::future::pending::<Option<SasState>>().await
+                }
+            } => {
+                if maybe_sas.is_none() {
+                    sas_stream = None;
+                    continue;
+                }
+                emit(NativeVerificationUpdateSignal { session_generation });
+            }
+        }
+    }
 }
 
 fn project_request(managed: &mut ManagedVerification) -> NativeVerificationRequest {

@@ -16,6 +16,7 @@ import {
 import { useCrossSigning } from '../../../hooks/useCrossSigning';
 import { BackupRestoreTile } from '../../../components/BackupRestore';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
+import { canOfferNativeDeviceVerification } from '../../cross-signing/nativeCrossSigning';
 import { NativeSecretStorageTile } from '../../../components/SecretStorage';
 
 function DevicesPlaceholder() {
@@ -39,7 +40,7 @@ export function Devices({ requestClose }: DevicesProps) {
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
   const verificationStatus = currentDevice?.trust ?? 'unknown';
   const unverifiedDeviceCount = otherDevices?.filter(
-    (device) => device.trust === 'unverified'
+    (device) => device.trust === 'unverified',
   ).length;
 
   return (
@@ -119,9 +120,10 @@ export function Devices({ requestClose }: DevicesProps) {
                       refreshDeviceList={refreshDeviceList}
                       options={<DeviceLogoutBtn />}
                     ></DeviceTile>
-                    {crossSigningActive && verificationStatus === 'unverified' && (
-                      <VerifyCurrentDeviceTile onVerified={() => void refreshDeviceList()} />
-                    )}
+                    {canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
+                      verificationStatus === 'unverified' && (
+                        <VerifyCurrentDeviceTile onVerified={() => void refreshDeviceList()} />
+                      )}
                   </SequenceCard>
                 ) : (
                   <DeviceTilePlaceholder />

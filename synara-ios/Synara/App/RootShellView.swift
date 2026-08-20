@@ -10,6 +10,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationState: CryptoVerificationState?
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationActionError: String?
+    @State private var autoStartedSas = false
     @State private var signOutError: String?
     @ObservedObject private var themePaint = SynaraThemePaint.shared
 
@@ -98,7 +99,10 @@ struct RootShellView: View {
                     onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
                     onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
                     onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
-                    onDismissTerminal: { self.cryptoVerificationState = nil }
+                    onDismissTerminal: {
+                        runCryptoVerificationAction { await environment.crypto.dismissVerification() }
+                        self.cryptoVerificationState = nil
+                    }
                 )
             }
         }
@@ -211,10 +215,27 @@ struct RootShellView: View {
                 guard Task.isCancelled == false else {
                     return
                 }
-                await MainActor.run {
+                let shouldStartSas = await MainActor.run { () -> Bool in
                     cryptoVerificationState = update
+                    switch update {
+                    case .requestReceived, .requestSent:
+                        autoStartedSas = false
+                        return false
+                    case .accepted:
+                        if autoStartedSas == false {
+                            autoStartedSas = true
+                            return true
+                        }
+                        return false
+                    default:
+                        return false
+                    }
+                }
+                if shouldStartSas {
+                    _ = await environment.crypto.startSasVerification()
                 }
                 if update.isTerminal {
+                    await MainActor.run { autoStartedSas = false }
                     if case .finished = update {
                         // Verification succeeded — kick a crypto status refresh.
                         // Any open timeline that is showing the "Encrypted history" / "Retry Decryption"
@@ -224,6 +245,7 @@ struct RootShellView: View {
                         }
                     }
                     try? await Task.sleep(nanoseconds: 1_500_000_000)
+                    _ = await environment.crypto.dismissVerification()
                     await MainActor.run {
                         if cryptoVerificationState == update {
                             cryptoVerificationState = nil

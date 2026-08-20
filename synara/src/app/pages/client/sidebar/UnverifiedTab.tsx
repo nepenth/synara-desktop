@@ -8,7 +8,8 @@ import {
 } from '../../../components/sidebar';
 import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
 import * as css from './UnverifiedTab.css';
-import { useCrossSigningActive } from '../../../hooks/useCrossSigning';
+import { useCrossSigning } from '../../../hooks/useCrossSigning';
+import { canOfferNativeDeviceVerification } from '../../../features/cross-signing/nativeCrossSigning';
 import { Modal500 } from '../../../components/Modal500';
 import { Settings, SettingsPages } from '../../../features/settings';
 
@@ -66,9 +67,9 @@ function UnverifiedIndicator() {
 }
 
 export function UnverifiedTab() {
-  const crossSigningActive = useCrossSigningActive();
+  const crossSigning = useCrossSigning();
 
-  if (!crossSigningActive) return null;
+  if (!canOfferNativeDeviceVerification(crossSigning.nativeStatus)) return null;
 
   return <UnverifiedIndicator />;
 }

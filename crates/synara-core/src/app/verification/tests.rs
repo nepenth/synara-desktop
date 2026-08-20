@@ -160,3 +160,16 @@ fn retire_generation() {
     assert!(inbox.is_empty());
     assert!(!inbox.has_pending_attention());
 }
+
+#[test]
+fn verification_update_signal_is_session_wake_only() {
+    assert_eq!(VERIFICATION_UPDATED_EVENT, "matrix-verification-updated");
+    let encoded = serde_json::to_string(&NativeVerificationUpdateSignal {
+        session_generation: 7,
+    })
+    .expect("serialize wake-up");
+    assert_eq!(encoded, "{\"sessionGeneration\":7}");
+    for forbidden in ["key", "token", "mac", "secret", "recovery", "ciphertext"] {
+        assert!(!encoded.to_ascii_lowercase().contains(forbidden));
+    }
+}

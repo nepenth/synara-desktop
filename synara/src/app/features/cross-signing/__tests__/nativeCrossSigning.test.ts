@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canOfferNativeDeviceVerification,
   isNativeCrossSigningPublished,
   nativeCrossSigningErrorMessage,
   NativeCrossSigningStatus,
@@ -25,7 +26,21 @@ test('published readiness requires the complete public identity projection', () 
       ...status('published'),
       selfSigning: 'missing',
     }),
-    false
+    false,
+  );
+});
+
+test('device verification remains offered when identity only needs verification', () => {
+  assert.equal(canOfferNativeDeviceVerification(status('published')), true);
+  assert.equal(canOfferNativeDeviceVerification(status('missing')), false);
+  assert.equal(canOfferNativeDeviceVerification(undefined), false);
+  assert.equal(
+    canOfferNativeDeviceVerification({
+      ...status('missing'),
+      readiness: 'verification_required',
+      bootstrap: 'not_needed',
+    }),
+    true,
   );
 });
 

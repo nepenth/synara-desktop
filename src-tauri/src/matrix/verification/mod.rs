@@ -5,3 +5,4 @@
 pub use synara_core::app::verification::*;
 
 pub mod live;
+pub use live::start as start_verification_owner;

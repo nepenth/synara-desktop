@@ -366,11 +366,16 @@ protocol CryptoStatusServicing {
     func cancelVerification() async -> CryptoActionResult
     func recover(recoveryKey: String) async -> CryptoActionResult
     func sessionDevices() async -> [SharedCoreSessionDevice]
+    func dismissVerification() async -> CryptoActionResult
 }
 
 extension CryptoStatusServicing {
     func sessionDevices() async -> [SharedCoreSessionDevice] {
         []
+    }
+
+    func dismissVerification() async -> CryptoActionResult {
+        .completed("Verification closed.")
     }
 }
 

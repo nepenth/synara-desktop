@@ -1,13 +1,31 @@
 //! Desktop adapter for the Core verification owner.
 //!
 //! `NativeVerificationOwner` lives in synara-core and returns privacy-safe
-//! diagnostic ids. This file maps those ids onto `MatrixAuthCommandError`.
+//! diagnostic ids. This file maps those ids onto `MatrixAuthCommandError`
+//! and the existing `matrix-verification-updated` Tauri wake-up.
+
+use std::sync::Arc;
+
+use matrix_sdk::Client;
+use tauri::{AppHandle, Emitter};
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
 pub use synara_core::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
+    NativeVerificationUpdateSignal, VERIFICATION_UPDATED_EVENT,
 };
+
+/// Start the Core owner and emit verification inbox wakeups on the Tauri event.
+pub fn start(client: &Client, app: AppHandle, session_generation: u64) -> NativeVerificationOwner {
+    NativeVerificationOwner::with_emit(
+        client,
+        Arc::new(move |signal: NativeVerificationUpdateSignal| {
+            let _ = app.emit(VERIFICATION_UPDATED_EVENT, signal);
+        }),
+        session_generation,
+    )
+}
 
 pub fn map_verification_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
