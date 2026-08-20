@@ -5273,8 +5273,9 @@ private struct ComposerView: View {
             }
             .padding(.horizontal, SynaraSpacing.xSmall)
             .padding(.vertical, SynaraSpacing.xSmall)
+            .accessibilityElement(children: .contain)
+            .accessibilityIdentifier("ComposerAttachmentDraftList")
         }
-        .accessibilityIdentifier("ComposerAttachmentDraftList")
     }
 
     private var shouldShowPromptMetrics: Bool {
