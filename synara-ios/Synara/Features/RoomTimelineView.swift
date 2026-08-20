@@ -1716,24 +1716,29 @@ struct RoomTimelineView: View {
 
     private func applyOutgoingQueueToTimeline() {
         let pendingItems = environment.outgoingSends.queue.timelineItems(in: roomID)
-        switch state {
+        switch OutgoingQueueTimelineMerge.applying(
+            pendingItems: pendingItems,
+            to: outgoingQueuePresentation
+        ) {
         case let .loaded(items, isPaginating):
-            var updated = items
-            var ids = Set(items.map(\.id))
-            for pending in pendingItems {
-                if let index = updated.firstIndex(where: { $0.id == pending.id }) {
-                    updated[index] = updated[index].withDeliveryStatus(pending.deliveryStatus)
-                } else if ids.insert(pending.id).inserted {
-                    updated.append(pending)
-                }
-            }
-            state = .loaded(updated, isPaginating: isPaginating)
-        case .empty, .idle:
-            if pendingItems.isEmpty == false {
-                state = .loaded(pendingItems, isPaginating: false)
-            }
-        case .loading, .failed(_):
+            state = .loaded(items, isPaginating: isPaginating)
+        case .idle, .loading, .empty, .failed:
             break
+        }
+    }
+
+    private var outgoingQueuePresentation: OutgoingQueueTimelineMerge.Presentation {
+        switch state {
+        case .idle:
+            return .idle
+        case .loading:
+            return .loading
+        case .empty:
+            return .empty
+        case .failed(_):
+            return .failed
+        case let .loaded(items, isPaginating):
+            return .loaded(items, isPaginating: isPaginating)
         }
     }
 
@@ -4150,8 +4155,17 @@ private struct TimelineRow: View {
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
 
-        row
+        withFailedRetryAccessibilityAction(row)
             .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
+    }
+
+    @ViewBuilder
+    private func withFailedRetryAccessibilityAction<Content: View>(_ content: Content) -> some View {
+        if TimelineRowAccessibility.retryActionTitle(deliveryStatus: item.deliveryStatus) != nil {
+            content.accessibilityAction(named: Text("Retry"), onRetryFailedSend)
+        } else {
+            content
+        }
     }
 
     @ViewBuilder
@@ -4344,19 +4358,12 @@ private struct TimelineRow: View {
     }
 
     private var accessibilityChildBehavior: AccessibilityChildBehavior {
-        if approvalPrompt != nil {
-            return .contain
-        }
-
-        if case .agentCard = item.kind {
-            return .contain
-        }
-
-        if replyCount > 0 {
-            return .contain
-        }
-
-        return .combine
+        TimelineRowAccessibility.containsChildren(
+            deliveryStatus: item.deliveryStatus,
+            kind: item.kind,
+            replyCount: replyCount,
+            hasApprovalPrompt: approvalPrompt != nil
+        ) ? .contain : .combine
     }
 
     private var accessibilityHint: String {

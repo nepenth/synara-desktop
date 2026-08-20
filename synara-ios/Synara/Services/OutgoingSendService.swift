@@ -51,6 +51,68 @@ enum OutgoingSendPolicy {
     }
 }
 
+/// VoiceOver for failed local echoes: keep the Retry chip as the touch
+/// target, but expose it as a child and as a named row action.
+enum TimelineRowAccessibility {
+    static func containsChildren(
+        deliveryStatus: TimelineDeliveryStatus?,
+        kind: TimelineItem.Kind,
+        replyCount: Int,
+        hasApprovalPrompt: Bool
+    ) -> Bool {
+        if deliveryStatus == .failed {
+            return true
+        }
+        if hasApprovalPrompt {
+            return true
+        }
+        if case .agentCard = kind {
+            return true
+        }
+        return replyCount > 0
+    }
+
+    static func retryActionTitle(deliveryStatus: TimelineDeliveryStatus?) -> String? {
+        deliveryStatus == .failed ? "Retry" : nil
+    }
+}
+
+/// Applies session-scoped pending rows onto the current timeline presentation.
+/// Send while `.loading` / `.failed` still surfaces the local echo.
+enum OutgoingQueueTimelineMerge {
+    enum Presentation: Equatable {
+        case idle
+        case loading
+        case empty
+        case failed
+        case loaded([TimelineItem], isPaginating: Bool)
+    }
+
+    static func applying(
+        pendingItems: [TimelineItem],
+        to presentation: Presentation
+    ) -> Presentation {
+        switch presentation {
+        case let .loaded(items, isPaginating):
+            var updated = items
+            var ids = Set(items.map(\.id))
+            for pending in pendingItems {
+                if let index = updated.firstIndex(where: { $0.id == pending.id }) {
+                    updated[index] = updated[index].withDeliveryStatus(pending.deliveryStatus)
+                } else if ids.insert(pending.id).inserted {
+                    updated.append(pending)
+                }
+            }
+            return .loaded(updated, isPaginating: isPaginating)
+        case .empty, .idle, .loading, .failed:
+            if pendingItems.isEmpty == false {
+                return .loaded(pendingItems, isPaginating: false)
+            }
+            return presentation
+        }
+    }
+}
+
 struct OutgoingQueuedMessage: Equatable, Identifiable {
     let id: String
     let roomID: String

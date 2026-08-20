@@ -186,6 +186,91 @@ final class OutgoingSendServiceTests: XCTestCase {
         XCTAssertEqual(coordinator.queue.item(id: message.id)?.deliveryStatus, .sent)
     }
 
+    func testFailedRowUsesContainmentAndNamedRetryAction() {
+        XCTAssertTrue(
+            TimelineRowAccessibility.containsChildren(
+                deliveryStatus: .failed,
+                kind: .text("Retry me"),
+                replyCount: 0,
+                hasApprovalPrompt: false
+            )
+        )
+        XCTAssertEqual(
+            TimelineRowAccessibility.retryActionTitle(deliveryStatus: .failed),
+            "Retry"
+        )
+        XCTAssertFalse(
+            TimelineRowAccessibility.containsChildren(
+                deliveryStatus: .sending,
+                kind: .text("Hello"),
+                replyCount: 0,
+                hasApprovalPrompt: false
+            )
+        )
+        XCTAssertNil(TimelineRowAccessibility.retryActionTitle(deliveryStatus: .queued))
+        XCTAssertNil(TimelineRowAccessibility.retryActionTitle(deliveryStatus: .sending))
+        XCTAssertTrue(
+            TimelineRowAccessibility.containsChildren(
+                deliveryStatus: nil,
+                kind: .text("Hello"),
+                replyCount: 1,
+                hasApprovalPrompt: false
+            )
+        )
+    }
+
+    func testPendingItemsSurfaceWhileTimelineIsLoadingOrFailed() {
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-visible",
+            body: "Hold this",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .queued
+        )
+
+        XCTAssertEqual(
+            OutgoingQueueTimelineMerge.applying(pendingItems: [pending], to: .loading),
+            .loaded([pending], isPaginating: false)
+        )
+        XCTAssertEqual(
+            OutgoingQueueTimelineMerge.applying(pendingItems: [pending], to: .failed),
+            .loaded([pending], isPaginating: false)
+        )
+        XCTAssertEqual(
+            OutgoingQueueTimelineMerge.applying(pendingItems: [pending], to: .empty),
+            .loaded([pending], isPaginating: false)
+        )
+        XCTAssertEqual(
+            OutgoingQueueTimelineMerge.applying(pendingItems: [], to: .loading),
+            .loading
+        )
+        XCTAssertEqual(
+            OutgoingQueueTimelineMerge.applying(pendingItems: [], to: .failed),
+            .failed
+        )
+
+        let existing = TimelineItem(
+            id: "$server",
+            eventID: "$server",
+            senderID: "@bob:matrix.org",
+            timestamp: Date(),
+            kind: .text("Earlier"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+        let merged = OutgoingQueueTimelineMerge.applying(
+            pendingItems: [pending],
+            to: .loaded([existing], isPaginating: true)
+        )
+        guard case let .loaded(items, isPaginating) = merged else {
+            return XCTFail("Expected loaded timeline")
+        }
+        XCTAssertTrue(isPaginating)
+        XCTAssertEqual(items.map(\.id), ["$server", "$pending-visible"])
+        XCTAssertEqual(items.last?.deliveryStatus, .queued)
+    }
+
     func testRoomTimelineDoesNotWrapFailedRowsInRetryButton() throws {
         let root = Self.repositoryRoot()
         let timeline = try String(
@@ -201,6 +286,9 @@ final class OutgoingSendServiceTests: XCTestCase {
         XCTAssertFalse(timeline.contains("TimelineItemRetry-\\(item.eventID)"))
         XCTAssertTrue(timeline.contains("retryFailedMessage(item)"))
         XCTAssertTrue(timeline.contains("retryFailedMessage(eventRow.item)"))
+        XCTAssertTrue(timeline.contains("accessibilityAction(named: Text(\"Retry\"), onRetryFailedSend)"))
+        XCTAssertTrue(timeline.contains("TimelineRowAccessibility.containsChildren("))
+        XCTAssertTrue(timeline.contains("case .idle, .loading, .empty, .failed:"))
         XCTAssertTrue(bubble.contains("TimelineItemRetry"))
         XCTAssertTrue(bubble.contains("TimelineItemQueued"))
         XCTAssertTrue(bubble.contains("TimelineItemSending"))
