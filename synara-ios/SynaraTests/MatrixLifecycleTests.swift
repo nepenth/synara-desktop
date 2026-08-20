@@ -160,6 +160,75 @@ final class MatrixLifecycleTests: XCTestCase {
         )
     }
 
+    func testNonTerminalVerificationUICannotBeInteractivelyDismissed() {
+        let emojis = [CryptoVerificationEmoji(symbol: "🐶", description: "Dog")]
+        XCTAssertFalse(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.emojis(emojis)))
+        XCTAssertFalse(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.decimals([1, 2, 3])))
+        XCTAssertFalse(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.confirmed))
+        XCTAssertFalse(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.requestReceived(
+            CryptoVerificationRequest(
+                userID: "@alice:matrix.org",
+                displayName: nil,
+                deviceID: "OTHER",
+                deviceDisplayName: nil,
+                flowID: "flow"
+            )
+        )))
+        XCTAssertFalse(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.sasStarted))
+        XCTAssertTrue(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.finished))
+        XCTAssertTrue(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.cancelled))
+        XCTAssertTrue(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.mismatched))
+        XCTAssertTrue(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.failed))
+    }
+
+    func testClearedNonTerminalVerificationStateIsRestoredFromInbox() {
+        let emojis = CryptoVerificationState.emojis([
+            CryptoVerificationEmoji(symbol: "🐶", description: "Dog")
+        ])
+        XCTAssertEqual(
+            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: nil, latest: emojis),
+            emojis
+        )
+        XCTAssertEqual(
+            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: emojis, latest: .requestSent),
+            emojis
+        )
+        XCTAssertNil(
+            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: nil, latest: .finished)
+        )
+        XCTAssertNil(
+            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: nil, latest: nil)
+        )
+    }
+
+    @MainActor
+    func testSecuritySettingsHidesVerifyButtonAfterFinishedTrustRefresh() async {
+        let unverified = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: true,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        let verified = SessionCryptoStatus(
+            verification: .verified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: true,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(unverified))
+        XCTAssertFalse(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(verified))
+
+        let crypto = SequencingCryptoStatusService(statuses: [unverified, verified])
+        let observer = SessionCryptoStatusObserver()
+        await observer.start(crypto: crypto)
+        XCTAssertEqual(observer.status.verification, .verified)
+        XCTAssertFalse(observer.showsVerifyThisDevice)
+    }
+
     func testVerificationContinuationCancellationBeforeRegistrationUsesTombstone() {
         var tracker = MatrixVerificationContinuationRegistrationTracker()
         let id = UUID()
@@ -216,5 +285,66 @@ final class MatrixLifecycleTests: XCTestCase {
             homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
             accessToken: "token"
         )
+    }
+}
+
+private final class SequencingCryptoStatusService: CryptoStatusServicing {
+    private let lock = NSLock()
+    private var remaining: [SessionCryptoStatus]
+
+    init(statuses: [SessionCryptoStatus]) {
+        remaining = statuses
+    }
+
+    func roomStatus(roomID: String) async -> RoomCryptoStatus {
+        .unknown
+    }
+
+    func sessionStatus() async -> SessionCryptoStatus {
+        lock.lock()
+        defer { lock.unlock() }
+        if remaining.count > 1 {
+            return remaining.removeFirst()
+        }
+        return remaining.first ?? .unknown
+    }
+
+    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+        AsyncStream { continuation in
+            continuation.yield(.finished)
+            continuation.finish()
+        }
+    }
+
+    func retryDecryption(roomID: String) async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func requestDeviceVerification() async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func acceptVerificationRequest() async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func startSasVerification() async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func approveVerification() async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func declineVerification() async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func cancelVerification() async -> CryptoActionResult {
+        .unavailable("unused")
+    }
+
+    func recover(recoveryKey: String) async -> CryptoActionResult {
+        .unavailable("unused")
     }
 }

@@ -1098,7 +1098,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         return invites.invites.first { $0.roomId == roomID }?.isEncrypted
     }
 
-    private func currentVerificationState() async -> CryptoVerificationState? {
+    func currentVerificationState() async -> CryptoVerificationState? {
         guard let inbox = try? await SharedCoreVerificationList.verificationList(core: host.core) else {
             return nil
         }

@@ -434,9 +434,33 @@ private struct AppearanceSettingsView: View {
     }
 }
 
+@MainActor
+final class SessionCryptoStatusObserver: ObservableObject {
+    @Published private(set) var status: SessionCryptoStatus = .unknown
+
+    var showsVerifyThisDevice: Bool {
+        SecuritySettingsVerificationPolicy.showsVerifyThisDevice(status)
+    }
+
+    func start(crypto: CryptoStatusServicing) async {
+        await refresh(crypto: crypto)
+        for await _ in crypto.verificationUpdates() {
+            await refresh(crypto: crypto)
+        }
+    }
+
+    func refresh(crypto: CryptoStatusServicing) async {
+        status = await crypto.sessionStatus()
+    }
+
+    func apply(_ status: SessionCryptoStatus) {
+        self.status = status
+    }
+}
+
 private struct SecuritySettingsView: View {
     @Environment(\.appEnvironment) private var environment
-    @State private var sessionCryptoStatus: SessionCryptoStatus = .unknown
+    @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
     @State private var recoveryKey = ""
     @State private var cryptoActionMessage: String?
     @State private var isRunningCryptoAction = false
@@ -448,19 +472,17 @@ private struct SecuritySettingsView: View {
                     .accessibilityIdentifier("SecuritySessionStorageRow")
                 SettingsInfoRow(title: "Message Security", value: "Matrix Rust SDK")
                     .accessibilityIdentifier("SecurityMatrixSDKRow")
-                SettingsInfoRow(title: "Device Verification", value: sessionCryptoStatus.verification.settingsDisplayName)
+                SettingsInfoRow(title: "Device Verification", value: sessionCrypto.status.verification.settingsDisplayName)
                     .accessibilityIdentifier("SecurityDeviceVerificationRow")
-                SettingsInfoRow(title: "Key Recovery", value: sessionCryptoStatus.recovery.settingsDisplayName)
+                SettingsInfoRow(title: "Key Recovery", value: sessionCrypto.status.recovery.settingsDisplayName)
                     .accessibilityIdentifier("SecurityKeyRecoveryRow")
-                SettingsInfoRow(title: "Key Backup", value: sessionCryptoStatus.backup.settingsDisplayName)
+                SettingsInfoRow(title: "Key Backup", value: sessionCrypto.status.backup.settingsDisplayName)
                     .accessibilityIdentifier("SecurityKeyBackupRow")
-                SettingsInfoRow(title: "Decryption Issues", value: sessionCryptoStatus.unableToDecryptCount == 0 ? "None" : "\(sessionCryptoStatus.unableToDecryptCount)")
+                SettingsInfoRow(title: "Decryption Issues", value: sessionCrypto.status.unableToDecryptCount == 0 ? "None" : "\(sessionCrypto.status.unableToDecryptCount)")
                     .accessibilityIdentifier("SecurityDecryptionIssuesRow")
             }
 
-            if sessionCryptoStatus.verification != .verified,
-               sessionCryptoStatus.hasDevicesToVerifyAgainst == true
-            {
+            if sessionCrypto.showsVerifyThisDevice {
                 Section {
                     Button {
                         runCryptoAction {
@@ -511,7 +533,7 @@ private struct SecuritySettingsView: View {
         .navigationTitle("Security")
         .accessibilityIdentifier("SecuritySettingsScreen")
         .task {
-            sessionCryptoStatus = await environment.crypto.sessionStatus()
+            await sessionCrypto.start(crypto: environment.crypto)
         }
     }
 
@@ -534,7 +556,7 @@ private struct SecuritySettingsView: View {
             let result = await action()
             let status = await environment.crypto.sessionStatus()
             await MainActor.run {
-                sessionCryptoStatus = status
+                sessionCrypto.apply(status)
                 cryptoActionMessage = result.message
                 isRunningCryptoAction = false
                 onComplete()

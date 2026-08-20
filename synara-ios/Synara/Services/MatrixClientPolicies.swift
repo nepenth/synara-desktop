@@ -66,6 +66,33 @@ enum MatrixVerificationEventSource: Equatable {
     case localRequest
 }
 
+enum CryptoVerificationPresentationPolicy {
+    static func allowsInteractiveDismiss(_ state: CryptoVerificationState?) -> Bool {
+        state?.isTerminal == true
+    }
+
+    /// Restore a still-active flow if local UI was cleared (swipe / nil) while
+    /// the native inbox still has a non-terminal request.
+    static func restoredStateIfCleared(
+        presented: CryptoVerificationState?,
+        latest: CryptoVerificationState?
+    ) -> CryptoVerificationState? {
+        if let presented {
+            return presented
+        }
+        guard let latest, latest.isTerminal == false else {
+            return nil
+        }
+        return latest
+    }
+}
+
+enum SecuritySettingsVerificationPolicy {
+    static func showsVerifyThisDevice(_ status: SessionCryptoStatus) -> Bool {
+        status.verification != .verified && status.hasDevicesToVerifyAgainst == true
+    }
+}
+
 struct MatrixVerificationStateReducer {
     private(set) var state: CryptoVerificationState?
     private var activeFlowID: String?
