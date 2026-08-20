@@ -61,20 +61,22 @@ struct RootShellView: View {
 
     private func signedInShell(session authenticatedSession: AuthenticatedSession) -> some View {
         VStack(spacing: 0) {
-            ConnectionStatusBanner(
-                store: connectionStatus,
-                onRetry: {
-                    Task {
-                        await environment.matrix.start(session: authenticatedSession)
-                        await MainActor.run {
-                            environment.connectionStatus.update(environment.matrix.syncStatus)
+            if connectionStatus.isBannerVisible {
+                ConnectionStatusBanner(
+                    store: connectionStatus,
+                    onRetry: {
+                        Task {
+                            await environment.matrix.start(session: authenticatedSession)
+                            await MainActor.run {
+                                environment.connectionStatus.update(environment.matrix.syncStatus)
+                            }
                         }
+                    },
+                    onSignOut: {
+                        signOut()
                     }
-                },
-                onSignOut: {
-                    signOut()
-                }
-            )
+                )
+            }
             TabView(selection: $router.selectedTab) {
                 tab(.rooms)
                 tab(.later)

@@ -6,10 +6,10 @@ struct PlaceholderScreen: View {
     @Environment(\.appEnvironment) private var environment
 
     var body: some View {
-        SynaraEmptyState(
+        HeldConnectionEmptyState(
             title: title,
             systemImage: systemImage,
-            message: environment.matrix.syncStatusDescription
+            store: environment.connectionStatus
         )
         .navigationTitle(title)
         .toolbar {

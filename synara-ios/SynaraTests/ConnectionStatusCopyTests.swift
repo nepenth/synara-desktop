@@ -61,10 +61,35 @@ final class ConnectionStatusCopyTests: XCTestCase {
         let store = ConnectionStatusStore()
         store.update(.restoreFailed)
         XCTAssertEqual(store.status, .restoreFailed)
+        XCTAssertTrue(store.isBannerVisible)
         let publicError = String(describing: store.status)
         for forbidden in ["password", "syt_", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
         }
+    }
+
+    func testHoldsLostEquivalentBeforeBanner() {
+        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.reconnecting))
+        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.disconnected))
+        XCTAssertTrue(ConnectionStatusCopy.holdsBeforeBanner(.failed("raw sdk blip")))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.restoreFailed))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.connected))
+        XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.starting))
+        XCTAssertEqual(ConnectionStatusCopy.lostHold, 4)
+        XCTAssertEqual(ConnectionStatusCopy.connectedFlash, 4)
+    }
+
+    func testConnectedBannerIsNotSticky() {
+        XCTAssertFalse(ConnectionStatusCopy.presentsBanner(.connected))
+        XCTAssertTrue(ConnectionStatusCopy.presentsBanner(.connected, connectedFlashVisible: true))
+        XCTAssertFalse(ConnectionStatusCopy.presentsBanner(.stopped))
+        XCTAssertTrue(ConnectionStatusCopy.presentsBanner(.disconnected))
+        XCTAssertTrue(ConnectionStatusCopy.presentsBanner(.restoreFailed))
+
+        let store = ConnectionStatusStore()
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
     }
 
     func testReconnectingHoldDoesNotBounceConnectedOnABlip() {
@@ -72,8 +97,56 @@ final class ConnectionStatusCopyTests: XCTestCase {
         store.update(.connected)
         store.update(.reconnecting)
         XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
         store.update(.connected)
         XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+    }
+
+    func testDisconnectedHoldDoesNotShowImmediateLost() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.disconnected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+        store.update(.reconnecting)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+    }
+
+    func testFailedHoldDoesNotShowImmediateLost() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+    }
+
+    func testStartingHoldFromConnectedDoesNotShowImmediateConnecting() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.starting)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+    }
+
+    func testRestoreFailedShowsImmediatelyDuringHold() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        store.update(.disconnected)
+        XCTAssertEqual(store.status, .connected)
+        store.update(.restoreFailed)
+        XCTAssertEqual(store.status, .restoreFailed)
+        XCTAssertTrue(store.isBannerVisible)
     }
 
     func testReconnectingHoldZeroAppliesImmediately() {
@@ -81,6 +154,98 @@ final class ConnectionStatusCopyTests: XCTestCase {
         store.update(.connected)
         store.update(.reconnecting)
         XCTAssertEqual(store.status, .reconnecting)
+        XCTAssertTrue(store.isBannerVisible)
+    }
+
+    func testLostHoldExpiresToDisconnected() {
+        let store = ConnectionStatusStore(reconnectingHold: 0.05)
+        store.update(.connected)
+        store.update(.disconnected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+
+        let shown = expectation(description: "lost after hold")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            XCTAssertEqual(store.status, .disconnected)
+            XCTAssertTrue(store.isBannerVisible)
+            shown.fulfill()
+        }
+        wait(for: [shown], timeout: 1)
+    }
+
+    func testConnectedFlashOnlyAfterVisibleLost() {
+        let store = ConnectionStatusStore(reconnectingHold: 0, connectedFlash: 4)
+        store.update(.connected)
+        XCTAssertFalse(store.isBannerVisible)
+        store.update(.disconnected)
+        XCTAssertEqual(store.status, .disconnected)
+        XCTAssertTrue(store.isBannerVisible)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertTrue(store.isBannerVisible)
+    }
+
+    func testConnectedFlashZeroIsNotStickyAfterLost() {
+        let store = ConnectionStatusStore(reconnectingHold: 0, connectedFlash: 0)
+        store.update(.connected)
+        store.update(.disconnected)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+    }
+
+    func testEmptyStateCopyUsesHeldStatusNotLiveLost() {
+        let store = ConnectionStatusStore(reconnectingHold: 4)
+        store.update(.connected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+
+        store.update(.reconnecting)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertNotEqual(store.emptyStateMessage, ConnectionStatusCopy.reconnecting)
+        XCTAssertNotEqual(store.emptyStateMessage, MatrixSyncStatus.reconnecting.description)
+
+        store.update(.disconnected)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertNotEqual(store.emptyStateMessage, ConnectionStatusCopy.disconnected)
+
+        store.update(.failed("raw sdk https://user:secret@hs/?password=hunter2"))
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+        XCTAssertFalse(store.emptyStateMessage.contains("https://"))
+
+        store.update(.restoreFailed)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.restoreFailed)
+    }
+
+    func testConnectedFlashHidesWhenLostHoldStarts() {
+        let store = ConnectionStatusStore(reconnectingHold: 4, connectedFlash: 4)
+        store.update(.restoreFailed)
+        XCTAssertTrue(store.isBannerVisible)
+        store.update(.connected)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertTrue(store.isBannerVisible)
+
+        store.update(.reconnecting)
+        XCTAssertEqual(store.status, .connected)
+        XCTAssertFalse(store.isBannerVisible)
+        XCTAssertEqual(store.emptyStateMessage, ConnectionStatusCopy.connected)
+    }
+
+    func testEmptyStatesReadHeldConnectionStatusNotLiveMatrixDescription() throws {
+        let root = repositoryRoot()
+        let roomList = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/RoomListView.swift",
+            encoding: .utf8
+        )
+        let placeholder = try String(
+            contentsOfFile: "\(root)/synara-ios/Synara/Features/PlaceholderScreen.swift",
+            encoding: .utf8
+        )
+        XCTAssertFalse(roomList.contains("matrix.syncStatusDescription"))
+        XCTAssertFalse(placeholder.contains("matrix.syncStatusDescription"))
+        XCTAssertTrue(roomList.contains("HeldConnectionEmptyState"))
+        XCTAssertTrue(placeholder.contains("HeldConnectionEmptyState"))
+        XCTAssertTrue(roomList.contains("environment.connectionStatus"))
+        XCTAssertTrue(placeholder.contains("environment.connectionStatus"))
     }
 
     func testMatrixSyncStatusDescriptionUsesPrivacySafeCopy() {
@@ -101,5 +266,16 @@ final class ConnectionStatusCopyTests: XCTestCase {
             .restoreFailed,
             .failed("syt_secret_token")
         ]
+    }
+
+    private func repositoryRoot() -> String {
+        var url = URL(fileURLWithPath: #filePath)
+        while url.pathComponents.count > 1 {
+            url.deleteLastPathComponent()
+            if FileManager.default.fileExists(atPath: url.appendingPathComponent("synara-ios").path) {
+                return url.path
+            }
+        }
+        return url.path
     }
 }
