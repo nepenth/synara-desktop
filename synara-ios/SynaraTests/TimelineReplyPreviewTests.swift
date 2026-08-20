@@ -101,5 +101,22 @@ final class TimelineReplyPreviewTests: XCTestCase {
         XCTAssertEqual(target.senderName, "You")
         XCTAssertEqual(target.bannerTitle, "Editing your message")
         XCTAssertEqual(target.snippet, "Updated draft copy")
+        XCTAssertFalse(target.isLocalPending)
+    }
+
+    func testComposerRelationTargetBuildsEditPreviewForFailedLocalMessage() {
+        let item = TimelineItem.pendingMessage(
+            localID: "$pending-failed",
+            body: "Retry after a typo",
+            senderID: "@local:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .failed
+        )
+
+        let target = ComposerRelationTarget(item: item, kind: .edit, currentUserID: "@local:matrix.org")
+
+        XCTAssertEqual(target.bannerTitle, "Editing unsent message")
+        XCTAssertTrue(target.isLocalPending)
+        XCTAssertEqual(target.snippet, "Retry after a typo")
     }
 }

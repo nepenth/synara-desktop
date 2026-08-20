@@ -100,3 +100,62 @@ struct MockMessageSendService: MessageSending {
         )
     }
 }
+
+struct ComposerEditSession: Equatable {
+    let draft: String
+    let previousDraft: String
+    let editTarget: ComposerRelationTarget
+    let retryingItem: TimelineItem?
+
+    var remoteEditEventID: String? {
+        retryingItem == nil ? editTarget.eventID : nil
+    }
+}
+
+struct ComposerSendIntent: Equatable {
+    let body: String
+    let replyToEventID: String?
+    let editEventID: String?
+    let retrying: TimelineItem?
+}
+
+enum ComposerEditFlow {
+    static func begin(
+        item: TimelineItem,
+        currentUserID: String,
+        currentDraft: String
+    ) -> ComposerEditSession {
+        ComposerEditSession(
+            draft: TimelinePendingReconciler.messageBody(for: item) ?? currentDraft,
+            previousDraft: currentDraft,
+            editTarget: ComposerRelationTarget(item: item, kind: .edit, currentUserID: currentUserID),
+            retryingItem: item.isLocalPending ? item : nil
+        )
+    }
+
+    static func cancel(_ session: ComposerEditSession) -> String {
+        session.previousDraft
+    }
+
+    static func sendIntent(
+        body: String,
+        replyToEventID: String?,
+        session: ComposerEditSession?
+    ) -> ComposerSendIntent {
+        if let retrying = session?.retryingItem {
+            return ComposerSendIntent(
+                body: body,
+                replyToEventID: retrying.replyToEventID,
+                editEventID: nil,
+                retrying: retrying
+            )
+        }
+
+        return ComposerSendIntent(
+            body: body,
+            replyToEventID: replyToEventID,
+            editEventID: session?.remoteEditEventID,
+            retrying: nil
+        )
+    }
+}

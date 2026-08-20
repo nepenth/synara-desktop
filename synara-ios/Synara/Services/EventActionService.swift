@@ -36,7 +36,12 @@ protocol EventActionServicing {
 struct MockEventActionService: EventActionServicing {
     func availability(for item: TimelineItem, currentUserID: String) -> EventActionAvailability {
         if item.isLocalPending {
-            return EventActionAvailability(canReply: false, canEdit: false, canRedact: false, canReact: false)
+            return EventActionAvailability(
+                canReply: false,
+                canEdit: Self.canEditLocalPending(item, currentUserID: currentUserID),
+                canRedact: false,
+                canReact: false
+            )
         }
 
         switch item.kind {
@@ -52,6 +57,16 @@ struct MockEventActionService: EventActionServicing {
                 canReact: true
             )
         }
+    }
+
+    private static func canEditLocalPending(_ item: TimelineItem, currentUserID: String) -> Bool {
+        guard item.deliveryStatus == .failed else {
+            return false
+        }
+        guard item.senderID == currentUserID else {
+            return false
+        }
+        return TimelinePendingReconciler.messageBody(for: item) != nil
     }
 
     func apply(_ action: EventActionType, to item: TimelineItem, currentUserID: String, roomID: String) async throws -> TimelineItem {
