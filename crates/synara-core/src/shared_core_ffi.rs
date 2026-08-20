@@ -185,7 +185,9 @@ use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
     StoreKeyVaultError, STORE_KEY_LEN,
 };
-use crate::app::sync::{build_sync_service, SyncReadiness, SyncServiceConfig};
+use crate::app::sync::{
+    build_sync_service, SyncReadiness, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
+};
 use crate::app::timeline::{
     NativeComposerReplyDraft, NativeDecryptionState, NativeReactionMutation,
     NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
@@ -3245,17 +3247,11 @@ impl SharedCore {
             }
         })?;
         self.spawn_room_list_live();
-        Ok(SyncStartDto {
-            readiness: snapshot.readiness.as_str().to_owned(),
-            session_generation: snapshot.session_generation,
-            // `start()` is requested before this snapshot. Idle means the SDK
-            // has not yet transitioned to Running; that is still a live start.
-            started: matches!(
-                snapshot.readiness,
-                SyncReadiness::Running | SyncReadiness::Offline | SyncReadiness::Idle
-            ),
-            offline_mode_enabled: snapshot.offline_mode_enabled,
-        })
+        let snapshot = match self.core.attached_sync_owner() {
+            Some(owner) => wait_for_started_readiness(owner.as_ref(), snapshot).await,
+            None => snapshot,
+        };
+        Ok(sync_start_dto_from_snapshot(snapshot))
     }
 
     fn spawn_room_list_live(&self) {
@@ -5284,6 +5280,9 @@ impl SharedCore {
     }
 
     pub async fn sync_status(&self) -> Result<SyncStatusDto, SessionStatusError> {
+        if let Some(owner) = self.core.attached_sync_owner() {
+            return sync_status_from_owner_snapshot(owner.observe());
+        }
         let payload = self.session_status_command(SYNC_STATUS_COMMAND).await?;
         sync_status_dto(payload)
     }
@@ -9917,6 +9916,52 @@ fn session_snapshot_dto(
             SESSION_STATUS_FAILED_DESCRIPTION,
         )),
     }
+}
+
+const START_OBSERVE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(2);
+const START_OBSERVE_POLL: std::time::Duration = std::time::Duration::from_millis(50);
+
+fn product_live_readiness(readiness: SyncReadiness) -> bool {
+    matches!(readiness, SyncReadiness::Running | SyncReadiness::Offline)
+}
+
+fn sync_start_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> SyncStartDto {
+    SyncStartDto {
+        readiness: snapshot.readiness.as_str().to_owned(),
+        session_generation: snapshot.session_generation,
+        started: product_live_readiness(snapshot.readiness),
+        offline_mode_enabled: snapshot.offline_mode_enabled,
+    }
+}
+
+async fn wait_for_started_readiness(
+    owner: &SyncServiceOwner,
+    mut snapshot: SyncReadinessSnapshot,
+) -> SyncReadinessSnapshot {
+    let deadline = tokio::time::Instant::now() + START_OBSERVE_TIMEOUT;
+    while snapshot.readiness == SyncReadiness::Idle && tokio::time::Instant::now() < deadline {
+        tokio::time::sleep(START_OBSERVE_POLL).await;
+        snapshot = owner.observe();
+    }
+    snapshot
+}
+
+fn sync_status_from_owner_snapshot(
+    snapshot: SyncReadinessSnapshot,
+) -> Result<SyncStatusDto, SessionStatusError> {
+    if !snapshot.is_valid_public_sync_status() {
+        return Err(session_status_failed(
+            SESSION_STATUS_FAILED_CODE,
+            SESSION_STATUS_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(SyncStatusDto {
+        readiness: snapshot.readiness.as_str().to_owned(),
+        session_generation: snapshot.session_generation,
+        offline_mode_enabled: snapshot.offline_mode_enabled,
+        failure_diagnostic_id: snapshot.failure_diagnostic_id.map(str::to_owned),
+        sliding_sync_capable: snapshot.sliding_sync_capable,
+    })
 }
 
 fn sync_status_dto(payload: serde_json::Value) -> Result<SyncStatusDto, SessionStatusError> {

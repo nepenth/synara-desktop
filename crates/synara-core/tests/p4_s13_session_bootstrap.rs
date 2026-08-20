@@ -98,6 +98,12 @@ fn cold_start_restore_attach_start_on_fresh_core_is_privacy_safe() {
         .expect("start after restore+attach");
     let started_text = format!("{started:?}");
     assert!(started.session_generation > 0);
+    assert_eq!(
+        started.started,
+        started.readiness == "running" || started.readiness == "offline",
+        "Idle is not a live start: {}",
+        started.readiness
+    );
     assert!(!started_text.contains(access));
     assert!(!started_text.contains(refresh));
     assert!(!started_text.contains("@alice"));
@@ -154,6 +160,12 @@ fn retained_login_client_skips_restore_then_attach_start() {
         .expect("start after login-retain skip restore");
     let started_text = format!("{started:?}");
     assert!(started.session_generation > 0);
+    assert_eq!(
+        started.started,
+        started.readiness == "running" || started.readiness == "offline",
+        "Idle is not a live start: {}",
+        started.readiness
+    );
     assert!(!started_text.contains(access));
     assert!(!started_text.contains("@alice"));
 

@@ -11,7 +11,7 @@ final class ConnectionStatusCopyTests: XCTestCase {
             ConnectionStatusCopy.banner(.restoreFailed),
             "Couldn't restore this session. Sign out and sign in again."
         )
-        XCTAssertEqual(ConnectionStatusCopy.banner(.starting), "Starting sync")
+        XCTAssertEqual(ConnectionStatusCopy.banner(.starting), "Connecting…")
         XCTAssertEqual(ConnectionStatusCopy.banner(.stopped), "Not connected")
         XCTAssertEqual(ConnectionStatusCopy.banner(.failed("raw sdk https://user:secret@hs/?password=hunter2")), "Connection Lost!")
 
@@ -23,9 +23,12 @@ final class ConnectionStatusCopyTests: XCTestCase {
         }
     }
 
-    func testReadinessMapping() {
+    func testReadinessMappingDoesNotTreatIdleAsCatchup() {
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("running"), .connected)
-        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle"), .syncing)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle"), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .starting), .starting)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .connected), .disconnected)
+        XCTAssertEqual(ConnectionStatusCopy.fromReadiness("idle", previous: .syncing), .disconnected)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("offline"), .reconnecting)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("failed"), .disconnected)
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness("terminated"), .disconnected)
@@ -33,19 +36,22 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertEqual(ConnectionStatusCopy.fromReadiness(nil), .starting)
     }
 
-    func testRestoreFailedAndDisconnectedOfferSignOut() {
+    func testRestoreFailedOffersSignOutWithoutRetry() {
         XCTAssertTrue(ConnectionStatusCopy.showsSignOutAction(.restoreFailed))
+        XCTAssertFalse(ConnectionStatusCopy.showsRetryAction(.restoreFailed))
         XCTAssertTrue(ConnectionStatusCopy.showsSignOutAction(.disconnected))
-        XCTAssertTrue(ConnectionStatusCopy.showsRetryAction(.restoreFailed))
         XCTAssertTrue(ConnectionStatusCopy.showsRetryAction(.disconnected))
+        XCTAssertTrue(ConnectionStatusCopy.showsRetryAction(.reconnecting))
         XCTAssertFalse(ConnectionStatusCopy.showsSignOutAction(.connected))
         XCTAssertFalse(ConnectionStatusCopy.showsSignOutAction(.syncing))
         XCTAssertFalse(ConnectionStatusCopy.showsRetryAction(.connected))
+        XCTAssertFalse(ConnectionStatusCopy.showsRetryAction(.starting))
     }
 
     func testVariantsStayGlanceableNotToastOnly() {
         XCTAssertEqual(ConnectionStatusCopy.variant(.connected), .success)
         XCTAssertEqual(ConnectionStatusCopy.variant(.syncing), .success)
+        XCTAssertEqual(ConnectionStatusCopy.variant(.starting), .warning)
         XCTAssertEqual(ConnectionStatusCopy.variant(.reconnecting), .warning)
         XCTAssertEqual(ConnectionStatusCopy.variant(.restoreFailed), .critical)
         XCTAssertEqual(ConnectionStatusCopy.variant(.disconnected), .critical)
@@ -63,6 +69,7 @@ final class ConnectionStatusCopyTests: XCTestCase {
 
     func testMatrixSyncStatusDescriptionUsesPrivacySafeCopy() {
         XCTAssertEqual(MatrixSyncStatus.syncing.description, "Syncing history…")
+        XCTAssertEqual(MatrixSyncStatus.starting.description, "Connecting…")
         XCTAssertEqual(MatrixSyncStatus.restoreFailed.description, ConnectionStatusCopy.restoreFailed)
         XCTAssertEqual(MatrixSyncStatus.failed("syt_secret_token").description, "Connection Lost!")
     }

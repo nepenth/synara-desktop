@@ -230,11 +230,8 @@ fn session_status_family_without_started_sync_returns_handler_result_without_ech
     );
     assert_eq!(snapshot.session_generation, Some(1));
 
-    let sync_err = sync
-        .as_ref()
-        .err()
-        .map(error_text)
-        .expect("planted sync_status must return the registered iOS platform diagnostic");
+    let sync =
+        sync.expect("attached SyncService projects readiness without the fail-closed platform");
     let media_err = media
         .as_ref()
         .err()
@@ -245,10 +242,14 @@ fn session_status_family_without_started_sync_returns_handler_result_without_ech
             "planted secret_storage_status must return the registered iOS platform diagnostic",
         );
 
-    assert!(
-        sync_err.contains("p2-sync-status-platform-unavailable"),
-        "sync_status must return the registered platform-unavailable diagnostic: {sync_err}"
-    );
+    assert_eq!(sync.readiness, "idle");
+    let sync_text = format!("{sync:?}");
+    assert!(!sync_text.contains(access));
+    assert!(!sync_text.contains(refresh));
+    assert!(!sync_text.contains("syt_"));
+    assert!(!sync_text.contains(&user_id));
+    assert!(!sync_text.contains(&homeserver));
+    assert!(!sync_text.contains(device_id));
     assert!(
         media_err.contains("p2-media-config-no-session"),
         "media_config must return the registered no-session diagnostic: {media_err}"
@@ -257,17 +258,13 @@ fn session_status_family_without_started_sync_returns_handler_result_without_ech
         secret_err.contains("v-crypto.4-secret-storage-requires-session"),
         "secret_storage_status must return the registered requires-session diagnostic: {secret_err}"
     );
-    for (label, text) in [
-        ("sync", &sync_err),
-        ("media", &media_err),
-        ("secret", &secret_err),
-    ] {
+    for (label, text) in [("media", &media_err), ("secret", &secret_err)] {
         assert!(
             !text.contains("p4-s9-31-session-status-failed"),
             "{label} must not hide a wrong envelope behind the generic fallback: {text}"
         );
     }
-    let combined = format!("{sync_err}{media_err}{secret_err}");
+    let combined = format!("{media_err}{secret_err}");
     assert!(!combined.contains(access));
     assert!(!combined.contains(refresh));
     assert!(!combined.contains("syt_"));

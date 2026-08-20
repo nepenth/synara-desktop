@@ -10,6 +10,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationState: CryptoVerificationState?
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationActionError: String?
+    @State private var signOutError: String?
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -68,9 +69,7 @@ struct RootShellView: View {
                     }
                 },
                 onSignOut: {
-                    Task {
-                        try? await environment.wipe.logoutAndWipe()
-                    }
+                    signOut()
                 }
             )
             TabView(selection: $router.selectedTab) {
@@ -108,6 +107,17 @@ struct RootShellView: View {
         } message: {
             Text(cryptoVerificationActionError ?? "Try the verification step again.")
         }
+        .alert("Could not sign out", isPresented: signOutErrorBinding) {
+            Button("Try Again") {
+                signOutError = nil
+                signOut()
+            }
+            Button("OK", role: .cancel) {
+                signOutError = nil
+            }
+        } message: {
+            Text(signOutError ?? LocalWipeError.sessionDeleteFailed.localizedDescription)
+        }
         .onDisappear {
             tabBadgeUpdatesTask?.cancel()
             tabBadgeUpdatesTask = nil
@@ -136,6 +146,30 @@ struct RootShellView: View {
                 }
             }
         )
+    }
+
+    private var signOutErrorBinding: Binding<Bool> {
+        Binding(
+            get: { signOutError != nil },
+            set: { isPresented in
+                if isPresented == false {
+                    signOutError = nil
+                }
+            }
+        )
+    }
+
+    private func signOut() {
+        signOutError = nil
+        Task {
+            do {
+                try await environment.wipe.logoutAndWipe()
+            } catch {
+                await MainActor.run {
+                    signOutError = LocalWipeError.sessionDeleteFailed.localizedDescription
+                }
+            }
+        }
     }
 
     private func tab(_ tab: AppTab) -> some View {

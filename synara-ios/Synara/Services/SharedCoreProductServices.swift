@@ -87,6 +87,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private var lastSession: AuthenticatedSession?
     private var pathMonitor: NWPathMonitor?
     private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
+    private var statusWatchTask: Task<Void, Never>?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
 
     var syncStatusDescription: String {
@@ -117,6 +118,7 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func stop() async {
+        stopStatusWatch()
         stopPathMonitor()
         await publish(.stopped)
     }
@@ -152,14 +154,50 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         if let failure = outcome.failure {
             await publish(failure.syncStatus)
             if failure == .restoreFailed || failure == .attachFailed {
+                stopStatusWatch()
                 stopPathMonitor()
             } else {
+                startStatusWatch()
                 startPathMonitor()
             }
             return
         }
-        await publish(ConnectionStatusCopy.fromReadiness(outcome.readiness))
+        await publish(ConnectionStatusCopy.fromReadiness(outcome.readiness, previous: .starting))
+        startStatusWatch()
         startPathMonitor()
+    }
+
+    private func startStatusWatch() {
+        if statusWatchTask != nil {
+            return
+        }
+        statusWatchTask = Task { [weak self] in
+            while Task.isCancelled == false {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard Task.isCancelled == false else {
+                    return
+                }
+                await self?.refreshLiveSyncStatus()
+            }
+        }
+    }
+
+    private func stopStatusWatch() {
+        statusWatchTask?.cancel()
+        statusWatchTask = nil
+    }
+
+    private func refreshLiveSyncStatus() async {
+        switch syncStatus {
+        case .restoreFailed, .stopped:
+            return
+        default:
+            break
+        }
+        guard let dto = try? await SharedCoreSessionStatus.syncStatus(core: host.core) else {
+            return
+        }
+        await publish(ConnectionStatusCopy.fromReadiness(dto.readiness, previous: syncStatus))
     }
 
     private func publish(_ status: MatrixSyncStatus) async {

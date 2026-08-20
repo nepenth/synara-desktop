@@ -7,7 +7,7 @@ import Foundation
 enum ConnectionStatusCopy {
     static let connected = "Connected"
     static let syncing = "Syncing history…"
-    static let starting = "Starting sync"
+    static let starting = "Connecting…"
     static let reconnecting = "Connection Lost! Reconnecting..."
     static let disconnected = "Connection Lost!"
     static let restoreFailed = "Couldn't restore this session. Sign out and sign in again."
@@ -80,19 +80,27 @@ enum ConnectionStatusCopy {
 
     static func showsRetryAction(_ status: MatrixSyncStatus) -> Bool {
         switch status {
-        case .disconnected, .failed, .reconnecting, .restoreFailed:
+        case .disconnected, .failed, .reconnecting:
             return true
-        case .connected, .syncing, .starting, .stopped:
+        case .restoreFailed, .connected, .syncing, .starting, .stopped:
             return false
         }
     }
 
-    static func fromReadiness(_ readiness: String?) -> MatrixSyncStatus {
+    static func fromReadiness(
+        _ readiness: String?,
+        previous: MatrixSyncStatus = .stopped
+    ) -> MatrixSyncStatus {
         switch readiness {
         case "running":
             return .connected
         case "idle":
-            return .syncing
+            switch previous {
+            case .connected, .syncing, .reconnecting, .disconnected:
+                return .disconnected
+            case .starting, .stopped, .restoreFailed, .failed:
+                return .starting
+            }
         case "offline":
             return .reconnecting
         case "failed", "terminated", "unconfigured":

@@ -6,6 +6,9 @@ import SynaraCore
 /// Login retains a Client first, so restore is skipped only on the dedicated
 /// already-restored code. Any other restore/attach/start failure is fail-closed
 /// and must not look like a live session. NSE still cannot start sync.
+///
+/// Idle after `start()` is not live. The sequencer observes until
+/// running/offline or a bounded timeout, then fail-closes.
 enum SharedCoreSessionBootstrap {
     struct Outcome: Equatable {
         var restored: Bool
@@ -32,9 +35,9 @@ enum SharedCoreSessionBootstrap {
 
         var syncStatus: MatrixSyncStatus {
             switch self {
-            case .restoreFailed, .attachFailed:
+            case .restoreFailed:
                 return .restoreFailed
-            case .startFailed:
+            case .attachFailed, .startFailed:
                 return .disconnected
             }
         }
@@ -51,6 +54,8 @@ enum SharedCoreSessionBootstrap {
 
     static let alreadyRestoredCode = "p4-s3b-session-already-restored"
     static let alreadyAttachedCode = "p4-s3d-already-attached"
+    static let defaultObserveAttempts = 30
+    static let defaultObserveDelayNanoseconds: UInt64 = 100_000_000
 
     static func prepareLiveSession(
         userID: String,
@@ -62,7 +67,9 @@ enum SharedCoreSessionBootstrap {
             userID: userID,
             homeserverURL: homeserverURL,
             storeRoot: storeRoot,
-            engine: SharedCoreLiveSessionEngine(core: core)
+            engine: SharedCoreLiveSessionEngine(core: core),
+            observeAttempts: defaultObserveAttempts,
+            observeDelayNanoseconds: defaultObserveDelayNanoseconds
         )
     }
 
@@ -70,7 +77,9 @@ enum SharedCoreSessionBootstrap {
         userID: String,
         homeserverURL: String,
         storeRoot: URL,
-        engine: any LiveSessionEngine
+        engine: any LiveSessionEngine,
+        observeAttempts: Int = defaultObserveAttempts,
+        observeDelayNanoseconds: UInt64 = defaultObserveDelayNanoseconds
     ) async -> Outcome {
         var outcome = Outcome(
             restored: false,
@@ -112,8 +121,7 @@ enum SharedCoreSessionBootstrap {
 
         for _ in 0..<2 {
             do {
-                let dto = try await engine.startSync()
-                applyStartResult(dto, to: &outcome)
+                applyStartResult(try await engine.startSync(), to: &outcome)
                 if outcome.started {
                     break
                 }
@@ -121,6 +129,23 @@ enum SharedCoreSessionBootstrap {
                 outcome.started = false
             }
         }
+
+        if outcome.started == false, isIdleReadiness(outcome.readiness) {
+            for _ in 0..<max(observeAttempts, 0) {
+                if observeDelayNanoseconds > 0 {
+                    try? await Task.sleep(nanoseconds: observeDelayNanoseconds)
+                }
+                do {
+                    applyStartResult(try await engine.observeSync(), to: &outcome)
+                } catch {
+                    continue
+                }
+                if outcome.started || isTerminalReadiness(outcome.readiness) {
+                    break
+                }
+            }
+        }
+
         if outcome.started == false {
             outcome.failure = .startFailed
         }
@@ -144,9 +169,22 @@ enum SharedCoreSessionBootstrap {
         return nil
     }
 
-    static func isLiveReadiness(_ readiness: String?) -> Bool {
+    static func isProductLiveReadiness(_ readiness: String?) -> Bool {
         switch readiness {
-        case "running", "offline", "idle":
+        case "running", "offline":
+            return true
+        default:
+            return false
+        }
+    }
+
+    static func isIdleReadiness(_ readiness: String?) -> Bool {
+        readiness == "idle"
+    }
+
+    static func isTerminalReadiness(_ readiness: String?) -> Bool {
+        switch readiness {
+        case "failed", "terminated", "unconfigured":
             return true
         default:
             return false
@@ -155,7 +193,7 @@ enum SharedCoreSessionBootstrap {
 
     private static func applyStartResult(_ dto: StartResult, to outcome: inout Outcome) {
         outcome.readiness = dto.readiness
-        outcome.started = dto.started || isLiveReadiness(dto.readiness)
+        outcome.started = dto.started || isProductLiveReadiness(dto.readiness)
     }
 }
 
@@ -167,6 +205,7 @@ protocol LiveSessionEngine: Sendable {
     ) async throws
     func attachSessionOwners() async throws
     func startSync() async throws -> SharedCoreSessionBootstrap.StartResult
+    func observeSync() async throws -> SharedCoreSessionBootstrap.StartResult
 }
 
 struct SharedCoreLiveSessionEngine: LiveSessionEngine, @unchecked Sendable {
@@ -191,9 +230,18 @@ struct SharedCoreLiveSessionEngine: LiveSessionEngine, @unchecked Sendable {
 
     func startSync() async throws -> SharedCoreSessionBootstrap.StartResult {
         let dto = try await SharedCoreSyncStart.startSync(core: core)
-        return SharedCoreSessionBootstrap.StartResult(
-            started: dto.started,
-            readiness: dto.readiness
+        return startResult(started: dto.started, readiness: dto.readiness)
+    }
+
+    func observeSync() async throws -> SharedCoreSessionBootstrap.StartResult {
+        let dto = try await SharedCoreSessionStatus.syncStatus(core: core)
+        return startResult(started: false, readiness: dto.readiness)
+    }
+
+    private func startResult(started: Bool, readiness: String) -> SharedCoreSessionBootstrap.StartResult {
+        SharedCoreSessionBootstrap.StartResult(
+            started: started || SharedCoreSessionBootstrap.isProductLiveReadiness(readiness),
+            readiness: readiness
         )
     }
 }
