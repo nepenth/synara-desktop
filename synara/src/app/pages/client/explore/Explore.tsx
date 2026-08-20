@@ -179,11 +179,7 @@ export function Explore() {
               </NavLink>
             </NavItem>
             {userServer && (
-              <NavItem
-                variant="Surface"
-                radii="400"
-                aria-selected={selectedServer === userServer}
-              >
+              <NavItem variant="Surface" radii="400" aria-selected={selectedServer === userServer}>
                 <NavLink to={getExploreServerPath(userServer)}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
