@@ -19,7 +19,7 @@ export const RoomNavCategoryButton = as<'button', { closed?: boolean }>(
       {...props}
       ref={ref}
     >
-      <Text size="O400" priority="300" truncate>
+      <Text size="B300" priority="300" truncate>
         {children}
       </Text>
     </Chip>

@@ -12,7 +12,6 @@ struct SynaraRoomAvatarTile: View {
     var body: some View {
         avatarContent
             .frame(width: size, height: size)
-            .shadow(color: room.avatarShadow.opacity(0.22), radius: 5, x: 0, y: 2)
             .task(id: avatarTaskID) {
                 await loadAvatar()
             }
@@ -29,23 +28,18 @@ struct SynaraRoomAvatarTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
         } else {
             ZStack {
-                RoundedRectangle(cornerRadius: 11, style: .continuous)
-                    .fill(room.avatarGradient)
-                    .overlay(alignment: .topLeading) {
-                        RoundedRectangle(cornerRadius: 11, style: .continuous)
-                            .fill(Color.white.opacity(0.18))
-                            .blendMode(.softLight)
-                    }
+                RoundedRectangle(cornerRadius: size * 0.28, style: .continuous)
+                    .fill(SynaraColor.mutedControl)
 
                 if let systemImage = room.avatarSystemImage {
                     Image(systemName: systemImage)
-                        .font(.system(size: size * 0.43, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: size * 0.4, weight: .medium))
+                        .foregroundStyle(SynaraColor.secondaryText)
                         .symbolRenderingMode(.hierarchical)
                 } else {
                     Text(room.avatarInitials)
-                        .font(.system(size: size * 0.34, weight: .bold))
-                        .foregroundStyle(.white)
+                        .font(.system(size: size * 0.32, weight: .medium))
+                        .foregroundStyle(SynaraColor.primaryText)
                         .minimumScaleFactor(0.72)
                 }
             }
@@ -87,21 +81,6 @@ extension RoomSummary {
         if kind == .directMessage {
             return "person.fill"
         }
-        if isAgentRoom {
-            return "sparkles"
-        }
-        if isSecureRoom {
-            return "lock.fill"
-        }
-        if name.localizedCaseInsensitiveContains("alert") || name.localizedCaseInsensitiveContains("incident") {
-            return "bell.badge.fill"
-        }
-        if name.localizedCaseInsensitiveContains("ops") || name.localizedCaseInsensitiveContains("infra") {
-            return "briefcase.fill"
-        }
-        if name.localizedCaseInsensitiveContains("design") || name.localizedCaseInsensitiveContains("creative") {
-            return "paintpalette.fill"
-        }
         return nil
     }
 
@@ -134,53 +113,9 @@ extension RoomSummary {
         return cleaned.first.map { String($0).uppercased() } ?? "S"
     }
 
-    var avatarGradient: LinearGradient {
-        let palette = avatarPalette
-        return LinearGradient(colors: palette, startPoint: .topLeading, endPoint: .bottomTrailing)
-    }
-
-    var avatarShadow: Color {
-        avatarPalette.last ?? SynaraColor.accent
-    }
-
     var isSecureRoom: Bool {
         name.localizedCaseInsensitiveContains("security")
             || name.localizedCaseInsensitiveContains("secure")
             || name.localizedCaseInsensitiveContains("e2e")
-    }
-
-    private var avatarPalette: [Color] {
-        if kind == .directMessage {
-            return [Color(synaraHex: "#2a3350"), Color(synaraHex: "#1e2438")]
-        }
-        if isAgentRoom {
-            return [Color(synaraHex: "#163a40"), Color(synaraHex: "#122e33")]
-        }
-        if isSecureRoom {
-            return [Color(synaraHex: "#1c3d32"), Color(synaraHex: "#163129")]
-        }
-        if name.localizedCaseInsensitiveContains("alert") || name.localizedCaseInsensitiveContains("incident") {
-            return [Color(synaraHex: "#3b2b22"), Color(synaraHex: "#30231c")]
-        }
-        if name.localizedCaseInsensitiveContains("design") || name.localizedCaseInsensitiveContains("creative") {
-            return [Color(synaraHex: "#3d2a4d"), Color(synaraHex: "#322240")]
-        }
-        if name.localizedCaseInsensitiveContains("ops") || name.localizedCaseInsensitiveContains("infra") {
-            return [Color(synaraHex: "#163a40"), Color(synaraHex: "#1c3d32")]
-        }
-
-        let palettes: [[Color]] = [
-            [Color(synaraHex: "#1e3a5f"), Color(synaraHex: "#16304d")],
-            [Color(synaraHex: "#163a40"), Color(synaraHex: "#122e33")],
-            [Color(synaraHex: "#3d2a4d"), Color(synaraHex: "#322240")],
-            [Color(synaraHex: "#1c3d32"), Color(synaraHex: "#163129")],
-            [Color(synaraHex: "#3b2b22"), Color(synaraHex: "#30231c")],
-            [Color(synaraHex: "#2a3350"), Color(synaraHex: "#222943")]
-        ]
-        let seed = "\(id)|\(name)".unicodeScalars.reduce(0) { partial, scalar in
-            (partial &* 31 &+ Int(scalar.value)) & 0x7fffffff
-        }
-        let index = seed % palettes.count
-        return palettes[index]
     }
 }

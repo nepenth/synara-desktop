@@ -69,6 +69,7 @@ import colorMXID from '../../../util/colorMXID';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import { shouldShowJumpToLatest } from './nativeTimelineViewportPolicy';
 import * as htmlCss from './nativeTimelineHtml.css';
 
 const HermesAgentCard = React.lazy(() =>
@@ -912,7 +913,7 @@ const NativeTimelineRow = ({
               <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
                 {grouped ? null : (
                   <Box gap="200" alignItems="Baseline">
-                    <Text size="T400" style={{ color: colorMXID(row.senderId), fontWeight: 600 }}>
+                    <Text size="T300" style={{ color: colorMXID(row.senderId), fontWeight: 600 }}>
                       {displayNameForRow(row)}
                     </Text>
                     {originServerTs ? (
@@ -974,9 +975,11 @@ const NativeTimelineRow = ({
                       />
                     ) : (
                       <Text
-                        size="T400"
+                        size="T300"
                         style={{
                           whiteSpace: 'pre-wrap',
+                          fontWeight: 400,
+                          lineHeight: 1.55,
                           fontStyle: isEmote ? 'italic' : undefined,
                         }}
                       >
@@ -1207,7 +1210,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const [actionError, setActionError] = useState<string>();
-  const [atLiveBottom, setAtLiveBottom] = useState(true);
+  const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [replyDraft, setReplyDraft] = useState<NativeComposerReplyDraft | undefined>();
   const roomList = useNativeRoomListSnapshot();
   const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
@@ -1276,7 +1279,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     initialPlacementRef.current = undefined;
     lastTotalSizeRef.current = 0;
     pendingBackwardGrowRef.current = false;
-    setAtLiveBottom(true);
+    setAtLiveBottom(false);
   }, [roomId]);
 
   useEffect(() => {
@@ -1318,7 +1321,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       saveViewport();
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
-      followingLiveRef.current = atBottom;
+      followingLiveRef.current =
+        readyState.selectedPosition.kind === 'live_bottom' && atBottom;
       setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
       if (performance.now() < programmaticScrollUntilRef.current) return;
       userInitiatedScrollRef.current = true;
@@ -1360,10 +1364,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
       if (selectedPosition.kind === 'live_bottom' || savedViewport?.atBottom) {
         followingLiveRef.current = true;
+        setAtLiveBottom(true);
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
       } else if (anchorIndex >= 0) {
         followingLiveRef.current = false;
+        setAtLiveBottom(false);
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
         const offsetPx = selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
@@ -1562,7 +1568,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             </Box>
           )}
         </Scroll>
-        {!atLiveBottom && (
+        {shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom) && (
           <Box
             style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
           >

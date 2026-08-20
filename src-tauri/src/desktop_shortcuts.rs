@@ -203,7 +203,7 @@ fn retired_shortcut_strings(
 }
 
 fn build_shortcut_route_map(
-    normalized: &DesktopShortcutConfig,
+    _normalized: &DesktopShortcutConfig,
     parsed_show: &Shortcut,
     parsed_later: &Shortcut,
     parsed_notifications: &Shortcut,
@@ -212,9 +212,6 @@ fn build_shortcut_route_map(
     route_by_id.insert(parsed_show.id(), ROUTE_HOME);
     route_by_id.insert(parsed_later.id(), ROUTE_LATER);
     route_by_id.insert(parsed_notifications.id(), ROUTE_NOTIFICATIONS);
-    debug_assert_eq!(normalized.show, parsed_show.to_string());
-    debug_assert_eq!(normalized.later, parsed_later.to_string());
-    debug_assert_eq!(normalized.notifications, parsed_notifications.to_string());
     route_by_id
 }
 

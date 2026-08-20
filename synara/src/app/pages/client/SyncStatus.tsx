@@ -5,9 +5,11 @@ import { useSyncState } from '../../hooks/useSyncState';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import {
   CONNECTED_STATUS_BANNER_DURATION_MS,
+  RECONNECTING_BANNER_HOLD_MS,
   getSlidingSyncCapabilityBannerCopy,
   getSyncStatusBannerVariant,
   getTransientSyncStatusBannerCopy,
+  shouldShowConnectedTransition,
   type SyncState,
 } from './syncStatusCopy';
 
@@ -33,6 +35,8 @@ export function SyncStatus({ mx }: SyncStatusProps) {
     undefined
   );
   const [connectedTransitionVisible, setConnectedTransitionVisible] = useState(false);
+  const [reconnectingBannerVisible, setReconnectingBannerVisible] = useState(false);
+  const [recoveredFromVisibleDisconnect, setRecoveredFromVisibleDisconnect] = useState(false);
 
   useSyncState(
     mx,
@@ -54,24 +58,47 @@ export function SyncStatus({ mx }: SyncStatusProps) {
 
   const currentSyncState = stateData.current;
 
-  // PREPARED means the native sync service is steadily ready. Surface it only
-  // for a short initial/reconnection transition; warnings and failures remain
-  // visible for as long as their actual sync state persists.
+  // Native SyncService flickers Offline during short sliding-sync gaps. Hold
+  // Connection Lost until Offline lasts, so a 1.5s poll blip never alarms.
   useEffect(() => {
-    if (currentSyncState !== 'PREPARED') {
+    if (currentSyncState === 'ERROR') {
+      setReconnectingBannerVisible(false);
+      setRecoveredFromVisibleDisconnect(true);
+      return undefined;
+    }
+    if (currentSyncState !== 'RECONNECTING') {
+      setReconnectingBannerVisible(false);
+      return undefined;
+    }
+
+    const timer = setTimeout(() => {
+      setReconnectingBannerVisible(true);
+      setRecoveredFromVisibleDisconnect(true);
+    }, RECONNECTING_BANNER_HOLD_MS);
+    return () => clearTimeout(timer);
+  }, [currentSyncState]);
+
+  // PREPARED is a steady state. Flash Connected only after a Lost banner the
+  // user actually saw; warnings and failures stay while their state persists.
+  useEffect(() => {
+    if (!shouldShowConnectedTransition(currentSyncState, recoveredFromVisibleDisconnect)) {
       setConnectedTransitionVisible(false);
       return undefined;
     }
 
     setConnectedTransitionVisible(true);
-    const timer = setTimeout(
-      () => setConnectedTransitionVisible(false),
-      CONNECTED_STATUS_BANNER_DURATION_MS
-    );
+    const timer = setTimeout(() => {
+      setConnectedTransitionVisible(false);
+      setRecoveredFromVisibleDisconnect(false);
+    }, CONNECTED_STATUS_BANNER_DURATION_MS);
     return () => clearTimeout(timer);
-  }, [mx, currentSyncState]);
+  }, [mx, currentSyncState, recoveredFromVisibleDisconnect]);
 
-  const bannerCopy = getTransientSyncStatusBannerCopy(currentSyncState, connectedTransitionVisible);
+  const bannerCopy = getTransientSyncStatusBannerCopy(
+    currentSyncState,
+    connectedTransitionVisible,
+    reconnectingBannerVisible
+  );
   const bannerVariant = getSyncStatusBannerVariant(currentSyncState);
 
   const banners: React.ReactElement[] = [];

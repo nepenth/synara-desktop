@@ -3,6 +3,15 @@ import chroma from 'chroma-js';
 export const DEFAULT_THEME_BASE_COLOR = '#2b2d31';
 export const THEME_BASE_COLOR_SETTING_KEY = 'themeBaseColor';
 
+export const THEME_BASE_PRESETS = [
+  { id: 'graphite', hex: '#2b2d31', label: 'Graphite' },
+  { id: 'blurple', hex: '#5865f2', label: 'Blurple' },
+  { id: 'teal', hex: '#0d9488', label: 'Teal' },
+  { id: 'slate', hex: '#64748b', label: 'Slate' },
+  { id: 'amber', hex: '#b45309', label: 'Amber' },
+  { id: 'rose', hex: '#be123c', label: 'Rose' },
+] as const;
+
 const HEX_COLOR_REGEX = /^#[0-9a-f]{6}$/i;
 
 export type ThemeRampKind = 'light' | 'dark';
@@ -104,25 +113,25 @@ export const deriveThemeSurfaceRamp = (
       background: scaleFromStops(
         hue,
         saturation,
-        { container: 0.07, hover: 0.105, active: 0.135, line: 0.17 },
+        { container: 0.075, hover: 0.11, active: 0.135, line: 0.16 },
         onContainer
       ),
       surface: scaleFromStops(
         hue,
         saturation * 0.92,
-        { container: 0.155, hover: 0.19, active: 0.22, line: 0.255 },
+        { container: 0.1, hover: 0.13, active: 0.155, line: 0.18 },
         onContainer
       ),
       surfaceVariant: scaleFromStops(
         hue,
-        saturation * 0.85,
-        { container: 0.2, hover: 0.235, active: 0.27, line: 0.31 },
+        saturation * 0.88,
+        { container: 0.104, hover: 0.132, active: 0.158, line: 0.185 },
         onContainer
       ),
       secondaryContainer: scaleFromStops(
         hue,
         saturation * 0.8,
-        { container: 0.24, hover: 0.28, active: 0.32, line: 0.36 },
+        { container: 0.135, hover: 0.165, active: 0.195, line: 0.225 },
         onContainer
       ),
     };

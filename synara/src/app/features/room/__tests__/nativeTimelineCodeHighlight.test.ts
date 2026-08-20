@@ -10,6 +10,7 @@ import {
   displayCodeText,
   formatLineNumbers,
   highlightNativeCode,
+  inferCodeLanguage,
   languageClassFromClassName,
   nativeCodeBlockFromPreChildren,
   normalizePrismLanguage,
@@ -96,6 +97,18 @@ test('language-js aliases to javascript and uses Prism core grammar', () => {
   const highlighted = highlightNativeCode('const ready = true;', 'language-js');
   assert.match(highlighted, /class="token keyword"/);
   assert.match(highlighted, /const/);
+});
+
+test('unlabeled python and shell fences infer a language and emit tokens', () => {
+  const python = 'from pathlib import Path\nprint(Path("."))\n';
+  assert.equal(inferCodeLanguage(python), 'python');
+  const pythonHtml = highlightNativeCode(python);
+  assert.match(pythonHtml, /token keyword/);
+  assert.match(pythonHtml, /import/);
+
+  const shell = `python3 - <<'PY'\nfrom pathlib import Path\nPY\ncurl -sS http://example.test\n`;
+  assert.equal(inferCodeLanguage(shell), 'python');
+  assert.match(highlightNativeCode(shell), /token/);
 });
 
 test('unknown languages still produce a numbered code panel model', () => {

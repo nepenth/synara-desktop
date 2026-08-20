@@ -88,8 +88,18 @@ struct SpaceSummary: Identifiable, Equatable, Hashable {
     let name: String
 }
 
+enum RoomListSortSection: String {
+    case favorites
+    case rooms
+    case directs
+
+    var storageKey: String { "synara.roomListSort.\(rawValue)" }
+}
+
 enum RoomListSortOrder: String, CaseIterable, Identifiable {
-    /// Device-local chrome. Same key/default as desktop `synara.roomListSort`.
+    /// Legacy device-local chrome. Same key as older desktop `synara.roomListSort`.
+    /// Section keys (`synara.roomListSort.favorites` / `.rooms` / `.directs`) win
+    /// when present; this key is the fallback for all sections.
     static let storageKey = "synara.roomListSort"
     static let defaultOrder: RoomListSortOrder = .recent
 
@@ -98,11 +108,44 @@ enum RoomListSortOrder: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    static func stored(
+        for section: RoomListSortSection,
+        defaults: UserDefaults = .standard
+    ) -> RoomListSortOrder {
+        if let raw = defaults.string(forKey: section.storageKey),
+           let order = RoomListSortOrder(rawValue: raw) {
+            return order
+        }
+        if let raw = defaults.string(forKey: storageKey),
+           let order = RoomListSortOrder(rawValue: raw) {
+            return order
+        }
+        return defaultOrder
+    }
+
+    static func persist(
+        _ order: RoomListSortOrder,
+        for section: RoomListSortSection,
+        defaults: UserDefaults = .standard
+    ) {
+        defaults.set(order.rawValue, forKey: section.storageKey)
+    }
+
     var title: String {
+        title(for: nil)
+    }
+
+    func title(for section: String?) -> String {
         switch self {
         case .recent:
+            if let section, section.isEmpty == false {
+                return "Sort \(section) by recent activity"
+            }
             return "Sort by recent activity"
         case .name:
+            if let section, section.isEmpty == false {
+                return "Sort \(section) by name"
+            }
             return "Sort by name"
         }
     }

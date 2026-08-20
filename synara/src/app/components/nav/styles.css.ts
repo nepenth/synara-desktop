@@ -49,10 +49,10 @@ const NavItemBase = style({
   display: 'flex',
   justifyContent: 'start',
   cursor: 'pointer',
-  backgroundColor: Container,
+  backgroundColor: 'transparent',
   color: OnContainer,
   outline: 'none',
-  minHeight: toRem(36),
+  minHeight: toRem(40),
 
   selectors: {
     '&:hover, &:focus-visible': {
@@ -65,7 +65,7 @@ const NavItemBase = style({
       backgroundColor: ContainerActive,
     },
     '&[aria-selected=true]': {
-      backgroundColor: ContainerActive,
+      backgroundColor: ContainerHover,
     },
     [`&:has(.${NavLink}:focus-visible)`]: {
       outline: `${config.borderWidth.B600} solid ${ContainerLine}`,
@@ -111,7 +111,7 @@ export const NavItemContent = style({
   flexGrow: 1,
   display: 'flex',
   alignItems: 'center',
-  fontWeight: config.fontWeight.W500,
+  fontWeight: config.fontWeight.W400,
 
   selectors: {
     '&:hover': {

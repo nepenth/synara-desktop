@@ -9,17 +9,21 @@ export const MessageRow = style({
 });
 
 export const MessageBody = style({
-  background: color.SurfaceVariant.Container,
-  borderRadius: config.radii.R400,
-  padding: `${config.space.S300} ${config.space.S400}`,
+  background: 'transparent',
+  padding: 0,
   minWidth: 0,
+  fontSize: toRem(14),
+  fontWeight: 400,
+  lineHeight: 1.55,
+  color: color.SurfaceVariant.OnContainer,
 });
 
 export const FormattedBody = style({
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
-  fontSize: 'inherit',
-  lineHeight: 1.45,
+  fontSize: toRem(14),
+  fontWeight: 400,
+  lineHeight: 1.55,
 });
 
 export const CodePanel = style({
@@ -181,4 +185,31 @@ globalStyle(`${FormattedBody} img`, {
   maxWidth: toRem(296),
   height: 'auto',
   borderRadius: config.radii.R300,
+});
+globalStyle(`${FormattedBody} code .token.comment, ${FormattedBody} code .token.prolog, ${FormattedBody} code .token.doctype, ${FormattedBody} code .token.cdata`, {
+  color: '#7a8478',
+});
+globalStyle(`${FormattedBody} code .token.punctuation`, {
+  color: '#9aa0a6',
+});
+globalStyle(`${FormattedBody} code .token.property, ${FormattedBody} code .token.tag, ${FormattedBody} code .token.constant, ${FormattedBody} code .token.symbol, ${FormattedBody} code .token.deleted`, {
+  color: '#e06c75',
+});
+globalStyle(`${FormattedBody} code .token.boolean, ${FormattedBody} code .token.number`, {
+  color: '#d19a66',
+});
+globalStyle(`${FormattedBody} code .token.selector, ${FormattedBody} code .token.attr-name, ${FormattedBody} code .token.string, ${FormattedBody} code .token.char, ${FormattedBody} code .token.builtin, ${FormattedBody} code .token.inserted`, {
+  color: '#98c379',
+});
+globalStyle(`${FormattedBody} code .token.operator, ${FormattedBody} code .token.entity, ${FormattedBody} code .token.url, ${FormattedBody} code .token.variable`, {
+  color: '#56b6c2',
+});
+globalStyle(`${FormattedBody} code .token.atrule, ${FormattedBody} code .token.attr-value, ${FormattedBody} code .token.function, ${FormattedBody} code .token.class-name`, {
+  color: '#61afef',
+});
+globalStyle(`${FormattedBody} code .token.keyword`, {
+  color: '#c678dd',
+});
+globalStyle(`${FormattedBody} code .token.regex, ${FormattedBody} code .token.important`, {
+  color: '#e5c07b',
 });

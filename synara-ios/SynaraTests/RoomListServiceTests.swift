@@ -793,6 +793,30 @@ final class RoomListServiceTests: XCTestCase {
         )
         XCTAssertEqual(RoomListSortOrder.defaultOrder, .recent)
         XCTAssertEqual(RoomListSortOrder.storageKey, "synara.roomListSort")
+        XCTAssertEqual(RoomListSortSection.favorites.storageKey, "synara.roomListSort.favorites")
+        XCTAssertEqual(RoomListSortSection.rooms.storageKey, "synara.roomListSort.rooms")
+        XCTAssertEqual(RoomListSortSection.directs.storageKey, "synara.roomListSort.directs")
+    }
+
+    func testSectionSortPreferencesAreIndependentAndFallBackToLegacyKey() {
+        let suite = "synara.roomListSort.test.\(UUID().uuidString)"
+        guard let defaults = UserDefaults(suiteName: suite) else {
+            return XCTFail("Could not create UserDefaults suite")
+        }
+        defer { defaults.removePersistentDomain(forName: suite) }
+
+        XCTAssertEqual(RoomListSortOrder.stored(for: .favorites, defaults: defaults), .recent)
+        RoomListSortOrder.persist(.name, for: .favorites, defaults: defaults)
+        XCTAssertEqual(RoomListSortOrder.stored(for: .favorites, defaults: defaults), .name)
+        XCTAssertEqual(RoomListSortOrder.stored(for: .rooms, defaults: defaults), .recent)
+
+        defaults.set("name", forKey: RoomListSortOrder.storageKey)
+        XCTAssertEqual(RoomListSortOrder.stored(for: .rooms, defaults: defaults), .name)
+        XCTAssertEqual(RoomListSortOrder.stored(for: .favorites, defaults: defaults), .name)
+
+        RoomListSortOrder.persist(.recent, for: .favorites, defaults: defaults)
+        XCTAssertEqual(RoomListSortOrder.stored(for: .favorites, defaults: defaults), .recent)
+        XCTAssertEqual(RoomListSortOrder.stored(for: .rooms, defaults: defaults), .name)
     }
 
     func testRoomListViewReplacedRecentTwentyFourHourSectionWithFavoritesAndSort() throws {

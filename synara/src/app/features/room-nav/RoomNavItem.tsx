@@ -314,7 +314,7 @@ function RoomNavItemImpl({
   return (
     <NavItem
       variant="Surface"
-      radii="400"
+      radii="300"
       highlight={unread !== undefined}
       aria-selected={selected}
       data-hover={!!menuAnchor}
@@ -325,7 +325,7 @@ function RoomNavItemImpl({
       <NavLink to={linkPath}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Avatar size="200" radii="400">
+            <Avatar size="200" radii="300">
               <RoomAvatar
                 roomId={room.roomId}
                 src={
@@ -342,7 +342,7 @@ function RoomNavItemImpl({
                   <Text
                     as="span"
                     size="T200"
-                    style={{ textTransform: 'uppercase', fontWeight: 600 }}
+                    style={{ textTransform: 'uppercase', fontWeight: 500, letterSpacing: '0.02em' }}
                   >
                     {roomNameInitials(roomName)}
                   </Text>

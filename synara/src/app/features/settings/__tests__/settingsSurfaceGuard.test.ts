@@ -32,6 +32,20 @@ test('user Settings avatar uses the native profile mxc instead of an HTTP thumbn
   assert.match(profile, /notifyOwnProfileChanged/);
 });
 
+test('appearance does not offer Twitter Emoji and does not advertise unused mint as the current accent', () => {
+  const general = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
+    'utf8'
+  );
+  const accent = readFileSync(join(process.cwd(), 'src/app/utils/themeAccent.ts'), 'utf8');
+  assert.equal(general.includes('Twitter Emoji'), false);
+  assert.equal(general.includes('twitterEmoji'), false);
+  assert.equal(general.includes('#6bdbb8'), false);
+  assert.equal(accent.includes('#6bdbb8'), false);
+  assert.match(general, /themeDefaultAccentColor/);
+  assert.match(general, /Sample/);
+});
+
 test('native Notifications does not point users at an unavailable Block Users editor', () => {
   assert.match(notifications, /isNativeMatrixSession/);
   assert.match(notifications, /not available in this native session/);

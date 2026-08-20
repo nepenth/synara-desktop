@@ -115,13 +115,52 @@ enum ConnectionStatusCopy {
 final class ConnectionStatusStore: ObservableObject {
     @Published private(set) var status: MatrixSyncStatus = .stopped
 
+    /// Native SyncService reports Offline during short sliding-sync gaps.
+    /// Hold reconnecting until that state lasts so the banner does not bounce.
+    private let reconnectingHold: TimeInterval
+    private var reconnectingWork: DispatchWorkItem?
+
+    init(reconnectingHold: TimeInterval = 4) {
+        self.reconnectingHold = reconnectingHold
+    }
+
+    deinit {
+        reconnectingWork?.cancel()
+    }
+
     func update(_ status: MatrixSyncStatus) {
         if Thread.isMainThread {
-            self.status = status
+            apply(status)
         } else {
             DispatchQueue.main.async { [weak self] in
-                self?.status = status
+                self?.apply(status)
             }
         }
+    }
+
+    private func apply(_ status: MatrixSyncStatus) {
+        if status == .reconnecting {
+            if self.status == .reconnecting { return }
+            scheduleReconnecting()
+            return
+        }
+        reconnectingWork?.cancel()
+        reconnectingWork = nil
+        self.status = status
+    }
+
+    private func scheduleReconnecting() {
+        reconnectingWork?.cancel()
+        if reconnectingHold <= 0 {
+            status = .reconnecting
+            reconnectingWork = nil
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            self?.status = .reconnecting
+            self?.reconnectingWork = nil
+        }
+        reconnectingWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + reconnectingHold, execute: work)
     }
 }

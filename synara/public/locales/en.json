@@ -28,7 +28,7 @@
       },
       "accent_color": {
         "title": "Accent Color",
-        "description": "Customize primary buttons, chips, links, and focus accents.",
+        "description": "Buttons, links, and selected items. The window background is Base Color above. Theme default until you pick a custom color.",
         "aria_label": "Custom accent color",
         "reset": "Reset"
       }

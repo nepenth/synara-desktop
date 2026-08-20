@@ -1,4 +1,4 @@
-import React, { lazy, memo, Suspense, useCallback, useMemo, useState } from 'react';
+import React, { memo, useCallback, useMemo, useState } from 'react';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
@@ -22,11 +22,7 @@ import { HermesAgentPayload, HermesCodeBlock, hermesPayloadToMarkdown } from '..
 import { copyToClipboard } from '../../utils/dom';
 import { sendPlatformAgentAction } from '../../platform';
 import { openExternalUrl } from '../../utils/appLinks';
-import * as customHtmlCss from '../../styles/CustomHtml.css';
-import { useIdleRender } from '../../hooks/useIdleRender';
-
-const ReactPrism = lazy(() => import('../../plugins/react-prism/ReactPrism'));
-const HERMES_PRISM_CHAR_LIMIT = 50_000;
+import { NativeCodeBlock } from '../../features/room/nativeTimelineFormattedBody';
 
 type CodeSectionProps = {
   title: string;
@@ -37,47 +33,8 @@ type CodeSectionProps = {
 type ActionEntry = HermesAgentPayload['actions'][number];
 
 function HermesCodePre({ block }: { block: HermesCodeBlock }) {
-  const largeCode = block.code.length > HERMES_PRISM_CHAR_LIMIT;
-  const ready = useIdleRender(!largeCode);
-  const className = `language-${block.language ?? 'text'}`;
-  const preStyle = useMemo(
-    () => ({
-      maxWidth: toRem(720),
-      overflow: 'auto',
-      whiteSpace: 'pre-wrap' as const,
-      contain: 'layout paint style' as const,
-      overflowAnchor: 'none' as const,
-    }),
-    []
-  );
-
-  if (largeCode || !ready) {
-    return (
-      <pre className={customHtmlCss.Code} style={preStyle}>
-        <code className={className}>{block.code}</code>
-      </pre>
-    );
-  }
-
-  return (
-    <Suspense
-      fallback={
-        <pre className={customHtmlCss.Code} style={preStyle}>
-          <code className={className}>{block.code}</code>
-        </pre>
-      }
-    >
-      <ReactPrism>
-        {(codeRef) => (
-          <pre className={customHtmlCss.Code} style={preStyle}>
-            <code ref={codeRef} className={className}>
-              {block.code}
-            </code>
-          </pre>
-        )}
-      </ReactPrism>
-    </Suspense>
-  );
+  const languageClass = block.language ? `language-${block.language}` : undefined;
+  return <NativeCodeBlock code={block.code} languageClass={languageClass} />;
 }
 
 const CodeSection = memo(({ title, blocks, copyLabel }: CodeSectionProps) => {

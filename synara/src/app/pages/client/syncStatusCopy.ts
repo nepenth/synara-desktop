@@ -30,16 +30,30 @@ export const getSyncStatusBannerCopy = (state: SyncState | null): string | null 
  * A ready sync service is a steady state, not a permanent success alert. The
  * component owns the short transition window and asks this helper whether the
  * otherwise persistent PREPARED copy may be shown.
+ *
+ * Native SyncService reports `Offline` during brief sliding-sync gaps. The
+ * banner holds RECONNECTING until that state lasts, and only flashes Connected
+ * after a Lost banner the user actually saw.
  */
 export const getTransientSyncStatusBannerCopy = (
   state: SyncState | null,
-  connectedTransitionVisible: boolean
+  connectedTransitionVisible: boolean,
+  reconnectingBannerVisible = true
 ): string | null => {
   if (state === SyncState.Prepared && !connectedTransitionVisible) return null;
+  if (state === SyncState.Reconnecting && !reconnectingBannerVisible) return null;
   return getSyncStatusBannerCopy(state);
 };
 
 export const CONNECTED_STATUS_BANNER_DURATION_MS = 4_000;
+
+/** Ignore SDK Offline blips shorter than this before showing Connection Lost. */
+export const RECONNECTING_BANNER_HOLD_MS = 4_000;
+
+export const shouldShowConnectedTransition = (
+  state: SyncState | null,
+  recoveredFromVisibleDisconnect: boolean
+): boolean => state === SyncState.Prepared && recoveredFromVisibleDisconnect;
 
 export const getSlidingSyncCapabilityBannerCopy = (): string =>
   'This homeserver does not advertise sliding-sync (MSC4186) support, so sync may not start. Contact your server administrator.';

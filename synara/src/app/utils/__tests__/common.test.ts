@@ -17,7 +17,7 @@ test('roomNameInitials skips filler words and still returns two letters for a si
   assert.equal(roomNameInitials(''), 'S');
 });
 
-test('roomAvatarTone is stable per room id and stays in the dark palette', () => {
+test('roomAvatarTone is stable per room id and stays in a muted grey palette', () => {
   const first = roomAvatarTone('!room:example.org');
   assert.equal(roomAvatarTone('!room:example.org').background, first.background);
   assert.notEqual(roomAvatarTone('!other:example.org').background, first.background);

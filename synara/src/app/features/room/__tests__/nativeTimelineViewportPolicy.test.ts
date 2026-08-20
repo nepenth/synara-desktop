@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
   shouldRestoreNativeTimelineViewport,
+  shouldShowJumpToLatest,
 } from '../nativeTimelineViewportPolicy';
 
 test('restores at-bottom when the room has no unread', () => {
@@ -61,4 +62,14 @@ test('unread blocks historical restore unless live-tail at-bottom still matches'
     ),
     true
   );
+});
+
+test('jump to latest stays available until the live tail is the loaded window', () => {
+  assert.equal(shouldShowJumpToLatest('unread', true), true);
+  assert.equal(shouldShowJumpToLatest('focused', true), true);
+  assert.equal(shouldShowJumpToLatest('restored', true), true);
+  assert.equal(shouldShowJumpToLatest('live_bottom', false), true);
+  assert.equal(shouldShowJumpToLatest('live_bottom', true), false);
+  assert.equal(shouldShowJumpToLatest(undefined, false), true);
+  assert.equal(shouldShowJumpToLatest(undefined, true), false);
 });

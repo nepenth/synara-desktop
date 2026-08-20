@@ -60,12 +60,16 @@ import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
-import { DEFAULT_ACCENT_COLOR, normalizeAccentColor } from '../../../utils/themeAccent';
+import {
+  normalizeAccentColor,
+  themeDefaultAccentColor,
+} from '../../../utils/themeAccent';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,
   deriveThemeSurfaceRamp,
   normalizeThemeBaseColor,
+  THEME_BASE_PRESETS,
 } from '../../../utils/themeBase';
 import {
   getPlatformIntegrationStatus,
@@ -375,8 +379,8 @@ function Appearance() {
   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor, setCustomAccentColor] = useSetting(settingsAtom, 'customAccentColor');
   const [themeBaseColor, setThemeBaseColor] = useSetting(settingsAtom, 'themeBaseColor');
-  const [twitterEmoji, setTwitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
-  const accentColor = normalizeAccentColor(customAccentColor) ?? DEFAULT_ACCENT_COLOR;
+  const accentColor =
+    normalizeAccentColor(customAccentColor) ?? themeDefaultAccentColor(activeTheme.kind);
   const baseColor = normalizeThemeBaseColor(themeBaseColor) ?? DEFAULT_THEME_BASE_COLOR;
 
   return (
@@ -415,33 +419,79 @@ function Appearance() {
           title={t('modernization.settings.base_color.title', 'Base Color')}
           description={t(
             'modernization.settings.base_color.description',
-            'Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.'
+            'Tint for rail, room list, and chat. Use a swatch, the color well, or paste a hex value. Lightness is mapped to stacked greys, not used as a fill.'
           )}
           after={
-            <Box gap="200" alignItems="Center">
+            <Box direction="Column" gap="200" style={{ minWidth: toRem(220) }}>
               <ThemeRampPreview baseColor={baseColor} kind={activeTheme.kind} />
-              <Input
-                style={{ width: toRem(56), padding: 0 }}
-                size="300"
-                radii="300"
-                type="color"
-                value={baseColor}
-                onChange={(evt) => {
-                  const next = normalizeThemeBaseColor(evt.currentTarget.value);
-                  if (next) setThemeBaseColor(next);
-                }}
-                aria-label={t('modernization.settings.base_color.aria_label', 'Theme base color')}
-              />
-              <Button
-                size="300"
-                radii="300"
-                variant="Secondary"
-                fill="Soft"
-                onClick={() => setThemeBaseColor(undefined)}
-                disabled={!themeBaseColor}
-              >
-                <Text size="B300">{t('modernization.settings.base_color.reset', 'Reset')}</Text>
-              </Button>
+              <Box gap="100" wrap="Wrap" alignItems="Center">
+                {THEME_BASE_PRESETS.map((preset) => {
+                  const selected = baseColor === preset.hex;
+                  return (
+                    <button
+                      key={preset.id}
+                      type="button"
+                      aria-label={preset.label}
+                      aria-pressed={selected}
+                      onClick={() => setThemeBaseColor(preset.hex)}
+                      style={{
+                        width: toRem(22),
+                        height: toRem(22),
+                        padding: 0,
+                        borderRadius: '50%',
+                        border: selected
+                          ? `2px solid ${baseColor}`
+                          : '1px solid rgba(255,255,255,0.18)',
+                        background: preset.hex,
+                        cursor: 'pointer',
+                        outline: selected ? '2px solid currentColor' : 'none',
+                        outlineOffset: 2,
+                      }}
+                    />
+                  );
+                })}
+                <input
+                  type="color"
+                  value={baseColor}
+                  onChange={(evt) => {
+                    const next = normalizeThemeBaseColor(evt.currentTarget.value);
+                    if (next) setThemeBaseColor(next);
+                  }}
+                  aria-label={t('modernization.settings.base_color.aria_label', 'Theme base color')}
+                  style={{
+                    width: toRem(28),
+                    height: toRem(28),
+                    padding: 0,
+                    border: '1px solid rgba(127,127,127,0.35)',
+                    borderRadius: toRem(4),
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
+              </Box>
+              <Box gap="100" alignItems="Center">
+                <Input
+                  size="300"
+                  radii="300"
+                  value={baseColor}
+                  onChange={(evt) => {
+                    const next = normalizeThemeBaseColor(evt.currentTarget.value);
+                    if (next) setThemeBaseColor(next);
+                  }}
+                  aria-label="Theme base color hex"
+                  style={{ width: toRem(108) }}
+                />
+                <Button
+                  size="300"
+                  radii="300"
+                  variant="Secondary"
+                  fill="Soft"
+                  onClick={() => setThemeBaseColor(undefined)}
+                  disabled={!themeBaseColor}
+                >
+                  <Text size="B300">{t('modernization.settings.base_color.reset', 'Reset')}</Text>
+                </Button>
+              </Box>
             </Box>
           }
         />
@@ -452,41 +502,59 @@ function Appearance() {
           title={t('modernization.settings.accent_color.title', 'Accent Color')}
           description={t(
             'modernization.settings.accent_color.description',
-            'Customize primary buttons, chips, links, and focus accents.'
+            'Buttons, links, and selected items. The window background is Base Color above. Theme default until you pick a custom color.'
           )}
           after={
-            <Box gap="100" alignItems="Center">
-              <Input
-                style={{ width: toRem(56), padding: 0 }}
-                size="300"
-                radii="300"
-                type="color"
-                value={accentColor}
-                onChange={(evt) => setCustomAccentColor(evt.currentTarget.value)}
-                aria-label={t(
-                  'modernization.settings.accent_color.aria_label',
-                  'Custom accent color'
-                )}
-              />
-              <Button
-                size="300"
-                radii="300"
-                variant="Secondary"
-                fill="Soft"
-                onClick={() => setCustomAccentColor(undefined)}
-                disabled={!customAccentColor}
-              >
-                <Text size="B300">{t('modernization.settings.accent_color.reset', 'Reset')}</Text>
-              </Button>
+            <Box direction="Column" gap="200" style={{ minWidth: toRem(180) }} alignItems="End">
+              <Chip as="span" variant="Primary" radii="Pill">
+                <Text size="B300">Sample</Text>
+              </Chip>
+              <Box gap="100" alignItems="Center">
+                <input
+                  type="color"
+                  value={accentColor}
+                  onChange={(evt) => {
+                    const next = normalizeAccentColor(evt.currentTarget.value);
+                    if (next) setCustomAccentColor(next);
+                  }}
+                  aria-label={t(
+                    'modernization.settings.accent_color.aria_label',
+                    'Custom accent color'
+                  )}
+                  style={{
+                    width: toRem(28),
+                    height: toRem(28),
+                    padding: 0,
+                    border: '1px solid rgba(127,127,127,0.35)',
+                    borderRadius: toRem(4),
+                    background: 'transparent',
+                    cursor: 'pointer',
+                  }}
+                />
+                <Input
+                  size="300"
+                  radii="300"
+                  value={accentColor}
+                  onChange={(evt) => {
+                    const next = normalizeAccentColor(evt.currentTarget.value);
+                    if (next) setCustomAccentColor(next);
+                  }}
+                  aria-label="Accent color hex"
+                  style={{ width: toRem(108) }}
+                />
+                <Button
+                  size="300"
+                  radii="300"
+                  variant="Secondary"
+                  fill="Soft"
+                  onClick={() => setCustomAccentColor(undefined)}
+                  disabled={!customAccentColor}
+                >
+                  <Text size="B300">{t('modernization.settings.accent_color.reset', 'Reset')}</Text>
+                </Button>
+              </Box>
             </Box>
           }
-        />
-      </SequenceCard>
-
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Twitter Emoji"
-          after={<Switch variant="Primary" value={twitterEmoji} onChange={setTwitterEmoji} />}
         />
       </SequenceCard>
 
