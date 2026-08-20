@@ -1140,6 +1140,106 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(merged.contains(where: { $0.id == stillSending.id && $0.deliveryStatus == .sending }))
     }
 
+    func testPendingReconcilerKeepsQueuedItemsUntilConfirmed() {
+        let queued = TimelineItem.pendingMessage(
+            localID: "$pending-queued",
+            body: "Waiting for network",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .queued,
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(40)
+        )
+        let confirmedSameBody = TimelineItem(
+            id: "$server:matrix.org",
+            eventID: "$server:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(41),
+            kind: .text("Waiting for network"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [confirmedSameBody],
+            localItems: [queued],
+            currentUserID: "@alice:matrix.org"
+        )
+
+        XCTAssertEqual(merged.count, 2)
+        XCTAssertTrue(merged.contains(where: { $0.id == queued.id && $0.deliveryStatus == .queued }))
+    }
+
+    func testPendingReconcilerCombinesStoredPendingStatuses() {
+        let local = TimelineItem.pendingMessage(
+            localID: "$pending-local",
+            body: "Hello",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .sending
+        )
+        let stored = TimelineItem.pendingMessage(
+            localID: "$pending-local",
+            body: "Hello",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .queued
+        )
+        let extra = TimelineItem.pendingMessage(
+            localID: "$pending-extra",
+            body: "Later",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil,
+            deliveryStatus: .failed
+        )
+
+        let combined = TimelinePendingReconciler.combining(
+            localItems: [local],
+            storedPending: [stored, extra]
+        )
+
+        XCTAssertEqual(combined.count, 2)
+        XCTAssertEqual(combined.first(where: { $0.id == local.id })?.deliveryStatus, .queued)
+        XCTAssertTrue(combined.contains(where: { $0.id == extra.id && $0.deliveryStatus == .failed }))
+    }
+
+    func testMessageBodyIsTextOnly() {
+        let text = TimelineItem.pendingMessage(
+            body: "Retry me",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil
+        )
+        let formatted = TimelineItem.pendingMessage(
+            body: "Retry me",
+            formattedBody: "<p>Retry me</p>",
+            senderID: "@alice:matrix.org",
+            replyToEventID: nil
+        )
+        let media = TimelineItem(
+            id: "$media",
+            eventID: "$media",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .mediaPlaceholder(
+                MediaResource(
+                    id: "$media",
+                    filename: "photo.jpg",
+                    authenticatedURL: URL(string: "mxc://matrix.org/photo")!,
+                    requiresAuthentication: true
+                )
+            ),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        XCTAssertEqual(TimelinePendingReconciler.messageBody(for: text), "Retry me")
+        XCTAssertEqual(TimelinePendingReconciler.messageBody(for: formatted), "Retry me")
+        XCTAssertEqual(TimelinePendingReconciler.formattedBody(for: formatted), "<p>Retry me</p>")
+        XCTAssertNil(TimelinePendingReconciler.messageBody(for: media))
+        XCTAssertNil(TimelinePendingReconciler.formattedBody(for: text))
+    }
+
     func testServerWindowReplacementDropsHistoricalContext() {
         let older = TimelineItem(
             id: "$older:matrix.org",

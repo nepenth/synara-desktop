@@ -42,6 +42,7 @@ enum TimelineSearchFilter {
 
 enum TimelineDeliveryStatus: Equatable {
     case sending
+    case queued
     case sent
     case failed
 }
@@ -184,8 +185,30 @@ enum TimelinePendingReconciler {
         }
     }
 
+    static func formattedBody(for item: TimelineItem) -> String? {
+        switch item.kind {
+        case let .formattedText(_, html):
+            return html
+        default:
+            return nil
+        }
+    }
+
     static func pendingItems(from items: [TimelineItem]) -> [TimelineItem] {
         items.filter(\.isLocalPending)
+    }
+
+    static func combining(localItems: [TimelineItem], storedPending: [TimelineItem]) -> [TimelineItem] {
+        var combined = localItems
+        var ids = Set(localItems.map(\.id))
+        for pending in storedPending {
+            if let index = combined.firstIndex(where: { $0.id == pending.id }) {
+                combined[index] = combined[index].withDeliveryStatus(pending.deliveryStatus)
+            } else if ids.insert(pending.id).inserted {
+                combined.append(pending)
+            }
+        }
+        return combined
     }
 
     static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {

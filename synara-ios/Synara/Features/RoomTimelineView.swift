@@ -407,6 +407,8 @@ struct RoomTimelineView: View {
             startTypingUpdates()
             startVerificationAutoRetry()
             await loadTimeline()
+            applyOutgoingQueueToTimeline()
+            flushOutgoingSendsIfReady(environment.connectionStatus.status)
             _ = await loadCryptoStatus()
         }
         .onDisappear {
@@ -415,6 +417,12 @@ struct RoomTimelineView: View {
             stopTypingUpdates()
             cancelTimelineScroll()
             flushMarkFullyRead()
+        }
+        .onReceive(environment.outgoingSends.queue.$items) { _ in
+            applyOutgoingQueueToTimeline()
+        }
+        .onReceive(environment.connectionStatus.$status) { status in
+            flushOutgoingSendsIfReady(status)
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
@@ -1222,11 +1230,17 @@ struct RoomTimelineView: View {
     }
 
     private var localPendingItems: [TimelineItem]? {
-        guard case let .loaded(items, _) = state else {
-            return nil
+        let fromState: [TimelineItem]
+        if case let .loaded(items, _) = state {
+            fromState = TimelinePendingReconciler.pendingItems(from: items)
+        } else {
+            fromState = []
         }
-        let pendingItems = TimelinePendingReconciler.pendingItems(from: items)
-        return pendingItems.isEmpty ? nil : pendingItems
+        let combined = TimelinePendingReconciler.combining(
+            localItems: fromState,
+            storedPending: environment.outgoingSends.queue.timelineItems(in: roomID)
+        )
+        return combined.isEmpty ? nil : combined
     }
 
     private var currentTimelineIsPaginating: Bool {
@@ -1244,9 +1258,14 @@ struct RoomTimelineView: View {
             localItems = []
         }
 
+        let storedPending = environment.outgoingSends.queue.timelineItems(in: roomID)
+        environment.outgoingSends.dropConfirmed(matching: streamItems, currentUserID: currentUserID)
         return TimelinePendingReconciler.merge(
             streamItems: streamItems,
-            localItems: localItems,
+            localItems: TimelinePendingReconciler.combining(
+                localItems: localItems,
+                storedPending: storedPending
+            ),
             currentUserID: currentUserID
         )
     }
@@ -1571,25 +1590,26 @@ struct RoomTimelineView: View {
     }
 
     private func retryFailedMessage(_ item: TimelineItem) {
-        guard item.deliveryStatus == .failed,
-              let body = TimelinePendingReconciler.messageBody(for: item)
-        else {
+        guard let queued = environment.outgoingSends.retry(
+            item,
+            roomID: roomID,
+            senderID: currentUserID
+        ) else {
             return
         }
 
-        performSend(
-            body: body,
-            replyToEventID: item.replyToEventID,
-            editEventID: nil,
-            retrying: item
-        )
+        registerSendAnimation(for: queued.id, isRetry: true)
+        sendError = nil
+        applyOutgoingQueueToTimeline()
+        Task {
+            await transmitOutgoing(id: queued.id)
+        }
     }
 
     private func performSend(
         body rawBody: String,
         replyToEventID: String?,
-        editEventID: String?,
-        retrying failedItem: TimelineItem? = nil
+        editEventID: String?
     ) {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
@@ -1606,89 +1626,115 @@ struct RoomTimelineView: View {
         )
         let isEditing = request.editEventID != nil
 
-        let pendingLocalID: String?
-        if isEditing == false {
-            let pendingItem = TimelineItem.pendingMessage(
-                localID: failedItem?.id ?? "$pending-\(UUID().uuidString)",
-                body: body,
-                formattedBody: request.formattedBody,
-                senderID: currentUserID,
-                replyToEventID: replyToEventID,
-                deliveryStatus: .sending,
-                timestamp: failedItem?.timestamp ?? Date()
-            )
-            pendingLocalID = pendingItem.id
-
-            if failedItem != nil {
-                replace(pendingItem)
-            } else {
-                append(pendingItem)
-            }
-            registerSendAnimation(for: pendingItem.id, isRetry: failedItem != nil)
-
-            draft = ""
-            environment.drafts.clearDraft(roomID: roomID)
-            clearComposerRelation()
-            sendError = nil
-        } else {
-            pendingLocalID = nil
-        }
-
-        Task {
-            do {
-                let signpostID = PerformanceTrace.begin("MessageSend")
-                defer {
-                    PerformanceTrace.end("MessageSend", id: signpostID)
-                }
-                let item = try await environment.messageSender.send(request)
-                await MainActor.run {
-                    if isEditing {
+        if isEditing {
+            Task {
+                do {
+                    let signpostID = PerformanceTrace.begin("MessageSend")
+                    defer {
+                        PerformanceTrace.end("MessageSend", id: signpostID)
+                    }
+                    let item = try await environment.messageSender.send(request)
+                    await MainActor.run {
                         replace(item)
                         draft = ""
                         environment.drafts.clearDraft(roomID: roomID)
                         clearComposerRelation()
-                    } else if let pendingLocalID {
-                        markPendingSendSent(localID: pendingLocalID)
-                        if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" {
-                            reconcilePendingSend(localID: pendingLocalID, confirmed: item)
-                        }
+                        sendError = nil
                     }
-                    sendError = nil
-                    if isEditing == false {
-                        SynaraHaptics.trigger(.lightImpact)
-                    }
-                }
-            } catch {
-                await MainActor.run {
-                    if isEditing {
+                } catch {
+                    await MainActor.run {
                         sendError = MessageSendError.failed.localizedDescription
-                    } else if let pendingLocalID {
-                        markPendingSendFailed(localID: pendingLocalID)
+                        SynaraHaptics.trigger(.warning)
                     }
-                    SynaraHaptics.trigger(.warning)
                 }
+            }
+            return
+        }
+
+        let queued = environment.outgoingSends.enqueue(
+            localID: "$pending-\(UUID().uuidString)",
+            roomID: roomID,
+            body: body,
+            formattedBody: request.formattedBody,
+            replyToEventID: replyToEventID,
+            senderID: currentUserID,
+            timestamp: Date()
+        )
+        registerSendAnimation(for: queued.id, isRetry: false)
+        applyOutgoingQueueToTimeline()
+
+        draft = ""
+        environment.drafts.clearDraft(roomID: roomID)
+        clearComposerRelation()
+        sendError = nil
+
+        Task {
+            await transmitOutgoing(id: queued.id)
+        }
+    }
+
+    private func transmitOutgoing(id: String) async {
+        let signpostID = PerformanceTrace.begin("MessageSend")
+        defer {
+            PerformanceTrace.end("MessageSend", id: signpostID)
+        }
+        await environment.outgoingSends.transmitIfNeeded(id: id)
+        await MainActor.run {
+            applyOutgoingQueueToTimeline()
+            guard let status = environment.outgoingSends.queue.item(id: id)?.deliveryStatus else {
+                return
+            }
+            switch status {
+            case .sent:
+                sendError = nil
+                SynaraHaptics.trigger(.lightImpact)
+                if ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1",
+                   case let .loaded(items, _) = state,
+                   let confirmed = items.first(where: { $0.id == id })
+                {
+                    reconcilePendingSend(localID: id, confirmed: confirmed.withDeliveryStatus(nil))
+                }
+            case .failed:
+                SynaraHaptics.trigger(.warning)
+            case .queued, .sending:
+                sendError = nil
             }
         }
     }
 
-    private func markPendingSendSent(localID: String) {
-        guard case let .loaded(items, _) = state,
-              let item = items.first(where: { $0.id == localID })
-        else {
+    private func flushOutgoingSendsIfReady(_ status: MatrixSyncStatus) {
+        guard OutgoingSendPolicy.isSendReady(status) else {
             return
         }
-
-        replace(item.withDeliveryStatus(.sent))
+        Task {
+            await environment.outgoingSends.flushWhenSendReady()
+            await MainActor.run {
+                applyOutgoingQueueToTimeline()
+            }
+        }
     }
 
-    private func markPendingSendFailed(localID: String) {
-        guard case let .loaded(items, _) = state,
-              let item = items.first(where: { $0.id == localID })
-        else {
-            return
+    private func applyOutgoingQueueToTimeline() {
+        let pendingItems = environment.outgoingSends.queue.timelineItems(in: roomID)
+        switch state {
+        case let .loaded(items, isPaginating):
+            var updated = items
+            var ids = Set(items.map(\.id))
+            for pending in pendingItems {
+                if let index = updated.firstIndex(where: { $0.id == pending.id }) {
+                    updated[index] = updated[index].withDeliveryStatus(pending.deliveryStatus)
+                } else if ids.insert(pending.id).inserted {
+                    updated.append(pending)
+                }
+            }
+            state = .loaded(updated, isPaginating: isPaginating)
+        case .empty, .idle:
+            if pendingItems.isEmpty == false {
+                state = .loaded(pendingItems, isPaginating: false)
+            }
+        case .loading, .failed(_):
+            break
         }
-
-        replace(item.withDeliveryStatus(.failed))
     }
 
     private func reconcilePendingSend(localID: String, confirmed: TimelineItem) {
@@ -4104,19 +4150,8 @@ private struct TimelineRow: View {
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
 
-        let animatedRow = row
+        row
             .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
-
-        if item.deliveryStatus == .failed {
-            Button(action: onRetryFailedSend) {
-                animatedRow
-            }
-            .buttonStyle(.plain)
-            .accessibilityHint("Tap to retry sending this message")
-            .accessibilityIdentifier("TimelineItemRetry-\(item.eventID)")
-        } else {
-            animatedRow
-        }
     }
 
     @ViewBuilder
@@ -4183,7 +4218,9 @@ private struct TimelineRow: View {
                     text: body,
                     alignment: bubbleAlignment,
                     isGrouped: isGroupedWithPrevious,
-                    deliveryStatus: item.deliveryStatus
+                    deliveryStatus: item.deliveryStatus,
+                    statusEventID: item.eventID,
+                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
                 )
             case let .formattedText(body, html):
                 SynaraMessageBubble(
@@ -4191,7 +4228,9 @@ private struct TimelineRow: View {
                     variant: .standard,
                     isGrouped: isGroupedWithPrevious,
                     showsBackground: false,
-                    deliveryStatus: item.deliveryStatus
+                    deliveryStatus: item.deliveryStatus,
+                    statusEventID: item.eventID,
+                    onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
                 ) {
                     MatrixFormattedMessageView(
                         fallbackBody: body,
@@ -4323,6 +4362,10 @@ private struct TimelineRow: View {
     private var accessibilityHint: String {
         if approvalPrompt != nil {
             return "Review available approval reactions"
+        }
+
+        if item.deliveryStatus == .failed {
+            return "Tap Retry to send this message again"
         }
 
         switch item.kind {
