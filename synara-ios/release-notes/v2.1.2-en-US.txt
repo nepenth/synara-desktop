@@ -1,0 +1,13 @@
+Synara 2.1.2 adds fenced-code line numbers, favorites and sortable rooms, live sync after TestFlight updates, draft attachments until Send, and Discord-like themed chrome.
+
+What to test:
+- Upgrade from 2.1.1 and confirm your session restores without another login.
+- After a TestFlight install, confirm rooms stay live and connection status is honest if restore fails.
+- Favorite a room, sort Rooms by name and by recent activity, and confirm Recent (24h) is gone.
+- Paste or attach photos in the composer, confirm they stay as drafts, then send with optional text.
+- Post a fenced code block and confirm line numbers (desktop also highlights syntax).
+- Open Appearance, change the base color, and confirm rail / list / chat greys update in light and dark.
+- Open Settings and confirm device verification, your server avatar, and that Emoji & Stickers settings are gone.
+- Sign out, relaunch, and sign in again.
+
+Please report the room type, action, and approximate time for any sync, composer, theme, or code-block issue. Do not include access tokens or recovery keys.

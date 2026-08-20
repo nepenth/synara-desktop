@@ -2,11 +2,22 @@
 
 ## Unreleased
 
-- Release reuses a proven `Quality gate` for the tagged SHA instead of always
-  rerunning the hour-plus exact-tag desktop and iOS suites before packaging.
-- Version-only bumps skip iOS, Synapse, and `cargo test`. GitHub Release no
-  longer waits on TestFlight promotion. PR CI shares one lane per branch and
-  builds only the simulator UniFFI slice.
+## 2.1.2 - 2026-08-20
+
+- Highlighted fenced chat code with Prism tokens, a matching line-number
+  gutter, and a distinct panel on the desktop native timeline. iOS code
+  blocks now draw a line-number gutter.
+- Replaced the Recent (24h) room rail with Matrix favorites and a sortable
+  rooms list.
+- Restored iOS live sync after TestFlight updates, showed connection status,
+  and kept composer attachments as drafts until Send.
+- Added Discord-like dark/light stacked chrome with a user base color, and
+  made Settings lead with native verification, the server avatar, and honest
+  controls.
+- Release reuses a proven Quality gate for the tagged SHA, skips iOS and
+  Synapse on version-only bumps, and publishes the GitHub Release without
+  waiting on TestFlight.
+- See [`docs/releases/v2.1.2.md`](docs/releases/v2.1.2.md) for details.
 
 ## 2.1.1 - 2026-08-19
 
