@@ -4,7 +4,11 @@ export type NativeCrossSigningKeyPublication = 'missing' | 'published';
 export type NativeCrossSigningPrivateIdentity = 'missing' | 'partial' | 'complete';
 export type NativeOwnIdentityVerification = 'missing' | 'unverified' | 'verified';
 export type NativeCrossSigningReadiness =
-  'unavailable' | 'setup_required' | 'recovery_required' | 'verification_required' | 'ready';
+  | 'unavailable'
+  | 'setup_required'
+  | 'recovery_required'
+  | 'verification_required'
+  | 'ready';
 
 export type NativeCrossSigningStatus = {
   sessionGeneration: number;
@@ -30,7 +34,7 @@ export const nativeCrossSigningErrorMessage = (): string =>
 const invokeNativeCrossSigning = async <T>(
   command: string,
   args?: Record<string, unknown>,
-  errorMessage = nativeCrossSigningErrorMessage(),
+  errorMessage = nativeCrossSigningErrorMessage()
 ): Promise<T> => {
   try {
     const result = await invokeDesktopWithAvailability<T>(command, args);
@@ -54,19 +58,19 @@ export const getNativeCrossSigningStatus = (): Promise<NativeCrossSigningStatus>
 
 export const startNativeCrossSigningSetup = async (): Promise<NativeCrossSigningSetupResult> => {
   const result = await invokeNativeCrossSigning<NativeCrossSigningSetupResult>(
-    'matrix_cross_signing_setup',
+    'matrix_cross_signing_setup'
   );
   announceStatusChange();
   return result;
 };
 
 export const authenticateNativeCrossSigningSetup = async (
-  password: string,
+  password: string
 ): Promise<NativeCrossSigningSetupResult> => {
   const result = await invokeNativeCrossSigning<NativeCrossSigningSetupResult>(
     'matrix_cross_signing_setup_password',
     { password },
-    'Cross-signing authentication failed. Check your account password and try again.',
+    'Cross-signing authentication failed. Check your account password and try again.'
   );
   announceStatusChange();
   return result;

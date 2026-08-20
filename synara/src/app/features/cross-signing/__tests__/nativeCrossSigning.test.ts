@@ -26,7 +26,7 @@ test('published readiness requires the complete public identity projection', () 
       ...status('published'),
       selfSigning: 'missing',
     }),
-    false,
+    false
   );
 });
 
@@ -40,7 +40,7 @@ test('device verification remains offered when identity only needs verification'
       readiness: 'verification_required',
       bootstrap: 'not_needed',
     }),
-    true,
+    true
   );
 });
 

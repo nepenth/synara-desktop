@@ -65,7 +65,10 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /distanceFromBottom <= 96/);
   assert.match(presenter, /aria-label="Jump to latest"/);
   assert.match(presenter, /Icons\.ChevronBottom/);
-  assert.match(presenter, /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/);
+  assert.match(
+    presenter,
+    /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/
+  );
   assert.match(presenter, /const jumpToLatest = \(\) =>/);
   assert.match(presenter, /followingLiveRef\.current = true/);
   assert.match(presenter, /onClick=\{jumpToLatest\}/);

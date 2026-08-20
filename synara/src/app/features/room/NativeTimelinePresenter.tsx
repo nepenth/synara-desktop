@@ -1321,8 +1321,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       saveViewport();
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
-      followingLiveRef.current =
-        readyState.selectedPosition.kind === 'live_bottom' && atBottom;
+      followingLiveRef.current = readyState.selectedPosition.kind === 'live_bottom' && atBottom;
       setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
       if (performance.now() < programmaticScrollUntilRef.current) return;
       userInitiatedScrollRef.current = true;

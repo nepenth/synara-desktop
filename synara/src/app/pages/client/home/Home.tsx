@@ -149,7 +149,12 @@ function RoomListSortIcons({
         title={nameLabel}
         onClick={() => onRoomSort('name')}
       >
-        <Icon className={css.SortIcon} size="50" src={Icons.Alphabet} filled={roomSort === 'name'} />
+        <Icon
+          className={css.SortIcon}
+          size="50"
+          src={Icons.Alphabet}
+          filled={roomSort === 'name'}
+        />
       </IconButton>
     </Box>
   );

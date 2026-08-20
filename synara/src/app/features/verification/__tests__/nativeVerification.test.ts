@@ -11,7 +11,7 @@ import {
 
 const request = (
   direction: NativeVerificationRequest['direction'],
-  phase: NativeVerificationRequest['phase'],
+  phase: NativeVerificationRequest['phase']
 ): NativeVerificationRequest => ({
   flowId: 'flow',
   otherUserId: '@alice:example.org',
@@ -30,7 +30,7 @@ test('SAS start projection follows Matrix request ownership', () => {
       ...request('outgoing', 'sas_ready'),
       sas: { emoji: [{ symbol: '🐶', description: 'Dog' }] },
     }),
-    false,
+    false
   );
 });
 
@@ -41,21 +41,21 @@ test('SAS compare requires emoji or decimal codes before confirm', () => {
       ...request('outgoing', 'sas_ready'),
       sas: { emoji: [{ symbol: '🐶', description: 'Dog' }] },
     }),
-    true,
+    true
   );
   assert.equal(
     verificationRequestHasSasCodes({
       ...request('incoming', 'sas_ready'),
       sas: { decimals: [11, 22, 33] },
     }),
-    true,
+    true
   );
   assert.equal(
     verificationRequestHasSasCodes({
       ...request('outgoing', 'sas_ready'),
       sas: { decimals: [11, 22] as unknown as [number, number, number] },
     }),
-    false,
+    false
   );
 });
 

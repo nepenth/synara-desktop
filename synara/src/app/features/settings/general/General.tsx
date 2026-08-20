@@ -60,10 +60,7 @@ import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
-import {
-  normalizeAccentColor,
-  themeDefaultAccentColor,
-} from '../../../utils/themeAccent';
+import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,

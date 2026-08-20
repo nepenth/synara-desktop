@@ -56,7 +56,7 @@ function NativeSas({
 }) {
   const [submitting, setSubmitting] = useState(false);
   const act = async (
-    action: (flowId: string) => Promise<NativeVerificationRequest>,
+    action: (flowId: string) => Promise<NativeVerificationRequest>
   ): Promise<void> => {
     setSubmitting(true);
     try {

@@ -40,7 +40,7 @@ export function Devices({ requestClose }: DevicesProps) {
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
   const verificationStatus = currentDevice?.trust ?? 'unknown';
   const unverifiedDeviceCount = otherDevices?.filter(
-    (device) => device.trust === 'unverified',
+    (device) => device.trust === 'unverified'
   ).length;
 
   return (

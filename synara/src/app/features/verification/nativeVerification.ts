@@ -54,7 +54,7 @@ export const isNativeVerificationTerminal = (phase: NativeVerificationPhase): bo
 
 export const selectNativeVerificationRequest = (
   requests: NativeVerificationRequest[],
-  currentFlowId?: string,
+  currentFlowId?: string
 ): NativeVerificationRequest | undefined => {
   if (currentFlowId) {
     const current = requests.find((item) => item.flowId === currentFlowId);
@@ -117,7 +117,7 @@ export const nativeVerificationErrorMessage = (): string =>
 
 const invokeNativeVerification = async <T>(
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ): Promise<T> => {
   const result = await invokeDesktopWithAvailability<T>(command, args);
   if (!result.available || result.value === undefined) {
@@ -131,7 +131,7 @@ export const listNativeVerificationRequests = (): Promise<NativeVerificationInbo
 
 const mutateNativeVerification = async <T>(
   command: string,
-  args?: Record<string, unknown>,
+  args?: Record<string, unknown>
 ): Promise<T> => {
   const value = await invokeNativeVerification<T>(command, args);
   announceNativeVerificationChanged();

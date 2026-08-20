@@ -17,7 +17,7 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
   const sessionGeneration = getActiveSession()?.sessionGeneration;
   const queryKey = useMemo(
     () => ['native-devices', sessionGeneration] as const,
-    [sessionGeneration],
+    [sessionGeneration]
   );
   const { data: snapshot, refetch } = useQuery({
     queryKey,
@@ -38,7 +38,7 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
       }
       await refetch();
     },
-    [queryClient, queryKey, refetch, sessionGeneration],
+    [queryClient, queryKey, refetch, sessionGeneration]
   );
 
   useEffect(() => {
@@ -56,7 +56,7 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
           ) {
             void refreshDeviceList();
           }
-        }),
+        })
       )
       .then((cleanup) => {
         if (disposed) cleanup();
@@ -74,7 +74,7 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
 }
 
 export const useSplitCurrentDevice = (
-  devices: NativeDevice[] | undefined,
+  devices: NativeDevice[] | undefined
 ): [NativeDevice | undefined, NativeDevice[] | undefined] => {
   const currentDevice = useMemo(() => devices?.find((device) => device.isCurrent), [devices]);
   const otherDevices = useMemo(() => devices?.filter((device) => !device.isCurrent), [devices]);
