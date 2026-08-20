@@ -84,6 +84,14 @@ struct RootShellView: View {
                 tab(.settings)
             }
         }
+        .onChange(of: connectionStatus.status) { status in
+            guard OutgoingSendPolicy.isSendReady(status) else {
+                return
+            }
+            Task {
+                await environment.outgoingSends.flushWhenSendReady()
+            }
+        }
         .task(id: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)") {
             let signpostID = PerformanceTrace.begin("SignedInSessionStart")
             await SessionCoordinator.startSignedInSession(environment: environment, session: authenticatedSession)

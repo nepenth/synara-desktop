@@ -96,7 +96,7 @@ final class TimelineMessageCopyTests: XCTestCase {
             "Failed sends must retry from the delivery-status chip"
         )
         XCTAssertTrue(bubble.contains("TimelineItemRetry"))
-        XCTAssertTrue(timeline.contains("retryAccessibilityIdentifier: \"TimelineItemRetry-\\(item.eventID)\""))
+        XCTAssertTrue(timeline.contains("statusEventID: item.eventID"))
     }
 
     func testMessageBodyEnablesTextSelectionAsSecondarySubstringCopy() throws {

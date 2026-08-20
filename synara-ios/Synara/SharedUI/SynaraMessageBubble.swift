@@ -17,29 +17,9 @@ struct SynaraMessageBubble<Content: View>: View {
     let isGrouped: Bool
     let showsBackground: Bool
     let deliveryStatus: TimelineDeliveryStatus?
-    let onRetryFailedSend: (() -> Void)?
-    let retryAccessibilityIdentifier: String?
-    let content: () -> Content
-
-    init(
-        alignment: SynaraMessageBubbleAlignment,
-        variant: SynaraMessageBubbleVariant,
-        isGrouped: Bool,
-        showsBackground: Bool,
-        deliveryStatus: TimelineDeliveryStatus?,
-        onRetryFailedSend: (() -> Void)? = nil,
-        retryAccessibilityIdentifier: String? = nil,
-        @ViewBuilder content: @escaping () -> Content
-    ) {
-        self.alignment = alignment
-        self.variant = variant
-        self.isGrouped = isGrouped
-        self.showsBackground = showsBackground
-        self.deliveryStatus = deliveryStatus
-        self.onRetryFailedSend = onRetryFailedSend
-        self.retryAccessibilityIdentifier = retryAccessibilityIdentifier
-        self.content = content
-    }
+    var statusEventID: String? = nil
+    var onRetryFailedSend: (() -> Void)? = nil
+    @ViewBuilder let content: () -> Content
 
     var body: some View {
         content()
@@ -59,12 +39,21 @@ struct SynaraMessageBubble<Content: View>: View {
                 }
             }
             .modifier(SynaraMessageBubbleClipModifier(showsBackground: showsBackground, shape: bubbleShape))
-            .opacity(deliveryStatus == .sending ? 0.72 : 1)
+            .opacity(deliveryStatusOpacity)
             .overlay(alignment: overlayAlignment) {
                 deliveryStatusIndicator
                     .padding(.horizontal, SynaraSpacing.xSmall)
                     .padding(.vertical, SynaraSpacing.xSmall)
             }
+    }
+
+    private var deliveryStatusOpacity: Double {
+        switch deliveryStatus {
+        case .sending, .queued:
+            return 0.72
+        default:
+            return 1
+        }
     }
 
     @ViewBuilder
@@ -74,11 +63,21 @@ struct SynaraMessageBubble<Content: View>: View {
             ProgressView()
                 .controlSize(.mini)
                 .accessibilityLabel("Sending")
+                .accessibilityIdentifier(statusIdentifier("TimelineItemSending"))
+                .allowsHitTesting(false)
+        case .queued where alignment == .own:
+            Image(systemName: "clock")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .accessibilityLabel("Queued")
+                .accessibilityIdentifier(statusIdentifier("TimelineItemQueued"))
+                .allowsHitTesting(false)
         case .sent where alignment == .own:
             Image(systemName: "checkmark")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundStyle(SynaraColor.secondaryText)
                 .accessibilityLabel("Sent")
+                .allowsHitTesting(false)
         case .failed where alignment == .own:
             retryChip
         default:
@@ -88,26 +87,34 @@ struct SynaraMessageBubble<Content: View>: View {
 
     @ViewBuilder
     private var retryChip: some View {
-        if let onRetryFailedSend {
-            Button(action: onRetryFailedSend) {
-                retryChipLabel
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier(retryAccessibilityIdentifier ?? "TimelineItemRetry")
-        } else {
-            retryChipLabel
-        }
-    }
-
-    private var retryChipLabel: some View {
-        Label("Retry", systemImage: "arrow.clockwise")
+        let chip = Label("Retry", systemImage: "arrow.clockwise")
             .font(SynaraTypography.chipLabel)
             .foregroundStyle(SynaraColor.critical)
             .padding(.horizontal, SynaraSpacing.small)
             .padding(.vertical, SynaraSpacing.xSmall)
             .background(SynaraColor.critical.opacity(0.12))
             .clipShape(Capsule())
+
+        if let onRetryFailedSend {
+            Button(action: onRetryFailedSend) {
+                chip
+            }
+            .buttonStyle(.plain)
             .accessibilityLabel("Failed to send. Tap to retry.")
+            .accessibilityIdentifier(statusIdentifier("TimelineItemRetry"))
+        } else {
+            chip
+                .accessibilityLabel("Failed to send. Tap to retry.")
+                .accessibilityIdentifier(statusIdentifier("TimelineItemRetry"))
+                .allowsHitTesting(false)
+        }
+    }
+
+    private func statusIdentifier(_ prefix: String) -> String {
+        if let statusEventID, statusEventID.isEmpty == false {
+            return "\(prefix)-\(statusEventID)"
+        }
+        return prefix
     }
 
     private var frameAlignment: Alignment {
@@ -252,16 +259,16 @@ extension SynaraMessageBubble where Content == AnyView {
         isGrouped: Bool = false,
         showsBackground: Bool = false,
         deliveryStatus: TimelineDeliveryStatus? = nil,
-        onRetryFailedSend: (() -> Void)? = nil,
-        retryAccessibilityIdentifier: String? = nil
+        statusEventID: String? = nil,
+        onRetryFailedSend: (() -> Void)? = nil
     ) {
         self.alignment = alignment
         self.variant = variant
         self.isGrouped = isGrouped
         self.showsBackground = showsBackground
         self.deliveryStatus = deliveryStatus
+        self.statusEventID = statusEventID
         self.onRetryFailedSend = onRetryFailedSend
-        self.retryAccessibilityIdentifier = retryAccessibilityIdentifier
         self.content = {
             AnyView(
                 Text(text)

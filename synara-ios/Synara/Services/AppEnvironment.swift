@@ -47,6 +47,7 @@ struct AppEnvironment {
     let roomManagement: RoomManagementServicing
     let sessionReadiness: SignedInSessionReadinessServicing
     let connectionStatus: ConnectionStatusStore
+    let outgoingSends: OutgoingSendCoordinator
 
     @MainActor
     static func live() -> AppEnvironment {
@@ -94,6 +95,11 @@ struct AppEnvironment {
         let crypto = SharedCoreCryptoStatusService(host: host)
         let roomManagement = SharedCoreRoomManagementService(host: host)
         let sessionReadiness = SignedInSessionReadiness()
+        let messageSender = SharedCoreMessageSendService(host: host)
+        let outgoingSends = OutgoingSendCoordinator(
+            messageSender: messageSender,
+            connectionStatus: connectionStatus
+        )
         return AppEnvironment(
             session: session,
             matrix: matrix,
@@ -115,11 +121,12 @@ struct AppEnvironment {
                 timeline: timeline,
                 drafts: drafts,
                 push: push,
-                router: router
+                router: router,
+                outgoingSends: outgoingSends
             ),
             timeline: timeline,
             later: SharedCoreLaterService(host: host),
-            messageSender: SharedCoreMessageSendService(host: host),
+            messageSender: messageSender,
             drafts: drafts,
             eventActions: SharedCoreEventActionService(host: host),
             agentApprovals: SharedCoreAgentApprovalService(host: host),
@@ -130,7 +137,8 @@ struct AppEnvironment {
             crypto: crypto,
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
-            connectionStatus: connectionStatus
+            connectionStatus: connectionStatus,
+            outgoingSends: outgoingSends
         )
     }
 
@@ -163,9 +171,14 @@ struct AppEnvironment {
         roomManagement: RoomManagementServicing = MockRoomManagementService(),
         sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness(),
         settings: SettingsStoring = InMemorySettingsStore(),
-        connectionStatus: ConnectionStatusStore = ConnectionStatusStore()
+        connectionStatus: ConnectionStatusStore = ConnectionStatusStore(),
+        outgoingSends: OutgoingSendCoordinator? = nil
     ) -> AppEnvironment {
-        AppEnvironment(
+        let resolvedOutgoingSends = outgoingSends ?? OutgoingSendCoordinator(
+            messageSender: messageSender,
+            connectionStatus: connectionStatus
+        )
+        return AppEnvironment(
             session: session,
             matrix: matrix,
             push: push,
@@ -184,7 +197,8 @@ struct AppEnvironment {
                 timeline: timeline,
                 drafts: drafts,
                 push: push,
-                router: router
+                router: router,
+                outgoingSends: resolvedOutgoingSends
             ),
             timeline: timeline,
             later: later,
@@ -199,7 +213,8 @@ struct AppEnvironment {
             crypto: crypto,
             roomManagement: roomManagement,
             sessionReadiness: sessionReadiness,
-            connectionStatus: connectionStatus
+            connectionStatus: connectionStatus,
+            outgoingSends: resolvedOutgoingSends
         )
     }
 
