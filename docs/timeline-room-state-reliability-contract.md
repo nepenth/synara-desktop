@@ -66,7 +66,7 @@ Rules:
 10. Automatic read advancement requires an active app, the current live provider
     generation, and a live-tail sentinel continuously visible for one second.
 
-## Room activity and Recent 24h
+## Room activity, Favorites, and sort
 
 Both clients maintain one immutable activity snapshot per visible joined room:
 
@@ -89,16 +89,13 @@ RoomActivity {
   not create new activity timestamps. An edit retains its original message's
   membership effect, and a redaction does not erase the fact that qualifying
   activity occurred.
-- Use server/SDK bump data for ordering and change detection, and the relevant
-  event timestamp for the 24-hour cutoff. Preserve the last valid timestamp when
-  the SDK temporarily lacks a preview event.
-- Recent membership is derived from the monotonic timestamp and a 24-hour cutoff;
-  it expires deterministically even when no further events arrive. Recent and
-  normal Rooms are one atomic partition of the same snapshot. Every visible
-  joined room appears in exactly one partition.
-- Recent sorts by descending activity, then case-insensitive room name, then room
-  ID. Recompute at the next expiry boundary and on foreground, clock/time-zone
-  change, reconnect, membership change, and timeline reset.
+- There is no 24-hour Recent partition. Joined rooms with Matrix `m.favourite`
+  appear under Favorites; remaining joined rooms appear under Rooms (and iOS
+  spaces/DMs). Every visible joined room appears in exactly one of those lists.
+- One global sort applies to both Favorites and remaining rooms: recent activity
+  (native `last_activity_ts` / SDK latest-event timestamp, missing ts last) or
+  name. Sort preference is device chrome (`synara.roomListSort`, default recent)
+  and does not sync via account data.
 - A single-room update must map and publish that room, not remap the full list.
 
 ## Timeline providers and scrolling

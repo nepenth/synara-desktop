@@ -4,6 +4,7 @@ import {
   Avatar,
   Box,
   Button,
+  Chip,
   Icon,
   IconButton,
   Icons,
@@ -46,10 +47,10 @@ import { useHomeRooms } from './useHomeRooms';
 import {
   favoriteRoomIdSet,
   partitionHomeRooms,
-  readHomeRoomSort,
+  readRoomListSort,
   sortHomeRoomIds,
-  writeHomeRoomSort,
-  type HomeRoomSort,
+  writeRoomListSort,
+  type RoomListSort,
 } from './homeRoomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
@@ -105,7 +106,13 @@ const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, re
   );
 });
 
-function HomeHeader() {
+function HomeHeader({
+  roomSort,
+  onRoomSort,
+}: {
+  roomSort: RoomListSort;
+  onRoomSort: (sort: RoomListSort) => void;
+}) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -125,7 +132,25 @@ function HomeHeader() {
               Home
             </Text>
           </Box>
-          <Box>
+          <Box alignItems="Center" gap="100">
+            <Chip
+              variant={roomSort === 'recent' ? 'Primary' : 'Background'}
+              radii="Pill"
+              aria-pressed={roomSort === 'recent'}
+              aria-label="Sort by recent activity"
+              onClick={() => onRoomSort('recent')}
+            >
+              <Text size="O400">Recent</Text>
+            </Chip>
+            <Chip
+              variant={roomSort === 'name' ? 'Primary' : 'Background'}
+              radii="Pill"
+              aria-pressed={roomSort === 'name'}
+              aria-label="Sort by name"
+              onClick={() => onRoomSort('name')}
+            >
+              <Text size="O400">Name</Text>
+            </Chip>
             <IconButton aria-pressed={!!menuAnchor} variant="Background" onClick={handleOpenMenu}>
               <Icon src={Icons.VerticalDots} size="200" />
             </IconButton>
@@ -217,8 +242,8 @@ export function Home() {
   const [closedCategories, setClosedCategories] = useAtom(useClosedNavCategoriesAtom());
 
   const nativeRoomList = useNativeRoomListSnapshot();
-  const [roomSort, setRoomSort] = useState<HomeRoomSort>(() =>
-    readHomeRoomSort(typeof localStorage === 'undefined' ? undefined : localStorage)
+  const [roomSort, setRoomSort] = useState<RoomListSort>(() =>
+    readRoomListSort(typeof localStorage === 'undefined' ? undefined : localStorage)
   );
   const favoriteIds = useMemo(
     () => favoriteRoomIdSet(nativeRoomList.rooms),
@@ -230,21 +255,28 @@ export function Home() {
   );
 
   const sortedFavoriteRoomIds = useMemo(
-    () => sortHomeRoomIds(mx, favoriteRoomIds, roomSort),
-    [mx, favoriteRoomIds, roomSort]
+    () => sortHomeRoomIds(favoriteRoomIds, nativeRoomList.rooms, roomSort),
+    [favoriteRoomIds, nativeRoomList.rooms, roomSort]
   );
 
   const mainRoomIds = useMemo(() => {
-    const items = sortHomeRoomIds(mx, remainingRoomIds, roomSort);
+    const items = sortHomeRoomIds(remainingRoomIds, nativeRoomList.rooms, roomSort);
     if (closedCategories.has(DEFAULT_CATEGORY_ID)) {
       return items.filter((rId) => roomToUnread.has(rId) || rId === selectedRoomId);
     }
     return items;
-  }, [mx, remainingRoomIds, roomSort, closedCategories, roomToUnread, selectedRoomId]);
+  }, [
+    remainingRoomIds,
+    nativeRoomList.rooms,
+    roomSort,
+    closedCategories,
+    roomToUnread,
+    selectedRoomId,
+  ]);
 
-  const handleRoomSort = (sort: HomeRoomSort) => {
+  const handleRoomSort = (sort: RoomListSort) => {
     setRoomSort(sort);
-    writeHomeRoomSort(typeof localStorage === 'undefined' ? undefined : localStorage, sort);
+    writeRoomListSort(typeof localStorage === 'undefined' ? undefined : localStorage, sort);
   };
 
   const virtualizer = useVirtualizer({
@@ -260,7 +292,7 @@ export function Home() {
 
   return (
     <PageNav>
-      <HomeHeader />
+      <HomeHeader roomSort={roomSort} onRoomSort={handleRoomSort} />
       {noRoomToDisplay ? (
         <HomeEmpty />
       ) : (
@@ -345,35 +377,13 @@ export function Home() {
 
             <NavCategory>
               <NavCategoryHeader>
-                <Box grow="Yes" alignItems="Center" gap="100">
-                  <RoomNavCategoryButton
-                    closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
-                    data-category-id={DEFAULT_CATEGORY_ID}
-                    onClick={handleCategoryClick}
-                  >
-                    Rooms
-                  </RoomNavCategoryButton>
-                  <IconButton
-                    variant={roomSort === 'name' ? 'Primary' : 'Background'}
-                    radii="300"
-                    aria-label="Sort rooms by name"
-                    title="Sort rooms by name"
-                    aria-pressed={roomSort === 'name'}
-                    onClick={() => handleRoomSort('name')}
-                  >
-                    <Icon src={Icons.Sort} size="50" />
-                  </IconButton>
-                  <IconButton
-                    variant={roomSort === 'recent' ? 'Primary' : 'Background'}
-                    radii="300"
-                    aria-label="Sort rooms by recent activity"
-                    title="Sort rooms by recent activity"
-                    aria-pressed={roomSort === 'recent'}
-                    onClick={() => handleRoomSort('recent')}
-                  >
-                    <Icon src={Icons.Message} size="50" />
-                  </IconButton>
-                </Box>
+                <RoomNavCategoryButton
+                  closed={closedCategories.has(DEFAULT_CATEGORY_ID)}
+                  data-category-id={DEFAULT_CATEGORY_ID}
+                  onClick={handleCategoryClick}
+                >
+                  Rooms
+                </RoomNavCategoryButton>
               </NavCategoryHeader>
               <div
                 style={{

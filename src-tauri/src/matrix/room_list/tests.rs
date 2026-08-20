@@ -458,11 +458,6 @@ fn p4_4_recent_and_priority_sorts() {
     let low_last = sort_rooms(&rooms, RoomListSort::LowPriorityLast);
     assert_eq!(low_last.last().unwrap().room_id.as_str(), "!c:example.org");
 
-    let top2 = recent_joined_rooms(&rooms, 2);
-    assert_eq!(top2.len(), 2);
-    assert_eq!(top2[0].room_id.as_str(), "!c:example.org");
-    assert_eq!(top2[1].room_id.as_str(), "!d:example.org");
-
     let by_name = sort_rooms(&rooms, RoomListSort::ByName);
     assert_eq!(
         by_name

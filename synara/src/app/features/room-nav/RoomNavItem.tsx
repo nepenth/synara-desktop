@@ -68,8 +68,9 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const unread = useRoomUnread(room.roomId, roomToUnreadAtom);
     const nativeRooms = useNativeRoomListSnapshot();
     const isFavorite =
-      nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)?.isFavorite ??
-      room.isFavorite === true;
+      nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)?.isFavorite === true;
+    const [favoriteError, setFavoriteError] = useState<string>();
+    const [favoriteBusy, setFavoriteBusy] = useState(false);
     const powerLevels = usePowerLevels(room);
     const creators = useRoomCreators(room);
 
@@ -90,13 +91,23 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
       requestClose();
     };
 
-    const handleToggleFavorite = () => {
-      void setRoomFavoriteWithNativeOwner(
-        room.roomId,
-        !isFavorite,
-        isSynaraDesktop(),
-        invokeDesktopWithAvailability
-      ).finally(() => requestClose());
+    const handleToggleFavorite = async () => {
+      if (favoriteBusy) return;
+      setFavoriteError(undefined);
+      setFavoriteBusy(true);
+      try {
+        await setRoomFavoriteWithNativeOwner(
+          room.roomId,
+          !isFavorite,
+          isSynaraDesktop(),
+          invokeDesktopWithAvailability
+        );
+        requestClose();
+      } catch {
+        setFavoriteError('Could not update favorite.');
+      } finally {
+        setFavoriteBusy(false);
+      }
     };
 
     const handleInvite = () => {
@@ -138,15 +149,29 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
             </Text>
           </MenuItem>
           <MenuItem
-            onClick={handleToggleFavorite}
+            onClick={() => {
+              void handleToggleFavorite();
+            }}
             size="300"
-            after={<Icon size="100" src={Icons.Pin} filled={isFavorite} />}
+            disabled={favoriteBusy}
+            after={
+              favoriteBusy ? (
+                <Spinner size="100" variant="Secondary" />
+              ) : (
+                <Icon size="100" src={Icons.Pin} filled={isFavorite} />
+              )
+            }
             radii="300"
           >
             <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
               {isFavorite ? 'Remove from Favorites' : 'Add to Favorites'}
             </Text>
           </MenuItem>
+          {favoriteError && (
+            <Text as="p" size="T200" style={{ paddingInline: config.space.S200 }}>
+              {favoriteError}
+            </Text>
+          )}
           <RoomNotificationModeSwitcher roomId={room.roomId} value={notificationMode}>
             {(handleOpen, opened, changing) => (
               <MenuItem

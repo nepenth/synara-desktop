@@ -3,9 +3,6 @@ import { isNotificationEvent } from '../../utils/room';
 import { recordFoundationDiagnostic } from '../../utils/foundationDiagnostics';
 import { ClientEvent, MatrixEventEvent, RoomEvent } from '../../utils/roomEvents';
 
-export const RECENT_ROOM_WINDOW_MS = 24 * 60 * 60 * 1000;
-const MAX_RECENT_ROOM_TIMEOUT_MS = 2_147_483_647;
-
 export type RoomActivity = {
   roomId: string;
   activityTs: number;
@@ -17,11 +14,6 @@ export type RoomActivity = {
 export type RoomActivitySnapshot = {
   revision: number;
   entries: ReadonlyMap<string, RoomActivity>;
-};
-
-export type RoomActivityPartition = {
-  recentRoomIds: string[];
-  nonRecentRoomIds: string[];
 };
 
 type RoomActivityListener = () => void;
@@ -81,65 +73,6 @@ const snapshotsEqual = (left: RoomActivity | undefined, right: RoomActivity): bo
   left?.activityTs === right.activityTs &&
   left.latestEventId === right.latestEventId &&
   left.bumpStamp === right.bumpStamp;
-
-export const partitionRoomIdsByActivity = (
-  roomIds: readonly string[],
-  activity: RoomActivitySnapshot,
-  nowMs: number,
-  getRoomName: (roomId: string) => string = (roomId) => roomId,
-  windowMs = RECENT_ROOM_WINDOW_MS
-): RoomActivityPartition => {
-  const cutoff = nowMs - windowMs;
-  const recentRoomIds: string[] = [];
-  const nonRecentRoomIds: string[] = [];
-
-  roomIds.forEach((roomId) => {
-    const timestamp = activity.entries.get(roomId)?.activityTs ?? 0;
-    if (timestamp > cutoff) recentRoomIds.push(roomId);
-    else nonRecentRoomIds.push(roomId);
-  });
-
-  recentRoomIds.sort((leftId, rightId) => {
-    const timestampDelta =
-      (activity.entries.get(rightId)?.activityTs ?? 0) -
-      (activity.entries.get(leftId)?.activityTs ?? 0);
-    if (timestampDelta !== 0) return timestampDelta;
-
-    const nameDelta = getRoomName(leftId).localeCompare(getRoomName(rightId), undefined, {
-      sensitivity: 'base',
-    });
-    return nameDelta || leftId.localeCompare(rightId);
-  });
-
-  return { recentRoomIds, nonRecentRoomIds };
-};
-
-export const getNextRecentRoomExpiry = (
-  roomIds: readonly string[],
-  activity: RoomActivitySnapshot,
-  nowMs: number,
-  windowMs = RECENT_ROOM_WINDOW_MS
-): number | undefined => {
-  let nextExpiry: number | undefined;
-  roomIds.forEach((roomId) => {
-    const timestamp = activity.entries.get(roomId)?.activityTs ?? 0;
-    const expiry = timestamp + windowMs;
-    if (timestamp <= 0 || expiry <= nowMs) return;
-    if (nextExpiry === undefined || expiry < nextExpiry) nextExpiry = expiry;
-  });
-  return nextExpiry;
-};
-
-export const getRecentRoomExpiryDelay = (
-  roomIds: readonly string[],
-  activity: RoomActivitySnapshot,
-  nowMs: number,
-  windowMs = RECENT_ROOM_WINDOW_MS
-): number | undefined => {
-  const nextExpiry = getNextRecentRoomExpiry(roomIds, activity, nowMs, windowMs);
-  if (nextExpiry === undefined) return undefined;
-  return Math.min(MAX_RECENT_ROOM_TIMEOUT_MS, Math.max(1, nextExpiry - nowMs + 1));
-};
 
 export const getLegacyRoomActivitySnapshot = (
   mx: MatrixClientReading,

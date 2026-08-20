@@ -6,14 +6,7 @@ import test from 'node:test';
 // RoomEvent Timeline/LocalEchoUpdated/Redaction/RedactionCancelled =
 //   'Room.timeline'/'Room.localEchoUpdated'/'Room.redaction'/'Room.redactionCancelled';
 // MatrixEventEvent.Decrypted = 'Event.decrypted'.
-import {
-  RECENT_ROOM_WINDOW_MS,
-  RoomActivityStore,
-  getLegacyRoomActivitySnapshot,
-  getNextRecentRoomExpiry,
-  getRecentRoomExpiryDelay,
-  partitionRoomIdsByActivity,
-} from '../roomActivity';
+import { RoomActivityStore, getLegacyRoomActivitySnapshot } from '../roomActivity';
 import {
   clearDesktopDiagnostics,
   getDesktopDiagnosticEntries,
@@ -67,34 +60,6 @@ class MockMatrixClient extends EventEmitter {
   }
 }
 
-test('room activity partitions every room exactly once and sorts recent rooms newest first', () => {
-  const now = 2 * RECENT_ROOM_WINDOW_MS;
-  const snapshot = {
-    revision: 1,
-    entries: new Map([
-      ['!newest:example.org', { roomId: '!newest:example.org', activityTs: now - 1, revision: 1 }],
-      [
-        '!recent:example.org',
-        { roomId: '!recent:example.org', activityTs: now - 1_000, revision: 1 },
-      ],
-      [
-        '!old:example.org',
-        { roomId: '!old:example.org', activityTs: now - RECENT_ROOM_WINDOW_MS, revision: 1 },
-      ],
-    ]),
-  };
-
-  const partition = partitionRoomIdsByActivity(
-    ['!old:example.org', '!recent:example.org', '!newest:example.org'],
-    snapshot,
-    now
-  );
-
-  assert.deepEqual(partition.recentRoomIds, ['!newest:example.org', '!recent:example.org']);
-  assert.deepEqual(partition.nonRecentRoomIds, ['!old:example.org']);
-  assert.equal(new Set([...partition.recentRoomIds, ...partition.nonRecentRoomIds]).size, 3);
-});
-
 test('legacy activity fallback uses bounded room summary metadata without scanning timelines', () => {
   let scans = 0;
   const room = {
@@ -114,27 +79,21 @@ test('legacy activity fallback uses bounded room summary metadata without scanni
   assert.equal(snapshot.entries.get(room.roomId)?.activityTs, 123);
 });
 
-test('a live message moves an old room directly into Recent without losing it from both lists', () => {
-  const now = 3 * RECENT_ROOM_WINDOW_MS;
-  const events = [createEvent('$old', now - RECENT_ROOM_WINDOW_MS - 1)];
+test('a live message updates stored activity without inventing a timestamp', () => {
+  const events = [createEvent('$old', 100)];
   const room = createRoom('!room:example.org', events, 'Room');
   const mx = new MockMatrixClient([room]);
   const store = new RoomActivityStore(mx as any);
   const unsubscribe = store.subscribe(() => undefined);
   clearDesktopDiagnostics();
 
-  assert.deepEqual(
-    partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now).nonRecentRoomIds,
-    [room.roomId]
-  );
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 100);
 
-  const liveMessage = createEvent('$live', now - 1);
+  const liveMessage = createEvent('$live', 200);
   events.push(liveMessage);
   mx.emit('Room.timeline', liveMessage, room, false, false, { liveEvent: true });
 
-  const partition = partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now);
-  assert.deepEqual(partition.recentRoomIds, [room.roomId]);
-  assert.deepEqual(partition.nonRecentRoomIds, []);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
   const diagnostic = getDesktopDiagnosticEntries().find((entry) =>
     entry.includes('room-activity.updated')
   );
@@ -144,10 +103,9 @@ test('a live message moves an old room directly into Recent without losing it fr
   unsubscribe();
 });
 
-test('loaded thread-only activity keeps a room in Recent after store reconstruction', () => {
-  const now = 3 * RECENT_ROOM_WINDOW_MS;
-  const mainEvents = [createEvent('$old-main', now - RECENT_ROOM_WINDOW_MS - 1)];
-  const threadEvent = createEvent('$thread-live', now - 1);
+test('loaded thread-only activity keeps the latest qualifying timestamp', () => {
+  const mainEvents = [createEvent('$old-main', 100)];
+  const threadEvent = createEvent('$thread-live', 200);
   const room = {
     ...createRoom('!thread-room:example.org', mainEvents),
     getThreads: () => [{ events: [threadEvent] }],
@@ -155,8 +113,7 @@ test('loaded thread-only activity keeps a room in Recent after store reconstruct
   const mx = new MockMatrixClient([room]);
   const store = new RoomActivityStore(mx as any);
 
-  const partition = partitionRoomIdsByActivity([room.roomId], store.getSnapshot(), now);
-  assert.deepEqual(partition.recentRoomIds, [room.roomId]);
+  assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$thread-live');
 });
 
@@ -326,42 +283,6 @@ test('cancelling a redaction restores the formerly eligible activity head', () =
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.activityTs, 200);
   assert.equal(store.getSnapshot().entries.get(room.roomId)?.latestEventId, '$head');
   unsubscribe();
-});
-
-test('next Recent expiry selects the earliest active room boundary', () => {
-  const now = 10_000;
-  const snapshot = {
-    revision: 1,
-    entries: new Map([
-      ['!first:example.org', { roomId: '!first:example.org', activityTs: 100, revision: 1 }],
-      ['!second:example.org', { roomId: '!second:example.org', activityTs: 200, revision: 1 }],
-    ]),
-  };
-
-  assert.equal(
-    getNextRecentRoomExpiry(['!second:example.org', '!first:example.org'], snapshot, now),
-    100 + RECENT_ROOM_WINDOW_MS
-  );
-});
-
-test('Recent expiry scheduling advances through staggered room boundaries', () => {
-  const now = 1_000;
-  const windowMs = 100;
-  const roomIds = ['!first:example.org', '!second:example.org'];
-  const snapshot = {
-    revision: 1,
-    entries: new Map([
-      ['!first:example.org', { roomId: '!first:example.org', activityTs: 910, revision: 1 }],
-      ['!second:example.org', { roomId: '!second:example.org', activityTs: 930, revision: 1 }],
-    ]),
-  };
-
-  assert.equal(getRecentRoomExpiryDelay(roomIds, snapshot, now, windowMs), 11);
-  assert.equal(getRecentRoomExpiryDelay(roomIds, snapshot, now + 11, windowMs), 20);
-  assert.deepEqual(partitionRoomIdsByActivity(roomIds, snapshot, now + 11, undefined, windowMs), {
-    recentRoomIds: ['!second:example.org'],
-    nonRecentRoomIds: ['!first:example.org'],
-  });
 });
 
 test('5k-room snapshot sources ignore unrelated updates without copying the activity map', () => {

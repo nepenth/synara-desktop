@@ -17,8 +17,8 @@ struct RoomListView: View {
     @State private var isResettingSession = false
     @State private var sessionRecoveryError: String?
     @State private var selectedSort: RoomListSortOrder = {
-        RoomListSortOrder(rawValue: UserDefaults.standard.string(forKey: "synara.roomListSort") ?? "")
-            ?? .byRecentActivity
+        RoomListSortOrder(rawValue: UserDefaults.standard.string(forKey: RoomListSortOrder.storageKey) ?? "")
+            ?? RoomListSortOrder.defaultOrder
     }()
     @FocusState private var isSearchFocused: Bool
 
@@ -304,7 +304,7 @@ struct RoomListView: View {
             roomUpdatesTask?.cancel()
         }
         .onChange(of: selectedSort) { sort in
-            UserDefaults.standard.set(sort.rawValue, forKey: "synara.roomListSort")
+            UserDefaults.standard.set(sort.rawValue, forKey: RoomListSortOrder.storageKey)
         }
     }
 
@@ -732,14 +732,19 @@ private struct RoomListHeader: View {
                     }
                 }
             } label: {
-                Image(systemName: selectedSort.systemImage)
-                    .font(.system(size: 17, weight: .semibold))
-                    .frame(width: 42, height: 42)
-                    .background(SynaraColor.secondaryText.opacity(0.10))
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                HStack(spacing: SynaraSpacing.xSmall) {
+                    Image(systemName: selectedSort.systemImage)
+                    Text(selectedSort.shortTitle)
+                }
+                .font(.system(size: 15, weight: .semibold))
+                .padding(.horizontal, SynaraSpacing.small)
+                .frame(height: 42)
+                .background(SynaraColor.secondaryText.opacity(0.10))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
             }
-            .accessibilityLabel(selectedSort.title)
+            .accessibilityLabel("Sort rooms")
+            .accessibilityValue(selectedSort.title)
             .accessibilityIdentifier("RoomListSortMenu")
 
             Button(action: onSearch) {

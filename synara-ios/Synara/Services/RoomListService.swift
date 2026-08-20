@@ -89,26 +89,39 @@ struct SpaceSummary: Identifiable, Equatable, Hashable {
 }
 
 enum RoomListSortOrder: String, CaseIterable, Identifiable {
-    case byName
-    case byRecentActivity
+    /// Device-local chrome. Same key/default as desktop `synara.roomListSort`.
+    static let storageKey = "synara.roomListSort"
+    static let defaultOrder: RoomListSortOrder = .recent
+
+    case recent
+    case name
 
     var id: String { rawValue }
 
     var title: String {
         switch self {
-        case .byName:
-            return "Sort by name"
-        case .byRecentActivity:
+        case .recent:
             return "Sort by recent activity"
+        case .name:
+            return "Sort by name"
+        }
+    }
+
+    var shortTitle: String {
+        switch self {
+        case .recent:
+            return "Recent"
+        case .name:
+            return "Name"
         }
     }
 
     var systemImage: String {
         switch self {
-        case .byName:
-            return "textformat"
-        case .byRecentActivity:
+        case .recent:
             return "clock"
+        case .name:
+            return "textformat"
         }
     }
 }
@@ -121,21 +134,21 @@ enum RoomListFavorites {
 
     static func partition(from rooms: [RoomSummary]) -> Partition {
         Partition(
-            favorites: rooms.filter(\.isFavorite),
-            remaining: rooms.filter { $0.isFavorite == false }
+            favorites: rooms.filter { $0.membership == .joined && $0.isFavorite },
+            remaining: rooms.filter { $0.membership != .joined || $0.isFavorite == false }
         )
     }
 
     static func sorted(_ rooms: [RoomSummary], order: RoomListSortOrder) -> [RoomSummary] {
         rooms.sorted { lhs, rhs in
             switch order {
-            case .byName:
+            case .name:
                 let nameOrder = lhs.name.localizedCaseInsensitiveCompare(rhs.name)
                 if nameOrder != .orderedSame {
                     return nameOrder == .orderedAscending
                 }
                 return lhs.id < rhs.id
-            case .byRecentActivity:
+            case .recent:
                 if lhs.lastActivityAt != rhs.lastActivityAt {
                     return lhs.lastActivityAt > rhs.lastActivityAt
                 }
@@ -146,47 +159,6 @@ enum RoomListFavorites {
                 return lhs.id < rhs.id
             }
         }
-    }
-}
-
-enum RoomListRecentActivity {
-    static let window: TimeInterval = 86400
-
-    struct Partition: Equatable {
-        let recent: [RoomSummary]
-        let remaining: [RoomSummary]
-    }
-
-    static func recent(from rooms: [RoomSummary], referenceDate: Date = Date()) -> [RoomSummary] {
-        partition(from: rooms, referenceDate: referenceDate).recent
-    }
-
-    static func partition(from rooms: [RoomSummary], referenceDate: Date = Date()) -> Partition {
-        let cutoff = referenceDate.addingTimeInterval(-window)
-        let recent = rooms
-            .filter { $0.lastActivityAt > cutoff }
-            .sorted {
-                if $0.lastActivityAt != $1.lastActivityAt {
-                    return $0.lastActivityAt > $1.lastActivityAt
-                }
-                let nameOrder = $0.name.localizedCaseInsensitiveCompare($1.name)
-                if nameOrder != .orderedSame {
-                    return nameOrder == .orderedAscending
-                }
-                return $0.id < $1.id
-            }
-        let recentIDs = Set(recent.map(\.id))
-        return Partition(
-            recent: recent,
-            remaining: rooms.filter { recentIDs.contains($0.id) == false }
-        )
-    }
-
-    static func nextExpirationDate(from rooms: [RoomSummary], referenceDate: Date = Date()) -> Date? {
-        rooms
-            .map { $0.lastActivityAt.addingTimeInterval(window) }
-            .filter { $0 > referenceDate }
-            .min()
     }
 }
 

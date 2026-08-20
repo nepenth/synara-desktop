@@ -9,7 +9,9 @@ use crate::dto::RoomSummary;
 pub enum RoomListSort {
     /// Case-insensitive display name; missing name sorts last; stable by room_id.
     ByName,
-    /// Newest `last_activity_ts` first; missing ts sorts last; stable by room_id.
+    /// Newest SDK `last_activity_ts` (`latest_event_timestamp`) first.
+    /// Missing ts sorts last; stable by room_id. This is latest-event time,
+    /// including encrypted events when the SDK has a timestamp — not a recents rail.
     RecentActivity,
     /// Favorites first, then recent activity among the rest.
     FavoritesThenRecent,
@@ -77,20 +79,6 @@ pub fn sort_rooms_in_place(rooms: &mut [RoomSummary], sort: RoomListSort) {
     });
 }
 
-/// Top-N recent joined rooms by activity (for "recent" rail).
-pub fn recent_joined_rooms(rooms: &[RoomSummary], limit: usize) -> Vec<RoomSummary> {
-    let mut joined: Vec<RoomSummary> = rooms
-        .iter()
-        .filter(|r| r.membership == crate::dto::Membership::Join)
-        .cloned()
-        .collect();
-    sort_rooms_in_place(&mut joined, RoomListSort::RecentActivity);
-    if joined.len() > limit {
-        joined.truncate(limit);
-    }
-    joined
-}
-
 fn normalized_name(room: &RoomSummary) -> Option<String> {
     let name = room.name.as_deref()?.trim();
     if name.is_empty() {
@@ -144,5 +132,47 @@ mod tests {
                 .collect::<Vec<_>>(),
             vec!["!new:example.org", "!mid:example.org", "!old:example.org"]
         );
+    }
+
+    #[test]
+    fn missing_last_activity_ts_sorts_last() {
+        let rooms = vec![
+            named("!new:example.org", "New", 30),
+            RoomSummaryBuilder::new("!none:example.org")
+                .name("None")
+                .build()
+                .unwrap(),
+            named("!old:example.org", "Old", 10),
+        ];
+        let sorted = sort_rooms(&rooms, RoomListSort::RecentActivity);
+        assert_eq!(
+            sorted
+                .iter()
+                .map(|r| r.room_id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["!new:example.org", "!old:example.org", "!none:example.org"]
+        );
+        assert!(sorted[2].last_activity_ts.is_none());
+    }
+
+    #[test]
+    fn encrypted_room_orders_by_native_last_activity_ts() {
+        let rooms = vec![
+            RoomSummaryBuilder::new("!plain:example.org")
+                .name("Plain")
+                .last_activity_ts(10)
+                .build()
+                .unwrap(),
+            RoomSummaryBuilder::new("!encrypted:example.org")
+                .name("Encrypted")
+                .encrypted(true)
+                .last_activity_ts(40)
+                .build()
+                .unwrap(),
+        ];
+        let sorted = sort_rooms(&rooms, RoomListSort::RecentActivity);
+        assert_eq!(sorted[0].room_id.as_str(), "!encrypted:example.org");
+        assert!(sorted[0].is_encrypted);
+        assert_eq!(sorted[0].last_activity_ts, Some(40));
     }
 }

@@ -1,10 +1,15 @@
 import type { RoomSummary } from '../../../features/matrix-dto/room';
-import { factoryRoomIdByActivity, factoryRoomIdByAtoZ } from '../../../utils/sort';
-import type { MatrixClientReading } from '../../../utils/room';
 
-export const HOME_ROOM_SORT_STORAGE_KEY = 'synara.homeRoomSort';
+/**
+ * Device-local room-list sort chrome. Same key and default as iOS
+ * `UserDefaults` (`synara.roomListSort`). Not Matrix account data; favorites
+ * sync via `m.favourite`, sort stays per-device.
+ */
+export const ROOM_LIST_SORT_STORAGE_KEY = 'synara.roomListSort';
 
-export type HomeRoomSort = 'name' | 'recent';
+export type RoomListSort = 'recent' | 'name';
+
+export const DEFAULT_ROOM_LIST_SORT: RoomListSort = 'recent';
 
 export const partitionHomeRooms = (
   roomIds: readonly string[],
@@ -25,23 +30,52 @@ export const partitionHomeRooms = (
 export const favoriteRoomIdSet = (rooms: readonly RoomSummary[]): Set<string> =>
   new Set(rooms.filter((room) => room.isFavorite).map((room) => room.roomId));
 
-export const readHomeRoomSort = (storage: Pick<Storage, 'getItem'> | undefined): HomeRoomSort => {
-  const value = storage?.getItem(HOME_ROOM_SORT_STORAGE_KEY);
-  return value === 'recent' ? 'recent' : 'name';
+export const readRoomListSort = (storage: Pick<Storage, 'getItem'> | undefined): RoomListSort => {
+  const value = storage?.getItem(ROOM_LIST_SORT_STORAGE_KEY);
+  return value === 'name' ? 'name' : DEFAULT_ROOM_LIST_SORT;
 };
 
-export const writeHomeRoomSort = (
+export const writeRoomListSort = (
   storage: Pick<Storage, 'setItem'> | undefined,
-  sort: HomeRoomSort
+  sort: RoomListSort
 ): void => {
-  storage?.setItem(HOME_ROOM_SORT_STORAGE_KEY, sort);
+  storage?.setItem(ROOM_LIST_SORT_STORAGE_KEY, sort);
 };
 
+const compareNames = (left?: string, right?: string, leftId?: string, rightId?: string): number => {
+  const ln = (left ?? '').replace(/#/g, '').toLocaleLowerCase();
+  const rn = (right ?? '').replace(/#/g, '').toLocaleLowerCase();
+  if (ln && !rn) return -1;
+  if (!ln && rn) return 1;
+  const nameDelta = ln.localeCompare(rn, undefined, { sensitivity: 'base' });
+  return nameDelta || (leftId ?? '').localeCompare(rightId ?? '');
+};
+
+/**
+ * One global sort for Favorites and Rooms. Recent uses native
+ * `lastActivityTs` only — missing timestamps sort last and are not invented.
+ */
 export const sortHomeRoomIds = (
-  mx: MatrixClientReading,
   roomIds: readonly string[],
-  sort: HomeRoomSort
-): string[] =>
-  Array.from(roomIds).sort(
-    sort === 'recent' ? factoryRoomIdByActivity(mx) : factoryRoomIdByAtoZ(mx)
-  );
+  rooms: readonly RoomSummary[],
+  sort: RoomListSort
+): string[] => {
+  const byId = new Map(rooms.map((room) => [room.roomId, room]));
+  return Array.from(roomIds).sort((leftId, rightId) => {
+    const left = byId.get(leftId);
+    const right = byId.get(rightId);
+    if (sort === 'name') {
+      return compareNames(left?.name, right?.name, leftId, rightId);
+    }
+    const leftTs = left?.lastActivityTs;
+    const rightTs = right?.lastActivityTs;
+    const leftHasTs = typeof leftTs === 'number' && Number.isFinite(leftTs);
+    const rightHasTs = typeof rightTs === 'number' && Number.isFinite(rightTs);
+    if (leftHasTs && rightHasTs && leftTs !== rightTs) {
+      return (rightTs as number) - (leftTs as number);
+    }
+    if (leftHasTs && !rightHasTs) return -1;
+    if (!leftHasTs && rightHasTs) return 1;
+    return compareNames(left?.name, right?.name, leftId, rightId);
+  });
+};
