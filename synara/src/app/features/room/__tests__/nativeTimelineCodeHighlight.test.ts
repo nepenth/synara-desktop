@@ -7,6 +7,7 @@ import Prism from 'prismjs';
 import { sanitizeCustomHtml } from '../../../utils/sanitize';
 import {
   countCodeLines,
+  displayCodeText,
   formatLineNumbers,
   highlightNativeCode,
   languageClassFromClassName,
@@ -50,12 +51,23 @@ test('native presenter routes formatted HTML through the sanitized Prism code-bl
   assert.match(formattedBody, /sanitizeCustomHtml/);
   assert.match(formattedBody, /react-prism\/ReactPrism/);
   assert.match(formattedBody, /highlightNativeCode/);
+  assert.match(formattedBody, /displayCodeText/);
   assert.match(formattedBody, /data-native-code-block/);
   assert.match(formattedBody, /CodeLineNumbers/);
+  assert.match(formattedBody, /CodeRow/);
+  assert.match(formattedBody, /setHighlightedHtml\(undefined\)/);
+  assert.match(formattedBody, /\.catch\(/);
   assert.match(highlight, /language-/);
   assert.match(htmlCss, /CodeLineNumbers/);
+  assert.match(htmlCss, /CodeRow/);
   assert.match(htmlCss, /whiteSpace: 'pre'/);
-  assert.match(htmlCss, /color\.Background\.Container/);
+  assert.match(htmlCss, /ui-monospace/);
+  assert.match(htmlCss, /fontSize: '0\.92em'/);
+  assert.match(htmlCss, /lineHeight: 1\.5/);
+  assert.match(htmlCss, /color\.Surface\.Container/);
+  assert.doesNotMatch(htmlCss, /color\.Background\.Container/);
+  assert.match(htmlCss, /export const CodeScroll[\s\S]*?overflowX: 'auto'/);
+  assert.match(formattedBody, /htmlCss\.CodeLineNumbers[\s\S]*?htmlCss\.CodeScroll/);
   assert.doesNotMatch(formattedBody, /matrix-js-sdk/);
   assert.doesNotMatch(highlight, /matrix-js-sdk/);
 });
@@ -95,4 +107,32 @@ test('unknown languages still produce a numbered code panel model', () => {
   assert.equal(countCodeLines(block.code), 2);
   assert.equal(formatLineNumbers(countCodeLines(block.code)), '1\n2');
   assert.equal(highlightNativeCode(block.code, block.languageClass), 'alpha\nbeta\n');
+});
+
+const visualLinesForPre = (text: string): number => text.split('\n').length;
+
+test('Synara language-python fences strip one trailing newline so gutter count matches visual lines', () => {
+  const sanitized = sanitizeCustomHtml(PYTHON_FIXTURE);
+  const block = nativeCodeBlockFromPreChildren(firstPreChildren(sanitized));
+  assert.equal(block.languageClass, 'language-python');
+  assert.equal(block.code.endsWith('\n'), true);
+  assert.equal(block.code.includes('\n\n'), false);
+
+  const display = displayCodeText(block.code);
+  assert.equal(display.endsWith('\n'), false);
+  assert.match(display, /def greet\(name\):/);
+  assert.match(display, /return f"hi \{name\}"/);
+
+  const gutterCount = countCodeLines(block.code);
+  assert.equal(gutterCount, countCodeLines(display));
+  assert.equal(gutterCount, visualLinesForPre(display));
+  assert.equal(gutterCount, 2);
+  assert.notEqual(gutterCount, visualLinesForPre(block.code));
+  assert.equal(formatLineNumbers(gutterCount), '1\n2');
+  assert.equal(formattedBody.includes('{displayCode}'), true);
+
+  const withInternalBlank = 'one\n\nthree\n';
+  assert.equal(displayCodeText(withInternalBlank), 'one\n\nthree');
+  assert.equal(countCodeLines(withInternalBlank), 3);
+  assert.equal(visualLinesForPre(displayCodeText(withInternalBlank)), 3);
 });

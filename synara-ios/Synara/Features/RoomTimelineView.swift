@@ -3358,13 +3358,14 @@ private struct MatrixCodeBlockView: View {
                         .foregroundStyle(SynaraColor.secondaryText)
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
+                        .fixedSize(horizontal: true, vertical: true)
                         .accessibilityHidden(true)
 
                     Text(code)
                         .font(SynaraTypography.monoBody)
                         .foregroundStyle(SynaraColor.primaryText)
                         .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: true, vertical: true)
                 }
                 .padding(SynaraSpacing.medium)
             }

@@ -31,11 +31,17 @@ export const CodePanel = style({
   boxSizing: 'border-box',
 });
 
+const codeMono = {
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontSize: '0.92em',
+  lineHeight: 1.5,
+} as const;
+
 export const CodeLanguage = style({
   flex: 'none',
   padding: `${config.space.S100} ${config.space.S300}`,
-  borderBottom: `1px solid ${color.Background.ContainerLine}`,
-  color: color.Background.OnContainer,
+  borderBottom: `1px solid ${color.Surface.ContainerLine}`,
+  color: color.Surface.OnContainer,
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
   fontSize: '0.78em',
   letterSpacing: '0.02em',
@@ -44,13 +50,21 @@ export const CodeLanguage = style({
   opacity: 0.78,
 });
 
-export const CodeScroll = style({
+export const CodeRow = style({
   display: 'flex',
   flexDirection: 'row',
   alignItems: 'flex-start',
+  minWidth: 0,
+  padding: `${config.space.S200} ${config.space.S300}`,
+  ...codeMono,
+});
+
+export const CodeScroll = style({
+  flex: 1,
+  minWidth: 0,
   overflowX: 'auto',
   whiteSpace: 'pre',
-  padding: `${config.space.S200} ${config.space.S300}`,
+  lineHeight: 1.5,
 });
 
 export const CodeLineNumbers = style({
@@ -61,10 +75,13 @@ export const CodeLineNumbers = style({
   lineHeight: 1.5,
   paddingRight: config.space.S200,
   marginRight: config.space.S200,
-  borderRight: `1px solid ${color.Background.ContainerLine}`,
-  color: color.Background.OnContainer,
+  borderRight: `1px solid ${color.Surface.ContainerLine}`,
+  color: color.Surface.OnContainer,
+  background: color.Surface.Container,
   opacity: 0.48,
   fontVariantNumeric: 'tabular-nums',
+  fontFamily: 'inherit',
+  fontSize: 'inherit',
 });
 
 globalStyle(`${FormattedBody} p`, {
@@ -112,9 +129,9 @@ globalStyle(`${FormattedBody} pre`, {
   wordBreak: 'normal',
   whiteSpace: 'normal',
   borderRadius: config.radii.R400,
-  background: color.Background.Container,
-  color: color.Background.OnContainer,
-  border: `1px solid ${color.Background.ContainerLine}`,
+  background: color.Surface.Container,
+  color: color.Surface.OnContainer,
+  border: `1px solid ${color.Surface.ContainerLine}`,
 });
 globalStyle(`${FormattedBody} pre:last-child`, {
   marginBottom: 0,
@@ -131,14 +148,16 @@ globalStyle(`${FormattedBody} :not(pre) > code`, {
 });
 globalStyle(`${FormattedBody} pre code`, {
   display: 'block',
-  flex: 1,
-  minWidth: 0,
+  width: 'max-content',
+  minWidth: '100%',
   padding: 0,
   background: 'transparent',
   border: 'none',
   whiteSpace: 'pre',
   overflowWrap: 'normal',
   wordBreak: 'normal',
+  fontFamily: 'inherit',
+  fontSize: 'inherit',
   lineHeight: 1.5,
   tabSize: 4,
 });

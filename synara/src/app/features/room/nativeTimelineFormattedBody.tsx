@@ -5,6 +5,7 @@ import {
   NATIVE_PRISM_CHAR_LIMIT,
   countCodeLines,
   displayCodeLanguage,
+  displayCodeText,
   formatLineNumbers,
   highlightNativeCode,
   nativeCodeBlockFromPreChildren,
@@ -13,48 +14,61 @@ import {
 import * as htmlCss from './nativeTimelineHtml.css';
 
 function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
-  const lineCount = countCodeLines(code);
+  const displayCode = displayCodeText(code);
+  const lineCount = countCodeLines(displayCode);
   const lineNumbers = formatLineNumbers(lineCount);
   const languageLabel = displayCodeLanguage(languageClass);
   const className = prismLanguageClass(languageClass);
-  const largeCode = code.length > NATIVE_PRISM_CHAR_LIMIT;
+  const largeCode = displayCode.length > NATIVE_PRISM_CHAR_LIMIT;
   const [highlightedHtml, setHighlightedHtml] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    setHighlightedHtml(undefined);
     if (largeCode) {
-      setHighlightedHtml(undefined);
       return undefined;
     }
 
     let cancelled = false;
     // Load ReactPrism so Prism language grammars register on the shared Prism instance.
-    void import('../../plugins/react-prism/ReactPrism').then(() => {
-      if (cancelled) return;
-      setHighlightedHtml(highlightNativeCode(code, languageClass));
-    });
+    void import('../../plugins/react-prism/ReactPrism')
+      .then(() => {
+        if (cancelled) return;
+        try {
+          const html = highlightNativeCode(displayCode, languageClass);
+          if (cancelled) return;
+          setHighlightedHtml(html);
+        } catch {
+          if (!cancelled) setHighlightedHtml(undefined);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setHighlightedHtml(undefined);
+      });
 
     return () => {
       cancelled = true;
     };
-  }, [code, languageClass, largeCode]);
+  }, [displayCode, languageClass, largeCode]);
 
   return (
     <pre className={htmlCss.CodePanel} data-native-code-block="true">
       <span className={htmlCss.CodeLanguage}>{languageLabel}</span>
-      <div className={htmlCss.CodeScroll}>
+      <div className={htmlCss.CodeRow}>
         <span className={htmlCss.CodeLineNumbers} aria-hidden="true">
           {lineNumbers}
         </span>
-        {highlightedHtml === undefined ? (
-          <code className={className}>{code}</code>
-        ) : (
-          <code
-            className={className}
-            // Highlighted markup is produced from already-sanitized text via Prism.
-            // eslint-disable-next-line react/no-danger
-            dangerouslySetInnerHTML={{ __html: highlightedHtml }}
-          />
-        )}
+        <div className={htmlCss.CodeScroll}>
+          {highlightedHtml === undefined ? (
+            <code className={className}>{displayCode}</code>
+          ) : (
+            <code
+              className={className}
+              // Highlighted markup is produced from already-sanitized text via Prism.
+              // eslint-disable-next-line react/no-danger
+              dangerouslySetInnerHTML={{ __html: highlightedHtml }}
+            />
+          )}
+        </div>
       </div>
     </pre>
   );

@@ -49,8 +49,11 @@ export const prismLanguageClass = (languageClass?: string): string | undefined =
 export const displayCodeLanguage = (languageClass?: string): string =>
   normalizePrismLanguage(languageClass) ?? 'code';
 
+/** Strip one trailing newline so gutter count matches `white-space: pre` paint. */
+export const displayCodeText = (code: string): string => code.replace(/\n$/, '');
+
 export const countCodeLines = (code: string): number => {
-  const normalized = code.replace(/\n$/, '');
+  const normalized = displayCodeText(code);
   if (normalized.length === 0) return 1;
   return normalized.split('\n').length;
 };
