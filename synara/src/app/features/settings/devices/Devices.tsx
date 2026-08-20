@@ -120,7 +120,7 @@ export function Devices({ requestClose }: DevicesProps) {
                       options={<DeviceLogoutBtn />}
                     ></DeviceTile>
                     {crossSigningActive && verificationStatus === 'unverified' && (
-                      <VerifyCurrentDeviceTile />
+                      <VerifyCurrentDeviceTile onVerified={() => void refreshDeviceList()} />
                     )}
                   </SequenceCard>
                 ) : (

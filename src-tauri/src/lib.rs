@@ -486,6 +486,7 @@ pub fn run() {
             matrix::auth::product::matrix_poll_respond,
             matrix::auth::product::matrix_set_own_display_name,
             matrix::auth::product::matrix_set_own_avatar,
+            matrix::auth::product::matrix_get_own_profile,
             matrix::auth::product::matrix_set_room_name,
             matrix::auth::product::matrix_set_room_topic,
             matrix::auth::product::matrix_set_room_avatar,

@@ -9,6 +9,24 @@ fn marker_stable() {
 }
 
 #[test]
+fn own_profile_read_dto_is_mxc_only() {
+    let profile = MatrixOwnProfile {
+        user_id: "@alice:example.org".into(),
+        display_name: Some("Alice".into()),
+        avatar_url: Some("mxc://example.org/abc".into()),
+    };
+    let json = serde_json::to_value(&profile).expect("own profile serializes");
+    assert_eq!(json["userId"], "@alice:example.org");
+    assert_eq!(json["displayName"], "Alice");
+    assert_eq!(json["avatarUrl"], "mxc://example.org/abc");
+    assert!(json.get("bytes").is_none());
+    assert!(parse_own_avatar_mxc("mxc://example.org/abc")
+        .unwrap()
+        .is_some());
+    assert!(parse_own_avatar_mxc("data:image/png;base64,AAAA").is_err());
+}
+
+#[test]
 fn own_and_peer_profiles() {
     let mut idx = UserProfileIndex::new(2);
     idx.set_own_user_id("@alice:example.org").unwrap();

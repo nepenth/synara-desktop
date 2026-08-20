@@ -153,8 +153,10 @@ struct MatrixVerificationStateReducer {
             return 2
         case .emojis, .decimals:
             return 3
-        case .finished, .cancelled, .failed:
+        case .confirmed:
             return 4
+        case .finished, .cancelled, .failed, .mismatched:
+            return 5
         }
     }
 }

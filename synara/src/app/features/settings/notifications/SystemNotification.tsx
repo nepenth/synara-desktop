@@ -16,6 +16,7 @@ import {
   supportsPlatformSystemNotifications,
 } from '../../../platform';
 import type { PlatformNotificationPermission } from '../../../platform';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 function EmailNotification() {
   const mx = useMatrixClient();
@@ -181,14 +182,16 @@ export function SystemNotification() {
           after={<Switch value={isNotificationSounds} onChange={setIsNotificationSounds} />}
         />
       </SequenceCard>
-      <SequenceCard
-        className={SequenceCardStyle}
-        variant="SurfaceVariant"
-        direction="Column"
-        gap="400"
-      >
-        <EmailNotification />
-      </SequenceCard>
+      {!isNativeMatrixSession() && (
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <EmailNotification />
+        </SequenceCard>
+      )}
     </Box>
   );
 }

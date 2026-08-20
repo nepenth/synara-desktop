@@ -8,6 +8,7 @@ import { KeywordMessagesNotifications } from './KeywordMessages';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 type NotificationsProps = {
   requestClose: () => void;
@@ -34,9 +35,25 @@ export function Notifications({ requestClose }: NotificationsProps) {
           <PageContent>
             <Box direction="Column" gap="700">
               <SystemNotification />
-              <AllMessagesNotifications />
-              <SpecialMessagesNotifications />
-              <KeywordMessagesNotifications />
+              {isNativeMatrixSession() ? (
+                <Box direction="Column" gap="100">
+                  <Text size="L400">Push Rules</Text>
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                    gap="400"
+                  >
+                    <SettingTile description="Homeserver push-rule editing is not available in this native session. Desktop notification permission still applies." />
+                  </SequenceCard>
+                </Box>
+              ) : (
+                <>
+                  <AllMessagesNotifications />
+                  <SpecialMessagesNotifications />
+                  <KeywordMessagesNotifications />
+                </>
+              )}
               <Box direction="Column" gap="100">
                 <Text size="L400">Block Messages</Text>
                 <SequenceCard

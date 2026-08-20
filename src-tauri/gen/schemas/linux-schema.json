@@ -459,6 +459,12 @@
           "markdownDescription": "Enables the matrix_get_global_image_packs command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_get_own_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-get-own-profile",
+          "markdownDescription": "Enables the matrix_get_own_profile command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_get_room_directory_visibility command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-get-room-directory-visibility",
@@ -1436,6 +1442,12 @@
           "type": "string",
           "const": "deny-matrix-get-global-image-packs",
           "markdownDescription": "Denies the matrix_get_global_image_packs command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_get_own_profile command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-get-own-profile",
+          "markdownDescription": "Denies the matrix_get_own_profile command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_get_room_directory_visibility command without any pre-configured scope.",

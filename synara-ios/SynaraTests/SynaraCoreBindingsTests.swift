@@ -1112,6 +1112,46 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             .finished
         )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "confirmed",
+                direction: "outgoing",
+                flowId: "flow-5",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .confirmed
+        )
+        XCTAssertNotEqual(
+            SharedCoreVerificationLive.state(
+                phase: "confirmed",
+                direction: "outgoing",
+                flowId: "flow-5",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .finished
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "mismatched",
+                direction: "outgoing",
+                flowId: "flow-6",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .mismatched
+        )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "sas_ready",
+                direction: "outgoing",
+                flowId: "flow-7",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .sasStarted
+        )
     }
 
     func testSharedCoreVerificationActionsWithoutSessionFailClosedWithoutEcho() async {

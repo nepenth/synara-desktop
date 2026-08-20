@@ -220,7 +220,10 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
               }
             />
             {showVerification && device.trust === 'unverified' && (
-              <VerifyOtherDeviceTile deviceId={device.deviceId} />
+              <VerifyOtherDeviceTile
+                deviceId={device.deviceId}
+                onVerified={() => void refreshDeviceList()}
+              />
             )}
           </SequenceCard>
         ))}

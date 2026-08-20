@@ -62,24 +62,30 @@ export function VerificationStatusBadge({
   );
 }
 
-export function VerifyCurrentDeviceTile() {
+export function VerifyCurrentDeviceTile({ onVerified }: { onVerified?: () => void }) {
   return (
     <InfoCard
       variant="Critical"
       title="Unverified"
       description="Use another verified device to compare emoji or decimal security codes."
-      after={<NativeStartVerification onExit={() => undefined} />}
+      after={<NativeStartVerification onExit={() => onVerified?.()} />}
     />
   );
 }
 
-export function VerifyOtherDeviceTile({ deviceId }: { deviceId: string }) {
+export function VerifyOtherDeviceTile({
+  deviceId,
+  onVerified,
+}: {
+  deviceId: string;
+  onVerified?: () => void;
+}) {
   return (
     <InfoCard
       variant="Warning"
       title="Unverified"
       description="Verify device identity and grant access to encrypted messages."
-      after={<NativeStartVerification deviceId={deviceId} onExit={() => undefined} />}
+      after={<NativeStartVerification deviceId={deviceId} onExit={() => onVerified?.()} />}
     />
   );
 }

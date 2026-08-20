@@ -56,14 +56,18 @@ enum SharedCoreVerificationLive {
             if emoji.isEmpty == false {
                 return .emojis(emoji.map { CryptoVerificationEmoji(symbol: $0.symbol, description: $0.description) })
             }
-            if decimals.isEmpty == false {
+            if decimals.count == 3 {
                 return .decimals(decimals)
             }
             return .sasStarted
-        case "confirmed", "done":
+        case "confirmed":
+            return .confirmed
+        case "done":
             return .finished
         case "cancelled":
             return .cancelled
+        case "mismatched":
+            return .mismatched
         default:
             return .failed
         }

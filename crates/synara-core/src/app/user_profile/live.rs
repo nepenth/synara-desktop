@@ -1,8 +1,8 @@
-//! Live own-profile display-name / avatar writes.
+//! Live own-profile display-name / avatar reads and writes.
 
 use matrix_sdk::{ruma::OwnedMxcUri, Client};
 
-use super::MatrixProfileWriteResult;
+use super::{MatrixOwnProfile, MatrixProfileWriteResult};
 
 const MAX_OWN_DISPLAY_NAME_CHARS: usize = 255;
 
@@ -56,4 +56,37 @@ pub async fn set_own_avatar(
         .await
         .map_err(|_| "v-send.r-avatar-set-sdk-failed")?;
     Ok(MatrixProfileWriteResult { status: "ok" })
+}
+
+pub async fn get_own_profile(client: &Client) -> Result<MatrixOwnProfile, &'static str> {
+    let user_id = client
+        .user_id()
+        .ok_or("v-send.r-avatar-profile-no-session")?
+        .to_string();
+    let display_name = client
+        .account()
+        .get_display_name()
+        .await
+        .map_err(|_| "v-send.r-avatar-display-name-read-failed")?;
+    if let Some(ref name) = display_name {
+        parse_own_display_name(name)?;
+    }
+    let avatar = client
+        .account()
+        .get_avatar_url()
+        .await
+        .map_err(|_| "v-send.r-avatar-read-failed")?;
+    let avatar_url = match avatar {
+        Some(mxc) => {
+            let serialized = mxc.to_string();
+            parse_own_avatar_mxc(&serialized)?;
+            Some(serialized)
+        }
+        None => None,
+    };
+    Ok(MatrixOwnProfile {
+        user_id,
+        display_name,
+        avatar_url,
+    })
 }

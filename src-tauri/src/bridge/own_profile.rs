@@ -1,6 +1,6 @@
-//! Desktop bridges for own display-name / avatar writes through `Core::command`.
+//! Desktop bridges for own display-name / avatar reads and writes through `Core::command`.
 
-use synara_core::app::user_profile::MatrixProfileWriteResult;
+use synara_core::app::user_profile::{MatrixOwnProfile, MatrixProfileWriteResult};
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -40,6 +40,19 @@ pub(crate) async fn set_own_avatar(
         "The native Matrix avatar could not be updated.",
         "v-send.r-avatar-set-sdk-failed",
     )
+}
+
+pub(crate) async fn get_own_profile(
+    core: &Core,
+) -> Result<MatrixOwnProfile, MatrixAuthCommandError> {
+    let payload = dispatch(core, "matrix_get_own_profile", serde_json::Value::Null).await?;
+    serde_json::from_value(payload).map_err(|_| {
+        MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix profile could not be loaded.",
+            "v-send.r-avatar-read-failed",
+        )
+    })
 }
 
 async fn dispatch(
@@ -99,6 +112,9 @@ fn map_own_profile_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
             let message = match diagnostic {
                 "v-send.r-avatar-display-name-sdk-failed" => {
                     "The native Matrix display name could not be updated."
+                }
+                "v-send.r-avatar-display-name-read-failed" | "v-send.r-avatar-read-failed" => {
+                    "The native Matrix profile could not be loaded."
                 }
                 _ => "The native Matrix avatar could not be updated.",
             };

@@ -62,7 +62,7 @@ use crate::app::timeline::{
     NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
-use crate::app::user_profile::MatrixProfileWriteResult;
+use crate::app::user_profile::{MatrixOwnProfile, MatrixProfileWriteResult};
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -1161,6 +1161,10 @@ struct MatrixSetOwnAvatarRequest {
     mxc: String,
 }
 
+fn own_profile_read_payload_is_empty(payload: &serde_json::Value) -> bool {
+    payload.is_null() || payload.as_object().is_some_and(serde_json::Map::is_empty)
+}
+
 /// Exact React/Tauri envelope payload for `matrix_room_directory_search`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1860,6 +1864,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_set_own_avatar", matrix_set_own_avatar)
         .expect("built-in matrix_set_own_avatar must remain in the command census");
+    registry
+        .register("matrix_get_own_profile", matrix_get_own_profile)
+        .expect("built-in matrix_get_own_profile must remain in the command census");
     registry
         .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
         .expect("built-in matrix_set_room_image_pack must remain in the command census");
@@ -4176,11 +4183,30 @@ fn matrix_set_own_avatar(state: Arc<CoreState>, request: CommandEnvelope) -> Com
     })
 }
 
+fn matrix_get_own_profile(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-get-own-profile-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-get-own-profile-no-session")
+        })?;
+        let result: MatrixOwnProfile = owner
+            .get_own_profile()
+            .await
+            .map_err(own_profile_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-get-own-profile-serialization-failed"))
+    })
+}
+
 fn own_profile_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-send.r-avatar-display-name-too-long" | "v-send.r-avatar-invalid-mxc" => {
             MatrixIpcErrorCategory::SdkInvariant
         }
+        "v-send.r-avatar-profile-no-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -5038,6 +5064,7 @@ mod tests {
                 "matrix_device_snapshot",
                 "matrix_edit_message",
                 "matrix_get_global_image_packs",
+                "matrix_get_own_profile",
                 "matrix_get_room_directory_visibility",
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
@@ -7130,6 +7157,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-set-own-avatar-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_get_own_profile_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_get_own_profile".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("get own profile without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-get-own-profile-no-session")
         );
     }
 

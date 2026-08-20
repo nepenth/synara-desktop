@@ -27,6 +27,7 @@ import {
   nativeVerificationErrorMessage,
   NativeVerificationRequest,
   startNativeVerification,
+  verificationRequestHasSasCodes,
   verificationRequestNeedsSasStart,
 } from './nativeVerification';
 
@@ -65,6 +66,16 @@ function NativeSas({
   };
   const emoji = request.sas?.emoji;
   const decimals = request.sas?.decimals;
+  if (!verificationRequestHasSasCodes(request)) {
+    return (
+      <Box direction="Column" gap="200">
+        <Text>
+          Comparison codes are not ready. Do not confirm this session until both devices show the
+          same emoji or numbers.
+        </Text>
+      </Box>
+    );
+  }
 
   return (
     <Box direction="Column" gap="400">

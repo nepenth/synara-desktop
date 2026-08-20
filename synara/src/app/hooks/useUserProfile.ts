@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { getOwnProfileNative } from '../features/settings/account/nativeProfile';
 import { UserEvent } from '../utils/roomEvents';
 import { useMatrixClient } from './useMatrixClient';
 
@@ -14,6 +15,9 @@ type UserEventedReading = {
   removeListener(event: string, listener: (...args: any[]) => void): void;
 };
 
+const isOwnUser = (mx: { getUserId(): string | null }, userId: string): boolean =>
+  mx.getUserId() === userId;
+
 export const useUserProfile = (userId: string): UserProfile => {
   const mx = useMatrixClient();
 
@@ -27,6 +31,7 @@ export const useUserProfile = (userId: string): UserProfile => {
 
   useEffect(() => {
     const user = mx.getUser(userId) as unknown as UserEventedReading | null;
+    let cancelled = false;
 
     const onAvatarChange = (event: unknown, myUser: UserEventedReading) => {
       setProfile((cp) => ({
@@ -41,16 +46,36 @@ export const useUserProfile = (userId: string): UserProfile => {
       }));
     };
 
-    mx.getProfileInfo(userId).then((info) =>
+    const load = async () => {
+      if (isOwnUser(mx, userId)) {
+        try {
+          const native = await getOwnProfileNative();
+          if (cancelled) return;
+          if (native !== 'legacy') {
+            setProfile({
+              avatarUrl: native.avatarUrl,
+              displayName: native.displayName,
+            });
+            return;
+          }
+        } catch {
+          // Fall through to the facade profile read.
+        }
+      }
+      const info = await mx.getProfileInfo(userId);
+      if (cancelled) return;
       setProfile({
         avatarUrl: info.avatar_url,
         displayName: info.displayname,
-      })
-    );
+      });
+    };
+
+    void load().catch(() => undefined);
 
     user?.on(UserEvent.AvatarUrl, onAvatarChange);
     user?.on(UserEvent.DisplayName, onDisplayNameChange);
     return () => {
+      cancelled = true;
       user?.removeListener(UserEvent.AvatarUrl, onAvatarChange);
       user?.removeListener(UserEvent.DisplayName, onDisplayNameChange);
     };

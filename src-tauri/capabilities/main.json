@@ -138,6 +138,7 @@
     "allow-matrix-upload-media",
     "allow-matrix-set-own-avatar",
     "allow-matrix-set-own-display-name",
+    "allow-matrix-get-own-profile",
     "allow-matrix-set-room-name",
     "allow-matrix-set-room-topic",
     "allow-matrix-set-room-avatar",

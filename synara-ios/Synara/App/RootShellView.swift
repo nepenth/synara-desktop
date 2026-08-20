@@ -328,12 +328,12 @@ private struct CryptoVerificationSheet: View {
                         .synaraCard()
                 }
             }
-        case .requestSent, .accepted, .sasStarted:
+        case .requestSent, .accepted, .sasStarted, .confirmed:
             ProgressView()
                 .controlSize(.large)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, SynaraSpacing.large)
-        case .finished, .cancelled, .failed:
+        case .finished, .cancelled, .failed, .mismatched:
             Image(systemName: terminalSystemImage)
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(terminalTint)
@@ -369,7 +369,10 @@ private struct CryptoVerificationSheet: View {
                 Button("They Do Not Match", role: .destructive, action: onDecline)
                     .buttonStyle(.bordered)
             }
-        case .finished, .cancelled, .failed:
+        case .confirmed:
+            Button("Cancel", role: .cancel, action: onCancel)
+                .buttonStyle(.bordered)
+        case .finished, .cancelled, .failed, .mismatched:
             Button("Done", action: onDismissTerminal)
                 .buttonStyle(.borderedProminent)
         }
@@ -387,12 +390,16 @@ private struct CryptoVerificationSheet: View {
             return "Preparing comparison"
         case .emojis, .decimals:
             return "Compare on both devices"
+        case .confirmed:
+            return "Waiting for the other device"
         case .finished:
             return "Device verified"
         case .cancelled:
             return "Verification cancelled"
         case .failed:
             return "Verification failed"
+        case .mismatched:
+            return "Codes did not match"
         }
     }
 
@@ -408,12 +415,16 @@ private struct CryptoVerificationSheet: View {
             return "Waiting for short authentication strings from the Matrix SDK."
         case .emojis, .decimals:
             return "Only approve if the values match exactly on both devices."
+        case .confirmed:
+            return "This device accepted the codes. Wait for the other session to finish."
         case .finished:
             return "This device is now verified for encrypted Matrix sessions."
         case .cancelled:
             return "The verification flow was cancelled."
         case .failed:
             return "The verification flow could not be completed."
+        case .mismatched:
+            return "The security codes did not match. Verification was cancelled safely."
         }
     }
 
@@ -423,9 +434,9 @@ private struct CryptoVerificationSheet: View {
             return "checkmark.seal.fill"
         case .cancelled:
             return "xmark.circle.fill"
-        case .failed:
+        case .failed, .mismatched:
             return "exclamationmark.triangle.fill"
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
             return "lock.shield"
         }
     }
@@ -436,9 +447,9 @@ private struct CryptoVerificationSheet: View {
             return .green
         case .cancelled:
             return SynaraColor.secondaryText
-        case .failed:
+        case .failed, .mismatched:
             return SynaraColor.critical
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
             return SynaraColor.accent
         }
     }

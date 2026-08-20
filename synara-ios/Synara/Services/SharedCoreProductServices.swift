@@ -292,6 +292,28 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             statusMsg: snapshot.statusMsg
         )
     }
+
+    func ownProfile(userID: String) async -> SettingsOwnProfile? {
+        guard let rooms = try? await SharedCoreRoomList.roomListSnapshot(core: host.core) else {
+            return nil
+        }
+        for room in rooms.rooms.prefix(8) {
+            guard let snapshot = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
+                core: host.core,
+                roomId: room.roomId
+            ) else {
+                continue
+            }
+            guard let member = snapshot.members.first(where: { $0.userId == userID }) else {
+                continue
+            }
+            let avatarMXC = member.avatarUrl.flatMap { candidate in
+                candidate.hasPrefix("mxc://") ? candidate : nil
+            }
+            return SettingsOwnProfile(displayName: member.displayName, avatarMXC: avatarMXC)
+        }
+        return nil
+    }
 }
 
 final class SharedCoreRoomListService: RoomListServicing {
@@ -922,16 +944,36 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
         let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
         let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
-        guard crypto != nil || backup != nil || secretStorage != nil else {
+        let devices = (try? await SharedCoreDevices.deviceSnapshot(core: host.core))?.devices ?? []
+        guard crypto != nil || backup != nil || secretStorage != nil || devices.isEmpty == false else {
             return .unknown
         }
-        return SharedCoreSessionCrypto.status(
+        let mapped = SharedCoreSessionCrypto.status(
             crossSigningState: crypto?.crossSigningState,
             backupEnabled: backup?.enabled,
             backupAvailability: backup?.availability,
             backupDeviceState: backup?.deviceState,
             recoveryState: backup?.recoveryState,
             secretStorageState: secretStorage?.state
+        )
+        let current = devices.first(where: \.isCurrent)
+        let hasOtherDevices = devices.contains { $0.isCurrent == false }
+        let verification: SynaraCryptoVerificationStatus
+        switch current?.trust {
+        case "verified":
+            verification = .verified
+        case "unverified":
+            verification = .unverified
+        default:
+            verification = .unknown
+        }
+        return SessionCryptoStatus(
+            verification: verification,
+            recovery: mapped.recovery,
+            backup: mapped.backup,
+            hasDevicesToVerifyAgainst: hasOtherDevices,
+            isLastDevice: devices.isEmpty ? nil : hasOtherDevices == false,
+            unableToDecryptCount: mapped.unableToDecryptCount
         )
     }
 

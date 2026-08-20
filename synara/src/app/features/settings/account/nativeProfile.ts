@@ -1,8 +1,10 @@
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 import {
+  getOwnProfileWithNativeOwner,
   setOwnAvatarWithNativeOwner,
   setOwnDisplayNameWithNativeOwner,
   uploadMediaWithNativeOwner,
+  type NativeOwnProfile,
 } from './nativeProfileOwner';
 
 const invoke = (command: string, args?: Record<string, unknown>) =>
@@ -19,3 +21,6 @@ export const uploadMediaNative = (
   bytes: number[]
 ): Promise<{ mxc: string } | 'legacy'> =>
   uploadMediaWithNativeOwner(mimeType, bytes, isSynaraDesktop(), invoke);
+
+export const getOwnProfileNative = (): Promise<NativeOwnProfile | 'legacy'> =>
+  getOwnProfileWithNativeOwner(isSynaraDesktop(), invoke);

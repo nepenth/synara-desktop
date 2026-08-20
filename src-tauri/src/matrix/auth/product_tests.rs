@@ -1237,6 +1237,10 @@ fn own_profile_writes_route_through_core_without_desktop_client_io() {
             "matrix_set_own_avatar",
             "crate::bridge::own_profile::set_own_avatar",
         ),
+        (
+            "matrix_get_own_profile",
+            "crate::bridge::own_profile::get_own_profile",
+        ),
     ] {
         let command = product
             .split(&format!("pub async fn {name}"))

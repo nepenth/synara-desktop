@@ -50,6 +50,11 @@ enum MatrixSyncStatus: Equatable {
     }
 }
 
+struct SettingsOwnProfile: Equatable {
+    let displayName: String?
+    let avatarMXC: String?
+}
+
 protocol MatrixClientServicing: AnyObject {
     var syncStatusDescription: String { get }
     var syncStatus: MatrixSyncStatus { get }
@@ -68,6 +73,7 @@ protocol MatrixClientServicing: AnyObject {
     /// session/credential ownership.
     func coreSessionIdentity() async -> CoreSessionIdentity?
     func presence(userID: String) async -> SharedCorePresence?
+    func ownProfile(userID: String) async -> SettingsOwnProfile?
 }
 
 extension MatrixClientServicing {
@@ -76,6 +82,11 @@ extension MatrixClientServicing {
     }
 
     func presence(userID: String) async -> SharedCorePresence? {
+        _ = userID
+        return nil
+    }
+
+    func ownProfile(userID: String) async -> SettingsOwnProfile? {
         _ = userID
         return nil
     }
@@ -293,6 +304,8 @@ enum CryptoVerificationState: Equatable, Identifiable {
     case sasStarted
     case emojis([CryptoVerificationEmoji])
     case decimals([UInt16])
+    case confirmed
+    case mismatched
     case finished
     case cancelled
     case failed
@@ -303,9 +316,9 @@ enum CryptoVerificationState: Equatable, Identifiable {
 
     var isTerminal: Bool {
         switch self {
-        case .finished, .cancelled, .failed:
+        case .finished, .cancelled, .failed, .mismatched:
             return true
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
             return false
         }
     }
@@ -324,6 +337,10 @@ enum CryptoVerificationState: Equatable, Identifiable {
             return "emojis:\(emojis.count)"
         case .decimals(let values):
             return "decimals:\(values.count)"
+        case .confirmed:
+            return "confirmed"
+        case .mismatched:
+            return "mismatched"
         case .finished:
             return "finished"
         case .cancelled:

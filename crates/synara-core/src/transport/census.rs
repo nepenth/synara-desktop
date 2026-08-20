@@ -27,6 +27,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_device_snapshot",
     "matrix_edit_message",
     "matrix_get_global_image_packs",
+    "matrix_get_own_profile",
     "matrix_get_room_directory_visibility",
     "matrix_get_room_image_packs",
     "matrix_get_user_image_pack",

@@ -1004,13 +1004,28 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return parseMediaDownload(result.value);
     },
 
-    /** F4 — profile/identity from the sync cache (no key material, D1C). */
-    getProfileInfo(userId?: string): Promise<{ avatar_url?: string; displayname?: string }> {
-      const x = userId?.length ?? 0; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve({
-        avatar_url: cachedIdentity.avatarUrl,
-        displayname: cachedIdentity.displayName,
-      });
+    /** F4 — own profile from the native owner; peer profiles stay fail-closed. */
+    async getProfileInfo(userId?: string): Promise<{ avatar_url?: string; displayname?: string }> {
+      const ownId = cachedIdentity.userId;
+      if (userId && ownId && userId !== ownId) {
+        return {};
+      }
+      const result = await invoke('matrix_get_own_profile');
+      if (!result.available || !isObject(result.value)) {
+        throw new Error('Native Matrix profile is unavailable.');
+      }
+      const displayName = optString(result.value, 'displayName') ?? undefined;
+      const avatarUrl = optString(result.value, 'avatarUrl') ?? undefined;
+      const safeAvatar =
+        avatarUrl && avatarUrl.startsWith('mxc://') && avatarUrl.split('/').length >= 4
+          ? avatarUrl
+          : undefined;
+      cachedIdentity.displayName = displayName;
+      cachedIdentity.avatarUrl = safeAvatar;
+      return {
+        avatar_url: safeAvatar,
+        displayname: displayName,
+      };
     },
 
     /** F5 — crypto status via matrix_crypto_status (never key material, D1C). */
