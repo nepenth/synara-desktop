@@ -22,6 +22,51 @@ export const FormattedBody = style({
   lineHeight: 1.45,
 });
 
+export const CodePanel = style({
+  display: 'flex',
+  flexDirection: 'column',
+  width: '100%',
+  maxWidth: '100%',
+  minWidth: 0,
+  boxSizing: 'border-box',
+});
+
+export const CodeLanguage = style({
+  flex: 'none',
+  padding: `${config.space.S100} ${config.space.S300}`,
+  borderBottom: `1px solid ${color.Background.ContainerLine}`,
+  color: color.Background.OnContainer,
+  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontSize: '0.78em',
+  letterSpacing: '0.02em',
+  textTransform: 'lowercase',
+  userSelect: 'none',
+  opacity: 0.78,
+});
+
+export const CodeScroll = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'flex-start',
+  overflowX: 'auto',
+  whiteSpace: 'pre',
+  padding: `${config.space.S200} ${config.space.S300}`,
+});
+
+export const CodeLineNumbers = style({
+  flex: 'none',
+  userSelect: 'none',
+  textAlign: 'right',
+  whiteSpace: 'pre',
+  lineHeight: 1.5,
+  paddingRight: config.space.S200,
+  marginRight: config.space.S200,
+  borderRight: `1px solid ${color.Background.ContainerLine}`,
+  color: color.Background.OnContainer,
+  opacity: 0.48,
+  fontVariantNumeric: 'tabular-nums',
+});
+
 globalStyle(`${FormattedBody} p`, {
   margin: `0 0 ${config.space.S200}`,
 });
@@ -57,14 +102,22 @@ globalStyle(`${FormattedBody} li`, {
   margin: `${config.space.S100} 0`,
 });
 globalStyle(`${FormattedBody} pre`, {
-  width: 'fit-content',
+  width: '100%',
   maxWidth: '100%',
+  minWidth: 0,
   margin: `${config.space.S200} 0`,
-  padding: `${config.space.S200} ${config.space.S300}`,
-  overflowX: 'auto',
+  padding: 0,
+  overflow: 'hidden',
+  overflowWrap: 'normal',
+  wordBreak: 'normal',
+  whiteSpace: 'normal',
   borderRadius: config.radii.R400,
-  background: color.SurfaceVariant.Container,
-  border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+  background: color.Background.Container,
+  color: color.Background.OnContainer,
+  border: `1px solid ${color.Background.ContainerLine}`,
+});
+globalStyle(`${FormattedBody} pre:last-child`, {
+  marginBottom: 0,
 });
 globalStyle(`${FormattedBody} code`, {
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
@@ -74,6 +127,20 @@ globalStyle(`${FormattedBody} :not(pre) > code`, {
   padding: `0 ${toRem(4)}`,
   borderRadius: config.radii.R300,
   background: color.SurfaceVariant.Container,
+  whiteSpace: 'break-spaces',
+});
+globalStyle(`${FormattedBody} pre code`, {
+  display: 'block',
+  flex: 1,
+  minWidth: 0,
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  whiteSpace: 'pre',
+  overflowWrap: 'normal',
+  wordBreak: 'normal',
+  lineHeight: 1.5,
+  tabSize: 4,
 });
 globalStyle(`${FormattedBody} a`, {
   color: 'var(--tc-link)',

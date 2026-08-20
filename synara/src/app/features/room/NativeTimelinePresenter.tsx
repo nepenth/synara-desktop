@@ -22,7 +22,6 @@ import {
   config,
 } from 'folds';
 import { EmojiBoard } from '../../components/emoji-board';
-import { sanitizeCustomHtml } from '../../utils/sanitize';
 import {
   clearNativeComposerReplyDraft,
   getNativeComposerReplyDraft,
@@ -69,6 +68,7 @@ import { nameInitials } from '../../utils/common';
 import colorMXID from '../../../util/colorMXID';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
+import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import * as htmlCss from './nativeTimelineHtml.css';
 
 const HermesAgentCard = React.lazy(() =>
@@ -966,11 +966,8 @@ const NativeTimelineRow = ({
                 ) : (
                   <div className={htmlCss.MessageBody}>
                     {row.formattedBody ? (
-                      <div
-                        className={htmlCss.FormattedBody}
-                        // Defense in depth: re-sanitize Matrix HTML before the native presenter renders it.
-                        // eslint-disable-next-line react/no-danger
-                        dangerouslySetInnerHTML={{ __html: sanitizeCustomHtml(row.formattedBody) }}
+                      <NativeFormattedBody
+                        html={row.formattedBody}
                         style={{
                           fontStyle: isEmote ? 'italic' : undefined,
                         }}

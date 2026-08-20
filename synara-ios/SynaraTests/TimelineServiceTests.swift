@@ -588,6 +588,13 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testMatrixHTMLRendererCountsCodeBlockLines() {
+        XCTAssertEqual(MatrixHTMLRenderer.codeLineCount(""), 1)
+        XCTAssertEqual(MatrixHTMLRenderer.codeLineCount("print(1)"), 1)
+        XCTAssertEqual(MatrixHTMLRenderer.codeLineCount("let value = 1\nprint(value)"), 2)
+        XCTAssertEqual(MatrixHTMLRenderer.codeLineCount("one\n\nthree\n"), 3)
+    }
+
     func testMatrixHTMLRendererSegmentsHeadingsAndBlockquotes() {
         let html = #"""
         <h2>App-agent handoff</h2>
