@@ -7,6 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
+use std::time::Duration;
 
 use matrix_sdk::{
     attachment::AttachmentConfig,
@@ -344,31 +345,48 @@ impl MatrixAuthState {
 
     /// Read the exact legacy cross-signing observation as a closed Core projection.
     ///
-    /// The auth mutex intentionally remains held from before
-    /// `cross_signing_status` through the existing `request_user_identity`
-    /// await. That preserves the legacy key-query/store side effects and its
-    /// serialization against session replacement. Only the bounded generation
-    /// and closed enums/errors leave this desktop-owned SDK method.
+    /// Clone the live SDK client under the auth mutex, then release that mutex
+    /// before identity lookup. Holding the mutex across `request_user_identity`
+    /// (`/keys/query`) stalled Settings → Devices on a spinner because sync
+    /// could not progress. Prefer the local crypto-store identity so the page
+    /// can render without a network round trip; bound the homeserver fetch.
     pub(crate) async fn cross_signing_status_projection(
         &self,
     ) -> Result<PlatformCrossSigningStatus, synara_core::platform::PlatformCrossSigningStatusError>
     {
-        let session = self.session.lock().await;
-        let active = session
-            .as_ref()
-            .ok_or(synara_core::platform::PlatformCrossSigningStatusError::NoSession)?;
+        let (client, session_generation) = {
+            let session = self.session.lock().await;
+            let active = session
+                .as_ref()
+                .ok_or(synara_core::platform::PlatformCrossSigningStatusError::NoSession)?;
+            (active.client.clone(), active.sync.session_generation())
+        };
 
-        let encryption = active.client.encryption();
+        let encryption = client.encryption();
         let private_status = encryption.cross_signing_status().await;
-        let Some(user_id) = active.client.user_id() else {
+        let Some(user_id) = client.user_id() else {
             return Err(synara_core::platform::PlatformCrossSigningStatusError::UserMissing);
         };
-        let own_identity = encryption
-            .request_user_identity(user_id)
+        let local_identity = encryption.get_user_identity(user_id).await.map_err(|_| {
+            synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed
+        })?;
+        let own_identity = match local_identity {
+            Some(identity) => Some(identity),
+            None => match tokio::time::timeout(
+                Duration::from_secs(8),
+                encryption.request_user_identity(user_id),
+            )
             .await
-            .map_err(|_| {
-                synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed
-            })?;
+            {
+                Ok(Ok(identity)) => identity,
+                Ok(Err(_)) => {
+                    return Err(
+                        synara_core::platform::PlatformCrossSigningStatusError::IdentityQueryFailed,
+                    );
+                }
+                Err(_) => None,
+            },
+        };
 
         let private_state = match private_status.as_ref() {
             None => PlatformCrossSigningPrivateState::Unavailable,
@@ -380,15 +398,17 @@ impl MatrixAuthState {
             ),
         };
         let own_identity = match own_identity.as_ref() {
-            None => PlatformCrossSigningOwnIdentity::Missing,
             Some(identity) if identity.is_verified() => PlatformCrossSigningOwnIdentity::Verified,
             Some(_) => PlatformCrossSigningOwnIdentity::Unverified,
+            None if matches!(private_state, PlatformCrossSigningPrivateState::Complete) => {
+                // Local private keys exist but the identity query did not
+                // return. Offer verification instead of hanging the Devices
+                // page on a spinner.
+                PlatformCrossSigningOwnIdentity::Unverified
+            }
+            None => PlatformCrossSigningOwnIdentity::Missing,
         };
-        PlatformCrossSigningStatus::new(
-            active.sync.session_generation(),
-            private_state,
-            own_identity,
-        )
+        PlatformCrossSigningStatus::new(session_generation, private_state, own_identity)
     }
 
     /// Read secret-storage status through the desktop-owned Matrix session.

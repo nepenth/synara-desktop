@@ -98,6 +98,7 @@ const tests = [
   'src/app/features/room/__tests__/nativeTimelineViewDelta.test.ts',
   'src/app/features/verification/__tests__/nativeVerification.test.ts',
   'src/app/features/cross-signing/__tests__/nativeCrossSigning.test.ts',
+  'src/app/features/settings/devices/__tests__/deviceVerificationPresentation.test.ts',
   'src/app/features/backup/__tests__/nativeBackup.test.ts',
   'src/app/features/secret-storage/__tests__/nativeSecretStorage.test.ts',
   'src/app/features/room-keys/__tests__/nativeRoomKeys.test.ts',

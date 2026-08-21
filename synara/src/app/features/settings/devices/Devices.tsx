@@ -8,6 +8,7 @@ import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceLi
 import { LocalBackup } from './LocalBackup';
 import { DeviceLogoutBtn, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
 import { OtherDevices } from './OtherDevices';
+import { resolveDeviceVerificationStatus } from './deviceVerificationStatus';
 import {
   EnableVerification,
   VerificationStatusBadge,
@@ -38,10 +39,16 @@ export function Devices({ requestClose }: DevicesProps) {
   const [devices, refreshDeviceList] = useDeviceList();
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
-  const verificationStatus = currentDevice?.trust ?? 'unknown';
-  const unverifiedDeviceCount = otherDevices?.filter(
-    (device) => device.trust === 'unverified'
-  ).length;
+  const verificationStatus = resolveDeviceVerificationStatus(
+    currentDevice?.trust,
+    crossSigning.nativeStatus?.ownIdentityVerification,
+    crossSigning.loading
+  );
+  const unverifiedDeviceCount =
+    otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
+  const offerCurrentVerification =
+    canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
+    verificationStatus === 'unverified';
 
   return (
     <Page>
@@ -93,6 +100,9 @@ export function Devices({ requestClose }: DevicesProps) {
                       </>
                     }
                   />
+                  {offerCurrentVerification && (
+                    <VerifyCurrentDeviceTile onVerified={() => void refreshDeviceList()} />
+                  )}
                 </SequenceCard>
                 {nativeSession && (
                   <SequenceCard
@@ -120,10 +130,6 @@ export function Devices({ requestClose }: DevicesProps) {
                       refreshDeviceList={refreshDeviceList}
                       options={<DeviceLogoutBtn />}
                     ></DeviceTile>
-                    {canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
-                      verificationStatus === 'unverified' && (
-                        <VerifyCurrentDeviceTile onVerified={() => void refreshDeviceList()} />
-                      )}
                   </SequenceCard>
                 ) : (
                   <DeviceTilePlaceholder />
