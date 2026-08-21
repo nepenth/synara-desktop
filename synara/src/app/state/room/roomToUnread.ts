@@ -108,6 +108,13 @@ export const unreadInfosFromNativeRooms = (rooms: readonly RoomSummary[]): Unrea
   return unreadInfos;
 };
 
+/** Nav-item unread from the native room-list snapshot, not a JS-sdk receipt cache. */
+export const unreadFromNativeRoom = (room: RoomSummary | undefined): Unread | undefined => {
+  if (!room) return undefined;
+  const [info] = unreadInfosFromNativeRooms([room]);
+  return info ? unreadInfoToUnread(info) : undefined;
+};
+
 const baseRoomToUnread = atom<RoomToUnread>(new Map());
 export const roomToUnreadAtom = atom<RoomToUnread, [RoomToUnreadAction], undefined>(
   (get) => get(baseRoomToUnread),

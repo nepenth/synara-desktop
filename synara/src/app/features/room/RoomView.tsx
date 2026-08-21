@@ -95,7 +95,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
 
   return (
     <Page ref={roomViewRef}>
-      <Box grow="Yes" direction="Column">
+      <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
         {room.isCallRoom() && <VoiceRoom />}
         <NativeTimelinePresenter key={roomId} roomId={roomId} eventId={eventId} />
         <RoomViewTyping room={room} />

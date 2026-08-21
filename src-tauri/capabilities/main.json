@@ -99,6 +99,7 @@
     "allow-matrix-room-leave",
     "allow-matrix-room-join",
     "allow-matrix-room-set-favorite",
+    "allow-matrix-room-set-read-state",
     "allow-matrix-room-invite",
     "allow-matrix-room-kick",
     "allow-matrix-room-ban",

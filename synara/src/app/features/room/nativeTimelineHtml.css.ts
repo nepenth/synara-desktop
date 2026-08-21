@@ -1,11 +1,72 @@
 import { globalStyle, style } from '@vanilla-extract/css';
+import { recipe } from '@vanilla-extract/recipes';
 import { color, config, toRem } from 'folds';
 
-export const MessageRow = style({
-  paddingTop: config.space.S300,
-  paddingBottom: config.space.S300,
-  paddingLeft: toRem(32),
-  paddingRight: toRem(88),
+export const MessageActionSurface = style({
+  position: 'relative',
+});
+
+export const MessageActionRail = style({
+  position: 'absolute',
+  top: config.space.S100,
+  right: `calc(${config.space.S400} + ${config.space.S200})`,
+  zIndex: 2,
+});
+
+export const MessageRow = recipe({
+  base: {
+    paddingTop: config.space.S300,
+    paddingBottom: config.space.S300,
+    paddingLeft: toRem(32),
+    paddingRight: toRem(88),
+    marginLeft: config.space.S400,
+    marginRight: config.space.S400,
+    marginBottom: config.space.S200,
+    boxSizing: 'border-box',
+    color: color.SurfaceVariant.OnContainer,
+  },
+  variants: {
+    surface: {
+      true: {
+        backgroundColor: color.SurfaceVariant.ContainerHover,
+        borderRadius: config.radii.R400,
+        selectors: {
+          [`${MessageActionSurface}:hover &`]: {
+            backgroundColor: color.SurfaceVariant.ContainerActive,
+          },
+          [`${MessageActionSurface}:focus-within &`]: {
+            backgroundColor: color.SurfaceVariant.ContainerActive,
+          },
+          '&:hover': {
+            backgroundColor: color.SurfaceVariant.ContainerActive,
+          },
+        },
+      },
+      false: {},
+    },
+    grouped: {
+      true: {
+        paddingTop: config.space.S100,
+        borderTopLeftRadius: 0,
+        borderTopRightRadius: 0,
+      },
+      false: {},
+    },
+    groupsNext: {
+      true: {
+        paddingBottom: config.space.S100,
+        borderBottomLeftRadius: 0,
+        borderBottomRightRadius: 0,
+        marginBottom: 0,
+      },
+      false: {},
+    },
+  },
+  defaultVariants: {
+    surface: true,
+    grouped: false,
+    groupsNext: false,
+  },
 });
 
 export const MessageBody = style({

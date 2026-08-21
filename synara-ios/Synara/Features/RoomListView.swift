@@ -57,10 +57,10 @@ struct RoomListView: View {
                     .accessibilityIdentifier("RoomListLoading")
                 }
             case .empty:
-                SynaraEmptyState(
+                HeldConnectionEmptyState(
                     title: "No Rooms",
                     systemImage: "bubble.left.and.bubble.right",
-                    message: environment.matrix.syncStatusDescription
+                    store: environment.connectionStatus
                 )
             case .failed(let message):
                 VStack(spacing: SynaraSpacing.medium) {

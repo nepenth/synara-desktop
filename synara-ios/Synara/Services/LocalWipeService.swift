@@ -20,6 +20,7 @@ struct AppLocalWipeService: LocalWiping {
     let drafts: DraftStore
     let push: PushServicing
     let router: AppRouter
+    var outgoingSends: OutgoingSendCoordinator? = nil
 
     func logoutAndWipe() async throws {
         let activeSession: AuthenticatedSession?
@@ -51,6 +52,7 @@ struct AppLocalWipeService: LocalWiping {
         roomList.clearCache()
         timeline.clearSessionCaches()
         drafts.clearAll()
+        outgoingSends?.queue.clear()
         router.resetNavigationPathsForAccountChange()
     }
 }

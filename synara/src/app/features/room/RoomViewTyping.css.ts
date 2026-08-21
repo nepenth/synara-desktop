@@ -10,6 +10,12 @@ const SlideUpAnime = keyframes({
   },
 });
 
+export const RoomViewTypingSlot = style({
+  overflow: 'hidden',
+  width: '100%',
+  flexShrink: 0,
+});
+
 export const RoomViewTyping = style([
   DefaultReset,
   {
@@ -17,8 +23,6 @@ export const RoomViewTyping = style([
     width: '100%',
     backgroundColor: color.Surface.Container,
     color: color.Surface.OnContainer,
-    position: 'absolute',
-    bottom: 0,
     animation: `${SlideUpAnime} 100ms ease-in-out`,
   },
 ]);

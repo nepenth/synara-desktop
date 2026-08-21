@@ -14,6 +14,19 @@ final class LocalWipeServiceTests: XCTestCase {
         let router = AppRouter()
         router.route(to: .settings)
         router.present(.accountSwitcher)
+        let outgoingSends = OutgoingSendCoordinator(
+            messageSender: MockMessageSendService(),
+            connectionStatus: ConnectionStatusStore(reconnectingHold: 0)
+        )
+        outgoingSends.enqueue(
+            localID: "$pending-wipe",
+            roomID: "!room:matrix.org",
+            body: "queued",
+            formattedBody: nil,
+            replyToEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: Date()
+        )
         let wipe = AppLocalWipeService(
             session: session,
             matrix: matrix,
@@ -21,7 +34,8 @@ final class LocalWipeServiceTests: XCTestCase {
             timeline: timeline,
             drafts: drafts,
             push: push,
-            router: router
+            router: router,
+            outgoingSends: outgoingSends
         )
 
         try await wipe.logoutAndWipe()
@@ -37,6 +51,7 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(push.clearCallCount, 1)
         XCTAssertEqual(secureStore.deleteCallCount, 1)
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
+        XCTAssertTrue(outgoingSends.queue.items.isEmpty)
         XCTAssertEqual(router.selectedTab, .rooms)
         XCTAssertTrue(router.settingsPath.isEmpty)
         XCTAssertNil(router.sheetDestination)

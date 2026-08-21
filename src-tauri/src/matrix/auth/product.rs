@@ -122,9 +122,10 @@ use crate::matrix::timeline::{
     NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
     NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRedactRequest,
-    NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
-    TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineRedactRequest, NativeTimelineReportRequest, NativeTimelineSnapshot,
+    NativeTimelineViewPaginationRequest, TimelineMediaSource,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{

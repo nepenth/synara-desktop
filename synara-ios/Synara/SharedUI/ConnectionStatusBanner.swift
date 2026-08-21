@@ -1,12 +1,20 @@
 import SwiftUI
 
-/// Persistent signed-in chrome for connection/sync. Not a disappearing toast.
+/// Signed-in connection/sync chrome. Hidden in steady Connected; Lost waits
+/// for the store hold so SDK blips do not paint a banner.
 struct ConnectionStatusBanner: View {
     @ObservedObject var store: ConnectionStatusStore
     var onRetry: (() -> Void)?
     var onSignOut: (() -> Void)?
 
     var body: some View {
+        if store.isBannerVisible {
+            banner
+        }
+    }
+
+    @ViewBuilder
+    private var banner: some View {
         let status = store.status
         let variant = ConnectionStatusCopy.variant(status)
         HStack(spacing: SynaraSpacing.small) {
@@ -67,5 +75,20 @@ struct ConnectionStatusBanner: View {
         case .neutral:
             return SynaraColor.secondarySurface
         }
+    }
+}
+
+/// Empty-state copy from held connection chrome so SDK blips stay silent.
+struct HeldConnectionEmptyState: View {
+    let title: String
+    let systemImage: String
+    @ObservedObject var store: ConnectionStatusStore
+
+    var body: some View {
+        SynaraEmptyState(
+            title: title,
+            systemImage: systemImage,
+            message: store.emptyStateMessage
+        )
     }
 }

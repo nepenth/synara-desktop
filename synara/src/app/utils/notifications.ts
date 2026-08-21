@@ -37,6 +37,8 @@ import {
   getLatestRoomTimeline,
   getLoadedLiveTimelineEvents,
 } from './timelineLifecycle';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from './desktop';
+import { setRoomReadStateWithNativeOwner } from './nativeRoomReadStateOwner';
 
 const UNREAD_ANCHOR_ACCOUNT_DATA_VERSION = 1;
 const unreadAnchorWriteQueues = new WeakMap<ReceiptClientReading, Promise<void>>();
@@ -139,6 +141,15 @@ export async function setRoomMarkedUnread(
 }
 
 export async function markAsUnread(mx: ReceiptClientReading, roomId: string) {
+  if (typeof window !== 'undefined' && isSynaraDesktop()) {
+    await setRoomReadStateWithNativeOwner(
+      roomId,
+      'mark_unread',
+      true,
+      invokeDesktopWithAvailability
+    );
+    return;
+  }
   await setRoomMarkedUnread(mx, roomId, true);
 }
 
@@ -481,6 +492,10 @@ export async function markAsRead(
   privateReceipt: boolean,
   mode: MarkAsReadMode = 'latest-room'
 ): Promise<void> {
+  if (typeof window !== 'undefined' && isSynaraDesktop()) {
+    await setRoomReadStateWithNativeOwner(roomId, 'mark_read', true, invokeDesktopWithAvailability);
+    return;
+  }
   const room = mx.getRoom(roomId) as ReceiptRoomReading | null;
   if (!room) return;
 

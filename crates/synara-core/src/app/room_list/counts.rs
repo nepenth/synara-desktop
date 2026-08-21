@@ -152,6 +152,17 @@ mod tests {
     }
 
     #[test]
+    fn receipts_that_zero_counts_and_clear_marked_unread_drop_the_badge() {
+        assert_eq!(
+            room_unread_presentation(RoomUnreadMembership::Joined, 0, 0, 0, false),
+            RoomUnreadPresentationDto {
+                unread_count: 0,
+                has_highlight: false,
+            }
+        );
+    }
+
+    #[test]
     fn marked_unread_only_changes_a_zero_joined_count() {
         assert_eq!(
             room_unread_presentation(RoomUnreadMembership::Joined, 0, 0, 0, true),

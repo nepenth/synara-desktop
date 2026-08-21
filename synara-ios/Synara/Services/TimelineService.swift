@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(UIKit)
+    import UIKit
+#endif
 
 enum TimelineSearchFilter {
     static func searchableText(for item: TimelineItem) -> String {
@@ -42,6 +45,7 @@ enum TimelineSearchFilter {
 
 enum TimelineDeliveryStatus: Equatable {
     case sending
+    case queued
     case sent
     case failed
 }
@@ -172,6 +176,21 @@ struct TimelineItem: Identifiable, Equatable {
     }
 }
 
+enum TimelineMessageCopy {
+    static func payload(for item: TimelineItem) -> String? {
+        guard let body = TimelinePendingReconciler.messageBody(for: item), body.isEmpty == false else {
+            return nil
+        }
+        return body
+    }
+
+    static func copyToPasteboard(_ text: String) {
+        #if canImport(UIKit)
+            UIPasteboard.general.string = text
+        #endif
+    }
+}
+
 enum TimelinePendingReconciler {
     static func messageBody(for item: TimelineItem) -> String? {
         switch item.kind {
@@ -184,8 +203,30 @@ enum TimelinePendingReconciler {
         }
     }
 
+    static func formattedBody(for item: TimelineItem) -> String? {
+        switch item.kind {
+        case let .formattedText(_, html):
+            return html
+        default:
+            return nil
+        }
+    }
+
     static func pendingItems(from items: [TimelineItem]) -> [TimelineItem] {
         items.filter(\.isLocalPending)
+    }
+
+    static func combining(localItems: [TimelineItem], storedPending: [TimelineItem]) -> [TimelineItem] {
+        var combined = localItems
+        var ids = Set(localItems.map(\.id))
+        for pending in storedPending {
+            if let index = combined.firstIndex(where: { $0.id == pending.id }) {
+                combined[index] = combined[index].withDeliveryStatus(pending.deliveryStatus)
+            } else if ids.insert(pending.id).inserted {
+                combined.append(pending)
+            }
+        }
+        return combined
     }
 
     static func matchesPending(_ pending: TimelineItem, serverItem: TimelineItem) -> Bool {

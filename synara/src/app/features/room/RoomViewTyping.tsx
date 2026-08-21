@@ -75,11 +75,12 @@ export const RoomViewTyping = as<'div', RoomViewTypingProps>(
     };
 
     return (
-      <div style={{ position: 'relative' }}>
+      <div className={css.RoomViewTypingSlot}>
         <Box
           className={classNames(css.RoomViewTyping, className)}
           alignItems="Center"
           gap="400"
+          shrink="No"
           {...props}
           ref={ref}
         >

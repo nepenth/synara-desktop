@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { RoomSummary } from '../../../features/matrix-dto/room';
-import { unreadInfosFromNativeRooms } from '../roomToUnread';
+import { unreadFromNativeRoom, unreadInfosFromNativeRooms } from '../roomToUnread';
 
 const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): RoomSummary => ({
   membership: 'join',
@@ -42,4 +42,29 @@ test('native unread projection skips spaces, muted rooms, and non-joined members
     room({ roomId: '!leave:example.org', membership: 'leave', unreadCount: 2 }),
   ]);
   assert.deepEqual(infos, []);
+});
+
+test('native unread projection drops a room after receipts clear counts and marked-unread', () => {
+  const before = unreadInfosFromNativeRooms([
+    room({ roomId: '!a:example.org', unreadCount: 2, highlightCount: 1, markedUnread: true }),
+  ]);
+  assert.deepEqual(before, [{ roomId: '!a:example.org', highlight: 1, total: 2 }]);
+
+  const after = unreadInfosFromNativeRooms([
+    room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 0, markedUnread: false }),
+  ]);
+  assert.deepEqual(after, []);
+  assert.equal(
+    unreadFromNativeRoom(
+      room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 0, markedUnread: false })
+    ),
+    undefined
+  );
+});
+
+test('nav unread comes from native unreadCount, not a leftover jotai total', () => {
+  const unread = unreadFromNativeRoom(
+    room({ roomId: '!a:example.org', unreadCount: 4, highlightCount: 1 })
+  );
+  assert.deepEqual(unread, { highlight: 1, total: 4, from: null });
 });
