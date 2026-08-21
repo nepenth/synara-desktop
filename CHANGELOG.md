@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## 2.1.4 - 2026-08-21
+
+- iOS failed sends retry from a chip, offline text queues until connected,
+  and failed local echoes can be edited on the same pending id.
+- Long-press Copy copies the plain message body; text selection is a
+  best-effort substring path.
+- Connection Lost holds through short SDK blips instead of bouncing on
+  1–2s Offline gaps.
+- Desktop unread badges and Mark as Read use native receipts, typing
+  shifts the last message up, and timeline rows use a full-width surface.
+- See [`docs/releases/v2.1.4.md`](docs/releases/v2.1.4.md) for details.
+
 ## 2.1.3 - 2026-08-20
 
 - Completed the native SAS device-verification path: incoming requests stay

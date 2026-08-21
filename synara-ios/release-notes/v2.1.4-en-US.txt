@@ -1,0 +1,11 @@
+Synara 2.1.4 makes failed and offline sends recoverable, adds long-press copy and edit for unsent messages, and holds Connection Lost through short blips.
+
+What to test:
+- Upgrade from 2.1.3 and confirm your session restores without another login.
+- Send a text while offline: the row should queue, then send when you are back. Failed sends show a Retry chip; tapping it must resend. Long-press the row for Copy.
+- Edit a failed unsent message, save, and confirm it retries on the same bubble instead of creating a duplicate.
+- Toggle airplane mode for 1–2 seconds: Connection Lost must not flash. Hold Offline for about 4 seconds and confirm Lost appears.
+- On desktop: unread counts and right-click Mark as Read should clear. Typing in a room should push the last message up. Message rows should have a full-width slightly grey background.
+- Sign out, relaunch, and sign in again.
+
+Please report the room type, action, and approximate time for any send, copy, unread, or connection issue. Do not include access tokens or recovery keys.
