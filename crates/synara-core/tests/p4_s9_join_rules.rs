@@ -1,7 +1,9 @@
-//! P4-S9-3: typed SharedCore consume of `matrix_room_join_rule_snapshot` only.
+//! P4-S9-3 + join-rule write: typed SharedCore consume of
+//! `matrix_room_join_rule_snapshot` and `matrix_room_set_join_rule`.
 //!
-//! Calls the already-registered Core handler. Does not start SyncService.
-//! There is no join-rule writer on Core. Image packs, room leave/join, and
+//! Calls the already-registered Core handlers. Does not start SyncService.
+//! Write ack is status only. Failed errors stay static and must not echo
+//! room id, join rule, or allow-list ids. Image packs, room leave/join, and
 //! leftover secret envelopes stay off this slice.
 
 use std::collections::HashMap;
@@ -10,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use synara_core::app::store::AccountIdentity;
+use synara_core::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
 use synara_core::{IosSecretVault, IosSecretVaultError, SharedCore};
 
 struct MemoryCallbackVault(Arc<Mutex<HashMap<String, Vec<u8>>>>);
@@ -53,10 +56,11 @@ fn test_runtime() -> tokio::runtime::Runtime {
 }
 
 #[test]
-fn join_rule_surface_exposes_only_the_registered_snapshot() {
+fn join_rule_surface_exposes_the_registered_snapshot_and_writer() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("room_join_rule_snapshot"));
-    assert!(!udl.contains("set_room_join_rule"));
+    assert!(udl.contains("room_set_join_rule"));
+    assert!(udl.contains("dictionary RoomJoinRuleWriteDto"));
     assert!(!udl.contains("matrix_room_create"));
     assert!(!udl.contains("matrix_login_password"));
     let shared_core = udl
@@ -65,9 +69,9 @@ fn join_rule_surface_exposes_only_the_registered_snapshot() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("room_join_rule_snapshot"));
+    assert!(shared_core.contains("room_set_join_rule"));
     assert!(shared_core.contains("device_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("set_room_join_rule"));
     assert!(!shared_core.contains("matrix_backup_status"));
 }
 
@@ -84,6 +88,46 @@ fn join_rule_snapshot_without_session_fails_closed_without_echo() {
     assert!(!text.contains("token"));
     assert!(!text.contains(room_id));
     assert!(!text.contains("@alice"));
+}
+
+#[test]
+fn join_rule_write_without_session_fails_closed_without_echo() {
+    let shared = SharedCore::new();
+    let room_id = "!s93joinWrite:example.org";
+    let allow = "!s93allow:example.org";
+    let error = test_runtime()
+        .block_on(shared.room_set_join_rule(
+            room_id.to_owned(),
+            "restricted".to_owned(),
+            Some(vec![allow.to_owned()]),
+        ))
+        .expect_err("no attached join-rule owner");
+    let text = format!("{error:?}{error}");
+    assert!(text.contains("p2-room-set-join-rule-no-session"));
+    assert!(!text.contains("syt_"));
+    assert!(!text.contains("token"));
+    assert!(!text.contains(room_id));
+    assert!(!text.contains(allow));
+    assert!(!text.contains("restricted"));
+    assert!(!text.contains("@alice"));
+}
+
+#[test]
+fn join_rule_write_oversize_payload_fails_closed_without_truncate_or_echo() {
+    let shared = SharedCore::new();
+    let room_id = "!s93joinWrite:example.org";
+    let allow = "x".repeat(MAX_ENVELOPE_PAYLOAD_JSON_BYTES + 8);
+    let error = test_runtime()
+        .block_on(shared.room_set_join_rule(
+            room_id.to_owned(),
+            "restricted".to_owned(),
+            Some(vec![allow.clone()]),
+        ))
+        .expect_err("oversize join-rule write payload must fail closed");
+    let text = format!("{error:?}{error}");
+    assert!(text.contains("p4-s9-3-join-rule-failed"));
+    assert!(!text.contains(&allow));
+    assert!(!text.contains(room_id));
 }
 
 #[test]
@@ -112,7 +156,11 @@ fn join_rule_snapshot_without_started_sync_returns_handler_result_without_echo()
     let error = rt
         .block_on(shared.room_join_rule_snapshot(room_id.to_owned(), 1))
         .expect_err("unstarted sync still uses the registered snapshot handler");
+    let write = rt
+        .block_on(shared.room_set_join_rule(room_id.to_owned(), "invite".to_owned(), None))
+        .expect_err("unstarted sync still uses the registered join-rule writer");
     let text = format!("{error:?}{error}");
+    let write_text = format!("{write:?}{write}");
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -123,11 +171,22 @@ fn join_rule_snapshot_without_started_sync_returns_handler_result_without_echo()
         "snapshot must return the registered owner diagnostic: {text}"
     );
     assert!(
+        write_text.contains("v-send.r-room-profile-join-rule-room-not-found"),
+        "writer must return the registered owner diagnostic: {write_text}"
+    );
+    assert!(
         !text.contains("p4-s9-3-join-rule-failed"),
         "snapshot must not hide a wrong envelope behind the generic fallback: {text}"
     );
-    assert!(!text.contains(access));
-    assert!(!text.contains(refresh));
-    assert!(!text.contains("syt_"));
-    assert!(!text.contains(room_id));
+    assert!(
+        !write_text.contains("p4-s9-3-join-rule-failed"),
+        "writer must not hide a wrong envelope behind the generic fallback: {write_text}"
+    );
+    assert!(!text.contains("p4-s10-leftover-unavailable"));
+    assert!(!write_text.contains("p4-s10-leftover-unavailable"));
+    let combined = format!("{text}{write_text}");
+    assert!(!combined.contains(access));
+    assert!(!combined.contains(refresh));
+    assert!(!combined.contains("syt_"));
+    assert!(!combined.contains(room_id));
 }

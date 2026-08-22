@@ -1,7 +1,8 @@
 //! Credential-free V-PRESENCE.USER presentation DTOs and subscription registry.
 //!
 //! Live Client stream lives on `NativePresenceOwner`. Subscribe/unsubscribe
-//! route through Core; shells only attach the owner and emit updates.
+//! and presence SET route through Core; shells only attach the owner and
+//! emit updates.
 
 use std::collections::HashMap;
 
@@ -56,6 +57,13 @@ pub struct NativePresenceSubscription {
     pub subscription_id: String,
     pub user_id: String,
     pub session_generation: u64,
+}
+
+/// Presence SET ack. Status only; never echoes state or statusMsg.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativePresenceWriteResult {
+    pub status: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
@@ -293,5 +301,19 @@ mod tests {
         let raw_ready_update = serde_json::to_value(ready_update).unwrap();
         assert_eq!(raw_ready_update["outcome"]["status"], "ready");
         assert_eq!(raw_ready_update["outcome"]["snapshot"]["state"], "offline");
+    }
+
+    #[test]
+    fn native_write_ack_serializes_status_only() {
+        let result = NativePresenceWriteResult {
+            status: "ok".into(),
+        };
+        let raw = serde_json::to_value(&result).unwrap();
+        assert_eq!(raw, serde_json::json!({"status": "ok"}));
+        assert!(raw.get("statusMsg").is_none());
+        assert!(raw.get("state").is_none());
+        for forbidden in ["accessToken", "refreshToken", "password", "ciphertext"] {
+            assert!(!raw.to_string().contains(forbidden));
+        }
     }
 }

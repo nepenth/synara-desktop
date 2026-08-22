@@ -12,6 +12,7 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod attachment;
 mod attachment_queue;
 mod error;
 mod ipc;
@@ -20,6 +21,10 @@ mod queue;
 mod sticker;
 mod text;
 
+pub use attachment::{
+    send_room_attachment, validate_attachment_filename, validate_attachment_mime,
+    MAX_ATTACHMENT_UPLOAD_BYTES,
+};
 pub use attachment_queue::{
     AttachmentEnqueue, AttachmentKind, AttachmentSendQueue, OutboundAttachment,
     MAX_ACTIVE_ATTACHMENTS, MAX_CAPTION_CHARS, MAX_HANDLE_CHARS,
@@ -27,7 +32,7 @@ pub use attachment_queue::{
 pub use error::SendError;
 pub use ipc::{
     MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
-    MatrixSendStickerResult, MatrixSendTextResult,
+    MatrixSendRoomAttachmentResult, MatrixSendStickerResult, MatrixSendTextResult,
 };
 pub use poll::{
     apply_poll_start_relations, normalize_poll, poll_response_content, poll_start_content,

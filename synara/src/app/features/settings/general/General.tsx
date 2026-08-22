@@ -60,6 +60,7 @@ import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import {
   chromeColorsForRamp,
@@ -1570,7 +1571,17 @@ function Messages() {
     <Box direction="Column" gap="100">
       <Text size="L400">Messages</Text>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile title="Message Layout" after={<SelectMessageLayout />} />
+        <SettingTile
+          title="Message Layout"
+          description={
+            isNativeMatrixSession()
+              ? 'The native timeline uses a single Element-like layout. Compact and Bubble apply only to the retired JS timeline.'
+              : undefined
+          }
+          after={
+            isNativeMatrixSession() ? <Text size="T300">Modern</Text> : <SelectMessageLayout />
+          }
+        />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile title="Message Spacing" after={<SelectMessageSpacing />} />

@@ -1,9 +1,10 @@
 //! Live room-profile state owned by the managed native Matrix session.
 //!
 //! This module projects the bounded join-rule vocabulary needed by the
-//! room-settings Publish-to-Directory gate and owns the room name/topic/avatar
-//! writes. It does not own a join-rule writer and never sends SDK event
-//! objects over the application event boundary.
+//! room-settings Publish-to-Directory gate, owns join-rule writes through
+//! `privacy_settings().update_join_rule`, and owns the room name/topic/avatar
+//! writes. It never sends SDK event objects over the application event
+//! boundary.
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -23,7 +24,7 @@ use matrix_sdk::{
             room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
             StateEventType,
         },
-        room::JoinRule,
+        room::{AllowRule, JoinRule, Restricted},
         Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
     },
     Client, Room, RoomMemberships, RoomState,
@@ -347,6 +348,31 @@ impl NativeRoomJoinRuleOwner {
             session_generation: self.session_generation,
             join_rule: join_rule.to_owned(),
         })
+    }
+
+    pub async fn set_join_rule(
+        &self,
+        room_id: &str,
+        join_rule: &str,
+        allow_room_ids: Option<&[String]>,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let rule = parse_join_rule_write(join_rule, allow_room_ids)?;
+        let room_id = parse_join_rule_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-join-rule-room-not-found")?;
+        if room.state() != RoomState::Joined {
+            return Err("v-send.r-room-profile-join-rule-room-state-unavailable");
+        }
+        room.privacy_settings()
+            .update_join_rule(rule)
+            .await
+            .map_err(|_| "v-send.r-room-profile-join-rule-set-sdk-failed")?;
+        Ok(MatrixProfileWriteResult { status: "ok" })
     }
 
     pub async fn set_name(
@@ -1015,6 +1041,31 @@ fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
         .map_err(|_| "v-send.r-room-profile-join-rule-invalid")
 }
 
+fn parse_join_rule_allow_rooms(
+    allow_room_ids: Option<&[String]>,
+) -> Result<Vec<AllowRule>, &'static str> {
+    allow_room_ids
+        .unwrap_or(&[])
+        .iter()
+        .map(|room_id| parse_join_rule_room_id(room_id).map(AllowRule::room_membership))
+        .collect()
+}
+
+fn parse_join_rule_write(
+    join_rule: &str,
+    allow_room_ids: Option<&[String]>,
+) -> Result<JoinRule, &'static str> {
+    let allow = parse_join_rule_allow_rooms(allow_room_ids)?;
+    match join_rule {
+        "public" => Ok(JoinRule::Public),
+        "invite" => Ok(JoinRule::Invite),
+        "knock" => Ok(JoinRule::Knock),
+        "restricted" => Ok(JoinRule::Restricted(Restricted::new(allow))),
+        "knock_restricted" => Ok(JoinRule::KnockRestricted(Restricted::new(allow))),
+        _ => Err("v-send.r-room-profile-join-rule-invalid"),
+    }
+}
+
 fn parse_profile_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     OwnedRoomId::try_from(room_id.trim()).map_err(|_| "d0.4-send-invalid-room-id")
 }
@@ -1183,5 +1234,52 @@ mod tests {
         }))
         .expect("custom join rule is representable by Ruma");
         assert_eq!(project_join_rule(&custom), None);
+    }
+
+    #[test]
+    fn parse_join_rule_write_maps_closed_vocabulary_and_allow_rooms() {
+        assert_eq!(
+            parse_join_rule_write("public", None).unwrap(),
+            JoinRule::Public
+        );
+        assert_eq!(
+            parse_join_rule_write("invite", None).unwrap(),
+            JoinRule::Invite
+        );
+        assert_eq!(
+            parse_join_rule_write("knock", None).unwrap(),
+            JoinRule::Knock
+        );
+        let restricted =
+            parse_join_rule_write("restricted", Some(&["!space:example.org".to_owned()])).unwrap();
+        match restricted {
+            JoinRule::Restricted(rules) => {
+                assert_eq!(rules.allow.len(), 1);
+                match &rules.allow[0] {
+                    AllowRule::RoomMembership(membership) => {
+                        assert_eq!(membership.room_id.as_str(), "!space:example.org");
+                    }
+                    other => panic!("expected room membership allow, got {other:?}"),
+                }
+            }
+            other => panic!("expected restricted, got {other:?}"),
+        }
+        let knock_restricted = parse_join_rule_write("knock_restricted", Some(&[])).unwrap();
+        match knock_restricted {
+            JoinRule::KnockRestricted(rules) => assert!(rules.allow.is_empty()),
+            other => panic!("expected knock_restricted, got {other:?}"),
+        }
+        assert_eq!(
+            parse_join_rule_write("private", None).unwrap_err(),
+            "v-send.r-room-profile-join-rule-invalid"
+        );
+        assert_eq!(
+            parse_join_rule_write("custom", None).unwrap_err(),
+            "v-send.r-room-profile-join-rule-invalid"
+        );
+        assert_eq!(
+            parse_join_rule_write("restricted", Some(&["not-a-room".to_owned()])).unwrap_err(),
+            "v-send.r-room-profile-join-rule-invalid"
+        );
     }
 }

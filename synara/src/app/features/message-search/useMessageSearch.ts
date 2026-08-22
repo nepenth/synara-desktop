@@ -25,6 +25,8 @@ type SearchResponseReading = {
 };
 import { useCallback } from 'react';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { invokeDesktopWithAvailability } from '../../utils/desktop';
+import { isNativeMatrixSession } from '../verification/nativeVerification';
 
 export type ResultItem = {
   rank: number;
@@ -86,9 +88,54 @@ export type MessageSearchParams = {
   rooms?: string[];
   senders?: string[];
 };
+
+type NativeMessageSearchItem = {
+  rank: number;
+  eventId: string;
+  sender: string;
+  originServerTs: number;
+  body: string;
+  roomId: string;
+};
+
+type NativeMessageSearchGroup = {
+  roomId: string;
+  items: NativeMessageSearchItem[];
+};
+
+type NativeMessageSearchResult = {
+  nextToken?: string;
+  highlights: string[];
+  groups: NativeMessageSearchGroup[];
+};
+
+const mapNativeSearchResult = (value: NativeMessageSearchResult): SearchResult => ({
+  nextToken: value.nextToken,
+  highlights: value.highlights ?? [],
+  groups: (value.groups ?? []).map((group) => ({
+    roomId: group.roomId,
+    items: (group.items ?? []).map((item) => ({
+      rank: item.rank,
+      event: {
+        event_id: item.eventId,
+        type: 'm.room.message',
+        sender: item.sender,
+        origin_server_ts: item.originServerTs,
+        room_id: item.roomId,
+        content: {
+          msgtype: 'm.text',
+          body: item.body,
+        },
+      },
+      context: {},
+    })),
+  })),
+});
+
 export const useMessageSearch = (params: MessageSearchParams) => {
   const mx = useMatrixClient();
   const { term, order, rooms, senders } = params;
+  const nativeSession = isNativeMatrixSession();
 
   const searchMessages = useCallback(
     async (nextBatch?: string) => {
@@ -97,6 +144,26 @@ export const useMessageSearch = (params: MessageSearchParams) => {
           highlights: [],
           groups: [],
         };
+
+      if (nativeSession) {
+        const result = await invokeDesktopWithAvailability<NativeMessageSearchResult>(
+          'matrix_message_search',
+          {
+            term,
+            nextToken: nextBatch === '' ? undefined : nextBatch,
+            rooms,
+            senders,
+            order,
+          }
+        );
+        if (!result.available) {
+          throw new Error('Native message search is unavailable.');
+        }
+        return result.value
+          ? mapNativeSearchResult(result.value)
+          : { nextToken: undefined, highlights: [], groups: [] };
+      }
+
       const limit = 20;
 
       const requestBody: SearchRequestBody = {
@@ -141,7 +208,7 @@ export const useMessageSearch = (params: MessageSearchParams) => {
         ? parseSearchResult(r as SearchResponseReading)
         : { nextToken: undefined, highlights: [], groups: [] };
     },
-    [mx, term, order, rooms, senders]
+    [mx, nativeSession, term, order, rooms, senders]
   );
 
   return searchMessages;

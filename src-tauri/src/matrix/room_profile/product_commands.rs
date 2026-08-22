@@ -26,6 +26,7 @@ const JOIN_RULE_ROOM_STATE_UNAVAILABLE: &str =
 const JOIN_RULE_READ_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-read-sdk-failed";
 const JOIN_RULE_DESERIALIZE_FAILED: &str = "v-send.r-room-profile-join-rule-deserialize-failed";
 const JOIN_RULE_UNSUPPORTED: &str = "v-send.r-room-profile-join-rule-unsupported";
+const JOIN_RULE_SET_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-set-sdk-failed";
 
 pub use synara_core::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -33,8 +34,7 @@ pub use synara_core::app::room_profile::{
 };
 
 /// V-SEND.R-ROOM-PROFILE-JOIN-RULE — authoritative live room-scoped join-rule
-/// read through the managed native Matrix SDK client. This is intentionally a
-/// read-only gate owner; the Join Rules writer remains a separate residual.
+/// read through the managed native Matrix SDK client.
 #[tauri::command]
 pub async fn matrix_room_join_rule_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
@@ -45,6 +45,26 @@ pub async fn matrix_room_join_rule_snapshot(
         core.inner().as_ref(),
         room_id,
         session_generation,
+    )
+    .await
+}
+
+/// V-SEND.R-ROOM-PROFILE-JOIN-RULE — join-rule write through
+/// `NativeRoomJoinRuleOwner` / `privacy_settings().update_join_rule`.
+/// Fail-closed: when a native session is live this command is the only path;
+/// the JS `mx.sendStateEvent(m.room.join_rules)` must not be used as a fallback.
+#[tauri::command]
+pub async fn matrix_room_set_join_rule(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    join_rule: String,
+    allow_room_ids: Option<Vec<String>>,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    crate::bridge::join_rule_snapshot::set_join_rule(
+        core.inner().as_ref(),
+        room_id,
+        join_rule,
+        allow_room_ids,
     )
     .await
 }
@@ -183,6 +203,10 @@ pub(super) fn map_room_join_rule_error(diagnostic_id: &'static str) -> MatrixAut
         | JOIN_RULE_READ_SDK_FAILED => (
             "Unknown",
             "The native Matrix room join rule is unavailable.",
+        ),
+        JOIN_RULE_SET_SDK_FAILED => (
+            "Unknown",
+            "The native Matrix room join rule could not be updated.",
         ),
         _ => (
             "Unknown",

@@ -195,3 +195,17 @@ fn attachment_kinds() {
         assert!(!k.as_str().is_empty());
     }
 }
+
+#[test]
+fn attachment_filename_and_mime_reject_without_echo() {
+    let secret = "secret.bin";
+    assert_eq!(validate_attachment_filename(secret).unwrap(), secret);
+    let slash = validate_attachment_filename("../secret.bin").unwrap_err();
+    assert_eq!(slash, "v-send.1-attachment-invalid-filename");
+    assert!(!slash.contains("secret.bin"));
+    let mime = validate_attachment_mime("application/octet-stream").unwrap();
+    assert_eq!(mime.essence_str(), "application/octet-stream");
+    let invalid = validate_attachment_mime("not-a-mime").unwrap_err();
+    assert_eq!(invalid, "v-send.1-attachment-invalid-mime");
+    assert!(!invalid.contains("not-a-mime"));
+}

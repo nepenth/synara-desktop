@@ -3,6 +3,7 @@ import {
   isObject,
   optBoolean,
   optString,
+  reqBoolean,
   reqNumber,
   reqString,
 } from '../matrix-dto/parseUtil';
@@ -242,6 +243,39 @@ export const timelineMediaHandleFromUri = (contentUri: string): string | null =>
   } catch {
     return match[1];
   }
+};
+
+const isMxcAvatar = (value: string): boolean =>
+  value.startsWith('mxc://') && value.split('/').length >= 4;
+
+const parseUserDirectorySearch = (
+  value: unknown
+): {
+  limited: boolean;
+  results: Array<{ user_id: string; display_name?: string; avatar_url?: string }>;
+} => {
+  if (!isObject(value) || hasForbiddenWireFields(value)) {
+    return { limited: false, results: [] };
+  }
+  const limited = reqBoolean(value, 'limited') === true;
+  const rawResults = value.results;
+  if (!Array.isArray(rawResults)) {
+    return { limited, results: [] };
+  }
+  const results: Array<{ user_id: string; display_name?: string; avatar_url?: string }> = [];
+  for (const raw of rawResults) {
+    if (!isObject(raw) || hasForbiddenWireFields(raw)) continue;
+    const userId = reqString(raw, 'userId');
+    if (!userId || !userId.startsWith('@') || !userId.includes(':')) continue;
+    const displayName = optString(raw, 'displayName') ?? undefined;
+    const avatarUrl = optString(raw, 'avatarUrl') ?? undefined;
+    results.push({
+      user_id: userId,
+      display_name: displayName || undefined,
+      avatar_url: avatarUrl && isMxcAvatar(avatarUrl) ? avatarUrl : undefined,
+    });
+  }
+  return { limited, results };
 };
 
 const parseRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | null => {
@@ -1110,12 +1144,17 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         avatar_url?: string;
       }>;
     }> {
-      const x = opts.term.length + (opts.limit ?? 0); // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve({ limited: false, results: [] });
+      const result = await invoke('matrix_user_directory_search', {
+        term: opts.term,
+        limit: opts.limit,
+      });
+      if (!result.available) {
+        return { limited: false, results: [] };
+      }
+      return parseUserDirectorySearch(result.value);
     },
     async searchUserDirectoryFn(term: string): Promise<unknown> {
-      const x = term.length; // eslint-disable-line @typescript-eslint/no-unused-vars
-      return Promise.resolve(null);
+      return this.searchUserDirectory({ term });
     },
 
     /** F5 — GAP stubs required by the type anchor; no native surface. */

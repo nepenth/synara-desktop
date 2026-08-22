@@ -1,4 +1,7 @@
-//! Live V-CRYPTO.3 backup status from the managed Matrix client.
+//! Live V-CRYPTO.3 backup status and restore from the managed Matrix client.
+//!
+//! Recovery secrets are method arguments only. This module never stores or
+//! serializes them.
 
 use matrix_sdk::{
     encryption::{backups::BackupState, recovery::RecoveryState},
@@ -7,9 +10,15 @@ use matrix_sdk::{
 };
 
 use super::{
-    project_backup_status, NativeBackupEnginePhase, NativeBackupRecoveryPhase, NativeBackupStatus,
-    ServerBackupProjection,
+    project_backup_status, NativeBackupAvailability, NativeBackupEnginePhase,
+    NativeBackupRecoveryPhase, NativeBackupStatus, ServerBackupProjection,
 };
+
+/// Privacy-safe restore ack. Status is always `"ok"` on success.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MatrixRestoreBackupResult {
+    pub status: &'static str,
+}
 
 fn backup_engine_phase(state: BackupState) -> NativeBackupEnginePhase {
     match state {
@@ -62,4 +71,30 @@ pub async fn status(
         backup_engine_phase(backups.state()),
         backup_recovery_phase(client.encryption().recovery().state()),
     ))
+}
+
+/// Restore encryption backup with a recovery key or passphrase.
+///
+/// Empty secret fails closed with a static diagnostic. SDK `recover()`
+/// rejection is `v-crypto.3-restore-rejected`. The secret is never copied
+/// into the result.
+pub async fn restore(
+    client: &Client,
+    session_generation: u64,
+    recovery_secret: &str,
+) -> Result<MatrixRestoreBackupResult, &'static str> {
+    if recovery_secret.is_empty() {
+        return Err("v-crypto.3-recovery-secret-empty");
+    }
+    client
+        .encryption()
+        .recovery()
+        .recover(recovery_secret)
+        .await
+        .map_err(|_| "v-crypto.3-restore-rejected")?;
+    let status = status(client, session_generation).await?;
+    if !status.enabled || status.availability != NativeBackupAvailability::Available {
+        return Err("v-crypto.3-restore-incomplete");
+    }
+    Ok(MatrixRestoreBackupResult { status: "ok" })
 }

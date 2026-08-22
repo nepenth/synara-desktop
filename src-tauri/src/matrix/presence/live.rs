@@ -11,7 +11,7 @@ use tauri::{AppHandle, Emitter};
 pub use synara_core::app::presence::{
     NativePresenceOwner, NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
     NativePresenceSubscription, NativePresenceUpdate, NativePresenceUpdateOutcome,
-    PRESENCE_UPDATED_EVENT,
+    NativePresenceWriteResult, PRESENCE_UPDATED_EVENT,
 };
 
 /// Start the Core owner and emit presence updates on the existing Tauri event.

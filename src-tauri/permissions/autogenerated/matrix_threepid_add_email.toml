@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-threepid-add-email"
+description = "Enables the matrix_threepid_add_email command without any pre-configured scope."
+commands.allow = ["matrix_threepid_add_email"]
+
+[[permission]]
+identifier = "deny-matrix-threepid-add-email"
+description = "Denies the matrix_threepid_add_email command without any pre-configured scope."
+commands.deny = ["matrix_threepid_add_email"]

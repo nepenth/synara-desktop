@@ -1132,7 +1132,8 @@ mod view_pure {
     fn reply_and_thread_summary_serialize_product_shape_without_secrets() {
         let reply = TimelineReplyPreview {
             event_id: "$parent:example.org".into(),
-            sender_name: "@alice:example.org".into(),
+            sender_id: Some("@alice:example.org".into()),
+            sender_name: "alice".into(),
             body: "Earlier message".into(),
         };
         let thread = TimelineThreadSummary {

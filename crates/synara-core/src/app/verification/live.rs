@@ -182,20 +182,7 @@ impl NativeVerificationOwner {
                     .map_err(|_| "v-crypto.1-device-request-failed")?;
                 (request, Some(device_id))
             }
-            None => {
-                let identity = crate::app::cross_signing::query_own_identity(
-                    &self.client.encryption(),
-                    user_id,
-                )
-                .await
-                .map_err(|_| "v-crypto.1-identity-query-failed")?
-                .ok_or("v-crypto.1-own-identity-unavailable")?;
-                let request = identity
-                    .request_verification_with_methods(vec![VerificationMethod::SasV1])
-                    .await
-                    .map_err(|_| "v-crypto.1-own-request-failed")?;
-                (request, None)
-            }
+            None => start_self_verification(&self.client, user_id).await?,
         };
 
         let flow_id = request.flow_id().to_owned();
@@ -411,17 +398,59 @@ impl Drop for NativeVerificationOwner {
     }
 }
 
+async fn start_self_verification(
+    client: &Client,
+    user_id: &matrix_sdk::ruma::UserId,
+) -> Result<(VerificationRequest, Option<OwnedDeviceId>), &'static str> {
+    let encryption = client.encryption();
+    if let Some(identity) =
+        crate::app::cross_signing::query_own_identity(&encryption, user_id).await?
+    {
+        let request = identity
+            .request_verification_with_methods(vec![VerificationMethod::SasV1])
+            .await
+            .map_err(|_| "v-crypto.1-own-request-failed")?;
+        return Ok((request, None));
+    }
+    let current = client.device_id().map(|id| id.to_owned());
+    let devices = encryption
+        .get_user_devices(user_id)
+        .await
+        .map_err(|_| "v-crypto.1-device-query-failed")?;
+    let peer = devices.devices().find(|device| {
+        current
+            .as_ref()
+            .is_none_or(|current_id| device.device_id() != current_id)
+    });
+    let device = peer.ok_or("v-crypto.1-no-peer-device")?;
+    let device_id = device.device_id().to_owned();
+    let request = device
+        .request_verification_with_methods(vec![VerificationMethod::SasV1])
+        .await
+        .map_err(|_| "v-crypto.1-device-request-failed")?;
+    Ok((request, Some(device_id)))
+}
+
 async fn register_incoming_request(
     registry: &Arc<Mutex<VerificationRegistry>>,
     client: &Client,
     event: ToDeviceKeyVerificationRequestEvent,
 ) -> Option<VerificationRequest> {
     let flow_id = event.content.transaction_id.to_string();
-    let request = client
-        .encryption()
-        .get_verification_request(&event.sender, &flow_id)
-        .await?;
-    if !request.is_self_verification() {
+    let mut request = None;
+    for _ in 0..8 {
+        request = client
+            .encryption()
+            .get_verification_request(&event.sender, &flow_id)
+            .await;
+        if request.is_some() {
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    let request = request?;
+    let own_user = client.user_id()?;
+    if !request.is_self_verification() && event.sender != *own_user {
         return None;
     }
     let mut registry = registry.lock().await;

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-push-rules-snapshot"
+description = "Enables the matrix_push_rules_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_push_rules_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-push-rules-snapshot"
+description = "Denies the matrix_push_rules_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_push_rules_snapshot"]

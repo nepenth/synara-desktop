@@ -880,6 +880,8 @@ mod room_list;
 mod room_ops;
 #[path = "../room_profile/product_commands.rs"]
 mod room_profile;
+#[path = "../search/product_commands.rs"]
+mod search;
 #[path = "../secret_storage/product_commands.rs"]
 mod secret_storage;
 #[path = "../send/product_commands.rs"]
@@ -907,6 +909,7 @@ pub use room_keys::*;
 pub use room_list::*;
 pub use room_ops::*;
 pub use room_profile::*;
+pub use search::*;
 pub use secret_storage::*;
 pub use send::*;
 pub use spaces::*;

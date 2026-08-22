@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 
 struct SettingsView: View {
@@ -148,12 +149,30 @@ private struct AccountSettingsView: View {
     let session: AuthenticatedSession
     @State private var sessionDevices: [SharedCoreSessionDevice] = []
     @State private var ownPresence: SharedCorePresence?
+    @State private var presenceDraft = "online"
+    @State private var isSettingPresence = false
     @State private var coreSessionIdentity: CoreSessionIdentity?
     @State private var signOutDevice: SharedCoreSessionDevice?
     @State private var signOutPassword = ""
     @State private var signOutMessage: String?
     @State private var isSigningOut = false
     @State private var isLoadingSessions = true
+    @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
+    @State private var isRequestingVerification = false
+    @State private var verificationMessage: String?
+    @State private var displayNameDraft = ""
+    @State private var isSavingDisplayName = false
+    @State private var displayNameMessage: String?
+    @State private var selectedAvatarPhoto: PhotosPickerItem?
+    @State private var isUploadingAvatar = false
+    @State private var emails: [String] = []
+    @State private var emailDraft = ""
+    @State private var emailPassword = ""
+    @State private var needsEmailPassword = false
+    @State private var emailMessage: String?
+    @State private var ignoredUserIDs: [String] = []
+    @State private var ignoreDraft = ""
+    @State private var ignoreMessage: String?
 
     var body: some View {
         Form {
@@ -176,16 +195,133 @@ private struct AccountSettingsView: View {
                 .accessibilityIdentifier("SettingsAccountHomeserver")
             }
 
-            if let ownPresence,
-               ownPresence.displayName != "Unknown" || ownPresence.statusMessage?.isEmpty == false
-            {
-                Section("Presence") {
-                    SettingsInfoRow(title: "Status", value: ownPresence.displayName)
-                        .accessibilityIdentifier("SettingsPresenceStatus")
-                    if let status = ownPresence.statusMessage, status.isEmpty == false {
-                        SettingsInfoRow(title: "Message", value: status)
-                            .accessibilityIdentifier("SettingsPresenceMessage")
+            Section {
+                TextField("Display name", text: $displayNameDraft)
+                    .textInputAutocapitalization(.words)
+                    .accessibilityIdentifier("SettingsDisplayNameField")
+                Button {
+                    saveDisplayName()
+                } label: {
+                    if isSavingDisplayName {
+                        ProgressView()
+                    } else {
+                        Text("Save Display Name")
                     }
+                }
+                .disabled(isSavingDisplayName || displayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("SettingsSaveDisplayNameButton")
+            } header: {
+                Text("Profile")
+            } footer: {
+                Text("This is the name other people see in rooms. It is stored on your homeserver.")
+            }
+
+            Section {
+                PhotosPicker(selection: $selectedAvatarPhoto, matching: .images) {
+                    if isUploadingAvatar {
+                        ProgressView()
+                    } else {
+                        Label("Upload Avatar", systemImage: "photo")
+                    }
+                }
+                .disabled(isUploadingAvatar)
+                .accessibilityIdentifier("SettingsAvatarUploadButton")
+            } header: {
+                Text("Avatar")
+            } footer: {
+                Text("Photos are uploaded to your homeserver, then set as your profile avatar.")
+            }
+
+            Section {
+                ForEach(emails, id: \.self) { address in
+                    Button(role: .destructive) {
+                        Task {
+                            _ = await environment.matrix.deleteThreepidEmail(address)
+                            emails = await environment.matrix.threepidEmails()
+                        }
+                    } label: {
+                        Text(address)
+                    }
+                }
+                TextField("you@example.org", text: $emailDraft)
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.emailAddress)
+                    .accessibilityIdentifier("SettingsEmailField")
+                Button("Add Email") {
+                    addEmail()
+                }
+                .disabled(emailDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("SettingsAddEmailButton")
+                if needsEmailPassword {
+                    SecureField("Account password", text: $emailPassword)
+                    Button("Confirm Email") {
+                        confirmEmail()
+                    }
+                    .disabled(emailPassword.isEmpty)
+                }
+                if let emailMessage {
+                    Text(emailMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+            } header: {
+                Text("Contact")
+            }
+
+            Section {
+                ForEach(ignoredUserIDs, id: \.self) { userID in
+                    Button(role: .destructive) {
+                        Task {
+                            _ = await environment.matrix.unignoreUser(userID)
+                            ignoredUserIDs = await environment.matrix.ignoredUserIDs()
+                        }
+                    } label: {
+                        Text(userID)
+                    }
+                }
+                TextField("@user:server", text: $ignoreDraft)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .accessibilityIdentifier("SettingsIgnoreUserField")
+                Button("Block User") {
+                    blockUser()
+                }
+                .disabled(ignoreDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                .accessibilityIdentifier("SettingsBlockUserButton")
+                if let ignoreMessage {
+                    Text(ignoreMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                }
+            } header: {
+                Text("Blocked Users")
+            } footer: {
+                Text("Blocked users cannot message or invite you.")
+            }
+
+            if let displayNameMessage {
+                Section {
+                    Text(displayNameMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("SettingsDisplayNameMessage")
+                }
+            }
+
+            Section("Presence") {
+                Picker("Status", selection: $presenceDraft) {
+                    Text("Online").tag("online")
+                    Text("Away").tag("unavailable")
+                    Text("Offline").tag("offline")
+                }
+                .disabled(isSettingPresence)
+                .accessibilityIdentifier("SettingsPresenceStatus")
+                .onChange(of: presenceDraft) { newValue in
+                    applyPresence(newValue)
+                }
+                if let status = ownPresence?.statusMessage, status.isEmpty == false {
+                    SettingsInfoRow(title: "Message", value: status)
+                        .accessibilityIdentifier("SettingsPresenceMessage")
                 }
             }
 
@@ -216,12 +352,47 @@ private struct AccountSettingsView: View {
                 Text("Sign out a session to revoke it on the homeserver. This device uses Log Out instead.")
             }
 
+            if sessionCrypto.showsVerifyThisDevice {
+                Section {
+                    Button {
+                        isRequestingVerification = true
+                        verificationMessage = nil
+                        Task {
+                            let result = await environment.crypto.requestDeviceVerification()
+                            await MainActor.run {
+                                verificationMessage = result.message
+                                isRequestingVerification = false
+                            }
+                        }
+                    } label: {
+                        if isRequestingVerification {
+                            ProgressView()
+                        } else {
+                            Text("Verify This Device")
+                        }
+                    }
+                    .disabled(isRequestingVerification)
+                    .accessibilityIdentifier("AccountVerifyThisDeviceButton")
+                } footer: {
+                    Text("Compare emoji or number codes with another signed-in Synara or Element session.")
+                }
+            }
+
             if let signOutMessage {
                 Section {
                     Text(signOutMessage)
                         .font(SynaraTypography.supporting)
                         .foregroundStyle(SynaraColor.secondaryText)
                         .accessibilityIdentifier("SettingsSessionSignOutMessage")
+                }
+            }
+
+            if let verificationMessage {
+                Section {
+                    Text(verificationMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("AccountVerificationMessage")
                 }
             }
         }
@@ -255,13 +426,167 @@ private struct AccountSettingsView: View {
             Text("Enter your account password to revoke \(signOutDevice?.displayName ?? "this session").")
         }
         .task {
+            await sessionCrypto.start(crypto: environment.crypto)
+        }
+        .onChange(of: selectedAvatarPhoto) { item in
+            if let item {
+                uploadAvatar(item)
+            }
+        }
+        .task {
             await refreshCoreSessionIdentity()
             let presence = await environment.matrix.presence(userID: session.userID)
             let devices = await environment.crypto.sessionDevices()
+            let loadedEmails = await environment.matrix.threepidEmails()
+            let loadedIgnored = await environment.matrix.ignoredUserIDs()
+            let profile = await environment.matrix.ownProfile()
             await MainActor.run {
                 ownPresence = presence
+                if let state = presence?.state, ["online", "unavailable", "offline"].contains(state) {
+                    presenceDraft = state
+                }
                 sessionDevices = devices
+                emails = loadedEmails
+                ignoredUserIDs = loadedIgnored
                 isLoadingSessions = false
+                if let homeserverDisplayName = profile?.displayName?
+                    .trimmingCharacters(in: .whitespacesAndNewlines),
+                   homeserverDisplayName.isEmpty == false {
+                    displayNameDraft = homeserverDisplayName
+                } else if displayNameDraft.isEmpty {
+                    displayNameDraft = session.userID.split(separator: ":").first.map(String.init)?
+                        .replacingOccurrences(of: "@", with: "")
+                        ?? session.userID
+                }
+            }
+        }
+    }
+
+    private func applyPresence(_ state: String) {
+        guard ["online", "unavailable", "offline"].contains(state) else { return }
+        if state == ownPresence?.state { return }
+        isSettingPresence = true
+        Task {
+            let ok = await environment.matrix.setOwnPresence(state)
+            await MainActor.run {
+                isSettingPresence = false
+                if ok {
+                    ownPresence = SharedCorePresenceLive.presence(
+                        userId: session.userID,
+                        state: state,
+                        currentlyActive: state == "online",
+                        statusMsg: ownPresence?.statusMessage
+                    )
+                } else if let previous = ownPresence?.state,
+                          ["online", "unavailable", "offline"].contains(previous) {
+                    presenceDraft = previous
+                }
+            }
+        }
+    }
+
+    private func uploadAvatar(_ item: PhotosPickerItem) {
+        isUploadingAvatar = true
+        displayNameMessage = nil
+        Task {
+            do {
+                guard let data = try await item.loadTransferable(type: Data.self), data.isEmpty == false else {
+                    throw NSError(domain: "synara.avatar", code: 1)
+                }
+                let ok = await environment.matrix.uploadOwnAvatar(payload: data, mimeType: "image/jpeg")
+                await MainActor.run {
+                    selectedAvatarPhoto = nil
+                    isUploadingAvatar = false
+                    displayNameMessage = ok ? "Avatar updated." : "Could not update avatar."
+                }
+            } catch {
+                await MainActor.run {
+                    selectedAvatarPhoto = nil
+                    isUploadingAvatar = false
+                    displayNameMessage = "Could not update avatar."
+                }
+            }
+        }
+    }
+
+    private func addEmail() {
+        let email = emailDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard email.isEmpty == false else { return }
+        emailMessage = nil
+        Task {
+            let requested = await environment.matrix.requestThreepidEmailToken(email)
+            guard requested else {
+                await MainActor.run { emailMessage = "Could not send verification email." }
+                return
+            }
+            let status = await environment.matrix.addThreepidEmail()
+            await MainActor.run {
+                if status == "authenticationRequired" {
+                    needsEmailPassword = true
+                    emailMessage = "Enter your account password to confirm this email."
+                } else if status == "ok" {
+                    emailDraft = ""
+                    needsEmailPassword = false
+                    emailMessage = "Email attached."
+                } else {
+                    emailMessage = "Could not attach this email."
+                }
+            }
+            emails = await environment.matrix.threepidEmails()
+        }
+    }
+
+    private func confirmEmail() {
+        let password = emailPassword
+        emailPassword = ""
+        Task {
+            let status = await environment.matrix.addThreepidEmailPassword(password)
+            await MainActor.run {
+                if status == "ok" {
+                    emailDraft = ""
+                    needsEmailPassword = false
+                    emailMessage = "Email attached."
+                } else {
+                    emailMessage = "Could not confirm this email."
+                }
+            }
+            emails = await environment.matrix.threepidEmails()
+        }
+    }
+
+    private func blockUser() {
+        let userID = ignoreDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard userID.hasPrefix("@") else {
+            ignoreMessage = "Enter a full Matrix user ID."
+            return
+        }
+        ignoreMessage = nil
+        Task {
+            let ok = await environment.matrix.ignoreUser(userID)
+            let loaded = await environment.matrix.ignoredUserIDs()
+            await MainActor.run {
+                ignoredUserIDs = loaded
+                if ok {
+                    ignoreDraft = ""
+                } else {
+                    ignoreMessage = "Could not block this user."
+                }
+            }
+        }
+    }
+
+    private func saveDisplayName() {
+        let name = displayNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard name.isEmpty == false else { return }
+        isSavingDisplayName = true
+        displayNameMessage = nil
+        Task {
+            let ok = await environment.matrix.setOwnDisplayName(name)
+            await MainActor.run {
+                isSavingDisplayName = false
+                displayNameMessage = ok
+                    ? "Display name updated."
+                    : "Could not update display name."
             }
         }
     }
@@ -347,6 +672,9 @@ private struct NotificationSettingsView: View {
     @State private var isRequestingNotifications = false
     @State private var isRegisteringPush = false
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
+    @State private var pushRules: SynaraPushRulesSnapshot?
+    @State private var keywordDraft = ""
+    @State private var pushRulesMessage: String?
 
     var body: some View {
         Form {
@@ -406,6 +734,64 @@ private struct NotificationSettingsView: View {
                 Text("Message content is looked up on this device and is not sent through the push gateway.")
                     .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
             }
+
+            if let pushRules {
+                Section("1-to-1 Chats") {
+                    pushModePicker("Unencrypted", current: pushRules.dm) { mode in
+                        await updateDefault(encrypted: false, oneToOne: true, mode: mode)
+                    }
+                    pushModePicker("Encrypted", current: pushRules.dmEncrypted) { mode in
+                        await updateDefault(encrypted: true, oneToOne: true, mode: mode)
+                    }
+                }
+                Section("Rooms") {
+                    pushModePicker("Unencrypted", current: pushRules.group) { mode in
+                        await updateDefault(encrypted: false, oneToOne: false, mode: mode)
+                    }
+                    pushModePicker("Encrypted", current: pushRules.groupEncrypted) { mode in
+                        await updateDefault(encrypted: true, oneToOne: false, mode: mode)
+                    }
+                }
+                Section("Mentions") {
+                    mentionToggle("User ID", enabled: pushRules.mentions.userMention, ruleID: "userMention")
+                    mentionToggle("Display name", enabled: pushRules.mentions.displayName, ruleID: "displayName")
+                    mentionToggle("Username", enabled: pushRules.mentions.userName, ruleID: "userName")
+                    mentionToggle("@room mention", enabled: pushRules.mentions.roomMention, ruleID: "roomMention")
+                    mentionToggle("Contains @room", enabled: pushRules.mentions.atRoom, ruleID: "atRoom")
+                }
+                Section("Keywords") {
+                    ForEach(pushRules.keywords, id: \.self) { keyword in
+                        Button(role: .destructive) {
+                            Task {
+                                _ = await environment.matrix.removePushKeyword(keyword)
+                                self.pushRules = await environment.matrix.pushRulesSnapshot()
+                            }
+                        } label: {
+                            Text(keyword)
+                        }
+                    }
+                    TextField("Keyword", text: $keywordDraft)
+                        .accessibilityIdentifier("NotificationKeywordField")
+                    Button("Add Keyword") {
+                        let keyword = keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+                        guard keyword.isEmpty == false else { return }
+                        Task {
+                            _ = await environment.matrix.addPushKeyword(keyword)
+                            keywordDraft = ""
+                            self.pushRules = await environment.matrix.pushRulesSnapshot()
+                        }
+                    }
+                    .disabled(keywordDraft.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .accessibilityIdentifier("NotificationAddKeywordButton")
+                }
+                if let pushRulesMessage {
+                    Section {
+                        Text(pushRulesMessage)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                }
+            }
         }
         .settingsTabBarClearance()
         .navigationTitle("Notifications")
@@ -415,6 +801,49 @@ private struct NotificationSettingsView: View {
                 for: SynaraSharedConstants.lockScreenMessagePreviewsKey
             )
             notificationStatus = await environment.notificationPermission.currentStatus()
+            pushRules = await environment.matrix.pushRulesSnapshot()
+        }
+    }
+
+    @ViewBuilder
+    private func pushModePicker(
+        _ title: String,
+        current: String,
+        onChange: @escaping (String) async -> Void
+    ) -> some View {
+        Picker(title, selection: Binding(
+            get: { current },
+            set: { mode in
+                Task { await onChange(mode) }
+            }
+        )) {
+            Text("All").tag("all")
+            Text("Mentions").tag("mentions")
+            Text("Off").tag("mute")
+        }
+    }
+
+    private func mentionToggle(_ title: String, enabled: Bool, ruleID: String) -> some View {
+        Toggle(title, isOn: Binding(
+            get: { enabled },
+            set: { value in
+                Task {
+                    _ = await environment.matrix.setPushRuleMention(ruleID: ruleID, enabled: value)
+                    pushRules = await environment.matrix.pushRulesSnapshot()
+                }
+            }
+        ))
+    }
+
+    private func updateDefault(encrypted: Bool, oneToOne: Bool, mode: String) async {
+        let ok = await environment.matrix.setPushRuleDefault(
+            encrypted: encrypted,
+            oneToOne: oneToOne,
+            mode: mode
+        )
+        pushRules = await environment.matrix.pushRulesSnapshot()
+        if ok == false {
+            pushRulesMessage = "Could not update push rules."
         }
     }
 
@@ -442,6 +871,8 @@ private struct AppearanceSettingsView: View {
     @State private var didLoadBaseColor = false
     @State private var isBaseColorDirty = false
     @State private var persistTask: Task<Void, Never>?
+    @State private var hour24Clock = false
+    @State private var hideActivity = false
 
     var body: some View {
         Form {
@@ -490,6 +921,30 @@ private struct AppearanceSettingsView: View {
                 Text("Hue tint for chrome. Lightness is mapped to stacked greys (rail / room list / chat); this is not the fill color.")
             }
             Section {
+                Toggle("24-Hour Time", isOn: $hour24Clock)
+                    .accessibilityIdentifier("AppearanceHour24Toggle")
+                    .onChange(of: hour24Clock) { value in
+                        environment.settings.set(value, for: SynaraSharedConstants.hour24ClockKey)
+                    }
+            } header: {
+                Text("Date & Time")
+            } footer: {
+                Text("Matches desktop Settings → General. Room list and timeline clocks follow this toggle.")
+            }
+
+            Section {
+                Toggle("Hide Typing & Read Receipts", isOn: $hideActivity)
+                    .accessibilityIdentifier("AppearanceHideActivityToggle")
+                    .onChange(of: hideActivity) { value in
+                        environment.settings.set(value, for: SynaraSharedConstants.hideActivityKey)
+                    }
+            } header: {
+                Text("Privacy")
+            } footer: {
+                Text("When on, this device does not send read receipts. Matches desktop Editor → Hide Typing & Read Receipts.")
+            }
+
+            Section {
                 SettingsInfoRow(title: "Text Size", value: "Uses iOS Dynamic Type")
                     .accessibilityIdentifier("AppearanceTextSizeRow")
             } header: {
@@ -507,6 +962,8 @@ private struct AppearanceSettingsView: View {
             let stored = environment.settings.string(for: SynaraThemeRamp.storageKey)
             hasCustomBaseColor = SynaraThemeRamp.normalize(stored) != nil
             baseColor = Color(synaraHex: SynaraThemeRamp.resolve(stored))
+            hour24Clock = environment.settings.bool(for: SynaraSharedConstants.hour24ClockKey)
+            hideActivity = environment.settings.bool(for: SynaraSharedConstants.hideActivityKey)
             DispatchQueue.main.async {
                 didLoadBaseColor = true
             }
@@ -640,7 +1097,7 @@ private struct SecuritySettingsView: View {
                     .disabled(isRunningCryptoAction)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
                 } footer: {
-                    Text("Compare emoji or number codes with another already verified session. Synara does not mark this device verified until both sides confirm.")
+                    Text("Compare emoji or number codes with another signed-in Synara or Element session. Synara does not mark this device verified until both sides confirm.")
                 }
             }
 

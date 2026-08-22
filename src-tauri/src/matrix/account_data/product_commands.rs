@@ -101,6 +101,85 @@ pub async fn matrix_later_snapshot(
 }
 
 #[tauri::command]
+pub async fn matrix_push_rules_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::notifications::MatrixPushRulesSnapshot, MatrixAuthCommandError> {
+    crate::bridge::push_rules::push_rules_snapshot(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_push_rules_set_default(
+    core: State<'_, Arc<synara_core::Core>>,
+    encrypted: bool,
+    one_to_one: bool,
+    mode: String,
+) -> Result<synara_core::app::notifications::MatrixPushRulesWriteResult, MatrixAuthCommandError> {
+    crate::bridge::push_rules::push_rules_set_default(
+        core.inner().as_ref(),
+        encrypted,
+        one_to_one,
+        mode,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_push_rules_set_mention(
+    core: State<'_, Arc<synara_core::Core>>,
+    rule_id: String,
+    enabled: bool,
+) -> Result<synara_core::app::notifications::MatrixPushRulesWriteResult, MatrixAuthCommandError> {
+    crate::bridge::push_rules::push_rules_set_mention(core.inner().as_ref(), rule_id, enabled).await
+}
+
+#[tauri::command]
+pub async fn matrix_push_rules_add_keyword(
+    core: State<'_, Arc<synara_core::Core>>,
+    keyword: String,
+) -> Result<synara_core::app::notifications::MatrixPushRulesWriteResult, MatrixAuthCommandError> {
+    crate::bridge::push_rules::push_rules_add_keyword(core.inner().as_ref(), keyword).await
+}
+
+#[tauri::command]
+pub async fn matrix_push_rules_remove_keyword(
+    core: State<'_, Arc<synara_core::Core>>,
+    keyword: String,
+) -> Result<synara_core::app::notifications::MatrixPushRulesWriteResult, MatrixAuthCommandError> {
+    crate::bridge::push_rules::push_rules_remove_keyword(core.inner().as_ref(), keyword).await
+}
+
+#[tauri::command]
+pub async fn matrix_room_notification_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+) -> Result<synara_core::app::notifications::MatrixRoomNotificationSnapshot, MatrixAuthCommandError>
+{
+    crate::bridge::room_notification::room_notification_snapshot(core.inner().as_ref(), room_id)
+        .await
+}
+
+#[tauri::command]
+pub async fn matrix_room_notification_set(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    mode: String,
+) -> Result<
+    synara_core::app::notifications::MatrixRoomNotificationWriteResult,
+    MatrixAuthCommandError,
+> {
+    crate::bridge::room_notification::room_notification_set(core.inner().as_ref(), room_id, mode)
+        .await
+}
+
+#[tauri::command]
+pub async fn matrix_room_notifications_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::notifications::MatrixRoomNotificationsSnapshot, MatrixAuthCommandError>
+{
+    crate::bridge::room_notification::room_notifications_snapshot(core.inner().as_ref()).await
+}
+
+#[tauri::command]
 pub async fn matrix_later_upsert(
     core: State<'_, Arc<synara_core::Core>>,
     item: SynaraLaterItem,

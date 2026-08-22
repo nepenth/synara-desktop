@@ -22,7 +22,8 @@ pub use live::{NativePresenceOwner, PresenceUpdateEmit};
 pub use native::{
     subscription_id_generation, NativePresenceSnapshot, NativePresenceSnapshotResult,
     NativePresenceState, NativePresenceSubscription, NativePresenceUpdate,
-    NativePresenceUpdateOutcome, PresenceSubscriptionRegistry, PRESENCE_UPDATED_EVENT,
+    NativePresenceUpdateOutcome, NativePresenceWriteResult, PresenceSubscriptionRegistry,
+    PRESENCE_UPDATED_EVENT,
 };
 
 /// Static marker for link / schema smoke.

@@ -46,9 +46,19 @@ test('appearance does not offer Twitter Emoji and does not advertise unused mint
   assert.match(general, /Sample/);
 });
 
-test('native Notifications does not point users at an unavailable Block Users editor', () => {
+test('native General does not offer Compact or Bubble layouts that the native timeline ignores', () => {
+  const general = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
+    'utf8'
+  );
+  assert.match(general, /isNativeMatrixSession\(\)/);
+  assert.match(general, /native timeline uses a single Element-like layout/);
+});
+
+test('native Notifications owns homeserver push rules instead of a unavailable stub', () => {
   assert.match(notifications, /isNativeMatrixSession/);
-  assert.match(notifications, /not available in this native session/);
+  assert.match(notifications, /NativePushRulesEditor/);
+  assert.equal(notifications.includes('not available in this native session'), false);
   const nativeBranch = notifications.slice(
     notifications.indexOf('isNativeMatrixSession()'),
     notifications.indexOf(') : (')

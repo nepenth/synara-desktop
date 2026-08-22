@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { test } from 'node:test';
 import type { DesktopEvent, DesktopInvokeResult } from '../../../../utils/desktop';
 import {
@@ -144,4 +146,15 @@ test('stale, malformed, and unavailable updates clear a previously ready gate', 
     },
   });
   assert.equal(states.at(-1)?.status, 'error');
+});
+
+test('RoomJoinRules uses native join-rule write on native sessions', () => {
+  const source = readFileSync(
+    join(process.cwd(), 'src/app/features/common-settings/general/RoomJoinRules.tsx'),
+    'utf8'
+  );
+  assert.match(source, /isNativeMatrixSession\(\)/);
+  assert.match(source, /matrix_room_set_join_rule/);
+  assert.match(source, /allowRoomIds/);
+  assert.match(source, /roomIdToParents/);
 });

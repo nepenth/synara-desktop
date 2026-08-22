@@ -68,6 +68,41 @@ protocol MatrixClientServicing: AnyObject {
     /// session/credential ownership.
     func coreSessionIdentity() async -> CoreSessionIdentity?
     func presence(userID: String) async -> SharedCorePresence?
+    func setOwnPresence(_ state: String) async -> Bool
+    func ownProfile() async -> SharedCoreOwnProfileInfo?
+    func setOwnDisplayName(_ displayName: String) async -> Bool
+    func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool
+    func setOutgoingTyping(roomID: String, typing: Bool) async
+    func ignoredUserIDs() async -> [String]
+    func ignoreUser(_ userID: String) async -> Bool
+    func unignoreUser(_ userID: String) async -> Bool
+    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot?
+    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool
+    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool
+    func addPushKeyword(_ keyword: String) async -> Bool
+    func removePushKeyword(_ keyword: String) async -> Bool
+    func threepidEmails() async -> [String]
+    func deleteThreepidEmail(_ address: String) async -> Bool
+    func requestThreepidEmailToken(_ email: String) async -> Bool
+    func addThreepidEmail() async -> String?
+    func addThreepidEmailPassword(_ password: String) async -> String?
+}
+
+struct SynaraPushRuleMentions {
+    var userMention: Bool
+    var displayName: Bool
+    var userName: Bool
+    var roomMention: Bool
+    var atRoom: Bool
+}
+
+struct SynaraPushRulesSnapshot {
+    var dm: String
+    var dmEncrypted: String
+    var group: String
+    var groupEncrypted: String
+    var mentions: SynaraPushRuleMentions
+    var keywords: [String]
 }
 
 extension MatrixClientServicing {
@@ -77,6 +112,75 @@ extension MatrixClientServicing {
 
     func presence(userID: String) async -> SharedCorePresence? {
         _ = userID
+        return nil
+    }
+
+    func setOwnPresence(_ state: String) async -> Bool {
+        _ = state
+        return false
+    }
+
+    func ownProfile() async -> SharedCoreOwnProfileInfo? {
+        nil
+    }
+
+    func setOwnDisplayName(_ displayName: String) async -> Bool {
+        _ = displayName
+        return false
+    }
+
+    func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool {
+        _ = payload
+        _ = mimeType
+        return false
+    }
+
+    func setOutgoingTyping(roomID: String, typing: Bool) async {
+        _ = roomID
+        _ = typing
+    }
+
+    func ignoredUserIDs() async -> [String] { [] }
+    func ignoreUser(_ userID: String) async -> Bool {
+        _ = userID
+        return false
+    }
+    func unignoreUser(_ userID: String) async -> Bool {
+        _ = userID
+        return false
+    }
+    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot? { nil }
+    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool {
+        _ = encrypted
+        _ = oneToOne
+        _ = mode
+        return false
+    }
+    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool {
+        _ = ruleID
+        _ = enabled
+        return false
+    }
+    func addPushKeyword(_ keyword: String) async -> Bool {
+        _ = keyword
+        return false
+    }
+    func removePushKeyword(_ keyword: String) async -> Bool {
+        _ = keyword
+        return false
+    }
+    func threepidEmails() async -> [String] { [] }
+    func deleteThreepidEmail(_ address: String) async -> Bool {
+        _ = address
+        return false
+    }
+    func requestThreepidEmailToken(_ email: String) async -> Bool {
+        _ = email
+        return false
+    }
+    func addThreepidEmail() async -> String? { nil }
+    func addThreepidEmailPassword(_ password: String) async -> String? {
+        _ = password
         return nil
     }
 }
@@ -399,6 +503,7 @@ enum SynaraRoomVisibility: String, CaseIterable, Identifiable, Equatable {
 }
 
 enum SynaraRoomNotificationMode: String, CaseIterable, Identifiable, Equatable {
+    case `default` = "Default"
     case allMessages = "All"
     case mentionsOnly = "Mentions"
     case mute = "Mute"
@@ -835,7 +940,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             canEditAvatar: true,
             canEditAliases: true,
             powerLevels: .fullPower,
-            notificationMode: .allMessages,
+            notificationMode: .default,
             avatarURL: nil,
             members: []
         )
@@ -911,7 +1016,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             canEditAvatar: true,
             canEditAliases: true,
             powerLevels: .fullPower,
-            notificationMode: .allMessages,
+            notificationMode: .default,
             avatarURL: nil,
             members: []
         )

@@ -62,7 +62,7 @@ import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
-import { settingsAtom } from '../../state/settings';
+import { settingsAtom, type MessageSpacing } from '../../state/settings';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import colorMXID from '../../../util/colorMXID';
@@ -193,6 +193,7 @@ type NativeTimelineRowProps = {
   grouped: boolean;
   groupsNext: boolean;
   roomId: string;
+  messageSpacing: MessageSpacing;
   pinnedEventIds?: string[];
   sourceEncrypted?: boolean;
   onActionError: (message: string) => void;
@@ -638,8 +639,8 @@ const NativeTimelineRowActionSurface = ({
   const hasActionMenu = Boolean(eventId && capabilities);
   const menuOpen = Boolean(menuAnchor);
   const emojiBoardOpen = Boolean(emojiBoardAnchor);
-  const showActionRail = hasActionMenu;
   const actionsActive = hovered || focusWithin || menuOpen || emojiBoardOpen;
+  const showActionRail = hasActionMenu && actionsActive;
 
   const closeMenu = () => setMenuAnchor(undefined);
   const openMenu = (event: React.MouseEvent<HTMLButtonElement>) => {
@@ -828,6 +829,7 @@ const NativeTimelineRow = ({
   grouped,
   groupsNext,
   roomId,
+  messageSpacing,
   pinnedEventIds,
   sourceEncrypted,
   onActionError,
@@ -842,6 +844,11 @@ const NativeTimelineRow = ({
     grouped: surface && grouped,
     groupsNext: surface && groupsNext,
   });
+  const spacingToken =
+    groupsNext || messageSpacing === '0'
+      ? undefined
+      : config.space[`S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500'];
+  const rowStyle = spacingToken ? { marginBottom: spacingToken } : undefined;
   const capabilities = rowCapabilities(row);
   const eventId = rowEventId(row);
   const originServerTs = rowOriginServerTs(row);
@@ -903,7 +910,7 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box direction="Column" gap="100" className={rowClassName}>
+          <Box direction="Column" gap="100" className={rowClassName} style={rowStyle}>
             <Box gap="300" alignItems="Start">
               <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
                 {grouped ? (
@@ -946,9 +953,11 @@ const NativeTimelineRow = ({
                     gap="100"
                     onClick={() => onFocusEvent(row.reply!.eventId)}
                     style={{
-                      opacity: 0.8,
-                      borderLeft: '2px solid currentColor',
-                      paddingLeft: config.space.S200,
+                      borderLeft: `3px solid ${colorMXID(
+                        row.reply.senderId ?? row.reply.senderName
+                      )}`,
+                      paddingLeft: config.space.S300,
+                      margin: `${config.space.S100} 0`,
                       background: 'transparent',
                       borderTop: 'none',
                       borderRight: 'none',
@@ -959,8 +968,16 @@ const NativeTimelineRow = ({
                     }}
                     aria-label={`Jump to replied message ${row.reply.eventId}`}
                   >
-                    <Text size="T200">{row.reply.senderName}</Text>
-                    <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
+                    <Text
+                      size="T200"
+                      style={{
+                        color: colorMXID(row.reply.senderId ?? row.reply.senderName),
+                        fontWeight: 600,
+                      }}
+                    >
+                      {row.reply.senderName}
+                    </Text>
+                    <Text size="T200" style={{ whiteSpace: 'pre-wrap', opacity: 0.86 }}>
                       {row.reply.body}
                     </Text>
                   </Box>
@@ -1230,7 +1247,18 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const followingLiveRef = useRef(false);
   const programmaticScrollUntilRef = useRef(0);
   const lastTotalSizeRef = useRef(0);
-  const rows = useMemo(() => readyState?.snapshot.rows ?? [], [readyState?.snapshot.rows]);
+  const [hideMembershipEvents] = useSetting(settingsAtom, 'hideMembershipEvents');
+  const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
+  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
+  const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
+  const rows = useMemo(() => {
+    const raw = readyState?.snapshot.rows ?? [];
+    return raw.filter((row) => {
+      if (hideMembershipEvents && row.kind === 'membership') return false;
+      if (hideNickAvatarEvents && row.kind === 'state') return false;
+      return true;
+    });
+  }, [hideMembershipEvents, hideNickAvatarEvents, readyState?.snapshot.rows]);
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: useCallback(() => scrollRef.current, []),
@@ -1301,7 +1329,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       ? `${roomId}:${readyState.snapshot.revision}`
       : undefined;
   useEffect(() => {
-    if (!liveTailMarkReadKey) return;
+    if (hideActivity || !liveTailMarkReadKey) return;
     if (liveTailMarkedKeyRef.current === liveTailMarkReadKey) return;
     liveTailMarkedKeyRef.current = liveTailMarkReadKey;
     void controller.setReadState('mark_read').catch(() => {
@@ -1309,7 +1337,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         liveTailMarkedKeyRef.current = undefined;
       }
     });
-  }, [controller, liveTailMarkReadKey]);
+  }, [controller, hideActivity, liveTailMarkReadKey]);
 
   useEffect(() => {
     if (!readyState) return undefined;
@@ -1498,7 +1526,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       if (rows.length > 0) {
         virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
       }
-      await controller.setReadState('mark_read');
+      if (!hideActivity) {
+        await controller.setReadState('mark_read');
+      }
     });
   };
 
@@ -1585,6 +1615,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                       virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
                     )}
                     roomId={roomId}
+                    messageSpacing={messageSpacing}
                     pinnedEventIds={snapshot.pinnedEventIds}
                     sourceEncrypted={sourceEncrypted}
                     onActionError={setActionError}

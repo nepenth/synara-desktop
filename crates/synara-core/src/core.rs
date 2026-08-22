@@ -19,16 +19,23 @@ use crate::app::auth::{
     HttpLoginFlowTransport, HttpRegisterFlowTransport, MatrixLoginFlowsResponse,
     RegisterFlowsProbe,
 };
-use crate::app::backup::NativeBackupStatus;
+use crate::app::backup::{MatrixRestoreBackupResult, NativeBackupStatus};
 use crate::app::cross_signing::NativeCrossSigningSetupResult;
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
+use crate::app::media::MatrixUploadMediaResult;
 use crate::app::members::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_POWER_LEVELS_EVENT_TYPE,
     ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
+use crate::app::notifications::{
+    MatrixHttpPusherWriteResult, MatrixPushRulesSnapshot, MatrixPushRulesWriteResult,
+    MatrixRoomNotificationSnapshot, MatrixRoomNotificationWriteResult,
+    MatrixRoomNotificationsSnapshot,
+};
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
+    NativePresenceWriteResult,
 };
 use crate::app::room_directory::{
     DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryProtocols,
@@ -43,8 +50,10 @@ use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
 };
+use crate::app::search::MatrixMessageSearchResult;
 use crate::app::send::{
-    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendStickerResult, MatrixSendTextResult,
+    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendRoomAttachmentResult,
+    MatrixSendStickerResult, MatrixSendTextResult,
 };
 use crate::app::spaces::{
     NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
@@ -62,7 +71,12 @@ use crate::app::timeline::{
     NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
-use crate::app::user_profile::{MatrixOwnProfile, MatrixProfileWriteResult};
+use crate::app::user_profile::{
+    MatrixIgnoredUsersSnapshot, MatrixIgnoredUsersWriteResult, MatrixOwnProfile,
+    MatrixProfileWriteResult, MatrixThreepidAddResult, MatrixThreepidEmailTokenResult,
+    MatrixThreepidSnapshot, MatrixThreepidWriteResult, MatrixUploadAvatarResult,
+    MatrixUserDirectorySearchResult,
+};
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -563,6 +577,19 @@ struct MatrixPresenceUnsubscribeRequest {
     subscription_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_presence_set`.
+///
+/// `state` is the closed online/offline/unavailable vocabulary. Optional
+/// `statusMsg` is omitted or empty for no message. Unknown keys are rejected
+/// so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPresenceSetRequest {
+    state: String,
+    #[serde(default)]
+    status_msg: Option<String>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_get_room_image_packs`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1020,6 +1047,16 @@ struct MatrixRoomJoinRuleSnapshotRequest {
     session_generation: u64,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_set_join_rule`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomSetJoinRuleRequest {
+    room_id: String,
+    join_rule: String,
+    #[serde(default)]
+    allow_room_ids: Option<Vec<String>>,
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixInviteActionRequest {
@@ -1167,6 +1204,82 @@ struct MatrixSetOwnDisplayNameRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixSetOwnAvatarRequest {
     mxc: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixIgnoredUsersUserRequest {
+    user_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_user_directory_search`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixUserDirectorySearchRequest {
+    term: String,
+    #[serde(default)]
+    limit: Option<u64>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_message_search`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixMessageSearchRequest {
+    term: String,
+    #[serde(default)]
+    next_token: Option<String>,
+    #[serde(default)]
+    rooms: Option<Vec<String>>,
+    #[serde(default)]
+    senders: Option<Vec<String>>,
+    #[serde(default)]
+    order: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPushRulesSetDefaultRequest {
+    encrypted: bool,
+    one_to_one: bool,
+    mode: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPushRulesSetMentionRequest {
+    rule_id: String,
+    enabled: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPushRulesKeywordRequest {
+    keyword: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomNotificationRoomRequest {
+    room_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomNotificationSetRequest {
+    room_id: String,
+    mode: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixThreepidAddressRequest {
+    address: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixThreepidEmailRequest {
+    email: String,
 }
 
 fn own_profile_read_payload_is_empty(payload: &serde_json::Value) -> bool {
@@ -1459,8 +1572,9 @@ impl Core {
     }
 
     /// Install the live presence owner created by the shell after login/restore.
-    /// Core snapshots it for `matrix_presence_snapshot`; the shell keeps an Arc
-    /// for subscribe/unsubscribe and event-handler lifetime.
+    /// Core snapshots it for `matrix_presence_snapshot` and writes through
+    /// `matrix_presence_set`; the shell keeps an Arc for subscribe/unsubscribe
+    /// and event-handler lifetime.
     pub fn attach_presence(&self, owner: Arc<NativePresenceOwner>) -> Result<(), MatrixIpcError> {
         let mut presence = self
             .state
@@ -1516,6 +1630,177 @@ impl Core {
             .authenticate_delete_password(operation_id, session_generation, password)
             .await
             .map_err(device_snapshot_owner_error)
+    }
+
+    /// Restore encryption backup. Recovery secret is a method argument,
+    /// never a `Core::command` JSON field.
+    pub async fn restore_backup(
+        &self,
+        recovery_secret: &str,
+    ) -> Result<MatrixRestoreBackupResult, MatrixIpcError> {
+        if recovery_secret.is_empty() {
+            return Err(restore_backup_owner_error(
+                "v-crypto.3-recovery-secret-empty",
+            ));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-restore-backup-no-session")
+        })?;
+        owner
+            .restore_backup(recovery_secret)
+            .await
+            .map_err(restore_backup_owner_error)
+    }
+
+    /// Password UIAA for a pending email 3PID attach. Password is a method
+    /// argument, never a `Core::command` JSON field.
+    pub async fn threepid_add_email_password(
+        &self,
+        password: &str,
+    ) -> Result<MatrixThreepidAddResult, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-add-email-password-no-session")
+        })?;
+        owner
+            .add_threepid_email_password(password)
+            .await
+            .map_err(threepid_owner_error)
+    }
+
+    /// Own-avatar bytes upload. Bytes are a method argument, never a
+    /// `Core::command` JSON field. Returns an `mxc://` URI only.
+    pub async fn upload_avatar(
+        &self,
+        payload: Vec<u8>,
+        mime_type: &str,
+    ) -> Result<MatrixUploadAvatarResult, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-upload-avatar-no-session")
+        })?;
+        owner
+            .upload_avatar(payload, mime_type)
+            .await
+            .map_err(own_profile_owner_error)
+    }
+
+    /// Generic content upload. Bytes are a method argument, never a
+    /// `Core::command` JSON field. Returns an `mxc://` URI only.
+    pub async fn upload_content(
+        &self,
+        payload: Vec<u8>,
+        mime_type: &str,
+        filename: Option<&str>,
+    ) -> Result<MatrixUploadMediaResult, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-upload-content-no-session")
+        })?;
+        owner
+            .upload_content(payload, mime_type, filename)
+            .await
+            .map_err(content_upload_owner_error)
+    }
+
+    /// Send a room attachment. Bytes are a method argument, never a
+    /// `Core::command` JSON field.
+    pub async fn send_room_attachment(
+        &self,
+        room_id: &str,
+        filename: &str,
+        mime_type: &str,
+        payload: Vec<u8>,
+        reply_to: Option<String>,
+        thread_root: Option<String>,
+    ) -> Result<MatrixSendRoomAttachmentResult, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-send-room-attachment-no-session")
+        })?;
+        owner
+            .send_room_attachment(room_id, filename, mime_type, payload, reply_to, thread_root)
+            .await
+            .map_err(send_room_attachment_owner_error)
+    }
+
+    /// Original-file download for a plain `mxc://`. Bytes are a method
+    /// return, never a `Core::command` JSON field. Timeline-media handles
+    /// stay on `timeline_media_bytes`. Encrypted sources are not this API.
+    pub async fn download_plain_media(&self, content_uri: &str) -> Result<Vec<u8>, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-download-plain-media-no-session")
+        })?;
+        owner
+            .download_plain_media(content_uri)
+            .await
+            .map_err(plain_media_owner_error)
+    }
+
+    /// Thumbnail download for a plain `mxc://`. Bytes are a method return,
+    /// never a `Core::command` JSON field. Timeline-media handles stay on
+    /// `timeline_media_bytes`. Encrypted sources are not this API.
+    pub async fn thumbnail_plain_media(
+        &self,
+        content_uri: &str,
+        width: u64,
+        height: u64,
+    ) -> Result<Vec<u8>, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-thumbnail-plain-media-no-session")
+        })?;
+        owner
+            .thumbnail_plain_media(content_uri, width, height)
+            .await
+            .map_err(plain_media_owner_error)
+    }
+
+    /// Register an HTTP pusher. Push key and gateway stay method arguments,
+    /// never `Core::command` JSON fields.
+    pub async fn register_http_pusher(
+        &self,
+        push_key: &str,
+        app_id: &str,
+        gateway_url: &str,
+        app_display_name: &str,
+        device_display_name: &str,
+        lang: &str,
+    ) -> Result<MatrixHttpPusherWriteResult, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-register-http-pusher-no-session")
+        })?;
+        owner
+            .register_http_pusher(
+                push_key,
+                app_id,
+                gateway_url,
+                app_display_name,
+                device_display_name,
+                lang,
+            )
+            .await
+            .map_err(http_pusher_owner_error)
+    }
+
+    /// Delete an HTTP pusher. Push key stays a method argument, never a
+    /// `Core::command` JSON field.
+    pub async fn delete_http_pusher(
+        &self,
+        push_key: &str,
+        app_id: &str,
+    ) -> Result<MatrixHttpPusherWriteResult, MatrixIpcError> {
+        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-delete-http-pusher-no-session")
+        })?;
+        owner
+            .delete_http_pusher(push_key, app_id)
+            .await
+            .map_err(http_pusher_owner_error)
     }
 
     /// Install the live join-rule owner created by the shell after login/restore.
@@ -1732,6 +2017,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_typing_snapshot", matrix_typing_snapshot)
         .expect("built-in matrix_typing_snapshot must remain in the command census");
     registry
+        .register("matrix_presence_set", matrix_presence_set)
+        .expect("built-in matrix_presence_set must remain in the command census");
+    registry
         .register("matrix_presence_snapshot", matrix_presence_snapshot)
         .expect("built-in matrix_presence_snapshot must remain in the command census");
     registry
@@ -1785,6 +2073,9 @@ fn built_in_registry() -> CommandRegistry {
             matrix_room_join_rule_snapshot,
         )
         .expect("built-in matrix_room_join_rule_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_set_join_rule", matrix_room_set_join_rule)
+        .expect("built-in matrix_room_set_join_rule must remain in the command census");
     registry
         .register("matrix_room_leave", matrix_room_leave)
         .expect("built-in matrix_room_leave must remain in the command census");
@@ -1896,6 +2187,84 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_get_own_profile", matrix_get_own_profile)
         .expect("built-in matrix_get_own_profile must remain in the command census");
+    registry
+        .register(
+            "matrix_ignored_users_snapshot",
+            matrix_ignored_users_snapshot,
+        )
+        .expect("built-in matrix_ignored_users_snapshot must remain in the command census");
+    registry
+        .register("matrix_ignored_users_ignore", matrix_ignored_users_ignore)
+        .expect("built-in matrix_ignored_users_ignore must remain in the command census");
+    registry
+        .register(
+            "matrix_ignored_users_unignore",
+            matrix_ignored_users_unignore,
+        )
+        .expect("built-in matrix_ignored_users_unignore must remain in the command census");
+    registry
+        .register("matrix_user_directory_search", matrix_user_directory_search)
+        .expect("built-in matrix_user_directory_search must remain in the command census");
+    registry
+        .register("matrix_message_search", matrix_message_search)
+        .expect("built-in matrix_message_search must remain in the command census");
+    registry
+        .register("matrix_push_rules_snapshot", matrix_push_rules_snapshot)
+        .expect("built-in matrix_push_rules_snapshot must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_set_default",
+            matrix_push_rules_set_default,
+        )
+        .expect("built-in matrix_push_rules_set_default must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_set_mention",
+            matrix_push_rules_set_mention,
+        )
+        .expect("built-in matrix_push_rules_set_mention must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_add_keyword",
+            matrix_push_rules_add_keyword,
+        )
+        .expect("built-in matrix_push_rules_add_keyword must remain in the command census");
+    registry
+        .register(
+            "matrix_push_rules_remove_keyword",
+            matrix_push_rules_remove_keyword,
+        )
+        .expect("built-in matrix_push_rules_remove_keyword must remain in the command census");
+    registry
+        .register(
+            "matrix_room_notification_snapshot",
+            matrix_room_notification_snapshot,
+        )
+        .expect("built-in matrix_room_notification_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_notification_set", matrix_room_notification_set)
+        .expect("built-in matrix_room_notification_set must remain in the command census");
+    registry
+        .register(
+            "matrix_room_notifications_snapshot",
+            matrix_room_notifications_snapshot,
+        )
+        .expect("built-in matrix_room_notifications_snapshot must remain in the command census");
+    registry
+        .register("matrix_threepid_snapshot", matrix_threepid_snapshot)
+        .expect("built-in matrix_threepid_snapshot must remain in the command census");
+    registry
+        .register("matrix_threepid_delete", matrix_threepid_delete)
+        .expect("built-in matrix_threepid_delete must remain in the command census");
+    registry
+        .register(
+            "matrix_threepid_request_email_token",
+            matrix_threepid_request_email_token,
+        )
+        .expect("built-in matrix_threepid_request_email_token must remain in the command census");
+    registry
+        .register("matrix_threepid_add_email", matrix_threepid_add_email)
+        .expect("built-in matrix_threepid_add_email must remain in the command census");
     registry
         .register("matrix_set_room_image_pack", matrix_set_room_image_pack)
         .expect("built-in matrix_set_room_image_pack must remain in the command census");
@@ -2801,6 +3170,23 @@ fn matrix_presence_unsubscribe(state: Arc<CoreState>, request: CommandEnvelope) 
     })
 }
 
+fn matrix_presence_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPresenceSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-presence-set-invalid-payload"))?;
+        let owner = state.presence_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-presence-set-no-session")
+        })?;
+        let result: NativePresenceWriteResult = owner
+            .set(&payload.state, payload.status_msg)
+            .await
+            .map_err(presence_set_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-presence-set-serialization-failed"))
+    })
+}
+
 /// Map live presence-owner diagnostics onto closed Core transport categories.
 /// Preserve the owner diagnostic id so the desktop bridge can restore the
 /// established Tauri error shape without leaking user ids or status text.
@@ -2972,6 +3358,17 @@ fn matrix_backup_status(state: Arc<CoreState>, request: CommandEnvelope) -> Comm
 
 fn backup_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
+}
+
+fn restore_backup_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.3-recovery-secret-empty" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-crypto.3-restore-rejected" | "v-crypto.3-restore-incomplete" => {
+            MatrixIpcErrorCategory::RecoveryFailure
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_room_key_transfer_status(
@@ -3346,6 +3743,27 @@ fn matrix_room_join_rule_snapshot(
             .map_err(join_rule_snapshot_owner_error)?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-join-rule-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_room_set_join_rule(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomSetJoinRuleRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-set-join-rule-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-set-join-rule-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_join_rule(
+                &payload.room_id,
+                &payload.join_rule,
+                payload.allow_room_ids.as_deref(),
+            )
+            .await
+            .map_err(join_rule_snapshot_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-set-join-rule-serialization-failed"))
     })
 }
 
@@ -4258,13 +4676,441 @@ fn matrix_get_own_profile(state: Arc<CoreState>, request: CommandEnvelope) -> Co
 
 fn own_profile_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
-        "v-send.r-avatar-display-name-too-long" | "v-send.r-avatar-invalid-mxc" => {
-            MatrixIpcErrorCategory::SdkInvariant
-        }
+        "v-send.r-avatar-display-name-too-long"
+        | "v-send.r-avatar-invalid-mxc"
+        | "v-send.r-avatar-upload-empty"
+        | "v-send.r-avatar-upload-invalid-mime"
+        | "v-send.r-avatar-upload-too-large" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-avatar-profile-no-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn content_upload_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-content-upload-empty"
+        | "v-send.r-content-upload-invalid-mime"
+        | "v-send.r-content-upload-invalid-filename"
+        | "v-send.r-content-upload-too-large" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-content-upload-no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn send_room_attachment_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.1-attachment-empty"
+        | "v-send.1-attachment-invalid-filename"
+        | "v-send.1-attachment-invalid-mime"
+        | "v-send.1-attachment-invalid-reply"
+        | "v-send.1-attachment-invalid-room"
+        | "v-send.1-attachment-invalid-thread-root"
+        | "v-send.1-attachment-too-large" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn plain_media_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-media-invalid-content-uri" | "v-send.r-media-download-too-large" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn ignored_users_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-profile.ignore-invalid-user" | "v-profile.ignore-self" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-profile.ignore-no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn push_rules_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-push.invalid-mode"
+        | "v-push.invalid-rule"
+        | "v-push.invalid-keyword"
+        | "v-push.invalid-room" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-push.no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn http_pusher_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-pusher.invalid-push-key"
+        | "v-pusher.invalid-app-id"
+        | "v-pusher.invalid-gateway"
+        | "v-pusher.invalid-name"
+        | "v-pusher.invalid-lang" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-pusher.no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn threepid_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-threepid.invalid-email"
+        | "v-threepid.password-empty"
+        | "v-threepid.not-pending"
+        | "v-threepid.auth-unsupported" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-threepid.no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_ignored_users_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error(
+                "p2-ignored-users-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-ignored-users-snapshot-no-session")
+        })?;
+        let result: MatrixIgnoredUsersSnapshot = owner
+            .snapshot_ignored_users()
+            .await
+            .map_err(ignored_users_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-ignored-users-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_ignored_users_ignore(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixIgnoredUsersUserRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-ignored-users-ignore-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-ignored-users-ignore-no-session")
+        })?;
+        let result: MatrixIgnoredUsersWriteResult = owner
+            .ignore_user(&payload.user_id)
+            .await
+            .map_err(ignored_users_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-ignored-users-ignore-serialization-failed"))
+    })
+}
+
+fn matrix_ignored_users_unignore(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixIgnoredUsersUserRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-ignored-users-unignore-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-ignored-users-unignore-no-session")
+        })?;
+        let result: MatrixIgnoredUsersWriteResult = owner
+            .unignore_user(&payload.user_id)
+            .await
+            .map_err(ignored_users_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-ignored-users-unignore-serialization-failed"))
+    })
+}
+
+fn user_directory_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-search.directory-empty-term"
+        | "v-search.directory-term-too-long"
+        | "v-search.directory-invalid-term"
+        | "v-search.directory-invalid-limit" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-search.directory-no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_user_directory_search(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixUserDirectorySearchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-user-directory-search-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-directory-search-no-session")
+        })?;
+        let result: MatrixUserDirectorySearchResult = owner
+            .search_user_directory(&payload.term, payload.limit)
+            .await
+            .map_err(user_directory_search_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-user-directory-search-serialization-failed"))
+    })
+}
+
+fn message_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-search.term-too-long"
+        | "v-search.invalid-term"
+        | "v-search.invalid-token"
+        | "v-search.invalid-order"
+        | "v-search.invalid-room"
+        | "v-search.invalid-sender" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-search.no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_message_search(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMessageSearchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-message-search-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-message-search-no-session")
+        })?;
+        let result: MatrixMessageSearchResult = owner
+            .search_messages(
+                &payload.term,
+                payload.next_token.as_deref(),
+                payload.rooms.as_deref(),
+                payload.senders.as_deref(),
+                payload.order.as_deref(),
+            )
+            .await
+            .map_err(message_search_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-message-search-serialization-failed"))
+    })
+}
+
+fn matrix_push_rules_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-push-rules-snapshot-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-push-rules-snapshot-no-session")
+        })?;
+        let result: MatrixPushRulesSnapshot = owner
+            .snapshot_push_rules()
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-push-rules-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_push_rules_set_default(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPushRulesSetDefaultRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-push-rules-set-default-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-push-rules-set-default-no-session")
+        })?;
+        let result: MatrixPushRulesWriteResult = owner
+            .set_push_rule_default(payload.encrypted, payload.one_to_one, &payload.mode)
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-push-rules-set-default-serialization-failed"))
+    })
+}
+
+fn matrix_push_rules_set_mention(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPushRulesSetMentionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-push-rules-set-mention-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-push-rules-set-mention-no-session")
+        })?;
+        let result: MatrixPushRulesWriteResult = owner
+            .set_push_rule_mention(&payload.rule_id, payload.enabled)
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-push-rules-set-mention-serialization-failed"))
+    })
+}
+
+fn matrix_push_rules_add_keyword(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPushRulesKeywordRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-push-rules-add-keyword-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-push-rules-add-keyword-no-session")
+        })?;
+        let result: MatrixPushRulesWriteResult = owner
+            .add_push_keyword(&payload.keyword)
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-push-rules-add-keyword-serialization-failed"))
+    })
+}
+
+fn matrix_push_rules_remove_keyword(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPushRulesKeywordRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-push-rules-remove-keyword-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-push-rules-remove-keyword-no-session")
+        })?;
+        let result: MatrixPushRulesWriteResult = owner
+            .remove_push_keyword(&payload.keyword)
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-push-rules-remove-keyword-serialization-failed"))
+    })
+}
+
+fn matrix_room_notification_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomNotificationRoomRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-notification-snapshot-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notification-snapshot-no-session")
+        })?;
+        let result: MatrixRoomNotificationSnapshot = owner
+            .snapshot_room_notification(&payload.room_id)
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-notification-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_room_notification_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomNotificationSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-notification-set-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notification-set-no-session")
+        })?;
+        let result: MatrixRoomNotificationWriteResult = owner
+            .set_room_notification(&payload.room_id, &payload.mode)
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-notification-set-serialization-failed"))
+    })
+}
+
+fn matrix_room_notifications_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error(
+                "p2-room-notifications-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-notifications-snapshot-no-session")
+        })?;
+        let result: MatrixRoomNotificationsSnapshot = owner
+            .snapshot_room_notifications()
+            .await
+            .map_err(push_rules_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-notifications-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_threepid_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-threepid-snapshot-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-snapshot-no-session")
+        })?;
+        let result: MatrixThreepidSnapshot = owner
+            .snapshot_threepids()
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_threepid_delete(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixThreepidAddressRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-threepid-delete-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-delete-no-session")
+        })?;
+        let result: MatrixThreepidWriteResult = owner
+            .delete_threepid_email(&payload.address)
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-delete-serialization-failed"))
+    })
+}
+
+fn matrix_threepid_request_email_token(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixThreepidEmailRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-threepid-request-email-token-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-request-email-token-no-session")
+        })?;
+        let result: MatrixThreepidEmailTokenResult = owner
+            .request_threepid_email_token(&payload.email)
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-request-email-token-serialization-failed"))
+    })
+}
+
+fn matrix_threepid_add_email(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-threepid-add-email-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-add-email-no-session")
+        })?;
+        let result: MatrixThreepidAddResult = owner
+            .add_threepid_email()
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-add-email-serialization-failed"))
+    })
 }
 
 fn matrix_room_notes_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -4485,6 +5331,20 @@ fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
 fn presence_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-presence-invalid-user-id" | "v-presence-invalid-subscription-id" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-presence-user-owner-missing" | "v-presence-session-not-live" => {
+            MatrixIpcErrorCategory::Forbidden
+        }
+        "v-presence-stale-session-generation" => MatrixIpcErrorCategory::StaleSessionGeneration,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn presence_set_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-presence-state-unsupported" | "p4.7-status-msg-cap" => {
             MatrixIpcErrorCategory::SdkInvariant
         }
         "v-presence-user-owner-missing" | "v-presence-session-not-live" => {
@@ -5124,6 +5984,9 @@ mod tests {
                 "matrix_get_room_directory_visibility",
                 "matrix_get_room_image_packs",
                 "matrix_get_user_image_pack",
+                "matrix_ignored_users_ignore",
+                "matrix_ignored_users_snapshot",
+                "matrix_ignored_users_unignore",
                 "matrix_invites_accept",
                 "matrix_invites_block_sender",
                 "matrix_invites_decline",
@@ -5140,10 +6003,17 @@ mod tests {
                 "matrix_mdirect_remove",
                 "matrix_mdirect_snapshot",
                 "matrix_media_config",
+                "matrix_message_search",
                 "matrix_poll_respond",
+                "matrix_presence_set",
                 "matrix_presence_snapshot",
                 "matrix_presence_subscribe",
                 "matrix_presence_unsubscribe",
+                "matrix_push_rules_add_keyword",
+                "matrix_push_rules_remove_keyword",
+                "matrix_push_rules_set_default",
+                "matrix_push_rules_set_mention",
+                "matrix_push_rules_snapshot",
                 "matrix_reaction_ensure",
                 "matrix_reaction_redact",
                 "matrix_register_flows",
@@ -5167,9 +6037,13 @@ mod tests {
                 "matrix_room_notes_move_todo",
                 "matrix_room_notes_snapshot",
                 "matrix_room_notes_upsert",
+                "matrix_room_notification_set",
+                "matrix_room_notification_snapshot",
+                "matrix_room_notifications_snapshot",
                 "matrix_room_power_level_tags_snapshot",
                 "matrix_room_power_levels_snapshot",
                 "matrix_room_set_favorite",
+                "matrix_room_set_join_rule",
                 "matrix_room_set_power_level",
                 "matrix_room_set_power_level_tags",
                 "matrix_room_set_power_levels",
@@ -5195,6 +6069,10 @@ mod tests {
                 "matrix_space_hierarchy_snapshot",
                 "matrix_space_parents_snapshot",
                 "matrix_sync_status",
+                "matrix_threepid_add_email",
+                "matrix_threepid_delete",
+                "matrix_threepid_request_email_token",
+                "matrix_threepid_snapshot",
                 "matrix_timeline_call_decline",
                 "matrix_timeline_close",
                 "matrix_timeline_edit_text",
@@ -5214,6 +6092,7 @@ mod tests {
                 "matrix_timeline_unpin",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
+                "matrix_user_directory_search",
                 "matrix_verification_accept",
                 "matrix_verification_begin_sas",
                 "matrix_verification_cancel",
@@ -6462,6 +7341,49 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_presence_set_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"state":"online","statusMsg":"coffee"}),
+            })
+            .await
+            .expect_err("presence set without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-set-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("coffee"));
+        assert!(!text.contains("online"));
+    }
+
+    #[tokio::test]
+    async fn matrix_presence_set_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_presence_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"state":"online","token":"no"}),
+            })
+            .await
+            .expect_err("presence set must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-presence-set-invalid-payload")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("token"));
+    }
+
+    #[tokio::test]
     async fn matrix_verification_accept_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -7237,6 +8159,151 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_ignored_users_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_ignored_users_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("ignored-users snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-ignored-users-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_user_directory_search_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_directory_search".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "term": "alice" }),
+            })
+            .await
+            .expect_err("user-directory search without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-user-directory-search-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("alice"));
+        assert!(!text.contains("syt_"));
+        assert!(!text.contains("token"));
+    }
+
+    #[tokio::test]
+    async fn matrix_message_search_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let term = "s7MessageSearchSecretTerm";
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_message_search".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "term": term, "rooms": ["!r:example.org"] }),
+            })
+            .await
+            .expect_err("message search without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-message-search-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains(term));
+        assert!(!text.contains("!r:example.org"));
+        assert!(!text.contains("syt_"));
+        assert!(!text.contains("token"));
+    }
+
+    #[tokio::test]
+    async fn matrix_push_rules_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_push_rules_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("push-rules snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-push-rules-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_notification_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_notification_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org"}),
+            })
+            .await
+            .expect_err("room-notification snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-notification-snapshot-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("!r:example.org"));
+    }
+
+    #[tokio::test]
+    async fn matrix_room_notifications_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_notifications_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("room-notifications snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-notifications-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_threepid_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_threepid_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("threepid snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-threepid-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
     async fn matrix_get_room_directory_visibility_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -7420,6 +8487,30 @@ mod tests {
             error.diagnostic_id.as_deref(),
             Some("p2-join-rule-snapshot-no-session")
         );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_set_join_rule_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_set_join_rule".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "joinRule":"invite"
+                }),
+            })
+            .await
+            .expect_err("join-rule write without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-set-join-rule-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("!r:example.org"));
     }
 
     #[tokio::test]
@@ -7804,6 +8895,32 @@ mod tests {
             error.diagnostic_id.as_deref(),
             Some("p2-join-rule-snapshot-invalid-payload")
         );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_set_join_rule_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_set_join_rule".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "joinRule":"invite",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("join-rule write must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-set-join-rule-invalid-payload")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("!r:example.org"));
+        assert!(!text.contains("token"));
     }
 
     #[tokio::test]

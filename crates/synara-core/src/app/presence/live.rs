@@ -8,15 +8,19 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use matrix_sdk::{
     event_handler::EventHandlerDropGuard,
-    ruma::{events::presence::PresenceEvent, UserId},
+    ruma::{
+        api::client::presence::set_presence::v3::Request as SetPresenceRequest,
+        events::presence::PresenceEvent, presence::PresenceState as RumaPresenceState, UserId,
+    },
     Client, StateStore,
 };
 use tokio::sync::Mutex;
 
 use super::{
     NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
-    NativePresenceSubscription, NativePresenceUpdate, NativePresenceUpdateOutcome, PresenceIndex,
-    PresenceSnapshot, PresenceState, PresenceSubscriptionRegistry, MAX_STATUS_MSG_CHARS,
+    NativePresenceSubscription, NativePresenceUpdate, NativePresenceUpdateOutcome,
+    NativePresenceWriteResult, PresenceIndex, PresenceSnapshot, PresenceState,
+    PresenceSubscriptionRegistry, MAX_STATUS_MSG_CHARS,
 };
 
 /// Shell-supplied sink for presence updates. Desktop maps this to the
@@ -211,6 +215,33 @@ impl NativePresenceOwner {
         }
         self.subscriptions.lock().await.unsubscribe(subscription_id)
     }
+
+    /// PUT own presence through the managed client. Own user id is taken from
+    /// the live session; callers never supply a user id. Empty `status_msg`
+    /// becomes `None`. Failures stay static and must not echo status text.
+    pub async fn set(
+        &self,
+        state: &str,
+        status_msg: Option<String>,
+    ) -> Result<NativePresenceWriteResult, &'static str> {
+        self.ensure_live()?;
+        let user_id = self
+            .client
+            .user_id()
+            .ok_or("v-presence-user-owner-missing")?
+            .to_owned();
+        let presence = parse_presence_write_state(state)?;
+        let status_msg = parse_presence_write_status_msg(status_msg)?;
+        let mut request = SetPresenceRequest::new(user_id, presence);
+        request.status_msg = status_msg;
+        self.client
+            .send(request)
+            .await
+            .map_err(|_| "v-presence-set-sdk-failed")?;
+        Ok(NativePresenceWriteResult {
+            status: "ok".to_owned(),
+        })
+    }
 }
 
 impl Drop for NativePresenceOwner {
@@ -220,6 +251,31 @@ impl Drop for NativePresenceOwner {
             subscriptions.retire();
         }
     }
+}
+
+fn parse_presence_write_state(state: &str) -> Result<RumaPresenceState, &'static str> {
+    match state {
+        "online" => Ok(RumaPresenceState::Online),
+        "offline" => Ok(RumaPresenceState::Offline),
+        "unavailable" => Ok(RumaPresenceState::Unavailable),
+        _ => Err("v-presence-state-unsupported"),
+    }
+}
+
+fn parse_presence_write_status_msg(
+    status_msg: Option<String>,
+) -> Result<Option<String>, &'static str> {
+    let Some(raw) = status_msg else {
+        return Ok(None);
+    };
+    let trimmed = raw.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.chars().count() > MAX_STATUS_MSG_CHARS {
+        return Err("p4.7-status-msg-cap");
+    }
+    Ok(Some(trimmed.to_owned()))
 }
 
 fn project_presence_event(event: &PresenceEvent) -> Result<PresenceSnapshot, &'static str> {
@@ -352,6 +408,52 @@ mod tests {
                 Some("x".repeat(MAX_STATUS_MSG_CHARS + 1)),
             ))
             .unwrap_err(),
+            "p4.7-status-msg-cap"
+        );
+    }
+
+    #[test]
+    fn write_state_accepts_closed_vocabulary_only() {
+        assert_eq!(
+            parse_presence_write_state("online").unwrap(),
+            RumaPresenceState::Online
+        );
+        assert_eq!(
+            parse_presence_write_state("offline").unwrap(),
+            RumaPresenceState::Offline
+        );
+        assert_eq!(
+            parse_presence_write_state("unavailable").unwrap(),
+            RumaPresenceState::Unavailable
+        );
+        assert_eq!(
+            parse_presence_write_state("custom").unwrap_err(),
+            "v-presence-state-unsupported"
+        );
+        assert_eq!(
+            parse_presence_write_state("unknown").unwrap_err(),
+            "v-presence-state-unsupported"
+        );
+    }
+
+    #[test]
+    fn write_status_msg_empty_becomes_none_and_rejects_oversize() {
+        assert_eq!(parse_presence_write_status_msg(None).unwrap(), None);
+        assert_eq!(
+            parse_presence_write_status_msg(Some(String::new())).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_presence_write_status_msg(Some("   ".to_owned())).unwrap(),
+            None
+        );
+        assert_eq!(
+            parse_presence_write_status_msg(Some("coffee".to_owned())).unwrap(),
+            Some("coffee".to_owned())
+        );
+        assert_eq!(
+            parse_presence_write_status_msg(Some("x".repeat(MAX_STATUS_MSG_CHARS + 1)))
+                .unwrap_err(),
             "p4.7-status-msg-cap"
         );
     }

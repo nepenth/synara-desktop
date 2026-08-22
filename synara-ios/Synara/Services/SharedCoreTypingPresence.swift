@@ -5,9 +5,9 @@ import SynaraCore
 ///
 /// The caller owns the core so UniFFI does not free the retained Client.
 /// This wraps `matrix_typing_snapshot`, `matrix_typing_set`,
-/// `matrix_presence_snapshot`, `matrix_presence_subscribe`, and
-/// `matrix_presence_unsubscribe` only. It is not a generic `Core.command`
-/// FFI, not verification, and not a product live swap.
+/// `matrix_presence_snapshot`, `matrix_presence_subscribe`,
+/// `matrix_presence_unsubscribe`, and `matrix_presence_set` only. It is not
+/// a generic `Core.command` FFI, not verification, and not a product live swap.
 enum SharedCoreTypingPresence {
     static func typingSnapshot(core: SharedCore) async throws -> TypingSnapshotDto {
         try await core.typingSnapshot()
@@ -30,5 +30,13 @@ enum SharedCoreTypingPresence {
 
     static func presenceUnsubscribe(core: SharedCore, subscriptionId: String) async throws {
         try await core.presenceUnsubscribe(subscriptionId: subscriptionId)
+    }
+
+    static func presenceSet(
+        core: SharedCore,
+        state: String,
+        statusMsg: String?
+    ) async throws -> PresenceWriteDto {
+        try await core.presenceSet(state: state, statusMsg: statusMsg)
     }
 }

@@ -9,10 +9,26 @@
 #![allow(unused_imports)]
 
 mod error;
+mod http_pusher;
 mod index;
+mod push_rules;
+mod room_notification;
 
 pub use error::NotificationError;
+pub use http_pusher::{
+    delete_http_pusher, register_http_pusher, MatrixHttpPusherWriteResult, MAX_APP_ID_BYTES,
+    MAX_PUSH_KEY_BYTES,
+};
 pub use index::{NotificationIndex, MAX_PENDING_CANDIDATES};
+pub use push_rules::{
+    add_keyword, remove_keyword, set_default_room_mode, set_mention_enabled, snapshot_push_rules,
+    MatrixPushRuleMentions, MatrixPushRulesSnapshot, MatrixPushRulesWriteResult,
+};
+pub use room_notification::{
+    set_room_notification, snapshot_room_notification, snapshot_room_notifications,
+    MatrixRoomNotificationSnapshot, MatrixRoomNotificationWriteResult,
+    MatrixRoomNotificationsSnapshot,
+};
 
 /// Static marker for link / schema smoke.
 pub const MATRIX_NOTIFICATIONS_MARKER: &str = "matrix-notifications-p7.1";

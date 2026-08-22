@@ -6,15 +6,26 @@ enum SynaraSharedConstants {
     static let lockScreenMessagePreviewsKey = "synara.settings.lockScreenMessagePreviews"
     static let defaultLockScreenMessagePreviews = false
     static let themeBaseColorKey = "themeBaseColor"
+    static let hour24ClockKey = "synara.settings.hour24Clock"
+    static let hideActivityKey = "synara.settings.hideActivity"
 
     static var registeredUserDefaults: [String: Any] {
         [
-            lockScreenMessagePreviewsKey: defaultLockScreenMessagePreviews
+            lockScreenMessagePreviewsKey: defaultLockScreenMessagePreviews,
+            hour24ClockKey: false,
+            hideActivityKey: false
         ]
     }
 
     static func appGroupDefaults() -> UserDefaults? {
         UserDefaults(suiteName: appGroupIdentifier)
+    }
+
+    static func boolSetting(_ key: String) -> Bool {
+        if let group = appGroupDefaults(), group.object(forKey: key) != nil {
+            return group.bool(forKey: key)
+        }
+        return UserDefaults.standard.bool(forKey: key)
     }
 }
 
