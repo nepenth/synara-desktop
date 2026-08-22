@@ -788,6 +788,11 @@ dictionary PresenceSubscriptionDto {
   u64 session_generation;
 };
 
+// Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
+dictionary PresenceWriteDto {
+  string status;
+};
+
 // Static source constants only. Never echo user id, URL, path, token, or password.
 [Error]
 interface PresenceCommandError {
@@ -882,7 +887,12 @@ dictionary RoomJoinRuleSnapshotDto {
   string join_rule;
 };
 
-// Static source constants only. Never echo room id, user id, token, or password.
+// Privacy-safe join-rule write ack. Status only; no room id, join rule, or allow-list.
+dictionary RoomJoinRuleWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo room id, user id, token, join rule, or password.
 [Error]
 interface JoinRuleCommandError {
   Failed(string code, string description);
@@ -1003,9 +1013,205 @@ dictionary OwnProfileWriteDto {
   string status;
 };
 
+// Privacy-safe own-profile read. User id and display name may appear.
+// Avatar is an mxc:// URI only; never bytes. Failed errors never echo
+// display name, mxc, or tokens.
+dictionary OwnProfileDto {
+  string user_id;
+  string? display_name;
+  string? avatar_url;
+};
+
 // Static source constants only. Never echo display name, mxc, token, or password.
 [Error]
 interface OwnProfileCommandError {
+  Failed(string code, string description);
+};
+
+// Own-avatar upload result. mxc URI only; never bytes.
+dictionary OwnProfileUploadDto {
+  string mxc;
+};
+
+// Generic content upload result. mxc URI only; never bytes.
+dictionary MediaUploadDto {
+  string mxc;
+};
+
+// Static source constants only. Never echo mxc, filename, mime, or token.
+[Error]
+interface MediaUploadError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe room attachment send ack. Event id and status only.
+dictionary SendRoomAttachmentDto {
+  string event_id;
+  string status;
+};
+
+// Static source constants only. Never echo bytes, filename, mime, room id, or token.
+[Error]
+interface SendRoomAttachmentError {
+  Failed(string code, string description);
+};
+
+// Original-file or thumbnail bytes for a plain `mxc://`. Never leftover media_download.
+dictionary MediaBytesDto {
+  bytes payload;
+};
+
+// Static source constants only. Never echo mxc, tokens, or bytes.
+[Error]
+interface PlainMediaError {
+  Failed(string code, string description);
+};
+
+// Ignored-user ids only. No tokens.
+dictionary IgnoredUsersSnapshotDto {
+  sequence<string> user_ids;
+};
+
+dictionary IgnoredUsersWriteDto {
+  string status;
+};
+
+[Error]
+interface IgnoredUsersCommandError {
+  Failed(string code, string description);
+};
+
+// User-directory search hits. User id / display name may appear. Avatar is mxc:// only.
+dictionary UserDirectoryHitDto {
+  string user_id;
+  string? display_name;
+  string? avatar_url;
+};
+
+dictionary UserDirectorySearchDto {
+  boolean limited;
+  sequence<UserDirectoryHitDto> results;
+};
+
+// Static source constants only. Never echo term, user id, or token.
+[Error]
+interface UserDirectorySearchError {
+  Failed(string code, string description);
+};
+
+// Homeserver room-event search. Ids and a capped body snippet only. No raw event JSON.
+dictionary MessageSearchItemDto {
+  f64 rank;
+  string event_id;
+  string sender;
+  u64 origin_server_ts;
+  string body;
+  string room_id;
+};
+
+dictionary MessageSearchGroupDto {
+  string room_id;
+  sequence<MessageSearchItemDto> items;
+};
+
+dictionary MessageSearchDto {
+  string? next_token;
+  sequence<string> highlights;
+  sequence<MessageSearchGroupDto> groups;
+};
+
+// Static source constants only. Never echo term, room id, event id, or token.
+[Error]
+interface MessageSearchError {
+  Failed(string code, string description);
+};
+
+dictionary PushRuleMentionsDto {
+  boolean user_mention;
+  boolean display_name;
+  boolean user_name;
+  boolean room_mention;
+  boolean at_room;
+};
+
+dictionary PushRulesSnapshotDto {
+  string dm;
+  string dm_encrypted;
+  string group;
+  string group_encrypted;
+  PushRuleMentionsDto mentions;
+  sequence<string> keywords;
+};
+
+dictionary PushRulesWriteDto {
+  string status;
+};
+
+[Error]
+interface PushRulesCommandError {
+  Failed(string code, string description);
+};
+
+dictionary RoomNotificationSnapshotDto {
+  string room_id;
+  string mode;
+};
+
+dictionary RoomNotificationsSnapshotDto {
+  sequence<RoomNotificationSnapshotDto> rooms;
+};
+
+dictionary RoomNotificationWriteDto {
+  string status;
+};
+
+[Error]
+interface RoomNotificationCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe HTTP pusher write ack. Status only; never push key, gateway, token, or app id.
+dictionary PusherWriteDto {
+  string status;
+};
+
+[Error]
+interface PusherCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe backup restore ack. Status only; never recovery key or passphrase.
+dictionary RestoreBackupDto {
+  string status;
+};
+
+[Error]
+interface RestoreBackupError {
+  Failed(string code, string description);
+};
+
+dictionary ThreepidEmailDto {
+  string address;
+};
+
+dictionary ThreepidSnapshotDto {
+  sequence<ThreepidEmailDto> emails;
+};
+
+dictionary ThreepidWriteDto {
+  string status;
+};
+
+dictionary ThreepidEmailTokenDto {
+  string session_id;
+};
+
+dictionary ThreepidAddDto {
+  string status;
+};
+
+[Error]
+interface ThreepidCommandError {
   Failed(string code, string description);
 };
 
@@ -1289,11 +1495,13 @@ interface InviteActionError {
 // matrix_invites_snapshot only. P4-S6 adds typed timeline_open /
 // timeline_close / timeline_paginate only. P4-S7 adds typed typing_snapshot /
 // typing_set / presence_snapshot / presence_subscribe / presence_unsubscribe
-// only. P4-S8 adds typed verification_list for matrix_verification_list only.
+// / presence_set. P4-S8 adds typed verification_list for matrix_verification_list only.
 // P4-S9 adds typed verification SAS start/accept/begin_sas/confirm/mismatch/cancel/dismiss.
 // P4-S9-2 adds typed device snapshot/rename/delete start/cancel only.
 // Backup/room-key/cross-signing stay off: leftover passphrase/path/password envelopes.
-// P4-S9-3 adds typed room_join_rule_snapshot only. No join-rule writer.
+// P4-S9-3 adds typed room_join_rule_snapshot. Join-rule write is
+// room_set_join_rule on the same owner. Write ack is status only.
+// Failed errors stay static and must not echo room id, join rule, or allow ids.
 // P4-S9-4 adds typed image-pack get/set for the six registered commands.
 // Pack metadata/IDs/URLs/JSON may cross. Image/media bytes stay off.
 // P4-S9-5 adds typed later snapshot/upsert/complete/snooze/clear_completed/mark_reminded.
@@ -1301,6 +1509,7 @@ interface InviteActionError {
 // P4-S9-7 adds typed room-notes snapshot/upsert/delete/complete_todo/move_todo.
 // P4-S9-8 adds typed set_own_display_name / set_own_avatar.
 // Avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
+// P4-S9-8a adds typed get_own_profile (empty payload). Avatar is mxc:// only.
 // P4-S9-9 adds typed set_room_name / set_room_topic / set_room_avatar.
 // Room avatar is an mxc:// (or empty clear) reference only. Image bytes stay off.
 // P4-S9-10 adds typed get/set room directory visibility.
@@ -1421,6 +1630,9 @@ interface SharedCore {
   [Async, Throws=PresenceCommandError]
   void presence_unsubscribe(string subscription_id);
 
+  [Async, Throws=PresenceCommandError]
+  PresenceWriteDto presence_set(string state, string? status_msg);
+
   [Async, Throws=VerificationListError]
   VerificationInboxDto verification_list();
 
@@ -1462,6 +1674,9 @@ interface SharedCore {
 
   [Async, Throws=JoinRuleCommandError]
   RoomJoinRuleSnapshotDto room_join_rule_snapshot(string room_id, u64 session_generation);
+
+  [Async, Throws=JoinRuleCommandError]
+  RoomJoinRuleWriteDto room_set_join_rule(string room_id, string join_rule, sequence<string>? allow_room_ids);
 
   [Async, Throws=ImagePackCommandError]
   GlobalImagePacksSnapshotDto get_global_image_packs();
@@ -1528,6 +1743,87 @@ interface SharedCore {
 
   [Async, Throws=OwnProfileCommandError]
   OwnProfileWriteDto set_own_avatar(string mxc);
+
+  [Async, Throws=OwnProfileCommandError]
+  OwnProfileDto get_own_profile();
+
+  [Async, Throws=OwnProfileCommandError]
+  OwnProfileUploadDto upload_avatar(bytes payload, string mime_type);
+
+  [Async, Throws=MediaUploadError]
+  MediaUploadDto upload_content(bytes payload, string mime_type, string? filename);
+
+  [Async, Throws=SendRoomAttachmentError]
+  SendRoomAttachmentDto send_room_attachment(string room_id, string filename, string mime_type, bytes payload, string? reply_to, string? thread_root);
+
+  [Async, Throws=PlainMediaError]
+  MediaBytesDto download_plain_media(string content_uri);
+
+  [Async, Throws=PlainMediaError]
+  MediaBytesDto thumbnail_plain_media(string content_uri, u64 width, u64 height);
+
+  [Async, Throws=PusherCommandError]
+  PusherWriteDto register_http_pusher(string push_key, string app_id, string gateway_url, string app_display_name, string device_display_name, string lang);
+
+  [Async, Throws=PusherCommandError]
+  PusherWriteDto delete_http_pusher(string push_key, string app_id);
+
+  [Async, Throws=RestoreBackupError]
+  RestoreBackupDto restore_backup(string recovery_secret);
+
+  [Async, Throws=IgnoredUsersCommandError]
+  IgnoredUsersSnapshotDto ignored_users_snapshot();
+
+  [Async, Throws=IgnoredUsersCommandError]
+  IgnoredUsersWriteDto ignored_users_ignore(string user_id);
+
+  [Async, Throws=IgnoredUsersCommandError]
+  IgnoredUsersWriteDto ignored_users_unignore(string user_id);
+
+  [Async, Throws=UserDirectorySearchError]
+  UserDirectorySearchDto user_directory_search(string term, u64? limit);
+
+  [Async, Throws=MessageSearchError]
+  MessageSearchDto message_search(string term, string? next_token, sequence<string>? rooms, sequence<string>? senders, string? order);
+
+  [Async, Throws=PushRulesCommandError]
+  PushRulesSnapshotDto push_rules_snapshot();
+
+  [Async, Throws=PushRulesCommandError]
+  PushRulesWriteDto push_rules_set_default(boolean encrypted, boolean one_to_one, string mode);
+
+  [Async, Throws=PushRulesCommandError]
+  PushRulesWriteDto push_rules_set_mention(string rule_id, boolean enabled);
+
+  [Async, Throws=PushRulesCommandError]
+  PushRulesWriteDto push_rules_add_keyword(string keyword);
+
+  [Async, Throws=PushRulesCommandError]
+  PushRulesWriteDto push_rules_remove_keyword(string keyword);
+
+  [Async, Throws=RoomNotificationCommandError]
+  RoomNotificationSnapshotDto room_notification_snapshot(string room_id);
+
+  [Async, Throws=RoomNotificationCommandError]
+  RoomNotificationWriteDto room_notification_set(string room_id, string mode);
+
+  [Async, Throws=RoomNotificationCommandError]
+  RoomNotificationsSnapshotDto room_notifications_snapshot();
+
+  [Async, Throws=ThreepidCommandError]
+  ThreepidSnapshotDto threepid_snapshot();
+
+  [Async, Throws=ThreepidCommandError]
+  ThreepidWriteDto threepid_delete(string address);
+
+  [Async, Throws=ThreepidCommandError]
+  ThreepidEmailTokenDto threepid_request_email_token(string email);
+
+  [Async, Throws=ThreepidCommandError]
+  ThreepidAddDto threepid_add_email();
+
+  [Async, Throws=ThreepidCommandError]
+  ThreepidAddDto threepid_add_email_password(string password);
 
   [Async, Throws=RoomProfileCommandError]
   RoomProfileWriteDto set_room_name(string room_id, string name);

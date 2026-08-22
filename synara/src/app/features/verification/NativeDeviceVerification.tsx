@@ -404,7 +404,12 @@ export function NativeStartVerification({
         {starting && <Spinner size="100" variant="Warning" />}
         <Text size="B300">{deviceId ? 'Verify' : 'Verify from Another Device'}</Text>
       </Button>
-      {error && <Text size="T200">{nativeVerificationErrorMessage()}</Text>}
+      {error && (
+        <Text size="T200">
+          Could not start verification. Sign in on Element or another Synara session, keep that
+          client online, then try again.
+        </Text>
+      )}
     </Box>
   );
 }

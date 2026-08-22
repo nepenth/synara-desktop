@@ -5,7 +5,7 @@ import Foundation
 /// Uses existing list / members / power-level / join-rule / invite reads
 /// only. Topic and encryption come from the invite snapshot when the
 /// room is an invite; joined-room topic is not on the list DTO. Avatar
-/// is an `mxc://` string. Notification mode stays leftover default.
+/// is an `mxc://` string. Notification mode comes from the Core snapshot.
 /// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreRoomDetails {
     struct RoomRow {
@@ -30,7 +30,7 @@ enum SharedCoreRoomDetails {
         joinRule: String?,
         topic: String?,
         isEncrypted: Bool,
-        notificationMode: SynaraRoomNotificationMode = .allMessages
+        notificationMode: SynaraRoomNotificationMode = .default
     ) -> RoomDetails {
         let power = powerSummary(
             ownUserID: ownUserID,
@@ -72,12 +72,27 @@ enum SharedCoreRoomDetails {
 
     static func notificationMode(_ raw: String?) -> SynaraRoomNotificationMode {
         switch raw {
+        case "all":
+            return .allMessages
         case "mentions":
             return .mentionsOnly
         case "mute":
             return .mute
         default:
-            return .allMessages
+            return .default
+        }
+    }
+
+    static func wireNotificationMode(_ mode: SynaraRoomNotificationMode) -> String {
+        switch mode {
+        case .default:
+            return "default"
+        case .allMessages:
+            return "all"
+        case .mentionsOnly:
+            return "mentions"
+        case .mute:
+            return "mute"
         }
     }
 

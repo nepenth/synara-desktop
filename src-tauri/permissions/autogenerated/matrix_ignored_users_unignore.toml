@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-ignored-users-unignore"
+description = "Enables the matrix_ignored_users_unignore command without any pre-configured scope."
+commands.allow = ["matrix_ignored_users_unignore"]
+
+[[permission]]
+identifier = "deny-matrix-ignored-users-unignore"
+description = "Denies the matrix_ignored_users_unignore command without any pre-configured scope."
+commands.deny = ["matrix_ignored_users_unignore"]

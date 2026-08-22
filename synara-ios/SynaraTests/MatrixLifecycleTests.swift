@@ -221,6 +221,24 @@ final class MatrixLifecycleTests: XCTestCase {
         )
         XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(unverified))
         XCTAssertFalse(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(verified))
+        let unverifiedWithoutTrustedPeer = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: false,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(unverifiedWithoutTrustedPeer))
+        let lastDevice = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: false,
+            isLastDevice: true,
+            unableToDecryptCount: 0
+        )
+        XCTAssertFalse(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(lastDevice))
 
         let crypto = SequencingCryptoStatusService(statuses: [unverified, verified])
         let observer = SessionCryptoStatusObserver()

@@ -77,6 +77,7 @@ const tests = [
   'src/app/features/settings/account/__tests__/nativeProfileOwner.test.ts',
   'src/app/features/settings/__tests__/settingsSurfaceGuard.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomProfileOwner.test.ts',
+  'src/app/features/message-search/__tests__/useMessageSearch.test.ts',
   'src/app/features/native-client/__tests__/nativeClientFacade.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomJoinRuleOwner.test.ts',
   'src/app/features/common-settings/general/__tests__/roomPublishSourceGuard.test.ts',

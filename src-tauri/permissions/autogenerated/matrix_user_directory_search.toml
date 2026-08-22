@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-user-directory-search"
+description = "Enables the matrix_user_directory_search command without any pre-configured scope."
+commands.allow = ["matrix_user_directory_search"]
+
+[[permission]]
+identifier = "deny-matrix-user-directory-search"
+description = "Denies the matrix_user_directory_search command without any pre-configured scope."
+commands.deny = ["matrix_user_directory_search"]

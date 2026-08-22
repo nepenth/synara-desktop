@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-threepid-delete"
+description = "Enables the matrix_threepid_delete command without any pre-configured scope."
+commands.allow = ["matrix_threepid_delete"]
+
+[[permission]]
+identifier = "deny-matrix-threepid-delete"
+description = "Denies the matrix_threepid_delete command without any pre-configured scope."
+commands.deny = ["matrix_threepid_delete"]

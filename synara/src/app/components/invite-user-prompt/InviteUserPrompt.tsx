@@ -4,6 +4,7 @@ import React, {
   FormEventHandler,
   KeyboardEventHandler,
   useCallback,
+  useEffect,
   useMemo,
   useRef,
   useState,
@@ -44,6 +45,8 @@ import { BreakWord } from '../../styles/Text.css';
 import { useAlive } from '../../hooks/useAlive';
 import { inviteUserWithNativeOwner } from '../nativeRoomModerationOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { isNativeMatrixSession } from '../../features/verification/nativeVerification';
+import { isObject, optString, reqString } from '../../features/matrix-dto/parseUtil';
 
 const SEARCH_OPTIONS: UseAsyncSearchOptions = {
   limit: 1000,
@@ -51,7 +54,20 @@ const SEARCH_OPTIONS: UseAsyncSearchOptions = {
     contain: true,
   },
 };
+const DIRECTORY_SEARCH_LIMIT = 10;
+const DIRECTORY_SEARCH_DEBOUNCE_MS = 300;
 const getUserIdString = (userId: string) => getMxIdLocalPart(userId) ?? userId;
+
+const parseDirectoryUserIds = (value: unknown): string[] => {
+  if (!isObject(value) || !Array.isArray(value.results)) return [];
+  const ids: string[] = [];
+  for (const raw of value.results) {
+    if (!isObject(raw)) continue;
+    const userId = reqString(raw, 'userId') ?? optString(raw, 'user_id');
+    if (typeof userId === 'string' && isUserId(userId)) ids.push(userId);
+  }
+  return ids;
+};
 
 type InviteUserProps = {
   room: EventedRoomReading;
@@ -61,8 +77,12 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   const alive = useAlive();
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const directoryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const directoryGen = useRef(0);
   const directUsers = useDirectUsers();
   const [validUserId, setValidUserId] = useState<string>();
+  const [directoryUsers, setDirectoryUsers] = useState<string[]>([]);
+  const nativeDirectory = isNativeMatrixSession() || isSynaraDesktop();
 
   const filteredUsers = useMemo(
     () =>
@@ -77,6 +97,59 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
     getUserIdString,
     SEARCH_OPTIONS
   );
+  const cancelDirectorySearch = useCallback(() => {
+    directoryGen.current += 1;
+    if (directoryTimer.current) clearTimeout(directoryTimer.current);
+    setDirectoryUsers([]);
+  }, []);
+  const scheduleDirectorySearch = useCallback(
+    (term: string) => {
+      if (!nativeDirectory) return;
+      directoryGen.current += 1;
+      const gen = directoryGen.current;
+      if (directoryTimer.current) clearTimeout(directoryTimer.current);
+      directoryTimer.current = setTimeout(() => {
+        void (async () => {
+          try {
+            const response = await invokeDesktopWithAvailability<unknown>(
+              'matrix_user_directory_search',
+              { term, limit: DIRECTORY_SEARCH_LIMIT }
+            );
+            if (gen !== directoryGen.current || !alive()) return;
+            if (!response.available) {
+              setDirectoryUsers([]);
+              return;
+            }
+            setDirectoryUsers(parseDirectoryUserIds(response.value));
+          } catch {
+            if (gen !== directoryGen.current || !alive()) return;
+            setDirectoryUsers([]);
+          }
+        })();
+      }, DIRECTORY_SEARCH_DEBOUNCE_MS);
+    },
+    [alive, nativeDirectory]
+  );
+  useEffect(
+    () => () => {
+      if (directoryTimer.current) clearTimeout(directoryTimer.current);
+    },
+    []
+  );
+  const searchItems = useMemo(() => {
+    const local = result?.items ?? [];
+    if (directoryUsers.length === 0) return local;
+    const seen = new Set(local);
+    const merged = [...local];
+    for (const userId of directoryUsers) {
+      if (seen.has(userId)) continue;
+      const membership = (room.getMember(userId) as { membership?: string } | null)?.membership;
+      if (membership === Membership.Join) continue;
+      seen.add(userId);
+      merged.push(userId);
+    }
+    return merged;
+  }, [directoryUsers, result?.items, room]);
   const queryHighlighRegex = result?.query
     ? makeHighlightRegex(result.query.split(' '))
     : undefined;
@@ -102,6 +175,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
     if (inputRef.current) inputRef.current.value = '';
     setValidUserId(undefined);
     resetSearch();
+    cancelDirectorySearch();
   };
 
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
@@ -125,13 +199,17 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
     const value = evt.currentTarget.value.trim();
     if (isUserId(value)) {
       setValidUserId(value);
+      resetSearch();
+      cancelDirectorySearch();
     } else {
       setValidUserId(undefined);
       const term = getMxIdLocalPart(value) ?? (value.startsWith('@') ? value.slice(1) : value);
       if (term) {
         search(term);
+        scheduleDirectorySearch(term);
       } else {
         resetSearch();
+        cancelDirectorySearch();
       }
     }
   };
@@ -141,6 +219,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
       inputRef.current.value = userId;
       setValidUserId(userId);
       resetSearch();
+      cancelDirectorySearch();
       inputRef.current.focus();
     }
   };
@@ -148,11 +227,12 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
   const handleKeyDown: KeyboardEventHandler<HTMLInputElement> = (evt) => {
     if (isKeyHotkey('escape', evt)) {
       resetSearch();
+      cancelDirectorySearch();
       return;
     }
-    if (isKeyHotkey('tab', evt) && result && result.items.length > 0) {
+    if (isKeyHotkey('tab', evt) && searchItems.length > 0) {
       evt.preventDefault();
-      const userId = result.items[0];
+      const userId = searchItems[0];
       handleUserId(userId);
     }
   };
@@ -208,11 +288,14 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                       autoComplete="off"
                       required
                     />
-                    {result && result.items.length > 0 && (
+                    {searchItems.length > 0 && (
                       <FocusTrap
                         focusTrapOptions={{
                           initialFocus: false,
-                          onDeactivate: resetSearch,
+                          onDeactivate: () => {
+                            resetSearch();
+                            cancelDirectorySearch();
+                          },
                           returnFocusOnDeactivate: false,
                           clickOutsideDeactivates: true,
                           allowOutsideClick: true,
@@ -225,7 +308,7 @@ export function InviteUserPrompt({ room, requestClose }: InviteUserProps) {
                           <Menu style={{ position: 'absolute', top: 0, zIndex: 1, width: '100%' }}>
                             <Scroll size="300" style={{ maxHeight: toRem(100) }}>
                               <div style={{ padding: config.space.S100 }}>
-                                {result.items.map((userId) => {
+                                {searchItems.map((userId) => {
                                   const username = `${getMxIdLocalPart(userId)}`;
                                   const userServer = getMxIdServer(userId);
 

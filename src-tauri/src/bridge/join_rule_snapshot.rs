@@ -1,12 +1,14 @@
-//! Desktop bridge for `matrix_room_join_rule_snapshot` through `Core::command`.
+//! Desktop bridge for join-rule snapshot and write through `Core::command`.
 
 use synara_core::app::room_profile::MatrixRoomJoinRuleSnapshot;
+use synara_core::app::user_profile::MatrixProfileWriteResult;
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
 const JOIN_RULE_SNAPSHOT_COMMAND: &str = "matrix_room_join_rule_snapshot";
+const JOIN_RULE_SET_COMMAND: &str = "matrix_room_set_join_rule";
 
 pub(crate) async fn join_rule_snapshot(
     core: &Core,
@@ -32,6 +34,27 @@ pub(crate) async fn join_rule_snapshot(
             "v-send.r-room-profile-join-rule-read-sdk-failed",
         )
     })
+}
+
+pub(crate) async fn set_join_rule(
+    core: &Core,
+    room_id: String,
+    join_rule: String,
+    allow_room_ids: Option<Vec<String>>,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    core.command(CommandEnvelope {
+        command: JOIN_RULE_SET_COMMAND.to_owned(),
+        session_generation: 0,
+        request_id: None,
+        payload: serde_json::json!({
+            "roomId": room_id,
+            "joinRule": join_rule,
+            "allowRoomIds": allow_room_ids,
+        }),
+    })
+    .await
+    .map_err(map_join_rule_snapshot_core_error)?;
+    Ok(MatrixProfileWriteResult { status: "ok" })
 }
 
 fn map_join_rule_snapshot_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
@@ -70,6 +93,13 @@ fn map_join_rule_snapshot_core_error(error: MatrixIpcError) -> MatrixAuthCommand
                 ),
                 Some("v-send.r-room-profile-join-rule-unsupported") => {
                     ("Unknown", "v-send.r-room-profile-join-rule-unsupported")
+                }
+                Some("v-send.r-room-profile-join-rule-set-sdk-failed") => {
+                    return MatrixAuthCommandError::new(
+                        "Unknown",
+                        "The native Matrix room join rule could not be updated.",
+                        "v-send.r-room-profile-join-rule-set-sdk-failed",
+                    );
                 }
                 _ => ("Unknown", "v-send.r-room-profile-join-rule-read-sdk-failed"),
             };

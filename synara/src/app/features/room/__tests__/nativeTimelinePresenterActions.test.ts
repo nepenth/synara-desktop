@@ -113,7 +113,15 @@ test('room read state stays a single contextual overflow action', () => {
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
 });
 
-test('native timeline message rows use a full-width surface, not a text-only chip', () => {
+test('native timeline honors hide membership, hide activity receipts, and message spacing', () => {
+  assert.match(presenter, /hideMembershipEvents && row\.kind === 'membership'/);
+  assert.match(presenter, /hideNickAvatarEvents && row\.kind === 'state'/);
+  assert.match(presenter, /hideActivity \|\| !liveTailMarkReadKey/);
+  assert.match(presenter, /if \(!hideActivity\) \{/);
+  assert.match(presenter, /messageSpacing=\{messageSpacing\}/);
+});
+
+test('native timeline message rows sit on chat chrome and highlight on hover', () => {
   const messageRowCss = htmlCss.slice(
     htmlCss.indexOf('export const MessageRow'),
     htmlCss.indexOf('export const MessageBody')
@@ -125,19 +133,19 @@ test('native timeline message rows use a full-width surface, not a text-only chi
 
   assert.match(messageRowCss, /export const MessageRow = recipe\(/);
   assert.match(messageRowCss, /backgroundColor: color\.SurfaceVariant\.ContainerHover/);
-  assert.match(messageRowCss, /backgroundColor: color\.SurfaceVariant\.ContainerActive/);
   assert.match(messageRowCss, /borderRadius: config\.radii\.R400/);
-  assert.match(messageRowCss, /marginLeft: config\.space\.S400/);
-  assert.match(messageRowCss, /marginRight: config\.space\.S400/);
-  assert.match(messageRowCss, /color: color\.SurfaceVariant\.OnContainer/);
-  assert.doesNotMatch(messageRowCss, /['"]transparent['"]/);
+  assert.match(messageRowCss, /MessageActionSurface\}:hover/);
   assert.match(messageBodyCss, /background: 'transparent'/);
-  assert.match(messageBodyCss, /color: color\.SurfaceVariant\.OnContainer/);
+  assert.match(messageBodyCss, /color: color\.Surface\.OnContainer/);
 
   assert.match(presenter, /htmlCss\.MessageRow\(\{/);
   assert.match(presenter, /hasMessageSurface/);
   assert.match(presenter, /groupsNext/);
   assert.match(presenter, /htmlCss\.MessageActionSurface/);
+  assert.match(
+    readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8'),
+    /showActionRail = hasActionMenu && actionsActive/
+  );
   assert.doesNotMatch(presenter, /htmlCss\.MessageBody[\s\S]{0,80}backgroundColor/);
 });
 

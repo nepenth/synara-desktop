@@ -1,6 +1,6 @@
 //! Credential-free V-CRYPTO.3 backup presentation DTOs and projector.
 //!
-//! Live Client status I/O lives in `live.rs`. Setup/restore/repair stay desktop.
+//! Live Client status I/O lives in `live.rs`. Restore is live. Setup/repair stay desktop.
 
 use serde::{Deserialize, Serialize};
 

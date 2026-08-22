@@ -1,6 +1,7 @@
 //! P4-S7: typed SharedCore consume of typing/presence commands only.
 //!
-//! Calls the already-registered Core handlers. Does not start SyncService.
+//! Calls the already-registered Core handlers, including presence SET.
+//! Does not start SyncService. Failed SET errors must not echo statusMsg.
 
 use std::collections::HashMap;
 use std::fs;
@@ -58,6 +59,8 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("presence_snapshot"));
     assert!(udl.contains("presence_subscribe"));
     assert!(udl.contains("presence_unsubscribe"));
+    assert!(udl.contains("presence_set"));
+    assert!(udl.contains("dictionary PresenceWriteDto"));
     assert!(!udl.contains("matrix_verification_start"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_sticker"));
@@ -74,6 +77,7 @@ fn typing_presence_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("presence_snapshot"));
     assert!(shared_core.contains("presence_subscribe"));
     assert!(shared_core.contains("presence_unsubscribe"));
+    assert!(shared_core.contains("presence_set"));
     assert!(shared_core.contains("timeline_open"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("matrix_crypto_status"));
@@ -98,17 +102,23 @@ fn typing_presence_without_session_fails_closed_without_echo() {
     let unsubscribe = rt
         .block_on(shared.presence_unsubscribe("presence-1-0".to_owned()))
         .expect_err("no attached presence owner");
+    let status_msg = "coffee-status-secret";
+    let presence_set = rt
+        .block_on(shared.presence_set("unavailable".to_owned(), Some(status_msg.to_owned())))
+        .expect_err("no attached presence owner");
     let text = format!(
-        "{typing:?}{typing}{typing_set:?}{typing_set}{presence:?}{presence}{subscribe:?}{subscribe}{unsubscribe:?}{unsubscribe}"
+        "{typing:?}{typing}{typing_set:?}{typing_set}{presence:?}{presence}{subscribe:?}{subscribe}{unsubscribe:?}{unsubscribe}{presence_set:?}{presence_set}"
     );
     assert!(text.contains("p2-typing-snapshot-no-session"));
     assert!(text.contains("p2-typing-set-no-session"));
     assert!(text.contains("p2-presence-snapshot-no-session"));
     assert!(text.contains("p2-presence-subscribe-no-session"));
     assert!(text.contains("p2-presence-unsubscribe-no-session"));
+    assert!(text.contains("p2-presence-set-no-session"));
     assert!(!text.contains("password"));
     assert!(!text.contains("syt_"));
     assert!(!text.contains("@bob"));
+    assert!(!text.contains(status_msg));
 }
 
 #[test]
@@ -162,11 +172,21 @@ fn typing_presence_without_started_sync_returns_handler_result_without_echo() {
     rt.block_on(shared.presence_unsubscribe(subscription.subscription_id.clone()))
         .expect("unsubscribe of a live subscription is the registered handler result");
 
-    let text = format!("{typing:?}{presence:?}{subscription:?}{typing_set_text}");
+    let secret_status = "planted-presence-status-secret";
+    let presence_set = rt
+        .block_on(shared.presence_set("custom".to_owned(), Some(secret_status.to_owned())))
+        .expect_err("unstarted sync still uses the registered presence-set handler");
+    let presence_set_text = format!("{presence_set:?}{presence_set}");
+    assert!(presence_set_text.contains("v-presence-state-unsupported"));
+    assert!(!presence_set_text.contains(secret_status));
+
+    let text =
+        format!("{typing:?}{presence:?}{subscription:?}{typing_set_text}{presence_set_text}");
     assert!(!text.contains(access));
     assert!(!text.contains(refresh));
     assert!(!text.contains("password"));
     assert!(!text.contains("syt_"));
+    assert!(!text.contains(secret_status));
 
     drop(shared);
     drop(_enter);

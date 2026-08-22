@@ -30,6 +30,8 @@ import {
 } from '../../../utils/matrix';
 import type { MatrixError } from '../../../utils/matrix';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
+import { invokeDesktopWithAvailability } from '../../../utils/desktop';
+import { isNativeMatrixSession } from '../../verification/nativeVerification';
 
 type JoinRule = 'public' | 'invite' | 'private' | 'knock' | 'restricted';
 
@@ -132,6 +134,22 @@ export function RoomJoinRules({ permissions }: RoomJoinRulesProps) {
               room_id: parentRoomId,
             });
           });
+        }
+
+        const allowRoomIds = allow.map((entry) => entry.room_id);
+        if (isNativeMatrixSession()) {
+          const result = await invokeDesktopWithAvailability<{ status: string }>(
+            'matrix_room_set_join_rule',
+            {
+              roomId: room.roomId,
+              joinRule,
+              ...(allowRoomIds.length > 0 ? { allowRoomIds } : {}),
+            }
+          );
+          if (!result.available || result.value?.status !== 'ok') {
+            throw new Error('Native Matrix room join-rule update is unavailable.');
+          }
+          return;
         }
 
         const c: RoomJoinRulesEventContent = {

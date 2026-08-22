@@ -1,7 +1,7 @@
 //! P8.5 — Key backup / recovery setup-restore-repair foundation (harness).
 //!
-//! Pure flow state machine plus live status reads. **Never stores recovery
-//! keys or secrets.** Setup/restore/repair stay in the desktop shell.
+//! Pure flow state machine plus live status and restore. **Never stores
+//! recovery keys or secrets.** Setup/repair stay in the desktop shell.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.5-backup-recovery.md`
 
@@ -15,7 +15,7 @@ mod status;
 
 pub use error::BackupError;
 pub use flow::{BackupFlowKind, BackupFlowPhase, BackupRecoveryFlow};
-pub use live::status;
+pub use live::{restore, status, MatrixRestoreBackupResult};
 pub use status::{
     project_backup_status, NativeBackupAction, NativeBackupAvailability, NativeBackupDeviceState,
     NativeBackupEnginePhase, NativeBackupOperationOutcome, NativeBackupOperationResult,

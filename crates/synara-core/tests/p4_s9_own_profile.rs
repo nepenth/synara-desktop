@@ -1,10 +1,12 @@
-//! P4-S9-8: typed SharedCore consume of the two registered own-profile commands.
+//! P4-S9-8 / P4-S9-8a: typed SharedCore consume of the registered own-profile
+//! commands, including `get_own_profile`.
 //!
 //! Calls the already-registered Core handlers. Does not start SyncService.
 //! Display name and `mxc://` (or empty clear) may cross as method arguments.
-//! Image/media bytes stay off. Failed errors stay static and must not echo
-//! display name or mxc. Directory visibility and leftover secret envelopes
-//! stay off.
+//! `get_own_profile` uses an empty payload. Avatar is mxc only. Image/media
+//! bytes stay off. Failed errors stay static and must not echo display name,
+//! mxc, or tokens. Directory visibility and leftover secret envelopes stay
+//! off.
 
 use std::collections::HashMap;
 use std::fs;
@@ -60,6 +62,8 @@ fn own_profile_surface_exposes_only_the_registered_family() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("set_own_display_name"));
     assert!(udl.contains("set_own_avatar"));
+    assert!(udl.contains("get_own_profile"));
+    assert!(udl.contains("OwnProfileDto"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_upload_media"));
@@ -70,6 +74,7 @@ fn own_profile_surface_exposes_only_the_registered_family() {
         .expect("SharedCore");
     assert!(shared_core.contains("set_own_display_name"));
     assert!(shared_core.contains("set_own_avatar"));
+    assert!(shared_core.contains("get_own_profile"));
     assert!(shared_core.contains("room_notes_snapshot"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("matrix_backup_status"));
@@ -87,11 +92,16 @@ fn own_profile_family_without_session_fails_closed_without_echo() {
     let avatar = rt
         .block_on(shared.set_own_avatar(mxc.to_owned()))
         .expect_err("no attached own-profile owner");
+    let profile = rt
+        .block_on(shared.get_own_profile())
+        .expect_err("no attached own-profile owner");
     let display_text = format!("{display:?}{display}");
     let avatar_text = format!("{avatar:?}{avatar}");
+    let profile_text = format!("{profile:?}{profile}");
     assert!(display_text.contains("p2-set-own-display-name-no-session"));
     assert!(avatar_text.contains("p2-set-own-avatar-no-session"));
-    let text = format!("{display_text}{avatar_text}");
+    assert!(profile_text.contains("p2-get-own-profile-no-session"));
+    let text = format!("{display_text}{avatar_text}{profile_text}");
     assert!(!text.contains("syt_"));
     assert!(!text.contains("token"));
     assert!(!text.contains(display_name));
@@ -148,6 +158,7 @@ fn own_profile_family_without_started_sync_returns_handler_result_without_echo()
 
     let display = rt.block_on(shared.set_own_display_name(display_name.to_owned()));
     let avatar = rt.block_on(shared.set_own_avatar(mxc.to_owned()));
+    let profile = rt.block_on(shared.get_own_profile());
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -163,6 +174,11 @@ fn own_profile_family_without_started_sync_returns_handler_result_without_echo()
         .err()
         .map(|error| format!("{error:?}{error}"))
         .expect("unstarted sync still uses the registered avatar handler");
+    let profile_text = profile
+        .as_ref()
+        .err()
+        .map(|error| format!("{error:?}{error}"))
+        .expect("unstarted sync still uses the registered get-own-profile handler");
 
     assert!(
         display_text.contains("v-send.r-avatar-"),
@@ -173,6 +189,10 @@ fn own_profile_family_without_started_sync_returns_handler_result_without_echo()
         "avatar must return a registered owner diagnostic: {avatar_text}"
     );
     assert!(
+        profile_text.contains("v-send.r-avatar-"),
+        "get own profile must return a registered owner diagnostic: {profile_text}"
+    );
+    assert!(
         !display_text.contains("p4-s9-8-own-profile-failed"),
         "display name must not hide a wrong envelope behind the generic fallback: {display_text}"
     );
@@ -180,7 +200,11 @@ fn own_profile_family_without_started_sync_returns_handler_result_without_echo()
         !avatar_text.contains("p4-s9-8-own-profile-failed"),
         "avatar must not hide a wrong envelope behind the generic fallback: {avatar_text}"
     );
-    let text = format!("{display_text}{avatar_text}");
+    assert!(
+        !profile_text.contains("p4-s9-8-own-profile-failed"),
+        "get own profile must not hide a wrong envelope behind the generic fallback: {profile_text}"
+    );
+    let text = format!("{display_text}{avatar_text}{profile_text}");
     assert!(!text.contains(access));
     assert!(!text.contains(refresh));
     assert!(!text.contains("syt_"));

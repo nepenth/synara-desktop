@@ -1336,7 +1336,11 @@ private extension RoomSummary {
         if calendar.isDate(lastActivityAt, inSameDayAs: referenceDate) {
             let formatter = DateFormatter()
             formatter.dateStyle = .none
-            formatter.timeStyle = .short
+            if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey) {
+                formatter.dateFormat = "HH:mm"
+            } else {
+                formatter.timeStyle = .short
+            }
             return formatter.string(from: lastActivityAt)
         }
 

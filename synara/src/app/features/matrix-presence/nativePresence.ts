@@ -264,6 +264,45 @@ const invokeSafely = async (
   }
 };
 
+const isWritablePresence = (state: Presence): boolean =>
+  state === Presence.Online || state === Presence.Unavailable || state === Presence.Offline;
+
+/** Own-presence write. Closed vocabulary only; never sends a userId. */
+export const setOwnPresenceNative = async (
+  state: Presence,
+  statusMsg?: string,
+  invoke: NativePresenceInvoke = defaultDependencies.invoke
+): Promise<void> => {
+  if (!isWritablePresence(state)) {
+    throw new Error(unavailableMessage);
+  }
+  const args: Record<string, unknown> = { state };
+  if (statusMsg !== undefined) args.statusMsg = statusMsg;
+  const result = await invokeSafely(invoke, 'matrix_presence_set', args);
+  if (!result.available || !isRecord(result.value) || result.value.status !== 'ok') {
+    throw new Error(unavailableMessage);
+  }
+};
+
+/** Own-presence snapshot for Account Profile. Fail-closed when unavailable. */
+export const snapshotOwnPresenceNative = async (
+  userId: string,
+  invoke: NativePresenceInvoke = defaultDependencies.invoke
+): Promise<UserPresence | undefined> => {
+  if (!isUserId(userId)) {
+    throw new Error(unavailableMessage);
+  }
+  const result = await invokeSafely(invoke, 'matrix_presence_snapshot', { userId });
+  if (!result.available) {
+    throw new Error(unavailableMessage);
+  }
+  const parsed = parseSnapshotResult(result.value, userId);
+  if (!parsed) {
+    throw new Error(unavailableMessage);
+  }
+  return parsed.status === 'ready' ? presenceFromSnapshot(parsed.snapshot) : undefined;
+};
+
 /** Testable native owner for one profile's presence subscription. */
 export const createNativePresenceSubscription = async (
   userId: string,

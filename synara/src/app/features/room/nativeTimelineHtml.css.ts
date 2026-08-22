@@ -15,30 +15,25 @@ export const MessageActionRail = style({
 
 export const MessageRow = recipe({
   base: {
-    paddingTop: config.space.S300,
-    paddingBottom: config.space.S300,
-    paddingLeft: toRem(32),
-    paddingRight: toRem(88),
-    marginLeft: config.space.S400,
-    marginRight: config.space.S400,
-    marginBottom: config.space.S200,
+    paddingTop: config.space.S200,
+    paddingBottom: config.space.S200,
+    paddingLeft: toRem(16),
+    paddingRight: toRem(72),
+    marginLeft: config.space.S200,
+    marginRight: config.space.S200,
     boxSizing: 'border-box',
-    color: color.SurfaceVariant.OnContainer,
+    color: color.Surface.OnContainer,
   },
   variants: {
     surface: {
       true: {
-        backgroundColor: color.SurfaceVariant.ContainerHover,
         borderRadius: config.radii.R400,
         selectors: {
           [`${MessageActionSurface}:hover &`]: {
-            backgroundColor: color.SurfaceVariant.ContainerActive,
+            backgroundColor: color.SurfaceVariant.ContainerHover,
           },
           [`${MessageActionSurface}:focus-within &`]: {
-            backgroundColor: color.SurfaceVariant.ContainerActive,
-          },
-          '&:hover': {
-            backgroundColor: color.SurfaceVariant.ContainerActive,
+            backgroundColor: color.SurfaceVariant.ContainerHover,
           },
         },
       },
@@ -47,17 +42,14 @@ export const MessageRow = recipe({
     grouped: {
       true: {
         paddingTop: config.space.S100,
-        borderTopLeftRadius: 0,
-        borderTopRightRadius: 0,
       },
-      false: {},
+      false: {
+        paddingTop: config.space.S400,
+      },
     },
     groupsNext: {
       true: {
         paddingBottom: config.space.S100,
-        borderBottomLeftRadius: 0,
-        borderBottomRightRadius: 0,
-        marginBottom: 0,
       },
       false: {},
     },
@@ -73,18 +65,18 @@ export const MessageBody = style({
   background: 'transparent',
   padding: 0,
   minWidth: 0,
-  fontSize: toRem(14),
+  fontSize: toRem(15),
   fontWeight: 400,
-  lineHeight: 1.55,
-  color: color.SurfaceVariant.OnContainer,
+  lineHeight: 1.5,
+  color: color.Surface.OnContainer,
 });
 
 export const FormattedBody = style({
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
-  fontSize: toRem(14),
+  fontSize: toRem(15),
   fontWeight: 400,
-  lineHeight: 1.55,
+  lineHeight: 1.5,
 });
 
 export const CodePanel = style({

@@ -18,8 +18,8 @@
 //! already-registered `matrix_invites_snapshot` Core command only.
 //! P4-S6 adds typed `timeline_open` / `timeline_close` / `timeline_paginate`
 //! wrappers for those three already-registered Core commands only.
-//! P4-S7 adds typed typing/presence wrappers for the five already-registered
-//! Core commands in that family only.
+//! P4-S7 adds typed typing/presence wrappers for the already-registered
+//! Core commands in that family, including presence SET.
 //! P4-S8 adds a typed `verification_list` wrapper for the already-registered
 //! `matrix_verification_list` Core command only.
 //! P4-S9 adds typed verification SAS wrappers for the seven already-registered
@@ -29,8 +29,10 @@
 //! Backup status, room-key transfer status, and cross-signing setup stay off
 //! this slice: they sit next to leftover passphrase/path/password envelopes.
 //! P4-S9-3 adds a typed `room_join_rule_snapshot` wrapper for the
-//! already-registered `matrix_room_join_rule_snapshot` Core command only.
-//! There is no join-rule writer on Core.
+//! already-registered `matrix_room_join_rule_snapshot` Core command.
+//! Join-rule write (`room_set_join_rule` / `matrix_room_set_join_rule`)
+//! hangs on the same NativeRoomJoinRuleOwner. Write ack is status only.
+//! Failed errors never echo room id, join rule, or allow-list ids.
 //! P4-S9-4 adds typed image-pack get/set wrappers for the six
 //! already-registered Core commands. Pack metadata/IDs/URLs/JSON may
 //! cross. Image/media bytes stay off.
@@ -45,6 +47,9 @@
 //! for those two already-registered Core commands. Avatar is an `mxc://`
 //! (or empty clear) reference only. Image/media bytes stay off. Failed
 //! errors never echo display name or mxc.
+//! P4-S9-8a adds typed `get_own_profile` wrapping the already-registered
+//! `matrix_get_own_profile` Core command. Empty payload. Avatar is an
+//! `mxc://` URI only. Failed errors never echo display name, mxc, or tokens.
 //! P4-S9-9 adds typed `set_room_name` / `set_room_topic` / `set_room_avatar`
 //! wrappers for those three already-registered Core commands. Room avatar
 //! is an `mxc://` (or empty clear) reference only. Image/media bytes stay
@@ -104,7 +109,8 @@
 //! P4-S9-23 adds a typed `send_sticker` wrapper for the already-registered
 //! `matrix_send_sticker` Core command only. Metadata / mxc only; no image
 //! bytes or file path. Failed errors never echo mxc or room id. Poll, edit,
-//! and respond stay off. `matrix_send_attachment` stays a desktop leftover.
+//! and respond stay off. Live `upload_content` / `send_room_attachment` take
+//! bytes as method arguments. Leftover `media_upload` remains.
 //! P4-S9-24 adds a typed `send_poll` wrapper for the already-registered
 //! `matrix_send_poll` Core command only. No media bytes. Failed errors never
 //! echo question, options, or room id. Edit and respond stay off.
@@ -142,6 +148,13 @@
 //! Failed errors stay static and never echo password, recovery key, event,
 //! body, bytes, URL, or token. Oversize fail-closes at 1 MiB with no
 //! truncate. Planted leftover I/O does not hit a live homeserver.
+//! Live HTTP pusher set/delete are dedicated Core methods (push keys stay
+//! off `Core::command` JSON). Leftover `pusher_set` / `pusher_delete` remain.
+//! Live `restore_backup` takes a recovery secret as a method argument and
+//! calls SDK `recover()`. Leftover `recover` remains fail-closed.
+//! Live `download_plain_media` / `thumbnail_plain_media` take an `mxc://`
+//! argument and return bytes. Leftover `media_download` / `media_thumbnail`
+//! remain fail-closed. Timeline-media handles stay on `timeline_media_bytes`.
 //! This still exposes no generic command FFI or APNs surface.
 
 use std::path::{Component, Path};
@@ -172,7 +185,7 @@ use crate::app::lifecycle::{
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
-    NativePresenceSubscription, NativePresenceUpdate,
+    NativePresenceSubscription, NativePresenceUpdate, NativePresenceWriteResult,
 };
 use crate::app::room_list::{
     NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListOwner,
@@ -361,11 +374,13 @@ const TYPING_SET_COMMAND: &str = "matrix_typing_set";
 const PRESENCE_SNAPSHOT_COMMAND: &str = "matrix_presence_snapshot";
 const PRESENCE_SUBSCRIBE_COMMAND: &str = "matrix_presence_subscribe";
 const PRESENCE_UNSUBSCRIBE_COMMAND: &str = "matrix_presence_unsubscribe";
+const PRESENCE_SET_COMMAND: &str = "matrix_presence_set";
 const TYPING_SNAPSHOT_NO_SESSION_CODE: &str = "p2-typing-snapshot-no-session";
 const TYPING_SET_NO_SESSION_CODE: &str = "p2-typing-set-no-session";
 const PRESENCE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-presence-snapshot-no-session";
 const PRESENCE_SUBSCRIBE_NO_SESSION_CODE: &str = "p2-presence-subscribe-no-session";
 const PRESENCE_UNSUBSCRIBE_NO_SESSION_CODE: &str = "p2-presence-unsubscribe-no-session";
+const PRESENCE_SET_NO_SESSION_CODE: &str = "p2-presence-set-no-session";
 const TYPING_NO_SESSION_DESCRIPTION: &str = "No typing session is available.";
 const PRESENCE_NO_SESSION_DESCRIPTION: &str = "No presence session is available.";
 const TYPING_SNAPSHOT_FAILED_CODE: &str = "p4-s7-typing-snapshot-failed";
@@ -388,6 +403,12 @@ const PRESENCE_INVALID_USER_CODE: &str = "v-presence-invalid-user-id";
 const PRESENCE_INVALID_USER_DESCRIPTION: &str = "The presence user id is invalid.";
 const PRESENCE_INVALID_SUBSCRIPTION_CODE: &str = "v-presence-invalid-subscription-id";
 const PRESENCE_INVALID_SUBSCRIPTION_DESCRIPTION: &str = "The presence subscription id is invalid.";
+const PRESENCE_SET_FAILED_CODE: &str = "p4-s7-presence-set-failed";
+const PRESENCE_SET_FAILED_DESCRIPTION: &str = "The presence status could not be updated.";
+const PRESENCE_INVALID_STATE_CODE: &str = "v-presence-state-unsupported";
+const PRESENCE_INVALID_STATE_DESCRIPTION: &str = "The presence state is invalid.";
+const PRESENCE_STATUS_MSG_CAP_CODE: &str = "p4.7-status-msg-cap";
+const PRESENCE_STATUS_MSG_CAP_DESCRIPTION: &str = "The presence status message is too long.";
 const VERIFICATION_LIST_COMMAND: &str = "matrix_verification_list";
 const VERIFICATION_LIST_GENERATION: u64 = 0;
 const VERIFICATION_LIST_NO_SESSION_CODE: &str = "p2-verification-list-no-session";
@@ -429,7 +450,9 @@ const DEVICE_FAILED_CODE: &str = "p4-s9-2-device-failed";
 const DEVICE_FAILED_DESCRIPTION: &str = "The device request could not be completed.";
 const DEVICE_OWNER_DESCRIPTION: &str = "The device request is not available.";
 const JOIN_RULE_SNAPSHOT_COMMAND: &str = "matrix_room_join_rule_snapshot";
+const JOIN_RULE_SET_COMMAND: &str = "matrix_room_set_join_rule";
 const JOIN_RULE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-join-rule-snapshot-no-session";
+const JOIN_RULE_SET_NO_SESSION_CODE: &str = "p2-room-set-join-rule-no-session";
 const JOIN_RULE_NO_SESSION_DESCRIPTION: &str = "No join-rule session is available.";
 const JOIN_RULE_FAILED_CODE: &str = "p4-s9-3-join-rule-failed";
 const JOIN_RULE_FAILED_DESCRIPTION: &str = "The join-rule request could not be completed.";
@@ -503,12 +526,120 @@ const ROOM_NOTES_OWNER_DESCRIPTION: &str = "The room-notes request is not availa
 const OWN_PROFILE_COMMAND_GENERATION: u64 = 0;
 const SET_OWN_DISPLAY_NAME_COMMAND: &str = "matrix_set_own_display_name";
 const SET_OWN_AVATAR_COMMAND: &str = "matrix_set_own_avatar";
+const GET_OWN_PROFILE_COMMAND: &str = "matrix_get_own_profile";
 const SET_OWN_DISPLAY_NAME_NO_SESSION_CODE: &str = "p2-set-own-display-name-no-session";
 const SET_OWN_AVATAR_NO_SESSION_CODE: &str = "p2-set-own-avatar-no-session";
+const GET_OWN_PROFILE_NO_SESSION_CODE: &str = "p2-get-own-profile-no-session";
 const OWN_PROFILE_NO_SESSION_DESCRIPTION: &str = "No own-profile session is available.";
 const OWN_PROFILE_FAILED_CODE: &str = "p4-s9-8-own-profile-failed";
 const OWN_PROFILE_FAILED_DESCRIPTION: &str = "The own-profile request could not be completed.";
 const OWN_PROFILE_OWNER_DESCRIPTION: &str = "The own-profile request is not available.";
+const IGNORED_USERS_COMMAND_GENERATION: u64 = 0;
+const IGNORED_USERS_SNAPSHOT_COMMAND: &str = "matrix_ignored_users_snapshot";
+const IGNORED_USERS_IGNORE_COMMAND: &str = "matrix_ignored_users_ignore";
+const IGNORED_USERS_UNIGNORE_COMMAND: &str = "matrix_ignored_users_unignore";
+const IGNORED_USERS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-ignored-users-snapshot-no-session";
+const IGNORED_USERS_IGNORE_NO_SESSION_CODE: &str = "p2-ignored-users-ignore-no-session";
+const IGNORED_USERS_UNIGNORE_NO_SESSION_CODE: &str = "p2-ignored-users-unignore-no-session";
+const IGNORED_USERS_NO_SESSION_DESCRIPTION: &str = "No ignored-users session is available.";
+const IGNORED_USERS_FAILED_CODE: &str = "p4-s9-ignored-users-failed";
+const IGNORED_USERS_FAILED_DESCRIPTION: &str = "The ignored-users request could not be completed.";
+const IGNORED_USERS_OWNER_DESCRIPTION: &str = "The ignored-users request is not available.";
+const USER_DIRECTORY_SEARCH_COMMAND_GENERATION: u64 = 0;
+const USER_DIRECTORY_SEARCH_COMMAND: &str = "matrix_user_directory_search";
+const USER_DIRECTORY_SEARCH_NO_SESSION_CODE: &str = "p2-user-directory-search-no-session";
+const USER_DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION: &str =
+    "No user-directory session is available.";
+const USER_DIRECTORY_SEARCH_FAILED_CODE: &str = "p4-s9-user-directory-search-failed";
+const USER_DIRECTORY_SEARCH_FAILED_DESCRIPTION: &str =
+    "The user-directory search request could not be completed.";
+const USER_DIRECTORY_SEARCH_OWNER_DESCRIPTION: &str =
+    "The user-directory search request is not available.";
+const MESSAGE_SEARCH_COMMAND_GENERATION: u64 = 0;
+const MESSAGE_SEARCH_COMMAND: &str = "matrix_message_search";
+const MESSAGE_SEARCH_NO_SESSION_CODE: &str = "p2-message-search-no-session";
+const MESSAGE_SEARCH_NO_SESSION_DESCRIPTION: &str = "No message-search session is available.";
+const MESSAGE_SEARCH_FAILED_CODE: &str = "p4-s9-message-search-failed";
+const MESSAGE_SEARCH_FAILED_DESCRIPTION: &str =
+    "The message-search request could not be completed.";
+const MESSAGE_SEARCH_OWNER_DESCRIPTION: &str = "The message-search request is not available.";
+const PUSH_RULES_COMMAND_GENERATION: u64 = 0;
+const PUSH_RULES_SNAPSHOT_COMMAND: &str = "matrix_push_rules_snapshot";
+const PUSH_RULES_SET_DEFAULT_COMMAND: &str = "matrix_push_rules_set_default";
+const PUSH_RULES_SET_MENTION_COMMAND: &str = "matrix_push_rules_set_mention";
+const PUSH_RULES_ADD_KEYWORD_COMMAND: &str = "matrix_push_rules_add_keyword";
+const PUSH_RULES_REMOVE_KEYWORD_COMMAND: &str = "matrix_push_rules_remove_keyword";
+const PUSH_RULES_SNAPSHOT_NO_SESSION_CODE: &str = "p2-push-rules-snapshot-no-session";
+const PUSH_RULES_SET_DEFAULT_NO_SESSION_CODE: &str = "p2-push-rules-set-default-no-session";
+const PUSH_RULES_SET_MENTION_NO_SESSION_CODE: &str = "p2-push-rules-set-mention-no-session";
+const PUSH_RULES_ADD_KEYWORD_NO_SESSION_CODE: &str = "p2-push-rules-add-keyword-no-session";
+const PUSH_RULES_REMOVE_KEYWORD_NO_SESSION_CODE: &str = "p2-push-rules-remove-keyword-no-session";
+const PUSH_RULES_NO_SESSION_DESCRIPTION: &str = "No push-rules session is available.";
+const PUSH_RULES_FAILED_CODE: &str = "p4-s9-push-rules-failed";
+const PUSH_RULES_FAILED_DESCRIPTION: &str = "The push-rules request could not be completed.";
+const PUSH_RULES_OWNER_DESCRIPTION: &str = "The push-rules request is not available.";
+const ROOM_NOTIFICATION_COMMAND_GENERATION: u64 = 0;
+const ROOM_NOTIFICATION_SNAPSHOT_COMMAND: &str = "matrix_room_notification_snapshot";
+const ROOM_NOTIFICATION_SET_COMMAND: &str = "matrix_room_notification_set";
+const ROOM_NOTIFICATIONS_SNAPSHOT_COMMAND: &str = "matrix_room_notifications_snapshot";
+const ROOM_NOTIFICATION_SNAPSHOT_NO_SESSION_CODE: &str = "p2-room-notification-snapshot-no-session";
+const ROOM_NOTIFICATION_SET_NO_SESSION_CODE: &str = "p2-room-notification-set-no-session";
+const ROOM_NOTIFICATIONS_SNAPSHOT_NO_SESSION_CODE: &str =
+    "p2-room-notifications-snapshot-no-session";
+const ROOM_NOTIFICATION_NO_SESSION_DESCRIPTION: &str = "No room-notification session is available.";
+const ROOM_NOTIFICATION_FAILED_CODE: &str = "p4-s9-room-notification-failed";
+const ROOM_NOTIFICATION_FAILED_DESCRIPTION: &str =
+    "The room-notification request could not be completed.";
+const ROOM_NOTIFICATION_OWNER_DESCRIPTION: &str = "The room-notification request is not available.";
+const THREEPID_COMMAND_GENERATION: u64 = 0;
+const THREEPID_SNAPSHOT_COMMAND: &str = "matrix_threepid_snapshot";
+const THREEPID_DELETE_COMMAND: &str = "matrix_threepid_delete";
+const THREEPID_REQUEST_EMAIL_TOKEN_COMMAND: &str = "matrix_threepid_request_email_token";
+const THREEPID_ADD_EMAIL_COMMAND: &str = "matrix_threepid_add_email";
+const THREEPID_SNAPSHOT_NO_SESSION_CODE: &str = "p2-threepid-snapshot-no-session";
+const THREEPID_DELETE_NO_SESSION_CODE: &str = "p2-threepid-delete-no-session";
+const THREEPID_REQUEST_EMAIL_TOKEN_NO_SESSION_CODE: &str =
+    "p2-threepid-request-email-token-no-session";
+const THREEPID_ADD_EMAIL_NO_SESSION_CODE: &str = "p2-threepid-add-email-no-session";
+const THREEPID_ADD_EMAIL_PASSWORD_NO_SESSION_CODE: &str =
+    "p2-threepid-add-email-password-no-session";
+const THREEPID_NO_SESSION_DESCRIPTION: &str = "No 3PID session is available.";
+const THREEPID_FAILED_CODE: &str = "p4-s9-threepid-failed";
+const THREEPID_FAILED_DESCRIPTION: &str = "The 3PID request could not be completed.";
+const THREEPID_OWNER_DESCRIPTION: &str = "The 3PID request is not available.";
+const UPLOAD_AVATAR_NO_SESSION_CODE: &str = "p2-upload-avatar-no-session";
+const UPLOAD_CONTENT_NO_SESSION_CODE: &str = "p2-upload-content-no-session";
+const UPLOAD_CONTENT_NO_SESSION_DESCRIPTION: &str = "No content-upload session is available.";
+const UPLOAD_CONTENT_FAILED_CODE: &str = "p4-s9-media-upload-failed";
+const UPLOAD_CONTENT_FAILED_DESCRIPTION: &str =
+    "The content-upload request could not be completed.";
+const UPLOAD_CONTENT_OWNER_DESCRIPTION: &str = "The content-upload request is not available.";
+const SEND_ROOM_ATTACHMENT_NO_SESSION_CODE: &str = "p2-send-room-attachment-no-session";
+const SEND_ROOM_ATTACHMENT_NO_SESSION_DESCRIPTION: &str =
+    "No room-attachment session is available.";
+const SEND_ROOM_ATTACHMENT_FAILED_CODE: &str = "p4-s9-send-room-attachment-failed";
+const SEND_ROOM_ATTACHMENT_FAILED_DESCRIPTION: &str =
+    "The room-attachment request could not be completed.";
+const SEND_ROOM_ATTACHMENT_OWNER_DESCRIPTION: &str =
+    "The room-attachment request is not available.";
+const DOWNLOAD_PLAIN_MEDIA_NO_SESSION_CODE: &str = "p2-download-plain-media-no-session";
+const THUMBNAIL_PLAIN_MEDIA_NO_SESSION_CODE: &str = "p2-thumbnail-plain-media-no-session";
+const PLAIN_MEDIA_NO_SESSION_DESCRIPTION: &str = "No plain-media session is available.";
+const PLAIN_MEDIA_FAILED_CODE: &str = "p4-s9-plain-media-failed";
+const PLAIN_MEDIA_FAILED_DESCRIPTION: &str = "The plain-media request could not be completed.";
+const PLAIN_MEDIA_OWNER_DESCRIPTION: &str = "The plain-media request is not available.";
+const REGISTER_HTTP_PUSHER_NO_SESSION_CODE: &str = "p2-register-http-pusher-no-session";
+const DELETE_HTTP_PUSHER_NO_SESSION_CODE: &str = "p2-delete-http-pusher-no-session";
+const HTTP_PUSHER_NO_SESSION_DESCRIPTION: &str = "No HTTP pusher session is available.";
+const HTTP_PUSHER_FAILED_CODE: &str = "p4-s9-http-pusher-failed";
+const HTTP_PUSHER_FAILED_DESCRIPTION: &str = "The HTTP pusher request could not be completed.";
+const HTTP_PUSHER_OWNER_DESCRIPTION: &str = "The HTTP pusher request is not available.";
+const RESTORE_BACKUP_NO_SESSION_CODE: &str = "p2-restore-backup-no-session";
+const RESTORE_BACKUP_NO_SESSION_DESCRIPTION: &str = "No backup restore session is available.";
+const RESTORE_BACKUP_FAILED_CODE: &str = "p4-s9-backup-restore-failed";
+const RESTORE_BACKUP_FAILED_DESCRIPTION: &str =
+    "The backup restore request could not be completed.";
+const RESTORE_BACKUP_OWNER_DESCRIPTION: &str = "The backup restore request is not available.";
 const ROOM_PROFILE_COMMAND_GENERATION: u64 = 0;
 const SET_ROOM_NAME_COMMAND: &str = "matrix_set_room_name";
 const SET_ROOM_TOPIC_COMMAND: &str = "matrix_set_room_topic";
@@ -1479,6 +1610,73 @@ impl std::fmt::Display for SendStickerError {
 
 impl std::error::Error for SendStickerError {}
 
+/// Privacy-safe generic content upload result. mxc URI only; never bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaUploadDto {
+    pub mxc: String,
+}
+
+/// Static fail-closed content-upload error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MediaUploadError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for MediaUploadError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for MediaUploadError {}
+
+/// Privacy-safe room attachment send ack. Event id and status only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SendRoomAttachmentDto {
+    pub event_id: String,
+    pub status: String,
+}
+
+/// Static fail-closed room-attachment error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SendRoomAttachmentError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SendRoomAttachmentError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SendRoomAttachmentError {}
+
+/// Original-file or thumbnail bytes for a plain `mxc://`. Callers must not log the payload.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MediaBytesDto {
+    pub payload: Vec<u8>,
+}
+
+/// Static fail-closed plain-media download error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PlainMediaError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for PlainMediaError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for PlainMediaError {}
+
 /// Privacy-safe send-poll write ack from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SendPollDto {
@@ -2428,6 +2626,12 @@ pub struct PresenceSubscriptionDto {
     pub session_generation: u64,
 }
 
+/// Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PresenceWriteDto {
+    pub status: String,
+}
+
 /// Static fail-closed presence error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresenceCommandError {
@@ -2499,6 +2703,24 @@ fn map_presence_unsubscribe_core_error(error: MatrixIpcError) -> PresenceCommand
             PRESENCE_UNSUBSCRIBE_FAILED_CODE,
             PRESENCE_UNSUBSCRIBE_FAILED_DESCRIPTION,
         ),
+    }
+}
+
+fn map_presence_set_core_error(error: MatrixIpcError) -> PresenceCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some("p2-presence-set-no-session") => presence_failed(
+            PRESENCE_SET_NO_SESSION_CODE,
+            PRESENCE_NO_SESSION_DESCRIPTION,
+        ),
+        Some("v-presence-state-unsupported") => presence_failed(
+            PRESENCE_INVALID_STATE_CODE,
+            PRESENCE_INVALID_STATE_DESCRIPTION,
+        ),
+        Some("p4.7-status-msg-cap") => presence_failed(
+            PRESENCE_STATUS_MSG_CAP_CODE,
+            PRESENCE_STATUS_MSG_CAP_DESCRIPTION,
+        ),
+        _ => presence_failed(PRESENCE_SET_FAILED_CODE, PRESENCE_SET_FAILED_DESCRIPTION),
     }
 }
 
@@ -3665,6 +3887,30 @@ impl SharedCore {
         Ok(())
     }
 
+    pub async fn presence_set(
+        &self,
+        state: String,
+        status_msg: Option<String>,
+    ) -> Result<PresenceWriteDto, PresenceCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: PRESENCE_SET_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "state": state, "statusMsg": status_msg }),
+            })
+            .await
+            .map_err(map_presence_set_core_error)?;
+        let result: NativePresenceWriteResult =
+            serde_json::from_value(response.payload).map_err(|_| {
+                presence_failed(PRESENCE_SET_FAILED_CODE, PRESENCE_SET_FAILED_DESCRIPTION)
+            })?;
+        Ok(PresenceWriteDto {
+            status: result.status,
+        })
+    }
+
     pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {
         let response = self
             .core
@@ -3921,6 +4167,39 @@ impl SharedCore {
             room_id: snapshot.room_id,
             session_generation: snapshot.session_generation,
             join_rule: snapshot.join_rule,
+        })
+    }
+
+    pub async fn room_set_join_rule(
+        &self,
+        room_id: String,
+        join_rule: String,
+        allow_room_ids: Option<Vec<String>>,
+    ) -> Result<RoomJoinRuleWriteDto, JoinRuleCommandError> {
+        let payload = join_rule_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "joinRule": join_rule,
+            "allowRoomIds": allow_room_ids,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: JOIN_RULE_SET_COMMAND.to_owned(),
+                session_generation: 0,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_join_rule_core_error_with_no_session(JOIN_RULE_SET_NO_SESSION_CODE, error)
+            })?;
+        let status = response
+            .payload
+            .get("status")
+            .and_then(|value| value.as_str())
+            .ok_or_else(|| join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION))?;
+        Ok(RoomJoinRuleWriteDto {
+            status: status.to_owned(),
         })
     }
 
@@ -4262,6 +4541,7 @@ impl SharedCore {
             payload,
         )
         .await
+        .and_then(own_profile_write_dto)
     }
 
     pub async fn set_own_avatar(
@@ -4275,6 +4555,484 @@ impl SharedCore {
             payload,
         )
         .await
+        .and_then(own_profile_write_dto)
+    }
+
+    pub async fn get_own_profile(&self) -> Result<OwnProfileDto, OwnProfileCommandError> {
+        self.own_profile_command(
+            GET_OWN_PROFILE_COMMAND,
+            GET_OWN_PROFILE_NO_SESSION_CODE,
+            serde_json::Value::Null,
+        )
+        .await
+        .and_then(own_profile_dto)
+    }
+
+    pub async fn upload_avatar(
+        &self,
+        payload: Vec<u8>,
+        mime_type: String,
+    ) -> Result<OwnProfileUploadDto, OwnProfileCommandError> {
+        if mime_type.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+            return Err(own_profile_failed(
+                OWN_PROFILE_FAILED_CODE,
+                OWN_PROFILE_FAILED_DESCRIPTION,
+            ));
+        }
+        let result = self
+            .core
+            .upload_avatar(payload, &mime_type)
+            .await
+            .map_err(|error| map_own_profile_core_error(UPLOAD_AVATAR_NO_SESSION_CODE, error))?;
+        Ok(OwnProfileUploadDto { mxc: result.mxc })
+    }
+
+    pub async fn upload_content(
+        &self,
+        payload: Vec<u8>,
+        mime_type: String,
+        filename: Option<String>,
+    ) -> Result<MediaUploadDto, MediaUploadError> {
+        upload_content_reject_oversize(mime_type.len())?;
+        if let Some(filename) = filename.as_ref() {
+            upload_content_reject_oversize(filename.len())?;
+        }
+        let result = self
+            .core
+            .upload_content(payload, &mime_type, filename.as_deref())
+            .await
+            .map_err(|error| {
+                map_upload_content_core_error(UPLOAD_CONTENT_NO_SESSION_CODE, error)
+            })?;
+        Ok(MediaUploadDto { mxc: result.mxc })
+    }
+
+    pub async fn send_room_attachment(
+        &self,
+        room_id: String,
+        filename: String,
+        mime_type: String,
+        payload: Vec<u8>,
+        reply_to: Option<String>,
+        thread_root: Option<String>,
+    ) -> Result<SendRoomAttachmentDto, SendRoomAttachmentError> {
+        send_room_attachment_reject_oversize(room_id.len())?;
+        send_room_attachment_reject_oversize(filename.len())?;
+        send_room_attachment_reject_oversize(mime_type.len())?;
+        if let Some(reply_to) = reply_to.as_ref() {
+            send_room_attachment_reject_oversize(reply_to.len())?;
+        }
+        if let Some(thread_root) = thread_root.as_ref() {
+            send_room_attachment_reject_oversize(thread_root.len())?;
+        }
+        let result = self
+            .core
+            .send_room_attachment(
+                &room_id,
+                &filename,
+                &mime_type,
+                payload,
+                reply_to,
+                thread_root,
+            )
+            .await
+            .map_err(|error| {
+                map_send_room_attachment_core_error(SEND_ROOM_ATTACHMENT_NO_SESSION_CODE, error)
+            })?;
+        Ok(SendRoomAttachmentDto {
+            event_id: result.event_id,
+            status: result.status.to_owned(),
+        })
+    }
+
+    pub async fn download_plain_media(
+        &self,
+        content_uri: String,
+    ) -> Result<MediaBytesDto, PlainMediaError> {
+        plain_media_reject_oversize(content_uri.len())?;
+        let payload = self
+            .core
+            .download_plain_media(&content_uri)
+            .await
+            .map_err(|error| {
+                map_plain_media_core_error(DOWNLOAD_PLAIN_MEDIA_NO_SESSION_CODE, error)
+            })?;
+        Ok(MediaBytesDto { payload })
+    }
+
+    pub async fn thumbnail_plain_media(
+        &self,
+        content_uri: String,
+        width: u64,
+        height: u64,
+    ) -> Result<MediaBytesDto, PlainMediaError> {
+        plain_media_reject_oversize(content_uri.len())?;
+        let payload = self
+            .core
+            .thumbnail_plain_media(&content_uri, width, height)
+            .await
+            .map_err(|error| {
+                map_plain_media_core_error(THUMBNAIL_PLAIN_MEDIA_NO_SESSION_CODE, error)
+            })?;
+        Ok(MediaBytesDto { payload })
+    }
+
+    pub async fn register_http_pusher(
+        &self,
+        push_key: String,
+        app_id: String,
+        gateway_url: String,
+        app_display_name: String,
+        device_display_name: String,
+        lang: String,
+    ) -> Result<PusherWriteDto, PusherCommandError> {
+        http_pusher_reject_oversize(push_key.len())?;
+        http_pusher_reject_oversize(app_id.len())?;
+        http_pusher_reject_oversize(gateway_url.len())?;
+        http_pusher_reject_oversize(app_display_name.len())?;
+        http_pusher_reject_oversize(device_display_name.len())?;
+        http_pusher_reject_oversize(lang.len())?;
+        let result = self
+            .core
+            .register_http_pusher(
+                &push_key,
+                &app_id,
+                &gateway_url,
+                &app_display_name,
+                &device_display_name,
+                &lang,
+            )
+            .await
+            .map_err(|error| {
+                map_http_pusher_core_error(REGISTER_HTTP_PUSHER_NO_SESSION_CODE, error)
+            })?;
+        Ok(PusherWriteDto {
+            status: result.status.to_owned(),
+        })
+    }
+
+    pub async fn delete_http_pusher(
+        &self,
+        push_key: String,
+        app_id: String,
+    ) -> Result<PusherWriteDto, PusherCommandError> {
+        http_pusher_reject_oversize(push_key.len())?;
+        http_pusher_reject_oversize(app_id.len())?;
+        let result = self
+            .core
+            .delete_http_pusher(&push_key, &app_id)
+            .await
+            .map_err(|error| {
+                map_http_pusher_core_error(DELETE_HTTP_PUSHER_NO_SESSION_CODE, error)
+            })?;
+        Ok(PusherWriteDto {
+            status: result.status.to_owned(),
+        })
+    }
+
+    /// Restore encryption backup. Recovery secret is a dedicated FFI argument,
+    /// never a Core JSON field. Leftover `recover` remains fail-closed.
+    pub async fn restore_backup(
+        &self,
+        recovery_secret: String,
+    ) -> Result<RestoreBackupDto, RestoreBackupError> {
+        let recovery_secret = Zeroizing::new(recovery_secret);
+        restore_backup_reject_oversize(recovery_secret.len())?;
+        let result = self
+            .core
+            .restore_backup(recovery_secret.as_str())
+            .await
+            .map_err(|error| {
+                map_restore_backup_core_error(RESTORE_BACKUP_NO_SESSION_CODE, error)
+            })?;
+        Ok(RestoreBackupDto {
+            status: result.status.to_owned(),
+        })
+    }
+
+    pub async fn ignored_users_snapshot(
+        &self,
+    ) -> Result<IgnoredUsersSnapshotDto, IgnoredUsersCommandError> {
+        self.ignored_users_command(
+            IGNORED_USERS_SNAPSHOT_COMMAND,
+            IGNORED_USERS_SNAPSHOT_NO_SESSION_CODE,
+            serde_json::Value::Null,
+        )
+        .await
+        .and_then(ignored_users_snapshot_dto)
+    }
+
+    pub async fn ignored_users_ignore(
+        &self,
+        user_id: String,
+    ) -> Result<IgnoredUsersWriteDto, IgnoredUsersCommandError> {
+        let payload = ignored_users_envelope_payload(serde_json::json!({ "userId": user_id }))?;
+        self.ignored_users_command(
+            IGNORED_USERS_IGNORE_COMMAND,
+            IGNORED_USERS_IGNORE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(ignored_users_write_dto)
+    }
+
+    pub async fn ignored_users_unignore(
+        &self,
+        user_id: String,
+    ) -> Result<IgnoredUsersWriteDto, IgnoredUsersCommandError> {
+        let payload = ignored_users_envelope_payload(serde_json::json!({ "userId": user_id }))?;
+        self.ignored_users_command(
+            IGNORED_USERS_UNIGNORE_COMMAND,
+            IGNORED_USERS_UNIGNORE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(ignored_users_write_dto)
+    }
+
+    pub async fn user_directory_search(
+        &self,
+        term: String,
+        limit: Option<u64>,
+    ) -> Result<UserDirectorySearchDto, UserDirectorySearchError> {
+        let payload = user_directory_search_envelope_payload(serde_json::json!({
+            "term": term,
+            "limit": limit,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_DIRECTORY_SEARCH_COMMAND.to_owned(),
+                session_generation: USER_DIRECTORY_SEARCH_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_user_directory_search_core_error(USER_DIRECTORY_SEARCH_NO_SESSION_CODE, error)
+            })?;
+        user_directory_search_dto(response.payload)
+    }
+
+    pub async fn message_search(
+        &self,
+        term: String,
+        next_token: Option<String>,
+        rooms: Option<Vec<String>>,
+        senders: Option<Vec<String>>,
+        order: Option<String>,
+    ) -> Result<MessageSearchDto, MessageSearchError> {
+        let payload = message_search_envelope_payload(serde_json::json!({
+            "term": term,
+            "nextToken": next_token,
+            "rooms": rooms,
+            "senders": senders,
+            "order": order,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: MESSAGE_SEARCH_COMMAND.to_owned(),
+                session_generation: MESSAGE_SEARCH_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_message_search_core_error(MESSAGE_SEARCH_NO_SESSION_CODE, error)
+            })?;
+        message_search_dto(response.payload)
+    }
+
+    pub async fn push_rules_snapshot(&self) -> Result<PushRulesSnapshotDto, PushRulesCommandError> {
+        self.push_rules_command(
+            PUSH_RULES_SNAPSHOT_COMMAND,
+            PUSH_RULES_SNAPSHOT_NO_SESSION_CODE,
+            serde_json::Value::Null,
+        )
+        .await
+        .and_then(push_rules_snapshot_dto)
+    }
+
+    pub async fn push_rules_set_default(
+        &self,
+        encrypted: bool,
+        one_to_one: bool,
+        mode: String,
+    ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
+        let payload = push_rules_envelope_payload(serde_json::json!({
+            "encrypted": encrypted,
+            "oneToOne": one_to_one,
+            "mode": mode,
+        }))?;
+        self.push_rules_command(
+            PUSH_RULES_SET_DEFAULT_COMMAND,
+            PUSH_RULES_SET_DEFAULT_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(push_rules_write_dto)
+    }
+
+    pub async fn push_rules_set_mention(
+        &self,
+        rule_id: String,
+        enabled: bool,
+    ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
+        let payload = push_rules_envelope_payload(serde_json::json!({
+            "ruleId": rule_id,
+            "enabled": enabled,
+        }))?;
+        self.push_rules_command(
+            PUSH_RULES_SET_MENTION_COMMAND,
+            PUSH_RULES_SET_MENTION_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(push_rules_write_dto)
+    }
+
+    pub async fn push_rules_add_keyword(
+        &self,
+        keyword: String,
+    ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
+        let payload = push_rules_envelope_payload(serde_json::json!({ "keyword": keyword }))?;
+        self.push_rules_command(
+            PUSH_RULES_ADD_KEYWORD_COMMAND,
+            PUSH_RULES_ADD_KEYWORD_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(push_rules_write_dto)
+    }
+
+    pub async fn push_rules_remove_keyword(
+        &self,
+        keyword: String,
+    ) -> Result<PushRulesWriteDto, PushRulesCommandError> {
+        let payload = push_rules_envelope_payload(serde_json::json!({ "keyword": keyword }))?;
+        self.push_rules_command(
+            PUSH_RULES_REMOVE_KEYWORD_COMMAND,
+            PUSH_RULES_REMOVE_KEYWORD_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(push_rules_write_dto)
+    }
+
+    pub async fn room_notification_snapshot(
+        &self,
+        room_id: String,
+    ) -> Result<RoomNotificationSnapshotDto, RoomNotificationCommandError> {
+        let payload = room_notification_envelope_payload(serde_json::json!({ "roomId": room_id }))?;
+        self.room_notification_command(
+            ROOM_NOTIFICATION_SNAPSHOT_COMMAND,
+            ROOM_NOTIFICATION_SNAPSHOT_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(room_notification_snapshot_dto)
+    }
+
+    pub async fn room_notification_set(
+        &self,
+        room_id: String,
+        mode: String,
+    ) -> Result<RoomNotificationWriteDto, RoomNotificationCommandError> {
+        let payload = room_notification_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "mode": mode,
+        }))?;
+        self.room_notification_command(
+            ROOM_NOTIFICATION_SET_COMMAND,
+            ROOM_NOTIFICATION_SET_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(room_notification_write_dto)
+    }
+
+    pub async fn room_notifications_snapshot(
+        &self,
+    ) -> Result<RoomNotificationsSnapshotDto, RoomNotificationCommandError> {
+        self.room_notification_command(
+            ROOM_NOTIFICATIONS_SNAPSHOT_COMMAND,
+            ROOM_NOTIFICATIONS_SNAPSHOT_NO_SESSION_CODE,
+            serde_json::Value::Null,
+        )
+        .await
+        .and_then(room_notifications_snapshot_dto)
+    }
+
+    pub async fn threepid_snapshot(&self) -> Result<ThreepidSnapshotDto, ThreepidCommandError> {
+        self.threepid_command(
+            THREEPID_SNAPSHOT_COMMAND,
+            THREEPID_SNAPSHOT_NO_SESSION_CODE,
+            serde_json::Value::Null,
+        )
+        .await
+        .and_then(threepid_snapshot_dto)
+    }
+
+    pub async fn threepid_delete(
+        &self,
+        address: String,
+    ) -> Result<ThreepidWriteDto, ThreepidCommandError> {
+        let payload = threepid_envelope_payload(serde_json::json!({ "address": address }))?;
+        self.threepid_command(
+            THREEPID_DELETE_COMMAND,
+            THREEPID_DELETE_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(threepid_write_dto)
+    }
+
+    pub async fn threepid_request_email_token(
+        &self,
+        email: String,
+    ) -> Result<ThreepidEmailTokenDto, ThreepidCommandError> {
+        let payload = threepid_envelope_payload(serde_json::json!({ "email": email }))?;
+        self.threepid_command(
+            THREEPID_REQUEST_EMAIL_TOKEN_COMMAND,
+            THREEPID_REQUEST_EMAIL_TOKEN_NO_SESSION_CODE,
+            payload,
+        )
+        .await
+        .and_then(threepid_email_token_dto)
+    }
+
+    pub async fn threepid_add_email(&self) -> Result<ThreepidAddDto, ThreepidCommandError> {
+        self.threepid_command(
+            THREEPID_ADD_EMAIL_COMMAND,
+            THREEPID_ADD_EMAIL_NO_SESSION_CODE,
+            serde_json::Value::Null,
+        )
+        .await
+        .and_then(threepid_add_dto)
+    }
+
+    pub async fn threepid_add_email_password(
+        &self,
+        password: String,
+    ) -> Result<ThreepidAddDto, ThreepidCommandError> {
+        if password.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+            return Err(threepid_failed(
+                THREEPID_FAILED_CODE,
+                THREEPID_FAILED_DESCRIPTION,
+            ));
+        }
+        let result = self
+            .core
+            .threepid_add_email_password(&password)
+            .await
+            .map_err(|error| {
+                map_threepid_core_error(THREEPID_ADD_EMAIL_PASSWORD_NO_SESSION_CODE, error)
+            })?;
+        drop(password);
+        Ok(ThreepidAddDto {
+            status: result.status,
+        })
     }
 
     pub async fn set_room_name(
@@ -6271,7 +7029,7 @@ impl SharedCore {
         command: &'static str,
         no_session: &'static str,
         payload: serde_json::Value,
-    ) -> Result<OwnProfileWriteDto, OwnProfileCommandError> {
+    ) -> Result<serde_json::Value, OwnProfileCommandError> {
         let response = self
             .core
             .command(CommandEnvelope {
@@ -6282,7 +7040,83 @@ impl SharedCore {
             })
             .await
             .map_err(|error| map_own_profile_core_error(no_session, error))?;
-        own_profile_write_dto(response.payload)
+        Ok(response.payload)
+    }
+
+    async fn ignored_users_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, IgnoredUsersCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: IGNORED_USERS_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_ignored_users_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    async fn push_rules_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, PushRulesCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: PUSH_RULES_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_push_rules_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    async fn room_notification_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, RoomNotificationCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: ROOM_NOTIFICATION_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_room_notification_core_error(no_session, error))?;
+        Ok(response.payload)
+    }
+
+    async fn threepid_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<serde_json::Value, ThreepidCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: THREEPID_COMMAND_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| map_threepid_core_error(no_session, error))?;
+        Ok(response.payload)
     }
 
     async fn room_profile_command(
@@ -6507,6 +7341,12 @@ pub struct RoomJoinRuleSnapshotDto {
     pub join_rule: String,
 }
 
+/// Privacy-safe join-rule write ack. Status only; no room id, join rule, or allow-list.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomJoinRuleWriteDto {
+    pub status: String,
+}
+
 /// Static fail-closed join-rule error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum JoinRuleCommandError {
@@ -6531,8 +7371,21 @@ fn join_rule_failed(code: &str, description: &'static str) -> JoinRuleCommandErr
 }
 
 fn map_join_rule_core_error(error: MatrixIpcError) -> JoinRuleCommandError {
+    map_join_rule_core_error_with_no_session(JOIN_RULE_SNAPSHOT_NO_SESSION_CODE, error)
+}
+
+fn map_join_rule_core_error_with_no_session(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> JoinRuleCommandError {
     match error.diagnostic_id.as_deref() {
-        Some(code) if code == JOIN_RULE_SNAPSHOT_NO_SESSION_CODE => {
+        Some(code) if code == no_session => {
+            join_rule_failed(code, JOIN_RULE_NO_SESSION_DESCRIPTION)
+        }
+        Some(code)
+            if code == JOIN_RULE_SNAPSHOT_NO_SESSION_CODE
+                || code == JOIN_RULE_SET_NO_SESSION_CODE =>
+        {
             join_rule_failed(code, JOIN_RULE_NO_SESSION_DESCRIPTION)
         }
         Some(code) if code.starts_with("v-send.r-room-profile-join-rule-") => {
@@ -6540,6 +7393,21 @@ fn map_join_rule_core_error(error: MatrixIpcError) -> JoinRuleCommandError {
         }
         _ => join_rule_failed(JOIN_RULE_FAILED_CODE, JOIN_RULE_FAILED_DESCRIPTION),
     }
+}
+
+fn join_rule_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, JoinRuleCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(join_rule_failed(
+            JOIN_RULE_FAILED_CODE,
+            JOIN_RULE_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
 }
 
 /// Privacy-safe image-pack row. Metadata/IDs/mxc URLs/JSON only; never image bytes.
@@ -7058,6 +7926,14 @@ pub struct OwnProfileWriteDto {
     pub status: String,
 }
 
+/// Privacy-safe own-profile read. Avatar is an `mxc://` URI only; never bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnProfileDto {
+    pub user_id: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
 /// Static fail-closed own-profile-family error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum OwnProfileCommandError {
@@ -7096,6 +7972,105 @@ fn map_own_profile_core_error(
     }
 }
 
+fn upload_content_failed(code: &str, description: &'static str) -> MediaUploadError {
+    MediaUploadError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_upload_content_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> MediaUploadError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            upload_content_failed(code, UPLOAD_CONTENT_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.") => {
+            upload_content_failed(code, UPLOAD_CONTENT_OWNER_DESCRIPTION)
+        }
+        _ => upload_content_failed(
+            UPLOAD_CONTENT_FAILED_CODE,
+            UPLOAD_CONTENT_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn upload_content_reject_oversize(size: usize) -> Result<(), MediaUploadError> {
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(upload_content_failed(
+            UPLOAD_CONTENT_FAILED_CODE,
+            UPLOAD_CONTENT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(())
+}
+
+fn send_room_attachment_failed(code: &str, description: &'static str) -> SendRoomAttachmentError {
+    SendRoomAttachmentError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_send_room_attachment_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> SendRoomAttachmentError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            send_room_attachment_failed(code, SEND_ROOM_ATTACHMENT_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.") => {
+            send_room_attachment_failed(code, SEND_ROOM_ATTACHMENT_OWNER_DESCRIPTION)
+        }
+        _ => send_room_attachment_failed(
+            SEND_ROOM_ATTACHMENT_FAILED_CODE,
+            SEND_ROOM_ATTACHMENT_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn send_room_attachment_reject_oversize(size: usize) -> Result<(), SendRoomAttachmentError> {
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(send_room_attachment_failed(
+            SEND_ROOM_ATTACHMENT_FAILED_CODE,
+            SEND_ROOM_ATTACHMENT_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(())
+}
+
+fn plain_media_failed(code: &str, description: &'static str) -> PlainMediaError {
+    PlainMediaError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_plain_media_core_error(no_session: &'static str, error: MatrixIpcError) -> PlainMediaError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            plain_media_failed(code, PLAIN_MEDIA_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-send.") => {
+            plain_media_failed(code, PLAIN_MEDIA_OWNER_DESCRIPTION)
+        }
+        _ => plain_media_failed(PLAIN_MEDIA_FAILED_CODE, PLAIN_MEDIA_FAILED_DESCRIPTION),
+    }
+}
+
+fn plain_media_reject_oversize(size: usize) -> Result<(), PlainMediaError> {
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(plain_media_failed(
+            PLAIN_MEDIA_FAILED_CODE,
+            PLAIN_MEDIA_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(())
+}
+
 fn own_profile_envelope_payload(
     payload: serde_json::Value,
 ) -> Result<serde_json::Value, OwnProfileCommandError> {
@@ -7122,6 +8097,832 @@ fn own_profile_write_dto(
         })?;
     Ok(OwnProfileWriteDto {
         status: status.to_owned(),
+    })
+}
+
+fn own_profile_dto(payload: serde_json::Value) -> Result<OwnProfileDto, OwnProfileCommandError> {
+    let profile: crate::app::user_profile::MatrixOwnProfile = serde_json::from_value(payload)
+        .map_err(|_| own_profile_failed(OWN_PROFILE_FAILED_CODE, OWN_PROFILE_FAILED_DESCRIPTION))?;
+    let avatar_url = profile.avatar_url.filter(|mxc| mxc.starts_with("mxc://"));
+    Ok(OwnProfileDto {
+        user_id: profile.user_id,
+        display_name: profile.display_name,
+        avatar_url,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct OwnProfileUploadDto {
+    pub mxc: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IgnoredUsersSnapshotDto {
+    pub user_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IgnoredUsersWriteDto {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum IgnoredUsersCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for IgnoredUsersCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for IgnoredUsersCommandError {}
+
+fn ignored_users_failed(code: &str, description: &'static str) -> IgnoredUsersCommandError {
+    IgnoredUsersCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_ignored_users_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> IgnoredUsersCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            ignored_users_failed(code, IGNORED_USERS_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-profile.ignore-") => {
+            ignored_users_failed(code, IGNORED_USERS_OWNER_DESCRIPTION)
+        }
+        _ => ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION),
+    }
+}
+
+fn ignored_users_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, IgnoredUsersCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(ignored_users_failed(
+            IGNORED_USERS_FAILED_CODE,
+            IGNORED_USERS_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn ignored_users_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<IgnoredUsersSnapshotDto, IgnoredUsersCommandError> {
+    let snapshot: crate::app::user_profile::MatrixIgnoredUsersSnapshot =
+        serde_json::from_value(payload).map_err(|_| {
+            ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION)
+        })?;
+    Ok(IgnoredUsersSnapshotDto {
+        user_ids: snapshot.user_ids,
+    })
+}
+
+fn ignored_users_write_dto(
+    payload: serde_json::Value,
+) -> Result<IgnoredUsersWriteDto, IgnoredUsersCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            ignored_users_failed(IGNORED_USERS_FAILED_CODE, IGNORED_USERS_FAILED_DESCRIPTION)
+        })?;
+    Ok(IgnoredUsersWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserDirectoryHitDto {
+    pub user_id: String,
+    pub display_name: Option<String>,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserDirectorySearchDto {
+    pub limited: bool,
+    pub results: Vec<UserDirectoryHitDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UserDirectorySearchError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for UserDirectorySearchError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for UserDirectorySearchError {}
+
+fn user_directory_search_failed(code: &str, description: &'static str) -> UserDirectorySearchError {
+    UserDirectorySearchError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_user_directory_search_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> UserDirectorySearchError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            user_directory_search_failed(code, USER_DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-search.") || code.starts_with("v-directory.") => {
+            user_directory_search_failed(code, USER_DIRECTORY_SEARCH_OWNER_DESCRIPTION)
+        }
+        _ => user_directory_search_failed(
+            USER_DIRECTORY_SEARCH_FAILED_CODE,
+            USER_DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn user_directory_search_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, UserDirectorySearchError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(user_directory_search_failed(
+            USER_DIRECTORY_SEARCH_FAILED_CODE,
+            USER_DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn user_directory_search_dto(
+    payload: serde_json::Value,
+) -> Result<UserDirectorySearchDto, UserDirectorySearchError> {
+    let result: crate::app::user_profile::MatrixUserDirectorySearchResult =
+        serde_json::from_value(payload).map_err(|_| {
+            user_directory_search_failed(
+                USER_DIRECTORY_SEARCH_FAILED_CODE,
+                USER_DIRECTORY_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let mut results = Vec::with_capacity(result.results.len());
+    for hit in result.results {
+        if matrix_sdk::ruma::UserId::parse(hit.user_id.as_str()).is_err() {
+            continue;
+        }
+        let avatar_url = hit.avatar_url.filter(|mxc| mxc.starts_with("mxc://"));
+        results.push(UserDirectoryHitDto {
+            user_id: hit.user_id,
+            display_name: hit.display_name,
+            avatar_url,
+        });
+    }
+    Ok(UserDirectorySearchDto {
+        limited: result.limited,
+        results,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageSearchItemDto {
+    pub rank: f64,
+    pub event_id: String,
+    pub sender: String,
+    pub origin_server_ts: u64,
+    pub body: String,
+    pub room_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageSearchGroupDto {
+    pub room_id: String,
+    pub items: Vec<MessageSearchItemDto>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct MessageSearchDto {
+    pub next_token: Option<String>,
+    pub highlights: Vec<String>,
+    pub groups: Vec<MessageSearchGroupDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum MessageSearchError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for MessageSearchError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for MessageSearchError {}
+
+fn message_search_failed(code: &str, description: &'static str) -> MessageSearchError {
+    MessageSearchError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_message_search_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> MessageSearchError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            message_search_failed(code, MESSAGE_SEARCH_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-search.") => {
+            message_search_failed(code, MESSAGE_SEARCH_OWNER_DESCRIPTION)
+        }
+        _ => message_search_failed(
+            MESSAGE_SEARCH_FAILED_CODE,
+            MESSAGE_SEARCH_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn message_search_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, MessageSearchError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(message_search_failed(
+            MESSAGE_SEARCH_FAILED_CODE,
+            MESSAGE_SEARCH_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn message_search_dto(payload: serde_json::Value) -> Result<MessageSearchDto, MessageSearchError> {
+    let result: crate::app::search::MatrixMessageSearchResult = serde_json::from_value(payload)
+        .map_err(|_| {
+            message_search_failed(
+                MESSAGE_SEARCH_FAILED_CODE,
+                MESSAGE_SEARCH_FAILED_DESCRIPTION,
+            )
+        })?;
+    let mut highlights = Vec::new();
+    for highlight in result.highlights {
+        let trimmed = highlight.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        if highlights.len() >= crate::app::search::MAX_MESSAGE_SEARCH_HIGHLIGHTS {
+            break;
+        }
+        highlights.push(
+            trimmed
+                .chars()
+                .take(crate::app::search::MAX_MESSAGE_SEARCH_HIGHLIGHT_CHARS)
+                .collect(),
+        );
+    }
+    let next_token = result.next_token.filter(|token| {
+        !token.is_empty()
+            && token.chars().count() <= crate::app::search::MAX_MESSAGE_SEARCH_NEXT_TOKEN_CHARS
+            && !token.contains("syt_")
+            && !token.contains("access_token")
+    });
+    let mut groups = Vec::new();
+    let mut items_seen = 0usize;
+    for group in result.groups {
+        if groups.len() >= crate::app::search::MAX_MESSAGE_SEARCH_GROUPS {
+            break;
+        }
+        if !group.room_id.starts_with('!') {
+            continue;
+        }
+        let mut items = Vec::new();
+        for item in group.items {
+            if items_seen >= crate::app::search::MAX_MESSAGE_SEARCH_ITEMS {
+                break;
+            }
+            if !item.event_id.starts_with('$') || !item.sender.starts_with('@') {
+                continue;
+            }
+            let body = item
+                .body
+                .chars()
+                .take(crate::app::search::MAX_MESSAGE_SEARCH_BODY_CHARS)
+                .collect();
+            items.push(MessageSearchItemDto {
+                rank: item.rank,
+                event_id: item.event_id,
+                sender: item.sender,
+                origin_server_ts: item.origin_server_ts,
+                body,
+                room_id: group.room_id.clone(),
+            });
+            items_seen += 1;
+        }
+        if items.is_empty() {
+            continue;
+        }
+        groups.push(MessageSearchGroupDto {
+            room_id: group.room_id,
+            items,
+        });
+    }
+    Ok(MessageSearchDto {
+        next_token,
+        highlights,
+        groups,
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushRuleMentionsDto {
+    pub user_mention: bool,
+    pub display_name: bool,
+    pub user_name: bool,
+    pub room_mention: bool,
+    pub at_room: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushRulesSnapshotDto {
+    pub dm: String,
+    pub dm_encrypted: String,
+    pub group: String,
+    pub group_encrypted: String,
+    pub mentions: PushRuleMentionsDto,
+    pub keywords: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PushRulesWriteDto {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PushRulesCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for PushRulesCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for PushRulesCommandError {}
+
+fn push_rules_failed(code: &str, description: &'static str) -> PushRulesCommandError {
+    PushRulesCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_push_rules_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> PushRulesCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            push_rules_failed(code, PUSH_RULES_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-push.") => {
+            push_rules_failed(code, PUSH_RULES_OWNER_DESCRIPTION)
+        }
+        _ => push_rules_failed(PUSH_RULES_FAILED_CODE, PUSH_RULES_FAILED_DESCRIPTION),
+    }
+}
+
+fn push_rules_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, PushRulesCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(push_rules_failed(
+            PUSH_RULES_FAILED_CODE,
+            PUSH_RULES_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn push_rules_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<PushRulesSnapshotDto, PushRulesCommandError> {
+    let snapshot: crate::app::notifications::MatrixPushRulesSnapshot =
+        serde_json::from_value(payload).map_err(|_| {
+            push_rules_failed(PUSH_RULES_FAILED_CODE, PUSH_RULES_FAILED_DESCRIPTION)
+        })?;
+    Ok(PushRulesSnapshotDto {
+        dm: snapshot.dm,
+        dm_encrypted: snapshot.dm_encrypted,
+        group: snapshot.group,
+        group_encrypted: snapshot.group_encrypted,
+        mentions: PushRuleMentionsDto {
+            user_mention: snapshot.mentions.user_mention,
+            display_name: snapshot.mentions.display_name,
+            user_name: snapshot.mentions.user_name,
+            room_mention: snapshot.mentions.room_mention,
+            at_room: snapshot.mentions.at_room,
+        },
+        keywords: snapshot.keywords,
+    })
+}
+
+fn push_rules_write_dto(
+    payload: serde_json::Value,
+) -> Result<PushRulesWriteDto, PushRulesCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| push_rules_failed(PUSH_RULES_FAILED_CODE, PUSH_RULES_FAILED_DESCRIPTION))?;
+    Ok(PushRulesWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomNotificationSnapshotDto {
+    pub room_id: String,
+    pub mode: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomNotificationsSnapshotDto {
+    pub rooms: Vec<RoomNotificationSnapshotDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RoomNotificationWriteDto {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RoomNotificationCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RoomNotificationCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RoomNotificationCommandError {}
+
+fn room_notification_failed(code: &str, description: &'static str) -> RoomNotificationCommandError {
+    RoomNotificationCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_room_notification_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RoomNotificationCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            room_notification_failed(code, ROOM_NOTIFICATION_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-push.") => {
+            room_notification_failed(code, ROOM_NOTIFICATION_OWNER_DESCRIPTION)
+        }
+        _ => room_notification_failed(
+            ROOM_NOTIFICATION_FAILED_CODE,
+            ROOM_NOTIFICATION_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn room_notification_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, RoomNotificationCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(room_notification_failed(
+            ROOM_NOTIFICATION_FAILED_CODE,
+            ROOM_NOTIFICATION_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn room_notification_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomNotificationSnapshotDto, RoomNotificationCommandError> {
+    let snapshot: crate::app::notifications::MatrixRoomNotificationSnapshot =
+        serde_json::from_value(payload).map_err(|_| {
+            room_notification_failed(
+                ROOM_NOTIFICATION_FAILED_CODE,
+                ROOM_NOTIFICATION_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomNotificationSnapshotDto {
+        room_id: snapshot.room_id,
+        mode: snapshot.mode,
+    })
+}
+
+fn room_notifications_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<RoomNotificationsSnapshotDto, RoomNotificationCommandError> {
+    let snapshot: crate::app::notifications::MatrixRoomNotificationsSnapshot =
+        serde_json::from_value(payload).map_err(|_| {
+            room_notification_failed(
+                ROOM_NOTIFICATION_FAILED_CODE,
+                ROOM_NOTIFICATION_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomNotificationsSnapshotDto {
+        rooms: snapshot
+            .rooms
+            .into_iter()
+            .map(|room| RoomNotificationSnapshotDto {
+                room_id: room.room_id,
+                mode: room.mode,
+            })
+            .collect(),
+    })
+}
+
+fn room_notification_write_dto(
+    payload: serde_json::Value,
+) -> Result<RoomNotificationWriteDto, RoomNotificationCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| {
+            room_notification_failed(
+                ROOM_NOTIFICATION_FAILED_CODE,
+                ROOM_NOTIFICATION_FAILED_DESCRIPTION,
+            )
+        })?;
+    Ok(RoomNotificationWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+/// Privacy-safe HTTP pusher write ack. Status only; never push key or URL.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PusherWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed HTTP pusher-family error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PusherCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for PusherCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for PusherCommandError {}
+
+fn http_pusher_failed(code: &str, description: &'static str) -> PusherCommandError {
+    PusherCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn http_pusher_reject_oversize(size: usize) -> Result<(), PusherCommandError> {
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(http_pusher_failed(
+            HTTP_PUSHER_FAILED_CODE,
+            HTTP_PUSHER_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(())
+}
+
+fn map_http_pusher_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> PusherCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            http_pusher_failed(code, HTTP_PUSHER_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-pusher.") || code.starts_with("v-push.") => {
+            http_pusher_failed(code, HTTP_PUSHER_OWNER_DESCRIPTION)
+        }
+        _ => http_pusher_failed(HTTP_PUSHER_FAILED_CODE, HTTP_PUSHER_FAILED_DESCRIPTION),
+    }
+}
+
+/// Privacy-safe backup restore ack. Status only; never recovery key or passphrase.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RestoreBackupDto {
+    pub status: String,
+}
+
+/// Static fail-closed backup restore error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RestoreBackupError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RestoreBackupError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RestoreBackupError {}
+
+fn restore_backup_failed(code: &str, description: &'static str) -> RestoreBackupError {
+    RestoreBackupError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn restore_backup_reject_oversize(size: usize) -> Result<(), RestoreBackupError> {
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(restore_backup_failed(
+            RESTORE_BACKUP_FAILED_CODE,
+            RESTORE_BACKUP_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(())
+}
+
+fn map_restore_backup_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RestoreBackupError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            restore_backup_failed(code, RESTORE_BACKUP_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) if code.starts_with("v-crypto.3-") => {
+            restore_backup_failed(code, RESTORE_BACKUP_OWNER_DESCRIPTION)
+        }
+        _ => restore_backup_failed(
+            RESTORE_BACKUP_FAILED_CODE,
+            RESTORE_BACKUP_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreepidEmailDto {
+    pub address: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreepidSnapshotDto {
+    pub emails: Vec<ThreepidEmailDto>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreepidWriteDto {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreepidEmailTokenDto {
+    pub session_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThreepidAddDto {
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum ThreepidCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for ThreepidCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for ThreepidCommandError {}
+
+fn threepid_failed(code: &str, description: &'static str) -> ThreepidCommandError {
+    ThreepidCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_threepid_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> ThreepidCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => threepid_failed(code, THREEPID_NO_SESSION_DESCRIPTION),
+        Some(code) if code.starts_with("v-threepid.") => {
+            threepid_failed(code, THREEPID_OWNER_DESCRIPTION)
+        }
+        _ => threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION),
+    }
+}
+
+fn threepid_envelope_payload(
+    payload: serde_json::Value,
+) -> Result<serde_json::Value, ThreepidCommandError> {
+    let size = serde_json::to_vec(&payload)
+        .map(|bytes| bytes.len())
+        .unwrap_or(usize::MAX);
+    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err(threepid_failed(
+            THREEPID_FAILED_CODE,
+            THREEPID_FAILED_DESCRIPTION,
+        ));
+    }
+    Ok(payload)
+}
+
+fn threepid_snapshot_dto(
+    payload: serde_json::Value,
+) -> Result<ThreepidSnapshotDto, ThreepidCommandError> {
+    let snapshot: crate::app::user_profile::MatrixThreepidSnapshot =
+        serde_json::from_value(payload)
+            .map_err(|_| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    Ok(ThreepidSnapshotDto {
+        emails: snapshot
+            .emails
+            .into_iter()
+            .map(|email| ThreepidEmailDto {
+                address: email.address,
+            })
+            .collect(),
+    })
+}
+
+fn threepid_write_dto(
+    payload: serde_json::Value,
+) -> Result<ThreepidWriteDto, ThreepidCommandError> {
+    let status = payload
+        .get("status")
+        .and_then(|value| value.as_str())
+        .ok_or_else(|| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    Ok(ThreepidWriteDto {
+        status: status.to_owned(),
+    })
+}
+
+fn threepid_email_token_dto(
+    payload: serde_json::Value,
+) -> Result<ThreepidEmailTokenDto, ThreepidCommandError> {
+    let result: crate::app::user_profile::MatrixThreepidEmailTokenResult =
+        serde_json::from_value(payload)
+            .map_err(|_| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    Ok(ThreepidEmailTokenDto {
+        session_id: result.session_id,
+    })
+}
+
+fn threepid_add_dto(payload: serde_json::Value) -> Result<ThreepidAddDto, ThreepidCommandError> {
+    let result: crate::app::user_profile::MatrixThreepidAddResult = serde_json::from_value(payload)
+        .map_err(|_| threepid_failed(THREEPID_FAILED_CODE, THREEPID_FAILED_DESCRIPTION))?;
+    Ok(ThreepidAddDto {
+        status: result.status,
     })
 }
 

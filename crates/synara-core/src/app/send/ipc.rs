@@ -22,6 +22,14 @@ pub struct MatrixSendAttachmentResult {
     pub status: &'static str,
 }
 
+/// Dedicated Core attachment send ack. Event id and status only — no bytes.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixSendRoomAttachmentResult {
+    pub event_id: String,
+    pub status: &'static str,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct MatrixSendStickerResult {

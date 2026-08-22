@@ -291,6 +291,181 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             statusMsg: snapshot.statusMsg
         )
     }
+
+    func setOwnPresence(_ state: String) async -> Bool {
+        do {
+            _ = try await SharedCoreTypingPresence.presenceSet(
+                core: host.core,
+                state: state,
+                statusMsg: nil
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func ownProfile() async -> SharedCoreOwnProfileInfo? {
+        guard let dto = try? await SharedCoreOwnProfile.getOwnProfile(core: host.core) else {
+            return nil
+        }
+        return SharedCoreOwnProfileInfo(
+            userID: dto.userId,
+            displayName: dto.displayName,
+            avatarURL: dto.avatarUrl
+        )
+    }
+
+    func setOwnDisplayName(_ displayName: String) async -> Bool {
+        do {
+            _ = try await SharedCoreOwnProfile.setOwnDisplayName(
+                core: host.core,
+                displayName: displayName
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool {
+        do {
+            let uploaded = try await SharedCoreOwnProfile.uploadAvatar(
+                core: host.core,
+                payload: payload,
+                mimeType: mimeType
+            )
+            _ = try await SharedCoreOwnProfile.setOwnAvatar(core: host.core, mxc: uploaded.mxc)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func setOutgoingTyping(roomID: String, typing: Bool) async {
+        _ = try? await SharedCoreTypingPresence.typingSet(
+            core: host.core,
+            roomId: roomID,
+            typing: typing
+        )
+    }
+
+    func ignoredUserIDs() async -> [String] {
+        (try? await SharedCoreAccountSettings.ignoredUsersSnapshot(core: host.core))?.userIds ?? []
+    }
+
+    func ignoreUser(_ userID: String) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.ignoredUsersIgnore(core: host.core, userId: userID)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func unignoreUser(_ userID: String) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.ignoredUsersUnignore(core: host.core, userId: userID)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func pushRulesSnapshot() async -> SynaraPushRulesSnapshot? {
+        guard let snapshot = try? await SharedCoreAccountSettings.pushRulesSnapshot(core: host.core) else {
+            return nil
+        }
+        return SynaraPushRulesSnapshot(
+            dm: snapshot.dm,
+            dmEncrypted: snapshot.dmEncrypted,
+            group: snapshot.group,
+            groupEncrypted: snapshot.groupEncrypted,
+            mentions: SynaraPushRuleMentions(
+                userMention: snapshot.mentions.userMention,
+                displayName: snapshot.mentions.displayName,
+                userName: snapshot.mentions.userName,
+                roomMention: snapshot.mentions.roomMention,
+                atRoom: snapshot.mentions.atRoom
+            ),
+            keywords: snapshot.keywords
+        )
+    }
+
+    func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.pushRulesSetDefault(
+                core: host.core,
+                encrypted: encrypted,
+                oneToOne: oneToOne,
+                mode: mode
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.pushRulesSetMention(
+                core: host.core,
+                ruleId: ruleID,
+                enabled: enabled
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func addPushKeyword(_ keyword: String) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.pushRulesAddKeyword(core: host.core, keyword: keyword)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func removePushKeyword(_ keyword: String) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.pushRulesRemoveKeyword(core: host.core, keyword: keyword)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func threepidEmails() async -> [String] {
+        (try? await SharedCoreAccountSettings.threepidSnapshot(core: host.core))?.emails.map(\.address) ?? []
+    }
+
+    func deleteThreepidEmail(_ address: String) async -> Bool {
+        do {
+            try await SharedCoreAccountSettings.threepidDelete(core: host.core, address: address)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func requestThreepidEmailToken(_ email: String) async -> Bool {
+        do {
+            _ = try await SharedCoreAccountSettings.threepidRequestEmailToken(core: host.core, email: email)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func addThreepidEmail() async -> String? {
+        try? await SharedCoreAccountSettings.threepidAddEmail(core: host.core).status
+    }
+
+    func addThreepidEmailPassword(_ password: String) async -> String? {
+        try? await SharedCoreAccountSettings.threepidAddEmailPassword(core: host.core, password: password).status
+    }
 }
 
 final class SharedCoreRoomListService: RoomListServicing {
@@ -1061,11 +1236,36 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func recover(recoveryKey: String) async -> CryptoActionResult {
+        let trimmed = recoveryKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else {
+            return .failed("Enter your recovery key or passphrase.")
+        }
         do {
-            _ = try await SharedCoreLeftovers.recover(core: host.core, recoveryKey: recoveryKey)
+            _ = try await SharedCoreBackupRestore.restoreBackup(
+                core: host.core,
+                recoverySecret: trimmed
+            )
             return .completed("Recovery completed.")
         } catch {
-            return .failed("Recovery is unavailable.")
+            return Self.restoreBackupResult(for: error)
+        }
+    }
+
+    private static func restoreBackupResult(for error: Error) -> CryptoActionResult {
+        guard case let RestoreBackupError.Failed(code, _) = error else {
+            return .failed("Could not restore encryption backup.")
+        }
+        switch code {
+        case "v-crypto.3-restore-rejected":
+            return .failed("The recovery key or passphrase was rejected. Check it and try again.")
+        case "v-crypto.3-recovery-secret-empty":
+            return .failed("Enter your recovery key or passphrase.")
+        case "p2-restore-backup-no-session":
+            return .failed("Sign in to restore encryption backup.")
+        case "v-crypto.3-restore-incomplete":
+            return .failed("Native encryption backup could not be activated.")
+        default:
+            return .failed("Could not restore encryption backup.")
         }
     }
 
@@ -1350,6 +1550,10 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
         let invite = (try? await SharedCoreInvites.invitesSnapshot(core: host.core))?
             .invites
             .first(where: { $0.roomId == roomID })
+        let notification = try? await SharedCoreRoomNotification.snapshot(
+            core: host.core,
+            roomId: roomID
+        )
         return SharedCoreRoomDetails.details(
             roomID: roomID,
             ownUserID: ownUserID,
@@ -1372,7 +1576,9 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             joinRule: join?.joinRule,
             topic: invite?.roomTopic,
             isEncrypted: room?.isEncrypted ?? invite?.isEncrypted ?? false,
-            notificationMode: SharedCoreRoomDetails.notificationMode(room?.notificationMode)
+            notificationMode: SharedCoreRoomDetails.notificationMode(
+                notification?.mode ?? room?.notificationMode
+            )
         )
     }
 
@@ -1430,21 +1636,36 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
                 topic: topic
             )
         }
-        if case .remove = request.avatar {
+        switch request.avatar {
+        case let .upload(data, mimeType):
+            let uploaded = try await SharedCoreMediaSend.uploadContent(
+                core: host.core,
+                payload: data,
+                mimeType: mimeType,
+                filename: nil
+            )
+            _ = try await SharedCoreRoomProfile.setRoomAvatar(
+                core: host.core,
+                roomId: request.roomID,
+                mxc: uploaded.mxc
+            )
+        case .remove:
             _ = try await SharedCoreRoomProfile.setRoomAvatar(
                 core: host.core,
                 roomId: request.roomID,
                 mxc: ""
             )
+        case nil:
+            break
         }
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
         do {
-            _ = try await SharedCoreLeftovers.setNotificationMode(
+            try await SharedCoreRoomNotification.set(
                 core: host.core,
                 roomId: roomID,
-                mode: mode.rawValue
+                mode: SharedCoreRoomDetails.wireNotificationMode(mode)
             )
         } catch {
             throw RoomManagementError.failed
@@ -1466,16 +1687,19 @@ final class SharedCoreMediaLoader: MediaLoading {
         if SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) != nil {
             return .thumbnail(resource)
         }
-        guard let url = resource.authenticatedURL else {
+        guard let url = resource.authenticatedURL, url.scheme == "mxc" else {
             return .failed("Media is unavailable.")
         }
         do {
-            _ = try await SharedCoreLeftovers.mediaThumbnail(
+            let bytes = try await SharedCorePlainMedia.thumbnail(
                 core: host.core,
-                mxc: url.absoluteString,
+                contentUri: url.absoluteString,
                 width: 640,
                 height: 480
             )
+            guard bytes.isEmpty == false else {
+                return .failed("Media could not be loaded.")
+            }
             return .thumbnail(resource)
         } catch {
             return .failed("Media could not be loaded.")
@@ -1483,8 +1707,21 @@ final class SharedCoreMediaLoader: MediaLoading {
     }
 
     func loadThumbnailData(for resource: MediaResource, width: UInt64, height: UInt64) async -> Data? {
-        _ = (width, height)
-        return await loadMediaData(for: resource)
+        guard resource.isEncrypted == false else {
+            return nil
+        }
+        if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
+            return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
+        }
+        guard let url = resource.authenticatedURL, url.scheme == "mxc" else {
+            return nil
+        }
+        return try? await SharedCorePlainMedia.thumbnail(
+            core: host.core,
+            contentUri: url.absoluteString,
+            width: width,
+            height: height
+        )
     }
 
     func loadMediaData(for resource: MediaResource) async -> Data? {
@@ -1494,13 +1731,13 @@ final class SharedCoreMediaLoader: MediaLoading {
         if let handle = SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL) {
             return try? await SharedCoreTimelineMedia.mediaBytes(core: host.core, handleId: handle)
         }
-        guard let url = resource.authenticatedURL else {
+        guard let url = resource.authenticatedURL, url.scheme == "mxc" else {
             return nil
         }
-        return try? await SharedCoreLeftovers.mediaDownload(
+        return try? await SharedCorePlainMedia.download(
             core: host.core,
-            mxc: url.absoluteString
-        ).payload
+            contentUri: url.absoluteString
+        )
     }
 }
 
@@ -1519,16 +1756,47 @@ final class SharedCoreMediaUploadService: MediaUploading {
             return .failed("Attachment is empty.")
         }
         do {
-            _ = try await SharedCoreLeftovers.mediaUpload(
+            let result = try await SharedCoreMediaSend.sendRoomAttachment(
                 core: host.core,
-                payload: request.data,
+                roomId: request.roomID,
+                filename: request.displayName,
                 mimeType: request.mimeType,
-                filename: request.displayName
+                payload: request.data,
+                replyTo: nil,
+                threadRoot: nil
             )
-            return .failed("Media upload is unavailable.")
+            let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
+            let resource = MediaResource(
+                id: result.eventId,
+                filename: safeName.isEmpty ? "Attachment" : safeName,
+                authenticatedURL: URL(string: "mxc://local/upload"),
+                requiresAuthentication: true,
+                mimeType: request.mimeType,
+                byteSize: UInt64(request.data.count)
+            )
+            let senderID = await coreSessionUserID() ?? ""
+            let item = TimelineItem(
+                id: result.eventId,
+                eventID: result.eventId,
+                serverEventID: result.eventId,
+                senderID: senderID,
+                timestamp: Date(),
+                kind: .mediaPlaceholder(resource),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+            return .uploaded(item)
         } catch {
             return .failed("Media could not be uploaded.")
         }
+    }
+
+    private func coreSessionUserID() async -> String? {
+        guard let snapshot = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core) else {
+            return nil
+        }
+        return snapshot.userId
     }
 }
 
@@ -1570,7 +1838,7 @@ final class SharedCorePusherService: MatrixPusherServicing {
             logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
             return
         }
-        _ = try await SharedCoreLeftovers.pusherSet(
+        _ = try await SharedCoreHttpPusher.register(
             core: host.core,
             pushKey: pushKey,
             appId: appID,
@@ -1583,7 +1851,7 @@ final class SharedCorePusherService: MatrixPusherServicing {
 
     func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
         _ = session
-        _ = try await SharedCoreLeftovers.pusherDelete(
+        _ = try await SharedCoreHttpPusher.delete(
             core: host.core,
             pushKey: pushKey,
             appId: appID
@@ -1615,6 +1883,9 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
     }
 
     func markRoomAsRead(roomID: String) async -> String? {
+        if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) {
+            return nil
+        }
         await withOpenLive(roomID: roomID) { opened in
             let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
                 core: host.core,

@@ -202,3 +202,25 @@ fn download_retire() {
     assert!(q.is_empty());
     assert_eq!(q.session_generation(), 7);
 }
+
+#[test]
+fn content_upload_mime_accepts_non_image_and_rejects_invalid() {
+    assert!(parse_content_upload_mime("application/octet-stream").is_ok());
+    assert!(parse_content_upload_mime("image/jpeg").is_ok());
+    let invalid = parse_content_upload_mime("not-a-mime").unwrap_err();
+    assert_eq!(invalid, "v-send.r-content-upload-invalid-mime");
+    assert!(!invalid.contains("not-a-mime"));
+    let empty = parse_content_upload_mime("").unwrap_err();
+    assert_eq!(empty, "v-send.r-content-upload-invalid-mime");
+}
+
+#[test]
+fn content_upload_filename_rejects_without_echo() {
+    let secret = "secret.bin";
+    assert_eq!(validate_content_upload_filename(secret).unwrap(), secret);
+    let slash = validate_content_upload_filename("../secret.bin").unwrap_err();
+    assert_eq!(slash, "v-send.r-content-upload-invalid-filename");
+    assert!(!slash.contains("secret.bin"));
+    let empty = validate_content_upload_filename("").unwrap_err();
+    assert_eq!(empty, "v-send.r-content-upload-invalid-filename");
+}

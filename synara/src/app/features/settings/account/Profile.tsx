@@ -49,6 +49,11 @@ import {
   uploadMediaNative,
 } from './nativeProfile';
 import { isSynaraDesktop } from '../../../utils/desktop';
+import {
+  Presence,
+  setOwnPresenceNative,
+  snapshotOwnPresenceNative,
+} from '../../matrix-presence/nativePresence';
 
 type ProfileProps = {
   profile: UserProfile;
@@ -379,6 +384,90 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
   );
 }
 
+const PRESENCE_OPTIONS: { state: Presence; label: string }[] = [
+  { state: Presence.Online, label: 'Online' },
+  { state: Presence.Unavailable, label: 'Away' },
+  { state: Presence.Offline, label: 'Offline' },
+];
+
+function ProfilePresence({ userId }: { userId: string }) {
+  const [current, setCurrent] = useState<Presence | undefined>();
+  const [unavailable, setUnavailable] = useState(false);
+
+  const refresh = useCallback(async () => {
+    const snapshot = await snapshotOwnPresenceNative(userId);
+    setCurrent(snapshot?.presence);
+    setUnavailable(false);
+  }, [userId]);
+
+  useEffect(() => {
+    refresh().catch(() => {
+      setCurrent(undefined);
+      setUnavailable(true);
+    });
+  }, [refresh]);
+
+  const [changeState, changePresence] = useAsyncCallback(
+    useCallback(
+      async (state: Presence) => {
+        await setOwnPresenceNative(state);
+        setCurrent(state);
+        try {
+          const snapshot = await snapshotOwnPresenceNative(userId);
+          // Unknown snapshot must not clear the optimistic SET selection.
+          if (snapshot?.presence) {
+            setCurrent(snapshot.presence);
+          }
+          setUnavailable(false);
+        } catch {
+          /* SET committed; keep local state if snapshot refresh fails. */
+        }
+      },
+      [userId]
+    )
+  );
+  const busy = changeState.status === AsyncStatus.Loading;
+  const failed = unavailable || changeState.status === AsyncStatus.Error;
+
+  return (
+    <SettingTile
+      title={
+        <Text as="span" size="L400">
+          Presence
+        </Text>
+      }
+    >
+      <Box direction="Column" gap="100">
+        <Box gap="100" alignItems="Center">
+          {PRESENCE_OPTIONS.map(({ state, label }) => (
+            <Button
+              key={state}
+              size="300"
+              variant={state === current ? 'Primary' : 'Secondary'}
+              fill={state === current ? 'Solid' : 'Soft'}
+              outlined
+              radii="300"
+              disabled={busy || unavailable}
+              onClick={() => {
+                if (state === current || busy || unavailable) return;
+                changePresence(state);
+              }}
+            >
+              <Text size="T300">{label}</Text>
+            </Button>
+          ))}
+          {busy && <Spinner size="300" />}
+        </Box>
+        {failed && (
+          <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
+            Native Matrix presence is unavailable.
+          </Text>
+        )}
+      </Box>
+    </SettingTile>
+  );
+}
+
 export function Profile() {
   const mx = useMatrixClient();
   const userId = mx.getUserId()!;
@@ -395,6 +484,7 @@ export function Profile() {
       >
         <ProfileAvatar userId={userId} profile={profile} />
         <ProfileDisplayName userId={userId} profile={profile} />
+        <ProfilePresence userId={userId} />
       </SequenceCard>
     </Box>
   );

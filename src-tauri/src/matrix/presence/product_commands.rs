@@ -1,5 +1,7 @@
 use super::*;
-use crate::matrix::presence::{NativePresenceSnapshotResult, NativePresenceSubscription};
+use crate::matrix::presence::{
+    NativePresenceSnapshotResult, NativePresenceSubscription, NativePresenceWriteResult,
+};
 
 #[tauri::command]
 pub async fn matrix_presence_snapshot(
@@ -27,6 +29,15 @@ pub async fn matrix_presence_unsubscribe(
         subscription_id,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn matrix_presence_set(
+    core: State<'_, Arc<synara_core::Core>>,
+    state: String,
+    status_msg: Option<String>,
+) -> Result<NativePresenceWriteResult, MatrixAuthCommandError> {
+    crate::bridge::presence_set::presence_set(core.inner().as_ref(), state, status_msg).await
 }
 
 pub(super) fn map_presence_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -69,6 +80,7 @@ mod tests {
             ("v-presence-state-unsupported", "Unknown"),
             ("p4.7-status-msg-cap", "Unknown"),
             ("p4.7-last-active-ts-invalid", "Unknown"),
+            ("v-presence-set-sdk-failed", "Unknown"),
         ];
 
         for (diagnostic_id, expected_code) in cases {

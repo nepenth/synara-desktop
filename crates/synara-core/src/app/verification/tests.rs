@@ -162,6 +162,26 @@ fn retire_generation() {
 }
 
 #[test]
+fn self_verification_start_falls_back_to_a_peer_device() {
+    let source = include_str!("live.rs");
+    assert!(source.contains("fn start_self_verification"));
+    assert!(source.contains("query_own_identity"));
+    assert!(source.contains("get_user_devices"));
+    assert!(source.contains("v-crypto.1-no-peer-device"));
+    let helper = source
+        .split("async fn start_self_verification")
+        .nth(1)
+        .and_then(|rest| rest.split("async fn register_incoming_request").next())
+        .expect("start_self_verification helper");
+    let identity = helper.find("query_own_identity").expect("identity first");
+    let peer = helper.find("get_user_devices").expect("peer fallback");
+    assert!(
+        identity < peer,
+        "own identity must be tried before a peer device"
+    );
+}
+
+#[test]
 fn verification_update_signal_is_session_wake_only() {
     assert_eq!(VERIFICATION_UPDATED_EVENT, "matrix-verification-updated");
     let encoded = serde_json::to_string(&NativeVerificationUpdateSignal {

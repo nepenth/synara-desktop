@@ -318,6 +318,7 @@ struct RoomTimelineView: View {
             }
             Divider()
             ComposerView(
+                roomID: roomID,
                 text: $draft,
                 placeholder: composerPlaceholder,
                 showsPromptMetrics: isAgentRoom,
@@ -2823,6 +2824,7 @@ struct ThreadTimelineView: View {
             Divider()
 
             ComposerView(
+                roomID: roomID,
                 text: $draft,
                 placeholder: "Reply in thread...",
                 replyTarget: nil,
@@ -3596,7 +3598,7 @@ private struct RoomDetailsView: View {
     @State private var alternativeAliases = ""
     @State private var selectedAvatarPhoto: PhotosPickerItem?
     @State private var inviteUserID = ""
-    @State private var notificationMode: SynaraRoomNotificationMode = .allMessages
+    @State private var notificationMode: SynaraRoomNotificationMode = .default
     @State private var isApplyingLoadedNotificationMode = false
     @State private var message: String?
     @State private var isLoading = false
@@ -3734,7 +3736,7 @@ private struct RoomDetailsView: View {
         await MainActor.run {
             details = loadedDetails
             isApplyingLoadedNotificationMode = true
-            notificationMode = loadedDetails?.notificationMode ?? .allMessages
+            notificationMode = loadedDetails?.notificationMode ?? .default
             isApplyingLoadedNotificationMode = false
             profileName = loadedDetails?.name ?? fallbackTitle
             profileTopic = loadedDetails?.topic ?? ""
@@ -5137,6 +5139,7 @@ private extension SynaraAgentApprovalPromptReaction {
 }
 
 private struct ComposerView: View {
+    let roomID: String
     @Binding var text: String
     let placeholder: String
     var showsPromptMetrics = false
@@ -5160,6 +5163,8 @@ private struct ComposerView: View {
         var onPasteImages: ([UIImage]) -> Void = { _ in }
     #endif
     @Binding var isFocusedExternally: Bool
+    @Environment(\.appEnvironment) private var environment
+    @State private var lastOutgoingTyping = false
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
     #if canImport(UIKit)
@@ -5316,12 +5321,18 @@ private struct ComposerView: View {
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .onChange(of: isComposerFocused) { focused in
             isFocusedExternally = focused
+            updateOutgoingTyping()
+        }
+        .onChange(of: text) { _ in
+            updateOutgoingTyping()
         }
         .onAppear {
             isFocusedExternally = isComposerFocused
+            updateOutgoingTyping()
         }
         .onDisappear {
             isFocusedExternally = false
+            setOutgoingTyping(false)
         }
         .sheet(isPresented: $isAttachmentSheetPresented) {
             AttachmentOptionsSheet(
@@ -5530,9 +5541,28 @@ private struct ComposerView: View {
             ComposerTextInputRegistry.dismissKeyboard()
         #endif
         isComposerFocused = false
+        setOutgoingTyping(false)
         let messageBody = text
         text = messageBody
         onSend(messageBody)
+    }
+
+    private func updateOutgoingTyping() {
+        let shouldType =
+            isComposerFocused
+            && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
+        setOutgoingTyping(shouldType)
+    }
+
+    private func setOutgoingTyping(_ typing: Bool) {
+        guard lastOutgoingTyping != typing else {
+            return
+        }
+        lastOutgoingTyping = typing
+        Task {
+            await environment.matrix.setOutgoingTyping(roomID: roomID, typing: typing)
+        }
     }
 }
 
@@ -5972,8 +6002,12 @@ private struct ZoomableMediaImage: View {
 private extension Date {
     var timelineTime: String {
         let formatter = DateFormatter()
-        formatter.timeStyle = .short
         formatter.dateStyle = .none
+        if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hour24ClockKey) {
+            formatter.dateFormat = "HH:mm"
+        } else {
+            formatter.timeStyle = .short
+        }
         return formatter.string(from: self)
     }
 }

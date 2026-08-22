@@ -777,11 +777,55 @@ test('F6c GAP-safe stubs (searchUserDirectory, queueToDevice, delayed events)', 
     limited: false,
     results: [],
   });
+  assert.deepEqual(await client.searchUserDirectoryFn('term'), {
+    limited: false,
+    results: [],
+  });
   await client.queueToDevice({ eventType: 'm.test', batch: [] });
   assert.equal(await client._unstable_sendDelayedEvent('!r', {}, null, 'm.test', {}), null);
   assert.equal(await client._unstable_sendDelayedStateEvent('!r', {}, 'm.test', {}, '$k'), null);
   assert.equal(await client._unstable_updateDelayedEvent('$evt', '!r', {}, {}), null);
   assert.equal(await client.getOpenIdTokenData(), null);
+});
+
+test('searchUserDirectory maps native user-directory hits and omits non-mxc avatars', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_user_directory_search: {
+      limited: true,
+      results: [
+        {
+          userId: '@bob:example.org',
+          displayName: 'Bob',
+          avatarUrl: 'mxc://example.org/abc',
+        },
+        {
+          userId: '@eve:example.org',
+          displayName: 'Eve',
+          avatarUrl: 'data:image/png;base64,AAAA',
+        },
+      ],
+    },
+  });
+  const client = createNativeMatrixClient(invoke);
+  const listed = {
+    limited: true,
+    results: [
+      {
+        user_id: '@bob:example.org',
+        display_name: 'Bob',
+        avatar_url: 'mxc://example.org/abc',
+      },
+      {
+        user_id: '@eve:example.org',
+        display_name: 'Eve',
+        avatar_url: undefined,
+      },
+    ],
+  };
+  assert.deepEqual(await client.searchUserDirectory({ term: 'bo', limit: 10 }), listed);
+  assert.equal(callLog[0], 'matrix_user_directory_search');
+  assert.deepEqual(await client.searchUserDirectoryFn('bo'), listed);
+  assert.equal(callLog[1], 'matrix_user_directory_search');
 });
 
 test('F6c crypto reading includes encryptToDeviceMessages no-op', async () => {

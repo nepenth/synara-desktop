@@ -2,7 +2,7 @@
 //!
 //! Shells supply the emit sink (desktop Tauri event / later iOS UniFFI).
 
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use matrix_sdk::event_handler::EventHandlerDropGuard;
 use matrix_sdk::ruma::events::{AnyGlobalAccountDataEvent, AnySyncStateEvent};
@@ -246,6 +246,7 @@ pub async fn set_room_image_pack(
 pub struct NativeImagePackOwner {
     client: Client,
     session_generation: u64,
+    pending_threepid: Mutex<Option<crate::app::user_profile::PendingThreepid>>,
     _account_data: EventHandlerDropGuard,
     _state: EventHandlerDropGuard,
 }
@@ -285,6 +286,7 @@ impl NativeImagePackOwner {
         Ok(Self {
             client: client.clone(),
             session_generation,
+            pending_threepid: Mutex::new(None),
             _account_data: client.event_handler_drop_guard(account_handle),
             _state: client.event_handler_drop_guard(state_handle),
         })
@@ -464,6 +466,228 @@ impl NativeImagePackOwner {
         &self,
     ) -> Result<crate::app::user_profile::MatrixOwnProfile, &'static str> {
         crate::app::user_profile::get_own_profile(&self.client).await
+    }
+
+    pub async fn snapshot_ignored_users(
+        &self,
+    ) -> Result<crate::app::user_profile::MatrixIgnoredUsersSnapshot, &'static str> {
+        crate::app::user_profile::snapshot_ignored_users(&self.client).await
+    }
+
+    pub async fn ignore_user(
+        &self,
+        user_id: &str,
+    ) -> Result<crate::app::user_profile::MatrixIgnoredUsersWriteResult, &'static str> {
+        crate::app::user_profile::ignore_user(&self.client, user_id).await
+    }
+
+    pub async fn unignore_user(
+        &self,
+        user_id: &str,
+    ) -> Result<crate::app::user_profile::MatrixIgnoredUsersWriteResult, &'static str> {
+        crate::app::user_profile::unignore_user(&self.client, user_id).await
+    }
+
+    pub async fn search_user_directory(
+        &self,
+        term: &str,
+        limit: Option<u64>,
+    ) -> Result<crate::app::user_profile::MatrixUserDirectorySearchResult, &'static str> {
+        crate::app::user_profile::search_user_directory(&self.client, term, limit).await
+    }
+
+    pub async fn search_messages(
+        &self,
+        term: &str,
+        next_token: Option<&str>,
+        rooms: Option<&[String]>,
+        senders: Option<&[String]>,
+        order: Option<&str>,
+    ) -> Result<crate::app::search::MatrixMessageSearchResult, &'static str> {
+        crate::app::search::search_messages(&self.client, term, next_token, rooms, senders, order)
+            .await
+    }
+
+    pub async fn snapshot_push_rules(
+        &self,
+    ) -> Result<crate::app::notifications::MatrixPushRulesSnapshot, &'static str> {
+        crate::app::notifications::snapshot_push_rules(&self.client).await
+    }
+
+    pub async fn set_push_rule_default(
+        &self,
+        encrypted: bool,
+        one_to_one: bool,
+        mode: &str,
+    ) -> Result<crate::app::notifications::MatrixPushRulesWriteResult, &'static str> {
+        crate::app::notifications::set_default_room_mode(&self.client, encrypted, one_to_one, mode)
+            .await
+    }
+
+    pub async fn set_push_rule_mention(
+        &self,
+        rule_id: &str,
+        enabled: bool,
+    ) -> Result<crate::app::notifications::MatrixPushRulesWriteResult, &'static str> {
+        crate::app::notifications::set_mention_enabled(&self.client, rule_id, enabled).await
+    }
+
+    pub async fn add_push_keyword(
+        &self,
+        keyword: &str,
+    ) -> Result<crate::app::notifications::MatrixPushRulesWriteResult, &'static str> {
+        crate::app::notifications::add_keyword(&self.client, keyword).await
+    }
+
+    pub async fn remove_push_keyword(
+        &self,
+        keyword: &str,
+    ) -> Result<crate::app::notifications::MatrixPushRulesWriteResult, &'static str> {
+        crate::app::notifications::remove_keyword(&self.client, keyword).await
+    }
+
+    pub async fn snapshot_room_notification(
+        &self,
+        room_id: &str,
+    ) -> Result<crate::app::notifications::MatrixRoomNotificationSnapshot, &'static str> {
+        crate::app::notifications::snapshot_room_notification(&self.client, room_id).await
+    }
+
+    pub async fn set_room_notification(
+        &self,
+        room_id: &str,
+        mode: &str,
+    ) -> Result<crate::app::notifications::MatrixRoomNotificationWriteResult, &'static str> {
+        crate::app::notifications::set_room_notification(&self.client, room_id, mode).await
+    }
+
+    pub async fn snapshot_room_notifications(
+        &self,
+    ) -> Result<crate::app::notifications::MatrixRoomNotificationsSnapshot, &'static str> {
+        crate::app::notifications::snapshot_room_notifications(&self.client).await
+    }
+
+    pub async fn snapshot_threepids(
+        &self,
+    ) -> Result<crate::app::user_profile::MatrixThreepidSnapshot, &'static str> {
+        crate::app::user_profile::snapshot_threepids(&self.client).await
+    }
+
+    pub async fn delete_threepid_email(
+        &self,
+        address: &str,
+    ) -> Result<crate::app::user_profile::MatrixThreepidWriteResult, &'static str> {
+        crate::app::user_profile::delete_threepid_email(&self.client, address).await
+    }
+
+    pub async fn request_threepid_email_token(
+        &self,
+        email: &str,
+    ) -> Result<crate::app::user_profile::MatrixThreepidEmailTokenResult, &'static str> {
+        crate::app::user_profile::request_threepid_email_token(
+            &self.client,
+            email,
+            &self.pending_threepid,
+        )
+        .await
+    }
+
+    pub async fn add_threepid_email(
+        &self,
+    ) -> Result<crate::app::user_profile::MatrixThreepidAddResult, &'static str> {
+        crate::app::user_profile::add_threepid_email(&self.client, &self.pending_threepid).await
+    }
+
+    pub async fn add_threepid_email_password(
+        &self,
+        password: &str,
+    ) -> Result<crate::app::user_profile::MatrixThreepidAddResult, &'static str> {
+        crate::app::user_profile::add_threepid_email_password(
+            &self.client,
+            &self.pending_threepid,
+            password,
+        )
+        .await
+    }
+
+    pub async fn upload_avatar(
+        &self,
+        payload: Vec<u8>,
+        mime_type: &str,
+    ) -> Result<crate::app::user_profile::MatrixUploadAvatarResult, &'static str> {
+        crate::app::user_profile::upload_avatar(&self.client, payload, mime_type).await
+    }
+
+    pub async fn upload_content(
+        &self,
+        payload: Vec<u8>,
+        mime_type: &str,
+        filename: Option<&str>,
+    ) -> Result<crate::app::media::MatrixUploadMediaResult, &'static str> {
+        crate::app::media::upload_content(&self.client, payload, mime_type, filename).await
+    }
+
+    pub async fn send_room_attachment(
+        &self,
+        room_id: &str,
+        filename: &str,
+        mime_type: &str,
+        payload: Vec<u8>,
+        reply_to: Option<String>,
+        thread_root: Option<String>,
+    ) -> Result<crate::app::send::MatrixSendRoomAttachmentResult, &'static str> {
+        crate::app::send::send_room_attachment(
+            &self.client,
+            room_id,
+            filename,
+            mime_type,
+            payload,
+            reply_to,
+            thread_root,
+        )
+        .await
+    }
+
+    pub async fn download_plain_media(&self, content_uri: &str) -> Result<Vec<u8>, &'static str> {
+        crate::app::media::download_plain_media(&self.client, content_uri).await
+    }
+
+    pub async fn thumbnail_plain_media(
+        &self,
+        content_uri: &str,
+        width: u64,
+        height: u64,
+    ) -> Result<Vec<u8>, &'static str> {
+        crate::app::media::thumbnail_plain_media(&self.client, content_uri, width, height).await
+    }
+
+    pub async fn register_http_pusher(
+        &self,
+        push_key: &str,
+        app_id: &str,
+        gateway_url: &str,
+        app_display_name: &str,
+        device_display_name: &str,
+        lang: &str,
+    ) -> Result<crate::app::notifications::MatrixHttpPusherWriteResult, &'static str> {
+        crate::app::notifications::register_http_pusher(
+            &self.client,
+            push_key,
+            app_id,
+            gateway_url,
+            app_display_name,
+            device_display_name,
+            lang,
+        )
+        .await
+    }
+
+    pub async fn delete_http_pusher(
+        &self,
+        push_key: &str,
+        app_id: &str,
+    ) -> Result<crate::app::notifications::MatrixHttpPusherWriteResult, &'static str> {
+        crate::app::notifications::delete_http_pusher(&self.client, push_key, app_id).await
     }
 }
 

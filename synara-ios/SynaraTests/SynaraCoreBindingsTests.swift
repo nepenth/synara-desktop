@@ -753,11 +753,18 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(SharedCoreRoomDetails.notificationMode("mute"), .mute)
         XCTAssertEqual(SharedCoreRoomDetails.notificationMode("all"), .allMessages)
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode("default"), .default)
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode(nil), .default)
+        XCTAssertEqual(SharedCoreRoomDetails.notificationMode("unknown"), .default)
+        XCTAssertEqual(SharedCoreRoomDetails.wireNotificationMode(.allMessages), "all")
+        XCTAssertEqual(SharedCoreRoomDetails.wireNotificationMode(.mentionsOnly), "mentions")
+        XCTAssertEqual(SharedCoreRoomDetails.wireNotificationMode(.mute), "mute")
+        XCTAssertEqual(SharedCoreRoomDetails.wireNotificationMode(.default), "default")
         XCTAssertEqual(details.canInvite, true)
         XCTAssertEqual(details.canEditName, true)
         XCTAssertEqual(details.canEditAliases, true)
         XCTAssertEqual(details.powerLevels?.ownUserLevel, 100)
-        XCTAssertEqual(details.notificationMode, .allMessages)
+        XCTAssertEqual(details.notificationMode, .default)
         let publicError = String(describing: details)
         for forbidden in ["password", "syt_", "token"] {
             XCTAssertFalse(publicError.contains(forbidden))
@@ -1058,6 +1065,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-presence-unsubscribe-no-session"))
             for forbidden in ["password", "syt_", "@alice:example.org", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreTypingPresence.presenceSet(
+                core: core,
+                state: "unavailable",
+                statusMsg: "coffee-status-secret"
+            )
+            XCTFail("Fail-closed SharedCore must not set presence without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-presence-set-no-session"))
+            for forbidden in ["password", "syt_", "coffee-status-secret", "token"] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }

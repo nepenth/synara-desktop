@@ -66,3 +66,75 @@ pub(super) fn parse_display_name(
 pub(super) fn parse_avatar_mxc(mxc: &str) -> Result<Option<OwnedMxcUri>, MatrixAuthCommandError> {
     synara_core::app::user_profile::parse_own_avatar_mxc(mxc).map_err(map_avatar_error)
 }
+
+#[tauri::command]
+pub async fn matrix_ignored_users_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::user_profile::MatrixIgnoredUsersSnapshot, MatrixAuthCommandError> {
+    crate::bridge::ignored_users::ignored_users_snapshot(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_ignored_users_ignore(
+    core: State<'_, Arc<synara_core::Core>>,
+    user_id: String,
+) -> Result<synara_core::app::user_profile::MatrixIgnoredUsersWriteResult, MatrixAuthCommandError> {
+    crate::bridge::ignored_users::ignored_users_ignore(core.inner().as_ref(), user_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_ignored_users_unignore(
+    core: State<'_, Arc<synara_core::Core>>,
+    user_id: String,
+) -> Result<synara_core::app::user_profile::MatrixIgnoredUsersWriteResult, MatrixAuthCommandError> {
+    crate::bridge::ignored_users::ignored_users_unignore(core.inner().as_ref(), user_id).await
+}
+
+#[tauri::command]
+pub async fn matrix_user_directory_search(
+    core: State<'_, Arc<synara_core::Core>>,
+    term: String,
+    limit: Option<u64>,
+) -> Result<synara_core::app::user_profile::MatrixUserDirectorySearchResult, MatrixAuthCommandError>
+{
+    crate::bridge::user_directory::user_directory_search(core.inner().as_ref(), term, limit).await
+}
+
+#[tauri::command]
+pub async fn matrix_threepid_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::user_profile::MatrixThreepidSnapshot, MatrixAuthCommandError> {
+    crate::bridge::threepid::threepid_snapshot(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_threepid_delete(
+    core: State<'_, Arc<synara_core::Core>>,
+    address: String,
+) -> Result<synara_core::app::user_profile::MatrixThreepidWriteResult, MatrixAuthCommandError> {
+    crate::bridge::threepid::threepid_delete(core.inner().as_ref(), address).await
+}
+
+#[tauri::command]
+pub async fn matrix_threepid_request_email_token(
+    core: State<'_, Arc<synara_core::Core>>,
+    email: String,
+) -> Result<synara_core::app::user_profile::MatrixThreepidEmailTokenResult, MatrixAuthCommandError>
+{
+    crate::bridge::threepid::threepid_request_email_token(core.inner().as_ref(), email).await
+}
+
+#[tauri::command]
+pub async fn matrix_threepid_add_email(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::user_profile::MatrixThreepidAddResult, MatrixAuthCommandError> {
+    crate::bridge::threepid::threepid_add_email(core.inner().as_ref()).await
+}
+
+#[tauri::command]
+pub async fn matrix_threepid_add_email_password(
+    core: State<'_, Arc<synara_core::Core>>,
+    password: String,
+) -> Result<synara_core::app::user_profile::MatrixThreepidAddResult, MatrixAuthCommandError> {
+    crate::bridge::threepid::threepid_add_email_password(core.inner().as_ref(), password).await
+}

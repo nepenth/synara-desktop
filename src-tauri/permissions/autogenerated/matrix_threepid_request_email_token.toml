@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-threepid-request-email-token"
+description = "Enables the matrix_threepid_request_email_token command without any pre-configured scope."
+commands.allow = ["matrix_threepid_request_email_token"]
+
+[[permission]]
+identifier = "deny-matrix-threepid-request-email-token"
+description = "Denies the matrix_threepid_request_email_token command without any pre-configured scope."
+commands.deny = ["matrix_threepid_request_email_token"]

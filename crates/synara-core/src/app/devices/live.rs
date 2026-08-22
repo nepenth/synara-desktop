@@ -122,6 +122,14 @@ impl NativeDeviceOwner {
         crate::app::backup::status(&self.client, self.session_generation).await
     }
 
+    /// Restore encryption backup. Recovery secret is a method argument only.
+    pub async fn restore_backup(
+        &self,
+        recovery_secret: &str,
+    ) -> Result<crate::app::backup::MatrixRestoreBackupResult, &'static str> {
+        crate::app::backup::restore(&self.client, self.session_generation, recovery_secret).await
+    }
+
     pub async fn cross_signing_setup(
         &self,
     ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {

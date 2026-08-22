@@ -64,6 +64,9 @@ sha2 = "0.10"
 # Host-only register token buffers (moved with live register orchestration).
 # Pin matches src-tauri (`zeroize = "1"`).
 zeroize = "1"
+# Avatar MIME parsing for upload_avatar (bytes stay off Core JSON).
+# Pin matches src-tauri (`mime = "0.3"`).
+mime = "0.3"
 
 [build-dependencies]
 uniffi = { version = "=0.28.3", features = ["build"] }

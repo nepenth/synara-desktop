@@ -48,7 +48,7 @@ export function Devices({ requestClose }: DevicesProps) {
     otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
   const offerCurrentVerification =
     canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
-    verificationStatus === 'unverified';
+    verificationStatus !== 'verified';
 
   return (
     <Page>

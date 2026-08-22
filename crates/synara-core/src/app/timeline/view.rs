@@ -104,6 +104,8 @@ pub struct TimelineReaction {
 #[serde(rename_all = "camelCase")]
 pub struct TimelineReplyPreview {
     pub event_id: EventId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_id: Option<UserId>,
     pub sender_name: String,
     pub body: String,
 }
@@ -678,15 +680,30 @@ fn project_reply(
     content: &matrix_sdk_ui::timeline::MsgLikeContent,
 ) -> Option<TimelineReplyPreview> {
     let details = content.in_reply_to.as_ref()?;
-    let TimelineDetails::Ready(event) = &details.event else {
-        return None;
-    };
-    let body = event.content.as_message()?.body().to_owned();
-    Some(TimelineReplyPreview {
-        event_id: details.event_id.to_string(),
-        sender_name: event.sender.to_string(),
-        body,
-    })
+    match &details.event {
+        TimelineDetails::Ready(event) => {
+            let body = event
+                .content
+                .as_message()
+                .map(|message| message.body().to_owned())
+                .filter(|body| !body.trim().is_empty())
+                .unwrap_or_else(|| "Original message".to_owned());
+            Some(TimelineReplyPreview {
+                event_id: details.event_id.to_string(),
+                sender_id: Some(event.sender.to_string()),
+                sender_name: sender_localpart_or_id(event.sender.as_str()),
+                body,
+            })
+        }
+        TimelineDetails::Unavailable | TimelineDetails::Pending | TimelineDetails::Error(_) => {
+            Some(TimelineReplyPreview {
+                event_id: details.event_id.to_string(),
+                sender_id: None,
+                sender_name: "Message".to_owned(),
+                body: "Jump to original".to_owned(),
+            })
+        }
+    }
 }
 
 fn project_thread_summary(
@@ -1248,7 +1265,8 @@ mod tests {
     fn reply_and_thread_summary_serialize_product_shape_without_secrets() {
         let reply = TimelineReplyPreview {
             event_id: "$parent:example.org".into(),
-            sender_name: "@alice:example.org".into(),
+            sender_id: Some("@alice:example.org".into()),
+            sender_name: "alice".into(),
             body: "Earlier message".into(),
         };
         let thread = TimelineThreadSummary {

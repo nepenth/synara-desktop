@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import test from 'node:test';
 import {
   createNativePresenceSubscription,
+  Presence,
+  setOwnPresenceNative,
+  snapshotOwnPresenceNative,
   type NativePresenceDependencies,
   type NativePresenceInvoke,
   type NativePresenceListen,
@@ -302,6 +305,46 @@ test('dispose unsubscribes and late events cannot update the profile', async () 
     outcome: { status: 'ready', snapshot },
   });
   assert.equal(values.length, countBeforeDispose);
+});
+
+test('setOwnPresenceNative invokes matrix_presence_set with state and no userId', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const invoke: NativePresenceInvoke = async (command, args) => {
+    calls.push({ command, args });
+    return { available: true, value: { status: 'ok' } };
+  };
+  await setOwnPresenceNative(Presence.Online, undefined, invoke);
+  assert.deepEqual(calls, [{ command: 'matrix_presence_set', args: { state: 'online' } }]);
+  assert.equal(Object.prototype.hasOwnProperty.call(calls[0]?.args ?? {}, 'userId'), false);
+
+  calls.length = 0;
+  await setOwnPresenceNative(Presence.Unavailable, undefined, invoke);
+  assert.deepEqual(calls, [{ command: 'matrix_presence_set', args: { state: 'unavailable' } }]);
+  await setOwnPresenceNative(Presence.Offline, undefined, invoke);
+  assert.equal(calls.at(-1)?.args?.state, 'offline');
+  assert.equal(Object.prototype.hasOwnProperty.call(calls.at(-1)?.args ?? {}, 'userId'), false);
+});
+
+test('snapshotOwnPresenceNative returns undefined on unknown without throwing', async () => {
+  const presence = await snapshotOwnPresenceNative(userId, async () => ({
+    available: true,
+    value: { status: 'unknown', sessionGeneration: 7, userId },
+  }));
+  assert.equal(presence, undefined);
+});
+
+test('setOwnPresenceNative fails closed when invoke is unavailable', async () => {
+  await assert.rejects(
+    () => setOwnPresenceNative(Presence.Online, undefined, async () => ({ available: false })),
+    /unavailable/
+  );
+  await assert.rejects(
+    () =>
+      setOwnPresenceNative('away' as Presence, undefined, async () => {
+        throw new Error('should not invoke');
+      }),
+    /unavailable/
+  );
 });
 
 test('profile presence path has no JavaScript Matrix presence owner', () => {

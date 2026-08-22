@@ -42,6 +42,7 @@ type NativeTimelineEventRowBase = {
 
 export type NativeTimelineReplyPreview = {
   eventId: string;
+  senderId?: string;
   senderName: string;
   body: string;
 };

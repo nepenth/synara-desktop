@@ -89,7 +89,7 @@ enum CryptoVerificationPresentationPolicy {
 
 enum SecuritySettingsVerificationPolicy {
     static func showsVerifyThisDevice(_ status: SessionCryptoStatus) -> Bool {
-        status.verification != .verified && status.hasDevicesToVerifyAgainst == true
+        status.verification != .verified && status.isLastDevice != true
     }
 }
 
