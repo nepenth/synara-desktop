@@ -1,8 +1,13 @@
 //! Live V-CRYPTO.2 cross-signing status and setup start.
 
+use std::time::Duration;
+
 use matrix_sdk::{
-    encryption::CrossSigningStatus,
-    ruma::api::client::uiaa::{AuthData, AuthType, Dummy, UiaaInfo},
+    encryption::{identities::UserIdentity, CrossSigningStatus, Encryption},
+    ruma::{
+        api::client::uiaa::{AuthData, AuthType, Dummy, UiaaInfo},
+        UserId,
+    },
     Client,
 };
 
@@ -54,6 +59,31 @@ pub fn supported_authentication(info: &UiaaInfo) -> Option<SupportedBootstrapAut
     }
 }
 
+/// Local identity first; bound the homeserver `/keys/query` so iOS Settings
+/// cannot stall on a spinner the way desktop Devices did.
+pub async fn query_own_identity(
+    encryption: &Encryption,
+    user_id: &UserId,
+) -> Result<Option<UserIdentity>, &'static str> {
+    match encryption
+        .get_user_identity(user_id)
+        .await
+        .map_err(|_| "v-crypto.2-cross-signing-identity-query-failed")?
+    {
+        Some(identity) => Ok(Some(identity)),
+        None => match tokio::time::timeout(
+            Duration::from_secs(8),
+            encryption.request_user_identity(user_id),
+        )
+        .await
+        {
+            Ok(Ok(identity)) => Ok(identity),
+            Ok(Err(_)) => Err("v-crypto.2-cross-signing-identity-query-failed"),
+            Err(_) => Ok(None),
+        },
+    }
+}
+
 pub async fn status(
     client: &Client,
     session_generation: u64,
@@ -63,14 +93,15 @@ pub async fn status(
     let user_id = client
         .user_id()
         .ok_or("v-crypto.2-cross-signing-user-missing")?;
-    let own_identity = encryption
-        .request_user_identity(user_id)
-        .await
-        .map_err(|_| "v-crypto.2-cross-signing-identity-query-failed")?;
+    let own_identity = query_own_identity(&encryption, user_id).await?;
+    let published = own_identity.is_some()
+        || private_status
+            .as_ref()
+            .is_some_and(|status| status.is_complete());
     Ok(project_status(
         session_generation,
         private_status.as_ref(),
-        own_identity.is_some(),
+        published,
         own_identity
             .as_ref()
             .is_some_and(|identity| identity.is_verified()),
@@ -172,6 +203,29 @@ mod tests {
         assert_eq!(
             supported_authentication(&password),
             Some(SupportedBootstrapAuthentication::Password)
+        );
+    }
+
+    #[test]
+    fn own_identity_lookup_prefers_local_store_and_bounds_keys_query() {
+        let source = include_str!("live.rs");
+        let helper = source
+            .split("pub async fn query_own_identity")
+            .nth(1)
+            .and_then(|rest| rest.split("pub async fn status").next())
+            .expect("query_own_identity helper");
+        assert!(helper.contains("get_user_identity(user_id)"));
+        assert!(helper.contains("Duration::from_secs(8)"));
+        assert!(helper.contains("request_user_identity(user_id)"));
+        let local_idx = helper
+            .find("get_user_identity(user_id)")
+            .expect("local first");
+        let remote_idx = helper
+            .find("request_user_identity(user_id)")
+            .expect("bounded remote");
+        assert!(
+            local_idx < remote_idx,
+            "local identity must be read before /keys/query"
         );
     }
 }

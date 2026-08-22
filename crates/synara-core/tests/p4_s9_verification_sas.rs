@@ -63,7 +63,6 @@ fn verification_sas_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("verification_dismiss"));
     assert!(!udl.contains("matrix_crypto_status"));
     assert!(!udl.contains("matrix_login_password"));
-    assert!(!udl.contains("device_delete_password"));
     let shared_core = udl
         .split("interface SharedCore {")
         .nth(1)
@@ -78,7 +77,6 @@ fn verification_sas_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("verification_cancel"));
     assert!(shared_core.contains("verification_dismiss"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("device_delete_password"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }
 

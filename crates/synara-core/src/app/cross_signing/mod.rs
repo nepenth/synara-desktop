@@ -18,7 +18,7 @@ pub use identity::{
     CrossSigningStore, IdentityTrust, LocalCrossSigningKeys, RemoteIdentity, MAX_TRACKED_IDENTITIES,
 };
 pub use live::{
-    complete, project_status, setup, status, supported_authentication,
+    complete, project_status, query_own_identity, setup, status, supported_authentication,
     SupportedBootstrapAuthentication,
 };
 pub use native::{

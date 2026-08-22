@@ -455,16 +455,19 @@ const assertions = [
   [sharedCoreFfi, "matrix_device_rename", "P4-S9-2 calls the registered rename command"],
   [sharedCoreFfi, "matrix_device_delete_start", "P4-S9-2 calls the registered delete-start command"],
   [sharedCoreFfi, "matrix_device_delete_cancel", "P4-S9-2 calls the registered delete-cancel command"],
+  [sharedCoreFfi, "device_delete_password", "P4-S9-2 typed device-delete-password FFI"],
   [udl, "DeviceSnapshotDto device_snapshot()", "P4-S9-2 SharedCore device-snapshot operation"],
   [udl, "DeviceSnapshotDto device_rename(", "P4-S9-2 SharedCore device-rename operation"],
   [udl, "DeviceDeleteDto device_delete_start(", "P4-S9-2 SharedCore delete-start operation"],
   [udl, "void device_delete_cancel(", "P4-S9-2 SharedCore delete-cancel operation"],
+  [udl, "DeviceDeleteDto device_delete_password(", "P4-S9-2 SharedCore delete-password operation"],
   [udl, "interface DeviceCommandError", "P4-S9-2 static device-family error"],
   [swiftBindingsTests, "testSharedCoreDevicesWithoutSessionFailsClosed", "Swift P4-S9-2 fail-closed device-family test"],
   [sharedCoreDevices, "deviceSnapshot", "P4-S9-2 product device-snapshot helper"],
   [sharedCoreDevices, "deviceRename", "P4-S9-2 product rename helper"],
   [sharedCoreDevices, "deviceDeleteStart", "P4-S9-2 product delete-start helper"],
   [sharedCoreDevices, "deviceDeleteCancel", "P4-S9-2 product delete-cancel helper"],
+  [sharedCoreDevices, "deviceDeletePassword", "P4-S9-2 product delete-password helper"],
   [sharedCoreDevices, "core: SharedCore", "P4-S9-2 helper takes an already-constructed SharedCore"],
   [sharedCoreDevices, "core.deviceSnapshot", "P4-S9-2 helper reads on the caller-owned instance"],
   [sharedCoreFfi, "room_join_rule_snapshot", "P4-S9-3 typed join-rule snapshot FFI"],
@@ -1765,7 +1768,7 @@ for (const required of ["verification_start", "verification_accept", "verificati
     throw new Error(`P4-S9 SharedCore must expose ${required}`);
   }
 }
-for (const required of ["device_snapshot", "device_rename", "device_delete_start", "device_delete_cancel"]) {
+for (const required of ["device_snapshot", "device_rename", "device_delete_start", "device_delete_cancel", "device_delete_password"]) {
   if (!sharedCoreBody.includes(required)) {
     throw new Error(`P4-S9-2 SharedCore must expose ${required}`);
   }
@@ -1913,7 +1916,7 @@ for (const required of ["session_snapshot(", "sync_status(", "media_config(", "s
     throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "device_delete_password", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "backup_setup", "matrix_cross_signing_status"]) {
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "backup_setup", "matrix_cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
     throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-31`);
   }

@@ -1457,6 +1457,9 @@ interface SharedCore {
   [Async, Throws=DeviceCommandError]
   void device_delete_cancel(u64 operation_id, u64 session_generation);
 
+  [Async, Throws=DeviceCommandError]
+  DeviceDeleteDto device_delete_password(u64 operation_id, u64 session_generation, string password);
+
   [Async, Throws=JoinRuleCommandError]
   RoomJoinRuleSnapshotDto room_join_rule_snapshot(string room_id, u64 session_generation);
 

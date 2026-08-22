@@ -1396,6 +1396,23 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
+
+        let password = "not-a-secret"
+        do {
+            _ = try await SharedCoreDevices.deviceDeletePassword(
+                core: core,
+                operationId: 9,
+                sessionGeneration: 1,
+                password: password
+            )
+            XCTFail("Fail-closed SharedCore must not finish device delete with a password without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-device-delete-password-no-session"))
+            for forbidden in ["syt_", "token", password] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
     }
 
     func testSharedCoreJoinRulesWithoutSessionFailsClosed() async {

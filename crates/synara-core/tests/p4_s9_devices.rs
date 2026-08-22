@@ -60,7 +60,7 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(udl.contains("device_rename"));
     assert!(udl.contains("device_delete_start"));
     assert!(udl.contains("device_delete_cancel"));
-    assert!(!udl.contains("device_delete_password"));
+    assert!(udl.contains("device_delete_password"));
     assert!(!udl.contains("matrix_backup_status"));
     assert!(!udl.contains("matrix_room_key_transfer_status"));
     assert!(!udl.contains("matrix_cross_signing_setup"));
@@ -76,9 +76,9 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(shared_core.contains("device_rename"));
     assert!(shared_core.contains("device_delete_start"));
     assert!(shared_core.contains("device_delete_cancel"));
+    assert!(shared_core.contains("device_delete_password"));
     assert!(shared_core.contains("verification_start"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("device_delete_password"));
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }
@@ -101,17 +101,25 @@ fn device_family_without_session_fails_closed_without_echo() {
     let delete_cancel = rt
         .block_on(shared.device_delete_cancel(9, 1))
         .expect_err("no attached device owner");
+    let delete_password = rt
+        .block_on(shared.device_delete_password(9, 1, "not-a-secret".to_owned()))
+        .expect_err("no attached device owner");
     let snapshot_text = format!("{snapshot:?}{snapshot}");
     let rename_text = format!("{rename:?}{rename}");
     let delete_start_text = format!("{delete_start:?}{delete_start}");
     let delete_cancel_text = format!("{delete_cancel:?}{delete_cancel}");
+    let delete_password_text = format!("{delete_password:?}{delete_password}");
     assert!(snapshot_text.contains("p2-device-snapshot-no-session"));
     assert!(rename_text.contains("p2-device-rename-no-session"));
     assert!(delete_start_text.contains("p2-device-delete-start-no-session"));
     assert!(delete_cancel_text.contains("p2-device-delete-cancel-no-session"));
-    let text = format!("{snapshot_text}{rename_text}{delete_start_text}{delete_cancel_text}");
+    assert!(delete_password_text.contains("p2-device-delete-password-no-session"));
+    let text = format!(
+        "{snapshot_text}{rename_text}{delete_start_text}{delete_cancel_text}{delete_password_text}"
+    );
     assert!(!text.contains("syt_"));
     assert!(!text.contains("token"));
+    assert!(!text.contains("not-a-secret"));
     assert!(!text.contains(device_id));
     assert!(!text.contains(display_name));
 }

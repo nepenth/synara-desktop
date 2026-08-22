@@ -255,10 +255,9 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
 
     func resetLocalState(for session: AuthenticatedSession?) async {
         _ = session
-        _ = try? await SharedCoreLeftovers.wipePersistedStores(
-            core: host.core,
-            storeRoot: host.storeRoot.path
-        )
+        // Keep the per-account crypto store so the next password login can
+        // reuse this device id. Wiping here minted a new Matrix session on
+        // every sign-in.
         _ = try? await SharedCoreLeftovers.logout(core: host.core)
     }
 
@@ -1079,8 +1078,45 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 deviceId: $0.deviceId,
                 displayName: $0.displayName,
                 isCurrent: $0.isCurrent,
-                trust: $0.trust
+                trust: $0.trust,
+                lastSeenTs: $0.lastSeenTs
             )
+        }
+    }
+
+    func signOutSession(deviceId: String, password: String) async -> CryptoActionResult {
+        let trimmedPassword = password.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard deviceId.isEmpty == false, trimmedPassword.isEmpty == false else {
+            return .failed("Enter your account password to sign out that session.")
+        }
+        do {
+            let started = try await SharedCoreDevices.deviceDeleteStart(
+                core: host.core,
+                deviceIds: [deviceId]
+            )
+            if started.outcome == "complete" {
+                return .completed("Session signed out.")
+            }
+            guard started.outcome == "authentication_required",
+                  let challenge = started.challenge
+            else {
+                return .failed("Could not sign out that session.")
+            }
+            let finished = try await SharedCoreDevices.deviceDeletePassword(
+                core: host.core,
+                operationId: challenge.operationId,
+                sessionGeneration: challenge.sessionGeneration,
+                password: trimmedPassword
+            )
+            if finished.outcome == "complete" {
+                return .completed("Session signed out.")
+            }
+            if finished.challenge?.authenticationFailed == true {
+                return .failed("Check your password and try again.")
+            }
+            return .failed("Could not sign out that session.")
+        } catch {
+            return .failed("Could not sign out that session.")
         }
     }
 
