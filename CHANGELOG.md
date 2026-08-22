@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2.1.5 - 2026-08-22
+
+- Settings → Devices no longer hangs on a spinner while identity lookup waits
+  on `/keys/query`. Linux uses the same desktop path; iOS Security uses the
+  same bounded Core lookup.
+- iOS logout keeps the per-account crypto store so the next password sign-in
+  reuses the same Matrix device instead of minting a new session.
+- iOS Account → Sessions lists devices and can force-sign-out others with the
+  account password. Desktop Settings → Devices → Others already had this.
+- See [`docs/releases/v2.1.5.md`](docs/releases/v2.1.5.md) for details.
+
 ## 2.1.4 - 2026-08-21
 
 - iOS failed sends retry from a chip, offline text queues until connected,
