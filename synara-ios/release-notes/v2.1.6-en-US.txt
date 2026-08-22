@@ -1,0 +1,10 @@
+Synara 2.1.6 adds native settings and remaining Core owners: emails, blocked users, room notification Default, presence Online/Away/Offline, avatar upload, photo send, recovery restore, and user search.
+
+What to test:
+- Upgrade from 2.1.5 and confirm your session restores without another login.
+- Account: change display name, upload an avatar, set Online/Away/Offline, add or remove an email, and block/unblock a user.
+- Room details: Notifications picker includes Default, All, Mentions, and Mute. Mute still silences the room list.
+- Send a photo in a room and open a remote image. Recover keys from Security if you have a recovery key.
+- On desktop/Linux: Settings → Notifications edits push rules; Account sets presence; invite search finds people who are not a full MXID.
+
+Please report the client, action, and approximate time for any settings, media, or presence issue. Do not include passwords, access tokens, or recovery keys.

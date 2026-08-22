@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 2.1.6 - 2026-08-22
+
+- Native Core now owns homeserver push rules, 3PID/email, ignored users,
+  per-room notification mode (including Default), user-directory search,
+  message search, join-rule write, and presence SET. Linux uses the same
+  Tauri commands as macOS.
+- iOS can upload an avatar, send attachments, download plain `mxc://`
+  media, register HTTP pushers, restore backup from a recovery key, and
+  set Online/Away/Offline presence through product FFI rather than
+  leftover stubs.
+- Desktop Account can set presence; invite search uses the user
+  directory; notifications and ignored-user/email settings write through
+  Core. Leftover SharedCore FFI stays fail-closed.
+- See [`docs/releases/v2.1.6.md`](docs/releases/v2.1.6.md) for details.
+
 ## 2.1.5 - 2026-08-22
 
 - Settings → Devices no longer hangs on a spinner while identity lookup waits
