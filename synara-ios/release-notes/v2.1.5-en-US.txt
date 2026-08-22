@@ -1,0 +1,10 @@
+Synara 2.1.5 stops Security from hanging on a spinner, reuses this device after sign-out, and lets you list and sign out other sessions.
+
+What to test:
+- Upgrade from 2.1.4 and confirm your session restores without another login.
+- Open Settings → Security: Device Verification should show Verified or Unverified, not a spinner that never finishes. If Unverified, Verify This Device should appear.
+- On desktop/Linux: Settings → Devices should show the same status instead of spinning. Other devices can still be logged out from Others.
+- Sign out of iOS, relaunch, and sign in with the same account. The Device id in Account should match the previous session, not a new one.
+- Open Account → Sessions. Other sessions should list name, trust, last activity, and a Sign Out action that asks for your password.
+
+Please report the client, action, and approximate time for any verification, session, or sign-in issue. Do not include passwords, access tokens, or recovery keys.
