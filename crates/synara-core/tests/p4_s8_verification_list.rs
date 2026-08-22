@@ -70,7 +70,6 @@ fn verification_list_surface_exposes_only_the_registered_list_command() {
     assert!(shared_core.contains("verification_list"));
     assert!(shared_core.contains("typing_snapshot"));
     assert!(!shared_core.contains("command("));
-    assert!(!shared_core.contains("device_delete_password"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 }
 

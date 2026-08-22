@@ -8,7 +8,9 @@ use tokio::sync::Mutex as AsyncMutex;
 use futures_util::StreamExt;
 use matrix_sdk::{
     ruma::{
-        api::client::uiaa::{AuthType, UiaaInfo},
+        api::client::uiaa::{
+            AuthData, AuthType, MatrixUserIdentifier, Password, UiaaInfo, UserIdentifier,
+        },
         OwnedDeviceId,
     },
     Client,
@@ -204,6 +206,43 @@ impl NativeDeviceOwner {
         session_generation: u64,
     ) -> Result<PendingDeviceDeletion, &'static str> {
         self.validate_pending(operation_id, session_generation)
+    }
+
+    /// Finish a pending delete with the account password. Password stays off
+    /// `Core::command` JSON; iOS/SharedCore call this method directly.
+    pub async fn authenticate_delete_password(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+        password: &str,
+    ) -> Result<NativeDeviceDeleteResult, &'static str> {
+        if password.is_empty() {
+            return Err("v-crypto.7-device-delete-password-empty");
+        }
+        let pending = self.pending_deletion(operation_id, session_generation)?;
+        let user_id = self
+            .client
+            .user_id()
+            .ok_or("v-crypto.7-device-delete-user-missing")?;
+        let mut auth = Password::new(
+            UserIdentifier::Matrix(MatrixUserIdentifier::new(user_id.to_string())),
+            password.to_owned(),
+        );
+        auth.session = Some(pending.auth_session.clone());
+        match self
+            .client
+            .delete_devices(&pending.device_ids, Some(AuthData::Password(auth)))
+            .await
+        {
+            Ok(_) => self.complete_deletion(&pending.device_ids).await,
+            Err(error) => {
+                let info = error
+                    .as_uiaa_response()
+                    .ok_or("v-crypto.7-device-delete-password-failed")?;
+                let authentication_failed = !info.completed.contains(&AuthType::Password);
+                self.refresh_delete_challenge(info, authentication_failed)
+            }
+        }
     }
 
     pub fn refresh_delete_challenge(

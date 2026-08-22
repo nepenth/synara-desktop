@@ -149,6 +149,11 @@ private struct AccountSettingsView: View {
     @State private var sessionDevices: [SharedCoreSessionDevice] = []
     @State private var ownPresence: SharedCorePresence?
     @State private var coreSessionIdentity: CoreSessionIdentity?
+    @State private var signOutDevice: SharedCoreSessionDevice?
+    @State private var signOutPassword = ""
+    @State private var signOutMessage: String?
+    @State private var isSigningOut = false
+    @State private var isLoadingSessions = true
 
     var body: some View {
         Form {
@@ -184,20 +189,71 @@ private struct AccountSettingsView: View {
                 }
             }
 
-            if sessionDevices.isEmpty == false {
-                Section("Sessions") {
+            Section {
+                if isLoadingSessions && sessionDevices.isEmpty {
+                    ProgressView()
+                        .accessibilityIdentifier("SettingsSessionsLoading")
+                } else if sessionDevices.isEmpty {
+                    Text("No other sessions were returned for this account.")
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("SettingsSessionsEmpty")
+                } else {
                     ForEach(sessionDevices) { device in
-                        SettingsInfoRow(
-                            title: device.isCurrent ? "This device" : "Device",
-                            value: device.displayName
-                        )
+                        SessionDeviceRow(
+                            device: device,
+                            isSigningOut: isSigningOut
+                        ) {
+                            signOutPassword = ""
+                            signOutMessage = nil
+                            signOutDevice = device
+                        }
                     }
+                }
+            } header: {
+                Text("Sessions")
+            } footer: {
+                Text("Sign out a session to revoke it on the homeserver. This device uses Log Out instead.")
+            }
+
+            if let signOutMessage {
+                Section {
+                    Text(signOutMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("SettingsSessionSignOutMessage")
                 }
             }
         }
         .settingsTabBarClearance()
         .navigationTitle("Account")
         .accessibilityIdentifier("AccountSettingsScreen")
+        .alert(
+            "Sign out session?",
+            isPresented: Binding(
+                get: { signOutDevice != nil },
+                set: { presented in
+                    if presented == false {
+                        signOutDevice = nil
+                        signOutPassword = ""
+                    }
+                }
+            )
+        ) {
+            SecureField("Account password", text: $signOutPassword)
+                .textContentType(.password)
+            Button("Sign Out", role: .destructive) {
+                confirmSignOut()
+            }
+            .disabled(isSigningOut || signOutPassword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            .accessibilityIdentifier("ConfirmSignOutSessionButton")
+            Button("Cancel", role: .cancel) {
+                signOutDevice = nil
+                signOutPassword = ""
+            }
+        } message: {
+            Text("Enter your account password to revoke \(signOutDevice?.displayName ?? "this session").")
+        }
         .task {
             await refreshCoreSessionIdentity()
             let presence = await environment.matrix.presence(userID: session.userID)
@@ -205,6 +261,7 @@ private struct AccountSettingsView: View {
             await MainActor.run {
                 ownPresence = presence
                 sessionDevices = devices
+                isLoadingSessions = false
             }
         }
     }
@@ -214,6 +271,73 @@ private struct AccountSettingsView: View {
         await MainActor.run {
             coreSessionIdentity = identity
         }
+    }
+
+    private func confirmSignOut() {
+        guard let device = signOutDevice, device.isCurrent == false else {
+            signOutDevice = nil
+            signOutPassword = ""
+            return
+        }
+        let password = signOutPassword
+        signOutDevice = nil
+        signOutPassword = ""
+        isSigningOut = true
+        signOutMessage = nil
+        Task {
+            let result = await environment.crypto.signOutSession(
+                deviceId: device.id,
+                password: password
+            )
+            let devices = await environment.crypto.sessionDevices()
+            await MainActor.run {
+                sessionDevices = devices
+                signOutMessage = result.message
+                isSigningOut = false
+            }
+        }
+    }
+}
+
+private struct SessionDeviceRow: View {
+    let device: SharedCoreSessionDevice
+    let isSigningOut: Bool
+    let onSignOut: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(device.isCurrent ? "This device" : device.displayName)
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(SynaraColor.primaryText)
+                Spacer()
+                if device.isCurrent == false {
+                    Button("Sign Out", role: .destructive, action: onSignOut)
+                        .disabled(isSigningOut)
+                        .accessibilityIdentifier("SignOutSessionButton-\(device.id)")
+                }
+            }
+            if device.isCurrent == false {
+                Text(device.displayName)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .textSelection(.enabled)
+            }
+            Text(SharedCoreDevicesLive.trustDisplayName(device.trust))
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+            if let lastActivity = SharedCoreDevicesLive.lastActivityDisplay(lastSeenTs: device.lastSeenTs) {
+                Text(lastActivity)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+            Text(device.id)
+                .font(SynaraTypography.fineMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .textSelection(.enabled)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier(device.isCurrent ? "SettingsCurrentSessionRow" : "SettingsSessionRow-\(device.id)")
     }
 }
 

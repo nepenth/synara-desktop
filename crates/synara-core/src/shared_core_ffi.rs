@@ -419,6 +419,7 @@ const DEVICE_SNAPSHOT_COMMAND: &str = "matrix_device_snapshot";
 const DEVICE_RENAME_COMMAND: &str = "matrix_device_rename";
 const DEVICE_DELETE_START_COMMAND: &str = "matrix_device_delete_start";
 const DEVICE_DELETE_CANCEL_COMMAND: &str = "matrix_device_delete_cancel";
+const DEVICE_DELETE_PASSWORD_NO_SESSION_CODE: &str = "p2-device-delete-password-no-session";
 const DEVICE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-device-snapshot-no-session";
 const DEVICE_RENAME_NO_SESSION_CODE: &str = "p2-device-rename-no-session";
 const DEVICE_DELETE_START_NO_SESSION_CODE: &str = "p2-device-delete-start-no-session";
@@ -3874,6 +3875,25 @@ impl SharedCore {
             .await
             .map_err(|error| map_device_core_error(DEVICE_DELETE_CANCEL_NO_SESSION_CODE, error))?;
         Ok(())
+    }
+
+    /// Password UIAA for a pending device delete. Password is a method argument,
+    /// never a Core JSON field.
+    pub async fn device_delete_password(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+        password: String,
+    ) -> Result<DeviceDeleteDto, DeviceCommandError> {
+        let result = self
+            .core
+            .device_delete_password(operation_id, session_generation, &password)
+            .await
+            .map_err(|error| {
+                map_device_core_error(DEVICE_DELETE_PASSWORD_NO_SESSION_CODE, error)
+            })?;
+        drop(password);
+        Ok(device_delete_dto(result))
     }
 
     pub async fn room_join_rule_snapshot(

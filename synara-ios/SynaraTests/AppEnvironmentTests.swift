@@ -30,6 +30,29 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertNil(identity)
     }
 
+    func testSessionDevicePresentationMapsTrustAndLastActivity() {
+        let device = SharedCoreDevicesLive.devices(
+            deviceId: "DEVICEABC",
+            displayName: "  MacBook  ",
+            isCurrent: false,
+            trust: "verified",
+            lastSeenTs: 1_700_000_000_000
+        )
+
+        XCTAssertEqual(device.id, "DEVICEABC")
+        XCTAssertEqual(device.displayName, "MacBook")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(device.trust), "Verified")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unverified"), "Unverified")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Unknown")
+        XCTAssertNil(SharedCoreDevicesLive.lastActivityDisplay(lastSeenTs: nil))
+        XCTAssertNotNil(
+            SharedCoreDevicesLive.lastActivityDisplay(
+                lastSeenTs: device.lastSeenTs,
+                now: Date(timeIntervalSince1970: 1_700_000_360)
+            )
+        )
+    }
+
     func testSettingsCoreIdentitySelectionRequiresExactSwiftSessionMatch() throws {
         let session = AuthenticatedSession(
             userID: "@alice:matrix.org",

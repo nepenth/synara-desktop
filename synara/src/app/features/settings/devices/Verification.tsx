@@ -36,9 +36,10 @@ export function VerificationStatusBadge({
   verificationStatus,
   otherUnverifiedCount,
 }: VerificationStatusBadgeProps) {
-  if (verificationStatus === 'unknown' || typeof otherUnverifiedCount !== 'number') {
+  if (verificationStatus === 'unknown') {
     return <Spinner size="400" variant="Secondary" />;
   }
+  const unverifiedCount = otherUnverifiedCount ?? 0;
   if (verificationStatus === 'unverified') {
     return (
       <Badge variant="Critical" fill="Solid" size="500">
@@ -47,10 +48,10 @@ export function VerificationStatusBadge({
     );
   }
 
-  if (otherUnverifiedCount > 0) {
+  if (unverifiedCount > 0) {
     return (
       <Badge variant="Warning" fill="Solid" size="500">
-        <Text size="L400">{otherUnverifiedCount} Unverified</Text>
+        <Text size="L400">{unverifiedCount} Unverified</Text>
       </Badge>
     );
   }
@@ -125,7 +126,7 @@ function NativeEnableVerification({
 }) {
   const [open, setOpen] = useState(false);
   if (!visible) return null;
-  if (loading) return <Spinner size="200" variant="Secondary" />;
+  if (loading && !status) return <Spinner size="200" variant="Secondary" />;
   if (error || status?.readiness === 'unavailable') {
     return (
       <Text size="T200">Native cross-signing is unavailable. Restart Synara and try again.</Text>

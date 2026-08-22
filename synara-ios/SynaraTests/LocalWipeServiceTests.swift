@@ -126,6 +126,25 @@ final class LocalWipeServiceTests: XCTestCase {
         )
     }
 
+    func testProductResetLocalStateDoesNotWipePersistedStores() throws {
+        let source = try String(
+            contentsOf: URL(fileURLWithPath: #filePath)
+                .deletingLastPathComponent()
+                .deletingLastPathComponent()
+                .appendingPathComponent("Synara/Services/SharedCoreProductServices.swift"),
+            encoding: .utf8
+        )
+        let reset = source
+            .components(separatedBy: "func resetLocalState(for session: AuthenticatedSession?) async")
+            .dropFirst()
+            .first?
+            .components(separatedBy: "func coreSessionIdentity()")
+            .first ?? ""
+        XCTAssertFalse(reset.isEmpty)
+        XCTAssertTrue(reset.contains("SharedCoreLeftovers.logout"))
+        XCTAssertFalse(reset.contains("wipePersistedStores"))
+    }
+
     func testServerRevocationFailureStillCompletesLocalWipe() async throws {
         let secureStore = InMemorySecureSessionStore(session: try makeSession())
         let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)

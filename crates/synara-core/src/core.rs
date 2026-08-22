@@ -1500,6 +1500,24 @@ impl Core {
         Ok(())
     }
 
+    /// Password UIAA for a pending device delete. The password is a method
+    /// argument, never a `Core::command` JSON field.
+    pub async fn device_delete_password(
+        &self,
+        operation_id: u64,
+        session_generation: u64,
+        password: &str,
+    ) -> Result<crate::app::devices::NativeDeviceDeleteResult, MatrixIpcError> {
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-delete-password-no-session")
+        })?;
+        owner
+            .authenticate_delete_password(operation_id, session_generation, password)
+            .await
+            .map_err(device_snapshot_owner_error)
+    }
+
     /// Install the live join-rule owner created by the shell after login/restore.
     pub fn attach_join_rules(
         &self,
@@ -4448,7 +4466,8 @@ fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-crypto.7-device-delete-selection-empty"
         | "v-crypto.7-device-delete-selection-invalid"
         | "v-crypto.7-device-delete-not-pending"
-        | "v-crypto.7-device-delete-operation-mismatch" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-crypto.7-device-delete-operation-mismatch"
+        | "v-crypto.7-device-delete-password-empty" => MatrixIpcErrorCategory::SdkInvariant,
         "v-crypto.7-device-delete-stale-generation" => {
             MatrixIpcErrorCategory::StaleSessionGeneration
         }

@@ -582,7 +582,8 @@ fn crypto_status_routes_through_core_while_desktop_keeps_the_mutex_bound_sdk_rea
 }
 
 #[test]
-fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across_both_sdk_reads() {
+fn cross_signing_status_routes_only_through_core_and_releases_the_auth_mutex_before_identity_lookup(
+) {
     let command_source = include_str!("../cross_signing/product_commands.rs");
     let command = command_source
         .split("pub async fn matrix_cross_signing_status")
@@ -638,26 +639,29 @@ fn cross_signing_status_routes_only_through_core_and_holds_the_auth_mutex_across
     let lock = projection
         .find("self.session.lock().await")
         .expect("cross-signing projection must take the existing auth mutex");
+    let clone = projection
+        .find("active.client.clone()")
+        .expect("projection must clone the live client before identity lookup");
     let private_status = projection
         .find("cross_signing_status().await")
         .expect("projection must retain the existing private status observation");
+    let local_identity = projection
+        .find("get_user_identity(user_id)")
+        .expect("projection must prefer the local crypto-store identity");
     let identity_query = projection
         .find("request_user_identity(user_id)")
-        .expect("projection must retain the existing desktop-owned identity query");
+        .expect("projection may still fetch identity after releasing the mutex");
     assert!(
-        lock < private_status && private_status < identity_query,
-        "the auth mutex must be acquired before and held across both legacy SDK awaits"
+        lock < clone
+            && clone < private_status
+            && private_status < local_identity
+            && local_identity < identity_query,
+        "clone and release the auth mutex before private status and identity lookup"
     );
-    for forbidden in [
-        "drop(session)",
-        "client.clone",
-        "clone().request_user_identity",
-    ] {
-        assert!(
-            !projection.contains(forbidden),
-            "cross-signing observation must not clone/drop/reorder the legacy mutex owner: {forbidden}"
-        );
-    }
+    assert!(
+        projection.contains("timeout"),
+        "homeserver identity fetch must be bounded so Devices cannot spin forever"
+    );
     for forbidden in [
         "MatrixIpcError",
         "diagnostic_id",

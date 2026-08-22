@@ -183,13 +183,13 @@ impl NativeVerificationOwner {
                 (request, Some(device_id))
             }
             None => {
-                let identity = self
-                    .client
-                    .encryption()
-                    .request_user_identity(user_id)
-                    .await
-                    .map_err(|_| "v-crypto.1-identity-query-failed")?
-                    .ok_or("v-crypto.1-own-identity-unavailable")?;
+                let identity = crate::app::cross_signing::query_own_identity(
+                    &self.client.encryption(),
+                    user_id,
+                )
+                .await
+                .map_err(|_| "v-crypto.1-identity-query-failed")?
+                .ok_or("v-crypto.1-own-identity-unavailable")?;
                 let request = identity
                     .request_verification_with_methods(vec![VerificationMethod::SasV1])
                     .await
