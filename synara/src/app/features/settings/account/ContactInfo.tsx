@@ -39,10 +39,13 @@ function NativeContactInformation() {
   }, [refresh]);
 
   const [deleteState, remove] = useAsyncCallback(
-    useCallback(async (address: string) => {
-      await nativeThreepidDelete(address);
-      await refresh();
-    }, [refresh])
+    useCallback(
+      async (address: string) => {
+        await nativeThreepidDelete(address);
+        await refresh();
+      },
+      [refresh]
+    )
   );
 
   const [addState, addEmail] = useAsyncCallback(
@@ -164,11 +167,7 @@ function NativeContactInformation() {
                 </Button>
               </Box>
             )}
-            {message && (
-              <Text size="T200">
-                {message}
-              </Text>
-            )}
+            {message && <Text size="T200">{message}</Text>}
           </Box>
         </SettingTile>
       </SequenceCard>

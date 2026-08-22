@@ -1578,7 +1578,9 @@ function Messages() {
               ? 'The native timeline uses a single Element-like layout. Compact and Bubble apply only to the retired JS timeline.'
               : undefined
           }
-          after={isNativeMatrixSession() ? <Text size="T300">Modern</Text> : <SelectMessageLayout />}
+          after={
+            isNativeMatrixSession() ? <Text size="T300">Modern</Text> : <SelectMessageLayout />
+          }
         />
       </SequenceCard>
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">

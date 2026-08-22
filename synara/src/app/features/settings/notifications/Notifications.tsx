@@ -71,10 +71,13 @@ function NativePushRulesEditor() {
   }, [refresh]);
 
   const [writeState, write] = useAsyncCallback(
-    useCallback(async (task: () => Promise<void>) => {
-      await task();
-      await refresh();
-    }, [refresh])
+    useCallback(
+      async (task: () => Promise<void>) => {
+        await task();
+        await refresh();
+      },
+      [refresh]
+    )
   );
   const busy = writeState.status === AsyncStatus.Loading;
 
@@ -86,49 +89,81 @@ function NativePushRulesEditor() {
     <Box direction="Column" gap="700">
       <Box direction="Column" gap="100">
         <Text size="L400">All Messages</Text>
-        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column" gap="400">
-          <SettingTile title="1-to-1 Chats" after={
-            snapshot && (
-              <NativeModePicker
-                value={snapshot.dm}
-                disabled={busy}
-                onChange={(mode) => setDefault(false, true, mode)}
-              />
-            )
-          } />
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="1-to-1 Chats"
+            after={
+              snapshot && (
+                <NativeModePicker
+                  value={snapshot.dm}
+                  disabled={busy}
+                  onChange={(mode) => setDefault(false, true, mode)}
+                />
+              )
+            }
+          />
         </SequenceCard>
-        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column" gap="400">
-          <SettingTile title="1-to-1 Chats (Encrypted)" after={
-            snapshot && (
-              <NativeModePicker
-                value={snapshot.dmEncrypted}
-                disabled={busy}
-                onChange={(mode) => setDefault(true, true, mode)}
-              />
-            )
-          } />
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="1-to-1 Chats (Encrypted)"
+            after={
+              snapshot && (
+                <NativeModePicker
+                  value={snapshot.dmEncrypted}
+                  disabled={busy}
+                  onChange={(mode) => setDefault(true, true, mode)}
+                />
+              )
+            }
+          />
         </SequenceCard>
-        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column" gap="400">
-          <SettingTile title="Rooms" after={
-            snapshot && (
-              <NativeModePicker
-                value={snapshot.group}
-                disabled={busy}
-                onChange={(mode) => setDefault(false, false, mode)}
-              />
-            )
-          } />
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Rooms"
+            after={
+              snapshot && (
+                <NativeModePicker
+                  value={snapshot.group}
+                  disabled={busy}
+                  onChange={(mode) => setDefault(false, false, mode)}
+                />
+              )
+            }
+          />
         </SequenceCard>
-        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column" gap="400">
-          <SettingTile title="Rooms (Encrypted)" after={
-            snapshot && (
-              <NativeModePicker
-                value={snapshot.groupEncrypted}
-                disabled={busy}
-                onChange={(mode) => setDefault(true, false, mode)}
-              />
-            )
-          } />
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
+          <SettingTile
+            title="Rooms (Encrypted)"
+            after={
+              snapshot && (
+                <NativeModePicker
+                  value={snapshot.groupEncrypted}
+                  disabled={busy}
+                  onChange={(mode) => setDefault(true, false, mode)}
+                />
+              )
+            }
+          />
         </SequenceCard>
       </Box>
 
@@ -160,9 +195,7 @@ function NativePushRulesEditor() {
                     radii="300"
                     disabled={busy}
                     onClick={() =>
-                      write(() =>
-                        nativePushRulesSetMention(ruleId, !snapshot.mentions[ruleId])
-                      )
+                      write(() => nativePushRulesSetMention(ruleId, !snapshot.mentions[ruleId]))
                     }
                   >
                     <Text size="T300">{snapshot.mentions[ruleId] ? 'On' : 'Off'}</Text>
@@ -176,20 +209,29 @@ function NativePushRulesEditor() {
 
       <Box direction="Column" gap="100">
         <Text size="L400">Keyword Messages</Text>
-        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column" gap="400">
+        <SequenceCard
+          className={SequenceCardStyle}
+          variant="SurfaceVariant"
+          direction="Column"
+          gap="400"
+        >
           <SettingTile
             title="Select Keyword"
             description="Notify when a message contains this keyword."
           >
-            <Box as="form" gap="200" onSubmit={(evt) => {
-              evt.preventDefault();
-              const next = keyword.trim();
-              if (!next) return;
-              write(async () => {
-                await nativePushRulesAddKeyword(next);
-                setKeyword('');
-              });
-            }}>
+            <Box
+              as="form"
+              gap="200"
+              onSubmit={(evt) => {
+                evt.preventDefault();
+                const next = keyword.trim();
+                if (!next) return;
+                write(async () => {
+                  await nativePushRulesAddKeyword(next);
+                  setKeyword('');
+                });
+              }}
+            >
               <Box grow="Yes" direction="Column">
                 <Input
                   value={keyword}
@@ -239,9 +281,7 @@ function NativePushRulesEditor() {
           </SequenceCard>
         ))}
       </Box>
-      {message && (
-        <Text size="T200">{message}</Text>
-      )}
+      {message && <Text size="T200">{message}</Text>}
     </Box>
   );
 }

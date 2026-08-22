@@ -198,9 +198,7 @@ function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Pro
 
 function NativeIgnoredUserList() {
   const [userList, setUserList] = useState<string[]>([]);
-  const [loadState, load] = useAsyncCallback(
-    useCallback(() => nativeIgnoredUsersSnapshot(), [])
-  );
+  const [loadState, load] = useAsyncCallback(useCallback(() => nativeIgnoredUsersSnapshot(), []));
 
   useEffect(() => {
     load().then((ids) => {

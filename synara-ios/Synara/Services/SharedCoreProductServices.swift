@@ -1886,7 +1886,7 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
         if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) {
             return nil
         }
-        await withOpenLive(roomID: roomID) { opened in
+        return await withOpenLive(roomID: roomID) { opened in
             let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
                 core: host.core,
                 streamId: opened.streamId,

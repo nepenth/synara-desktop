@@ -953,7 +953,9 @@ const NativeTimelineRow = ({
                     gap="100"
                     onClick={() => onFocusEvent(row.reply!.eventId)}
                     style={{
-                      borderLeft: `3px solid ${colorMXID(row.reply.senderId ?? row.reply.senderName)}`,
+                      borderLeft: `3px solid ${colorMXID(
+                        row.reply.senderId ?? row.reply.senderName
+                      )}`,
                       paddingLeft: config.space.S300,
                       margin: `${config.space.S100} 0`,
                       background: 'transparent',
