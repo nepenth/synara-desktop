@@ -48,10 +48,10 @@ export function VerificationStatusBadge({
     );
   }
 
-  if (otherUnverifiedCount > 0) {
+  if (unverifiedCount > 0) {
     return (
       <Badge variant="Warning" fill="Solid" size="500">
-        <Text size="L400">{otherUnverifiedCount} Unverified</Text>
+        <Text size="L400">{unverifiedCount} Unverified</Text>
       </Badge>
     );
   }
