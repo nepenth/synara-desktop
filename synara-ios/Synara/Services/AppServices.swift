@@ -395,6 +395,7 @@ enum CryptoVerificationState: Equatable, Identifiable {
     case requestSent
     case accepted
     case sasStarted
+    case keysExchanging
     case emojis([CryptoVerificationEmoji])
     case decimals([UInt16])
     case confirmed
@@ -411,7 +412,7 @@ enum CryptoVerificationState: Equatable, Identifiable {
         switch self {
         case .finished, .cancelled, .failed, .mismatched:
             return true
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .keysExchanging, .emojis, .decimals, .confirmed:
             return false
         }
     }
@@ -426,6 +427,8 @@ enum CryptoVerificationState: Equatable, Identifiable {
             return "accepted"
         case .sasStarted:
             return "sas_started"
+        case .keysExchanging:
+            return "keys_exchanging"
         case .emojis(let emojis):
             return "emojis:\(emojis.count)"
         case .decimals(let values):
@@ -463,7 +466,7 @@ protocol CryptoStatusServicing {
     func verificationUpdates() -> AsyncStream<CryptoVerificationState>
     func currentVerificationState() async -> CryptoVerificationState?
     func retryDecryption(roomID: String) async -> CryptoActionResult
-    func requestDeviceVerification() async -> CryptoActionResult
+    func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult
     func acceptVerificationRequest() async -> CryptoActionResult
     func startSasVerification() async -> CryptoActionResult
     func approveVerification() async -> CryptoActionResult
@@ -476,6 +479,10 @@ protocol CryptoStatusServicing {
 }
 
 extension CryptoStatusServicing {
+    func requestDeviceVerification() async -> CryptoActionResult {
+        await requestDeviceVerification(deviceId: nil)
+    }
+
     func sessionDevices() async -> [SharedCoreSessionDevice] {
         []
     }
@@ -872,8 +879,9 @@ struct MockCryptoStatusService: CryptoStatusServicing {
         .completed("Decryption retry started.")
     }
 
-    func requestDeviceVerification() async -> CryptoActionResult {
-        .completed("Device verification request sent.")
+    func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult {
+        _ = deviceId
+        return .completed("Device verification request sent.")
     }
 
     func acceptVerificationRequest() async -> CryptoActionResult {

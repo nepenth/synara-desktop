@@ -53,6 +53,44 @@ final class AppEnvironmentTests: XCTestCase {
         )
     }
 
+    func testVerificationPeerPrefersVerifiedThenRecentDevice() {
+        let current = SharedCoreDevicesLive.devices(
+            deviceId: "CURRENT",
+            displayName: "This iPhone",
+            isCurrent: true,
+            trust: "unverified",
+            lastSeenTs: 500
+        )
+        let recentUnverified = SharedCoreDevicesLive.devices(
+            deviceId: "RECENT",
+            displayName: "Recent iPhone",
+            isCurrent: false,
+            trust: "unverified",
+            lastSeenTs: 400
+        )
+        let olderVerified = SharedCoreDevicesLive.devices(
+            deviceId: "VERIFIED",
+            displayName: "Trusted Mac",
+            isCurrent: false,
+            trust: "verified",
+            lastSeenTs: 100
+        )
+
+        XCTAssertEqual(
+            SharedCoreDevicesLive.preferredVerificationDeviceId(
+                from: [current, recentUnverified, olderVerified]
+            ),
+            "VERIFIED"
+        )
+        XCTAssertEqual(
+            SharedCoreDevicesLive.preferredVerificationDeviceId(
+                from: [current, recentUnverified]
+            ),
+            "RECENT"
+        )
+        XCTAssertNil(SharedCoreDevicesLive.preferredVerificationDeviceId(from: [current]))
+    }
+
     func testSettingsCoreIdentitySelectionRequiresExactSwiftSessionMatch() throws {
         let session = AuthenticatedSession(
             userID: "@alice:matrix.org",

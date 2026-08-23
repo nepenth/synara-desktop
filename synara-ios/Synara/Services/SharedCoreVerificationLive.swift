@@ -83,6 +83,8 @@ enum SharedCoreVerificationLive {
                 return .accepted
             }
             return .sasStarted
+        case "keys_exchanging":
+            return .keysExchanging
         case "sas_ready":
             if emoji.isEmpty == false {
                 return .emojis(emoji.map { CryptoVerificationEmoji(symbol: $0.symbol, description: $0.description) })
@@ -90,7 +92,10 @@ enum SharedCoreVerificationLive {
             if decimals.count == 3 {
                 return .decimals(decimals)
             }
-            return .sasStarted
+            // `sas_ready` without a comparison payload violates the native/FFI
+            // contract. Surface the failure instead of leaving the user in an
+            // endless waiting state with no possible confirmation action.
+            return .failed
         case "confirmed":
             return .confirmed
         case "done":

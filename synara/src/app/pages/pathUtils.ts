@@ -95,8 +95,8 @@ export const getHomeJoinPath = (): string => HOME_JOIN_PATH;
 export const getHomeSearchPath = (): string => HOME_SEARCH_PATH;
 export const getHomeRoomPath = (roomIdOrAlias: string, eventId?: string): string => {
   const params = {
-    roomIdOrAlias,
-    eventId: eventId ?? null,
+    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
+    eventId: eventId ? encodeURIComponent(eventId) : null,
   };
 
   return generatePath(HOME_ROOM_PATH, params);

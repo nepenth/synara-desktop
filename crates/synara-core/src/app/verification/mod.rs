@@ -21,8 +21,9 @@ pub use inbox::{
 };
 pub use live::{NativeVerificationOwner, NativeVerificationUpdateSignal, VerificationUpdateEmit};
 pub use native::{
-    phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
-    NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
+    compare_for_inbox, phase_rank, NativeVerificationDirection, NativeVerificationEmoji,
+    NativeVerificationInbox, NativeVerificationPhase, NativeVerificationRequest,
+    NativeVerificationSas,
 };
 
 /// Tauri event: verification inbox/SAS may have changed. Signal only; UI

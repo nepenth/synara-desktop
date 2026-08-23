@@ -407,7 +407,7 @@ enum SynaraTypography {
     static let body = Font.body
     static let supporting = Font.callout
     static let emphasis = Font.body.weight(.semibold)
-    static let messageBody = Font.subheadline
+    static let messageBody = Font.body
     static let messageMeta = Font.caption
     static let roomPreview = Font.subheadline
     static let chipLabel = Font.caption.weight(.semibold)

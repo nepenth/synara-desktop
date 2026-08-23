@@ -2,6 +2,8 @@
 //!
 //! Live Client request/SAS ownership stays in the desktop shell.
 
+use std::cmp::Ordering;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -17,6 +19,7 @@ pub enum NativeVerificationPhase {
     Requested,
     Ready,
     Started,
+    KeysExchanging,
     SasReady,
     Confirmed,
     Done,
@@ -62,12 +65,26 @@ pub fn phase_rank(phase: NativeVerificationPhase) -> u8 {
         NativeVerificationPhase::Requested => 0,
         NativeVerificationPhase::Ready => 1,
         NativeVerificationPhase::Started => 2,
-        NativeVerificationPhase::SasReady => 3,
-        NativeVerificationPhase::Confirmed => 4,
-        NativeVerificationPhase::Done => 5,
-        NativeVerificationPhase::Mismatched => 6,
-        NativeVerificationPhase::Cancelled => 7,
+        NativeVerificationPhase::KeysExchanging => 3,
+        NativeVerificationPhase::SasReady => 4,
+        NativeVerificationPhase::Confirmed => 5,
+        NativeVerificationPhase::Done => 6,
+        NativeVerificationPhase::Mismatched => 7,
+        NativeVerificationPhase::Cancelled => 8,
     }
+}
+
+/// Order action phases first, then prefer the newest request within a phase.
+/// A freshly delivered verification must not be hidden behind an abandoned
+/// request from an earlier app run.
+pub fn compare_for_inbox(
+    left: &NativeVerificationRequest,
+    right: &NativeVerificationRequest,
+) -> Ordering {
+    phase_rank(left.phase)
+        .cmp(&phase_rank(right.phase))
+        .then_with(|| right.started_ts.cmp(&left.started_ts))
+        .then_with(|| left.flow_id.cmp(&right.flow_id))
 }
 
 #[cfg(test)]
@@ -84,6 +101,22 @@ mod tests {
             phase_rank(NativeVerificationPhase::SasReady)
                 < phase_rank(NativeVerificationPhase::Done)
         );
+    }
+
+    #[test]
+    fn inbox_order_prefers_newest_request_within_the_same_phase() {
+        let request = |flow_id: &str, started_ts| NativeVerificationRequest {
+            flow_id: flow_id.to_owned(),
+            other_user_id: "@alice:example.org".to_owned(),
+            other_device_id: Some("DEVICE".to_owned()),
+            direction: NativeVerificationDirection::Incoming,
+            phase: NativeVerificationPhase::Requested,
+            started_ts: Some(started_ts),
+            sas: None,
+        };
+        let mut requests = [request("older", 1), request("newer", 2)];
+        requests.sort_by(compare_for_inbox);
+        assert_eq!(requests[0].flow_id, "newer");
     }
 
     #[test]

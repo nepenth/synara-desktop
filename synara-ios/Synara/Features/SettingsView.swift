@@ -338,8 +338,11 @@ private struct AccountSettingsView: View {
                     ForEach(sessionDevices) { device in
                         SessionDeviceRow(
                             device: device,
-                            isSigningOut: isSigningOut
+                            isSigningOut: isSigningOut,
+                            isRequestingVerification: isRequestingVerification
                         ) {
+                            requestVerification(with: device)
+                        } onSignOut: {
                             signOutPassword = ""
                             signOutMessage = nil
                             signOutDevice = device
@@ -398,6 +401,7 @@ private struct AccountSettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("Account")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("AccountSettingsScreen")
         .alert(
             "Sign out session?",
@@ -622,11 +626,26 @@ private struct AccountSettingsView: View {
             }
         }
     }
+
+    private func requestVerification(with device: SharedCoreSessionDevice) {
+        guard device.isCurrent == false else { return }
+        isRequestingVerification = true
+        verificationMessage = nil
+        Task {
+            let result = await environment.crypto.requestDeviceVerification(deviceId: device.id)
+            await MainActor.run {
+                verificationMessage = result.message
+                isRequestingVerification = false
+            }
+        }
+    }
 }
 
 private struct SessionDeviceRow: View {
     let device: SharedCoreSessionDevice
     let isSigningOut: Bool
+    let isRequestingVerification: Bool
+    let onVerify: () -> Void
     let onSignOut: () -> Void
 
     var body: some View {
@@ -637,9 +656,18 @@ private struct SessionDeviceRow: View {
                     .foregroundStyle(SynaraColor.primaryText)
                 Spacer()
                 if device.isCurrent == false {
-                    Button("Sign Out", role: .destructive, action: onSignOut)
-                        .disabled(isSigningOut)
-                        .accessibilityIdentifier("SignOutSessionButton-\(device.id)")
+                    Menu {
+                        Button("Verify", systemImage: "checkmark.shield", action: onVerify)
+                            .disabled(isRequestingVerification)
+                            .accessibilityIdentifier("VerifySessionButton-\(device.id)")
+                        Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right", role: .destructive, action: onSignOut)
+                            .disabled(isSigningOut)
+                            .accessibilityIdentifier("SignOutSessionButton-\(device.id)")
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                            .accessibilityLabel("Actions for \(device.displayName)")
+                    }
+                    .accessibilityIdentifier("SessionActionsButton-\(device.id)")
                 }
             }
             if device.isCurrent == false {
@@ -795,6 +823,7 @@ private struct NotificationSettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("Notifications")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("NotificationSettingsScreen")
         .task {
             showLockScreenMessagePreviews = environment.settings.bool(
@@ -957,6 +986,7 @@ private struct AppearanceSettingsView: View {
         .background(SynaraChrome.settings)
         .settingsTabBarClearance()
         .navigationTitle("Appearance")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("AppearanceSettingsScreen")
         .onAppear {
             let stored = environment.settings.string(for: SynaraThemeRamp.storageKey)
@@ -1134,6 +1164,7 @@ private struct SecuritySettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("Security")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("SecuritySettingsScreen")
         .task {
             await sessionCrypto.start(crypto: environment.crypto)
@@ -1304,6 +1335,7 @@ private struct AboutSettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("About")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("AboutSettingsScreen")
     }
 }
@@ -1322,6 +1354,7 @@ private struct LicensesSettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("Licenses")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("LicensesSettingsScreen")
     }
 }
@@ -1366,6 +1399,7 @@ private struct PrivacyPolicySettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("Privacy")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("PrivacyPolicySettingsScreen")
     }
 }
@@ -1389,6 +1423,7 @@ private struct SupportSettingsView: View {
         }
         .settingsTabBarClearance()
         .navigationTitle("Support")
+        .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("SupportSettingsScreen")
     }
 }
@@ -1413,7 +1448,11 @@ private extension View {
     func settingsTabBarClearance() -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear
-                .frame(height: 72)
+                // The iOS floating tab bar occupies more than its visible
+                // capsule: content also needs room for the bar's outer margin
+                // and a readable separation above it. Keep the final Form row
+                // scrollable completely above that obstruction.
+                .frame(height: 104)
                 .accessibilityHidden(true)
         }
     }

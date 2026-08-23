@@ -611,6 +611,33 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testMatrixHTMLRendererSegmentsTablesAsReadableRows() {
+        let html = #"""
+        <p>Models</p>
+        <table>
+          <tr><th>Stage</th><th>Actual</th><th>Proof</th></tr>
+          <tr><td>Alpha</td><td>stealth/ox-alpha</td><td><code>content_chars=2702</code></td></tr>
+          <tr><td>Parent</td><td>grok-4.6</td><td>orchestrator only</td></tr>
+        </table>
+        <p>Verdicts</p>
+        """#
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "fallback", html: html),
+            [
+                .markdown("Models"),
+                .table(
+                    .init(rows: [
+                        .init(cells: ["Stage", "Actual", "Proof"], isHeader: true),
+                        .init(cells: ["Alpha", "stealth/ox-alpha", "content_chars=2702"], isHeader: false),
+                        .init(cells: ["Parent", "grok-4.6", "orchestrator only"], isHeader: false),
+                    ])
+                ),
+                .markdown("Verdicts"),
+            ]
+        )
+    }
+
     func testMatrixHTMLRendererPreservesAgentRichFormattingContract() {
         let html = #"""
         <h3>Verification plan</h3>

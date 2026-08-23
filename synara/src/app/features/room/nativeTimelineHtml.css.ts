@@ -64,19 +64,21 @@ export const MessageRow = recipe({
 export const MessageBody = style({
   background: 'transparent',
   padding: 0,
+  width: '100%',
+  maxWidth: toRem(672),
   minWidth: 0,
-  fontSize: toRem(15),
+  fontSize: toRem(16),
   fontWeight: 400,
-  lineHeight: 1.5,
+  lineHeight: 1.55,
   color: color.Surface.OnContainer,
 });
 
 export const FormattedBody = style({
   overflowWrap: 'anywhere',
   wordBreak: 'break-word',
-  fontSize: toRem(15),
+  fontSize: toRem(16),
   fontWeight: 400,
-  lineHeight: 1.5,
+  lineHeight: 1.55,
 });
 
 export const CodePanel = style({
@@ -142,7 +144,7 @@ export const CodeLineNumbers = style({
 });
 
 globalStyle(`${FormattedBody} p`, {
-  margin: `0 0 ${config.space.S200}`,
+  margin: `0 0 ${config.space.S300}`,
 });
 globalStyle(`${FormattedBody} p:last-child`, {
   marginBottom: 0,
@@ -150,9 +152,9 @@ globalStyle(`${FormattedBody} p:last-child`, {
 globalStyle(
   `${FormattedBody} h1, ${FormattedBody} h2, ${FormattedBody} h3, ${FormattedBody} h4, ${FormattedBody} h5, ${FormattedBody} h6`,
   {
-    margin: `${config.space.S300} 0 ${config.space.S200}`,
+    margin: `${config.space.S500} 0 ${config.space.S300}`,
     fontWeight: 600,
-    lineHeight: 1.25,
+    lineHeight: 1.3,
   }
 );
 globalStyle(
@@ -162,18 +164,18 @@ globalStyle(
   }
 );
 globalStyle(`${FormattedBody} blockquote`, {
-  margin: `${config.space.S200} 0`,
-  paddingLeft: config.space.S200,
+  margin: `${config.space.S300} 0`,
+  paddingLeft: config.space.S300,
   borderLeft: `3px solid ${color.SurfaceVariant.ContainerLine}`,
   fontStyle: 'italic',
   opacity: 0.92,
 });
 globalStyle(`${FormattedBody} ul, ${FormattedBody} ol`, {
-  margin: `${config.space.S200} 0`,
+  margin: `${config.space.S300} 0`,
   paddingLeft: '1.6em',
 });
 globalStyle(`${FormattedBody} li`, {
-  margin: `${config.space.S100} 0`,
+  margin: `${config.space.S200} 0`,
 });
 globalStyle(`${FormattedBody} pre`, {
   width: '100%',
@@ -227,12 +229,34 @@ globalStyle(`${FormattedBody} hr`, {
   borderTop: `1px solid ${color.SurfaceVariant.ContainerLine}`,
 });
 globalStyle(`${FormattedBody} table`, {
-  borderCollapse: 'collapse',
-  margin: `${config.space.S200} 0`,
+  width: '100%',
+  borderCollapse: 'separate',
+  borderSpacing: 0,
+  margin: `${config.space.S300} 0`,
+  overflow: 'hidden',
+  border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+  borderRadius: config.radii.R400,
+  background: color.Surface.Container,
 });
 globalStyle(`${FormattedBody} th, ${FormattedBody} td`, {
-  padding: `${config.space.S100} ${config.space.S200}`,
-  border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+  padding: `${config.space.S200} ${config.space.S300}`,
+  borderRight: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+  borderBottom: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+  textAlign: 'left',
+  verticalAlign: 'top',
+});
+globalStyle(`${FormattedBody} th:last-child, ${FormattedBody} td:last-child`, {
+  borderRight: 'none',
+});
+globalStyle(`${FormattedBody} tr:last-child td`, {
+  borderBottom: 'none',
+});
+globalStyle(`${FormattedBody} th`, {
+  background: color.SurfaceVariant.ContainerActive,
+  fontWeight: 600,
+});
+globalStyle(`${FormattedBody} tbody tr:nth-child(even) td`, {
+  background: color.SurfaceVariant.Container,
 });
 globalStyle(`${FormattedBody} img`, {
   maxWidth: toRem(296),

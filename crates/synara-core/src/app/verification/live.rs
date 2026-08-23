@@ -30,8 +30,9 @@ use serde::{Deserialize, Serialize};
 use tokio::{sync::Mutex, task::JoinHandle};
 
 use super::{
-    phase_rank, NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
-    NativeVerificationPhase, NativeVerificationRequest, NativeVerificationSas,
+    compare_for_inbox, NativeVerificationDirection, NativeVerificationEmoji,
+    NativeVerificationInbox, NativeVerificationPhase, NativeVerificationRequest,
+    NativeVerificationSas,
 };
 
 /// Privacy-safe verification wake-up. No user ids, tokens, or SAS secrets.
@@ -113,14 +114,15 @@ impl NativeVerificationOwner {
             },
         );
         let wake_emit = Arc::clone(&emit);
-        let wake_handler = client.add_event_handler(move |event: AnyToDeviceEvent| {
-            let emit = Arc::clone(&wake_emit);
-            async move {
-                if is_verification_to_device(&event) {
-                    emit(NativeVerificationUpdateSignal { session_generation });
+        let wake_handler =
+            client.add_event_handler(move |event: AnyToDeviceEvent, _client: Client| {
+                let emit = Arc::clone(&wake_emit);
+                async move {
+                    if is_verification_to_device(&event) {
+                        emit(NativeVerificationUpdateSignal { session_generation });
+                    }
                 }
-            }
-        });
+            });
         Self {
             client: client.clone(),
             registry,
@@ -146,12 +148,7 @@ impl NativeVerificationOwner {
             .values_mut()
             .map(project_request)
             .collect();
-        requests.sort_by(|left, right| {
-            phase_rank(left.phase)
-                .cmp(&phase_rank(right.phase))
-                .then_with(|| left.started_ts.cmp(&right.started_ts))
-                .then_with(|| left.flow_id.cmp(&right.flow_id))
-        });
+        requests.sort_by(compare_for_inbox);
         NativeVerificationInbox {
             session_generation,
             requests,
@@ -209,7 +206,7 @@ impl NativeVerificationOwner {
         arm_watch(
             self.watches.as_ref(),
             request_for_watch,
-            flow_id,
+            flow_id.clone(),
             self.registry.clone(),
             Arc::clone(&self.emit),
             self.session_generation,
@@ -242,18 +239,17 @@ impl NativeVerificationOwner {
                 .ok_or("v-crypto.1-sas-start-unavailable")?,
             VerificationRequestState::Transitioned {
                 verification: Verification::SasV1(sas),
-            } => {
-                if !sas.we_started() {
-                    sas.accept()
-                        .await
-                        .map_err(|_| "v-crypto.1-sas-accept-failed")?;
-                }
-                sas
-            }
+            } => sas,
             _ => {
                 return Err("v-crypto.1-sas-invalid-state");
             }
         };
+        // The SDK atomically emits Accept only while the SAS is actionable and
+        // otherwise returns Ok without sending. Delegating that decision avoids
+        // racing a separate `state()` snapshot during start-collision handling.
+        sas.accept()
+            .await
+            .map_err(|_| "v-crypto.1-sas-accept-failed")?;
         let mut registry = self.registry.lock().await;
         let managed = registry
             .requests
@@ -403,6 +399,35 @@ async fn start_self_verification(
     user_id: &matrix_sdk::ruma::UserId,
 ) -> Result<(VerificationRequest, Option<OwnedDeviceId>), &'static str> {
     let encryption = client.encryption();
+    let current = client.device_id().map(|id| id.to_owned());
+    let devices = encryption
+        .get_user_devices(user_id)
+        .await
+        .map_err(|_| "v-crypto.1-device-query-failed")?;
+    let peers: Vec<_> = devices
+        .devices()
+        .filter(|device| {
+            current
+                .as_ref()
+                .is_none_or(|current_id| device.device_id() != current_id)
+        })
+        .collect();
+
+    // A concrete trusted device is the least ambiguous authority for verifying
+    // a new session. Target it directly instead of broadcasting an identity
+    // request to every historical device on the account.
+    if let Some(device) = peers
+        .iter()
+        .find(|device| device.is_verified_with_cross_signing())
+    {
+        let device_id = device.device_id().to_owned();
+        let request = device
+            .request_verification_with_methods(vec![VerificationMethod::SasV1])
+            .await
+            .map_err(|_| "v-crypto.1-device-request-failed")?;
+        return Ok((request, Some(device_id)));
+    }
+
     if let Some(identity) =
         crate::app::cross_signing::query_own_identity(&encryption, user_id).await?
     {
@@ -412,17 +437,7 @@ async fn start_self_verification(
             .map_err(|_| "v-crypto.1-own-request-failed")?;
         return Ok((request, None));
     }
-    let current = client.device_id().map(|id| id.to_owned());
-    let devices = encryption
-        .get_user_devices(user_id)
-        .await
-        .map_err(|_| "v-crypto.1-device-query-failed")?;
-    let peer = devices.devices().find(|device| {
-        current
-            .as_ref()
-            .is_none_or(|current_id| device.device_id() != current_id)
-    });
-    let device = peer.ok_or("v-crypto.1-no-peer-device")?;
+    let device = peers.first().ok_or("v-crypto.1-no-peer-device")?;
     let device_id = device.device_id().to_owned();
     let request = device
         .request_verification_with_methods(vec![VerificationMethod::SasV1])
@@ -602,6 +617,8 @@ fn project_request(managed: &mut ManagedVerification) -> NativeVerificationReque
                 },
                 Some(display),
             )
+        } else if matches!(sas.state(), SasState::Accepted { .. }) {
+            (NativeVerificationPhase::KeysExchanging, None)
         } else {
             (NativeVerificationPhase::Started, None)
         }

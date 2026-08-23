@@ -180,8 +180,9 @@ use crate::app::devices::{
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
-    persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
-    SessionMaterial, SessionMaterialId, SessionMaterialVault,
+    load_session_material, matrix_session_from_host_secrets, persist_session_after_login,
+    restore_session_from_vault, restore_session_onto_client, SessionMaterial, SessionMaterialId,
+    SessionMaterialVault,
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
@@ -2778,8 +2779,8 @@ pub struct VerificationSasDto {
     pub decimals: Option<Vec<u16>>,
 }
 
-/// Privacy-safe verification request row. Identity/flow fields only; no tokens.
-/// S8 list omits SAS. S9 mutation returns may include optional SAS comparison.
+/// Privacy-safe verification request row. Identity/flow fields and optional
+/// display-only SAS values; no tokens, MACs, or key material.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequestDto {
     pub flow_id: String,
@@ -2850,6 +2851,7 @@ fn verification_phase_as_str(phase: NativeVerificationPhase) -> String {
         NativeVerificationPhase::Requested => "requested",
         NativeVerificationPhase::Ready => "ready",
         NativeVerificationPhase::Started => "started",
+        NativeVerificationPhase::KeysExchanging => "keys_exchanging",
         NativeVerificationPhase::SasReady => "sas_ready",
         NativeVerificationPhase::Confirmed => "confirmed",
         NativeVerificationPhase::Done => "done",
@@ -2857,18 +2859,6 @@ fn verification_phase_as_str(phase: NativeVerificationPhase) -> String {
         NativeVerificationPhase::Cancelled => "cancelled",
     }
     .to_owned()
-}
-
-fn verification_request_dto(request: NativeVerificationRequest) -> VerificationRequestDto {
-    VerificationRequestDto {
-        flow_id: request.flow_id,
-        other_user_id: request.other_user_id,
-        other_device_id: request.other_device_id,
-        direction: verification_direction_as_str(request.direction),
-        phase: verification_phase_as_str(request.phase),
-        started_ts: request.started_ts,
-        sas: None,
-    }
 }
 
 fn verification_emoji_dto(emoji: NativeVerificationEmoji) -> VerificationEmojiDto {
@@ -3043,6 +3033,12 @@ impl SharedCore {
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        install_session_rotation_callbacks(
+            &client,
+            identity.clone(),
+            Arc::clone(&self.secret_store),
+        )
+        .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
         let outcome = restore_session_from_vault(&client, &identity, &vault)
             .await
             .map_err(|error| match error {
@@ -3148,6 +3144,12 @@ impl SharedCore {
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        install_session_rotation_callbacks(
+            &client,
+            identity.clone(),
+            Arc::clone(&self.secret_store),
+        )
+        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let outcome = core_login_with_password(
             &client,
             identity.user_id(),
@@ -3216,6 +3218,12 @@ impl SharedCore {
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
+        install_session_rotation_callbacks(
+            &client,
+            identity.clone(),
+            Arc::clone(&self.secret_store),
+        )
+        .map_err(|_| login_failed(LOGIN_FAILED_CODE, LOGIN_FAILED_DESCRIPTION))?;
         let material = SessionMaterial::from_matrix_tokens(
             &identity,
             &device_id,
@@ -3934,7 +3942,10 @@ impl SharedCore {
             requests: inbox
                 .requests
                 .into_iter()
-                .map(verification_request_dto)
+                // `verification_list` is the long-lived UI observation path.
+                // Preserve the display-only SAS payload here; returning it only
+                // from one-shot mutations makes `sas_ready` impossible to render.
+                .map(verification_request_dto_with_sas)
                 .collect(),
         })
     }
@@ -12489,8 +12500,63 @@ impl SecretVault for CallbackSecretVault {
     }
 }
 
+#[derive(Clone)]
 struct SecretStoreSessionVault {
     store: Arc<dyn SecretVault + Send + Sync>,
+}
+
+#[derive(Debug)]
+struct SessionRotationCallbackError(&'static str);
+
+impl std::fmt::Display for SessionRotationCallbackError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(self.0)
+    }
+}
+
+impl std::error::Error for SessionRotationCallbackError {}
+
+/// Keep the host vault in lockstep with SDK access/refresh-token rotation.
+///
+/// `handle_refresh_tokens` updates the live SDK session, but persistence is an
+/// application responsibility. Without these callbacks, a later relaunch can
+/// restore a consumed refresh token even though the preceding run worked.
+fn install_session_rotation_callbacks(
+    client: &matrix_sdk::Client,
+    identity: AccountIdentity,
+    store: Arc<dyn SecretVault + Send + Sync>,
+) -> Result<(), SessionRotationCallbackError> {
+    let reload_identity = identity.clone();
+    let reload_store = Arc::clone(&store);
+    let save_identity = identity;
+    client
+        .set_session_callbacks(
+            Box::new(move |_| {
+                let vault = SecretStoreSessionVault {
+                    store: Arc::clone(&reload_store),
+                };
+                let material = load_session_material(&vault, &reload_identity)
+                    .map_err(|_| SessionRotationCallbackError("session-reload-read-failed"))?
+                    .ok_or(SessionRotationCallbackError(
+                        "session-reload-material-missing",
+                    ))?;
+                let secrets = material
+                    .decode_host_secrets()
+                    .map_err(|_| SessionRotationCallbackError("session-reload-decode-failed"))?;
+                let session = matrix_session_from_host_secrets(&reload_identity, &secrets)
+                    .map_err(|_| SessionRotationCallbackError("session-reload-invalid"))?;
+                Ok(session.tokens)
+            }),
+            Box::new(move |client| {
+                let vault = SecretStoreSessionVault {
+                    store: Arc::clone(&store),
+                };
+                persist_session_after_login(&client, &save_identity, &vault)
+                    .map_err(|_| SessionRotationCallbackError("session-rotation-persist-failed"))?;
+                Ok(())
+            }),
+        )
+        .map_err(|_| SessionRotationCallbackError("session-callback-install-failed"))
 }
 
 impl SessionMaterialVault for SecretStoreSessionVault {
@@ -12649,6 +12715,29 @@ mod tests {
             !shared_core.core.registered_commands().is_empty(),
             "P4-S2 must retain a real Core with its built-in registry"
         );
+    }
+
+    #[test]
+    fn verification_list_projection_preserves_display_only_sas() {
+        let dto = verification_request_dto_with_sas(NativeVerificationRequest {
+            flow_id: "flow".to_owned(),
+            other_user_id: "@alice:example.org".to_owned(),
+            other_device_id: Some("DEVICE".to_owned()),
+            direction: NativeVerificationDirection::Incoming,
+            phase: NativeVerificationPhase::SasReady,
+            started_ts: Some(1),
+            sas: Some(NativeVerificationSas {
+                emoji: Some(vec![NativeVerificationEmoji {
+                    symbol: "🐶".to_owned(),
+                    description: "Dog".to_owned(),
+                }]),
+                decimals: Some([1234, 5678, 9012]),
+            }),
+        });
+
+        let sas = dto.sas.expect("sas_ready list row must carry display SAS");
+        assert_eq!(sas.emoji.expect("emoji")[0].symbol, "🐶");
+        assert_eq!(sas.decimals, Some(vec![1234, 5678, 9012]));
     }
 
     #[test]

@@ -169,3 +169,17 @@ test('message surface stays readable against OnContainer in light and dark', () 
   assert.ok(contrastRatio(darkOn, darkPanel) >= 7);
   assert.ok(contrastRatio(darkOn, darkHover) >= 7);
 });
+
+test('formatted messages use a readable measure, body size, and layered tables', () => {
+  const messageBodyCss = htmlCss.slice(
+    htmlCss.indexOf('export const MessageBody'),
+    htmlCss.indexOf('export const CodePanel')
+  );
+
+  assert.match(messageBodyCss, /maxWidth: toRem\(672\)/);
+  assert.match(messageBodyCss, /fontSize: toRem\(16\)/);
+  assert.match(messageBodyCss, /lineHeight: 1\.55/);
+  assert.match(htmlCss, /borderCollapse: 'separate'/);
+  assert.match(htmlCss, /background: color\.SurfaceVariant\.ContainerActive/);
+  assert.match(htmlCss, /tbody tr:nth-child\(even\) td/);
+});

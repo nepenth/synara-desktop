@@ -1172,7 +1172,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
             ),
-            .sasStarted
+            .failed
         )
         XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
         XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
