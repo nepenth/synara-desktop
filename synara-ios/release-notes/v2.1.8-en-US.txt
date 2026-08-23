@@ -1,0 +1,14 @@
+Synara 2.1.8 completes device verification and fixes the washed-out iOS surfaces.
+
+What changed:
+- Verification refreshes and targets the exact new session instead of a stale device.
+- Direct SAS verification remains visible as Verified after both apps relaunch.
+- Rooms and Settings no longer have a gray veil or mismatched top and bottom colors in Light Mode.
+- Settings content remains visible above the floating tab bar, with the existing Dark Mode hierarchy preserved.
+
+What to test:
+- Sign in on two devices, verify the new session, and confirm both show the same emoji before approving.
+- Reopen both apps and confirm the peer session still says Verified.
+- Review Rooms and Settings in Light and Dark Mode, including the bottom of Settings.
+
+Never approve verification when the comparison differs.
