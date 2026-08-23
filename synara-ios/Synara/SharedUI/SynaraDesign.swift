@@ -99,18 +99,22 @@ enum SynaraThemeRamp {
             )
         }
 
-        let saturation = min(0.09, max(0.02, hsl.saturation * 0.28))
-        let mixRatio = min(0.16, max(0.06, 0.06 + hsl.saturation * 0.10))
+        // Light appearance needs a much quieter chrome stack than Dark Mode.
+        // Mixing the raw theme base into these stops made the default graphite
+        // theme look like a translucent gray veil over entire screens. Keep the
+        // chosen hue, but build near-white opaque surfaces so hierarchy comes
+        // from small luminance steps instead of a dark cast.
+        let saturation = min(0.045, max(0.012, hsl.saturation * 0.14))
         return SynaraThemeTokens(
-            groupedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation, lightness: 0.895), resolved, mixRatio),
-            secondarySurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.75, lightness: 0.952), resolved, mixRatio),
-            surface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.45, lightness: 1.0), resolved, mixRatio),
-            elevatedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.55, lightness: 0.975), resolved, mixRatio),
+            groupedSurface: synaraHex(hue: hue, saturation: saturation, lightness: 0.955),
+            secondarySurface: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.975),
+            surface: synaraHex(hue: hue, saturation: saturation * 0.40, lightness: 0.995),
+            elevatedSurface: synaraHex(hue: hue, saturation: saturation * 0.55, lightness: 0.985),
             primaryText: synaraHex(hue: hue, saturation: min(saturation * 1.4, 0.12), lightness: 0.09),
             secondaryText: synaraHex(hue: hue, saturation: saturation, lightness: 0.36),
             tertiaryText: synaraHex(hue: hue, saturation: saturation, lightness: 0.40),
-            separator: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.83), resolved, mixRatio),
-            mutedControl: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.91), resolved, mixRatio),
+            separator: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.86),
+            mutedControl: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.93),
             agentReviewBackground: synaraHex(hue: 196, saturation: 0.12, lightness: 0.94),
             agentReviewSurface: synaraHex(hue: 196, saturation: 0.14, lightness: 0.90)
         )

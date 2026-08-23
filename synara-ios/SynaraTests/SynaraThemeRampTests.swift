@@ -34,8 +34,14 @@ final class SynaraThemeRampTests: XCTestCase {
     func testDefaultLightRampIsARealLightTheme() {
         let tokens = SynaraThemeRamp.tokens(baseHex: SynaraThemeRamp.defaultBaseHex, dark: false)
 
+        XCTAssertGreaterThan(SynaraThemeRamp.relativeLuminance(hex: tokens.groupedSurface), 0.88)
+        XCTAssertGreaterThan(SynaraThemeRamp.relativeLuminance(hex: tokens.secondarySurface), 0.92)
         XCTAssertLessThan(
             SynaraThemeRamp.relativeLuminance(hex: tokens.groupedSurface),
+            SynaraThemeRamp.relativeLuminance(hex: tokens.secondarySurface)
+        )
+        XCTAssertLessThan(
+            SynaraThemeRamp.relativeLuminance(hex: tokens.secondarySurface),
             SynaraThemeRamp.relativeLuminance(hex: tokens.surface)
         )
         XCTAssertGreaterThan(SynaraThemeRamp.relativeLuminance(hex: tokens.surface), 0.8)
@@ -62,6 +68,31 @@ final class SynaraThemeRampTests: XCTestCase {
             SynaraThemeRamp.contrastRatio(foreground: blurple.primaryText, background: blurple.surface),
             4.5
         )
+    }
+
+    func testEveryLightPresetKeepsChromeBrightAndTextLegible() {
+        for preset in SynaraThemeRamp.presets {
+            let tokens = SynaraThemeRamp.tokens(baseHex: preset.hex, dark: false)
+
+            XCTAssertGreaterThan(
+                SynaraThemeRamp.relativeLuminance(hex: tokens.groupedSurface),
+                0.88,
+                "\(preset.label) grouped chrome must not cast a gray veil"
+            )
+            XCTAssertGreaterThan(
+                SynaraThemeRamp.relativeLuminance(hex: tokens.secondarySurface),
+                0.92,
+                "\(preset.label) room-list chrome must remain near white"
+            )
+            XCTAssertGreaterThan(
+                SynaraThemeRamp.contrastRatio(
+                    foreground: tokens.primaryText,
+                    background: tokens.groupedSurface
+                ),
+                7,
+                "\(preset.label) primary text must remain comfortably legible"
+            )
+        }
     }
 
     func testChromeRolesReadThePassedBaseHexNotTheStoredDefault() {

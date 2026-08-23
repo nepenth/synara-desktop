@@ -252,6 +252,13 @@ struct RoomListView: View {
                     .frame(height: 68)
             }
         }
+        .background {
+            // The floating tab bar and hidden navigation bar sit above the
+            // content plane. Paint that plane through both safe areas so their
+            // translucent edges never sample the window's unrelated default.
+            SynaraChrome.roomList
+                .ignoresSafeArea()
+        }
         .navigationTitle("Rooms")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar(.hidden, for: .navigationBar)
