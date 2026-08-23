@@ -9,7 +9,6 @@ import {
   HOME_CREATE_PATH,
   HOME_JOIN_PATH,
   HOME_PATH,
-  HOME_ROOM_PATH,
   HOME_SEARCH_PATH,
   LOGIN_PATH,
   INBOX_INVITES_PATH,
@@ -94,12 +93,11 @@ export const getHomeCreatePath = (): string => HOME_CREATE_PATH;
 export const getHomeJoinPath = (): string => HOME_JOIN_PATH;
 export const getHomeSearchPath = (): string => HOME_SEARCH_PATH;
 export const getHomeRoomPath = (roomIdOrAlias: string, eventId?: string): string => {
-  const params = {
-    roomIdOrAlias: encodeURIComponent(roomIdOrAlias),
-    eventId: eventId ? encodeURIComponent(eventId) : null,
-  };
-
-  return generatePath(HOME_ROOM_PATH, params);
+  // react-router has differed across supported host platforms on whether
+  // generatePath encodes route parameters. Assemble this fixed route after
+  // encoding so Matrix anchors are encoded exactly once everywhere.
+  const roomPath = `${trimTrailingSlash(HOME_PATH)}/${encodeURIComponent(roomIdOrAlias)}`;
+  return eventId ? `${roomPath}/${encodeURIComponent(eventId)}` : roomPath;
 };
 export const getHomeRoomPathWithViaServers = (
   roomIdOrAlias: string,
