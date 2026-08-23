@@ -1,0 +1,14 @@
+Synara 2.1.7 fixes device verification and improves readability in Dark Mode.
+
+What changed:
+- Device verification now reaches the emoji or decimal comparison, completes after both people confirm, and refreshes the trusted session state.
+- Comparison starts only when you choose Start Comparison, and the verification sheet stays readable while secure state changes arrive.
+- The last rows in Settings remain visible and tappable above the floating tab bar.
+- Messages use more comfortable body text. Wide tables scroll horizontally and use clearer headers, separators, and alternating rows.
+
+What to test:
+- From Account → Sessions, verify another signed-in device and confirm that both devices show the same comparison before approving.
+- In Dark Mode, scroll to the bottom of each Settings screen and confirm every row remains above the tab bar.
+- Open a long technical message with headings, lists, code, and a table.
+
+Never approve verification when the comparison differs. Please report the client, action, and approximate time for any issue; do not include passwords, access tokens, or recovery keys.

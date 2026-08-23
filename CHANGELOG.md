@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 2.1.7 - 2026-08-23
+
+- Device verification now completes through the real Matrix SAS operating path:
+  requests reach both clients, both sides exchange matching emoji or decimal
+  codes, confirmation completes, and the verified trust state refreshes.
+- iOS verification stays explicitly user-driven, keeps the comparison visible
+  while state changes arrive, and identifies the exact session being verified.
+- iOS Settings content now clears the floating tab bar, including the final rows
+  in Dark Mode, and uses more readable message typography and table treatment.
+- macOS message content has more comfortable measure, spacing, hierarchy, and
+  alternating table rows for easier scanning in long technical messages.
+- Matrix room and event routes are encoded consistently across desktop hosts.
+- See [`docs/releases/v2.1.7.md`](docs/releases/v2.1.7.md) for details.
+
 ## 2.1.6 - 2026-08-22
 
 - Native Core now owns homeserver push rules, 3PID/email, ignored users,
