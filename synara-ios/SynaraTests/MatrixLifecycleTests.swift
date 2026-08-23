@@ -338,8 +338,9 @@ private final class SequencingCryptoStatusService: CryptoStatusServicing {
         .unavailable("unused")
     }
 
-    func requestDeviceVerification() async -> CryptoActionResult {
-        .unavailable("unused")
+    func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult {
+        _ = deviceId
+        return .unavailable("unused")
     }
 
     func acceptVerificationRequest() async -> CryptoActionResult {

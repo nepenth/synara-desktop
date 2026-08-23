@@ -3336,6 +3336,8 @@ private struct MatrixFormattedMessageView: View {
             MatrixQuoteBlockView(markdown: markdown, font: font)
         case let .details(block):
             MatrixDetailsBlockView(block: block)
+        case let .table(block):
+            MatrixTableBlockView(block: block)
         }
     }
 
@@ -3355,6 +3357,64 @@ private struct MatrixFormattedMessageView: View {
             markdown: markdown,
             options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
         )) ?? AttributedString(markdown)
+    }
+}
+
+private struct MatrixTableBlockView: View {
+    let block: MatrixHTMLRenderer.TableBlock
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(Array(block.rows.enumerated()), id: \.offset) { rowIndex, row in
+                    HStack(alignment: .top, spacing: 0) {
+                        ForEach(Array(row.cells.enumerated()), id: \.offset) { cellIndex, cell in
+                            Text(cell)
+                                .font(
+                                    row.isHeader
+                                        ? SynaraTypography.messageBody.weight(.semibold)
+                                        : SynaraTypography.messageBody
+                                )
+                                .foregroundStyle(SynaraColor.primaryText)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(
+                                    width: cellIndex == 0 ? 112 : 168,
+                                    alignment: .topLeading
+                                )
+                                .padding(.horizontal, SynaraSpacing.small)
+                                .padding(.vertical, SynaraSpacing.small)
+
+                            if cellIndex < row.cells.count - 1 {
+                                Divider()
+                            }
+                        }
+                    }
+                    .background(tableRowSurface(rowIndex: rowIndex, isHeader: row.isHeader))
+                    .accessibilityElement(children: .combine)
+
+                    if rowIndex < block.rows.count - 1 {
+                        Divider()
+                    }
+                }
+            }
+        }
+        .background(SynaraColor.surface)
+        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+                .stroke(SynaraColor.separator, lineWidth: 1)
+        }
+        .textSelection(.enabled)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Message table")
+    }
+
+    private func tableRowSurface(rowIndex: Int, isHeader: Bool) -> Color {
+        if isHeader {
+            return SynaraColor.elevatedSurface
+        }
+        return rowIndex.isMultiple(of: 2) ? SynaraColor.surface : SynaraColor.secondarySurface
     }
 }
 

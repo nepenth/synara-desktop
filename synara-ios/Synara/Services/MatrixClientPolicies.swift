@@ -178,12 +178,14 @@ struct MatrixVerificationStateReducer {
             return 1
         case .sasStarted:
             return 2
-        case .emojis, .decimals:
+        case .keysExchanging:
             return 3
-        case .confirmed:
+        case .emojis, .decimals:
             return 4
-        case .finished, .cancelled, .failed, .mismatched:
+        case .confirmed:
             return 5
+        case .finished, .cancelled, .failed, .mismatched:
+            return 6
         }
     }
 }

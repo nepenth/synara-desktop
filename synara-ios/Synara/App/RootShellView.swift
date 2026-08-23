@@ -10,7 +10,6 @@ struct RootShellView: View {
     @State private var cryptoVerificationState: CryptoVerificationState?
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationActionError: String?
-    @State private var autoStartedSas = false
     @State private var signOutError: String?
     @ObservedObject private var themePaint = SynaraThemePaint.shared
 
@@ -99,23 +98,18 @@ struct RootShellView: View {
             startCryptoVerificationUpdates()
         }
         .sheet(isPresented: cryptoVerificationSheetBinding) {
-            if let cryptoVerificationState {
-                CryptoVerificationSheet(
-                    state: cryptoVerificationState,
-                    onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
-                    onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
-                    onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
-                    onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
-                    onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
-                    onDismissTerminal: {
-                        runCryptoVerificationAction { await environment.crypto.dismissVerification() }
-                        self.cryptoVerificationState = nil
-                    }
-                )
-                .interactiveDismissDisabled(
-                    CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(cryptoVerificationState) == false
-                )
-            }
+            CryptoVerificationSheetHost(
+                state: $cryptoVerificationState,
+                onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
+                onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
+                onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
+                onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
+                onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
+                onDismissTerminal: {
+                    runCryptoVerificationAction { await environment.crypto.dismissVerification() }
+                    self.cryptoVerificationState = nil
+                }
+            )
         }
         .alert("Verification action failed", isPresented: cryptoVerificationActionErrorBinding) {
             Button("OK", role: .cancel) {
@@ -241,27 +235,10 @@ struct RootShellView: View {
             guard Task.isCancelled == false else {
                 return
             }
-            let shouldStartSas = await MainActor.run { () -> Bool in
+            await MainActor.run {
                 cryptoVerificationState = update
-                switch update {
-                case .requestReceived, .requestSent:
-                    autoStartedSas = false
-                    return false
-                case .accepted:
-                    if autoStartedSas == false {
-                        autoStartedSas = true
-                        return true
-                    }
-                    return false
-                default:
-                    return false
-                }
-            }
-            if shouldStartSas {
-                _ = await environment.crypto.startSasVerification()
             }
             if update.isTerminal {
-                await MainActor.run { autoStartedSas = false }
                 if case .finished = update {
                     // Verification succeeded — kick a crypto status refresh.
                     // Any open timeline that is showing the "Encrypted history" / "Retry Decryption"
@@ -327,6 +304,40 @@ struct RootShellView_Previews: PreviewProvider {
     }
 }
 
+/// Keeps the presented sheet subscribed to verification state changes.
+///
+/// SwiftUI evaluates an `isPresented` sheet's content closure when the sheet is
+/// presented. Passing the unwrapped state value there freezes that snapshot, so
+/// an in-flight verification can remain visually stuck on "Waiting" even while
+/// the SDK has advanced to `sas_ready`. The binding makes each protocol update
+/// invalidate the presented hierarchy without dismissing the sheet.
+private struct CryptoVerificationSheetHost: View {
+    @Binding var state: CryptoVerificationState?
+    let onAccept: () -> Void
+    let onStartSas: () -> Void
+    let onApprove: () -> Void
+    let onDecline: () -> Void
+    let onCancel: () -> Void
+    let onDismissTerminal: () -> Void
+
+    var body: some View {
+        if let state {
+            CryptoVerificationSheet(
+                state: state,
+                onAccept: onAccept,
+                onStartSas: onStartSas,
+                onApprove: onApprove,
+                onDecline: onDecline,
+                onCancel: onCancel,
+                onDismissTerminal: onDismissTerminal
+            )
+            .interactiveDismissDisabled(
+                CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(state) == false
+            )
+        }
+    }
+}
+
 private struct CryptoVerificationSheet: View {
     let state: CryptoVerificationState
     let onAccept: () -> Void
@@ -339,16 +350,30 @@ private struct CryptoVerificationSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: SynaraSpacing.large) {
-                header
-                content
-                Spacer(minLength: SynaraSpacing.small)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: SynaraSpacing.large) {
+                        header
+                        content
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
                 actions
             }
             .padding(SynaraSpacing.xLarge)
-            .navigationTitle("Verify Device")
-            .navigationBarTitleDisplayMode(.inline)
         }
-        .presentationDetents([.medium, .large])
+        // Comparison needs the full height so all seven values and both
+        // decisions remain simultaneously readable at larger text sizes.
+        .presentationDetents(comparisonPresentationDetents)
+        .accessibilityIdentifier("DeviceVerificationSheet")
+    }
+
+    private var comparisonPresentationDetents: Set<PresentationDetent> {
+        switch state {
+        case .emojis, .decimals:
+            return [.large]
+        default:
+            return [.medium, .large]
+        }
     }
 
     @ViewBuilder
@@ -372,7 +397,7 @@ private struct CryptoVerificationSheet: View {
             }
         case .emojis(let emojis):
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: SynaraSpacing.small)], spacing: SynaraSpacing.small) {
-                ForEach(emojis) { emoji in
+                ForEach(Array(emojis.enumerated()), id: \.offset) { index, emoji in
                     VStack(spacing: SynaraSpacing.xSmall) {
                         Text(emoji.symbol)
                             .font(.system(size: 34))
@@ -383,19 +408,22 @@ private struct CryptoVerificationSheet: View {
                     .frame(maxWidth: .infinity, minHeight: 78)
                     .padding(SynaraSpacing.small)
                     .synaraCard()
+                    .accessibilityElement(children: .combine)
+                    .accessibilityIdentifier("VerificationEmoji-\(index)")
                 }
             }
         case .decimals(let values):
             HStack(spacing: SynaraSpacing.medium) {
-                ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+                ForEach(Array(values.enumerated()), id: \.offset) { index, value in
                     Text(String(value))
                         .font(.system(.title2, design: .monospaced).weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(SynaraSpacing.medium)
                         .synaraCard()
+                        .accessibilityIdentifier("VerificationDecimal-\(index)")
                 }
             }
-        case .requestSent, .accepted, .sasStarted, .confirmed:
+        case .requestSent, .accepted, .sasStarted, .keysExchanging, .confirmed:
             ProgressView()
                 .controlSize(.large)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -418,8 +446,9 @@ private struct CryptoVerificationSheet: View {
                     .buttonStyle(.bordered)
                 Button("Accept", action: onAccept)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("AcceptDeviceVerificationButton")
             }
-        case .requestSent, .sasStarted:
+        case .requestSent, .sasStarted, .keysExchanging:
             Button("Cancel Verification", role: .cancel, action: onCancel)
                 .buttonStyle(.bordered)
         case .accepted:
@@ -428,11 +457,13 @@ private struct CryptoVerificationSheet: View {
                     .buttonStyle(.bordered)
                 Button("Start Comparison", action: onStartSas)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("StartDeviceVerificationSasButton")
             }
         case .emojis, .decimals:
             VStack(spacing: SynaraSpacing.small) {
                 Button("They Match", action: onApprove)
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("ConfirmDeviceVerificationButton")
                 Button("They Do Not Match", role: .destructive, action: onDecline)
                     .buttonStyle(.bordered)
             }
@@ -442,6 +473,7 @@ private struct CryptoVerificationSheet: View {
         case .finished, .cancelled, .failed, .mismatched:
             Button("Done", action: onDismissTerminal)
                 .buttonStyle(.borderedProminent)
+                .accessibilityIdentifier("DismissDeviceVerificationButton")
         }
     }
 
@@ -455,6 +487,8 @@ private struct CryptoVerificationSheet: View {
             return "Ready to compare"
         case .sasStarted:
             return "Waiting"
+        case .keysExchanging:
+            return "Exchanging keys"
         case .emojis, .decimals:
             return "Compare on both devices"
         case .confirmed:
@@ -480,6 +514,8 @@ private struct CryptoVerificationSheet: View {
             return "Start a secure emoji or number comparison. Only this device should start."
         case .sasStarted:
             return "Waiting for the other device to start comparison, or for codes to appear."
+        case .keysExchanging:
+            return "Both devices accepted the comparison. Secure codes will appear when the key exchange completes."
         case .emojis, .decimals:
             return "Only approve if the values match exactly on both devices."
         case .confirmed:
@@ -503,7 +539,7 @@ private struct CryptoVerificationSheet: View {
             return "xmark.circle.fill"
         case .failed, .mismatched:
             return "exclamationmark.triangle.fill"
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .keysExchanging, .emojis, .decimals, .confirmed:
             return "lock.shield"
         }
     }
@@ -516,7 +552,7 @@ private struct CryptoVerificationSheet: View {
             return SynaraColor.secondaryText
         case .failed, .mismatched:
             return SynaraColor.critical
-        case .requestReceived, .requestSent, .accepted, .sasStarted, .emojis, .decimals, .confirmed:
+        case .requestReceived, .requestSent, .accepted, .sasStarted, .keysExchanging, .emojis, .decimals, .confirmed:
             return SynaraColor.accent
         }
     }

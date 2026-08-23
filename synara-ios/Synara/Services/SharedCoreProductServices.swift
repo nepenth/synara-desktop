@@ -1157,11 +1157,19 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         return .unavailable("Crypto recovery is unavailable.")
     }
 
-    func requestDeviceVerification() async -> CryptoActionResult {
+    func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult {
         await runVerification {
+            let targetDeviceId: String?
+            if let deviceId {
+                targetDeviceId = deviceId
+            } else {
+                targetDeviceId = SharedCoreDevicesLive.preferredVerificationDeviceId(
+                    from: await sessionDevices()
+                )
+            }
             let dto = try await SharedCoreVerificationSas.verificationStart(
                 core: host.core,
-                deviceId: nil
+                deviceId: targetDeviceId
             )
             storeFlow(dto.flowId)
             return "Device verification request sent."
@@ -1270,7 +1278,14 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionDevices() async -> [SharedCoreSessionDevice] {
-        guard let snapshot = try? await SharedCoreDevices.deviceSnapshot(core: host.core) else {
+        let snapshot: DeviceSnapshotDto
+        do {
+            snapshot = try await SharedCoreDevices.deviceSnapshot(core: host.core)
+        } catch {
+            AppLogger().error(
+                "device snapshot failed: \(String(describing: error))",
+                category: .matrix
+            )
             return []
         }
         return snapshot.devices.map {

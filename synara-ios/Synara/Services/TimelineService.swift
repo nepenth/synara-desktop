@@ -1254,11 +1254,21 @@ enum MatrixHTMLRenderer {
         let body: String
     }
 
+    struct TableRow: Equatable {
+        let cells: [String]
+        let isHeader: Bool
+    }
+
+    struct TableBlock: Equatable {
+        let rows: [TableRow]
+    }
+
     enum Segment: Equatable {
         case markdown(String)
         case code(String)
         case quote(String)
         case details(DetailsBlock)
+        case table(TableBlock)
     }
 
     static func attributedString(body: String, html: String) -> AttributedString {
@@ -1277,7 +1287,7 @@ enum MatrixHTMLRenderer {
         let sanitized = html
             .removingHTMLBlocks(named: "script")
             .removingHTMLBlocks(named: "style")
-        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>|<blockquote(?:\s+[^>]*)?>[\s\S]*?</blockquote\s*>"#
+        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>|<blockquote(?:\s+[^>]*)?>[\s\S]*?</blockquote\s*>|<table(?:\s+[^>]*)?>[\s\S]*?</table\s*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
             let markdown = sanitizedMarkdown(body: body, html: html)
             return markdown.isEmpty ? [] : [.markdown(markdown)]
@@ -1309,6 +1319,10 @@ enum MatrixHTMLRenderer {
                       let quote = quoteBlock(html: blockHTML)
             {
                 segments.append(.quote(quote))
+            } else if blockHTML.range(of: #"^\s*<table"#, options: [.regularExpression, .caseInsensitive]) != nil,
+                      let table = tableBlock(html: blockHTML)
+            {
+                segments.append(.table(table))
             } else if let code = codeBlock(html: blockHTML) {
                 segments.append(.code(code))
             }
@@ -1426,6 +1440,13 @@ enum MatrixHTMLRenderer {
             return 1
         }
         return normalized.split(separator: "\n", omittingEmptySubsequences: false).count
+    }
+
+    static func tableBlock(html: String) -> TableBlock? {
+        let rows = html.htmlTableRows().map { row in
+            TableRow(cells: row.cells, isHeader: row.isHeader)
+        }
+        return rows.isEmpty ? nil : TableBlock(rows: rows)
     }
 
     private static func codeBlock(html: String) -> String? {

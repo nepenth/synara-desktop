@@ -920,6 +920,7 @@ final class SynaraUITests: XCTestCase {
 
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "settings"
         launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
@@ -1056,7 +1057,9 @@ final class SynaraUITests: XCTestCase {
         }
 
         let app = XCUIApplication()
-        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        if liveEnvironmentValue("SYNARA_LIVE_SETTINGS_REUSE_SESSION", in: environment) != "1" {
+            app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        }
         launch(app)
 
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
@@ -1064,9 +1067,17 @@ final class SynaraUITests: XCTestCase {
             dismissPasswordSavePromptIfPresent(app: app)
         }
 
-        let settingsTab = app.buttons["SettingsTab"]
-        XCTAssertTrue(settingsTab.waitForExistence(timeout: 60))
-        tap(settingsTab)
+        // A reused signed-in session may reopen the last Settings subpage.
+        // Route through the product URL so this visual audit always starts at
+        // the top-level Settings screen without mutating the session.
+        app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
+        if #available(iOS 16.4, *) {
+            app.open(URL(string: "synara://settings")!)
+        } else {
+            tap(app.buttons["SettingsTab"], timeout: 20)
+        }
+
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 20))
         XCTAssertTrue(app.buttons["AccountSettingsLink"].waitForExistence(timeout: 10))
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "08-live-settings-top")
 
@@ -1101,7 +1112,184 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(revealSettingsElement(app.buttons["LogoutButton"], app: app, timeout: 15))
         XCTAssertTrue(app.buttons["LogoutButton"].isHittable)
+        let settingsTab = app.buttons["SettingsTab"]
+        XCTAssertTrue(settingsTab.exists)
+        XCTAssertLessThanOrEqual(
+            app.buttons["LogoutButton"].frame.maxY + 8,
+            settingsTab.frame.minY,
+            "The floating tab bar must not obscure the final Settings action."
+        )
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "15-live-settings-logout")
+    }
+
+    func testLiveDeviceVerificationAcrossSimulatorsWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_VERIFICATION_SMOKE=1 for the paired live verification smoke.")
+        }
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment),
+              let role = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_ROLE", in: environment),
+              ["initiator", "responder"].contains(role)
+        else {
+            throw XCTSkip("Paired verification needs credentials and an initiator or responder role.")
+        }
+
+        let app = XCUIApplication()
+        if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
+           let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
+        {
+            let ownSignature = URL(fileURLWithPath: screenshotDirectory)
+                .appendingPathComponent("\(proofID)-\(role)-sas.txt")
+            try? FileManager.default.removeItem(at: ownSignature)
+        }
+        if liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_REUSE_SESSION", in: environment) != "1" {
+            app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        }
+        launch(app)
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            // Login starts the native crypto restore before the signed-in shell
+            // appears. Opening the Settings URL while that work is in flight
+            // relaunches the app too early and can return to Choose Server.
+            XCTAssertTrue(app.buttons["SettingsTab"].waitForExistence(timeout: 240))
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        // Exercise the production URL router to reach Settings. This keeps the
+        // paired smoke independent of floating-tab accessibility hit testing.
+        // `open` may relaunch the process, so do not carry the one-shot session
+        // reset into that second launch.
+        app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
+        if #available(iOS 16.4, *) {
+            app.open(URL(string: "synara://settings")!)
+        } else {
+            let settingsTab = app.buttons["SettingsTab"]
+            XCTAssertTrue(settingsTab.waitForExistence(timeout: 60))
+            tap(settingsTab)
+        }
+        // Restoring the native crypto store can make the first signed-in task
+        // materially slower on a freshly provisioned simulator. The router
+        // replays this pending deep link after that production startup work.
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 90))
+
+        if role == "initiator" {
+            // Give the paired simulator time to finish login and arm its sync loop.
+            RunLoop.current.run(until: Date().addingTimeInterval(15))
+            if let targetDeviceId = liveEnvironmentValue(
+                "SYNARA_LIVE_VERIFICATION_TARGET_DEVICE_ID",
+                in: environment
+            ) {
+                tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
+                XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 20))
+                let actionsButton = identifiedElement(in: app, "SessionActionsButton-\(targetDeviceId)")
+                XCTAssertTrue(revealSettingsElement(actionsButton, app: app, timeout: 180))
+                tap(actionsButton, timeout: 1)
+                let verifyButton = app.buttons["VerifySessionButton-\(targetDeviceId)"]
+                if verifyButton.waitForExistence(timeout: 3) {
+                    tap(verifyButton, timeout: 1)
+                } else {
+                    tap(app.buttons["Verify"], timeout: 1)
+                }
+            } else {
+                // The device snapshot is current-first, then most-recent-first.
+                // Selecting its first non-current action keeps this paired smoke
+                // exact even though each isolated simulator login receives a new
+                // server device ID.
+                tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
+                XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 20))
+                let recentPeerActions = app.buttons.matching(
+                    NSPredicate(format: "identifier BEGINSWITH %@", "SessionActionsButton-")
+                ).firstMatch
+                if revealSettingsElement(recentPeerActions, app: app, timeout: 20) {
+                    tap(recentPeerActions, timeout: 1)
+                    tap(app.buttons["Verify"], timeout: 3)
+                } else {
+                    // A freshly signed-in crypto store can know the peer before
+                    // the homeserver session list snapshot exposes it. Exercise
+                    // the product's identity-verification fallback in that case.
+                    let verifyThisDevice = app.buttons["AccountVerifyThisDeviceButton"]
+                    XCTAssertTrue(revealSettingsElement(verifyThisDevice, app: app, timeout: 20))
+                    tap(verifyThisDevice, timeout: 1)
+                }
+            }
+            XCTAssertTrue(app.staticTexts["Request sent"].waitForExistence(timeout: 30))
+        } else {
+            tapSettingsElement(identifiedElement(in: app, "SecuritySettingsLink"), app: app, timeout: 20)
+            XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 20))
+            let acceptButton = app.buttons["AcceptDeviceVerificationButton"]
+            XCTAssertTrue(acceptButton.waitForExistence(timeout: 300))
+            tap(acceptButton, timeout: 1)
+        }
+
+        // Keep SAS ownership deterministic across real devices. The requester
+        // starts the comparison after Ready; the recipient accepts the SAS
+        // after Started. RootShell deliberately does not duplicate this action
+        // from a state-observer callback.
+        let startButton = app.buttons["StartDeviceVerificationSasButton"]
+        XCTAssertTrue(startButton.waitForExistence(timeout: 120))
+        tap(startButton, timeout: 1)
+
+        let confirmButton = app.buttons["ConfirmDeviceVerificationButton"]
+        XCTAssertTrue(confirmButton.waitForExistence(timeout: 120))
+        let signature = try verificationSasSignature(in: app)
+        XCTAssertFalse(signature.isEmpty, "The comparison must expose non-empty user-readable values.")
+        if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
+           let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
+        {
+            let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
+            let ownSignature = directory.appendingPathComponent("\(proofID)-\(role)-sas.txt")
+            let peerRole = role == "initiator" ? "responder" : "initiator"
+            let peerSignature = directory.appendingPathComponent("\(proofID)-\(peerRole)-sas.txt")
+            try signature.write(to: ownSignature, atomically: true, encoding: .utf8)
+            let deadline = Date().addingTimeInterval(30)
+            while FileManager.default.fileExists(atPath: peerSignature.path) == false, Date() < deadline {
+                RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+            }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: peerSignature.path))
+            XCTAssertEqual(try String(contentsOf: peerSignature, encoding: .utf8), signature)
+        }
+        // Let the large-detent transition and text rendering settle before the
+        // visual proof is captured and the comparison is confirmed.
+        RunLoop.current.run(until: Date().addingTimeInterval(0.75))
+        if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) {
+            try saveScreenshot(
+                app: app,
+                directory: screenshotDirectory,
+                name: "16-live-verification-\(role)-sas"
+            )
+        }
+        tap(confirmButton, timeout: 1)
+        XCTAssertTrue(app.staticTexts["Device verified"].waitForExistence(timeout: 90))
+        if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) {
+            try saveScreenshot(
+                app: app,
+                directory: screenshotDirectory,
+                name: "17-live-verification-\(role)-done"
+            )
+        }
+    }
+
+    private func verificationSasSignature(in app: XCUIApplication) throws -> String {
+        let firstEmoji = identifiedElement(in: app, "VerificationEmoji-0")
+        if firstEmoji.waitForExistence(timeout: 5) {
+            let values = (0..<7).map { identifiedElement(in: app, "VerificationEmoji-\($0)") }
+            for value in values {
+                XCTAssertTrue(value.exists)
+                XCTAssertFalse(value.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+            return values.map(\.label).joined(separator: "|")
+        }
+
+        let firstDecimal = identifiedElement(in: app, "VerificationDecimal-0")
+        XCTAssertTrue(firstDecimal.waitForExistence(timeout: 5))
+        let values = (0..<3).map { identifiedElement(in: app, "VerificationDecimal-\($0)") }
+        for value in values {
+            XCTAssertTrue(value.exists)
+            XCTAssertFalse(value.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }
+        return values.map(\.label).joined(separator: "|")
     }
 
     func testMockThreadVisualScreenshotWhenConfigured() throws {
@@ -1436,9 +1624,14 @@ final class SynaraUITests: XCTestCase {
 
     private func revealSettingsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) -> Bool {
         let deadline = Date().addingTimeInterval(timeout)
-        let settingsList = app.collectionViews["SettingsScreen"].exists
-            ? app.collectionViews["SettingsScreen"]
-            : app.collectionViews.firstMatch
+        let settingsList: XCUIElement
+        if app.collectionViews["AccountSettingsScreen"].exists {
+            settingsList = app.collectionViews["AccountSettingsScreen"]
+        } else if app.collectionViews["SettingsScreen"].exists {
+            settingsList = app.collectionViews["SettingsScreen"]
+        } else {
+            settingsList = app.collectionViews.firstMatch
+        }
 
         while Date() < deadline {
             if element.exists && element.isHittable {

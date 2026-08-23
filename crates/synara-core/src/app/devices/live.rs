@@ -432,18 +432,19 @@ pub async fn snapshot(
         .devices()
         .await
         .map_err(|_| "v-crypto.7-device-snapshot-server-failed")?;
-    let crypto_devices = client
-        .encryption()
-        .get_user_devices(user_id)
-        .await
-        .map_err(|_| "v-crypto.7-device-snapshot-trust-failed")?;
+    // The homeserver session list is authoritative for account/device actions.
+    // Crypto trust enrichment may be temporarily unavailable while a fresh
+    // store is still processing device keys; do not erase valid sessions in
+    // that case or the user loses the only path to target verification.
+    let crypto_devices = client.encryption().get_user_devices(user_id).await.ok();
 
     let mut devices = server_devices
         .devices
         .into_iter()
         .map(|device| {
             let trust = crypto_devices
-                .get(&device.device_id)
+                .as_ref()
+                .and_then(|devices| devices.get(&device.device_id))
                 .map(|crypto_device| {
                     if crypto_device.is_verified_with_cross_signing() {
                         NativeDeviceTrust::Verified
