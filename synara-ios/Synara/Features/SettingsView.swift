@@ -118,8 +118,13 @@ struct SettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .background(SynaraChrome.settings)
         .settingsTabBarClearance()
+        .background {
+            // Include the clearance inset in the same opaque content plane and
+            // continue it behind the floating navigation and tab-bar layers.
+            SynaraChrome.settings
+                .ignoresSafeArea()
+        }
         .navigationTitle("Settings")
         .accessibilityIdentifier("SettingsScreen")
     }
