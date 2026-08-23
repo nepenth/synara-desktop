@@ -446,7 +446,13 @@ pub async fn snapshot(
                 .as_ref()
                 .and_then(|devices| devices.get(&device.device_id))
                 .map(|crypto_device| {
-                    if crypto_device.is_verified_with_cross_signing() {
+                    // A completed direct SAS marks the peer locally trusted.
+                    // `is_verified()` deliberately includes that SDK-owned
+                    // trust as well as cross-signing trust; limiting this
+                    // projection to cross-signing made a successful SAS appear
+                    // unverified everywhere in the product after the sheet
+                    // reported completion.
+                    if crypto_device.is_verified() {
                         NativeDeviceTrust::Verified
                     } else {
                         NativeDeviceTrust::Unverified

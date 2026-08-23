@@ -248,7 +248,7 @@ async fn live_two_device_sas_completes_through_product_owner_and_sync() {
         .to_string();
     wait_for_live_device(&initiator, &responder_device).await;
     let started = initiator_owner
-        .start(Some(responder_device))
+        .start(Some(responder_device.clone()))
         .await
         .expect("verification request");
     let flow_id = started.flow_id;
@@ -311,6 +311,19 @@ async fn live_two_device_sas_completes_through_product_owner_and_sync() {
     assert!(
         peer.is_verified(),
         "SDK trust readback must report the peer verified"
+    );
+    let device_snapshot = crate::app::devices::snapshot(&initiator, 1)
+        .await
+        .expect("project verified device snapshot");
+    let projected_peer = device_snapshot
+        .devices
+        .iter()
+        .find(|device| device.device_id == responder_device)
+        .expect("verified peer in product device snapshot");
+    assert_eq!(
+        projected_peer.trust,
+        crate::app::devices::NativeDeviceTrust::Verified,
+        "product trust projection must preserve direct SAS verification"
     );
 
     initiator_sync.stop().await.expect("initiator sync stop");

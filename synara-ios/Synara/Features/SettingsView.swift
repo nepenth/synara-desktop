@@ -404,6 +404,9 @@ private struct AccountSettingsView: View {
                 }
             }
         }
+        .refreshable {
+            await refreshSessionDevices()
+        }
         .settingsTabBarClearance()
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
@@ -607,6 +610,14 @@ private struct AccountSettingsView: View {
         }
     }
 
+    private func refreshSessionDevices() async {
+        let devices = await environment.crypto.sessionDevices()
+        await MainActor.run {
+            sessionDevices = devices
+            isLoadingSessions = false
+        }
+    }
+
     private func confirmSignOut() {
         guard let device = signOutDevice, device.isCurrent == false else {
             signOutDevice = nil
@@ -684,6 +695,7 @@ private struct SessionDeviceRow: View {
             Text(SharedCoreDevicesLive.trustDisplayName(device.trust))
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
+                .accessibilityIdentifier("SettingsSessionTrust-\(device.id)")
             if let lastActivity = SharedCoreDevicesLive.lastActivityDisplay(lastSeenTs: device.lastSeenTs) {
                 Text(lastActivity)
                     .font(SynaraTypography.supporting)

@@ -1140,9 +1140,12 @@ final class SynaraUITests: XCTestCase {
         if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
            let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
         {
-            let ownSignature = URL(fileURLWithPath: screenshotDirectory)
-                .appendingPathComponent("\(proofID)-\(role)-sas.txt")
-            try? FileManager.default.removeItem(at: ownSignature)
+            let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
+            for suffix in ["sas", "device"] {
+                try? FileManager.default.removeItem(
+                    at: directory.appendingPathComponent("\(proofID)-\(role)-\(suffix).txt")
+                )
+            }
         }
         if liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_REUSE_SESSION", in: environment) != "1" {
             app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
@@ -1174,48 +1177,34 @@ final class SynaraUITests: XCTestCase {
         // replays this pending deep link after that production startup work.
         XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 90))
 
+        let coordinatedPeerDeviceID = try coordinateVerificationDevices(
+            app: app,
+            role: role,
+            environment: environment
+        )
+
         if role == "initiator" {
-            // Give the paired simulator time to finish login and arm its sync loop.
-            RunLoop.current.run(until: Date().addingTimeInterval(15))
-            if let targetDeviceId = liveEnvironmentValue(
+            let targetDeviceId = liveEnvironmentValue(
                 "SYNARA_LIVE_VERIFICATION_TARGET_DEVICE_ID",
                 in: environment
-            ) {
-                tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
-                XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 20))
-                let actionsButton = identifiedElement(in: app, "SessionActionsButton-\(targetDeviceId)")
-                XCTAssertTrue(revealSettingsElement(actionsButton, app: app, timeout: 180))
-                tap(actionsButton, timeout: 1)
-                let verifyButton = app.buttons["VerifySessionButton-\(targetDeviceId)"]
-                if verifyButton.waitForExistence(timeout: 3) {
-                    tap(verifyButton, timeout: 1)
-                } else {
-                    tap(app.buttons["Verify"], timeout: 1)
-                }
+            ) ?? coordinatedPeerDeviceID
+            // The peer can finish login after this screen's initial snapshot.
+            // Pull to refresh exercises the production homeserver-backed reload
+            // before locating the exact coordinated session.
+            let accountScreen = app.collectionViews["AccountSettingsScreen"]
+            accountScreen.swipeDown()
+            let actionsButton = identifiedElement(in: app, "SessionActionsButton-\(targetDeviceId)")
+            XCTAssertTrue(revealSettingsElement(actionsButton, app: app, timeout: 180))
+            tap(actionsButton, timeout: 1)
+            let verifyButton = app.buttons["VerifySessionButton-\(targetDeviceId)"]
+            if verifyButton.waitForExistence(timeout: 3) {
+                tap(verifyButton, timeout: 1)
             } else {
-                // The device snapshot is current-first, then most-recent-first.
-                // Selecting its first non-current action keeps this paired smoke
-                // exact even though each isolated simulator login receives a new
-                // server device ID.
-                tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
-                XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 20))
-                let recentPeerActions = app.buttons.matching(
-                    NSPredicate(format: "identifier BEGINSWITH %@", "SessionActionsButton-")
-                ).firstMatch
-                if revealSettingsElement(recentPeerActions, app: app, timeout: 20) {
-                    tap(recentPeerActions, timeout: 1)
-                    tap(app.buttons["Verify"], timeout: 3)
-                } else {
-                    // A freshly signed-in crypto store can know the peer before
-                    // the homeserver session list snapshot exposes it. Exercise
-                    // the product's identity-verification fallback in that case.
-                    let verifyThisDevice = app.buttons["AccountVerifyThisDeviceButton"]
-                    XCTAssertTrue(revealSettingsElement(verifyThisDevice, app: app, timeout: 20))
-                    tap(verifyThisDevice, timeout: 1)
-                }
+                tap(app.buttons["Verify"], timeout: 1)
             }
             XCTAssertTrue(app.staticTexts["Request sent"].waitForExistence(timeout: 30))
         } else {
+            navigateBack(app: app)
             tapSettingsElement(identifiedElement(in: app, "SecuritySettingsLink"), app: app, timeout: 20)
             XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 20))
             let acceptButton = app.buttons["AcceptDeviceVerificationButton"]
@@ -1269,6 +1258,84 @@ final class SynaraUITests: XCTestCase {
                 name: "17-live-verification-\(role)-done"
             )
         }
+        try assertPeerSessionVerified(
+            app: app,
+            peerDeviceID: coordinatedPeerDeviceID
+        )
+    }
+
+    private func assertPeerSessionVerified(
+        app: XCUIApplication,
+        peerDeviceID: String
+    ) throws {
+        guard let settingsURL = URL(string: "synara://settings") else {
+            XCTFail("The Settings deep link must be valid.")
+            return
+        }
+        app.terminate()
+        if #available(iOS 16.4, *) {
+            app.open(settingsURL)
+        } else {
+            throw XCTSkip("The durable verification readback needs Settings deep-link support.")
+        }
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 30))
+        tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
+        let accountScreen = app.collectionViews["AccountSettingsScreen"]
+        XCTAssertTrue(accountScreen.waitForExistence(timeout: 20))
+        accountScreen.swipeDown()
+        let peerTrust = identifiedElement(in: app, "SettingsSessionTrust-\(peerDeviceID)")
+        XCTAssertTrue(revealSettingsElement(peerTrust, app: app, timeout: 30))
+        XCTAssertEqual(
+            peerTrust.label,
+            "Verified",
+            "The SDK-backed Account snapshot must durably report the paired device verified."
+        )
+    }
+
+    private func coordinateVerificationDevices(
+        app: XCUIApplication,
+        role: String,
+        environment: [String: String]
+    ) throws -> String {
+        tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
+        XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 20))
+        let device = identifiedElement(in: app, "SettingsAccountDevice")
+        XCTAssertTrue(device.waitForExistence(timeout: 20))
+        let prefix = "Device, "
+        let label = device.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(label.hasPrefix(prefix), "The account device row must expose its current device ID.")
+        let ownDeviceID = String(label.dropFirst(prefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(ownDeviceID.isEmpty)
+
+        guard let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
+              let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
+        else {
+            throw XCTSkip("Paired verification device coordination needs a proof directory and ID.")
+        }
+        let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
+        let ownDevice = directory.appendingPathComponent("\(proofID)-\(role)-device.txt")
+        let peerRole = role == "initiator" ? "responder" : "initiator"
+        let peerDevice = directory.appendingPathComponent("\(proofID)-\(peerRole)-device.txt")
+        try ownDeviceID.write(to: ownDevice, atomically: true, encoding: .utf8)
+
+        let deadline = Date().addingTimeInterval(120)
+        while FileManager.default.fileExists(atPath: peerDevice.path) == false, Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+        }
+        XCTAssertTrue(
+            FileManager.default.fileExists(atPath: peerDevice.path),
+            "The paired simulator did not publish its device ID."
+        )
+        let peerDeviceID = try String(contentsOf: peerDevice, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(peerDeviceID.isEmpty)
+        XCTAssertNotEqual(
+            peerDeviceID,
+            ownDeviceID,
+            "Paired simulators must use distinct Matrix device sessions."
+        )
+        return peerDeviceID
     }
 
     private func verificationSasSignature(in app: XCUIApplication) throws -> String {
