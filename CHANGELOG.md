@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2.1.8 - 2026-08-23
+
+- Device verification now targets the exact newly signed-in session, refreshes
+  the device list before selection, and retains verified trust after relaunch.
+- Direct SAS trust is projected with the Matrix SDK's complete device trust
+  result instead of the narrower cross-signing-only state.
+- The paired iOS diagnostic proves both devices exchange the same SAS values,
+  confirm, and read each other back as Verified after both apps relaunch.
+- iOS Rooms and Settings use continuous opaque light-mode surfaces through the
+  safe areas, removing the gray veil and mismatched top and bottom colors while
+  retaining floating-tab-bar clearance.
+- See [`docs/releases/v2.1.8.md`](docs/releases/v2.1.8.md) for details.
+
 ## 2.1.7 - 2026-08-23
 
 - Device verification now completes through the real Matrix SAS operating path:
