@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F0CA10000000000000000002 /* RoomNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CA10000000000000000001 /* RoomNotesView.swift */; };
+		F0CA10000000000000000004 /* RoomNotesService.swift in Sources */ = {isa = PBXBuildFile; fileRef = F0CA10000000000000000003 /* RoomNotesService.swift */; };
 		0096DA204BC202DA4265462E /* SharedCoreLeftovers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CFA937424129A02D9E070E2 /* SharedCoreLeftovers.swift */; };
 		01A6E712EA43DAB8B20DFDF9 /* SharedCoreTimelineRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = C96EA34ED92FCEDC17A0165E /* SharedCoreTimelineRows.swift */; };
 		04418881C702E78099FD8C3E /* SharedCoreRoomModeration.swift in Sources */ = {isa = PBXBuildFile; fileRef = C408B6E0676EC23636BCA7DA /* SharedCoreRoomModeration.swift */; };
@@ -210,6 +212,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		F0CA10000000000000000001 /* RoomNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomNotesView.swift; sourceTree = "<group>"; };
+		F0CA10000000000000000003 /* RoomNotesService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomNotesService.swift; sourceTree = "<group>"; };
 		00D51C4E0E89D32C8D99CC22 /* PerformanceInstrumentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerformanceInstrumentation.swift; sourceTree = "<group>"; };
 		017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthServiceTests.swift; sourceTree = "<group>"; };
 		03AC3AA739D0F212EB229563 /* SharedCoreRoomListUpdates.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomListUpdates.swift; sourceTree = "<group>"; };
@@ -421,6 +425,7 @@
 				2515972271FDB4E4717F0CEE /* LoginView.swift */,
 				E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */,
 				417DD4194803886BB803C6A6 /* RoomListView.swift */,
+				F0CA10000000000000000001 /* RoomNotesView.swift */,
 				A460B0098799FF6C79F0756E /* RoomTimelineView.swift */,
 				C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */,
 				6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */,
@@ -524,6 +529,7 @@
 				A602AD446A2DD4C7C3A476ED /* PushService.swift */,
 				B6E7399D69CF6418A4206407 /* RoomListService.swift */,
 				A4B44B25CB0277A9BAD73943 /* RoomReadMarkerService.swift */,
+				F0CA10000000000000000003 /* RoomNotesService.swift */,
 				CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */,
 				75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */,
 				1D8E4F2A6B90C7D35E1A48B2 /* SharedCoreAccountSettings.swift */,
@@ -901,7 +907,9 @@
 				53A96EF2B937BE57AE02A15C /* PushService.swift in Sources */,
 				A72441DA6F04ED38E6AFA5FD /* RoomListService.swift in Sources */,
 				2F7828F754C6D475F5E161B4 /* RoomListView.swift in Sources */,
+				F0CA10000000000000000002 /* RoomNotesView.swift in Sources */,
 				D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */,
+				F0CA10000000000000000004 /* RoomNotesService.swift in Sources */,
 				652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */,
 				9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */,
 				A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */,

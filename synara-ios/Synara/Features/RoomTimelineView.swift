@@ -245,6 +245,7 @@ struct RoomTimelineView: View {
     @State private var attachmentDrafts: [ComposerAttachmentDraft] = []
     @State private var isSendingMessage = false
     @State private var agentActionMessage: String?
+    @State private var roomNotesActionMessage: String?
     @State private var cryptoStatus: RoomCryptoStatus = .unknown
     @State private var cryptoActionMessage: String?
     @State private var isCryptoBannerDismissed = false
@@ -360,6 +361,13 @@ struct RoomTimelineView: View {
                 onLeaveRoom: {
                     shouldReturnToListAfterDetailsDismiss = true
                     isRoomDetailsPresented = false
+                },
+                onOpenMessage: { eventID in
+                    isRoomDetailsPresented = false
+                    Task { @MainActor in
+                        await Task.yield()
+                        environment.router.route(to: .room(id: roomID, eventID: eventID, title: roomTitle))
+                    }
                 }
             )
         }
@@ -395,6 +403,14 @@ struct RoomTimelineView: View {
             }
         } message: {
             Text(cryptoActionMessage ?? "")
+        }
+        .alert("Personal Notes", isPresented: Binding(
+            get: { roomNotesActionMessage != nil },
+            set: { if !$0 { roomNotesActionMessage = nil } }
+        )) {
+            Button("OK") { roomNotesActionMessage = nil }
+        } message: {
+            Text(roomNotesActionMessage ?? "")
         }
         .task(id: timelineTaskID) {
             resetTimelineState()
@@ -513,6 +529,7 @@ struct RoomTimelineView: View {
                                     onEdit: { beginEdit(item) },
                                     onRedact: { applyAction(.redact, to: item) },
                                     onReact: { applyAction(.react("👍"), to: item) },
+                                    onPinToNotes: { pinToNotes(item) },
                                     onOpenMedia: { resource in viewerResource = resource },
                                     onAgentAction: { action in
                                         executeAgentAction(action, sourceEventID: item.eventID)
@@ -763,6 +780,7 @@ struct RoomTimelineView: View {
                 onEdit: { beginEdit(eventRow.item) },
                 onRedact: { applyAction(.redact, to: eventRow.item) },
                 onReact: { applyAction(.react("👍"), to: eventRow.item) },
+                onPinToNotes: { pinToNotes(eventRow.item) },
                 onOpenMedia: { resource in viewerResource = resource },
                 onAgentAction: { action in
                     executeAgentAction(action, sourceEventID: eventRow.item.eventID)
@@ -1022,6 +1040,20 @@ struct RoomTimelineView: View {
             "trace=\(timelineTraceID) elapsedMs=\(elapsedMilliseconds) event=\(name)\(suffix)",
             category: .timeline
         )
+    }
+
+    private func pinToNotes(_ item: TimelineItem) {
+        Task {
+            let result = await environment.roomNotes.pinMessage(roomID: roomID, item: item)
+            await MainActor.run {
+                switch result {
+                case .success:
+                    roomNotesActionMessage = "Message pinned to your private notes."
+                case .failure(let error):
+                    roomNotesActionMessage = error.errorDescription ?? "Could not pin this message."
+                }
+            }
+        }
     }
 
     private var currentUserID: String {
@@ -2811,6 +2843,7 @@ struct ThreadTimelineView: View {
     @State private var isSendingMessage = false
     @State private var isComposerFocused = false
     @State private var threadUpdatesTask: Task<Void, Never>?
+    @State private var notesActionMessage: String?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -2861,6 +2894,11 @@ struct ThreadTimelineView: View {
         .onChange(of: selectedPhotos) { items in
             draftThreadPickedPhotos(items)
         }
+        .alert("Personal Notes", isPresented: notesActionMessageBinding) {
+            Button("OK", role: .cancel) { notesActionMessage = nil }
+        } message: {
+            Text(notesActionMessage ?? "Try again.")
+        }
     }
 
     @ViewBuilder
@@ -2886,7 +2924,10 @@ struct ThreadTimelineView: View {
             ScrollView {
                 LazyVStack(alignment: .leading, spacing: SynaraSpacing.medium) {
                     ForEach(visibleItems) { item in
-                        ThreadMessageRow(item: item)
+                        ThreadMessageRow(
+                            item: item,
+                            onPinToNotes: { pinToNotes(item) }
+                        )
                     }
                 }
                 .padding(.horizontal, SynaraSpacing.xLarge)
@@ -2951,6 +2992,27 @@ struct ThreadTimelineView: View {
 
     private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
         items
+    }
+
+    private var notesActionMessageBinding: Binding<Bool> {
+        Binding(
+            get: { notesActionMessage != nil },
+            set: { if $0 == false { notesActionMessage = nil } }
+        )
+    }
+
+    private func pinToNotes(_ item: TimelineItem) {
+        Task {
+            let result = await environment.roomNotes.pinMessage(roomID: roomID, item: item)
+            await MainActor.run {
+                switch result {
+                case .success:
+                    notesActionMessage = "Message pinned to your private room notes."
+                case .failure(let error):
+                    notesActionMessage = error.errorDescription ?? "The message could not be pinned."
+                }
+            }
+        }
     }
 
     private func sendThreadReply(body rawBody: String) {
@@ -3219,6 +3281,7 @@ private struct ThreadHeader: View {
 
 private struct ThreadMessageRow: View {
     let item: TimelineItem
+    let onPinToNotes: () -> Void
 
     var body: some View {
         VStack(spacing: SynaraSpacing.medium) {
@@ -3264,6 +3327,10 @@ private struct ThreadMessageRow: View {
                     TimelineMessageCopy.copyToPasteboard(copyText)
                 }
                 .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+            }
+            if item.serverEventID != nil {
+                Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
+                    .accessibilityIdentifier("ThreadItemPinToNotes-\(item.eventID)")
             }
         }
         .accessibilityElement(children: .combine)
@@ -3649,6 +3716,7 @@ private struct RoomDetailsView: View {
     let roomID: String
     let fallbackTitle: String
     let onLeaveRoom: () -> Void
+    let onOpenMessage: (String) -> Void
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
     @State private var details: RoomDetails?
@@ -3667,6 +3735,19 @@ private struct RoomDetailsView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("Personal") {
+                    NavigationLink {
+                        RoomNotesView(
+                            roomID: roomID,
+                            roomTitle: notesRoomTitle,
+                            onOpenMessage: onOpenMessage
+                        )
+                    } label: {
+                        Label("Personal Notes", systemImage: "note.text")
+                    }
+                    .accessibilityIdentifier("RoomPersonalNotesLink")
+                }
+
                 Section("Room") {
                     TextField("Name", text: $profileName)
                         .disabled(details?.canEditName != true || isLoading)
@@ -3804,6 +3885,14 @@ private struct RoomDetailsView: View {
             canonicalAlias = aliases.first ?? ""
             alternativeAliases = aliases.dropFirst().joined(separator: ", ")
         }
+    }
+
+    private var notesRoomTitle: String {
+        let loadedName = details?.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let loadedName, loadedName.isEmpty == false, loadedName != roomID else {
+            return fallbackTitle
+        }
+        return loadedName
     }
 
     private var profileNameChange: String? {
@@ -4198,6 +4287,7 @@ private struct TimelineRow: View {
     let onEdit: () -> Void
     let onRedact: () -> Void
     let onReact: () -> Void
+    let onPinToNotes: () -> Void
     let onOpenMedia: (MediaResource) -> Void
     let onAgentAction: (SynaraAgentCardAction) -> Void
     let onAgentApprovalReaction: (String) -> Void
@@ -4284,6 +4374,10 @@ private struct TimelineRow: View {
         }
         if availability.canReact {
             Button("React", action: onReact)
+        }
+        if item.serverEventID != nil {
+            Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
+                .accessibilityIdentifier("TimelineItemPinToNotes-\(item.eventID)")
         }
         if availability.canRedact {
             Button("Redact", role: .destructive, action: onRedact)

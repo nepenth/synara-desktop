@@ -35,6 +35,7 @@ struct AppEnvironment {
     let wipe: LocalWiping
     let timeline: TimelineServicing
     let later: LaterServicing
+    let roomNotes: RoomNotesServicing
     let messageSender: MessageSending
     let drafts: DraftStore
     let eventActions: EventActionServicing
@@ -126,6 +127,7 @@ struct AppEnvironment {
             ),
             timeline: timeline,
             later: SharedCoreLaterService(host: host),
+            roomNotes: SharedCoreRoomNotesService(host: host),
             messageSender: messageSender,
             drafts: drafts,
             eventActions: SharedCoreEventActionService(host: host),
@@ -159,6 +161,7 @@ struct AppEnvironment {
         wipe: LocalWiping? = nil,
         timeline: TimelineServicing = MockTimelineService(),
         later: LaterServicing = MockLaterService(),
+        roomNotes: RoomNotesServicing = MockRoomNotesService(),
         messageSender: MessageSending = MockMessageSendService(),
         drafts: DraftStore = DraftStore(),
         eventActions: EventActionServicing = MockEventActionService(),
@@ -202,6 +205,7 @@ struct AppEnvironment {
             ),
             timeline: timeline,
             later: later,
+            roomNotes: roomNotes,
             messageSender: messageSender,
             drafts: drafts,
             eventActions: eventActions,

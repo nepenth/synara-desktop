@@ -434,6 +434,9 @@ private extension AppEnvironment {
         let later = processEnvironment["SYNARA_UI_TEST_LATER_ITEMS"] == "1"
             ? MockLaterService(items: uiTestLaterItems())
             : MockLaterService()
+        let roomNotes = processEnvironment["SYNARA_UI_TEST_ROOM_NOTES"] == "1"
+            ? MockRoomNotesService(items: uiTestRoomNotesItems())
+            : MockRoomNotesService()
         let approvalError: SynaraAgentApprovalError? = processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] == "failed"
             ? .failed
             : nil
@@ -468,6 +471,7 @@ private extension AppEnvironment {
                 roomMembership: inviteTransitionService,
                 timeline: timeline,
                 later: later,
+                roomNotes: roomNotes,
                 agentApprovals: agentApprovals,
                 agentApprovalReactions: agentApprovalReactions,
                 readMarkers: readMarkers,
@@ -481,6 +485,7 @@ private extension AppEnvironment {
             roomList: roomList,
             timeline: timeline,
             later: later,
+            roomNotes: roomNotes,
             agentApprovals: agentApprovals,
             agentApprovalReactions: agentApprovalReactions,
             readMarkers: readMarkers,
@@ -519,6 +524,51 @@ private extension AppEnvironment {
                 completedAt: 1_770_000_100_000,
                 createdAt: 1_769_998_000_000,
                 isCompleted: true
+            )
+        ]
+    }
+
+    static func uiTestRoomNotesItems() -> [SynaraRoomNoteItem] {
+        let base = Date(timeIntervalSince1970: 1_770_000_000)
+        return [
+            SynaraRoomNoteItem(
+                id: "todo-active",
+                kind: .todo,
+                roomID: "!project:matrix.org",
+                createdAt: base,
+                updatedAt: base.addingTimeInterval(60),
+                body: "Review the launch checklist",
+                completedAt: nil,
+                order: 1_770_000_060_000,
+                eventID: nil,
+                eventTimestamp: nil,
+                senderID: nil
+            ),
+            SynaraRoomNoteItem(
+                id: "note-private",
+                kind: .note,
+                roomID: "!project:matrix.org",
+                createdAt: base,
+                updatedAt: base,
+                body: "Discuss the migration privately",
+                completedAt: nil,
+                order: nil,
+                eventID: nil,
+                eventTimestamp: nil,
+                senderID: nil
+            ),
+            SynaraRoomNoteItem(
+                id: "message-anchor",
+                kind: .message,
+                roomID: "!project:matrix.org",
+                createdAt: base,
+                updatedAt: base.addingTimeInterval(-60),
+                body: "Here's the latest spec for the new permissions model.",
+                completedAt: nil,
+                order: nil,
+                eventID: "$text:!project:matrix.org",
+                eventTimestamp: base,
+                senderID: "@alice:matrix.org"
             )
         ]
     }

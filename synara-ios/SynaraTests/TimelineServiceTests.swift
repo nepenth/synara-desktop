@@ -1547,6 +1547,99 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(items.first?.isCompleted == true)
     }
 
+    func testMockRoomNotesServiceRunsRoomScopedCrudAndTodoOrderingPath() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let first = SynaraRoomNoteItem(
+            id: "first", kind: .todo, roomID: "!room:example.org", createdAt: now,
+            updatedAt: now, body: "First", completedAt: nil, order: 300,
+            eventID: nil, eventTimestamp: nil, senderID: nil
+        )
+        let second = SynaraRoomNoteItem(
+            id: "second", kind: .todo, roomID: "!room:example.org", createdAt: now,
+            updatedAt: now, body: "Second", completedAt: nil, order: 200,
+            eventID: nil, eventTimestamp: nil, senderID: nil
+        )
+        let otherRoom = SynaraRoomNoteItem(
+            id: "other", kind: .note, roomID: "!other:example.org", createdAt: now,
+            updatedAt: now, body: "Other", completedAt: nil, order: nil,
+            eventID: nil, eventTimestamp: nil, senderID: nil
+        )
+        let service = MockRoomNotesService(items: [second, otherRoom, first], now: { now })
+
+        guard case let .success(initial) = await service.loadItems(roomID: first.roomID) else {
+            return XCTFail("Expected room notes snapshot")
+        }
+        XCTAssertEqual(initial.map(\.id), ["first", "second"])
+
+        guard case let .success(moved) = await service.moveTodo(
+            roomID: first.roomID,
+            itemID: second.id,
+            direction: .up
+        ) else {
+            return XCTFail("Expected reordered snapshot")
+        }
+        XCTAssertEqual(moved.map(\.id), ["second", "first"])
+
+        guard case let .success(completed) = await service.setTodoCompleted(
+            roomID: first.roomID,
+            itemID: second.id,
+            completed: true
+        ) else {
+            return XCTFail("Expected completed snapshot")
+        }
+        XCTAssertEqual(completed.first?.id, "first")
+        XCTAssertEqual(completed.last?.id, "second")
+        XCTAssertTrue(completed.last?.isCompleted == true)
+
+        guard case let .success(added) = await service.addItem(
+            roomID: first.roomID,
+            kind: .note,
+            body: "  Private cross-client note  "
+        ) else {
+            return XCTFail("Expected added snapshot")
+        }
+        XCTAssertEqual(added.first(where: { $0.kind == .note })?.body, "Private cross-client note")
+
+        guard let addedNote = added.first(where: { $0.kind == .note }),
+              case let .success(updated) = await service.updateItem(
+                  addedNote,
+                  body: "  Updated private note  "
+              )
+        else {
+            return XCTFail("Expected updated snapshot")
+        }
+        XCTAssertEqual(updated.first(where: { $0.id == addedNote.id })?.body, "Updated private note")
+
+        guard case let .success(deleted) = await service.deleteItem(roomID: first.roomID, itemID: first.id) else {
+            return XCTFail("Expected deleted snapshot")
+        }
+        XCTAssertFalse(deleted.contains(where: { $0.id == first.id }))
+        guard case let .success(otherSnapshot) = await service.loadItems(roomID: otherRoom.roomID) else {
+            return XCTFail("Expected other room snapshot")
+        }
+        XCTAssertEqual(otherSnapshot.map(\.id), [otherRoom.id])
+    }
+
+    func testMockRoomNotesServicePinsOnlyDurableMessageEvents() async {
+        let now = Date(timeIntervalSince1970: 1_800_000_000)
+        let service = MockRoomNotesService(now: { now })
+        let message = TimelineItem(
+            id: "$event", eventID: "$event", senderID: "@mina:example.org", timestamp: now,
+            kind: .text("Pinned message preview"), replyToEventID: nil, isEdited: false, reactions: [:]
+        )
+
+        guard case let .success(items) = await service.pinMessage(roomID: "!room:example.org", item: message) else {
+            return XCTFail("Expected pinned message snapshot")
+        }
+        XCTAssertEqual(items.first?.kind, .message)
+        XCTAssertEqual(items.first?.eventID, "$event")
+        XCTAssertEqual(items.first?.body, "Pinned message preview")
+
+        let pending = TimelineItem.pendingMessage(body: "Not durable", senderID: "@mina:example.org", replyToEventID: nil)
+        let pendingResult = await service.pinMessage(roomID: "!room:example.org", item: pending)
+        XCTAssertEqual(pendingResult, .failure(.invalidItem))
+    }
+
     func testTimelineSearchFilterMatchesMessageBody() {
         let items = [
             TimelineItem(

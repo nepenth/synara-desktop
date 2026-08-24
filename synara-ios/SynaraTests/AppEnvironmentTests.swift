@@ -20,6 +20,7 @@ final class AppEnvironmentTests: XCTestCase {
         let environment = AppEnvironment.mock()
 
         XCTAssertTrue(environment.later is MockLaterService)
+        XCTAssertTrue(environment.roomNotes is MockRoomNotesService)
     }
 
     func testMatrixClientCoreSessionIdentityDefaultsToNilForMock() async {
