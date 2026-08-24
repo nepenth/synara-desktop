@@ -1,0 +1,15 @@
+Synara 2.1.9 adds synced room notes and opt-in encrypted notification previews on iOS.
+
+What changed:
+- Open Notes from a room timeline and keep room notes synced through your Matrix account.
+- When message previews are enabled, notifications can include content from encrypted rooms.
+- Notification delivery is cancellation-safe and falls back to generic text when content cannot be resolved in time.
+- Device verification retains its Verified trust result after session restore and relaunch.
+- Settings content remains clear of the floating tab bar.
+
+What to test:
+- Edit a room note on iOS and confirm it appears on another signed-in client.
+- Compare notifications with message previews enabled and disabled in clear and encrypted rooms.
+- Relaunch both clients after device verification and confirm the exact peer still reads Verified.
+
+Never approve device verification when the comparison differs.

@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 2.1.9 - 2026-08-24
+
+- iOS room timelines now include Notes backed by shared Matrix account data,
+  bringing synced room notes to the mobile client.
+- Opt-in iOS notification previews can show encrypted message content through
+  a bounded, cancellation-safe notification service extension, with safe
+  fallback text when content cannot be resolved.
+- The notification extension uses a purpose-built native core instead of
+  linking the full application core, with arm64, linkage, and size guards in
+  pull-request and release CI.
+- Device-verification session restore/reset preserves durable SAS trust
+  readback, and Settings retains clearance above the floating tab bar.
+- See [`docs/releases/v2.1.9.md`](docs/releases/v2.1.9.md) for details.
+
 ## 2.1.8 - 2026-08-23
 
 - Device verification now targets the exact newly signed-in session, refreshes
