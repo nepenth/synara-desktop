@@ -535,9 +535,10 @@ jobs:
         run: brew install xcodegen
 
       - name: Check SynaraCore Swift scaffold
-        run: |
-          node scripts/check-synara-core-swift-scaffold.mjs
-          node scripts/check-synara-nse-core-isolation.mjs
+        run: node scripts/check-synara-core-swift-scaffold.mjs
+
+      - name: Check SynaraNseCore isolation
+        run: node scripts/check-synara-nse-core-isolation.mjs
 
       - name: Build and run unsigned simulator tests
         run: scripts/ci-build.sh
