@@ -15,6 +15,7 @@ PUSH_GATEWAY_URL="${SYNARA_PUSH_GATEWAY_URL:-}"
 ARCHIVE_ROOT="${SYNARA_IOS_ARCHIVE_ROOT:-/tmp}"
 DIAGNOSTICS_DIR="${SYNARA_IOS_DIAGNOSTICS_DIR:-${RUNNER_TEMP:-$ARCHIVE_ROOT}/synara-ios-testflight-diagnostics}"
 PACKAGE_CACHE_PATH="${SYNARA_IOS_PACKAGE_CACHE_PATH:-}"
+NOTIFICATION_SERVICE_ARCHIVE_CHECKER="${SYNARA_IOS_NOTIFICATION_ARCHIVE_CHECKER:-$SCRIPT_DIR/check-notification-service-archive.sh}"
 
 require_env() {
   local name="$1"
@@ -168,7 +169,7 @@ if [[ "$archive_status" -ne 0 ]]; then
   exit "$archive_status"
 fi
 
-"$SCRIPT_DIR/check-notification-service-archive.sh" \
+"$NOTIFICATION_SERVICE_ARCHIVE_CHECKER" \
   "$archive_path" \
   "$DIAGNOSTICS_DIR"
 
