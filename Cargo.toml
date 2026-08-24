@@ -7,8 +7,22 @@
 # into the workspace as it starts depending on synara-core.
 [workspace]
 resolver = "2"
-members = ["crates/synara-core", "crates/synara-core-bindgen"]
+members = [
+  "crates/synara-core",
+  "crates/synara-core-bindgen",
+  "crates/synara-nse-core",
+]
 # Keep the desktop shell a standalone package for now (see comment above);
 # adding it to `members` would move the lockfile to the workspace root and is
 # deferred to a later slice.
 exclude = ["src-tauri"]
+
+# Apple's notification service extension has a strict memory ceiling. Build
+# its complete dependency graph for size and cross-crate dead-code elimination
+# without changing the normal desktop/full-Core release profile.
+[profile.nse-release]
+inherits = "release"
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+strip = "debuginfo"

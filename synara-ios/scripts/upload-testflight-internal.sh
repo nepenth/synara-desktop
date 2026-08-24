@@ -168,6 +168,10 @@ if [[ "$archive_status" -ne 0 ]]; then
   exit "$archive_status"
 fi
 
+"$SCRIPT_DIR/check-notification-service-archive.sh" \
+  "$archive_path" \
+  "$DIAGNOSTICS_DIR"
+
 echo "Uploading Synara ${marketing_version} (${build_number}) to App Store Connect"
 set +e
 run_xcodebuild \

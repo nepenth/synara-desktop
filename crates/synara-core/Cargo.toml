@@ -10,6 +10,11 @@ edition = "2021"
 [lib]
 crate-type = ["lib", "staticlib", "cdylib"]
 
+[features]
+default = ["full-uniffi"]
+full-uniffi = []
+nse-preview = []
+
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
 serde = { version = "1.0.193", features = ["derive"] }

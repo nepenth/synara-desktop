@@ -20,6 +20,8 @@ pub mod media_cache;
 pub mod media_export;
 pub mod members;
 pub mod notifications;
+#[cfg(feature = "nse-preview")]
+pub mod nse_preview;
 pub mod polls;
 pub mod presence;
 pub mod raw_content;

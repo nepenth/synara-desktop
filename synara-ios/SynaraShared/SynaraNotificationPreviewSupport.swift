@@ -3,6 +3,8 @@ import Foundation
 enum SynaraSharedConstants {
     static let appGroupIdentifier = "group.com.whylandcreative.synara"
     static let keychainAccessGroupInfoKey = "SynaraKeychainAccessGroup"
+    static let sharedCoreStoreDirectory = "SynaraCore"
+    static let sharedCoreStoreReadyMarker = ".synara-nse-store-ready-v1"
     static let lockScreenMessagePreviewsKey = "synara.settings.lockScreenMessagePreviews"
     static let defaultLockScreenMessagePreviews = false
     static let themeBaseColorKey = "themeBaseColor"
@@ -26,6 +28,20 @@ enum SynaraSharedConstants {
             return group.bool(forKey: key)
         }
         return UserDefaults.standard.bool(forKey: key)
+    }
+
+    static func sharedCoreStoreRoot(fileManager: FileManager = .default) -> URL? {
+        fileManager.containerURL(forSecurityApplicationGroupIdentifier: appGroupIdentifier)?
+            .appendingPathComponent(sharedCoreStoreDirectory, isDirectory: true)
+    }
+
+    static func sharedCoreStoreIsReady(
+        at storeRoot: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        fileManager.fileExists(
+            atPath: storeRoot.appendingPathComponent(sharedCoreStoreReadyMarker).path
+        )
     }
 }
 

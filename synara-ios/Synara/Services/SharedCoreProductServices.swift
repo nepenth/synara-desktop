@@ -22,10 +22,99 @@ final class SharedCoreProductHost {
     }
 
     static func liveStoreRoot() -> URL {
-        let root = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        let fileManager = FileManager.default
+        let legacyRoot = fileManager.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
             .appendingPathComponent("SynaraCore", isDirectory: true)
-        try? FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
-        return root
+        guard let sharedContainer = fileManager.containerURL(
+            forSecurityApplicationGroupIdentifier: SynaraSharedConstants.appGroupIdentifier
+        ) else {
+            try? fileManager.createDirectory(at: legacyRoot, withIntermediateDirectories: true)
+            return legacyRoot
+        }
+
+        let sharedRoot = sharedContainer.appendingPathComponent(
+            SynaraSharedConstants.sharedCoreStoreDirectory,
+            isDirectory: true
+        )
+        return resolvedLiveStoreRoot(
+            legacyRoot: legacyRoot,
+            sharedRoot: sharedRoot,
+            fileManager: fileManager
+        )
+    }
+
+    static func resolvedLiveStoreRoot(
+        legacyRoot: URL,
+        sharedRoot: URL,
+        fileManager: FileManager
+    ) -> URL {
+        let readyMarker = sharedRoot.appendingPathComponent(
+            SynaraSharedConstants.sharedCoreStoreReadyMarker
+        )
+        if fileManager.fileExists(atPath: readyMarker.path) {
+            return sharedRoot
+        }
+
+        let legacyExists = fileManager.fileExists(atPath: legacyRoot.path)
+        let sharedExists = fileManager.fileExists(atPath: sharedRoot.path)
+
+        if legacyExists, sharedExists {
+            let sharedContents = try? fileManager.contentsOfDirectory(
+                at: sharedRoot,
+                includingPropertiesForKeys: nil
+            )
+            guard sharedContents?.isEmpty == true else {
+                // Never guess between two populated SDK stores.
+                return legacyRoot
+            }
+            do {
+                try fileManager.removeItem(at: sharedRoot)
+            } catch {
+                return legacyRoot
+            }
+        }
+
+        if legacyExists {
+            do {
+                try fileManager.createDirectory(
+                    at: sharedRoot.deletingLastPathComponent(),
+                    withIntermediateDirectories: true
+                )
+                try fileManager.moveItem(at: legacyRoot, to: sharedRoot)
+            } catch {
+                return legacyRoot
+            }
+        }
+
+        do {
+            try fileManager.createDirectory(at: sharedRoot, withIntermediateDirectories: true)
+        } catch {
+            try? fileManager.createDirectory(at: legacyRoot, withIntermediateDirectories: true)
+            return legacyRoot
+        }
+
+        return sharedRoot
+    }
+
+    /// Publish only after product session restore has successfully opened the
+    /// shared SDK store and migrated its key into the shared Keychain group.
+    @discardableResult
+    static func publishNseStoreReady(
+        at storeRoot: URL,
+        fileManager: FileManager = .default,
+        expectedSharedRoot: URL? = nil
+    ) throws -> Bool {
+        guard let expectedRoot = expectedSharedRoot
+                ?? SynaraSharedConstants.sharedCoreStoreRoot(fileManager: fileManager),
+              expectedRoot.standardizedFileURL == storeRoot.standardizedFileURL,
+              fileManager.fileExists(atPath: storeRoot.path) else {
+            return false
+        }
+        let readyMarker = storeRoot.appendingPathComponent(
+            SynaraSharedConstants.sharedCoreStoreReadyMarker
+        )
+        try Data("ready-v1".utf8).write(to: readyMarker, options: .atomic)
+        return true
     }
 }
 
@@ -151,6 +240,9 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             storeRoot: host.storeRoot,
             core: host.core
         )
+        if outcome.hasLiveClient {
+            _ = try? SharedCoreProductHost.publishNseStoreReady(at: host.storeRoot)
+        }
         if let failure = outcome.failure {
             await publish(failure.syncStatus)
             if failure == .restoreFailed || failure == .attachFailed {

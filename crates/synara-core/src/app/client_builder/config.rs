@@ -14,6 +14,9 @@ pub const DEFAULT_REQUEST_TIMEOUT_SECS: u64 = 30;
 /// Default retry limit for product HTTP requests.
 pub const DEFAULT_RETRY_LIMIT: usize = 3;
 
+/// SDK default holder used by the containing product process.
+const DEFAULT_STORE_LOCK_HOLDER: &str = "main";
+
 /// How the homeserver is supplied to the SDK builder.
 ///
 /// Product default is explicit HTTPS homeserver URL (no well-known discovery
@@ -126,6 +129,9 @@ pub struct ClientBuildConfig {
     pub user_agent: String,
     /// When true, enable SDK refresh-token handling hooks (no tokens stored here).
     pub handle_refresh_tokens: bool,
+    /// Stable process identity for the SDK's leased cross-process store locks.
+    /// Every process that can open the same store must use a distinct value.
+    cross_process_store_lock_holder: String,
     /// SQLite store passphrase bytes (32). Prefer `StoreKeyMaterial` from P2.2 vault.
     store_key: Option<StoreKeyMaterial>,
 }
@@ -148,6 +154,7 @@ impl ClientBuildConfig {
             timeouts: TimeoutPolicy::default(),
             user_agent: default_user_agent(),
             handle_refresh_tokens: true,
+            cross_process_store_lock_holder: DEFAULT_STORE_LOCK_HOLDER.to_owned(),
             store_key,
         };
         cfg.validate()?;
@@ -178,6 +185,24 @@ impl ClientBuildConfig {
     pub fn with_store_key(mut self, key: StoreKeyMaterial) -> Self {
         self.store_key = Some(key);
         self
+    }
+
+    pub fn with_cross_process_store_lock_holder(
+        mut self,
+        holder: impl Into<String>,
+    ) -> Result<Self, ClientBuilderError> {
+        let holder = holder.into();
+        if holder.trim().is_empty() || holder.len() > 64 {
+            return Err(ClientBuilderError::InvalidConfig(
+                "cross-process store lock holder must be 1 to 64 characters",
+            ));
+        }
+        self.cross_process_store_lock_holder = holder;
+        Ok(self)
+    }
+
+    pub(crate) fn cross_process_store_lock_holder(&self) -> &str {
+        &self.cross_process_store_lock_holder
     }
 
     pub fn store_key(&self) -> Option<&StoreKeyMaterial> {
@@ -285,4 +310,44 @@ pub struct ClientBuildPlan {
     pub store_layout: StoreLayout,
     pub approved_features: Vec<String>,
     pub matrix_sdk_version: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_config() -> ClientBuildConfig {
+        let identity = AccountIdentity::new("@alice:example.org", "https://example.org")
+            .expect("valid test identity");
+        ClientBuildConfig::product_default(
+            Path::new("/tmp/synara-client-config-test"),
+            identity,
+            None,
+        )
+        .expect("valid product config")
+    }
+
+    #[test]
+    fn store_lock_holder_defaults_to_main_and_accepts_a_distinct_process() {
+        let config = make_config();
+        assert_eq!(config.cross_process_store_lock_holder(), "main");
+
+        let config = make_config()
+            .with_cross_process_store_lock_holder("synara-nse-parent")
+            .expect("valid distinct holder");
+        assert_eq!(
+            config.cross_process_store_lock_holder(),
+            "synara-nse-parent"
+        );
+    }
+
+    #[test]
+    fn store_lock_holder_rejects_empty_and_oversized_values() {
+        assert!(make_config()
+            .with_cross_process_store_lock_holder("   ")
+            .is_err());
+        assert!(make_config()
+            .with_cross_process_store_lock_holder("x".repeat(65))
+            .is_err());
+    }
 }

@@ -14,6 +14,8 @@ settings:
 packages:
   SynaraCore:
     path: SynaraCore
+  SynaraNseCore:
+    path: SynaraNseCore
   MatrixRustComponentsSwift:
     url: https://github.com/matrix-org/matrix-rust-components-swift.git
     exactVersion: 26.06.06
@@ -76,6 +78,9 @@ targets:
   SynaraNotificationService:
     type: app-extension
     platform: iOS
+    dependencies:
+      - package: SynaraNseCore
+        product: SynaraNseCore
     sources:
       - path: SynaraNotificationService
       - path: SynaraShared
@@ -101,8 +106,12 @@ targets:
         Debug:
           CODE_SIGN_STYLE: Automatic
         Release:
+          COPY_PHASE_STRIP: YES
           CODE_SIGN_IDENTITY: Apple Distribution
           CODE_SIGN_STYLE: Manual
+          DEPLOYMENT_POSTPROCESSING: YES
+          STRIP_INSTALLED_PRODUCT: YES
+          STRIP_STYLE: all
           PROVISIONING_PROFILE_SPECIFIER: "$(SYNARA_IOS_NOTIFICATION_SERVICE_PROVISIONING_PROFILE)"
   SynaraTests:
     type: bundle.unit-test
@@ -111,6 +120,8 @@ targets:
       - path: SynaraTests
     dependencies:
       - target: Synara
+      - package: SynaraNseCore
+        product: SynaraNseCore
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara.tests

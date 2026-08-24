@@ -18,6 +18,21 @@ enum SharedCoreLaunchReset {
         )
         return true
     }
+
+    static func prepareSessionStore(
+        storeRoot: URL,
+        environment: [String: String],
+        secureStore: SecureSessionStoring
+    ) -> AppSessionStore {
+        if (try? resetStoreRootIfRequested(storeRoot, environment: environment)) == true {
+            try? secureStore.delete()
+        }
+
+        return AppSessionStore(
+            secureStore: secureStore,
+            restorePersistedSession: true
+        )
+    }
 }
 
 struct AppEnvironment {
@@ -55,17 +70,19 @@ struct AppEnvironment {
         let logger = AppLogger()
         let secureStore = KeychainSecureSessionStore()
         let storeRoot = SharedCoreProductHost.liveStoreRoot()
-        if (try? SharedCoreLaunchReset.resetStoreRootIfRequested(
-            storeRoot,
-            environment: ProcessInfo.processInfo.environment
-        )) == true {
-            try? secureStore.delete()
-        }
-        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
-        let session = AppSessionStore(
+        // A requested clean start must remove persisted state before the
+        // session store restores it into memory. Restoring first briefly
+        // presents a stale signed-in shell while deleting the credentials that
+        // a subsequent deep-link relaunch needs.
+        //
+        // Otherwise load/migrate the session into the shared Keychain before
+        // any NSE readiness can be published by a successful core restore.
+        let session = SharedCoreLaunchReset.prepareSessionStore(
+            storeRoot: storeRoot,
+            environment: ProcessInfo.processInfo.environment,
             secureStore: secureStore,
-            restorePersistedSession: true
         )
+        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
         if let restoreFailure = session.restoreFailureLogDescription {
             logger.error("Session restore failed: \(restoreFailure)", category: .auth)
         } else if case .signedIn = session.currentState {

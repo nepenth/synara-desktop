@@ -1264,6 +1264,52 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "15-live-settings-logout")
     }
 
+    func testLiveNotificationPreviewOptInWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_NOTIFICATION_PREVIEW_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_NOTIFICATION_PREVIEW_SMOKE=1 for the local notification-preview smoke.")
+        }
+
+        let app = XCUIApplication()
+        launch(app)
+        XCTAssertTrue(app.buttons["SettingsTab"].waitForExistence(timeout: 60))
+
+        if #available(iOS 16.4, *) {
+            app.open(URL(string: "synara://settings")!)
+        } else {
+            tap(app.buttons["SettingsTab"], timeout: 20)
+        }
+
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 20))
+        tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 10))
+
+        let permissionButton = app.buttons["NotificationPermissionButton"]
+        XCTAssertTrue(permissionButton.waitForExistence(timeout: 5))
+        if permissionButton.label == "Enable Notifications" {
+            permissionButton.tap()
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            let alert = springboard.alerts.firstMatch
+            if alert.waitForExistence(timeout: 5) {
+                let allow = alert.buttons["Allow"]
+                XCTAssertTrue(allow.waitForExistence(timeout: 2))
+                allow.tap()
+            }
+        }
+
+        let toggle = app.switches["LockScreenMessagePreviewsToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        if (toggle.value as? String) != "1" {
+            XCTAssertTrue(toggle.isHittable)
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        }
+        expectation(
+            for: NSPredicate(format: "value == %@", "1"),
+            evaluatedWith: toggle
+        )
+        waitForExpectations(timeout: 5)
+    }
+
     func testLiveDeviceVerificationAcrossSimulatorsWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_SMOKE", in: environment) == "1" else {

@@ -82,6 +82,10 @@ fn preview_plain(
     rt.block_on(shared.nse_event_preview(room_id, event_id))
 }
 
+fn close_plain(rt: &tokio::runtime::Runtime, shared: &SharedCore) -> Result<(), NseStoreError> {
+    rt.block_on(shared.nse_close_read_only_store())
+}
+
 fn error_text(error: &NseStoreError) -> String {
     format!("{error:?}{error}")
 }
@@ -94,6 +98,8 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(udl.contains("interface NseStoreError"));
     assert!(udl.contains("NseStoreDto nse_open_read_only_store("));
     assert!(udl.contains("NseStoreDto nse_store_status()"));
+    assert!(udl.contains("void nse_close_read_only_store()"));
+    assert!(udl.contains("NseEventPreviewDto nse_resolve_event_preview("));
     assert!(udl.contains("NseEventPreviewDto nse_event_preview("));
     assert!(udl.contains("constructor();"));
     assert!(udl.contains("[Name=\"new_with_secret_store\"]"));
@@ -105,6 +111,8 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
         .expect("SharedCore");
     assert!(shared_core.contains("nse_open_read_only_store("));
     assert!(shared_core.contains("nse_store_status("));
+    assert!(shared_core.contains("nse_close_read_only_store("));
+    assert!(shared_core.contains("nse_resolve_event_preview("));
     assert!(shared_core.contains("nse_event_preview("));
     assert!(shared_core.contains("secret_storage_status("));
     assert!(!shared_core.contains("command("));
@@ -126,6 +134,7 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
         .and_then(|rest| rest.split("async fn space_null_command(").next())
         .expect("nse methods");
     assert!(nse.contains("nse_store_status"));
+    assert!(nse.contains("nse_close_read_only_store"));
     assert!(nse.contains("nse_event_preview"));
     assert!(!nse.contains("build_sync_service"));
     assert!(!nse.contains("attach_session_owners"));
@@ -134,9 +143,27 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(!nse.contains("poll_owner_updates"));
     assert!(!nse.contains("poll_room_list_updates"));
     assert!(!nse.contains(".start()"));
-    assert!(!nse.contains("sliding_sync"));
-    assert!(nse.contains("Room::event"));
-    assert!(nse.contains("Never fetches"));
+    assert!(nse.contains("NotificationClient::new"));
+    assert!(nse.contains("NotificationProcessSetup::MultipleProcesses"));
+    assert!(ffi.contains("with_cross_process_store_lock_holder"));
+    assert!(ffi.contains("config.with_cross_process_store_lock_holder(NSE_STORE_LOCK_HOLDER)"));
+    assert!(ffi.contains("NSE_STORE_LOCK_HOLDER: &str = \"synara-nse-parent\""));
+    assert!(nse.contains("get_notification"));
+    assert!(nse.contains("NSE_RESOLUTION_TIMEOUT"));
+    assert!(ffi.contains("p4-s11-nse-restore-failed"));
+    assert!(ffi.contains("p4-s11-nse-client-init-failed"));
+    assert!(ffi.contains("p4-s11-nse-event-fetch-failed"));
+    assert!(ffi.contains("p4-s11-nse-resolution-timeout"));
+    assert!(ffi.contains("p4-s11-nse-close-failed"));
+    assert!(nse.contains("nse_resolve_event_preview"));
+    assert!(nse.contains("self.nse_open_read_only_store_with_room("));
+    assert!(nse.contains("room_id.map(RoomLoadSettings::One)"));
+    assert!(nse.contains("Some(parsed_room)"));
+    assert!(nse.contains("self.nse_event_preview_unbounded(room_id, event_id)"));
+    assert!(nse.contains("NotificationEvent::Timeline"));
+    assert!(!nse.contains("RawNotificationEvent::Timeline"));
+    assert!(ffi.contains("store_key_for_read_only"));
+    assert!(ffi.contains("handle_refresh_tokens = false"));
 }
 
 #[test]
@@ -203,7 +230,7 @@ fn nse_store_oversize_payload_fails_closed_without_truncate_or_echo() {
 }
 
 #[test]
-fn nse_store_planted_session_cannot_start_sync_and_returns_owner_diagnostics() {
+fn nse_store_planted_session_cannot_start_product_sync_and_fails_closed() {
     let access = "syt_s11_nse_store_access";
     let refresh = "syr_s11_nse_store_refresh";
     let identity = alice();
@@ -237,6 +264,8 @@ fn nse_store_planted_session_cannot_start_sync_and_returns_owner_diagnostics() {
     let status = status_plain(&rt, &shared);
     let preview = preview_plain(&rt, &shared, room_id.to_owned(), event_id.to_owned());
     let attach = rt.block_on(shared.attach_session_owners());
+    let closed = close_plain(&rt, &shared);
+    let status_after_close = status_plain(&rt, &shared);
     drop(shared);
     drop(_enter);
     drop(rt);
@@ -258,12 +287,8 @@ fn nse_store_planted_session_cannot_start_sync_and_returns_owner_diagnostics() {
         .map(error_text)
         .expect("planted store has no notification event");
     assert!(
-        preview_err.contains("p4-s11-nse-event-not-in-store"),
-        "preview must return the registered not-in-store diagnostic: {preview_err}"
-    );
-    assert!(
-        !preview_err.contains("p4-s11-nse-store-failed"),
-        "preview must not hide a wrong path behind the generic fallback: {preview_err}"
+        preview_err.contains("p4-s11-nse-event-fetch-failed"),
+        "fake homeserver resolution must return the registered fetch diagnostic: {preview_err}"
     );
 
     let attach_err = attach.expect_err("NSE read-only store must refuse owner attach");
@@ -272,6 +297,8 @@ fn nse_store_planted_session_cannot_start_sync_and_returns_owner_diagnostics() {
         attach_text.contains("p4-s11-nse-read-only-forbids-attach"),
         "attach must return the NSE read-only diagnostic: {attach_text}"
     );
+    closed.expect("NSE close must drop the retained client on the async runtime");
+    assert!(status_after_close.is_err());
 
     let combined = format!("{preview_err}{attach_text}");
     assert!(!combined.contains(access));

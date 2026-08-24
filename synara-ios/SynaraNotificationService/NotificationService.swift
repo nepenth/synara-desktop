@@ -1,66 +1,79 @@
 import Foundation
+import OSLog
 import Security
+import SynaraNseCore
 import UserNotifications
+import Darwin.Mach
 
 final class NotificationService: UNNotificationServiceExtension {
-    private var contentHandler: ((UNNotificationContent) -> Void)?
-    private var bestAttemptContent: UNMutableNotificationContent?
-    private var enrichmentTask: Task<Void, Never>?
-    private let deliveryQueue = DispatchQueue(label: "com.whylandcreative.synara.notification-service.delivery")
-    private var didDeliver = false
+    private let logger = Logger(
+        subsystem: "com.whylandcreative.synara.notification-service",
+        category: "preview"
+    )
+    private let coordinator = NotificationDeliveryCoordinator()
 
     override func didReceive(
         _ request: UNNotificationRequest,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        self.contentHandler = contentHandler
+        let requestID = coordinator.begin(content: request.content, handler: contentHandler)
 
         guard let content = request.content.mutableCopy() as? UNMutableNotificationContent else {
-            contentHandler(request.content)
+            logger.error("preview stage=content-copy-failed")
+            deliver(request.content, requestID: requestID)
             return
         }
 
-        bestAttemptContent = content
-
-        guard SynaraNotificationPreviewPreference.isEnabled(),
-              let payload = SynaraNotificationPreviewPayloadParser.payload(from: request.content.userInfo),
-              payload.isAgentApproval == false else {
-            deliver(content)
+        guard SynaraNotificationPreviewPreference.isEnabled() else {
+            logger.info("preview stage=preference-disabled")
+            deliver(content, requestID: requestID)
+            return
+        }
+        guard let payload = SynaraNotificationPreviewPayloadParser.payload(from: request.content.userInfo) else {
+            logger.info("preview stage=payload-invalid")
+            deliver(content, requestID: requestID)
+            return
+        }
+        guard payload.isAgentApproval == false else {
+            logger.info("preview stage=agent-approval-generic")
+            deliver(content, requestID: requestID)
             return
         }
 
+        logger.info("preview stage=resolution-started")
         let resolver = MatrixNotificationPreviewResolver()
-        enrichmentTask = Task { [weak self] in
-            guard let self else { return }
-            if let preview = await resolver.preview(for: payload) {
+        let logger = self.logger
+        let enrichmentTask = Task { [coordinator] in
+            if let preview = await resolver.preview(for: payload, onRequest: { request in
+                coordinator.installCoreCancellation(
+                    { request.cancel() },
+                    requestID: requestID
+                )
+            }) {
                 content.title = preview.title
                 content.body = preview.body
+                logger.info("preview stage=resolved")
+            } else {
+                logger.error("preview stage=resolution-failed")
             }
-            self.deliver(content)
+            coordinator.deliver(content, requestID: requestID)
         }
+        coordinator.install(task: enrichmentTask, requestID: requestID)
     }
 
     override func serviceExtensionTimeWillExpire() {
-        enrichmentTask?.cancel()
-        if let bestAttemptContent {
-            deliver(bestAttemptContent)
-        }
+        logger.error("preview stage=system-deadline")
+        coordinator.expireCurrent()
     }
 
-    private func deliver(_ content: UNNotificationContent) {
-        deliveryQueue.sync {
-            guard didDeliver == false else { return }
-            didDeliver = true
-            let handler = contentHandler
-            contentHandler = nil
-            handler?(content)
-        }
+    private func deliver(_ content: UNNotificationContent, requestID: UUID) {
+        coordinator.deliver(content, requestID: requestID)
     }
 }
 
 private struct StoredSynaraSession: Decodable {
+    let userID: String
     let homeserverURL: URL
-    let accessToken: String
 }
 
 private struct StoredSynaraSessionEnvelope: Decodable {
@@ -100,7 +113,7 @@ private struct NotificationSessionStore {
         return try? JSONDecoder().decode(StoredSynaraSession.self, from: data)
     }
 
-    private static func sharedAccessGroup(bundle: Bundle = .main) -> String? {
+    static func sharedAccessGroup(bundle: Bundle = .main) -> String? {
         guard let value = bundle.object(forInfoDictionaryKey: SynaraSharedConstants.keychainAccessGroupInfoKey) as? String else {
             return nil
         }
@@ -116,109 +129,132 @@ private struct NotificationSessionStore {
 }
 
 private struct MatrixNotificationPreviewResolver {
-    private static let maximumEventResponseBytes = 256 * 1024
     private let sessionStore: NotificationSessionStore
-    private let urlSession: URLSession
+    private let logger = Logger(
+        subsystem: "com.whylandcreative.synara.notification-service",
+        category: "preview"
+    )
 
-    init(
-        sessionStore: NotificationSessionStore = NotificationSessionStore(),
-        urlSession: URLSession = .synaraNotificationPreview
-    ) {
+    init(sessionStore: NotificationSessionStore = NotificationSessionStore()) {
         self.sessionStore = sessionStore
-        self.urlSession = urlSession
     }
 
-    func preview(for payload: SynaraNotificationPreviewPayload) async -> SynaraNotificationPreview? {
-        guard Task.isCancelled == false,
-              let session = sessionStore.load(),
-              let url = eventURL(
-                homeserverURL: session.homeserverURL,
-                roomID: payload.roomID,
-                eventID: payload.eventID
-              ) else {
+    func preview(
+        for payload: SynaraNotificationPreviewPayload,
+        onRequest: (NsePreviewRequest) -> Void
+    ) async -> SynaraNotificationPreview? {
+        let fileManager = FileManager.default
+        guard Task.isCancelled == false else {
+            logger.info("preview stage=cancelled-before-restore")
+            return nil
+        }
+        guard let session = sessionStore.load() else {
+            logger.error("preview stage=shared-session-missing")
+            return nil
+        }
+        guard let storeRoot = SynaraSharedConstants.sharedCoreStoreRoot(fileManager: fileManager),
+              SynaraSharedConstants.sharedCoreStoreIsReady(at: storeRoot, fileManager: fileManager) else {
+            logger.error("preview stage=shared-store-not-ready")
             return nil
         }
 
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(session.accessToken)", forHTTPHeaderField: "Authorization")
-        request.timeoutInterval = 12
-
+        let memorySampler = NotificationMemorySampler()
+        await memorySampler.capture()
+        let samplingTask = Task {
+            while Task.isCancelled == false {
+                await memorySampler.capture()
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+        }
+        defer { samplingTask.cancel() }
         do {
-            let (bytes, response) = try await urlSession.bytes(for: request)
-            guard Task.isCancelled == false,
-                  let httpResponse = response as? HTTPURLResponse,
-                  (200..<300).contains(httpResponse.statusCode),
-                  httpResponse.expectedContentLength < 0 ||
-                    httpResponse.expectedContentLength <= Int64(Self.maximumEventResponseBytes) else {
+            let request = NsePreviewRequest(
+                store: NotificationKeychainNseSecretVault(),
+                userId: session.userID,
+                homeserverUrl: session.homeserverURL.absoluteString,
+                storeRoot: storeRoot.path,
+                roomId: payload.roomID,
+                eventId: payload.eventID
+            )
+            onRequest(request)
+            guard Task.isCancelled == false else {
+                request.cancel()
                 return nil
             }
-
-            var data = Data()
-            data.reserveCapacity(
-                min(max(0, Int(httpResponse.expectedContentLength)), Self.maximumEventResponseBytes)
-            )
-            for try await byte in bytes {
-                guard Task.isCancelled == false,
-                      data.count < Self.maximumEventResponseBytes else {
-                    return nil
-                }
-                data.append(byte)
-            }
-
-            let event = try JSONDecoder().decode(MatrixEventResponse.self, from: data)
+            let event = try await request.resolve()
+            await memorySampler.capture()
+            let peakKB = await memorySampler.peakFootprintKB
+            logger.info("preview memory peak_footprint_kb=\(peakKB, privacy: .public)")
+            guard Task.isCancelled == false else { return nil }
             return SynaraMatrixEventPreviewComposer.preview(
                 from: SynaraMatrixEventPreviewInput(
-                    eventType: event.type,
-                    senderID: event.sender,
-                    body: event.content.body,
-                    messageType: event.content.msgtype
+                    eventType: event.eventType,
+                    senderID: event.senderId,
+                    body: event.body,
+                    messageType: event.messageType
                 )
             )
         } catch {
+            await memorySampler.capture()
+            let peakKB = await memorySampler.peakFootprintKB
+            logger.error("preview memory failed_peak_footprint_kb=\(peakKB, privacy: .public)")
+            logger.error("preview stage=core-resolution-error")
             return nil
         }
     }
+}
 
-    private func eventURL(homeserverURL: URL, roomID: String, eventID: String) -> URL? {
-        guard var components = URLComponents(url: homeserverURL, resolvingAgainstBaseURL: false) else {
-            return nil
+private actor NotificationMemorySampler {
+    private(set) var peakFootprintKB: UInt64 = 0
+
+    func capture() {
+        var info = task_vm_info_data_t()
+        var count = mach_msg_type_number_t(
+            MemoryLayout<task_vm_info_data_t>.size / MemoryLayout<natural_t>.size
+        )
+        let status = withUnsafeMutablePointer(to: &info) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+                task_info(mach_task_self_, task_flavor_t(TASK_VM_INFO), rebound, &count)
+            }
         }
-
-        let basePath = components.percentEncodedPath.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        let encodedRoomID = Self.encodePathSegment(roomID)
-        let encodedEventID = Self.encodePathSegment(eventID)
-        components.percentEncodedPath = "/" + ([basePath, "_matrix/client/v3/rooms", encodedRoomID, "event", encodedEventID]
-            .filter { $0.isEmpty == false }
-            .joined(separator: "/"))
-        components.query = nil
-        components.fragment = nil
-        return components.url
-    }
-
-    private static func encodePathSegment(_ value: String) -> String {
-        let allowed = CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "-._~"))
-        return value.addingPercentEncoding(withAllowedCharacters: allowed) ?? value
+        guard status == KERN_SUCCESS else { return }
+        peakFootprintKB = max(peakFootprintKB, info.phys_footprint / 1_024)
     }
 }
 
-private struct MatrixEventResponse: Decodable {
-    let type: String
-    let sender: String?
-    let content: MatrixEventContent
-}
+private final class NotificationKeychainNseSecretVault: NseSecretVault, @unchecked Sendable {
+    private let service = "com.whylandcreative.synara.core-vault"
+    private let accessGroup: String?
 
-private struct MatrixEventContent: Decodable {
-    let body: String?
-    let msgtype: String?
-}
+    init(bundle: Bundle = .main) {
+        self.accessGroup = NotificationSessionStore.sharedAccessGroup(bundle: bundle)
+    }
 
-private extension URLSession {
-    static let synaraNotificationPreview: URLSession = {
-        let configuration = URLSessionConfiguration.ephemeral
-        configuration.timeoutIntervalForRequest = 12
-        configuration.timeoutIntervalForResource = 18
-        configuration.waitsForConnectivity = false
-        return URLSession(configuration: configuration)
-    }()
+    func get(key: String) throws -> Data? {
+        guard let accessGroup else { throw Self.unavailable }
+        var query = baseQuery(key: key, accessGroup: accessGroup)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw Self.unavailable }
+        return item as? Data
+    }
+
+    private func baseQuery(key: String, accessGroup: String) -> [String: Any] {
+        [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service,
+            kSecAttrAccount as String: key,
+            kSecAttrAccessGroup as String: accessGroup,
+        ]
+    }
+
+    private static var unavailable: NseSecretVaultError {
+        .Unavailable(
+            code: "p4-s3-secret-vault-unavailable",
+            description: "The secret store is unavailable."
+        )
+    }
 }
