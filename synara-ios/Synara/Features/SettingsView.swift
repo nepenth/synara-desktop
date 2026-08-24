@@ -768,7 +768,7 @@ private struct NotificationSettingsView: View {
             }
 
             Section {
-                Toggle("Show message previews on lock screen", isOn: $showLockScreenMessagePreviews)
+                Toggle("Show message content in notifications", isOn: $showLockScreenMessagePreviews)
                     .accessibilityIdentifier("LockScreenMessagePreviewsToggle")
                     .onChange(of: showLockScreenMessagePreviews) { value in
                         environment.settings.set(value, for: SynaraSharedConstants.lockScreenMessagePreviewsKey)
@@ -776,7 +776,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("Message content is looked up on this device and is not sent through the push gateway.")
+                Text("Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility.")
                     .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
             }
 

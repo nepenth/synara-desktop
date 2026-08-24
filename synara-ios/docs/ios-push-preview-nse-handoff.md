@@ -3,7 +3,7 @@
 Audience: iOS implementation agent for `nepenth/synara-desktop` / `synara-ios`.
 Owner: Synara iOS implementation.
 Date: 2026-07-09
-Status: ready for implementation
+Status: implementation in local validation
 
 ## Goal
 
@@ -11,7 +11,7 @@ Implement **privacy-preserving lock-screen previews** for Synara iOS:
 
 1. Keep Matrix pusher format **`event_id_only`** (do **not** put message bodies on the APNs path).
 2. Add a **Notification Service Extension (NSE)** that enriches sparse APNs payloads on-device.
-3. Add Settings: **“Show message previews on lock screen”**.
+3. Add Settings: **“Show message content in notifications”**, off by default.
 
 The push gateway must:
 
@@ -30,7 +30,7 @@ coordinating the proxy implementation.
 ```text
 Homeserver  --event_id_only-->  push gateway
 Gateway     --APNs alert (generic or approval) + room_id/event_id + mutable-content-->  device
-NSE         --Keychain session + bounded Matrix resolve-->  rewrite title/body (if allowed)
+NSE         --get-only Keychain callback + one-shot Matrix resolve-->  rewrite title/body (if allowed)
 User        sees rich banner when possible; generic fallback otherwise
 ```
 
@@ -117,6 +117,13 @@ Reuse existing parsers:
 
 ### A4. NSE runtime behavior
 
+The extension links `SynaraNseCore`, never the full `SynaraCore` package. Its
+UniFFI surface is one narrow `NsePreviewRequest` with async `resolve()` and
+idempotent `cancel()`, plus a get-only secret callback. Cancellation selects
+against and drops the Rust Matrix future promptly; Rust owns client creation
+and cleanup on success, error, cancellation, and timeout. Swift must not retain
+a Matrix client or expose vault writes from the extension process.
+
 Implement `UNNotificationServiceExtension`:
 
 ```text
@@ -131,7 +138,7 @@ Algorithm:
 3. If `synara.kind == agent-approval` and title/body already specific → optional pass-through (still may soft-validate).
 4. Parse `room_id` + `event_id`. Missing either → original.
 5. Load Matrix session from Keychain (**same store as main app**, App Group aware).
-6. Bounded resolve (hard budget **~20–25s**, prefer faster):
+6. Bounded resolve (20s product deadline, below the system deadline):
    - open SDK client if possible, or lightweight authenticated request
    - fetch event / use notification client / existing sparse route resolver patterns
 7. Build preview:
@@ -158,9 +165,10 @@ NSE requirements:
 
 Preferred order:
 
-1. Reuse Matrix Rust SDK if extension size/startup allows and session restore is reliable.
-2. Else: authenticated Matrix Client-Server API event fetch for cleartext rooms.
-3. For encrypted events without keys: leave generic body (or “Encrypted message” only if true).
+1. Reuse the Matrix Rust SDK notification client with a distinct cross-process
+   store-lock identity, `RoomLoadSettings::One(room_id)`, and a bounded
+   end-to-end restore/decryption deadline.
+2. For encrypted events without locally available keys, leave the generic body.
 
 Must remain within NSE time budget. No long sync loops.
 
@@ -190,8 +198,8 @@ Optional simulator tests only if existing harness supports extension targets.
 
 In `SettingsView` (Notifications section near existing Push registration):
 
-- Toggle: **“Show message previews on lock screen”**
-- Default: **ON** for now (or OFF if security review prefers; document choice)
+- Toggle: **“Show message content in notifications”**
+- Default: **OFF**
 - Helper text:
   “When enabled, Synara can show sender and message text on the lock screen after secure on-device lookup. Message content is not sent through Apple’s push servers.”
 
@@ -233,6 +241,11 @@ Approval actions remain governed by existing revalidation/TTL in `SynaraNotifica
 - [ ] With previews OFF / no session / timeout: non-blank generic fallback remains.
 - [ ] No tokens/bodies in logs.
 - [ ] Existing agent-approval action handling still works (`approve-once` / `deny`).
+- [ ] Release `.appex` exports no `_uniffi_synara_core_` symbols.
+- [ ] Release archive checker passes on the final embedded `.appex` and records
+      its device slice, linked images, and executable size before upload.
+- [ ] Physical-device peak `phys_footprint` stays below Apple's NSE memory
+      ceiling with measured headroom for both cleartext and encrypted events.
 
 ### Settings (#3)
 
@@ -249,6 +262,10 @@ Approval actions remain governed by existing revalidation/TTL in `SynaraNotifica
 4. Previews OFF → same path shows generic non-blank text.
 5. Tap notification routes to room/event.
 6. Agent-approval notification (when gateway metadata present) shows category actions.
+7. Capture `preview memory peak_footprint_kb` from device logs for cleartext,
+   encrypted, timeout, generic-fallback, and burst/cancellation cases.
+   Simulator and Mach-O file size are diagnostic only and cannot satisfy this
+   release gate.
 
 ---
 

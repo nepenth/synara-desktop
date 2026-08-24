@@ -128,6 +128,7 @@ live_and_visual=(
   testLiveRoomManagementSmokeWhenConfigured
   testLiveVisualMockupScreenshotsWhenConfigured
   testLiveSettingsVisualScreenshotsWhenConfigured
+  testLiveNotificationPreviewOptInWhenConfigured
   testMockThreadVisualScreenshotWhenConfigured
   testMockAgentVisualScreenshotWhenConfigured
   testMockRoomsVisualScreenshotsWhenConfigured

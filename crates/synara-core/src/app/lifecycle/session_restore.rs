@@ -11,6 +11,7 @@
 
 use matrix_sdk::authentication::matrix::MatrixSession;
 use matrix_sdk::ruma::UserId;
+use matrix_sdk::store::RoomLoadSettings;
 use matrix_sdk::{Client, SessionMeta, SessionTokens};
 
 use crate::app::store::AccountIdentity;
@@ -88,6 +89,24 @@ pub async fn restore_session_onto_client(
     identity: &AccountIdentity,
     material: &SessionMaterial,
 ) -> Result<SessionRestoreOutcome, LifecycleError> {
+    restore_session_onto_client_with_room_load_settings(
+        client,
+        identity,
+        material,
+        RoomLoadSettings::default(),
+    )
+    .await
+}
+
+/// Restore sealed material while bounding which persisted rooms are loaded
+/// into the client's in-memory state. Notification extensions use `One` so a
+/// push for one room does not hydrate the account's complete room list.
+pub async fn restore_session_onto_client_with_room_load_settings(
+    client: &Client,
+    identity: &AccountIdentity,
+    material: &SessionMaterial,
+    room_load_settings: RoomLoadSettings,
+) -> Result<SessionRestoreOutcome, LifecycleError> {
     if client.session().is_some() {
         return Err(LifecycleError::Vault {
             diagnostic_id: "p3.6-client-already-has-session",
@@ -100,7 +119,7 @@ pub async fn restore_session_onto_client(
     let session = matrix_session_from_host_secrets(identity, &secrets)?;
 
     client
-        .restore_session(session)
+        .restore_session_with(session, room_load_settings)
         .await
         .map_err(map_restore_sdk_error)?;
 
@@ -139,6 +158,28 @@ pub async fn restore_session_from_vault<V: SessionMaterialVault + ?Sized>(
         category: MatrixIpcErrorCategory::AuthenticationRejected,
     })?;
     restore_session_onto_client(client, identity, &material).await
+}
+
+/// Load sealed material and restore only the requested persisted room set.
+pub async fn restore_session_from_vault_with_room_load_settings<
+    V: SessionMaterialVault + ?Sized,
+>(
+    client: &Client,
+    identity: &AccountIdentity,
+    vault: &V,
+    room_load_settings: RoomLoadSettings,
+) -> Result<SessionRestoreOutcome, LifecycleError> {
+    let material = load_session_material(vault, identity)?.ok_or(LifecycleError::Vault {
+        diagnostic_id: "p3.6-session-material-missing",
+        category: MatrixIpcErrorCategory::AuthenticationRejected,
+    })?;
+    restore_session_onto_client_with_room_load_settings(
+        client,
+        identity,
+        &material,
+        room_load_settings,
+    )
+    .await
 }
 
 /// Whether the vault has **any** material for `identity` (privacy-safe probe).

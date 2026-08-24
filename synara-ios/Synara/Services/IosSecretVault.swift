@@ -34,55 +34,112 @@ final class InMemoryIosSecretVault: IosSecretVault, @unchecked Sendable {
 /// values. Failures become the static UniFFI unavailable error.
 final class KeychainIosSecretVault: IosSecretVault, @unchecked Sendable {
     private let service: String
+    private let sharedAccessGroup: String?
 
-    init(service: String = "com.whylandcreative.synara.core-vault") {
+    init(
+        service: String = "com.whylandcreative.synara.core-vault",
+        sharedAccessGroup: String? = KeychainSecureSessionStore.defaultSharedAccessGroup()
+    ) {
         self.service = service
+        self.sharedAccessGroup = sharedAccessGroup
     }
 
     func get(key: String) throws -> Data? {
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecReturnData as String: true,
-            kSecMatchLimit as String: kSecMatchLimitOne,
-        ]
-        var item: CFTypeRef?
-        let status = SecItemCopyMatching(query as CFDictionary, &item)
-        if status == errSecItemNotFound {
-            return nil
+        for accessGroup in loadAccessGroups {
+            do {
+                if let value = try load(key: key, accessGroup: accessGroup) {
+                    if accessGroup == nil, sharedAccessGroup != nil {
+                        try? save(key: key, value: value, accessGroup: sharedAccessGroup)
+                    }
+                    return value
+                }
+            } catch VaultKeychainError.failure(let status)
+                where accessGroup != nil && status == errSecMissingEntitlement {
+                continue
+            }
         }
-        guard status == errSecSuccess else {
-            throw Self.unavailable
-        }
-        return item as? Data
+        return nil
     }
 
     func put(key: String, value: Data) throws {
-        try delete(key: key)
-        let query: [String: Any] = [
-            kSecClass as String: kSecClassGenericPassword,
-            kSecAttrService as String: service,
-            kSecAttrAccount as String: key,
-            kSecValueData as String: value,
-            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
-        ]
-        let status = SecItemAdd(query as CFDictionary, nil)
-        guard status == errSecSuccess else {
+        if let sharedAccessGroup {
+            do {
+                try save(key: key, value: value, accessGroup: sharedAccessGroup)
+                return
+            } catch VaultKeychainError.failure(let status) where status == errSecMissingEntitlement {
+                // Unit-test and unsigned hosts may not have the production entitlement.
+            } catch {
+                throw Self.unavailable
+            }
+        }
+        do {
+            try save(key: key, value: value, accessGroup: nil)
+        } catch {
             throw Self.unavailable
         }
     }
 
     func delete(key: String) throws {
-        let query: [String: Any] = [
+        var failed = false
+        for accessGroup in loadAccessGroups {
+            let query = baseQuery(key: key, accessGroup: accessGroup)
+            let status = SecItemDelete(query as CFDictionary)
+            if status != errSecSuccess,
+               status != errSecItemNotFound,
+               !(accessGroup != nil && status == errSecMissingEntitlement) {
+                failed = true
+            }
+        }
+        if failed {
+            throw Self.unavailable
+        }
+    }
+
+    private var loadAccessGroups: [String?] {
+        if let sharedAccessGroup {
+            return [sharedAccessGroup, nil]
+        }
+        return [nil]
+    }
+
+    private func baseQuery(key: String, accessGroup: String?) -> [String: Any] {
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: key,
         ]
-        let status = SecItemDelete(query as CFDictionary)
-        guard status == errSecSuccess || status == errSecItemNotFound else {
-            throw Self.unavailable
+        if let accessGroup {
+            query[kSecAttrAccessGroup as String] = accessGroup
         }
+        return query
+    }
+
+    private func load(key: String, accessGroup: String?) throws -> Data? {
+        var query = baseQuery(key: key, accessGroup: accessGroup)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var item: CFTypeRef?
+        let status = SecItemCopyMatching(query as CFDictionary, &item)
+        if status == errSecItemNotFound { return nil }
+        guard status == errSecSuccess else { throw VaultKeychainError.failure(status) }
+        return item as? Data
+    }
+
+    private func save(key: String, value: Data, accessGroup: String?) throws {
+        let query = baseQuery(key: key, accessGroup: accessGroup)
+        let attributes: [String: Any] = [
+            kSecValueData as String: value,
+            kSecAttrAccessible as String: kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly,
+        ]
+        let updateStatus = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
+        if updateStatus == errSecSuccess { return }
+        guard updateStatus == errSecItemNotFound else {
+            throw VaultKeychainError.failure(updateStatus)
+        }
+        var addQuery = query
+        for (key, value) in attributes { addQuery[key] = value }
+        let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
+        guard addStatus == errSecSuccess else { throw VaultKeychainError.failure(addStatus) }
     }
 
     private static var unavailable: IosSecretVaultError {
@@ -91,4 +148,8 @@ final class KeychainIosSecretVault: IosSecretVault, @unchecked Sendable {
             description: "The secret store is unavailable."
         )
     }
+}
+
+private enum VaultKeychainError: Error {
+    case failure(OSStatus)
 }

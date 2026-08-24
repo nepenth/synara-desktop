@@ -221,6 +221,64 @@ final class SynaraUITests: XCTestCase {
         XCTAssertEqual(profileMessage.label, "Profile updated.")
     }
 
+    func testRoomPersonalNotesRendersAndAddsPrivateNote() {
+        let app = launchRoomApp(roomNotes: true)
+
+        tap(app.buttons["RoomDetailsButton"], timeout: 5)
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 5))
+        let notesLink = app.buttons["RoomPersonalNotesLink"]
+        XCTAssertTrue(revealRoomDetailsElement(notesLink, app: app, timeout: 5))
+        tap(notesLink)
+
+        XCTAssertTrue(app.collectionViews["RoomNotesScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.staticTexts["Review the launch checklist"].exists)
+        XCTAssertTrue(app.staticTexts["Discuss the migration privately"].exists)
+        XCTAssertTrue(app.staticTexts["Private to your account. Synced across Synara clients; never posted to the room."].exists)
+
+        let editor = app.textViews["RoomNotesBodyEditor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 5))
+        editor.tap()
+        editor.typeText("iOS parity note")
+        let keyboardDone = app.toolbars.buttons["Done"]
+        XCTAssertTrue(keyboardDone.waitForExistence(timeout: 5))
+        tap(keyboardDone)
+        tap(app.buttons["RoomNotesAddButton"], timeout: 5)
+        XCTAssertTrue(app.staticTexts["iOS parity note"].waitForExistence(timeout: 5))
+
+        let screenshot = XCTAttachment(screenshot: app.screenshot())
+        screenshot.name = "Room Personal Notes"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+    }
+
+    func testRoomPersonalNotesExposesExistingItemEditor() {
+        let app = launchRoomApp(roomNotes: true)
+
+        tap(app.buttons["RoomDetailsButton"], timeout: 5)
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 5))
+        let notesLink = app.buttons["RoomPersonalNotesLink"]
+        XCTAssertTrue(revealRoomDetailsElement(notesLink, app: app, timeout: 5))
+        tap(notesLink)
+
+        XCTAssertTrue(app.collectionViews["RoomNotesScreen"].waitForExistence(timeout: 5))
+        let noteRow = app.staticTexts["Discuss the migration privately"]
+        XCTAssertTrue(noteRow.waitForExistence(timeout: 5))
+        noteRow.press(forDuration: 0.8)
+        tap(app.buttons["Edit"], timeout: 5)
+
+        let editBody = app.textViews["RoomNotesEditBody"]
+        XCTAssertTrue(editBody.waitForExistence(timeout: 5))
+        XCTAssertEqual(editBody.value as? String, "Discuss the migration privately")
+        XCTAssertTrue(app.buttons["RoomNotesEditSave"].exists)
+        editBody.tap()
+        editBody.typeText(" updated")
+        tap(app.buttons["RoomNotesEditSave"], timeout: 5)
+        let updatedText = app.staticTexts.matching(
+            NSPredicate(format: "label CONTAINS %@", "updated")
+        ).firstMatch
+        XCTAssertTrue(updatedText.waitForExistence(timeout: 5))
+    }
+
     func testLargeRoomFixtureRendersAndScrolls() {
         let app = launchLargeRoomsApp()
 
@@ -714,6 +772,90 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 60))
     }
 
+    func testLiveRoomNotesSyncWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_ROOM_NOTES_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_ROOM_NOTES_SMOKE=1 for the live room-notes sync smoke.")
+        }
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment)
+        else {
+            throw XCTSkip("Live room-notes sync needs homeserver, username, and password environment variables.")
+        }
+
+        let liveClient = try MatrixLiveTestClient.login(
+            homeserver: homeserver,
+            username: username,
+            password: password
+        )
+        try liveClient.cleanupDisposableRooms(namePrefixes: ["Synara Notes Smoke "])
+
+        let smokeID = Int(Date().timeIntervalSince1970)
+        let roomID = try liveClient.createPrivateRoom(name: "Synara Notes Smoke \(smokeID)")
+        let externalNoteID = "note:external-\(smokeID)"
+        let externalNoteBody = "External client note \(smokeID)"
+        let iosNoteBody = "iOS account-data note \(smokeID)"
+        let now = Int64(Date().timeIntervalSince1970 * 1_000)
+
+        defer {
+            try? liveClient.removeRoomNotesRoom(roomID: roomID)
+            try? liveClient.leaveRoom(roomID: roomID)
+            try? liveClient.cleanupDisposableRooms(namePrefixes: ["Synara Notes Smoke "])
+            try? liveClient.logout()
+        }
+
+        try liveClient.replaceRoomNotesRoom(
+            roomID: roomID,
+            items: [
+                externalNoteID: [
+                    "id": externalNoteID,
+                    "kind": "note",
+                    "roomId": roomID,
+                    "createdAt": now,
+                    "updatedAt": now,
+                    "body": externalNoteBody,
+                ],
+            ]
+        )
+
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launchEnvironment["SYNARA_AUTO_OPEN_ROOM_ID"] = roomID
+        launch(app)
+
+        if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            loginLive(app: app, homeserver: homeserver, username: username, password: password)
+            dismissPasswordSavePromptIfPresent(app: app)
+        }
+
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 90))
+        tap(app.buttons["RoomDetailsButton"], timeout: 15)
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 30))
+        XCTAssertTrue(revealRoomDetailsElement(app.buttons["RoomPersonalNotesLink"], app: app, timeout: 15))
+        tap(app.buttons["RoomPersonalNotesLink"], timeout: 10)
+
+        XCTAssertTrue(app.collectionViews["RoomNotesScreen"].waitForExistence(timeout: 30))
+        XCTAssertTrue(
+            app.staticTexts[externalNoteBody].waitForExistence(timeout: 30),
+            "A note written by another Matrix client must be visible in iOS."
+        )
+
+        let editor = app.textViews["RoomNotesBodyEditor"]
+        XCTAssertTrue(editor.waitForExistence(timeout: 10))
+        editor.tap()
+        editor.typeText(iosNoteBody)
+        if app.toolbars.buttons["Done"].waitForExistence(timeout: 5) {
+            tap(app.toolbars.buttons["Done"])
+        }
+        tap(app.buttons["RoomNotesAddButton"], timeout: 10)
+        XCTAssertTrue(app.staticTexts[iosNoteBody].waitForExistence(timeout: 30))
+        XCTAssertTrue(
+            liveClient.waitForRoomNote(roomID: roomID, body: iosNoteBody, timeout: 30),
+            "The iOS write must be readable from Matrix global account data."
+        )
+    }
+
     func testLiveRichFormattingSmokeWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_LIVE_RICH_TEXT_SMOKE", in: environment) == "1" else {
@@ -1122,6 +1264,52 @@ final class SynaraUITests: XCTestCase {
         try saveScreenshot(app: app, directory: screenshotDirectory, name: "15-live-settings-logout")
     }
 
+    func testLiveNotificationPreviewOptInWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_NOTIFICATION_PREVIEW_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_NOTIFICATION_PREVIEW_SMOKE=1 for the local notification-preview smoke.")
+        }
+
+        let app = XCUIApplication()
+        launch(app)
+        XCTAssertTrue(app.buttons["SettingsTab"].waitForExistence(timeout: 60))
+
+        if #available(iOS 16.4, *) {
+            app.open(URL(string: "synara://settings")!)
+        } else {
+            tap(app.buttons["SettingsTab"], timeout: 20)
+        }
+
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 20))
+        tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
+        XCTAssertTrue(app.collectionViews["NotificationSettingsScreen"].waitForExistence(timeout: 10))
+
+        let permissionButton = app.buttons["NotificationPermissionButton"]
+        XCTAssertTrue(permissionButton.waitForExistence(timeout: 5))
+        if permissionButton.label == "Enable Notifications" {
+            permissionButton.tap()
+            let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+            let alert = springboard.alerts.firstMatch
+            if alert.waitForExistence(timeout: 5) {
+                let allow = alert.buttons["Allow"]
+                XCTAssertTrue(allow.waitForExistence(timeout: 2))
+                allow.tap()
+            }
+        }
+
+        let toggle = app.switches["LockScreenMessagePreviewsToggle"]
+        XCTAssertTrue(toggle.waitForExistence(timeout: 10))
+        if (toggle.value as? String) != "1" {
+            XCTAssertTrue(toggle.isHittable)
+            toggle.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        }
+        expectation(
+            for: NSPredicate(format: "value == %@", "1"),
+            evaluatedWith: toggle
+        )
+        waitForExpectations(timeout: 5)
+    }
+
     func testLiveDeviceVerificationAcrossSimulatorsWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_SMOKE", in: environment) == "1" else {
@@ -1436,7 +1624,8 @@ final class SynaraUITests: XCTestCase {
 
     private func launchRoomApp(
         readMarkerEventID: String? = nil,
-        largeTimelineCount: Int? = nil
+        largeTimelineCount: Int? = nil,
+        roomNotes: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -1448,6 +1637,9 @@ final class SynaraUITests: XCTestCase {
         if let largeTimelineCount {
             app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
             app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "\(largeTimelineCount)"
+        }
+        if roomNotes {
+            app.launchEnvironment["SYNARA_UI_TEST_ROOM_NOTES"] = "1"
         }
         launch(app)
         return app
@@ -1943,10 +2135,12 @@ final class SynaraUITests: XCTestCase {
 private final class MatrixLiveTestClient {
     private let homeserverURL: URL
     private let accessToken: String
+    private let userID: String
 
-    private init(homeserverURL: URL, accessToken: String) {
+    private init(homeserverURL: URL, accessToken: String, userID: String) {
         self.homeserverURL = homeserverURL
         self.accessToken = accessToken
+        self.userID = userID
     }
 
     static func login(homeserver: String, username: String, password: String) throws -> MatrixLiveTestClient {
@@ -1971,12 +2165,79 @@ private final class MatrixLiveTestClient {
 
         let data = try perform(request).data
         guard let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let token = object["access_token"] as? String
+              let token = object["access_token"] as? String,
+              let userID = object["user_id"] as? String
         else {
             throw LiveMatrixError.invalidResponse
         }
 
-        return MatrixLiveTestClient(homeserverURL: homeserverURL, accessToken: token)
+        return MatrixLiveTestClient(homeserverURL: homeserverURL, accessToken: token, userID: userID)
+    }
+
+    func replaceRoomNotesRoom(roomID: String, items: [String: [String: Any]]) throws {
+        var content = try roomNotesContent()
+        var rooms = content["rooms"] as? [String: Any] ?? [:]
+        rooms[roomID] = ["items": items]
+        content["version"] = 1
+        content["rooms"] = rooms
+        try setRoomNotesContent(content)
+    }
+
+    func removeRoomNotesRoom(roomID: String) throws {
+        var content = try roomNotesContent()
+        var rooms = content["rooms"] as? [String: Any] ?? [:]
+        rooms.removeValue(forKey: roomID)
+        content["version"] = 1
+        content["rooms"] = rooms
+        try setRoomNotesContent(content)
+    }
+
+    func waitForRoomNote(roomID: String, body: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (try? hasRoomNote(roomID: roomID, body: body)) == true {
+                return true
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+        return (try? hasRoomNote(roomID: roomID, body: body)) == true
+    }
+
+    private func hasRoomNote(roomID: String, body: String) throws -> Bool {
+        let content = try roomNotesContent()
+        guard let rooms = content["rooms"] as? [String: Any],
+              let room = rooms[roomID] as? [String: Any],
+              let items = room["items"] as? [String: Any]
+        else {
+            return false
+        }
+        return items.values.contains { value in
+            (value as? [String: Any])?["body"] as? String == body
+        }
+    }
+
+    private func roomNotesContent() throws -> [String: Any] {
+        do {
+            let response = try authenticatedRequest(
+                method: "GET",
+                path: ["client", "v3", "user", userID, "account_data", "in.synara.room_notes"],
+                body: nil
+            )
+            guard let content = try JSONSerialization.jsonObject(with: response.data) as? [String: Any] else {
+                throw LiveMatrixError.invalidResponse
+            }
+            return content
+        } catch LiveMatrixError.httpStatus(404) {
+            return ["version": 1, "rooms": [String: Any]()]
+        }
+    }
+
+    private func setRoomNotesContent(_ content: [String: Any]) throws {
+        _ = try authenticatedRequest(
+            method: "PUT",
+            path: ["client", "v3", "user", userID, "account_data", "in.synara.room_notes"],
+            body: content
+        )
     }
 
     func resolveRoomAlias(_ alias: String) throws -> String {
@@ -1991,6 +2252,14 @@ private final class MatrixLiveTestClient {
             throw LiveMatrixError.invalidResponse
         }
         return roomID
+    }
+
+    func logout() throws {
+        _ = try authenticatedRequest(
+            method: "POST",
+            path: ["client", "v3", "logout"],
+            body: [:]
+        )
     }
 
     func sendRoomMessage(roomID: String, body: String) throws -> String {

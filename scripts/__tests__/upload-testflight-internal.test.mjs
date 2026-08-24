@@ -22,6 +22,7 @@ async function createHarness(exportStatus) {
   const binDirectory = path.join(root, "bin");
   const diagnosticsDirectory = path.join(root, "diagnostics");
   const distributionLogs = path.join(root, "Synara_fixture.xcdistributionlogs");
+  const archiveCheckMarker = path.join(root, "archive-check.txt");
   const outputFile = path.join(root, "github-output.txt");
   await Promise.all([
     mkdir(binDirectory, { recursive: true }),
@@ -55,6 +56,19 @@ printf 'fixture archive\\n'
   );
   await chmod(fakeXcodebuild, 0o755);
 
+  const fakeArchiveChecker = path.join(binDirectory, "check-archive");
+  await writeFile(
+    fakeArchiveChecker,
+    `#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == "$SYNARA_EXPECTED_ARCHIVE_PATH" ]]
+[[ "$2" == "$SYNARA_IOS_DIAGNOSTICS_DIR" ]]
+printf 'checked\n' > "$SYNARA_ARCHIVE_CHECK_MARKER"
+`,
+    "utf8"
+  );
+  await chmod(fakeArchiveChecker, 0o755);
+
   const result = spawnSync(uploadScript, {
     cwd: repositoryRoot,
     encoding: "utf8",
@@ -73,9 +87,21 @@ printf 'fixture archive\\n'
         "https://push.example.test/_matrix/push/v1/notify",
       SYNARA_IOS_ARCHIVE_ROOT: root,
       SYNARA_IOS_DIAGNOSTICS_DIR: diagnosticsDirectory,
+      SYNARA_IOS_NOTIFICATION_ARCHIVE_CHECKER: fakeArchiveChecker,
+      SYNARA_EXPECTED_ARCHIVE_PATH: path.join(
+        root,
+        "Synara-1.2.56-1.2.57.xcarchive"
+      ),
+      SYNARA_ARCHIVE_CHECK_MARKER: archiveCheckMarker,
     },
   });
-  return { diagnosticsDirectory, distributionLogs, outputFile, result };
+  return {
+    archiveCheckMarker,
+    diagnosticsDirectory,
+    distributionLogs,
+    outputFile,
+    result,
+  };
 }
 
 test("preserves version outputs, command logs, and Xcode distribution diagnostics", async () => {
@@ -89,6 +115,7 @@ test("preserves version outputs, command logs, and Xcode distribution diagnostic
     await readFile(harness.outputFile, "utf8"),
     /build_number=1\.2\.57/
   );
+  assert.equal(await readFile(harness.archiveCheckMarker, "utf8"), "checked\n");
   assert.match(
     await readFile(
       path.join(harness.diagnosticsDirectory, "xcodebuild-archive.log"),

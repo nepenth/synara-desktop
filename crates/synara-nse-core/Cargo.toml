@@ -1,0 +1,22 @@
+[package]
+name = "synara-nse-core"
+version = "0.1.0"
+description = "Notification-extension-only bindings for the Synara native core"
+license = "AGPL-3.0-only"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["lib", "staticlib"]
+
+[dependencies]
+synara-core = { path = "../synara-core", default-features = false, features = ["nse-preview"] }
+tokio = { version = "1", features = ["macros"] }
+tokio-util = { version = "0.7", features = ["rt"] }
+uniffi = { version = "=0.28.3", features = ["tokio"] }
+
+[build-dependencies]
+uniffi = { version = "=0.28.3", features = ["build"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "time"] }

@@ -1,0 +1,4 @@
+# Produced by scripts/generate-synara-nse-core-swift.sh; never commit build output.
+/Sources/SynaraNseCore/Generated/*.swift
+/Artifacts/
+/.build/

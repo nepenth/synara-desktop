@@ -37,10 +37,13 @@ store or deploy-host-only path.
   production APNs tokens.
 - The push runtime handles routing, badge updates, and agent approval native
   actions.
-- The Notification Service Extension can enrich sparse cleartext notifications
-  on-device when lock-screen previews are enabled. It leaves encrypted events,
-  missing sessions, timeouts, and agent approval notifications on the generic
-  gateway-provided text.
+- The Notification Service Extension can enrich sparse room-message
+  notifications on-device when message-content previews are enabled. It uses
+  a notification-only, get-only native binding and restores only the target
+  room before asking the Matrix SDK notification client to resolve the event.
+  Encrypted events can be decrypted when the device already has the required
+  keys. Missing sessions or keys, timeouts, unsupported events, and agent
+  approval notifications retain the generic gateway-provided text.
 
 Run focused iOS push tests:
 
@@ -137,8 +140,9 @@ confirmation step on the approval card.
 6. Send a test room message to trigger Matrix gateway flow.
 7. Confirm iOS receives a non-blank notification and badge update.
 8. Toggle lock-screen previews off and confirm generic notification text remains.
-9. Toggle lock-screen previews on and confirm cleartext events can be enriched
-   by the Notification Service Extension.
+9. Toggle message-content previews on and confirm cleartext and encrypted events
+   with locally available keys can be enriched by the Notification Service
+   Extension.
 10. Tap notification and confirm room/event route or safe fallback.
 
 ## Production Gate Notes
@@ -156,3 +160,7 @@ confirmation step on the approval card.
 - App Store entitlement/profile with Push Notifications, App Groups, and
   Keychain Sharing.
 - Optional later: agent-approval metadata ingest endpoint on the gateway.
+- Release remains blocked until a real APNs delivery on a physical device
+  proves preview ON/OFF behavior and records peak NSE physical footprint with
+  headroom below Apple's extension memory ceiling, including encrypted,
+  timeout, and burst/cancellation paths.

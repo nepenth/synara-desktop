@@ -1,6 +1,6 @@
 # Synara Shared Contracts
 
-Reviewed: 2026-05-26
+Reviewed: 2026-08-24
 
 This directory contains machine-readable contract artifacts for behavior that
 must remain compatible across the desktop runtime, macOS/Linux shells, and the
@@ -67,17 +67,17 @@ Human-readable inventory: [Synara Shared Contract Inventory](../synara-contracts
 
 ## Ownership
 
-| Contract                 | Desktop-runtime owner                    | iOS owner                       | Compatibility rule                                                               |
-| ------------------------ | ---------------------------------------- | ------------------------------- | -------------------------------------------------------------------------------- |
-| Agent action payloads    | `src/app/agents/agentActions.ts`         | Future native agent-card service | Writers emit bounded canonical payloads; readers validate and fail closed.       |
-| Agent approval results   | Future agent action bridge               | Native agent approval service     | Writers emit canonical v1 Matrix room events; readers ignore unsupported versions. |
-| Agent cards              | `src/app/utils/hermes.ts`                | Future native agent-card service | Explicit structured keys only; safe URLs and bounded sections.                   |
-| `in.synara.later`        | `src/app/utils/later.ts`                 | Future native Later service      | Writers emit canonical v1; readers normalize legacy v1.                          |
-| `in.synara.room_notes`   | `src/app/utils/roomNotes.ts`             | Future native room notes service | Writers emit canonical v1; readers normalize malformed or oversized items.       |
-| `in.synara.spaces`       | `src/app/hooks/useSidebarItems.ts`       | Future native sidebar model      | Folder/ordering account data stays Matrix ID-only and portable.                  |
-| `in.synara.unread_anchor` | `src/app/utils/notifications.ts`         | Future native unread model       | Private unread anchors store event IDs only; no decrypted previews.              |
-| Media/external URL policy | `src/app/utils/remoteContent.ts`         | Future native media service      | Public HTTPS only; local/private/credentialed targets fail closed.               |
-| Notification summaries   | `src/app/notifications/badgeSummary.ts`  | Future native notification model | Writers emit non-negative integer counts; formulas remain cross-platform.        |
-| Room/event/thread anchors | Routes, Later, timeline helpers          | Future native navigation model   | Anchors contain opaque Matrix IDs only; readers resolve local context after sync. |
-| App-relative route paths | `src/app/routes/synaraRoutes.ts`         | Future native route parser       | Writers emit internal paths; readers reject malformed or unsupported routes.      |
-| Settings compatibility   | `src/app/state/settings.ts`              | Future native settings store     | Shared settings stay platform-neutral; platform settings stay channel-specific.  |
+| Contract                  | Desktop-runtime owner                                                  | iOS owner                        | Compatibility rule                                                                 |
+| ------------------------- | ---------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------- |
+| Agent action payloads     | `src/app/agents/agentActions.ts`                                       | Future native agent-card service | Writers emit bounded canonical payloads; readers validate and fail closed.         |
+| Agent approval results    | Future agent action bridge                                             | Native agent approval service    | Writers emit canonical v1 Matrix room events; readers ignore unsupported versions. |
+| Agent cards               | `src/app/utils/hermes.ts`                                              | Future native agent-card service | Explicit structured keys only; safe URLs and bounded sections.                     |
+| `in.synara.later`         | `src/app/utils/later.ts`                                               | Future native Later service      | Writers emit canonical v1; readers normalize legacy v1.                            |
+| `in.synara.room_notes`    | Shared Core `room_notes_live.rs`; `nativeRoomNotesOwner.ts` projection | `SharedCoreRoomNotesService`     | Writers emit canonical v1; readers normalize malformed or oversized items.         |
+| `in.synara.spaces`        | `src/app/hooks/useSidebarItems.ts`                                     | Future native sidebar model      | Folder/ordering account data stays Matrix ID-only and portable.                    |
+| `in.synara.unread_anchor` | `src/app/utils/notifications.ts`                                       | Future native unread model       | Private unread anchors store event IDs only; no decrypted previews.                |
+| Media/external URL policy | `src/app/utils/remoteContent.ts`                                       | Future native media service      | Public HTTPS only; local/private/credentialed targets fail closed.                 |
+| Notification summaries    | `src/app/notifications/badgeSummary.ts`                                | Future native notification model | Writers emit non-negative integer counts; formulas remain cross-platform.          |
+| Room/event/thread anchors | Routes, Later, timeline helpers                                        | Future native navigation model   | Anchors contain opaque Matrix IDs only; readers resolve local context after sync.  |
+| App-relative route paths  | `src/app/routes/synaraRoutes.ts`                                       | Future native route parser       | Writers emit internal paths; readers reject malformed or unsupported routes.       |
+| Settings compatibility    | `src/app/state/settings.ts`                                            | Future native settings store     | Shared settings stay platform-neutral; platform settings stay channel-specific.    |

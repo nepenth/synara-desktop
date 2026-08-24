@@ -7,6 +7,7 @@ RESULT_BUNDLE_DIR="${IOS_RESULT_BUNDLE_DIR:-/private/tmp/synara-ios-results}"
 RESULT_STAMP="${IOS_RESULT_STAMP:-$(date +%Y%m%d-%H%M%S)-$$}"
 BUILD_DESTINATION="${IOS_BUILD_DESTINATION:-generic/platform=iOS Simulator}"
 TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
+DEVICE_DERIVED_DATA_PATH="${IOS_DEVICE_DERIVED_DATA_PATH:-/private/tmp/synara-ios-device-derived}"
 CLONED_SOURCE_PACKAGES_DIR_PATH="${IOS_CLONED_SOURCE_PACKAGES_DIR_PATH:-}"
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/synara-ios-module-cache}"
 export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-/private/tmp/synara-ios-swiftpm-module-cache}"
@@ -50,6 +51,13 @@ if [[ ! -f "$checker" ]]; then
 fi
 node "$checker"
 
+nse_checker="$repo_root/scripts/check-synara-nse-core-isolation.mjs"
+if [[ ! -f "$nse_checker" ]]; then
+  echo "SynaraNseCore isolation checker is required at $nse_checker" >&2
+  exit 127
+fi
+node "$nse_checker"
+
 generator="$repo_root/scripts/generate-synara-core-swift.sh"
 if [[ ! -x "$generator" ]]; then
   echo "SynaraCore generator is required at $generator" >&2
@@ -61,6 +69,14 @@ fi
 # clean checkout cannot compile declarations without their Rust implementation.
 "$generator"
 
+nse_generator="$repo_root/scripts/generate-synara-nse-core-swift.sh"
+if [[ ! -x "$nse_generator" ]]; then
+  echo "SynaraNseCore generator is required at $nse_generator" >&2
+  exit 127
+fi
+SYNARA_NSE_CORE_APPLE_SLICES="${SYNARA_NSE_CORE_APPLE_SLICES:-${SYNARA_CORE_APPLE_SLICES:-all}}" \
+  "$nse_generator"
+
 required_synara_core_artifacts=(
   "SynaraCore/Sources/SynaraCore/Generated/synara_core.swift"
   "SynaraCore/Artifacts/SynaraCore.xcframework/Info.plist"
@@ -71,6 +87,35 @@ for artifact in "${required_synara_core_artifacts[@]}"; do
     exit 1
   fi
 done
+
+required_synara_nse_core_artifacts=(
+  "SynaraNseCore/Sources/SynaraNseCore/Generated/synara_nse_core.swift"
+  "SynaraNseCore/Artifacts/SynaraNseCore.xcframework/Info.plist"
+)
+for artifact in "${required_synara_nse_core_artifacts[@]}"; do
+  if [[ ! -f "$artifact" ]]; then
+    echo "SynaraNseCore generation did not produce required artifact: $artifact" >&2
+    exit 1
+  fi
+done
+for generated_ffi_file in synara_nse_coreFFI.h module.modulemap; do
+  if ! find "SynaraNseCore/Artifacts/SynaraNseCore.xcframework" \
+    -path "*/Headers/synara_nse_coreFFI/$generated_ffi_file" -print -quit | grep -q .; then
+    echo "SynaraNseCore XCFramework is missing namespaced FFI file: $generated_ffi_file" >&2
+    exit 1
+  fi
+done
+
+if cargo tree -p synara-nse-core -e features | grep -q 'synara-core feature "full-uniffi"'; then
+  echo "SynaraNseCore must not enable the full Core UniFFI feature" >&2
+  exit 1
+fi
+while IFS= read -r nse_archive; do
+  if nm -gU "$nse_archive" 2>/dev/null | grep -q '_uniffi_synara_core_'; then
+    echo "SynaraNseCore archive contains forbidden full Core exports: $nse_archive" >&2
+    exit 1
+  fi
+done < <(find "SynaraNseCore/Artifacts/SynaraNseCore.xcframework" -name 'libsynara_nse_core*.a' -type f)
 for generated_ffi_file in synara_coreFFI.h module.modulemap; do
   if ! find "SynaraCore/Artifacts/SynaraCore.xcframework" \
     -path "*/Headers/$generated_ffi_file" -print -quit | grep -q .; then
@@ -136,4 +181,28 @@ if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
     "${PACKAGE_ARGS[@]}" \
     test-without-building \
     "${UNSIGNED_BUILD_ARGS[@]}"
+fi
+
+# The simulator product cannot prove the architecture, linkage, or stripped
+# size of the extension that ships to users. PR CI opts into this second pass
+# after simulator tests so the final arm64 Release appex is checked before a
+# TestFlight archive is attempted.
+if [[ "${CHECK_IOS_DEVICE_RELEASE:-0}" == "1" ]]; then
+  SYNARA_CORE_APPLE_SLICES=device "$generator"
+  SYNARA_NSE_CORE_APPLE_SLICES=device "$nse_generator"
+
+  xcodebuild \
+    -project Synara.xcodeproj \
+    -scheme Synara \
+    -configuration Release \
+    -destination "generic/platform=iOS" \
+    -derivedDataPath "$DEVICE_DERIVED_DATA_PATH" \
+    -resultBundlePath "$RESULT_BUNDLE_DIR/device-release-$RESULT_STAMP.xcresult" \
+    "${PACKAGE_ARGS[@]}" \
+    build \
+    "${UNSIGNED_BUILD_ARGS[@]}"
+
+  scripts/check-notification-service-archive.sh \
+    "$DEVICE_DERIVED_DATA_PATH/Build/Products/Release-iphoneos/Synara.app" \
+    "$RESULT_BUNDLE_DIR"
 fi

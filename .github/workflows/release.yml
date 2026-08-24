@@ -653,9 +653,12 @@ jobs:
           shared-key: release-synara-core-apple-device
 
       - name: Generate SynaraCore Swift bindings and XCFramework
-        run: scripts/generate-synara-core-swift.sh
+        run: |
+          scripts/generate-synara-core-swift.sh
+          scripts/generate-synara-nse-core-swift.sh
         env:
           SYNARA_CORE_APPLE_SLICES: device
+          SYNARA_NSE_CORE_APPLE_SLICES: device
 
       - name: Validate TestFlight release configuration
         shell: bash

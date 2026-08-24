@@ -159,8 +159,16 @@
 
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
+use matrix_sdk::ruma::events::{
+    room::message::MessageType, AnySyncMessageLikeEvent, AnySyncTimelineEvent,
+};
+use matrix_sdk::store::RoomLoadSettings;
 use matrix_sdk::Client;
+use matrix_sdk_ui::notification_client::{
+    NotificationClient, NotificationEvent, NotificationProcessSetup, NotificationStatus,
+};
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
@@ -174,15 +182,15 @@ use crate::app::auth::{
     existing_sqlite_crypto_device_id, login_with_password as core_login_with_password,
     DevicePlatform, LoginOptions,
 };
-use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig};
+use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig, TimeoutPolicy};
 use crate::app::devices::{
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
 };
 use crate::app::lifecycle::{
     load_session_material, matrix_session_from_host_secrets, persist_session_after_login,
-    restore_session_from_vault, restore_session_onto_client, SessionMaterial, SessionMaterialId,
-    SessionMaterialVault,
+    restore_session_from_vault, restore_session_from_vault_with_room_load_settings,
+    restore_session_onto_client, SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
@@ -302,6 +310,20 @@ const NSE_OWNERS_ATTACHED_DESCRIPTION: &str =
     "The NSE read-only store cannot open after owners attach.";
 const NSE_FAILED_CODE: &str = "p4-s11-nse-store-failed";
 const NSE_FAILED_DESCRIPTION: &str = "The NSE read-only store request could not be completed.";
+const NSE_RESTORE_FAILED_CODE: &str = "p4-s11-nse-restore-failed";
+const NSE_RESTORE_FAILED_DESCRIPTION: &str = "The NSE session could not be restored.";
+const NSE_CLIENT_INIT_FAILED_CODE: &str = "p4-s11-nse-client-init-failed";
+const NSE_CLIENT_INIT_FAILED_DESCRIPTION: &str =
+    "The NSE notification client could not be initialized.";
+const NSE_EVENT_FETCH_FAILED_CODE: &str = "p4-s11-nse-event-fetch-failed";
+const NSE_EVENT_FETCH_FAILED_DESCRIPTION: &str = "The NSE notification event could not be fetched.";
+const NSE_RESOLUTION_TIMEOUT_CODE: &str = "p4-s11-nse-resolution-timeout";
+const NSE_RESOLUTION_TIMEOUT_DESCRIPTION: &str = "The NSE notification resolution timed out.";
+const NSE_CLOSE_FAILED_CODE: &str = "p4-s11-nse-close-failed";
+const NSE_CLOSE_FAILED_DESCRIPTION: &str = "The NSE read-only store could not be closed.";
+const NSE_REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
+const NSE_RESOLUTION_TIMEOUT: Duration = Duration::from_secs(20);
+const NSE_STORE_LOCK_HOLDER: &str = "synara-nse-parent";
 const LEFTOVER_NO_SESSION_CODE: &str = "p4-s10-leftover-no-session";
 const LEFTOVER_NO_SESSION_DESCRIPTION: &str = "The leftover command requires a session.";
 const LEFTOVER_OVERSIZE_CODE: &str = "p4-s10-leftover-oversize";
@@ -1954,6 +1976,26 @@ fn nse_failed(code: &'static str, description: &'static str) -> NseStoreError {
     }
 }
 
+fn bounded_nse_preview_text(value: &str, maximum_characters: usize) -> String {
+    value.chars().take(maximum_characters).collect()
+}
+
+fn nse_message_type(message: &MessageType) -> Option<&'static str> {
+    match message {
+        MessageType::Audio(_) => Some("m.audio"),
+        MessageType::Emote(_) => Some("m.emote"),
+        MessageType::File(_) => Some("m.file"),
+        MessageType::Image(_) => Some("m.image"),
+        MessageType::Location(_) => Some("m.location"),
+        MessageType::Notice(_) => Some("m.notice"),
+        MessageType::ServerNotice(_) => Some("m.server_notice"),
+        MessageType::Text(_) => Some("m.text"),
+        MessageType::Video(_) => Some("m.video"),
+        MessageType::VerificationRequest(_) => Some("m.key.verification.request"),
+        _ => None,
+    }
+}
+
 /// Privacy-safe leftover backup status. No passphrase or recovery secret.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BackupStatusDto {
@@ -2045,7 +2087,7 @@ fn map_restore_to_nse(error: SessionRestoreError) -> NseStoreError {
                 description: description.to_owned(),
             }
         }
-        _ => nse_failed(NSE_FAILED_CODE, NSE_FAILED_DESCRIPTION),
+        _ => nse_failed(NSE_RESTORE_FAILED_CODE, NSE_RESTORE_FAILED_DESCRIPTION),
     }
 }
 
@@ -3009,6 +3051,18 @@ impl SharedCore {
         homeserver_url: String,
         store_root: String,
     ) -> Result<SessionRestoreDto, SessionRestoreError> {
+        self.restore_persisted_session_with_policy(user_id, homeserver_url, store_root, false, None)
+            .await
+    }
+
+    async fn restore_persisted_session_with_policy(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        nse_read_only: bool,
+        room_load_settings: Option<RoomLoadSettings>,
+    ) -> Result<SessionRestoreDto, SessionRestoreError> {
         let identity = AccountIdentity::new(&user_id, &homeserver_url)
             .map_err(|_| restore_failed(IDENTITY_INVALID_CODE, IDENTITY_INVALID_DESCRIPTION))?;
         let root = validate_store_root(&store_root)?;
@@ -3027,27 +3081,55 @@ impl SharedCore {
             ));
         }
 
-        let store_key = store_key_for(&self.secret_store, &identity)?;
-        let config = ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
-            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        let store_key = if nse_read_only {
+            store_key_for_read_only(&self.secret_store, &identity)?
+        } else {
+            store_key_for(&self.secret_store, &identity)?
+        };
+        let mut config =
+            ClientBuildConfig::product_default(root, identity.clone(), Some(store_key))
+                .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        if nse_read_only {
+            config = config
+                .with_timeouts(TimeoutPolicy {
+                    request_timeout: NSE_REQUEST_TIMEOUT,
+                    retry_limit: 0,
+                })
+                .and_then(|config| {
+                    config.with_cross_process_store_lock_holder(NSE_STORE_LOCK_HOLDER)
+                })
+                .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+            config.handle_refresh_tokens = false;
+        }
         let client = build_unauthenticated_client(&config)
             .await
             .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        install_session_rotation_callbacks(
-            &client,
-            identity.clone(),
-            Arc::clone(&self.secret_store),
-        )
-        .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
-        let outcome = restore_session_from_vault(&client, &identity, &vault)
+        if !nse_read_only {
+            install_session_rotation_callbacks(
+                &client,
+                identity.clone(),
+                Arc::clone(&self.secret_store),
+            )
+            .map_err(|_| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))?;
+        }
+        let outcome = if let Some(room_load_settings) = room_load_settings {
+            restore_session_from_vault_with_room_load_settings(
+                &client,
+                &identity,
+                &vault,
+                room_load_settings,
+            )
             .await
-            .map_err(|error| match error {
-                crate::app::lifecycle::LifecycleError::Vault {
-                    diagnostic_id: "p3.6-session-material-missing",
-                    ..
-                } => restore_failed(MATERIAL_MISSING_CODE, MATERIAL_MISSING_DESCRIPTION),
-                _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
-            })?;
+        } else {
+            restore_session_from_vault(&client, &identity, &vault).await
+        }
+        .map_err(|error| match error {
+            crate::app::lifecycle::LifecycleError::Vault {
+                diagnostic_id: "p3.6-session-material-missing",
+                ..
+            } => restore_failed(MATERIAL_MISSING_CODE, MATERIAL_MISSING_DESCRIPTION),
+            _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
+        })?;
 
         let snapshot = SessionSnapshot {
             session_generation: 1,
@@ -6118,6 +6200,17 @@ impl SharedCore {
         homeserver_url: String,
         store_root: String,
     ) -> Result<NseStoreDto, NseStoreError> {
+        self.nse_open_read_only_store_with_room(user_id, homeserver_url, store_root, None)
+            .await
+    }
+
+    async fn nse_open_read_only_store_with_room(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        room_id: Option<matrix_sdk::ruma::OwnedRoomId>,
+    ) -> Result<NseStoreDto, NseStoreError> {
         if self.owners_attached() {
             return Err(nse_failed(
                 NSE_OWNERS_ATTACHED_CODE,
@@ -6131,9 +6224,15 @@ impl SharedCore {
             self.set_nse_read_only(true)?;
             return self.nse_store_dto();
         }
-        self.restore_persisted_session(user_id, homeserver_url, store_root)
-            .await
-            .map_err(map_restore_to_nse)?;
+        self.restore_persisted_session_with_policy(
+            user_id,
+            homeserver_url,
+            store_root,
+            true,
+            room_id.map(RoomLoadSettings::One),
+        )
+        .await
+        .map_err(map_restore_to_nse)?;
         self.set_nse_read_only(true)?;
         self.nse_store_dto()
     }
@@ -6148,8 +6247,92 @@ impl SharedCore {
         self.nse_store_dto()
     }
 
-    /// Local-store event lookup only. Never fetches and never starts sync.
+    /// Drop the short-lived NSE client while this async call is still executing
+    /// on the Rust runtime. SQLite pool cleanup may require that runtime; leaving
+    /// the retained client for UniFFI object deallocation can abort the extension.
+    pub async fn nse_close_read_only_store(&self) -> Result<(), NseStoreError> {
+        if self.owners_attached() || !self.is_nse_read_only() {
+            return Err(nse_failed(
+                NSE_CLOSE_FAILED_CODE,
+                NSE_CLOSE_FAILED_DESCRIPTION,
+            ));
+        }
+        let retained = {
+            let mut guard = self
+                .restored_client
+                .lock()
+                .map_err(|_| nse_failed(NSE_CLOSE_FAILED_CODE, NSE_CLOSE_FAILED_DESCRIPTION))?;
+            std::mem::replace(&mut *guard, RestoredClientSlot::Empty)
+        };
+        drop(retained);
+        self.set_nse_read_only(false)
+            .map_err(|_| nse_failed(NSE_CLOSE_FAILED_CODE, NSE_CLOSE_FAILED_DESCRIPTION))?;
+        Ok(())
+    }
+
+    /// Resolve one push notification with the Matrix SDK's dedicated
+    /// multi-process notification client. This may run the SDK's bounded,
+    /// short-lived notification/decryption sync, but it never starts the
+    /// product `SyncService` or attaches product session owners.
+    pub async fn nse_resolve_event_preview(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+        store_root: String,
+        room_id: String,
+        event_id: String,
+    ) -> Result<NseEventPreviewDto, NseStoreError> {
+        tokio::time::timeout(NSE_RESOLUTION_TIMEOUT, async {
+            if room_id.len() > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+                return Err(nse_failed(
+                    NSE_PAYLOAD_OVERSIZE_CODE,
+                    NSE_PAYLOAD_OVERSIZE_DESCRIPTION,
+                ));
+            }
+            let parsed_room =
+                matrix_sdk::ruma::OwnedRoomId::try_from(room_id.trim()).map_err(|_| {
+                    nse_failed(
+                        NSE_EVENT_NOT_IN_STORE_CODE,
+                        NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+                    )
+                })?;
+            self.nse_open_read_only_store_with_room(
+                user_id,
+                homeserver_url,
+                store_root,
+                Some(parsed_room),
+            )
+            .await?;
+            self.nse_event_preview_unbounded(room_id, event_id).await
+        })
+        .await
+        .map_err(|_| {
+            nse_failed(
+                NSE_RESOLUTION_TIMEOUT_CODE,
+                NSE_RESOLUTION_TIMEOUT_DESCRIPTION,
+            )
+        })?
+    }
+
     pub async fn nse_event_preview(
+        &self,
+        room_id: String,
+        event_id: String,
+    ) -> Result<NseEventPreviewDto, NseStoreError> {
+        tokio::time::timeout(
+            NSE_RESOLUTION_TIMEOUT,
+            self.nse_event_preview_unbounded(room_id, event_id),
+        )
+        .await
+        .map_err(|_| {
+            nse_failed(
+                NSE_RESOLUTION_TIMEOUT_CODE,
+                NSE_RESOLUTION_TIMEOUT_DESCRIPTION,
+            )
+        })?
+    }
+
+    async fn nse_event_preview_unbounded(
         &self,
         room_id: String,
         event_id: String,
@@ -6175,24 +6358,71 @@ impl SharedCore {
                 NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
             ));
         };
-        let Ok(_) = matrix_sdk::ruma::OwnedEventId::try_from(event_id.trim()) else {
+        let Ok(parsed_event) = matrix_sdk::ruma::OwnedEventId::try_from(event_id.trim()) else {
             return Err(nse_failed(
                 NSE_EVENT_NOT_IN_STORE_CODE,
                 NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
             ));
         };
-        // `Room::event` fetches from the network. NSE may only inspect the
-        // already-open local store, so a missing room or event fail-closes.
-        if client.get_room(&parsed_room).is_none() {
+        let notification_client =
+            NotificationClient::new(client, NotificationProcessSetup::MultipleProcesses)
+                .await
+                .map_err(|_| {
+                    nse_failed(
+                        NSE_CLIENT_INIT_FAILED_CODE,
+                        NSE_CLIENT_INIT_FAILED_DESCRIPTION,
+                    )
+                })?;
+        let status = notification_client
+            .get_notification(&parsed_room, &parsed_event)
+            .await
+            .map_err(|_| {
+                nse_failed(
+                    NSE_EVENT_FETCH_FAILED_CODE,
+                    NSE_EVENT_FETCH_FAILED_DESCRIPTION,
+                )
+            })?;
+        let NotificationStatus::Event(item) = status else {
             return Err(nse_failed(
                 NSE_EVENT_NOT_IN_STORE_CODE,
                 NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
             ));
-        }
-        Err(nse_failed(
-            NSE_EVENT_NOT_IN_STORE_CODE,
-            NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
-        ))
+        };
+        let NotificationEvent::Timeline(event) = &item.event else {
+            return Err(nse_failed(
+                NSE_EVENT_NOT_IN_STORE_CODE,
+                NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+            ));
+        };
+        let AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) =
+            event.as_ref()
+        else {
+            return Err(nse_failed(
+                NSE_EVENT_NOT_IN_STORE_CODE,
+                NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+            ));
+        };
+        let Some(original) = message.as_original() else {
+            return Err(nse_failed(
+                NSE_EVENT_NOT_IN_STORE_CODE,
+                NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
+            ));
+        };
+        let body = Some(bounded_nse_preview_text(original.content.body(), 240));
+        let message_type = nse_message_type(&original.content.msgtype)
+            .map(|value| bounded_nse_preview_text(value, 64));
+
+        Ok(NseEventPreviewDto {
+            event_type: "m.room.message".to_owned(),
+            sender_id: Some(bounded_nse_preview_text(
+                item.sender_display_name
+                    .as_deref()
+                    .unwrap_or_else(|| item.event.sender().as_str()),
+                255,
+            )),
+            body,
+            message_type,
+        })
     }
 
     pub async fn backup_status(&self) -> Result<BackupStatusDto, LeftoverCommandError> {
@@ -12476,6 +12706,27 @@ fn store_key_for(
     })
 }
 
+/// NSE access must never create or migrate a key. The containing app owns
+/// Keychain mutations and publishes readiness only after the current key and
+/// shared store are both available.
+fn store_key_for_read_only(
+    store: &Arc<dyn SecretVault + Send + Sync>,
+    identity: &AccountIdentity,
+) -> Result<StoreKeyMaterial, SessionRestoreError> {
+    let vault = SecretStoreKeyVault {
+        store: Arc::clone(store),
+    };
+    vault
+        .get(&StoreKeyId::from_identity(identity))
+        .map_err(|error| match error {
+            StoreKeyVaultError::BackendUnavailable { .. } => {
+                restore_failed(VAULT_UNAVAILABLE_CODE, VAULT_UNAVAILABLE_DESCRIPTION)
+            }
+            _ => restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION),
+        })?
+        .ok_or_else(|| restore_failed(RESTORE_FAILED_CODE, RESTORE_FAILED_DESCRIPTION))
+}
+
 struct CallbackSecretVault {
     inner: Box<dyn IosSecretVault>,
 }
@@ -12750,6 +13001,41 @@ mod tests {
             !shared.core.registered_commands().is_empty(),
             "P4-S3a must still retain a real Core"
         );
+    }
+
+    #[test]
+    fn nse_store_key_lookup_never_mints_a_missing_key() {
+        let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
+        let store: Arc<dyn SecretVault + Send + Sync> = Arc::new(CallbackSecretVault {
+            inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&values))),
+        });
+
+        let error = store_key_for_read_only(&store, &alice()).expect_err("missing key");
+
+        assert!(matches!(
+            error,
+            SessionRestoreError::Failed { ref code, .. } if code == RESTORE_FAILED_CODE
+        ));
+        assert!(values.lock().expect("vault").is_empty());
+    }
+
+    #[test]
+    fn nse_store_key_lookup_returns_the_existing_current_key() {
+        let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
+        let store: Arc<dyn SecretVault + Send + Sync> = Arc::new(CallbackSecretVault {
+            inner: Box::new(MemoryCallbackVault(std::sync::Arc::clone(&values))),
+        });
+        let identity = alice();
+        let expected = StoreKeyMaterial::from_bytes([7; STORE_KEY_LEN]);
+        values.lock().expect("vault").insert(
+            StoreKeyId::from_identity(&identity).account().to_owned(),
+            expected.as_bytes().to_vec(),
+        );
+
+        let actual = store_key_for_read_only(&store, &identity).expect("existing key");
+
+        assert_eq!(actual.as_bytes(), expected.as_bytes());
+        assert_eq!(values.lock().expect("vault").len(), 1);
     }
 
     #[test]

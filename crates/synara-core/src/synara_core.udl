@@ -696,8 +696,9 @@ dictionary NseStoreDto {
   boolean sync_started;
 };
 
-// Local-store notification preview. Missing events fail closed; this DTO is
-// only returned when a matching event is already in the persisted store.
+// Device-resolved notification preview. The NSE notification client may run a
+// bounded decryption sync; missing, filtered, redacted, or undecryptable events
+// fail closed.
 dictionary NseEventPreviewDto {
   string event_type;
   string? sender_id;
@@ -2019,7 +2020,19 @@ interface SharedCore {
   NseStoreDto nse_store_status();
 
   [Async, Throws=NseStoreError]
+  void nse_close_read_only_store();
+
+  [Async, Throws=NseStoreError]
   NseEventPreviewDto nse_event_preview(string room_id, string event_id);
+
+  [Async, Throws=NseStoreError]
+  NseEventPreviewDto nse_resolve_event_preview(
+    string user_id,
+    string homeserver_url,
+    string store_root,
+    string room_id,
+    string event_id
+  );
 
   [Async, Throws=LeftoverCommandError]
   BackupStatusDto backup_status();

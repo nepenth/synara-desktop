@@ -20,6 +20,7 @@ final class AppEnvironmentTests: XCTestCase {
         let environment = AppEnvironment.mock()
 
         XCTAssertTrue(environment.later is MockLaterService)
+        XCTAssertTrue(environment.roomNotes is MockRoomNotesService)
     }
 
     func testMatrixClientCoreSessionIdentityDefaultsToNilForMock() async {
@@ -144,6 +145,32 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: root.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: staleFile.path))
         XCTAssertFalse(try SharedCoreLaunchReset.resetStoreRootIfRequested(root, environment: [:]))
+    }
+
+    func testSharedCoreLaunchResetDeletesCredentialsBeforeSessionRestore() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("synara-session-reset-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let persistedSession = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "STALE-DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://example.org")),
+            accessToken: "stale-token"
+        )
+        let secureStore = InMemorySecureSessionStore(session: persistedSession)
+
+        let session = SharedCoreLaunchReset.prepareSessionStore(
+            storeRoot: root,
+            environment: ["SYNARA_RESET_SESSION_ON_LAUNCH": "1"],
+            secureStore: secureStore
+        )
+
+        XCTAssertEqual(session.currentState, .signedOut)
+        XCTAssertEqual(secureStore.deleteCallCount, 1)
+        XCTAssertEqual(secureStore.loadCallCount, 1)
+        XCTAssertNil(try secureStore.load())
     }
 
     func testSharedCoreLoginErrorMappingDoesNotMislabelVaultFailureAsBadCredentials() {

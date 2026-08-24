@@ -12,6 +12,7 @@
 // Generated from `src/synara_core.udl` by build.rs. Keep this at crate root:
 // P4-3 adds only a safe Core session-projection mirror to the credential-free
 // P4-2 login-flow surface.
+#[cfg(feature = "full-uniffi")]
 uniffi::include_scaffolding!("synara_core");
 
 /// Identifies the project-owned UniFFI surface without exposing a product
@@ -61,7 +62,7 @@ mod markdown_tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "full-uniffi"))]
 mod generated_binding_tests {
     #[test]
     fn every_async_udl_export_uses_the_tokio_bridge() {
@@ -77,18 +78,24 @@ mod generated_binding_tests {
     }
 }
 
+#[cfg(feature = "full-uniffi")]
 mod ffi;
+#[cfg(feature = "full-uniffi")]
 pub use ffi::{
     login_flows, register_flows, LoginFlowDto, LoginFlowsError, RegisterFlowsDto,
     RegisterFlowsError, RegisterFlowsStatus, RegisterUiaFlowDto,
 };
 
+#[cfg(feature = "full-uniffi")]
 mod session_projection_ffi;
+#[cfg(feature = "full-uniffi")]
 pub use session_projection_ffi::{
     SessionProjection, SessionProjectionCore, SessionProjectionError, SessionProjectionLifecycle,
 };
 
+#[cfg(feature = "full-uniffi")]
 mod shared_core_ffi;
+#[cfg(feature = "full-uniffi")]
 pub use shared_core_ffi::{
     AgentApprovalSendDto, AgentApprovalSendError, BackupStatusDto, ComposerReplyDraftDto,
     ComposerReplyDraftError, ComposerReplyDraftPreviewDto, CrossSigningStatusDto, CryptoStatusDto,

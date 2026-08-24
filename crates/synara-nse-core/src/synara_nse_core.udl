@@ -1,0 +1,39 @@
+namespace synara_nse_core {};
+
+interface NsePreviewRequest {
+  constructor(
+    NseSecretVault store,
+    string user_id,
+    string homeserver_url,
+    string store_root,
+    string room_id,
+    string event_id
+  );
+
+  [Async, Throws=NseCoreError]
+  NsePreviewDto resolve();
+
+  void cancel();
+};
+
+[Error]
+interface NseSecretVaultError {
+  Unavailable(string code, string description);
+};
+
+callback interface NseSecretVault {
+  [Throws=NseSecretVaultError]
+  bytes? get(string key);
+};
+
+dictionary NsePreviewDto {
+  string event_type;
+  string? sender_id;
+  string? body;
+  string? message_type;
+};
+
+[Error]
+interface NseCoreError {
+  Failed(string code, string description);
+};

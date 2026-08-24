@@ -2997,4 +2997,154 @@ final class SynaraCoreBindingsTests: XCTestCase {
         let identity = await mirror.coreSessionIdentity()
         XCTAssertNil(identity)
     }
+
+    func testLiveCoreStoreMigratesToSharedContainerBeforeOpen() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("synara-core-store-migration-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: root) }
+        let legacy = root.appendingPathComponent("legacy", isDirectory: true)
+        let shared = root.appendingPathComponent("group/SynaraCore", isDirectory: true)
+        try fileManager.createDirectory(at: legacy, withIntermediateDirectories: true)
+        let marker = legacy.appendingPathComponent("persisted-session-marker")
+        try Data("present".utf8).write(to: marker)
+
+        let resolved = SharedCoreProductHost.resolvedLiveStoreRoot(
+            legacyRoot: legacy,
+            sharedRoot: shared,
+            fileManager: fileManager
+        )
+
+        XCTAssertEqual(resolved, shared)
+        XCTAssertFalse(fileManager.fileExists(atPath: legacy.path))
+        XCTAssertTrue(
+            fileManager.fileExists(
+                atPath: shared.appendingPathComponent("persisted-session-marker").path
+            )
+        )
+        XCTAssertFalse(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+        XCTAssertTrue(
+            try SharedCoreProductHost.publishNseStoreReady(
+                at: shared,
+                fileManager: fileManager,
+                expectedSharedRoot: shared
+            )
+        )
+        XCTAssertTrue(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+    }
+
+    func testLiveCoreStoreReplacesEmptySharedDirectoryBeforeMigration() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("synara-core-empty-destination-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: root) }
+        let legacy = root.appendingPathComponent("legacy", isDirectory: true)
+        let shared = root.appendingPathComponent("group/SynaraCore", isDirectory: true)
+        try fileManager.createDirectory(at: legacy, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: shared, withIntermediateDirectories: true)
+        try Data("present".utf8).write(
+            to: legacy.appendingPathComponent("persisted-session-marker")
+        )
+
+        let resolved = SharedCoreProductHost.resolvedLiveStoreRoot(
+            legacyRoot: legacy,
+            sharedRoot: shared,
+            fileManager: fileManager
+        )
+
+        XCTAssertEqual(resolved, shared)
+        XCTAssertFalse(fileManager.fileExists(atPath: legacy.path))
+        XCTAssertTrue(
+            fileManager.fileExists(
+                atPath: shared.appendingPathComponent("persisted-session-marker").path
+            )
+        )
+        XCTAssertFalse(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+        XCTAssertTrue(
+            try SharedCoreProductHost.publishNseStoreReady(
+                at: shared,
+                fileManager: fileManager,
+                expectedSharedRoot: shared
+            )
+        )
+        XCTAssertTrue(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+    }
+
+    func testLiveCoreStoreFailsBackWhenBothRootsContainData() throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("synara-core-ambiguous-destination-\(UUID().uuidString)", isDirectory: true)
+        defer { try? fileManager.removeItem(at: root) }
+        let legacy = root.appendingPathComponent("legacy", isDirectory: true)
+        let shared = root.appendingPathComponent("group/SynaraCore", isDirectory: true)
+        try fileManager.createDirectory(at: legacy, withIntermediateDirectories: true)
+        try fileManager.createDirectory(at: shared, withIntermediateDirectories: true)
+        try Data("legacy".utf8).write(to: legacy.appendingPathComponent("legacy-store"))
+        try Data("shared".utf8).write(to: shared.appendingPathComponent("unexpected-store"))
+
+        let resolved = SharedCoreProductHost.resolvedLiveStoreRoot(
+            legacyRoot: legacy,
+            sharedRoot: shared,
+            fileManager: fileManager
+        )
+
+        XCTAssertEqual(resolved, legacy)
+        XCTAssertTrue(fileManager.fileExists(atPath: legacy.appendingPathComponent("legacy-store").path))
+        XCTAssertTrue(fileManager.fileExists(atPath: shared.appendingPathComponent("unexpected-store").path))
+        XCTAssertFalse(SynaraSharedConstants.sharedCoreStoreIsReady(at: shared, fileManager: fileManager))
+    }
+
+    func testLiveNseNotificationClientResolvesRealEventWhenConfigured() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        let enabled = environment["SYNARA_LIVE_NSE_RESOLVE_SMOKE"]
+            ?? environment["TEST_RUNNER_SYNARA_LIVE_NSE_RESOLVE_SMOKE"]
+        guard enabled == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_NSE_RESOLVE_SMOKE=1 for the local NSE resolver smoke.")
+        }
+        guard let roomID = environment["SYNARA_LIVE_NSE_ROOM_ID"]
+                ?? environment["TEST_RUNNER_SYNARA_LIVE_NSE_ROOM_ID"],
+              let eventID = environment["SYNARA_LIVE_NSE_EVENT_ID"]
+                ?? environment["TEST_RUNNER_SYNARA_LIVE_NSE_EVENT_ID"] else {
+            throw XCTSkip("The local NSE resolver smoke needs a room ID and event ID.")
+        }
+
+        let session = try XCTUnwrap(KeychainSecureSessionStore().load())
+        let storeRoot = SharedCoreProductHost.liveStoreRoot()
+        XCTAssertTrue(SynaraSharedConstants.sharedCoreStoreIsReady(at: storeRoot))
+        let core = SharedCore.newWithSecretStore(store: KeychainIosSecretVault())
+        let started = Date()
+
+        let preview: NseEventPreviewDto
+        do {
+            preview = try await core.nseResolveEventPreview(
+                userId: session.userID,
+                homeserverUrl: session.homeserverURL.absoluteString,
+                storeRoot: storeRoot.path,
+                roomId: roomID,
+                eventId: eventID
+            )
+        } catch {
+            try? await core.nseCloseReadOnlyStore()
+            if case let NseStoreError.Failed(code, _) = error {
+                XCTFail("NSE resolver failed with static diagnostic \(code).")
+            } else {
+                XCTFail("NSE resolver failed with unexpected error type \(String(reflecting: type(of: error))).")
+            }
+            return
+        }
+        do {
+            try await core.nseCloseReadOnlyStore()
+        } catch {
+            if case let NseStoreError.Failed(code, _) = error {
+                XCTFail("NSE teardown failed with static diagnostic \(code).")
+            } else {
+                XCTFail("NSE teardown failed with unexpected error type \(String(reflecting: type(of: error))).")
+            }
+            return
+        }
+
+        XCTAssertLessThan(Date().timeIntervalSince(started), 21)
+        XCTAssertEqual(preview.eventType, "m.room.message")
+        XCTAssertFalse(preview.body?.isEmpty ?? true)
+    }
 }

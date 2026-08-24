@@ -4,6 +4,7 @@
 //! `synara-core`. It never performs login, restore_session, or sync.
 
 use matrix_sdk::config::RequestConfig;
+use matrix_sdk::cross_process_lock::CrossProcessLockConfig;
 use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
 use matrix_sdk::Client;
 
@@ -37,7 +38,10 @@ pub async fn build_unauthenticated_client(
     let mut builder = Client::builder()
         .request_config(request_config)
         .user_agent(&config.user_agent)
-        .with_encryption_settings(encryption_settings);
+        .with_encryption_settings(encryption_settings)
+        .cross_process_store_config(CrossProcessLockConfig::multi_process(
+            config.cross_process_store_lock_holder(),
+        ));
 
     match config.homeserver_mode {
         HomeserverMode::ExplicitUrl => {

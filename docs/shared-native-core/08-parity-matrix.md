@@ -38,23 +38,39 @@ leftover I/O fail-closes without a live homeserver. SharedCore can
 start SyncService (S12); live homeserver proof is paused. This is not
 iOS-on-engine.
 
-| Capability | Desktop (src-tauri engine) | iOS today (Swift re-impl) | After P4+P5 (shared core) |
-|---|---|---|---|
-| Sync service (sliding sync + readiness + reconnect + capability probe) | ✅ (sync/, readiness.rs, capability.rs) | 🔨 (SessionCoordinator/SignedInSessionReadiness — partial) | ✅ single implementation |
-| Room list projection (summary, filters, sort, invites, badges, counts) | ✅ (room_list/) | 🔨 (RoomListService) | ✅ |
-| Timeline projection (live, pagination, focus, composer, registry, view) | ✅ (timeline/) | 🔨 (TimelineService, StableTimelineViewport) | ✅ |
-| Send / composer / attachment + poll send | ✅ (send/) | 🔨 (ComposerService, MediaService) | ✅ |
-| Read receipts / typing / unread / threads / polls / spaces / search | ✅ | 🔨/⛔ partial | ✅ |
-| Crypto: SAS in-bbox verification | ✅ (verification/inbox.rs + product_commands) | 🔨 (SharedCore leftover/product adapters; fail-closed without a live session) | ✅ (core supervisor) |
-| Crypto: key backup + restore | ✅ (backup/) | ⛔ (blocked externally per device-readiness) | ✅ (shared suite gates) |
-| Crypto: cross-signing / secret storage / room keys / UTD recovery | ✅ (cross_signing/, secret_storage/, room_keys/, utd_recovery/) | ⛔ partial | ✅ |
-| Session lifecycle: persist/restore/logout/wipe/recovery | ✅ (lifecycle/) | 🔨 (SessionCoordinator, SecureSessionStore, LocalWipeService) | ✅ |
-| Media cache/export | ✅ | ⛔/🔨 | ✅ (moved, shells only add OS pickers) |
-| Notifications read-model | ✅ (notifications/) | 🔨 (PushService + NSE) | ✅ read model + NSE narrow API |
-| Badge / tray / global shortcuts | ✅ platform | ✅ (badge) | ✅ via sink |
-| UI | ✅ React | ✅ SwiftUI | UI stays platform-owned (non-goal to unify) |
-| Test gate | 800+ Rust + 6 Synapse proofs + boundary + audit | iOS sim unit tests | ❗ ONE suite gates both |
+| Capability                                                              | Desktop (src-tauri engine)                                      | iOS today (Swift re-impl)                                                           | After P4+P5 (shared core)                                                          |
+| ----------------------------------------------------------------------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| Sync service (sliding sync + readiness + reconnect + capability probe)  | ✅ (sync/, readiness.rs, capability.rs)                         | 🔨 (SessionCoordinator/SignedInSessionReadiness — partial)                          | ✅ single implementation                                                           |
+| Room list projection (summary, filters, sort, invites, badges, counts)  | ✅ (room_list/)                                                 | 🔨 (RoomListService)                                                                | ✅                                                                                 |
+| Timeline projection (live, pagination, focus, composer, registry, view) | ✅ (timeline/)                                                  | 🔨 (TimelineService, StableTimelineViewport)                                        | ✅                                                                                 |
+| Send / composer / attachment + poll send                                | ✅ (send/)                                                      | 🔨 (ComposerService, MediaService)                                                  | ✅                                                                                 |
+| Read receipts / typing / unread / threads / polls / spaces / search     | ✅                                                              | 🔨/⛔ partial                                                                       | ✅                                                                                 |
+| Crypto: SAS in-bbox verification                                        | ✅ (verification/inbox.rs + product_commands)                   | 🔨 (SharedCore leftover/product adapters; fail-closed without a live session)       | ✅ (core supervisor)                                                               |
+| Crypto: key backup + restore                                            | ✅ (backup/)                                                    | ⛔ (blocked externally per device-readiness)                                        | ✅ (shared suite gates)                                                            |
+| Crypto: cross-signing / secret storage / room keys / UTD recovery       | ✅ (cross_signing/, secret_storage/, room_keys/, utd_recovery/) | ⛔ partial                                                                          | ✅                                                                                 |
+| Session lifecycle: persist/restore/logout/wipe/recovery                 | ✅ (lifecycle/)                                                 | 🔨 (SessionCoordinator, SecureSessionStore, LocalWipeService)                       | ✅                                                                                 |
+| Media cache/export                                                      | ✅                                                              | ⛔/🔨                                                                               | ✅ (moved, shells only add OS pickers)                                             |
+| Notifications read-model                                                | ✅ (notifications/)                                             | 🔨 (PushService + NSE)                                                              | ✅ read model + NSE narrow API                                                     |
+| Personal room notes (notes, ToDos, message anchors)                     | ✅ (`nativeRoomNotesOwner.ts` + React room panel)               | ✅ (`SharedCoreRoomNotesService` + SwiftUI room details; main/thread message menus) | ✅ one `room_notes_live.rs` Matrix account-data owner with platform UI projections |
+| Badge / tray / global shortcuts                                         | ✅ platform                                                     | ✅ (badge)                                                                          | ✅ via sink                                                                        |
+| UI                                                                      | ✅ React                                                        | ✅ SwiftUI                                                                          | UI stays platform-owned (non-goal to unify)                                        |
+| Test gate                                                               | 800+ Rust + 6 Synapse proofs + boundary + audit                 | iOS sim unit tests                                                                  | ❗ ONE suite gates both                                                            |
 
 Platform-specific behaviors intentionally never shared: credential stores,
 APNs vs tray notification delivery, dialogs/file pickers, updater metadata,
 tray/shortcut surfaces, app lifecycle.
+
+### Room-notes parity evidence — 2026-08-24
+
+The iOS projection intentionally lives under Room Details instead of adding a
+fifth top-level mobile tab. Both desktop and iOS route snapshot, upsert, delete,
+ToDo completion, and ToDo move through the caller-owned SharedCore and the same
+`in.synara.room_notes` global Matrix account-data contract. iOS also exposes
+message anchors from both the main timeline and thread message menus.
+
+Focused simulator coverage exercises light and dark appearance, CRUD/order
+semantics, room isolation, durable-event-only message anchors, and pinned-message
+navigation. A gated live smoke writes a private note through an independent
+Matrix client, reads it in iOS, writes a second note from iOS, and reads that
+write back through the Matrix account-data API. This evidence is feature-scoped;
+it does not claim whole-client parity.
