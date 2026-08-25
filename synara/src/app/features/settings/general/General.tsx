@@ -62,6 +62,7 @@ import { useClientConfig } from '../../../hooks/useClientConfig';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
+import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,
@@ -377,6 +378,7 @@ function Appearance() {
   const [monochromeMode, setMonochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor, setCustomAccentColor] = useSetting(settingsAtom, 'customAccentColor');
   const [themeBaseColor, setThemeBaseColor] = useSetting(settingsAtom, 'themeBaseColor');
+  const [messageTextTone, setMessageTextTone] = useSetting(settingsAtom, 'messageTextTone');
   const accentColor =
     normalizeAccentColor(customAccentColor) ?? themeDefaultAccentColor(activeTheme.kind);
   const baseColor = normalizeThemeBaseColor(themeBaseColor) ?? DEFAULT_THEME_BASE_COLOR;
@@ -551,6 +553,32 @@ function Appearance() {
                   <Text size="B300">{t('modernization.settings.accent_color.reset', 'Reset')}</Text>
                 </Button>
               </Box>
+            </Box>
+          }
+        />
+      </SequenceCard>
+
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="Message Text"
+          description="Adjust message prose brightness without changing navigation, metadata, or code colors."
+          after={
+            <Box gap="100" role="group" aria-label="Message text brightness">
+              {MESSAGE_TEXT_TONES.map((tone) => (
+                <Button
+                  key={tone}
+                  size="300"
+                  radii="300"
+                  variant={messageTextTone === tone ? 'Primary' : 'Secondary'}
+                  fill={messageTextTone === tone ? 'Solid' : 'Soft'}
+                  aria-pressed={messageTextTone === tone}
+                  onClick={() => setMessageTextTone(tone as MessageTextTone)}
+                >
+                  <Text size="B300">
+                    {tone === 'soft' ? 'Soft' : tone === 'balanced' ? 'Balanced' : 'Bright'}
+                  </Text>
+                </Button>
+              ))}
             </Box>
           }
         />

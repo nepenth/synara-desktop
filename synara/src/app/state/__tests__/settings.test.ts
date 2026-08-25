@@ -151,6 +151,23 @@ test('shared settings persist a user-selected theme base color', () => {
   assert.equal(store.getSharedSettings().themeBaseColor, '#5865f2');
 });
 
+test('message text tone defaults bright and persists only valid shared choices', () => {
+  const storage = createMemoryStorage();
+  const store = createLocalStorageSettingsStore(storage);
+
+  assert.equal(store.getSharedSettings().messageTextTone, 'bright');
+  store.setSettings({ ...defaultSettings, messageTextTone: 'soft' });
+  assert.equal(storage.getObject('settings')?.messageTextTone, 'soft');
+  assert.equal(storage.getObject('platformSettings')?.messageTextTone, undefined);
+
+  const poisoned = createLocalStorageSettingsStore(
+    createMemoryStorage({
+      settings: JSON.stringify({ ...defaultSharedSettings, messageTextTone: 'blinding' }),
+    })
+  );
+  assert.equal(poisoned.getSharedSettings().messageTextTone, 'bright');
+});
+
 test('invalid theme base colors are dropped instead of persisted', () => {
   const storage = createMemoryStorage();
   const store = createLocalStorageSettingsStore(storage);

@@ -1530,7 +1530,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             padding: config.space.S200,
             borderBottom: '1px solid var(--synara-content-separator)',
             background: 'var(--synara-table-even)',
-            color: 'var(--synara-content-primary)',
+            color: 'var(--synara-message-foreground)',
           }}
         >
           <Text size="T200" style={{ color: 'var(--synara-content-secondary)' }}>

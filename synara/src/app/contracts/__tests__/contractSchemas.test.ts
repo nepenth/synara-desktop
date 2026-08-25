@@ -99,6 +99,7 @@ type SettingsFixtures = {
     sharedContainsDesktopShortcut: unknown;
     badMessageSpacing: unknown;
     badThemeBaseColor: unknown;
+    badMessageTextTone: unknown;
     desktopPlatformContainsSharedField: unknown;
   };
 };
@@ -528,6 +529,7 @@ test('Settings compatibility schemas validate shared and desktop platform split'
   );
   assert.ok(validateWithSchema(fixtures.invalid.badMessageSpacing, sharedSchema).length > 0);
   assert.ok(validateWithSchema(fixtures.invalid.badThemeBaseColor, sharedSchema).length > 0);
+  assert.ok(validateWithSchema(fixtures.invalid.badMessageTextTone, sharedSchema).length > 0);
   assert.ok(
     validateWithSchema(fixtures.invalid.desktopPlatformContainsSharedField, desktopSchema).length >
       0

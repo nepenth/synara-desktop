@@ -47,7 +47,7 @@ export const MessageRow = recipe({
     marginLeft: config.space.S200,
     marginRight: config.space.S200,
     boxSizing: 'border-box',
-    color: 'var(--synara-content-primary)',
+    color: 'var(--synara-message-foreground)',
   },
   variants: {
     surface: {
@@ -95,7 +95,7 @@ export const MessageBody = style({
   fontSize: toRem(16),
   fontWeight: 400,
   lineHeight: 1.55,
-  color: 'var(--synara-content-primary)',
+  color: 'var(--synara-message-foreground)',
 });
 
 export const FormattedBody = style({
@@ -104,7 +104,7 @@ export const FormattedBody = style({
   fontSize: toRem(16),
   fontWeight: 400,
   lineHeight: 1.55,
-  color: 'var(--synara-content-primary)',
+  color: 'var(--synara-message-foreground)',
   vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
 });
 
@@ -126,7 +126,7 @@ export const ReplySurface = style({
   borderLeft: `3px solid var(--synara-content-separator)`,
   borderRadius: `0 ${config.radii.R300} ${config.radii.R300} 0`,
   background: 'var(--synara-table-even)',
-  color: 'var(--synara-content-primary)',
+  color: 'var(--synara-message-foreground)',
   textAlign: 'left',
   cursor: 'pointer',
   selectors: {
