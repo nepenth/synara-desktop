@@ -205,6 +205,17 @@ fn verification_update_signal_is_session_wake_only() {
     }
 }
 
+#[test]
+fn live_verification_diagnostics_use_an_opaque_flow_tag() {
+    let flow_id = "sensitive-transaction-id";
+    let tag = live::verification_flow_tag(flow_id);
+    assert_eq!(tag.len(), 12);
+    assert!(tag.chars().all(|character| character.is_ascii_hexdigit()));
+    assert!(!tag.contains(flow_id));
+    assert_eq!(tag, live::verification_flow_tag(flow_id));
+    assert_ne!(tag, live::verification_flow_tag("another-flow"));
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires SYNARA_LIVE_HOMESERVER, SYNARA_LIVE_USERNAME, and SYNARA_LIVE_PASSWORD"]
 async fn live_two_device_sas_completes_through_product_owner_and_sync() {

@@ -1448,6 +1448,9 @@ final class SynaraUITests: XCTestCase {
         }
 
         let app = XCUIApplication()
+        if liveEnvironmentValue("SYNARA_VERIFICATION_DIAGNOSTICS", in: environment) == "1" {
+            app.launchEnvironment["SYNARA_VERIFICATION_DIAGNOSTICS"] = "1"
+        }
         if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
            let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
         {
@@ -1571,13 +1574,17 @@ final class SynaraUITests: XCTestCase {
         }
         try assertPeerSessionVerified(
             app: app,
-            peerDeviceID: coordinatedPeerDeviceID
+            peerDeviceID: coordinatedPeerDeviceID,
+            screenshotDirectory: liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
+            role: role
         )
     }
 
     private func assertPeerSessionVerified(
         app: XCUIApplication,
-        peerDeviceID: String
+        peerDeviceID: String,
+        screenshotDirectory: String?,
+        role: String
     ) throws {
         guard let settingsURL = URL(string: "synara://settings") else {
             XCTFail("The Settings deep link must be valid.")
@@ -1601,6 +1608,13 @@ final class SynaraUITests: XCTestCase {
             "Verified",
             "The SDK-backed Account snapshot must durably report the paired device verified."
         )
+        if let screenshotDirectory {
+            try saveScreenshot(
+                app: app,
+                directory: screenshotDirectory,
+                name: "18-live-verification-\(role)-durable-trust"
+            )
+        }
     }
 
     private func coordinateVerificationDevices(
