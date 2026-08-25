@@ -12,6 +12,38 @@ enum SynaraSpacing {
     static let xLarge: CGFloat = 24
 }
 
+/// The floating system tab bar intentionally floats over edge-to-edge content.
+/// A clear scroll tail lets the final actionable row move fully above that glass
+/// without painting an opaque footer or duplicating screen-specific estimates.
+enum SynaraTabRootContentReachability {
+    static let minimumSeparation: CGFloat = SynaraSpacing.small
+
+    static func scrollTailHeight(
+        windowBounds: CGRect,
+        tabBarFrame: CGRect,
+        isVisible: Bool
+    ) -> CGFloat {
+        guard isVisible else {
+            return 0
+        }
+        let visibleTabBar = tabBarFrame.intersection(windowBounds)
+        guard visibleTabBar.isNull == false, visibleTabBar.height > 0 else {
+            return 0
+        }
+        return max(0, windowBounds.maxY - visibleTabBar.minY) + minimumSeparation
+    }
+}
+
+extension View {
+    func synaraTabRootContentReachability(scrollTailHeight: CGFloat) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: max(0, scrollTailHeight))
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 struct SynaraThemeTokens: Equatable {
     let groupedSurface: String
     let secondarySurface: String

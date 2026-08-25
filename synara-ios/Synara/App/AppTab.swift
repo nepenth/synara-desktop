@@ -33,7 +33,6 @@ private struct NotificationsTabView: View {
             await reloadInbox()
         }
         .navigationTitle("Notifications")
-        .accessibilityIdentifier("NotificationsScreen")
         .task {
             loadInbox()
             startRoomUpdates()
@@ -85,14 +84,32 @@ private struct NotificationsTabView: View {
 
                 if sections.unreadRooms.isEmpty == false {
                     Section {
-                        DisclosureGroup(isExpanded: $isUnreadRoomsExpanded) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isUnreadRoomsExpanded.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: SynaraSpacing.medium) {
+                                Text("Unread rooms")
+                                    .font(SynaraTypography.body.weight(.medium))
+                                    .foregroundStyle(SynaraColor.primaryText)
+                                Spacer(minLength: SynaraSpacing.small)
+                                Image(systemName: "chevron.right")
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                                    .rotationEffect(.degrees(isUnreadRoomsExpanded ? 90 : 0))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Unread rooms")
+                        .accessibilityValue(isUnreadRoomsExpanded ? "Expanded" : "Collapsed")
+                        .accessibilityIdentifier("NotificationsUnreadRoomsDisclosure")
+
+                        if isUnreadRoomsExpanded {
                             ForEach(sections.unreadRooms) { room in
                                 notificationsRow(room)
                             }
-                        } label: {
-                            Text("Unread rooms")
-                                .font(SynaraTypography.body.weight(.medium))
-                                .foregroundStyle(SynaraColor.primaryText)
                         }
                     } header: {
                         notificationsSectionHeader("Unread rooms", count: sections.unreadRooms.count)

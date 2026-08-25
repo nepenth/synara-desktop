@@ -1,6 +1,31 @@
-import { globalStyle, style } from '@vanilla-extract/css';
+import { createVar, globalStyle, style } from '@vanilla-extract/css';
 import { recipe } from '@vanilla-extract/recipes';
 import { color, config, toRem } from 'folds';
+import { NATIVE_SYNTAX_PALETTES, type NativeSyntaxPalette } from './nativeTimelineSyntaxPalette';
+
+const syntaxMeta = createVar();
+const syntaxComment = createVar();
+const syntaxPunctuation = createVar();
+const syntaxProperty = createVar();
+const syntaxNumber = createVar();
+const syntaxString = createVar();
+const syntaxOperator = createVar();
+const syntaxFunction = createVar();
+const syntaxKeyword = createVar();
+const syntaxRegex = createVar();
+
+const syntaxPaletteVars = (palette: NativeSyntaxPalette) => ({
+  [syntaxMeta]: palette.meta,
+  [syntaxComment]: palette.comment,
+  [syntaxPunctuation]: palette.punctuation,
+  [syntaxProperty]: palette.property,
+  [syntaxNumber]: palette.number,
+  [syntaxString]: palette.string,
+  [syntaxOperator]: palette.operator,
+  [syntaxFunction]: palette.function,
+  [syntaxKeyword]: palette.keyword,
+  [syntaxRegex]: palette.regex,
+});
 
 export const MessageActionSurface = style({
   position: 'relative',
@@ -79,6 +104,25 @@ export const FormattedBody = style({
   fontSize: toRem(16),
   fontWeight: 400,
   lineHeight: 1.55,
+  vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
+});
+
+globalStyle(`.prism-light ${FormattedBody}`, {
+  vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
+  '@media': {
+    '(prefers-contrast: more)': {
+      vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.moreLight),
+    },
+  },
+});
+
+globalStyle(`.prism-dark ${FormattedBody}`, {
+  vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.dark),
+  '@media': {
+    '(prefers-contrast: more)': {
+      vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.moreDark),
+    },
+  },
 });
 
 export const CodePanel = style({
@@ -100,13 +144,12 @@ export const CodeLanguage = style({
   flex: 'none',
   padding: `${config.space.S100} ${config.space.S300}`,
   borderBottom: `1px solid ${color.Surface.ContainerLine}`,
-  color: color.Surface.OnContainer,
+  color: syntaxMeta,
   fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
   fontSize: '0.78em',
   letterSpacing: '0.02em',
   textTransform: 'lowercase',
   userSelect: 'none',
-  opacity: 0.78,
 });
 
 export const CodeRow = style({
@@ -135,9 +178,8 @@ export const CodeLineNumbers = style({
   paddingRight: config.space.S200,
   marginRight: config.space.S200,
   borderRight: `1px solid ${color.Surface.ContainerLine}`,
-  color: color.Surface.OnContainer,
+  color: syntaxMeta,
   background: color.Surface.Container,
-  opacity: 0.48,
   fontVariantNumeric: 'tabular-nums',
   fontFamily: 'inherit',
   fontSize: 'inherit',
@@ -266,42 +308,46 @@ globalStyle(`${FormattedBody} img`, {
 globalStyle(
   `${FormattedBody} code .token.comment, ${FormattedBody} code .token.prolog, ${FormattedBody} code .token.doctype, ${FormattedBody} code .token.cdata`,
   {
-    color: '#7a8478',
+    color: syntaxComment,
   }
 );
 globalStyle(`${FormattedBody} code .token.punctuation`, {
-  color: '#9aa0a6',
+  color: syntaxPunctuation,
+});
+globalStyle(`${FormattedBody} code .token.namespace`, {
+  color: syntaxMeta,
+  opacity: 1,
 });
 globalStyle(
   `${FormattedBody} code .token.property, ${FormattedBody} code .token.tag, ${FormattedBody} code .token.constant, ${FormattedBody} code .token.symbol, ${FormattedBody} code .token.deleted`,
   {
-    color: '#e06c75',
+    color: syntaxProperty,
   }
 );
 globalStyle(`${FormattedBody} code .token.boolean, ${FormattedBody} code .token.number`, {
-  color: '#d19a66',
+  color: syntaxNumber,
 });
 globalStyle(
   `${FormattedBody} code .token.selector, ${FormattedBody} code .token.attr-name, ${FormattedBody} code .token.string, ${FormattedBody} code .token.char, ${FormattedBody} code .token.builtin, ${FormattedBody} code .token.inserted`,
   {
-    color: '#98c379',
+    color: syntaxString,
   }
 );
 globalStyle(
   `${FormattedBody} code .token.operator, ${FormattedBody} code .token.entity, ${FormattedBody} code .token.url, ${FormattedBody} code .token.variable`,
   {
-    color: '#56b6c2',
+    color: syntaxOperator,
   }
 );
 globalStyle(
   `${FormattedBody} code .token.atrule, ${FormattedBody} code .token.attr-value, ${FormattedBody} code .token.function, ${FormattedBody} code .token.class-name`,
   {
-    color: '#61afef',
+    color: syntaxFunction,
   }
 );
 globalStyle(`${FormattedBody} code .token.keyword`, {
-  color: '#c678dd',
+  color: syntaxKeyword,
 });
 globalStyle(`${FormattedBody} code .token.regex, ${FormattedBody} code .token.important`, {
-  color: '#e5c07b',
+  color: syntaxRegex,
 });

@@ -247,9 +247,6 @@ struct RoomListView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SynaraColor.secondarySurface)
                     .accessibilityIdentifier("RoomMembershipErrorText")
-            } else {
-                Color.clear
-                    .frame(height: 68)
             }
         }
         .background {
