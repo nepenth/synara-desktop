@@ -44,12 +44,61 @@ struct SynaraRoomNoteItem: Identifiable, Equatable {
                 let rank: [RoomNoteKind: Int] = [.todo: 0, .note: 1, .message: 2]
                 return (rank[left.kind] ?? 3) < (rank[right.kind] ?? 3)
             }
-            if left.kind == .todo {
-                return (left.order ?? left.updatedAt.millisecondsSince1970)
-                    > (right.order ?? right.updatedAt.millisecondsSince1970)
-            }
-            return left.updatedAt > right.updatedAt
+            return (left.order ?? left.updatedAt.millisecondsSince1970)
+                > (right.order ?? right.updatedAt.millisecondsSince1970)
         }
+    }
+}
+
+enum RoomNoteOrdering {
+    struct Result: Equatable {
+        let items: [SynaraRoomNoteItem]
+        let movedItem: SynaraRoomNoteItem
+        let order: Double
+    }
+
+    static func moving(
+        itemID: String,
+        to targetIndex: Int,
+        in orderedItems: [SynaraRoomNoteItem]
+    ) -> Result? {
+        guard orderedItems.count > 1,
+              let sourceIndex = orderedItems.firstIndex(where: { $0.id == itemID })
+        else {
+            return nil
+        }
+
+        var reordered = orderedItems
+        let movedItem = reordered.remove(at: sourceIndex)
+        let destination = min(max(targetIndex, 0), reordered.count)
+        reordered.insert(movedItem, at: destination)
+        guard destination != sourceIndex else { return nil }
+
+        let previousOrder = destination > 0 ? score(reordered[destination - 1]) : nil
+        let nextOrder = destination + 1 < reordered.count ? score(reordered[destination + 1]) : nil
+        let order: Double
+        switch (previousOrder, nextOrder) {
+        case let (.some(previous), .some(next)) where previous > next:
+            order = next + ((previous - next) / 2)
+        case let (.some(previous), .none):
+            order = previous - edgeStep(for: previous)
+        case let (.none, .some(next)):
+            order = next + edgeStep(for: next)
+        default:
+            return nil
+        }
+
+        let rankedItem = movedItem.with(order: order, updatedAt: movedItem.updatedAt)
+        reordered[destination] = rankedItem
+        return Result(items: reordered, movedItem: movedItem, order: order)
+    }
+
+    private static func score(_ item: SynaraRoomNoteItem) -> Double {
+        item.order ?? item.updatedAt.millisecondsSince1970
+    }
+
+    private static func edgeStep(for value: Double) -> Double {
+        max(1, abs(value) * 1e-9)
     }
 }
 
@@ -78,6 +127,7 @@ protocol RoomNotesServicing {
     func deleteItem(roomID: String, itemID: String) async -> Result<[SynaraRoomNoteItem], RoomNotesError>
     func setTodoCompleted(roomID: String, itemID: String, completed: Bool) async -> Result<[SynaraRoomNoteItem], RoomNotesError>
     func moveTodo(roomID: String, itemID: String, direction: RoomNoteMoveDirection) async -> Result<[SynaraRoomNoteItem], RoomNotesError>
+    func setItemOrder(_ item: SynaraRoomNoteItem, order: Double) async -> Result<[SynaraRoomNoteItem], RoomNotesError>
 }
 
 final class SharedCoreRoomNotesService: RoomNotesServicing {
@@ -117,7 +167,7 @@ final class SharedCoreRoomNotesService: RoomNotesServicing {
             updatedAt: timestamp,
             body: trimmed,
             completedAt: nil,
-            order: kind == .todo ? timestamp : nil,
+            order: timestamp,
             eventId: nil,
             eventTs: nil,
             sender: nil
@@ -215,6 +265,27 @@ final class SharedCoreRoomNotesService: RoomNotesServicing {
         }
     }
 
+    func setItemOrder(
+        _ item: SynaraRoomNoteItem,
+        order: Double
+    ) async -> Result<[SynaraRoomNoteItem], RoomNotesError> {
+        guard order.isFinite else { return .failure(.invalidItem) }
+        let reordered = RoomNoteItemDto(
+            id: item.id,
+            kind: item.kind.rawValue,
+            roomId: item.roomID,
+            createdAt: item.createdAt.millisecondsSince1970,
+            updatedAt: item.updatedAt.millisecondsSince1970,
+            body: item.body,
+            completedAt: item.completedAt?.millisecondsSince1970,
+            order: order,
+            eventId: item.eventID,
+            eventTs: item.eventTimestamp?.millisecondsSince1970,
+            sender: item.senderID
+        )
+        return await upsert(reordered, roomID: item.roomID)
+    }
+
     private func upsert(_ item: RoomNoteItemDto, roomID: String) async -> Result<[SynaraRoomNoteItem], RoomNotesError> {
         do {
             let snapshot = try await SharedCoreRoomNotes.roomNotesUpsert(core: host.core, item: item)
@@ -270,7 +341,7 @@ final class MockRoomNotesService: RoomNotesServicing {
             updatedAt: timestamp,
             body: trimmed,
             completedAt: nil,
-            order: kind == .todo ? timestamp.millisecondsSince1970 : nil,
+            order: timestamp.millisecondsSince1970,
             eventID: nil,
             eventTimestamp: nil,
             senderID: nil
@@ -356,12 +427,25 @@ final class MockRoomNotesService: RoomNotesServicing {
         return .success(roomItems(roomID))
     }
 
+    func setItemOrder(
+        _ item: SynaraRoomNoteItem,
+        order: Double
+    ) async -> Result<[SynaraRoomNoteItem], RoomNotesError> {
+        guard order.isFinite,
+              let index = items.firstIndex(where: { $0.roomID == item.roomID && $0.id == item.id })
+        else {
+            return .failure(.invalidItem)
+        }
+        items[index] = items[index].with(order: order, updatedAt: items[index].updatedAt)
+        return .success(roomItems(item.roomID))
+    }
+
     private func roomItems(_ roomID: String) -> [SynaraRoomNoteItem] {
         SynaraRoomNoteItem.sorted(items.filter { $0.roomID == roomID })
     }
 }
 
-private extension SynaraRoomNoteItem {
+extension SynaraRoomNoteItem {
     func with(order: Double, updatedAt: Date) -> SynaraRoomNoteItem {
         SynaraRoomNoteItem(
             id: id, kind: kind, roomID: roomID, createdAt: createdAt, updatedAt: updatedAt,

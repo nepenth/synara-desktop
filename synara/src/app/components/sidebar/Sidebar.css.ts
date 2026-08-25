@@ -63,7 +63,6 @@ export const DropTarget = style({
   },
 });
 
-const PUSH_X = 2;
 export const SidebarItem = recipe({
   base: [
     DefaultReset,
@@ -73,18 +72,13 @@ export const SidebarItem = recipe({
       alignItems: 'center',
       justifyContent: 'center',
       position: 'relative',
-      transition: 'transform 200ms cubic-bezier(0, 0.8, 0.67, 0.97)',
-
       selectors: {
-        '&:hover': {
-          transform: `translateX(${toRem(PUSH_X)})`,
-        },
         '&::before': {
           content: '',
           display: 'none',
           position: 'absolute',
-          left: toRem(-11.5 - PUSH_X),
-          width: toRem(3 + PUSH_X),
+          left: toRem(-11.5),
+          width: toRem(3),
           height: toRem(16),
           borderRadius: `0 ${toRem(4)} ${toRem(4)} 0`,
           background: 'CurrentColor',
@@ -92,7 +86,6 @@ export const SidebarItem = recipe({
         },
         '&:hover::before': {
           display: 'block',
-          width: toRem(3),
         },
       },
     },
@@ -108,7 +101,7 @@ export const SidebarItem = recipe({
             height: toRem(24),
           },
           '&:hover::before': {
-            width: toRem(3 + PUSH_X),
+            width: toRem(3),
           },
         },
       },

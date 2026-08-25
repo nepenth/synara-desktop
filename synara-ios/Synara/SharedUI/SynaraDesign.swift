@@ -12,11 +12,44 @@ enum SynaraSpacing {
     static let xLarge: CGFloat = 24
 }
 
+/// The floating system tab bar intentionally floats over edge-to-edge content.
+/// A clear scroll tail lets the final actionable row move fully above that glass
+/// without painting an opaque footer or duplicating screen-specific estimates.
+enum SynaraTabRootContentReachability {
+    static let minimumSeparation: CGFloat = SynaraSpacing.small
+
+    static func scrollTailHeight(
+        windowBounds: CGRect,
+        tabBarFrame: CGRect,
+        isVisible: Bool
+    ) -> CGFloat {
+        guard isVisible else {
+            return 0
+        }
+        let visibleTabBar = tabBarFrame.intersection(windowBounds)
+        guard visibleTabBar.isNull == false, visibleTabBar.height > 0 else {
+            return 0
+        }
+        return max(0, windowBounds.maxY - visibleTabBar.minY) + minimumSeparation
+    }
+}
+
+extension View {
+    func synaraTabRootContentReachability(scrollTailHeight: CGFloat) -> some View {
+        safeAreaInset(edge: .bottom, spacing: 0) {
+            Color.clear
+                .frame(height: max(0, scrollTailHeight))
+                .accessibilityHidden(true)
+        }
+    }
+}
+
 struct SynaraThemeTokens: Equatable {
     let groupedSurface: String
     let secondarySurface: String
     let surface: String
     let elevatedSurface: String
+    let headingText: String
     let primaryText: String
     let secondaryText: String
     let tertiaryText: String
@@ -76,7 +109,11 @@ enum SynaraThemeRamp {
         SynaraThemePaint.shared.reload()
     }
 
-    static func tokens(baseHex: String, dark: Bool) -> SynaraThemeTokens {
+    static func tokens(
+        baseHex: String,
+        dark: Bool,
+        increasedContrast: Bool = false
+    ) -> SynaraThemeTokens {
         let resolved = resolve(baseHex)
         let hsl = synaraHSL(from: resolved)
         let hue = hsl.hue.isNaN ? 220.0 : hsl.hue
@@ -89,9 +126,10 @@ enum SynaraThemeRamp {
                 secondarySurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.92, lightness: 0.10), resolved, mixRatio),
                 surface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.88, lightness: 0.104), resolved, mixRatio),
                 elevatedSurface: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.135), resolved, mixRatio),
-                primaryText: synaraHex(hue: hue, saturation: saturation * 0.22, lightness: 0.95),
-                secondaryText: synaraHex(hue: hue, saturation: saturation * 0.18, lightness: 0.72),
-                tertiaryText: synaraHex(hue: hue, saturation: saturation * 0.14, lightness: 0.58),
+                headingText: synaraHex(hue: hue, saturation: saturation * 0.18, lightness: increasedContrast ? 0.99 : 0.97),
+                primaryText: synaraHex(hue: hue, saturation: saturation * 0.22, lightness: increasedContrast ? 0.94 : 0.80),
+                secondaryText: synaraHex(hue: hue, saturation: saturation * 0.18, lightness: increasedContrast ? 0.80 : 0.66),
+                tertiaryText: synaraHex(hue: hue, saturation: saturation * 0.14, lightness: increasedContrast ? 0.72 : 0.60),
                 separator: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.31), resolved, mixRatio),
                 mutedControl: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.24), resolved, mixRatio),
                 agentReviewBackground: synaraHex(hue: hue, saturation: min(0.22, saturation + 0.06), lightness: 0.08),
@@ -110,9 +148,10 @@ enum SynaraThemeRamp {
             secondarySurface: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.975),
             surface: synaraHex(hue: hue, saturation: saturation * 0.40, lightness: 0.995),
             elevatedSurface: synaraHex(hue: hue, saturation: saturation * 0.55, lightness: 0.985),
-            primaryText: synaraHex(hue: hue, saturation: min(saturation * 1.4, 0.12), lightness: 0.09),
-            secondaryText: synaraHex(hue: hue, saturation: saturation, lightness: 0.36),
-            tertiaryText: synaraHex(hue: hue, saturation: saturation, lightness: 0.40),
+            headingText: synaraHex(hue: hue, saturation: min(saturation * 1.4, 0.12), lightness: increasedContrast ? 0.01 : 0.06),
+            primaryText: synaraHex(hue: hue, saturation: min(saturation * 1.4, 0.12), lightness: increasedContrast ? 0.04 : 0.12),
+            secondaryText: synaraHex(hue: hue, saturation: saturation, lightness: increasedContrast ? 0.20 : 0.34),
+            tertiaryText: synaraHex(hue: hue, saturation: saturation, lightness: increasedContrast ? 0.27 : 0.40),
             separator: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.86),
             mutedControl: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.93),
             agentReviewBackground: synaraHex(hue: 196, saturation: 0.12, lightness: 0.94),
@@ -214,6 +253,7 @@ enum SynaraColor {
     static var secondarySurface: Color { synaraAdaptive(\.secondarySurface) }
     static var elevatedSurface: Color { synaraAdaptive(\.elevatedSurface) }
     static var groupedSurface: Color { synaraAdaptive(\.groupedSurface) }
+    static var headingText: Color { synaraAdaptive(\.headingText) }
     static var primaryText: Color { synaraAdaptive(\.primaryText) }
     static var secondaryText: Color { synaraAdaptive(\.secondaryText) }
     static var tertiaryText: Color { synaraAdaptive(\.tertiaryText) }
@@ -250,7 +290,8 @@ private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>, baseH
     Color(uiColor: UIColor { traits in
         let tokens = SynaraThemeRamp.tokens(
             baseHex: baseHex,
-            dark: traits.userInterfaceStyle == .dark
+            dark: traits.userInterfaceStyle == .dark,
+            increasedContrast: traits.accessibilityContrast == .high
         )
         return UIColor(synaraHex: tokens[keyPath: keyPath]) ?? .systemBackground
     })

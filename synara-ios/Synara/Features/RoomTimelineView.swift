@@ -2685,7 +2685,7 @@ private struct TimelineHeader: View {
                         .foregroundStyle(SynaraColor.secondaryText)
                     Text(title)
                         .font(SynaraTypography.sectionTitle.weight(.semibold))
-                        .foregroundStyle(SynaraColor.primaryText)
+                        .foregroundStyle(SynaraColor.headingText)
                         .lineLimit(1)
                 }
                 HStack(spacing: SynaraSpacing.small) {
@@ -3344,6 +3344,7 @@ private struct ThreadMessageRow: View {
             Text(body)
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.primaryText)
+                .lineSpacing(2.5)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case let .formattedText(body, html):
@@ -3413,6 +3414,7 @@ private struct MatrixFormattedMessageView: View {
         return Text(attributedMarkdown(displayMarkdown))
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
+            .lineSpacing(2.5)
             .lineLimit(nil)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -3431,7 +3433,7 @@ private struct MatrixTableBlockView: View {
     let block: MatrixHTMLRenderer.TableBlock
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(block.rows.enumerated()), id: \.offset) { rowIndex, row in
                     HStack(alignment: .top, spacing: 0) {
@@ -3446,11 +3448,22 @@ private struct MatrixTableBlockView: View {
                                 .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(
-                                    width: cellIndex == 0 ? 112 : 168,
+                                    minWidth: cellIndex == 0 ? 128 : 176,
+                                    idealWidth: cellIndex == 0 ? 156 : 220,
+                                    maxWidth: cellIndex == 0 ? 220 : 320,
                                     alignment: .topLeading
                                 )
-                                .padding(.horizontal, SynaraSpacing.small)
-                                .padding(.vertical, SynaraSpacing.small)
+                                .padding(.horizontal, SynaraSpacing.medium)
+                                .padding(.vertical, 10)
+                                .accessibilityLabel(
+                                    tableCellAccessibilityLabel(
+                                        cell,
+                                        rowIndex: rowIndex,
+                                        cellIndex: cellIndex,
+                                        isHeader: row.isHeader
+                                    )
+                                )
+                                .accessibilityAddTraits(row.isHeader ? .isHeader : [])
 
                             if cellIndex < row.cells.count - 1 {
                                 Divider()
@@ -3458,7 +3471,7 @@ private struct MatrixTableBlockView: View {
                         }
                     }
                     .background(tableRowSurface(rowIndex: rowIndex, isHeader: row.isHeader))
-                    .accessibilityElement(children: .combine)
+                    .accessibilityElement(children: .contain)
 
                     if rowIndex < block.rows.count - 1 {
                         Divider()
@@ -3482,6 +3495,23 @@ private struct MatrixTableBlockView: View {
             return SynaraColor.elevatedSurface
         }
         return rowIndex.isMultiple(of: 2) ? SynaraColor.surface : SynaraColor.secondarySurface
+    }
+
+    private func tableCellAccessibilityLabel(
+        _ cell: String,
+        rowIndex: Int,
+        cellIndex: Int,
+        isHeader: Bool
+    ) -> String {
+        if isHeader {
+            return "Column \(cellIndex + 1), \(cell)"
+        }
+        let headers = block.rows.first(where: \.isHeader)?.cells ?? []
+        let header = headers.indices.contains(cellIndex) ? headers[cellIndex] : nil
+        if let header, header.isEmpty == false {
+            return "Row \(rowIndex + 1), \(header): \(cell)"
+        }
+        return "Row \(rowIndex + 1), column \(cellIndex + 1): \(cell)"
     }
 }
 
@@ -4310,7 +4340,7 @@ private struct TimelineRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                         Text(senderDisplayName)
                             .font(SynaraTypography.emphasis)
-                            .foregroundStyle(SynaraColor.primaryText)
+                            .foregroundStyle(SynaraColor.headingText)
                             .lineLimit(1)
                         Text(item.timestamp.timelineTime)
                             .font(SynaraTypography.messageMeta)
@@ -4650,13 +4680,13 @@ private struct TimelineRow: View {
         if let preview = replyPreview {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Replying to \(preview.senderName)")
-                    .font(SynaraTypography.messageMeta.weight(.semibold))
+                    .font(SynaraTypography.supporting.weight(.semibold))
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(1)
                 Text(preview.snippet)
-                    .font(SynaraTypography.messageMeta)
-                    .foregroundStyle(SynaraColor.tertiaryText)
-                    .lineLimit(2)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(3)
             }
             .padding(.leading, SynaraSpacing.small)
             .overlay(alignment: .leading) {
@@ -5318,6 +5348,7 @@ private struct ComposerView: View {
     #endif
     @Binding var isFocusedExternally: Bool
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var lastOutgoingTyping = false
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
@@ -5327,6 +5358,8 @@ private struct ComposerView: View {
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
     @State private var formattingRevision = 0
+    @State private var liveText: String?
+    @State private var draftPublishTask: Task<Void, Never>?
     @State private var composerFieldHeight: CGFloat = {
         #if canImport(UIKit)
             ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
@@ -5366,92 +5399,7 @@ private struct ComposerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
-                Button {
-                    isAttachmentSheetPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 34, height: 34)
-                        .background(SynaraColor.secondarySurface)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                        .clipShape(Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
-                                .allowsHitTesting(false)
-                        )
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .disabled(isSending)
-                .accessibilityLabel("Attach")
-                .accessibilityIdentifier("AttachmentButton")
-
-                if let onOpenStickers {
-                    Button(action: onOpenStickers) {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                            .background(SynaraColor.secondarySurface)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Stickers")
-                    .accessibilityIdentifier("StickerPackButton")
-                }
-
-                HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
-                    composerField
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isFormattingBarVisible.toggle()
-                        }
-                        isComposerFocused = true
-                    } label: {
-                        Image(systemName: isFormattingBarVisible ? "textformat.alt" : "textformat")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel(isFormattingBarVisible ? "Hide formatting toolbar" : "Show formatting toolbar")
-                    .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
-                    .accessibilityIdentifier("ComposerFormattingToggle")
-                }
-                .padding(.leading, SynaraSpacing.small)
-                .padding(.trailing, SynaraSpacing.xSmall)
-                .padding(.vertical, 5)
-                .background {
-                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                        .fill(SynaraColor.surface)
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                        .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
-                        .allowsHitTesting(false)
-                )
-
-                if canSubmit {
-                    Button(action: submitMessage) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                            .background(sendButtonTint)
-                            .foregroundStyle(Color.white)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .disabled(isSending)
-                    .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
-                    .accessibilityHint(composerSendAccessibilityHint)
-                    .accessibilityIdentifier("ComposerSendButton")
-                }
-            }
+            composerControls
 
             if showsPromptMetrics, shouldShowPromptMetrics {
                 composerPromptMetrics
@@ -5477,14 +5425,21 @@ private struct ComposerView: View {
             isFocusedExternally = focused
             updateOutgoingTyping()
         }
-        .onChange(of: text) { _ in
+        .onChange(of: currentText) { _ in
             updateOutgoingTyping()
         }
+        .onChange(of: text) { value in
+            reconcileExternalText(value)
+        }
         .onAppear {
+            if liveText == nil {
+                liveText = text
+            }
             isFocusedExternally = isComposerFocused
             updateOutgoingTyping()
         }
         .onDisappear {
+            flushExternalText()
             isFocusedExternally = false
             setOutgoingTyping(false)
         }
@@ -5562,8 +5517,138 @@ private struct ComposerView: View {
         canSubmit && isSending == false ? SynaraColor.accent : SynaraColor.secondarySurface
     }
 
+    @ViewBuilder
+    private var composerControls: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                composerInputSurface(showsFormattingToggle: false)
+
+                HStack(spacing: SynaraSpacing.small) {
+                    attachmentButton
+                    stickerButton
+                    formattingButton
+                    Spacer(minLength: SynaraSpacing.small)
+                    sendButton
+                }
+            }
+        } else {
+            HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
+                attachmentButton
+                stickerButton
+                composerInputSurface(showsFormattingToggle: true)
+                sendButton
+            }
+        }
+    }
+
+    private var attachmentButton: some View {
+        Button {
+            isAttachmentSheetPresented = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 34, height: 34)
+                .background(SynaraColor.secondarySurface)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                )
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .disabled(isSending)
+        .accessibilityLabel("Attach")
+        .accessibilityIdentifier("AttachmentButton")
+    }
+
+    @ViewBuilder
+    private var stickerButton: some View {
+        if let onOpenStickers {
+            Button(action: onOpenStickers) {
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(SynaraColor.secondarySurface)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .clipShape(Circle())
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Stickers")
+            .accessibilityIdentifier("StickerPackButton")
+        }
+    }
+
+    private var formattingButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isFormattingBarVisible.toggle()
+            }
+            isComposerFocused = true
+        } label: {
+            Image(systemName: isFormattingBarVisible ? "textformat.alt" : "textformat")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityLabel(isFormattingBarVisible ? "Hide formatting toolbar" : "Show formatting toolbar")
+        .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
+        .accessibilityIdentifier("ComposerFormattingToggle")
+    }
+
+    @ViewBuilder
+    private var sendButton: some View {
+        if canSubmit {
+            Button(action: submitMessage) {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(sendButtonTint)
+                    .foregroundStyle(Color.white)
+                    .clipShape(Circle())
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .disabled(isSending)
+            .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
+            .accessibilityHint(composerSendAccessibilityHint)
+            .accessibilityIdentifier("ComposerSendButton")
+        }
+    }
+
+    private func composerInputSurface(showsFormattingToggle: Bool) -> some View {
+        HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
+            composerField
+
+            if showsFormattingToggle {
+                formattingButton
+            }
+        }
+        .padding(.leading, SynaraSpacing.small)
+        .padding(.trailing, SynaraSpacing.xSmall)
+        .padding(.vertical, 5)
+        .background {
+            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                .fill(SynaraColor.surface)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        )
+    }
+
     private var canSubmit: Bool {
-        ComposerAttachmentDraftList.canSend(text: text, drafts: attachmentDrafts)
+        ComposerAttachmentDraftList.canSend(text: currentText, drafts: attachmentDrafts)
     }
 
     private var resolvedPlaceholder: String {
@@ -5609,17 +5694,17 @@ private struct ComposerView: View {
     }
 
     private var shouldShowPromptMetrics: Bool {
-        text.isEmpty == false || isComposerFocused
+        currentText.isEmpty == false || isComposerFocused
     }
 
     private var composerLineCount: Int {
-        max(1, text.components(separatedBy: .newlines).count)
+        max(1, currentText.components(separatedBy: .newlines).count)
     }
 
     private var composerPromptMetrics: some View {
         HStack(spacing: SynaraSpacing.small) {
             Spacer()
-            Text("\(text.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
+            Text("\(currentText.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
                 .font(SynaraTypography.composerMetric)
                 .foregroundStyle(SynaraColor.tertiaryText)
                 .monospacedDigit()
@@ -5632,7 +5717,7 @@ private struct ComposerView: View {
     private var composerField: some View {
         #if canImport(UIKit)
             ComposerTextView(
-                text: $text,
+                text: composerTextBinding,
                 selection: $composerSelection,
                 height: $composerFieldHeight,
                 placeholder: resolvedPlaceholder,
@@ -5642,13 +5727,13 @@ private struct ComposerView: View {
             )
             .frame(height: composerFieldHeight)
         #else
-            TextField(resolvedPlaceholder, text: $text, axis: .vertical)
+            TextField(resolvedPlaceholder, text: composerTextBinding, axis: .vertical)
                 .font(SynaraTypography.body)
                 .focused($isComposerFocused)
                 .lineLimit(1 ... 5)
                 .frame(minHeight: composerFieldHeight)
                 .accessibilityIdentifier("ComposerTextField")
-                .onChange(of: text) { _ in
+                .onChange(of: currentText) { _ in
                     updateComposerFieldHeight()
                 }
                 .onChange(of: isComposerFocused) { _ in
@@ -5662,12 +5747,12 @@ private struct ComposerView: View {
             let singleLineHeight = ComposerTextMetrics.singleLineHeight(
                 font: UIFont.preferredFont(forTextStyle: .callout)
             )
-            if text.isEmpty, isComposerFocused == false {
+            if currentText.isEmpty, isComposerFocused == false {
                 composerFieldHeight = singleLineHeight
                 return
             }
 
-            let lineCount = max(1, text.components(separatedBy: .newlines).count)
+            let lineCount = max(1, currentText.components(separatedBy: .newlines).count)
             let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
             let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
                 + ComposerTextMetrics.textContainerInset.top
@@ -5680,8 +5765,8 @@ private struct ComposerView: View {
     }
 
     private func applyFormatting(_ format: ComposerMarkdownFormat) {
-        let result = ComposerMarkdown.apply(format, to: text, selection: composerSelection)
-        text = result.text
+        let result = ComposerMarkdown.apply(format, to: currentText, selection: composerSelection)
+        setLiveText(result.text)
         composerSelection = result.selection
         formattingRevision += 1
         isComposerFocused = true
@@ -5696,7 +5781,7 @@ private struct ComposerView: View {
         #endif
         isComposerFocused = false
         setOutgoingTyping(false)
-        let messageBody = text
+        let messageBody = currentText
         text = messageBody
         onSend(messageBody)
     }
@@ -5704,7 +5789,7 @@ private struct ComposerView: View {
     private func updateOutgoingTyping() {
         let shouldType =
             isComposerFocused
-            && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             && SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
         setOutgoingTyping(shouldType)
     }
@@ -5716,6 +5801,41 @@ private struct ComposerView: View {
         lastOutgoingTyping = typing
         Task {
             await environment.matrix.setOutgoingTyping(roomID: roomID, typing: typing)
+        }
+    }
+
+    private var currentText: String {
+        liveText ?? text
+    }
+
+    private var composerTextBinding: Binding<String> {
+        Binding(
+            get: { currentText },
+            set: { setLiveText($0) }
+        )
+    }
+
+    private func setLiveText(_ value: String) {
+        liveText = value
+        draftPublishTask?.cancel()
+        draftPublishTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard Task.isCancelled == false, text != value else { return }
+            text = value
+        }
+    }
+
+    private func reconcileExternalText(_ value: String) {
+        guard value != currentText else { return }
+        draftPublishTask?.cancel()
+        liveText = value
+    }
+
+    private func flushExternalText() {
+        draftPublishTask?.cancel()
+        let value = currentText
+        if text != value {
+            text = value
         }
     }
 }
@@ -5741,6 +5861,7 @@ private struct ComposerFormattingBar: View {
                                     .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
                                     .allowsHitTesting(false)
                             )
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())

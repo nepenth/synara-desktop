@@ -3,6 +3,9 @@ import { recipe, RecipeVariants } from '@vanilla-extract/recipes';
 import { DefaultReset, color, config, toRem } from 'folds';
 
 export const PageNav = recipe({
+  base: {
+    position: 'relative',
+  },
   variants: {
     size: {
       '400': {
@@ -12,12 +15,66 @@ export const PageNav = recipe({
         width: toRem(222),
       },
     },
+    resizable: {
+      true: {
+        minWidth: toRem(196),
+        maxWidth: toRem(360),
+      },
+      false: {},
+    },
   },
   defaultVariants: {
     size: '400',
+    resizable: false,
   },
 });
 export type PageNavVariants = RecipeVariants<typeof PageNav>;
+
+export const PageNavDivider = style([
+  DefaultReset,
+  {
+    position: 'absolute',
+    zIndex: 3,
+    top: 0,
+    right: toRem(-5),
+    bottom: 0,
+    width: toRem(10),
+    padding: 0,
+    border: 0,
+    background: 'transparent',
+    cursor: 'col-resize',
+    selectors: {
+      '&::after': {
+        content: '',
+        position: 'absolute',
+        top: 0,
+        bottom: 0,
+        left: '50%',
+        width: toRem(1),
+        background: color.Background.ContainerLine,
+        transform: 'translateX(-50%)',
+        transition: 'width 120ms ease, background-color 120ms ease',
+      },
+      '&:hover::after, &:focus-visible::after': {
+        width: toRem(3),
+        background: color.Primary.Main,
+      },
+      '&:focus-visible': {
+        outline: `2px solid ${color.Primary.Main}`,
+        outlineOffset: toRem(-2),
+      },
+    },
+    '@media': {
+      '(prefers-reduced-motion: reduce)': {
+        selectors: {
+          '&::after': {
+            transition: 'none',
+          },
+        },
+      },
+    },
+  },
+]);
 
 export const PageNavHeader = recipe({
   base: {

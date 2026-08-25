@@ -65,7 +65,6 @@ import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom, type MessageSpacing } from '../../state/settings';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
-import colorMXID from '../../../util/colorMXID';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
@@ -795,7 +794,7 @@ const NativeTimelineMedia = ({
           {body || 'Download file'}
         </a>
         {media?.mimeType ? (
-          <Text size="T200" style={{ opacity: 0.7 }}>
+          <Text size="T200" className={htmlCss.Metadata}>
             {media.mimeType}
           </Text>
         ) : null}
@@ -928,8 +927,8 @@ const NativeTimelineRow = ({
               </Box>
               <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
                 {grouped ? null : (
-                  <Box gap="200" alignItems="Baseline">
-                    <Text size="T300" style={{ color: colorMXID(row.senderId), fontWeight: 600 }}>
+                  <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
+                    <Text size="T300" className={htmlCss.SenderName}>
                       {displayNameForRow(row)}
                     </Text>
                     {originServerTs ? (
@@ -940,7 +939,7 @@ const NativeTimelineRow = ({
                       />
                     ) : null}
                     {pinned ? (
-                      <Text size="T200" style={{ opacity: 0.7 }}>
+                      <Text size="T200" className={htmlCss.Metadata}>
                         Pinned
                       </Text>
                     ) : null}
@@ -952,32 +951,13 @@ const NativeTimelineRow = ({
                     direction="Column"
                     gap="100"
                     onClick={() => onFocusEvent(row.reply!.eventId)}
-                    style={{
-                      borderLeft: `3px solid ${colorMXID(
-                        row.reply.senderId ?? row.reply.senderName
-                      )}`,
-                      paddingLeft: config.space.S300,
-                      margin: `${config.space.S100} 0`,
-                      background: 'transparent',
-                      borderTop: 'none',
-                      borderRight: 'none',
-                      borderBottom: 'none',
-                      textAlign: 'left',
-                      cursor: 'pointer',
-                      color: 'inherit',
-                    }}
-                    aria-label={`Jump to replied message ${row.reply.eventId}`}
+                    className={htmlCss.ReplySurface}
+                    aria-label={`Open message from ${row.reply.senderName}`}
                   >
-                    <Text
-                      size="T200"
-                      style={{
-                        color: colorMXID(row.reply.senderId ?? row.reply.senderName),
-                        fontWeight: 600,
-                      }}
-                    >
-                      {row.reply.senderName}
+                    <Text size="T300" className={htmlCss.SenderName}>
+                      Replying to {row.reply.senderName}
                     </Text>
-                    <Text size="T200" style={{ whiteSpace: 'pre-wrap', opacity: 0.86 }}>
+                    <Text size="T300" style={{ whiteSpace: 'pre-wrap' }}>
                       {row.reply.body}
                     </Text>
                   </Box>
@@ -1013,7 +993,7 @@ const NativeTimelineRow = ({
                       </Text>
                     )}
                     {row.edited ? (
-                      <Text size="T200" style={{ opacity: 0.7 }}>
+                      <Text size="T200" className={htmlCss.Metadata}>
                         Edited
                       </Text>
                     ) : null}
@@ -1056,7 +1036,7 @@ const NativeTimelineRow = ({
     case 'membership':
     case 'state':
       return (
-        <Box className={rowClassName}>
+        <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
           <Text size="T300">{row.summary}</Text>
         </Box>
       );
@@ -1113,20 +1093,26 @@ const NativeTimelineRow = ({
       );
     case 'date_separator':
       return row.timestampMs && Number.isFinite(row.timestampMs) ? (
-        <Box className={rowClassName}>
+        <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
+          <span className={htmlCss.SystemRule} aria-hidden="true" />
           <Text size="T300">{new Date(row.timestampMs).toLocaleDateString()}</Text>
+          <span className={htmlCss.SystemRule} aria-hidden="true" />
         </Box>
       ) : null;
     case 'read_marker':
       return (
-        <Box className={rowClassName}>
+        <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
+          <span className={htmlCss.SystemRule} aria-hidden="true" />
           <Text size="T300">Read up to here</Text>
+          <span className={htmlCss.SystemRule} aria-hidden="true" />
         </Box>
       );
     case 'unread_marker':
       return (
-        <Box className={rowClassName}>
+        <Box className={`${rowClassName} ${htmlCss.SystemRow} ${htmlCss.UnreadSystemRow}`}>
+          <span className={htmlCss.SystemRule} aria-hidden="true" />
           <Text size="T300">New messages</Text>
+          <span className={htmlCss.SystemRule} aria-hidden="true" />
         </Box>
       );
     case 'timeline_start':
@@ -1170,8 +1156,10 @@ const NativeTimelineRow = ({
           onReaction={runReaction}
         >
           <Box direction="Column" gap="100" className={rowClassName}>
-            <Box gap="200" alignItems="Baseline">
-              <Text size="L400">{row.event.senderName}</Text>
+            <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
+              <Text size="T300" className={htmlCss.SenderName}>
+                {row.event.senderName}
+              </Text>
               {originServerTs ? (
                 <Time
                   ts={originServerTs}
@@ -1180,7 +1168,7 @@ const NativeTimelineRow = ({
                 />
               ) : null}
               {pinned ? (
-                <Text size="T200" style={{ opacity: 0.7 }}>
+                <Text size="T200" className={htmlCss.Metadata}>
                   Pinned
                 </Text>
               ) : null}
@@ -1540,11 +1528,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           gap="100"
           style={{
             padding: config.space.S200,
-            borderBottom: '1px solid currentColor',
-            opacity: 0.9,
+            borderBottom: '1px solid var(--synara-content-separator)',
+            background: 'var(--synara-table-even)',
+            color: 'var(--synara-content-primary)',
           }}
         >
-          <Text size="T200">
+          <Text size="T200" style={{ color: 'var(--synara-content-secondary)' }}>
             Replying to {replyDraft.senderId}
             {replyDraft.threadRootEventId ? ' · in thread' : ''}
           </Text>

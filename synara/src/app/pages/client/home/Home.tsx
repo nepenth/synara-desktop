@@ -116,47 +116,73 @@ function RoomListSortIcons({
   roomSort: RoomListSort;
   onRoomSort: (sort: RoomListSort) => void;
 }) {
-  const recentLabel = `Sort ${sectionLabel} by recent activity`;
-  const nameLabel = `Sort ${sectionLabel} by name`;
+  const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  const activeLabel = roomSort === 'recent' ? 'Recent activity' : 'Name';
+  const closeMenu = () => setMenuAnchor(undefined);
   return (
-    <Box shrink="No" alignItems="Center" gap="0">
+    <PopOut
+      anchor={menuAnchor}
+      position="Bottom"
+      align="End"
+      content={
+        <FocusTrap
+          focusTrapOptions={{
+            initialFocus: false,
+            onDeactivate: closeMenu,
+            clickOutsideDeactivates: true,
+            escapeDeactivates: stopPropagation,
+          }}
+        >
+          <Menu style={{ width: toRem(190) }}>
+            <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+              <MenuItem
+                size="300"
+                radii="300"
+                onClick={() => {
+                  onRoomSort('recent');
+                  closeMenu();
+                }}
+                after={roomSort === 'recent' ? <Icon size="100" src={Icons.Check} /> : undefined}
+              >
+                <Text size="T300">Recent activity</Text>
+              </MenuItem>
+              <MenuItem
+                size="300"
+                radii="300"
+                onClick={() => {
+                  onRoomSort('name');
+                  closeMenu();
+                }}
+                after={roomSort === 'name' ? <Icon size="100" src={Icons.Check} /> : undefined}
+              >
+                <Text size="T300">Name</Text>
+              </MenuItem>
+            </Box>
+          </Menu>
+        </FocusTrap>
+      }
+    >
       <IconButton
         className={css.SortIconButton}
         size="300"
         variant="Surface"
         radii="300"
-        fill={roomSort === 'recent' ? 'Soft' : 'None'}
-        aria-pressed={roomSort === 'recent'}
-        aria-label={recentLabel}
-        title={recentLabel}
-        onClick={() => onRoomSort('recent')}
+        fill={menuAnchor ? 'Soft' : 'None'}
+        aria-expanded={!!menuAnchor}
+        aria-label={`Sort ${sectionLabel}. Current: ${activeLabel}`}
+        title={`Sort ${sectionLabel}. Current: ${activeLabel}`}
+        onClick={(event) =>
+          setMenuAnchor(menuAnchor ? undefined : event.currentTarget.getBoundingClientRect())
+        }
       >
         <Icon
           className={css.SortIcon}
           size="50"
-          src={Icons.RecentClock}
-          filled={roomSort === 'recent'}
+          src={roomSort === 'recent' ? Icons.RecentClock : Icons.Alphabet}
+          filled
         />
       </IconButton>
-      <IconButton
-        className={css.SortIconButton}
-        size="300"
-        variant="Surface"
-        radii="300"
-        fill={roomSort === 'name' ? 'Soft' : 'None'}
-        aria-pressed={roomSort === 'name'}
-        aria-label={nameLabel}
-        title={nameLabel}
-        onClick={() => onRoomSort('name')}
-      >
-        <Icon
-          className={css.SortIcon}
-          size="50"
-          src={Icons.Alphabet}
-          filled={roomSort === 'name'}
-        />
-      </IconButton>
-    </Box>
+    </PopOut>
   );
 }
 
@@ -417,7 +443,6 @@ export function Home() {
                       key={roomId}
                       room={room}
                       selected={selected}
-                      showAvatar
                       linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
                       notificationMode={getRoomNotificationMode(
                         notificationPreferences,
@@ -468,7 +493,6 @@ export function Home() {
                       <RoomNavItem
                         room={room}
                         selected={selected}
-                        showAvatar
                         linkPath={getHomeRoomPath(getCanonicalAliasOrRoomId(mx, roomId))}
                         notificationMode={getRoomNotificationMode(
                           notificationPreferences,

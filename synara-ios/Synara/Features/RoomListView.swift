@@ -228,6 +228,11 @@ struct RoomListView: View {
                     .refreshable {
                         await reloadRoomsForRefresh()
                     }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear
+                            .frame(height: SynaraTabRootContentReachability.minimumSeparation)
+                            .accessibilityHidden(true)
+                    }
                     .accessibilityIdentifier("RoomList")
                     .onAppear {
                         seedExpandedSpacesIfNeeded(
@@ -247,9 +252,6 @@ struct RoomListView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(SynaraColor.secondarySurface)
                     .accessibilityIdentifier("RoomMembershipErrorText")
-            } else {
-                Color.clear
-                    .frame(height: 68)
             }
         }
         .background {
@@ -732,7 +734,7 @@ private struct RoomListHeader: View {
                     HStack(spacing: SynaraSpacing.xSmall) {
                         Text(title)
                             .font(.title3.weight(.semibold))
-                            .foregroundStyle(SynaraColor.primaryText)
+                            .foregroundStyle(SynaraColor.headingText)
                             .lineLimit(1)
                             .minimumScaleFactor(0.78)
                     }
@@ -1071,7 +1073,7 @@ private struct RoomSectionHeader: View {
             Text(title)
                 .font(SynaraTypography.emphasis)
                 .textCase(nil)
-                .foregroundStyle(SynaraColor.primaryText)
+                .foregroundStyle(SynaraColor.headingText)
             Spacer()
             if let selectedSort {
                 RoomListSortIcons(sectionTitle: title, selectedSort: selectedSort)
@@ -1088,23 +1090,27 @@ private struct RoomListSortIcons: View {
     @Binding var selectedSort: RoomListSortOrder
 
     var body: some View {
-        HStack(spacing: SynaraSpacing.xSmall) {
+        Menu {
             ForEach(RoomListSortOrder.allCases) { sort in
                 Button {
                     selectedSort = sort
                 } label: {
-                    Image(systemName: sort.systemImage)
-                        .font(.system(size: 11, weight: selectedSort == sort ? .semibold : .regular))
-                        .foregroundStyle(
-                            selectedSort == sort ? SynaraColor.primaryText : SynaraColor.secondaryText
-                        )
-                        .frame(width: 16, height: 16)
+                    if selectedSort == sort {
+                        Label(sort.shortTitle, systemImage: "checkmark")
+                    } else {
+                        Text(sort.shortTitle)
+                    }
                 }
-                .buttonStyle(.plain)
                 .accessibilityLabel(sort.title(for: sectionTitle))
-                .accessibilityAddTraits(selectedSort == sort ? .isSelected : [])
             }
+        } label: {
+            Image(systemName: selectedSort.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel("Sort \(sectionTitle). Current: \(selectedSort.shortTitle)")
         .accessibilityIdentifier("RoomListSortMenu")
     }
 }
@@ -1117,7 +1123,7 @@ private struct SpaceSelectedHeader: View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             Text(title)
                 .font(SynaraTypography.screenTitle.weight(.bold))
-                .foregroundStyle(SynaraColor.primaryText)
+                .foregroundStyle(SynaraColor.headingText)
             Text("\(roomCount) channel\(roomCount == 1 ? "" : "s")")
                 .font(SynaraTypography.messageMeta.weight(.medium))
                 .foregroundStyle(SynaraColor.secondaryText)
@@ -1209,26 +1215,34 @@ private struct RoomListRow: View {
     }
 
     private var previewColor: Color {
-        hasUnreadActivity ? SynaraColor.primaryText.opacity(0.82) : SynaraColor.secondaryText
+        SynaraColor.secondaryText
+    }
+
+    private var roomPrefix: String {
+        "#"
     }
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            SynaraRoomAvatarTile(room: room, size: 32)
+            Text(roomPrefix)
+                .font(SynaraTypography.body.weight(.semibold))
+                .foregroundStyle(roomGlyphColor)
+                .frame(width: 20, alignment: .center)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
-                    if room.kind == .room {
-                        Image(systemName: room.isSecureRoom ? "lock.fill" : "number")
-                            .font(SynaraTypography.chipLabel.weight(.bold))
-                            .foregroundStyle(roomGlyphColor)
-                            .accessibilityHidden(true)
-                    }
-
                     Text(room.name)
                         .font(SynaraTypography.body.weight(hasUnreadActivity ? .semibold : .regular))
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(1)
+
+                    if room.isSecureRoom {
+                        Image(systemName: "lock.fill")
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityLabel("Encrypted room")
+                    }
 
                     if room.isFavorite {
                         Image(systemName: "star.fill")

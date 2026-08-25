@@ -1,5 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import parse, { Element, HTMLReactParserOptions } from 'html-react-parser';
+import parse, {
+  attributesToProps,
+  domToReact,
+  Element,
+  HTMLReactParserOptions,
+} from 'html-react-parser';
 import { sanitizeCustomHtml } from '../../utils/sanitize';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
@@ -80,9 +85,23 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
     if (!(domNode instanceof Element) || !('name' in domNode)) {
       return undefined;
     }
-    if (domNode.name !== 'pre') {
-      return undefined;
+    if (domNode.name === 'table') {
+      return (
+        <div
+          className={htmlCss.TableScroll}
+          role="region"
+          aria-label="Scrollable message table"
+          // Horizontal overflow needs an explicit keyboard focus target.
+          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+          tabIndex={0}
+        >
+          <table {...attributesToProps(domNode.attribs)}>
+            {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+          </table>
+        </div>
+      );
     }
+    if (domNode.name !== 'pre') return undefined;
     const { code, languageClass } = nativeCodeBlockFromPreChildren(domNode.children);
     return <NativeCodeBlock code={code} languageClass={languageClass} />;
   },

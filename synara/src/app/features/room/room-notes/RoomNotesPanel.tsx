@@ -18,7 +18,11 @@ import {
 } from 'folds';
 import { useAtomValue } from 'jotai';
 import { SynaraRoomNoteItem } from '../../../../types/matrix/accountData';
-import { createManualRoomNoteItem, getRoomNoteItems } from '../../../utils/roomNotes';
+import {
+  createManualRoomNoteItem,
+  getRoomNoteItems,
+  rankRoomNoteItem,
+} from '../../../utils/roomNotes';
 import { roomNotesContentAtom } from '../../../state/roomNotesList';
 import {
   completeRoomTodoWithNativeOwner,
@@ -69,6 +73,7 @@ type RoomNoteItemProps = {
   roomId: string;
   item: SynaraRoomNoteItem;
   memberDisplayNames: ReadonlyMap<string, string>;
+  roomItems: SynaraRoomNoteItem[];
   canMoveUp: boolean;
   canMoveDown: boolean;
 };
@@ -77,6 +82,7 @@ function RoomNoteItem({
   roomId,
   item,
   memberDisplayNames,
+  roomItems,
   canMoveUp,
   canMoveDown,
 }: RoomNoteItemProps) {
@@ -92,10 +98,20 @@ function RoomNoteItem({
     void completeRoomTodoWithNativeOwner(roomId, item.id, !item.completedAt).catch(() => undefined);
   };
   const handleMoveUp = () => {
-    void moveRoomTodoWithNativeOwner(roomId, item.id, 'up').catch(() => undefined);
+    if (item.kind === 'todo') {
+      void moveRoomTodoWithNativeOwner(roomId, item.id, 'up').catch(() => undefined);
+      return;
+    }
+    const ranked = rankRoomNoteItem(roomItems, item.id, 'up');
+    if (ranked) void upsertRoomNoteWithNativeOwner(ranked).catch(() => undefined);
   };
   const handleMoveDown = () => {
-    void moveRoomTodoWithNativeOwner(roomId, item.id, 'down').catch(() => undefined);
+    if (item.kind === 'todo') {
+      void moveRoomTodoWithNativeOwner(roomId, item.id, 'down').catch(() => undefined);
+      return;
+    }
+    const ranked = rankRoomNoteItem(roomItems, item.id, 'down');
+    if (ranked) void upsertRoomNoteWithNativeOwner(ranked).catch(() => undefined);
   };
   const handleOpenMessage = () => {
     if (item.eventId) navigateRoom(roomId, item.eventId);
@@ -157,14 +173,14 @@ function RoomNoteItem({
       )}
       <Box gap="200" justifyContent="SpaceBetween" alignItems="Center">
         <Box gap="100">
-          {item.kind === 'todo' && (
+          {(item.kind === 'todo' || item.kind === 'note') && (
             <>
               <IconButton
                 size="300"
                 radii="300"
                 disabled={!canMoveUp}
                 onClick={handleMoveUp}
-                aria-label="Move ToDo up"
+                aria-label={`Move ${item.kind === 'todo' ? 'ToDo' : 'note'} up`}
               >
                 <Icon src={Icons.ChevronTop} size="200" />
               </IconButton>
@@ -173,7 +189,7 @@ function RoomNoteItem({
                 radii="300"
                 disabled={!canMoveDown}
                 onClick={handleMoveDown}
-                aria-label="Move ToDo down"
+                aria-label={`Move ${item.kind === 'todo' ? 'ToDo' : 'note'} down`}
               >
                 <Icon src={Icons.ChevronBottom} size="200" />
               </IconButton>
@@ -195,18 +211,22 @@ function RoomNoteItem({
   );
 }
 
-const getTodoOrderState = (
+const getItemOrderState = (
   item: SynaraRoomNoteItem,
   roomItems: SynaraRoomNoteItem[]
 ): { canMoveUp: boolean; canMoveDown: boolean } => {
-  if (item.kind !== 'todo') return { canMoveUp: false, canMoveDown: false };
-  const todoGroup = roomItems.filter(
-    (candidate) => candidate.kind === 'todo' && !!candidate.completedAt === !!item.completedAt
+  if (item.kind !== 'todo' && item.kind !== 'note') {
+    return { canMoveUp: false, canMoveDown: false };
+  }
+  const itemGroup = roomItems.filter(
+    (candidate) =>
+      candidate.kind === item.kind &&
+      (item.kind !== 'todo' || !!candidate.completedAt === !!item.completedAt)
   );
-  const index = todoGroup.findIndex((candidate) => candidate.id === item.id);
+  const index = itemGroup.findIndex((candidate) => candidate.id === item.id);
   return {
     canMoveUp: index > 0,
-    canMoveDown: index >= 0 && index < todoGroup.length - 1,
+    canMoveDown: index >= 0 && index < itemGroup.length - 1,
   };
 };
 
@@ -337,15 +357,16 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
         <Box direction="Column" gap="200" style={{ minWidth: 0, padding: config.space.S300 }}>
           {roomItems.length > 0 ? (
             roomItems.map((item) => {
-              const todoOrderState = getTodoOrderState(item, roomItems);
+              const itemOrderState = getItemOrderState(item, roomItems);
               return (
                 <RoomNoteItem
                   key={item.id}
                   roomId={room.roomId}
                   item={item}
                   memberDisplayNames={memberDisplayNames}
-                  canMoveUp={todoOrderState.canMoveUp}
-                  canMoveDown={todoOrderState.canMoveDown}
+                  roomItems={roomItems}
+                  canMoveUp={itemOrderState.canMoveUp}
+                  canMoveDown={itemOrderState.canMoveDown}
                 />
               );
             })

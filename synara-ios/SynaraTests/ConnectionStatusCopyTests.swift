@@ -82,6 +82,7 @@ final class ConnectionStatusCopyTests: XCTestCase {
     func testConnectedBannerIsNotSticky() {
         XCTAssertFalse(ConnectionStatusCopy.presentsBanner(.connected))
         XCTAssertTrue(ConnectionStatusCopy.presentsBanner(.connected, connectedFlashVisible: true))
+        XCTAssertFalse(ConnectionStatusCopy.presentsBanner(.syncing))
         XCTAssertFalse(ConnectionStatusCopy.presentsBanner(.stopped))
         XCTAssertTrue(ConnectionStatusCopy.presentsBanner(.disconnected))
         XCTAssertTrue(ConnectionStatusCopy.presentsBanner(.restoreFailed))

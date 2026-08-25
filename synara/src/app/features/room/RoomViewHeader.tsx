@@ -3,7 +3,6 @@ import { useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
   Box,
-  Avatar,
   Text,
   Overlay,
   OverlayCenter,
@@ -26,18 +25,15 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useStateEvent } from '../../hooks/useStateEvent';
 import { PageHeader } from '../../components/page';
-import { RoomAvatar, RoomIcon } from '../../components/room-avatar';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
 import { StateEvent } from '../../../types/matrix/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { useIsDirectRoom, useRoom } from '../../hooks/useRoom';
+import { useRoom } from '../../hooks/useRoom';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import { getHomeSearchPath, getSpaceSearchPath, withSearchParam } from '../../pages/pathUtils';
-import { resolveMatrixThumbnailUrl } from '../../matrix/media';
-import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import * as css from './RoomViewHeader.css';
@@ -47,13 +43,12 @@ import { markAsReadInBackground, markAsUnread } from '../../utils/notifications'
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import { copyToClipboard } from '../../utils/dom';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
-import { useRoomAvatar, useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
+import { useRoomName, useRoomTopic } from '../../hooks/useRoomMeta';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { stopPropagation } from '../../utils/keyboard';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getViaServers } from '../../plugins/via-servers';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
 import { RoomPinMenu } from './room-pin-menu';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
@@ -277,26 +272,20 @@ export function RoomViewHeader({
 }: RoomViewHeaderProps) {
   const navigate = useNavigate();
   const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const screenSize = useScreenSizeContext();
   const room = useRoom();
   const space = useSpaceOptionally();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [notesOverlayOpen, setNotesOverlayOpen] = useState(false);
-  const direct = useIsDirectRoom();
 
   const pinnedEvents = useRoomPinnedEvents(room);
   const notesContent = useAtomValue(roomNotesContentAtom);
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
   const encryptedRoom = !!encryptionEvent;
-  const avatarMxc = useRoomAvatar(room, direct);
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
-  const avatarUrl = avatarMxc
-    ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
-    : undefined;
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
@@ -363,23 +352,12 @@ export function RoomViewHeader({
         )}
         <Box grow="Yes" alignItems="Center" gap="300">
           {screenSize !== ScreenSize.Mobile && (
-            <Avatar size="300">
-              <RoomAvatar
-                roomId={room.roomId}
-                src={avatarUrl}
-                alt={name}
-                renderFallback={() => (
-                  <RoomIcon
-                    size="200"
-                    joinRule={normalizeRoomJoinRulePresentation(room.getJoinRule())}
-                    roomType={room.getType()}
-                  />
-                )}
-              />
-            </Avatar>
+            <Text as="span" className={css.RoomChannelGlyph} aria-hidden="true">
+              #
+            </Text>
           )}
           <Box direction="Column">
-            <Text size={topic ? 'H5' : 'H3'} truncate>
+            <Text size={topic ? 'H5' : 'H3'} className={css.RoomTitle} truncate>
               {name}
             </Text>
             {topic && (

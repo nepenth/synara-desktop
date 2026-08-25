@@ -39,10 +39,25 @@ export type ThemeSurfaceRamp = {
   surface: ThemeSurfaceScale;
   surfaceVariant: ThemeSurfaceScale;
   secondaryContainer: ThemeSurfaceScale;
+  content: ThemeContentRoles;
   chrome: string;
   overlay: string;
   shadow: string;
   focusRing: string;
+};
+
+export type ThemeContentRoles = {
+  heading: string;
+  primary: string;
+  secondary: string;
+  tertiary: string;
+  separator: string;
+  selectedSurface: string;
+  tableCanvas: string;
+  tableHeader: string;
+  tableOdd: string;
+  tableEven: string;
+  tableHover: string;
 };
 
 export type ThemeChromeColors = {
@@ -95,6 +110,72 @@ const tintScale = (
   OnContainer: scale.OnContainer,
 });
 
+const softenToContrast = (
+  foreground: string,
+  background: string,
+  minimumContrast: number
+): string => {
+  let resolved = foreground;
+  for (let step = 1; step <= 95; step += 1) {
+    const candidate = chroma.mix(foreground, background, step / 100, 'rgb').hex();
+    if (chroma.contrast(candidate, background) < minimumContrast) break;
+    resolved = candidate;
+  }
+  return resolved;
+};
+
+const contentRoles = (
+  kind: ThemeRampKind,
+  background: string,
+  surface: ThemeSurfaceScale,
+  surfaceVariant: ThemeSurfaceScale,
+  secondaryContainer: ThemeSurfaceScale
+): ThemeContentRoles => {
+  const neutral = kind === 'dark' ? '#ffffff' : '#000000';
+  const heading = softenToContrast(neutral, background, 12);
+  const primary = softenToContrast(neutral, background, 8);
+  const secondary = softenToContrast(neutral, background, 5.5);
+  const tertiary = softenToContrast(neutral, background, 4.5);
+  const selectedSurface = chroma
+    .mix(surface.Container, primary, kind === 'dark' ? 0.1 : 0.06, 'rgb')
+    .hex();
+
+  return {
+    heading,
+    primary,
+    secondary,
+    tertiary,
+    separator: softenToContrast(neutral, background, 3),
+    selectedSurface,
+    tableCanvas: secondaryContainer.Container,
+    tableHeader: secondaryContainer.ContainerActive,
+    tableOdd: surfaceVariant.Container,
+    tableEven: surface.ContainerHover,
+    tableHover: surface.ContainerActive,
+  };
+};
+
+const withContentRoles = (
+  ramp: Omit<ThemeSurfaceRamp, 'content'>,
+  kind: ThemeRampKind
+): ThemeSurfaceRamp => {
+  const content = contentRoles(
+    kind,
+    ramp.surfaceVariant.Container,
+    ramp.surface,
+    ramp.surfaceVariant,
+    ramp.secondaryContainer
+  );
+  return {
+    ...ramp,
+    background: { ...ramp.background, OnContainer: content.primary },
+    surface: { ...ramp.surface, OnContainer: content.primary },
+    surfaceVariant: { ...ramp.surfaceVariant, OnContainer: content.primary },
+    secondaryContainer: { ...ramp.secondaryContainer, OnContainer: content.primary },
+    content,
+  };
+};
+
 /** Stacked Discord-like greys: rail < room list < chat < composer. Hue tints; mix keeps white/black distinct. */
 export const deriveThemeSurfaceRamp = (
   baseColor: string,
@@ -135,16 +216,19 @@ export const deriveThemeSurfaceRamp = (
         onContainer
       ),
     };
-    return {
-      background: tintScale(stacked.background, hex, mixRatio),
-      surface: tintScale(stacked.surface, hex, mixRatio),
-      surfaceVariant: tintScale(stacked.surfaceVariant, hex, mixRatio),
-      secondaryContainer: tintScale(stacked.secondaryContainer, hex, mixRatio),
-      chrome: chroma.mix(hslHex(hue, saturation, 0.07), hex, mixRatio, 'rgb').hex(),
-      overlay: 'rgba(0, 0, 0, 0.72)',
-      shadow: 'rgba(0, 0, 0, 0.55)',
-      focusRing: 'rgba(255, 255, 255, 0.45)',
-    };
+    return withContentRoles(
+      {
+        background: tintScale(stacked.background, hex, mixRatio),
+        surface: tintScale(stacked.surface, hex, mixRatio),
+        surfaceVariant: tintScale(stacked.surfaceVariant, hex, mixRatio),
+        secondaryContainer: tintScale(stacked.secondaryContainer, hex, mixRatio),
+        chrome: chroma.mix(hslHex(hue, saturation, 0.07), hex, mixRatio, 'rgb').hex(),
+        overlay: 'rgba(0, 0, 0, 0.72)',
+        shadow: 'rgba(0, 0, 0, 0.55)',
+        focusRing: 'rgba(255, 255, 255, 0.45)',
+      },
+      kind
+    );
   }
 
   const saturation = clamp(sourceSaturation * 0.28, 0.02, 0.09);
@@ -176,16 +260,19 @@ export const deriveThemeSurfaceRamp = (
       onContainer
     ),
   };
-  return {
-    background: tintScale(stacked.background, hex, mixRatio),
-    surface: tintScale(stacked.surface, hex, mixRatio),
-    surfaceVariant: tintScale(stacked.surfaceVariant, hex, mixRatio),
-    secondaryContainer: tintScale(stacked.secondaryContainer, hex, mixRatio),
-    chrome: chroma.mix(hslHex(hue, saturation * 0.45, 1), hex, mixRatio * 0.4, 'rgb').hex(),
-    overlay: 'rgba(15, 17, 21, 0.45)',
-    shadow: 'rgba(15, 17, 21, 0.16)',
-    focusRing: 'rgba(15, 17, 21, 0.45)',
-  };
+  return withContentRoles(
+    {
+      background: tintScale(stacked.background, hex, mixRatio),
+      surface: tintScale(stacked.surface, hex, mixRatio),
+      surfaceVariant: tintScale(stacked.surfaceVariant, hex, mixRatio),
+      secondaryContainer: tintScale(stacked.secondaryContainer, hex, mixRatio),
+      chrome: chroma.mix(hslHex(hue, saturation * 0.45, 1), hex, mixRatio * 0.4, 'rgb').hex(),
+      overlay: 'rgba(15, 17, 21, 0.45)',
+      shadow: 'rgba(15, 17, 21, 0.16)',
+      focusRing: 'rgba(15, 17, 21, 0.45)',
+    },
+    kind
+  );
 };
 
 export const chromeColorsForRamp = (ramp: ThemeSurfaceRamp): ThemeChromeColors => ({

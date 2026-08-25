@@ -552,7 +552,20 @@ private extension AppEnvironment {
                 updatedAt: base,
                 body: "Discuss the migration privately",
                 completedAt: nil,
-                order: nil,
+                order: 1_770_000_000_000,
+                eventID: nil,
+                eventTimestamp: nil,
+                senderID: nil
+            ),
+            SynaraRoomNoteItem(
+                id: "note-follow-up",
+                kind: .note,
+                roomID: "!project:matrix.org",
+                createdAt: base.addingTimeInterval(-120),
+                updatedAt: base.addingTimeInterval(-120),
+                body: "Capture the private follow-up",
+                completedAt: nil,
+                order: 1_769_999_880_000,
                 eventID: nil,
                 eventTimestamp: nil,
                 senderID: nil

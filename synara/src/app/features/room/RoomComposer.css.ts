@@ -1,5 +1,5 @@
 import { style } from '@vanilla-extract/css';
-import { DefaultReset, toRem } from 'folds';
+import { color, config, DefaultReset, toRem } from 'folds';
 
 export const RoomComposer = style([
   DefaultReset,
@@ -41,3 +41,12 @@ export const RoomComposerToolbar = style([
     minWidth: 0,
   },
 ]);
+
+export const ComposerError = style({
+  margin: `0 ${config.space.S300} ${config.space.S200}`,
+  padding: `${config.space.S200} ${config.space.S300}`,
+  border: `1px solid ${color.Critical.Main}`,
+  borderRadius: config.radii.R300,
+  background: color.Critical.Container,
+  color: color.Critical.OnContainer,
+});

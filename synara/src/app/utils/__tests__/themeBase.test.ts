@@ -10,6 +10,7 @@ import {
   normalizeThemeBaseColor,
   resolveThemeBaseColor,
   shouldApplyDerivedThemeRamp,
+  THEME_BASE_PRESETS,
   THEME_CHROME_ROLES,
   themeChromeAssignments,
   themeContrastRatio,
@@ -94,6 +95,33 @@ test('white black and saturated bases produce user-visible ramp differences', ()
   assert.ok(themeContrastRatio('#f2f2f2', blurple.chat) >= 4.5);
 });
 
+test('semantic content roles keep calm hierarchy and accessible floors across every preset', () => {
+  for (const preset of THEME_BASE_PRESETS) {
+    for (const kind of ['light', 'dark'] as const) {
+      const ramp = deriveThemeSurfaceRamp(preset.hex, kind);
+      const { content } = ramp;
+
+      assert.ok(themeContrastRatio(content.heading, ramp.surfaceVariant.Container) >= 12);
+      assert.ok(themeContrastRatio(content.primary, ramp.surfaceVariant.Container) >= 8);
+      assert.ok(themeContrastRatio(content.secondary, ramp.surfaceVariant.Container) >= 5.5);
+      assert.ok(themeContrastRatio(content.tertiary, ramp.surfaceVariant.Container) >= 4.5);
+      for (const surface of [
+        ramp.background.Container,
+        ramp.surface.Container,
+        ramp.surfaceVariant.Container,
+        ramp.secondaryContainer.Container,
+      ]) {
+        assert.ok(themeContrastRatio(content.primary, surface) >= 4.5);
+      }
+      assert.ok(themeContrastRatio(content.primary, content.tableHeader) >= 4.5);
+      assert.ok(themeContrastRatio(content.primary, content.tableOdd) >= 4.5);
+      assert.ok(themeContrastRatio(content.primary, content.tableEven) >= 4.5);
+      assert.notEqual(content.tableHeader, content.tableOdd);
+      assert.notEqual(content.tableOdd, content.tableEven);
+    }
+  }
+});
+
 test('desktop chrome source files consume the stacked stops', () => {
   const page = readFileSync(join(srcRoot, 'app/components/page/Page.tsx'), 'utf8');
   const editor = readFileSync(join(srcRoot, 'app/components/editor/Editor.css.ts'), 'utf8');
@@ -106,6 +134,24 @@ test('desktop chrome source files consume the stacked stops', () => {
   assert.match(editor, /color\.Secondary\.Container/);
   assert.match(roomNav, /variant="Surface"/);
   assert.match(sidebar, /color\.Background\.Container/);
+});
+
+test('non-derived themes keep their own surface-matched content roles', () => {
+  const manager = readFileSync(join(srcRoot, 'app/pages/ThemeManager.tsx'), 'utf8');
+  assert.match(
+    manager,
+    /if \(!shouldApplyDerivedThemeRamp\(themeId\)\) \{[\s\S]*clearContentRoles\(target\)[\s\S]*return themeKind[\s\S]*\}\n{2} {2}syncContentRoles\(target, ramp\.content\)/
+  );
+});
+
+test('desktop room navigation uses stable channel text instead of decorative room tiles', () => {
+  const roomNav = readFileSync(join(srcRoot, 'app/features/room-nav/RoomNavItem.tsx'), 'utf8');
+  const roomHeader = readFileSync(join(srcRoot, 'app/features/room/RoomViewHeader.tsx'), 'utf8');
+
+  assert.match(roomNav, /className=\{css\.RoomGlyph\}[\s\S]{0,80}#/);
+  assert.doesNotMatch(roomNav, /RoomAvatar/);
+  assert.match(roomHeader, /className=\{css\.RoomChannelGlyph\}[\s\S]{0,80}#/);
+  assert.doesNotMatch(roomHeader, /RoomAvatar/);
 });
 
 test('roomAvatarTone stays independent of the theme base hue', () => {

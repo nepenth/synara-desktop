@@ -45,6 +45,7 @@ const getVariant = (variant: ContainerColor): ComplexStyleRule => ({
 });
 
 const NavItemBase = style({
+  position: 'relative',
   width: '100%',
   display: 'flex',
   justifyContent: 'start',
@@ -55,6 +56,17 @@ const NavItemBase = style({
   minHeight: toRem(40),
 
   selectors: {
+    '&::before': {
+      content: '',
+      position: 'absolute',
+      left: 0,
+      top: toRem(7),
+      bottom: toRem(7),
+      width: toRem(3),
+      borderRadius: `0 ${toRem(3)} ${toRem(3)} 0`,
+      background: color.Primary.Main,
+      opacity: 0,
+    },
     '&:hover, &:focus-visible': {
       backgroundColor: ContainerHover,
     },
@@ -65,7 +77,10 @@ const NavItemBase = style({
       backgroundColor: ContainerActive,
     },
     '&[aria-selected=true]': {
-      backgroundColor: ContainerHover,
+      backgroundColor: 'var(--synara-selected-surface)',
+    },
+    '&[aria-selected=true]::before': {
+      opacity: 1,
     },
     [`&:has(.${NavLink}:focus-visible)`]: {
       outline: `${config.borderWidth.B600} solid ${ContainerLine}`,

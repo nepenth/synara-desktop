@@ -2,6 +2,37 @@ import XCTest
 @testable import Synara
 
 final class SynaraThemeRampTests: XCTestCase {
+    func testTabBarScrollTailTracksActualVisibleOcclusion() {
+        XCTAssertEqual(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: CGRect(x: 0, y: 0, width: 390, height: 844),
+                tabBarFrame: CGRect(x: 0, y: 760, width: 390, height: 84),
+                isVisible: true
+            ),
+            92
+        )
+    }
+
+    func testTabBarScrollTailDisappearsWithHiddenOrOffscreenBar() {
+        let window = CGRect(x: 0, y: 0, width: 390, height: 844)
+        XCTAssertEqual(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: window,
+                tabBarFrame: CGRect(x: 0, y: 760, width: 390, height: 84),
+                isVisible: false
+            ),
+            0
+        )
+        XCTAssertEqual(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: window,
+                tabBarFrame: CGRect(x: 0, y: 900, width: 390, height: 84),
+                isVisible: true
+            ),
+            0
+        )
+    }
+
     func testNormalizeAcceptsOnlyFullHashPrefixedHexColors() {
         XCTAssertEqual(SynaraThemeRamp.normalize("#AABBCC"), "#aabbcc")
         XCTAssertEqual(SynaraThemeRamp.normalize(" #2b2d31 "), "#2b2d31")
@@ -92,6 +123,44 @@ final class SynaraThemeRampTests: XCTestCase {
                 7,
                 "\(preset.label) primary text must remain comfortably legible"
             )
+        }
+    }
+
+    func testEveryPresetMaintainsReadableTextHierarchyInBothAppearances() {
+        for preset in SynaraThemeRamp.presets {
+            for dark in [false, true] {
+                let tokens = SynaraThemeRamp.tokens(baseHex: preset.hex, dark: dark)
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.headingText, background: tokens.surface),
+                    12,
+                    "\(preset.label) heading contrast"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.primaryText, background: tokens.surface),
+                    7,
+                    "\(preset.label) primary contrast"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.secondaryText, background: tokens.surface),
+                    4.5,
+                    "\(preset.label) secondary contrast"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.tertiaryText, background: tokens.surface),
+                    4.5,
+                    "\(preset.label) tertiary contrast"
+                )
+
+                let increased = SynaraThemeRamp.tokens(
+                    baseHex: preset.hex,
+                    dark: dark,
+                    increasedContrast: true
+                )
+                XCTAssertGreaterThan(
+                    SynaraThemeRamp.contrastRatio(foreground: increased.primaryText, background: increased.surface),
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.primaryText, background: tokens.surface)
+                )
+            }
         }
     }
 

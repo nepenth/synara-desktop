@@ -33,7 +33,6 @@ private struct NotificationsTabView: View {
             await reloadInbox()
         }
         .navigationTitle("Notifications")
-        .accessibilityIdentifier("NotificationsScreen")
         .task {
             loadInbox()
             startRoomUpdates()
@@ -85,17 +84,36 @@ private struct NotificationsTabView: View {
 
                 if sections.unreadRooms.isEmpty == false {
                     Section {
-                        DisclosureGroup(isExpanded: $isUnreadRoomsExpanded) {
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.2)) {
+                                isUnreadRoomsExpanded.toggle()
+                            }
+                        } label: {
+                            HStack(spacing: SynaraSpacing.small) {
+                                Text("Unread rooms")
+                                    .font(SynaraTypography.body.weight(.medium))
+                                    .foregroundStyle(SynaraColor.primaryText)
+                                Spacer(minLength: SynaraSpacing.small)
+                                Image(systemName: "chevron.right")
+                                    .font(.caption.weight(.semibold))
+                                    .foregroundStyle(SynaraColor.secondaryText)
+                                    .rotationEffect(.degrees(isUnreadRoomsExpanded ? 90 : 0))
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Unread rooms")
+                        .accessibilityValue(isUnreadRoomsExpanded ? "Expanded" : "Collapsed")
+                        .accessibilityHint(isUnreadRoomsExpanded ? "Collapses unread rooms" : "Expands unread rooms")
+                        .accessibilityIdentifier("NotificationsUnreadRoomsDisclosure")
+
+                        if isUnreadRoomsExpanded {
                             ForEach(sections.unreadRooms) { room in
                                 notificationsRow(room)
                             }
-                        } label: {
-                            Text("Unread rooms")
-                                .font(SynaraTypography.body.weight(.medium))
-                                .foregroundStyle(SynaraColor.primaryText)
                         }
                     } header: {
-                        notificationsSectionHeader("Unread rooms", count: sections.unreadRooms.count)
+                        notificationsSectionHeader("Messages", count: sections.unreadRooms.count)
                     }
                 }
             }
@@ -178,28 +196,35 @@ private struct NotificationsInboxRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            SynaraRoomAvatarTile(room: room, size: 42)
+            Text("#")
+                .font(SynaraTypography.body.weight(.semibold))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(width: 24, alignment: .center)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                HStack(spacing: SynaraSpacing.small) {
-                    Text(room.name)
-                        .font(SynaraTypography.body.weight(room.hasHighlight ? .semibold : .regular))
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(1)
-
-                    if room.hasHighlight {
-                        SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
-                    }
-
-                    if room.membership == .invited {
-                        SynaraStatusChip(title: "Invite", tint: SynaraColor.accent, systemImage: "envelope")
-                    }
-                }
+                Text(room.name)
+                    .font(SynaraTypography.body.weight(room.hasHighlight ? .semibold : .regular))
+                    .foregroundStyle(SynaraColor.headingText)
+                    .lineLimit(1)
 
                 Text(room.lastMessagePreview)
                     .font(SynaraTypography.roomPreview)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(2)
+
+                HStack(spacing: SynaraSpacing.small) {
+                    if room.hasHighlight {
+                        Label("Mention", systemImage: "at")
+                    } else if room.membership == .invited {
+                        Label("Invite", systemImage: "envelope")
+                    }
+                    if room.lastActivityAt.timeIntervalSince1970 > 0 {
+                        Text(room.lastActivityAt, style: .relative)
+                    }
+                }
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.tertiaryText)
             }
 
             Spacer(minLength: SynaraSpacing.small)
@@ -216,45 +241,42 @@ private struct AgentPendingApprovalRow: View {
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            SynaraRoomAvatarTile(room: item.roomSummary, size: 42)
+            Text("#")
+                .font(SynaraTypography.body.weight(.semibold))
+                .foregroundStyle(SynaraColor.secondaryText)
+                .frame(width: 24, alignment: .center)
+                .accessibilityHidden(true)
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                HStack(spacing: SynaraSpacing.small) {
-                    Text(item.title)
-                        .font(SynaraTypography.body.weight(.semibold))
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineLimit(1)
-
-                    SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "sparkles")
-                }
+                Text(item.title)
+                    .font(SynaraTypography.body.weight(.semibold))
+                    .foregroundStyle(SynaraColor.headingText)
+                    .lineLimit(2)
 
                 Text(item.summary ?? item.roomName)
                     .font(SynaraTypography.roomPreview)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(2)
 
-                Text(item.roomName)
-                    .font(SynaraTypography.supporting)
-                    .foregroundStyle(SynaraColor.tertiaryText)
-                    .lineLimit(1)
+                HStack(spacing: SynaraSpacing.small) {
+                    Label("Agent", systemImage: "sparkles")
+                    Text("# \(item.roomName)")
+                        .lineLimit(1)
+                    if let status = item.status, status.isEmpty == false {
+                        Text(status)
+                            .fontWeight(.semibold)
+                    }
+                }
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.tertiaryText)
             }
 
             Spacer(minLength: SynaraSpacing.small)
 
-            if let status = item.status, status.isEmpty == false {
-                Text(status)
-                    .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.agent)
-                    .padding(.horizontal, SynaraSpacing.small)
-                    .padding(.vertical, SynaraSpacing.xSmall)
-                    .background(SynaraColor.agent.opacity(0.12))
-                    .clipShape(Capsule())
-            } else {
-                Image(systemName: "chevron.right")
-                    .font(SynaraTypography.chipLabel)
-                    .foregroundStyle(SynaraColor.tertiaryText)
-                    .accessibilityHidden(true)
-            }
+            Image(systemName: "chevron.right")
+                .font(SynaraTypography.chipLabel)
+                .foregroundStyle(SynaraColor.tertiaryText)
+                .accessibilityHidden(true)
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.vertical, SynaraSpacing.xSmall)

@@ -150,8 +150,9 @@ test('desktop and iOS room lists no longer implement a Recent 24h partition', ()
   assert.equal(iosService.includes('TimeInterval = 86400'), false);
   assert.equal(coreSort.includes('fn recent_joined_rooms'), false);
   assert.equal(contract.includes('24-hour cutoff'), false);
-  assert.equal(home.includes('by recent activity'), true);
-  assert.equal(home.includes('by name'), true);
+  assert.equal(home.includes("roomSort === 'recent' ? 'Recent activity' : 'Name'"), true);
+  assert.equal(home.includes("onRoomSort('recent')"), true);
+  assert.equal(home.includes("onRoomSort('name')"), true);
   assert.equal(home.includes('css.SortIconButton'), true);
   assert.equal(home.includes('handleFavoriteSort'), true);
   assert.equal(home.includes('handleRoomsSort'), true);
