@@ -63,6 +63,7 @@ use crate::app::sync::{
     SyncReadiness, SyncReadinessSnapshot, SyncServiceOwner, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
 use crate::app::timeline::{
+    NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
@@ -777,6 +778,15 @@ struct MatrixTimelineReactionKeyRequest {
     room_id: String,
     event_id: String,
     key: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_agent_approval_decide`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixAgentApprovalDecisionRequest {
+    room_id: String,
+    event_id: String,
+    action_id: String,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_reaction_redact`.
@@ -2314,6 +2324,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_mdirect_remove", matrix_mdirect_remove)
         .expect("built-in matrix_mdirect_remove must remain in the command census");
     registry
+        .register("matrix_agent_approval_decide", matrix_agent_approval_decide)
+        .expect("built-in matrix_agent_approval_decide must remain in the command census");
+    registry
         .register("matrix_typing_set", matrix_typing_set)
         .expect("built-in matrix_typing_set must remain in the command census");
     registry
@@ -2638,6 +2651,30 @@ fn matrix_reaction_ensure(state: Arc<CoreState>, request: CommandEnvelope) -> Co
             .map_err(timeline_reaction_owner_error)?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-reaction-ensure-serialization-failed"))
+    })
+}
+
+fn matrix_agent_approval_decide(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixAgentApprovalDecisionRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("agent-approval-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("agent-approval-no-session")
+        })?;
+        let result: NativeAgentApprovalDecisionResult = owner
+            .decide_agent_approval(NativeAgentApprovalDecisionRequest {
+                room_id: payload.room_id,
+                event_id: payload.event_id,
+                action_id: payload.action_id,
+            })
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden).with_diagnostic(diagnostic)
+            })?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("agent-approval-serialization-failed"))
     })
 }
 
@@ -5967,6 +6004,7 @@ mod tests {
         assert_eq!(
             core.registered_commands(),
             vec![
+                "matrix_agent_approval_decide",
                 "matrix_backup_status",
                 "matrix_composer_clear_reply_draft",
                 "matrix_composer_get_reply_draft",
@@ -7684,6 +7722,53 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-backup-status-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_agent_approval_decide_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_agent_approval_decide".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!room:example.org",
+                    "eventId":"$event:example.org",
+                    "actionId":"agent-approval.approve-once"
+                }),
+            })
+            .await
+            .expect_err("approval decision without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("agent-approval-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_agent_approval_decide_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_agent_approval_decide".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!room:example.org",
+                    "eventId":"$event:example.org",
+                    "actionId":"agent-approval.approve-once",
+                    "reaction":"♾️"
+                }),
+            })
+            .await
+            .expect_err("approval decision must reject caller-selected reactions");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("agent-approval-invalid-payload")
         );
     }
 

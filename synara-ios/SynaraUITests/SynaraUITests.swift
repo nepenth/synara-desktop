@@ -1455,7 +1455,7 @@ final class SynaraUITests: XCTestCase {
            let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
         {
             let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
-            for suffix in ["sas", "device"] {
+            for suffix in ["sas", "sas-captured", "device", "user"] {
                 try? FileManager.default.removeItem(
                     at: directory.appendingPathComponent("\(proofID)-\(role)-\(suffix).txt")
                 )
@@ -1502,13 +1502,15 @@ final class SynaraUITests: XCTestCase {
                 "SYNARA_LIVE_VERIFICATION_TARGET_DEVICE_ID",
                 in: environment
             ) ?? coordinatedPeerDeviceID
-            // The peer can finish login after this screen's initial snapshot.
-            // Pull to refresh exercises the production homeserver-backed reload
-            // before locating the exact coordinated session.
-            let accountScreen = app.collectionViews["AccountSettingsScreen"]
-            accountScreen.swipeDown()
             let actionsButton = identifiedElement(in: app, "SessionActionsButton-\(targetDeviceId)")
-            XCTAssertTrue(revealSettingsElement(actionsButton, app: app, timeout: 180))
+            XCTAssertTrue(
+                revealVerificationSession(
+                    actionsButton,
+                    app: app,
+                    timeout: 180
+                ),
+                "The homeserver-backed session list never exposed the coordinated peer device."
+            )
             tap(actionsButton, timeout: 1)
             let verifyButton = app.buttons["VerifySessionButton-\(targetDeviceId)"]
             if verifyButton.waitForExistence(timeout: 3) {
@@ -1555,13 +1557,59 @@ final class SynaraUITests: XCTestCase {
         }
         // Let the large-detent transition and text rendering settle before the
         // visual proof is captured and the comparison is confirmed.
-        RunLoop.current.run(until: Date().addingTimeInterval(0.75))
-        if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment) {
+        // Concurrent simulator runs can leave one scene inactive even though
+        // its accessibility tree has advanced. Activate this exact app before
+        // capture so the proof records painted SAS values, not stale card
+        // backgrounds from the previous state.
+        if let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
+           let proofID = liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_PROOF_ID", in: environment)
+        {
+            let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
+            let initiatorCaptured = directory.appendingPathComponent("\(proofID)-initiator-sas-captured.txt")
+            let responderCaptured = directory.appendingPathComponent("\(proofID)-responder-sas-captured.txt")
+            if role == "responder" {
+                let deadline = Date().addingTimeInterval(15)
+                while FileManager.default.fileExists(atPath: initiatorCaptured.path) == false,
+                      Date() < deadline
+                {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+                }
+                XCTAssertTrue(
+                    FileManager.default.fileExists(atPath: initiatorCaptured.path),
+                    "The initiator did not finish its serialized SAS visual capture."
+                )
+            }
+            // Two concurrent simulator runners otherwise race for the active
+            // scene and one screenshot can capture unpainted emoji cards even
+            // though the accessibility values are complete and identical.
+            // A real background/foreground transition forces SwiftUI and the
+            // emoji font layers to repaint on the simulator that was not most
+            // recently frontmost, while also proving the live SAS survives a
+            // normal app lifecycle transition.
+            XCUIDevice.shared.press(.home)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
+            app.activate()
+            RunLoop.current.run(until: Date().addingTimeInterval(1.5))
             try saveScreenshot(
                 app: app,
                 directory: screenshotDirectory,
                 name: "16-live-verification-\(role)-sas"
             )
+            if role == "initiator" {
+                try "captured".write(to: initiatorCaptured, atomically: true, encoding: .utf8)
+                let deadline = Date().addingTimeInterval(15)
+                while FileManager.default.fileExists(atPath: responderCaptured.path) == false,
+                      Date() < deadline
+                {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+                }
+                XCTAssertTrue(
+                    FileManager.default.fileExists(atPath: responderCaptured.path),
+                    "The responder did not finish its serialized SAS visual capture."
+                )
+            } else {
+                try "captured".write(to: responderCaptured, atomically: true, encoding: .utf8)
+            }
         }
         tap(confirmButton, timeout: 1)
         XCTAssertTrue(app.staticTexts["Device verified"].waitForExistence(timeout: 90))
@@ -1603,12 +1651,18 @@ final class SynaraUITests: XCTestCase {
         accountScreen.swipeDown()
         let peerTrust = identifiedElement(in: app, "SettingsSessionTrust-\(peerDeviceID)")
         XCTAssertTrue(revealSettingsElement(peerTrust, app: app, timeout: 30))
+        XCTAssertTrue(
+            revealForDirectHit(peerTrust, in: accountScreen, app: app),
+            "The durable peer-trust value must clear the floating tab bar for visual proof."
+        )
         XCTAssertEqual(
             peerTrust.label,
             "Verified",
             "The SDK-backed Account snapshot must durably report the paired device verified."
         )
         if let screenshotDirectory {
+            app.activate()
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
             try saveScreenshot(
                 app: app,
                 directory: screenshotDirectory,
@@ -1625,12 +1679,20 @@ final class SynaraUITests: XCTestCase {
         tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
         XCTAssertTrue(app.collectionViews["AccountSettingsScreen"].waitForExistence(timeout: 20))
         let device = identifiedElement(in: app, "SettingsAccountDevice")
+        let user = identifiedElement(in: app, "SettingsAccountUser")
+        XCTAssertTrue(user.waitForExistence(timeout: 20))
         XCTAssertTrue(device.waitForExistence(timeout: 20))
+        let userPrefix = "User, "
         let prefix = "Device, "
+        let userLabel = user.label.trimmingCharacters(in: .whitespacesAndNewlines)
         let label = device.label.trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(userLabel.hasPrefix(userPrefix), "The account row must expose its Matrix user ID.")
         XCTAssertTrue(label.hasPrefix(prefix), "The account device row must expose its current device ID.")
+        let ownUserID = String(userLabel.dropFirst(userPrefix.count))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         let ownDeviceID = String(label.dropFirst(prefix.count))
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertFalse(ownUserID.isEmpty)
         XCTAssertFalse(ownDeviceID.isEmpty)
 
         guard let screenshotDirectory = liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
@@ -1640,20 +1702,33 @@ final class SynaraUITests: XCTestCase {
         }
         let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
         let ownDevice = directory.appendingPathComponent("\(proofID)-\(role)-device.txt")
+        let ownUser = directory.appendingPathComponent("\(proofID)-\(role)-user.txt")
         let peerRole = role == "initiator" ? "responder" : "initiator"
         let peerDevice = directory.appendingPathComponent("\(proofID)-\(peerRole)-device.txt")
+        let peerUser = directory.appendingPathComponent("\(proofID)-\(peerRole)-user.txt")
         try ownDeviceID.write(to: ownDevice, atomically: true, encoding: .utf8)
+        try ownUserID.write(to: ownUser, atomically: true, encoding: .utf8)
 
         let deadline = Date().addingTimeInterval(120)
-        while FileManager.default.fileExists(atPath: peerDevice.path) == false, Date() < deadline {
+        while (
+            FileManager.default.fileExists(atPath: peerDevice.path) == false
+                || FileManager.default.fileExists(atPath: peerUser.path) == false
+        ), Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(0.2))
         }
         XCTAssertTrue(
-            FileManager.default.fileExists(atPath: peerDevice.path),
-            "The paired simulator did not publish its device ID."
+            FileManager.default.fileExists(atPath: peerDevice.path)
+                && FileManager.default.fileExists(atPath: peerUser.path),
+            "The paired simulator did not publish its account identity."
         )
         let peerDeviceID = try String(contentsOf: peerDevice, encoding: .utf8)
             .trimmingCharacters(in: .whitespacesAndNewlines)
+        let peerUserID = try String(contentsOf: peerUser, encoding: .utf8)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        XCTAssertTrue(
+            peerUserID == ownUserID,
+            "Paired session verification requires two device sessions for the same Matrix user."
+        )
         XCTAssertFalse(peerDeviceID.isEmpty)
         XCTAssertNotEqual(
             peerDeviceID,
@@ -2044,6 +2119,34 @@ final class SynaraUITests: XCTestCase {
         return element.exists && element.isHittable
     }
 
+    /// A newly logged-in peer can become visible after Account Settings took
+    /// its first homeserver snapshot. Refresh explicitly, then scan that fresh
+    /// snapshot. Repeatedly scrolling one stale list cannot prove discovery.
+    private func revealVerificationSession(
+        _ element: XCUIElement,
+        app: XCUIApplication,
+        timeout: TimeInterval
+    ) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        let refresh = app.buttons["RefreshSessionsButton"]
+        let account = app.collectionViews["AccountSettingsScreen"]
+
+        while Date() < deadline {
+            if revealSettingsElement(element, app: app, timeout: 8) {
+                return true
+            }
+
+            if refresh.waitForExistence(timeout: 2) {
+                tap(refresh, timeout: 1)
+            } else if account.exists {
+                account.swipeDown()
+            }
+            RunLoop.current.run(until: Date().addingTimeInterval(1))
+        }
+
+        return revealSettingsElement(element, app: app, timeout: 1)
+    }
+
     private func tapSettingsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) {
         XCTAssertTrue(revealSettingsElement(element, app: app, timeout: timeout))
         tap(element, timeout: 1)
@@ -2053,7 +2156,7 @@ final class SynaraUITests: XCTestCase {
         _ element: XCUIElement,
         in scrollView: XCUIElement,
         app: XCUIApplication,
-        maxSwipes: Int = 14
+        maxSwipes: Int = 28
     ) -> Bool {
         guard scrollView.waitForExistence(timeout: 5) else {
             return false
@@ -2062,7 +2165,19 @@ final class SynaraUITests: XCTestCase {
             if clearsFloatingTabBar(element, app: app) {
                 return true
             }
-            scrollView.swipeUp()
+            let scrollFrame = scrollView.frame
+            if element.exists, element.frame.maxY < scrollFrame.minY + 80 {
+                let start = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35))
+                let end = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.55))
+                start.press(forDuration: 0.05, thenDragTo: end)
+            } else {
+                // Move one row-sized step. A full swipe can carry a row from
+                // beneath the floating bar straight past the navigation bar,
+                // making an actually reachable row look permanently blocked.
+                let start = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.72))
+                let end = scrollView.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.52))
+                start.press(forDuration: 0.05, thenDragTo: end)
+            }
         }
         return clearsFloatingTabBar(element, app: app)
     }

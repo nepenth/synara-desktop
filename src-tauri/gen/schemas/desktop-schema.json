@@ -519,6 +519,12 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_agent_approval_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-approval-decide",
+          "markdownDescription": "Enables the matrix_agent_approval_decide command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-backup-repair",
@@ -1645,6 +1651,12 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_agent_approval_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-approval-decide",
+          "markdownDescription": "Denies the matrix_agent_approval_decide command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",

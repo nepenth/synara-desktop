@@ -3,6 +3,43 @@ import UserNotifications
 @testable import Synara
 
 final class NotificationDeliveryCoordinatorTests: XCTestCase {
+    func testResolutionGateSerializesMatrixWork() async {
+        let gate = NotificationResolutionGate()
+        let firstAcquired = await gate.acquire()
+        XCTAssertTrue(firstAcquired)
+        let probe = ResolutionGateProbe()
+        let second = Task {
+            let acquired = await gate.acquire()
+            if acquired { await probe.markAcquired() }
+            return acquired
+        }
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        let acquiredWhileHeld = await probe.wasAcquired
+        XCTAssertFalse(acquiredWhileHeld)
+        await gate.release()
+        let didAcquireSecond = await second.value
+        XCTAssertTrue(didAcquireSecond)
+        let acquiredAfterRelease = await probe.wasAcquired
+        XCTAssertTrue(acquiredAfterRelease)
+        await gate.release()
+    }
+
+    func testResolutionGateRemovesCancelledWaiter() async {
+        let gate = NotificationResolutionGate()
+        let firstAcquired = await gate.acquire()
+        XCTAssertTrue(firstAcquired)
+        let waiter = Task { await gate.acquire() }
+        waiter.cancel()
+
+        let cancelledWaiterAcquired = await waiter.value
+        XCTAssertFalse(cancelledWaiterAcquired)
+        await gate.release()
+        let reacquired = await gate.acquire()
+        XCTAssertTrue(reacquired)
+        await gate.release()
+    }
+
     func testExpirationDeliversFallbackExactlyOnceAndDoesNotObserveLaterMutation() {
         let coordinator = NotificationDeliveryCoordinator()
         let original = UNMutableNotificationContent()
@@ -13,13 +50,13 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
         }
 
         original.body = "mutated after begin"
-        coordinator.expireCurrent()
+        coordinator.expireAll()
         coordinator.deliver(original, requestID: requestID)
 
         XCTAssertEqual(delivered, ["private fallback"])
     }
 
-    func testStaleCompletionCannotDeliverTheNewestRequest() {
+    func testConcurrentRequestsCompleteIndependently() {
         let coordinator = NotificationDeliveryCoordinator()
         let first = UNMutableNotificationContent()
         first.body = "first fallback"
@@ -30,14 +67,14 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
 
         let firstID = coordinator.begin(content: first) { firstDeliveries.append($0.body) }
         let secondID = coordinator.begin(content: second) { secondDeliveries.append($0.body) }
-        let staleResult = UNMutableNotificationContent()
-        staleResult.body = "stale result"
-        coordinator.deliver(staleResult, requestID: firstID)
+        let firstResult = UNMutableNotificationContent()
+        firstResult.body = "first result"
+        coordinator.deliver(firstResult, requestID: firstID)
         let currentResult = UNMutableNotificationContent()
         currentResult.body = "current result"
         coordinator.deliver(currentResult, requestID: secondID)
 
-        XCTAssertEqual(firstDeliveries, ["first fallback"])
+        XCTAssertEqual(firstDeliveries, ["first result"])
         XCTAssertEqual(secondDeliveries, ["current result"])
     }
 
@@ -52,8 +89,8 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
         coordinator.install(task: task, requestID: requestID)
         coordinator.installCoreCancellation({ events.append("core-cancelled") }, requestID: requestID)
 
-        coordinator.expireCurrent()
-        coordinator.expireCurrent()
+        coordinator.expireAll()
+        coordinator.expireAll()
 
         XCTAssertTrue(task.isCancelled)
         XCTAssertEqual(events.filter { $0 == "core-cancelled" }.count, 1)
@@ -62,5 +99,13 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
             events.firstIndex(of: "core-cancelled")!,
             events.firstIndex(of: "handler")!
         )
+    }
+}
+
+private actor ResolutionGateProbe {
+    private(set) var wasAcquired = false
+
+    func markAcquired() {
+        wasAcquired = true
     }
 }

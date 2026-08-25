@@ -1115,6 +1115,27 @@ mod tests {
     }
 
     #[test]
+    fn hermes_approval_html_crosses_the_shared_boundary_unchanged() {
+        let html = concat!(
+            "<p>⚠️ <strong>Dangerous command requires approval</strong></p>\n",
+            "<pre><code>rm -rf /tmp/example\n</code></pre>\n",
+            "<p>Reason: destructive command</p>\n",
+            "<p>Reply <code>!approve</code> to execute, ",
+            "<code>!approve session</code> to approve this pattern for the session, ",
+            "<code>!approve always</code> to approve permanently, or ",
+            "<code>!deny</code> to cancel.</p>\n",
+            "<p>You can also react to this prompt:<br>\n",
+            "✅ = approve once<br>\n♾️ = approve always<br>\n❌ = deny</p>"
+        );
+        let message = MessageType::Text(TextMessageEventContent::html(
+            "⚠️ **Dangerous command requires approval**",
+            html,
+        ));
+
+        assert_eq!(project_formatted_body(&message).as_deref(), Some(html));
+    }
+
+    #[test]
     fn agent_card_body_projection_accepts_only_recognized_bounded_objects() {
         let payload = agent_card_payload_from_body(
             r#"{"hermes":true,"payload":{"title":"Approval required","status":"pending"}}"#,

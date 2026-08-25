@@ -11,17 +11,20 @@ protocol SparsePushRouteResolving {
 
 enum SynaraNotificationActionContract {
     static let agentApprovalCategoryIdentifier = "synara.agent-approval"
+    static let reviewIdentifier = SynaraAgentApprovalNotificationActionID.review.rawValue
     static let approveOnceIdentifier = SynaraAgentApprovalNotificationActionID.approveOnce.rawValue
     static let approveAlwaysIdentifier = SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
     static let denyIdentifier = SynaraAgentApprovalNotificationActionID.deny.rawValue
     /// Max age for acting on a native/push approval notification without in-app confirmation.
-    static let nativeActionTTL: TimeInterval = 10 * 60
+    static let nativeActionTTL: TimeInterval = 5 * 60
 
     static func registerCategories(
         center: UNUserNotificationCenter = UNUserNotificationCenter.current()
     ) {
         // Approve-always is intentionally omitted from the native category: permanent
-        // approval requires an explicit in-app confirmation path.
+        // approval requires an explicit in-app confirmation path. Keep the two
+        // time-critical decisions first for compact notification surfaces;
+        // tapping the notification body remains the primary Review path.
         let actions = [
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
@@ -32,6 +35,11 @@ enum SynaraNotificationActionContract {
                 identifier: denyIdentifier,
                 title: "Deny",
                 options: [.authenticationRequired, .destructive]
+            ),
+            UNNotificationAction(
+                identifier: reviewIdentifier,
+                title: "Review",
+                options: [.foreground]
             )
         ]
 
@@ -45,11 +53,12 @@ enum SynaraNotificationActionContract {
     }
 
     /// Plans how a native/push notification action should be handled.
-    /// Does not send Matrix traffic; callers must still revalidate prompt content when possible.
+    /// Does not send Matrix traffic; reaction callers must use the shared-core
+    /// decision route for authoritative event and expiry validation.
     static func planAgentApprovalNotificationAction(
         actionIdentifier: String,
         userInfo: [AnyHashable: Any],
-        now: Date = Date(),
+        now _: Date = Date(),
         alreadyActed: Bool = false
     ) -> SynaraAgentApprovalNotificationActionPlan {
         guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier) else {
@@ -62,12 +71,12 @@ enum SynaraNotificationActionContract {
             return .ignore(reason: "missing-room-or-event-id")
         }
 
-        if alreadyActed {
-            return .ignore(reason: "already-acted")
-        }
-
-        if isExpired(candidates: candidates, now: now) {
-            return .ignore(reason: "expired-ttl")
+        if action == .review {
+            return .openRoom(
+                roomID: roomID,
+                eventID: eventID,
+                reason: "review-requested"
+            )
         }
 
         // Permanent approval must not fire from a background notification action.
@@ -79,11 +88,19 @@ enum SynaraNotificationActionContract {
             )
         }
 
+        if alreadyActed {
+            return .ignore(reason: "already-acted")
+        }
+
+        guard let reactionKey = action.reactionKey else {
+            return .ignore(reason: "unsupported-action")
+        }
+
         return .submitReaction(
             SynaraAgentApprovalReactionRequest(
                 roomID: roomID,
                 sourceEventID: eventID,
-                reactionKey: action.reactionKey
+                reactionKey: reactionKey
             )
         )
     }
@@ -103,63 +120,6 @@ enum SynaraNotificationActionContract {
             alreadyActed: alreadyActed
         ) {
             return request
-        }
-        return nil
-    }
-
-    /// Best-effort event/notification creation timestamp from a push payload.
-    static func payloadEventDate(from userInfo: [AnyHashable: Any]) -> Date? {
-        let candidates = NotificationPushRouteParser.flattenPayload(userInfo)
-        return dateValue(
-            candidates,
-            keys: [
-                "origin_server_ts",
-                "originServerTs",
-                "created_at",
-                "createdAt"
-            ]
-        )
-    }
-
-    private static func isExpired(candidates: [String: Any], now: Date) -> Bool {
-        if let expiresAt = dateValue(candidates, keys: ["expires_at", "expiresAt"]),
-           expiresAt < now {
-            return true
-        }
-
-        if let createdAt = dateValue(candidates, keys: ["created_at", "createdAt", "origin_server_ts", "originServerTs"]) {
-            if now.timeIntervalSince(createdAt) > nativeActionTTL {
-                return true
-            }
-        }
-
-        // No payload timestamp: defer TTL to revalidation against the resolved
-        // Matrix event. Unresolved events fail closed before reactions are sent.
-        return false
-    }
-
-    private static func dateValue(_ values: [String: Any], keys: [String]) -> Date? {
-        for key in keys {
-            guard let raw = values[key] else { continue }
-            if let date = raw as? Date {
-                return date
-            }
-            if let number = raw as? NSNumber {
-                let value = number.doubleValue
-                // Matrix origin_server_ts is milliseconds.
-                let seconds = value > 1_000_000_000_000 ? value / 1000 : value
-                return Date(timeIntervalSince1970: seconds)
-            }
-            if let string = raw as? String {
-                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let asDouble = Double(trimmed) {
-                    let seconds = asDouble > 1_000_000_000_000 ? asDouble / 1000 : asDouble
-                    return Date(timeIntervalSince1970: seconds)
-                }
-                if let iso = ISO8601DateFormatter().date(from: trimmed) {
-                    return iso
-                }
-            }
         }
         return nil
     }
@@ -213,8 +173,8 @@ final class SynaraAgentApprovalNotificationActionDedupeStore {
         defaults.set(storedKeys().filter { $0 != key }, forKey: storageKey)
     }
 
-    static func key(roomID: String, eventID: String, actionIdentifier: String) -> String {
-        "\(roomID)\u{0}\(eventID)\u{0}\(actionIdentifier)"
+    static func key(roomID: String, eventID: String, actionIdentifier _: String) -> String {
+        "\(roomID)\u{0}\(eventID)"
     }
 
     private func storedKeys() -> [String] {

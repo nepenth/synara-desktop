@@ -1159,6 +1159,24 @@ final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServici
             throw SynaraAgentApprovalError.failed
         }
     }
+    func submitNativeDecision(
+        roomID: String,
+        eventID: String,
+        actionIdentifier: String
+    ) async throws {
+        guard case .signedIn = host.sessionStore.currentState else {
+            throw SynaraAgentApprovalError.signedOut
+        }
+        do {
+            _ = try await host.core.agentApprovalDecide(
+                roomId: roomID,
+                eventId: eventID,
+                actionId: actionIdentifier
+            )
+        } catch {
+            throw SynaraAgentApprovalError.failed
+        }
+    }
 }
 
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
@@ -1388,6 +1406,23 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 trust: $0.trust,
                 lastSeenTs: $0.lastSeenTs
             )
+        }
+    }
+
+    func sessionDeviceUpdates() -> AsyncStream<Void> {
+        AsyncStream { continuation in
+            let task = Task {
+                for await _ in host.livePoller.ownerSignals(families: ["devices"]) {
+                    guard Task.isCancelled == false else {
+                        break
+                    }
+                    continuation.yield(())
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
         }
     }
 

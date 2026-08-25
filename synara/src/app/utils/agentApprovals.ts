@@ -11,10 +11,11 @@ export const AGENT_APPROVAL_REACTION_DENY = '❌';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE = 'agent-approval.approve-once';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS = 'agent-approval.approve-always';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_DENY = 'agent-approval.deny';
+export const AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW = 'agent-approval.review';
 export const AGENT_APPROVAL_NOTIFICATION_KIND = 'agent-approval';
 
 /** Max age of an approval prompt event (or native action) that can be acted on from OS notifications. */
-export const AGENT_APPROVAL_NATIVE_ACTION_TTL_MS = 10 * 60 * 1000;
+export const AGENT_APPROVAL_NATIVE_ACTION_TTL_MS = 5 * 60 * 1000;
 
 export const AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY =
   'synara.agent-approval.native-action-dedupe';
@@ -26,6 +27,7 @@ export const AGENT_APPROVAL_REACTION_KEYS = [
 ] as const;
 
 export type AgentApprovalNotificationActionId =
+  | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW
   | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE
   | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS
   | typeof AGENT_APPROVAL_NOTIFICATION_ACTION_DENY;
@@ -34,6 +36,10 @@ export const AGENT_APPROVAL_NOTIFICATION_ACTIONS: {
   id: AgentApprovalNotificationActionId;
   label: string;
 }[] = [
+  {
+    id: AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW,
+    label: 'Review',
+  },
   {
     id: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
     label: 'Approve once',
@@ -55,9 +61,17 @@ export const AGENT_APPROVAL_NOTIFICATION_ACTIONS: {
 export const AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS: {
   id: AgentApprovalNotificationActionId;
   label: string;
-}[] = AGENT_APPROVAL_NOTIFICATION_ACTIONS.filter(
-  (action) => action.id !== AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS
-);
+}[] = [
+  AGENT_APPROVAL_NOTIFICATION_ACTIONS.find(
+    (action) => action.id === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE
+  )!,
+  AGENT_APPROVAL_NOTIFICATION_ACTIONS.find(
+    (action) => action.id === AGENT_APPROVAL_NOTIFICATION_ACTION_DENY
+  )!,
+  AGENT_APPROVAL_NOTIFICATION_ACTIONS.find(
+    (action) => action.id === AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW
+  )!,
+];
 
 export const getAgentApprovalReactionForNotificationAction = (
   actionId: string
@@ -77,6 +91,7 @@ export const getAgentApprovalReactionForNotificationAction = (
 export const isKnownAgentApprovalNotificationActionId = (
   actionId: string
 ): actionId is AgentApprovalNotificationActionId =>
+  actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW ||
   actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE ||
   actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS ||
   actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_DENY;
@@ -126,11 +141,8 @@ export type PlanAgentApprovalNativeActionInput = {
   eventResolved?: boolean;
 };
 
-export const buildAgentApprovalNativeActionDedupeKey = (
-  roomId: string,
-  eventId: string,
-  actionId: string
-): string => `${roomId}\u0000${eventId}\u0000${actionId}`;
+export const buildAgentApprovalNativeActionDedupeKey = (roomId: string, eventId: string): string =>
+  `${roomId}\u0000${eventId}`;
 
 const isNonEmptyId = (value: string | undefined): value is string =>
   typeof value === 'string' && value.trim().length > 0;
@@ -177,6 +189,12 @@ export const planAgentApprovalNativeNotificationAction = (
   }
   if (!isKnownAgentApprovalNotificationActionId(actionId)) {
     return { type: 'reject', reason: 'unknown-action-id' };
+  }
+
+  // Review is navigation-only and remains safe and useful even after the
+  // five-minute reaction window has expired.
+  if (actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW) {
+    return { type: 'open-room', roomId, eventId, reason: 'review-requested' };
   }
 
   if (
@@ -233,7 +251,7 @@ export const planAgentApprovalNativeNotificationAction = (
     eventId,
     actionId,
     reaction,
-    dedupeKey: buildAgentApprovalNativeActionDedupeKey(roomId, eventId, actionId),
+    dedupeKey: buildAgentApprovalNativeActionDedupeKey(roomId, eventId),
   };
 };
 
@@ -243,9 +261,12 @@ export type AgentApprovalNativeActionDedupeStore = {
   remove: (key: string) => void;
 };
 
-const readDedupeKeysFromStorage = (storage: Storage): Set<string> => {
+const dedupeStorageKey = (accountScope: string): string =>
+  `${AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY}.${encodeURIComponent(accountScope)}`;
+
+const readDedupeKeysFromStorage = (storage: Storage, accountScope: string): Set<string> => {
   try {
-    const raw = storage.getItem(AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY);
+    const raw = storage.getItem(dedupeStorageKey(accountScope));
     if (!raw) return new Set();
     const parsed = JSON.parse(raw) as unknown;
     if (!Array.isArray(parsed)) return new Set();
@@ -255,26 +276,31 @@ const readDedupeKeysFromStorage = (storage: Storage): Set<string> => {
   }
 };
 
-const writeDedupeKeysToStorage = (storage: Storage, keys: Set<string>): void => {
+const writeDedupeKeysToStorage = (
+  storage: Storage,
+  accountScope: string,
+  keys: Set<string>
+): void => {
   try {
     // Bound growth: keep the most recently recorded actions only.
     const values = Array.from(keys).slice(-200);
-    storage.setItem(AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY, JSON.stringify(values));
+    storage.setItem(dedupeStorageKey(accountScope), JSON.stringify(values));
   } catch {
     // Storage may be unavailable (private mode, quota); in-memory set still helps in-session.
   }
 };
 
 /**
- * Session-backed dedupe store so native approval actions are not double-sent across restarts
- * of the renderer within the same browser/webview session.
+ * Bounded storage-backed dedupe so a successful native approval is not
+ * contradicted after the desktop process or renderer restarts.
  */
 export const createAgentApprovalNativeActionDedupeStore = (
   storage?: Storage | null,
+  accountScope = 'unknown-account',
   memory: Set<string> = new Set()
 ): AgentApprovalNativeActionDedupeStore => {
   if (storage) {
-    for (const key of readDedupeKeysFromStorage(storage)) {
+    for (const key of readDedupeKeysFromStorage(storage, accountScope)) {
       memory.add(key);
     }
   }
@@ -283,11 +309,11 @@ export const createAgentApprovalNativeActionDedupeStore = (
     has: (key) => memory.has(key),
     add: (key) => {
       memory.add(key);
-      if (storage) writeDedupeKeysToStorage(storage, memory);
+      if (storage) writeDedupeKeysToStorage(storage, accountScope, memory);
     },
     remove: (key) => {
       memory.delete(key);
-      if (storage) writeDedupeKeysToStorage(storage, memory);
+      if (storage) writeDedupeKeysToStorage(storage, accountScope, memory);
     },
   };
 };

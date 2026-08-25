@@ -36,12 +36,15 @@ enum SynaraAgentApprovalError: LocalizedError, Equatable {
 }
 
 enum SynaraAgentApprovalNotificationActionID: String, Equatable {
+    case review = "agent-approval.review"
     case approveOnce = "agent-approval.approve-once"
     case approveAlways = "agent-approval.approve-always"
     case deny = "agent-approval.deny"
 
-    var reactionKey: String {
+    var reactionKey: String? {
         switch self {
+        case .review:
+            return nil
         case .approveOnce:
             return "✅"
         case .approveAlways:
@@ -351,8 +354,7 @@ enum SynaraAgentApprovalNativeActionValidator {
         items: [TimelineItem],
         eventID: String,
         now: Date = Date(),
-        ttl: TimeInterval = SynaraNotificationActionContract.nativeActionTTL,
-        payloadEventDate: Date? = nil
+        ttl: TimeInterval = SynaraNotificationActionContract.nativeActionTTL
     ) -> Result {
         guard let item = findTargetItem(in: items, eventID: eventID) else {
             return Result(
@@ -377,16 +379,6 @@ enum SynaraAgentApprovalNativeActionValidator {
 
         let eventTimestamp = item.timestamp
         if now.timeIntervalSince(eventTimestamp) > ttl {
-            return Result(
-                eventResolved: true,
-                isApprovalPrompt: true,
-                eventTimestamp: eventTimestamp,
-                shouldSubmitReaction: false,
-                reason: "expired-ttl"
-            )
-        }
-
-        if let payloadEventDate, now.timeIntervalSince(payloadEventDate) > ttl {
             return Result(
                 eventResolved: true,
                 isApprovalPrompt: true,
@@ -427,6 +419,11 @@ protocol AgentApprovalServicing {
 
 protocol AgentApprovalReactionServicing {
     func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws
+    func submitNativeDecision(
+        roomID: String,
+        eventID: String,
+        actionIdentifier: String
+    ) async throws
 }
 
 extension AgentApprovalServicing {
@@ -599,6 +596,25 @@ final class MockAgentApprovalReactionService: AgentApprovalReactionServicing {
             throw error
         }
         submitted.append(request)
+    }
+
+    func submitNativeDecision(
+        roomID: String,
+        eventID: String,
+        actionIdentifier: String
+    ) async throws {
+        guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier),
+              action == .approveOnce || action == .deny,
+              let reactionKey = action.reactionKey else {
+            throw SynaraAgentApprovalError.unsupportedAction
+        }
+        try await submitReaction(
+            SynaraAgentApprovalReactionRequest(
+                roomID: roomID,
+                sourceEventID: eventID,
+                reactionKey: reactionKey
+            )
+        )
     }
 }
 

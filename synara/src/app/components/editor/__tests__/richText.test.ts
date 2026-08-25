@@ -129,6 +129,23 @@ test('sanitizer follows the documented Matrix HTML profile with legacy inbound t
   assert.match(sanitized, /rel="noreferrer noopener"/);
 });
 
+test('sanitizer preserves the Hermes approval HTML vocabulary', () => {
+  const hermesApprovalHtml = [
+    '<p>⚠️ <strong>Dangerous command requires approval</strong></p>',
+    '<pre><code>rm -rf /tmp/example\n</code></pre>',
+    '<p>Reason: destructive command</p>',
+    '<p>Reply <code>!approve</code> to execute, <code>!approve session</code> to approve this pattern for the session, <code>!approve always</code> to approve permanently, or <code>!deny</code> to cancel.</p>',
+    '<p>You can also react to this prompt:<br>\n✅ = approve once<br>\n♾️ = approve always<br>\n❌ = deny</p>',
+  ].join('\n');
+
+  // DOMPurify serializes HTML void elements as XHTML-style `<br />`; the
+  // change is byte-level only and preserves the Matrix presentation.
+  assert.equal(
+    sanitizeCustomHtml(hermesApprovalHtml),
+    hermesApprovalHtml.replaceAll('<br>', '<br />')
+  );
+});
+
 test('nested lists round-trip through Matrix HTML and plain-text fallback', () => {
   const nodes: Descendant[] = [
     {

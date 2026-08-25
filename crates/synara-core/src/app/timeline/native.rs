@@ -182,6 +182,24 @@ pub struct NativeReactionMutationResult {
     pub readback: Option<NativeTimelineReaction>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct NativeAgentApprovalDecisionRequest {
+    pub room_id: String,
+    pub event_id: String,
+    pub action_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAgentApprovalDecisionResult {
+    pub room_id: String,
+    pub event_id: String,
+    pub status: crate::app::agent_approvals::AgentApprovalDecisionStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub reaction: Option<NativeReactionMutationResult>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDecryptionState {

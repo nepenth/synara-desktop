@@ -108,6 +108,42 @@ export const FormattedBody = style({
   vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
 });
 
+export const SpoilerButton = style({
+  display: 'inline',
+  padding: `0 ${toRem(5)}`,
+  border: `1px solid var(--synara-content-separator)`,
+  borderRadius: config.radii.R300,
+  background: color.SurfaceVariant.Container,
+  color: 'var(--synara-content-secondary)',
+  font: 'inherit',
+  lineHeight: 'inherit',
+  cursor: 'pointer',
+  selectors: {
+    '&:hover': {
+      background: color.SurfaceVariant.ContainerHover,
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: toRem(2),
+    },
+  },
+});
+
+export const SpoilerContent = style({
+  padding: `0 ${toRem(4)}`,
+  borderRadius: config.radii.R300,
+  background: color.SurfaceVariant.Container,
+});
+
+export const InlineImageFallback = style({
+  display: 'inline-block',
+  padding: `0 ${toRem(4)}`,
+  borderRadius: config.radii.R300,
+  background: color.SurfaceVariant.Container,
+  color: 'var(--synara-content-secondary)',
+  fontStyle: 'italic',
+});
+
 export const SenderName = style({
   color: 'var(--synara-content-heading)',
   fontWeight: 600,

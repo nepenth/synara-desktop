@@ -81,6 +81,24 @@ final class AgentApprovalServiceTests: XCTestCase {
         XCTAssertEqual(service.submitted, [request])
     }
 
+    func testMockNativeDecisionRejectsApproveAlwaysLikeProductionCore() async {
+        let service = MockAgentApprovalReactionService()
+
+        do {
+            try await service.submitNativeDecision(
+                roomID: "!room:matrix.org",
+                eventID: "$approval:matrix.org",
+                actionIdentifier: SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
+            )
+            XCTFail("Approve always must require in-app confirmation")
+        } catch let error as SynaraAgentApprovalError {
+            XCTAssertEqual(error, .unsupportedAction)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+        XCTAssertTrue(service.submitted.isEmpty)
+    }
+
     func testAgentApprovalPromptDetectorExtractsAutomationPrompt() throws {
         let prompt = try XCTUnwrap(
             SynaraAgentApprovalPromptDetector.detect(

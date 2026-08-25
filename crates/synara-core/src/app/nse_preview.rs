@@ -37,6 +37,8 @@ pub struct NseEventPreview {
     pub sender_id: Option<String>,
     pub body: Option<String>,
     pub message_type: Option<String>,
+    pub is_agent_approval: bool,
+    pub origin_server_ts: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -262,6 +264,10 @@ fn preview_from_status(status: NotificationStatus) -> Result<NseEventPreview, Ns
         )),
         body: Some(bounded(original.content.body(), 240)),
         message_type: message_type(&original.content.msgtype).map(|value| bounded(value, 64)),
+        is_agent_approval: crate::app::agent_approvals::is_agent_approval_prompt(
+            original.content.body(),
+        ),
+        origin_server_ts: original.origin_server_ts.get().into(),
     })
 }
 

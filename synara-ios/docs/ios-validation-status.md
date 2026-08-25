@@ -1,6 +1,26 @@
 # iOS Validation Status
 
-Reviewed: 2026-08-18
+Reviewed: 2026-08-25
+
+## 2026-08-25 Device Verification Validation
+
+The current-tree signed iOS bundle completed the production shared-core SAS
+route on two clean simulator device sessions authenticated as the same Matrix
+account. Both roles passed without retry: the initiator sent the request, the
+responder accepted it, both crossed `KeysExchanged`, the seven user-visible
+emoji values matched byte-for-byte, both confirmed, both reached `Done`, and
+both read the exact coordinated peer device back as `Verified` after process
+termination and relaunch. No store edit, fallback trust flag, reused session,
+or second verification request was used.
+
+Three clean paired reruns reproduced the same functional result. The final run
+also backgrounded and foregrounded each app before capture, proving that the
+presented SAS survives the lifecycle transition. One responder PNG still
+captured blank emoji glyphs even though XCTest had already read and persisted
+all seven exact accessibility values, both clients completed the protocol, and
+the durable SDK-backed trust readback passed. This is tracked as a concurrent
+Simulator compositor capture limitation, not as missing verification state;
+the earlier same-day clean proof contains painted SAS values on both roles.
 
 ## 2026-08-17 Shared-Core Validation
 
@@ -159,10 +179,11 @@ Findings are tracked in ordered implementation items in
 - Encrypted media is now a first-class safe-blocked state: Matrix `content.file`
   media events map to encrypted media placeholders, media loading refuses to
   fetch them until decryption support exists, and event actions are disabled.
-- Production E2EE remains blocked until full recovery, verification/cross-
-  signing, key backup restore, encrypted media decryption, and broader
-  encrypted-room regression coverage are complete before external TestFlight/App
-  Store release.
+- The same-account SAS verification and durable exact-peer trust route is now
+  locally proven. Production E2EE remains blocked on full recovery/bootstrap,
+  key backup restore, encrypted media decryption, broader encrypted-room
+  regression coverage, and the remaining physical-device release evidence
+  before an external TestFlight/App Store release can be described as complete.
 
 The repeatable live-smoke checklist is
 [`synara-ios/docs/live-simulator-smoke.md`](live-simulator-smoke.md).
@@ -281,9 +302,15 @@ The repeatable live-smoke checklist is
 - Room details exposes read-only power-level thresholds and allowed/restricted
   status for message, invite, name/topic/avatar, and moderation permissions.
 - Daily messaging parity has started with safe Matrix HTML rendering for the
-  REST timeline mapper. Supported formatting includes emphasis, strong text,
-  inline code, safe links, quotes, lists, spoilers as safe text, and stripped
-  script/style content with body fallback.
+  shared-core timeline mapper. Supported formatting includes emphasis, strong
+  text, heading hierarchy, superscript/subscript, strict Matrix colors, inline
+  and fenced code with exact whitespace and language metadata, quoted or
+  unquoted allowlisted absolute links, quotes, nested lists with ordered starts,
+  tables, recursively structured collapsed details, concealed/revealable
+  inline and block spoilers, math/image textual fallbacks, and stripped
+  executable content with bounded body fallback. The native sanitizer also
+  strips legacy `mx-reply` content, caps source size at 256 KiB, and caps
+  emitted HTML nesting at 100 levels.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.

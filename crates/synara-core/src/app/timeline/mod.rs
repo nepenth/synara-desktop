@@ -57,14 +57,15 @@ pub use media::{
     TIMELINE_MEDIA_HANDLE_PREFIX,
 };
 pub use native::{
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
-    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult, NativeDecryptionState,
+    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineCloseRequest,
+    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
+    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
+    NativeUtdPhase, NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,

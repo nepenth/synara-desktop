@@ -494,50 +494,12 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(markdown, "- **Ship it**\n- Review fallback")
 
-        let attributed = MatrixHTMLRenderer.attributedString(
+        let richText = MatrixHTMLRenderer.richText(
             body: "- **Ship it**\n- Review fallback",
             html: #"<ul><li><strong>Ship it</strong></li><li>Review fallback</li></ul>"#
         )
-        XCTAssertEqual(String(attributed.characters), "- Ship it\n- Review fallback")
-    }
-
-    func testMatrixDisplayMarkdownCompactsLooseListsForMobileTimeline() {
-        let markdown = """
-        Specifically:
-
-        - **Service:** synara-push-gateway
-
-        - **Code:** /srv/example-service
-
-        - **Binary:** /usr/local/bin/example-service
-        """
-
-        XCTAssertEqual(
-            MatrixDisplayMarkdown.normalize(markdown),
-            """
-            Specifically:
-            - **Service:** synara-push-gateway
-            - **Code:** /srv/example-service
-            - **Binary:** /usr/local/bin/example-service
-            """
-        )
-    }
-
-    func testMatrixDisplayMarkdownPreservesParagraphBreaks() {
-        let markdown = """
-        First paragraph.
-
-        Second paragraph.
-        """
-
-        XCTAssertEqual(
-            MatrixDisplayMarkdown.normalize(markdown),
-            """
-            First paragraph.
-
-            Second paragraph.
-            """
-        )
+        XCTAssertEqual(richText.plainText, "• Ship it\n• Review fallback")
+        XCTAssertTrue(richText.runs.first { $0.text == "Ship it" }?.style.contains(.bold) == true)
     }
 
     func testMatrixHTMLRendererExtractsDetailsCodeBlocks() throws {
@@ -554,38 +516,40 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(block.summary, "🛠️ Tool activity (4 updates)")
         XCTAssertEqual(
-            block.code,
+            block.code?.code,
             "🧠 memory: \"~memory: \"Worker multi-model \"\"\n✅ memory completed (0.0s)"
         )
+        XCTAssertNil(block.code?.language)
         XCTAssertTrue(block.body.isEmpty)
         XCTAssertEqual(
             MatrixHTMLRenderer.markdownExcludingDetails(body: "", html: html),
             "**Practical decision:**\n\n- Do not use it for active/default bounty pipelines."
         )
+        let segments = MatrixHTMLRenderer.segments(body: "", html: html)
+        XCTAssertEqual(segments.count, 2)
+        XCTAssertEqual(segments.first, .details(block))
+        let text = try XCTUnwrap(richText(from: segments.last))
         XCTAssertEqual(
-            MatrixHTMLRenderer.segments(body: "", html: html),
-            [
-                .details(block),
-                .markdown("**Practical decision:**\n\n- Do not use it for active/default bounty pipelines."),
-            ]
+            text.plainText,
+            "Practical decision:\n\n• Do not use it for active/default bounty pipelines."
         )
+        XCTAssertTrue(text.runs.first { $0.text.contains("Practical decision:") }?.style.contains(.bold) == true)
     }
 
-    func testMatrixHTMLRendererSegmentsCodeBlocksOutsideDetails() {
+    func testMatrixHTMLRendererSegmentsCodeBlocksOutsideDetails() throws {
         let html = #"""
         <p>Plan:</p>
         <pre><code>let value = 1&#10;print(value)</code></pre>
         <ul><li><strong>Ship</strong></li><li>Verify</li></ul>
         """#
 
-        XCTAssertEqual(
-            MatrixHTMLRenderer.segments(body: "fallback", html: html),
-            [
-                .markdown("Plan:"),
-                .code("let value = 1\nprint(value)"),
-                .markdown("- **Ship**\n- Verify"),
-            ]
-        )
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+        XCTAssertEqual(segments.count, 3)
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[0])).plainText, "Plan:")
+        XCTAssertEqual(segments[1], .code(.init(code: "let value = 1\nprint(value)", language: nil)))
+        let list = try XCTUnwrap(richText(from: segments[2]))
+        XCTAssertEqual(list.plainText, "• Ship\n• Verify")
+        XCTAssertTrue(list.runs.first { $0.text == "Ship" }?.style.contains(.bold) == true)
     }
 
     func testMatrixHTMLRendererCountsCodeBlockLines() {
@@ -595,20 +559,27 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(MatrixHTMLRenderer.codeLineCount("one\n\nthree\n"), 3)
     }
 
-    func testMatrixHTMLRendererSegmentsHeadingsAndBlockquotes() {
+    func testMatrixHTMLRendererSegmentsHeadingsAndBlockquotes() throws {
         let html = #"""
         <h2>App-agent handoff</h2>
         <p>I wrote a copyable handoff file here:</p>
         <blockquote><p>TestFlight <strong>MUST</strong> use production APNs.</p></blockquote>
         """#
 
-        XCTAssertEqual(
-            MatrixHTMLRenderer.segments(body: "fallback", html: html),
-            [
-                .markdown("**App-agent handoff**\n\nI wrote a copyable handoff file here:"),
-                .quote("TestFlight **MUST** use production APNs."),
-            ]
-        )
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+        XCTAssertEqual(segments.count, 3)
+        guard case let .heading(heading) = segments[0] else {
+            return XCTFail("Expected a semantic heading segment")
+        }
+        XCTAssertEqual(heading.level, 2)
+        XCTAssertEqual(heading.content.plainText, "App-agent handoff")
+        XCTAssertTrue(heading.content.runs.first?.style.contains(.heading2) == true)
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[1])).plainText, "I wrote a copyable handoff file here:")
+        guard case let .quote(quote) = segments[2] else {
+            return XCTFail("Expected semantic quote segment")
+        }
+        XCTAssertEqual(quote.plainText, "TestFlight MUST use production APNs.")
+        XCTAssertTrue(quote.runs.first { $0.text == "MUST" }?.style.contains(.bold) == true)
     }
 
     func testMatrixHTMLRendererSegmentsTablesAsReadableRows() {
@@ -622,20 +593,20 @@ final class TimelineServiceTests: XCTestCase {
         <p>Verdicts</p>
         """#
 
-        XCTAssertEqual(
-            MatrixHTMLRenderer.segments(body: "fallback", html: html),
-            [
-                .markdown("Models"),
-                .table(
-                    .init(rows: [
-                        .init(cells: ["Stage", "Actual", "Proof"], isHeader: true),
-                        .init(cells: ["Alpha", "stealth/ox-alpha", "content_chars=2702"], isHeader: false),
-                        .init(cells: ["Parent", "grok-4.6", "orchestrator only"], isHeader: false),
-                    ])
-                ),
-                .markdown("Verdicts"),
-            ]
-        )
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+        XCTAssertEqual(segments.count, 3)
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[0])).plainText, "Models")
+        guard case let .table(table) = segments[1] else {
+            return XCTFail("Expected semantic table segment")
+        }
+        XCTAssertEqual(table.rows.map { $0.cells.map(\.plainText) }, [
+            ["Stage", "Actual", "Proof"],
+            ["Alpha", "stealth/ox-alpha", "content_chars=2702"],
+            ["Parent", "grok-4.6", "orchestrator only"],
+        ])
+        XCTAssertEqual(table.rows.map(\.isHeader), [true, false, false])
+        XCTAssertTrue(table.rows[1].cells[2].content.runs.first?.style.contains(.code) == true)
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[2])).plainText, "Verdicts")
     }
 
     func testMatrixHTMLRendererPreservesAgentRichFormattingContract() {
@@ -668,6 +639,518 @@ final class TimelineServiceTests: XCTestCase {
             | code | preserved |
             """
         )
+    }
+
+    func testMatrixHTMLRendererNeverReinterpretsLiteralMarkdownInsideFormattedHTML() throws {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p>literal **bold** and ~~removed~~ and `code`; <strong>real bold</strong>, <del>real strike</del>, <code>real code</code></p>"#
+        )
+
+        XCTAssertEqual(
+            text.plainText,
+            "literal **bold** and ~~removed~~ and `code`; real bold, real strike, real code"
+        )
+        let literal = try XCTUnwrap(text.runs.first { $0.text.contains("literal **bold**") })
+        XCTAssertTrue(literal.style.isEmpty)
+        XCTAssertTrue(text.runs.first { $0.text == "real bold" }?.style.contains(.bold) == true)
+        XCTAssertTrue(text.runs.first { $0.text == "real strike" }?.style.contains(.strikethrough) == true)
+        XCTAssertTrue(text.runs.first { $0.text == "real code" }?.style.contains(.code) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesExactHermesMentionAndRejectsUnsafeLink() throws {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p>Hello <a href="https://matrix.to/#/@alice:example.org">@alice:example.org</a>; unsafe <a href="javascript:alert(1)">tap</a></p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Hello @alice:example.org; unsafe tap")
+        let mention = try XCTUnwrap(text.runs.first { $0.text == "@alice:example.org" })
+        XCTAssertEqual(mention.link?.absoluteString, "https://matrix.to/#/@alice:example.org")
+        XCTAssertNil(text.runs.first { $0.text == "tap" }?.link)
+    }
+
+    func testMatrixHTMLRendererUsesInlineImageAltTextWithoutImportingAResource() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p>Status <img data-mx-emoticon src="https://invalid.example/tracker.png" alt="✅"> ready</p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Status ✅ ready")
+    }
+
+    func testMatrixHTMLRendererStrictlyAllowlistsTagsAndIsQuoteAware() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p onclick="ignored()" data-probe='><img src="https://invalid.example/tracker.png">'>Safe <unknown>visible</unknown></p><video src="https://invalid.example/video">hidden</video><link rel="stylesheet" href="https://invalid.example/style.css"><p><strong>Done</strong></p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Safe visible\n\nDone")
+        XCTAssertTrue(text.runs.allSatisfy { $0.link == nil })
+        XCTAssertTrue(text.runs.first { $0.text == "Done" }?.style.contains(.bold) == true)
+    }
+
+    func testMatrixHTMLRendererRetainsEverySafeAbsoluteMatrixLinkScheme() throws {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p><a href="https://example.org">https</a> <a href="http://example.org">http</a> <a href="ftp://example.org/file">ftp</a> <a href="mailto:alice@example.org">mail</a> <a href="magnet:?xt=urn:btih:abc">magnet</a> <a href="matrix:u/alice:example.org">matrix</a> <a href="/relative">relative</a></p>"#
+        )
+
+        for label in ["https", "http", "ftp", "mail", "magnet"] {
+            XCTAssertTrue(
+                text.runs.contains { $0.text.contains(label) && $0.link != nil },
+                "Expected a typed safe link for \(label): \(text.runs)"
+            )
+        }
+        XCTAssertTrue(text.runs.contains { $0.text.contains("matrix") && $0.link == nil })
+        XCTAssertTrue(text.runs.contains { $0.text.contains("relative") && $0.link == nil })
+    }
+
+    func testMatrixHTMLRendererParsesUnquotedAbsoluteLinksWithoutTruncatingSlashes() throws {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p><a href=https://example.org/path>safe</a> <a href=javascript:alert(1)>unsafe</a></p>"#
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(text.runs.first { $0.text == "safe" }).link?.absoluteString,
+            "https://example.org/path"
+        )
+        XCTAssertNil(text.runs.first { $0.text == "unsafe" }?.link)
+    }
+
+    func testMatrixHTMLRendererPreservesHeadingHierarchyAndScriptSemantics() throws {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<h1>Primary</h1><h4>Section</h4><p>x<sup>2</sup> + H<sub>2</sub>O</p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Primary\n\nSection\n\nx2 + H2O")
+        XCTAssertTrue(try XCTUnwrap(text.runs.first { $0.text == "Primary" }).style.contains(.heading1))
+        XCTAssertTrue(try XCTUnwrap(text.runs.first { $0.text == "Section" }).style.contains(.heading4))
+        XCTAssertTrue(try XCTUnwrap(text.runs.first { $0.text == "2" }).style.contains(.superscript))
+        XCTAssertTrue(try XCTUnwrap(text.runs.last { $0.text == "2" }).style.contains(.subscriptText))
+    }
+
+    func testMatrixHTMLRendererStripsReplyFallbackAndCapsTagNestingAtOneHundred() throws {
+        let reply = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<mx-reply><blockquote>old reply</blockquote></mx-reply><p>Current message</p>"#
+        )
+        XCTAssertEqual(reply.plainText, "Current message")
+
+        let html = String(repeating: "<div>", count: 100)
+            + "<strong>deep text</strong>"
+            + String(repeating: "</div>", count: 100)
+        let nested = MatrixHTMLRenderer.richText(body: "fallback", html: html)
+        XCTAssertEqual(nested.plainText, "deep text")
+        XCTAssertFalse(try XCTUnwrap(nested.runs.first).style.contains(.bold))
+    }
+
+    func testMatrixHTMLRendererConcealsSpoilersAsTypedSegments() throws {
+        let segments = MatrixHTMLRenderer.segments(
+            body: "Visible secret after reveal",
+            html: #"<p>Visible</p><span data-mx-spoiler="deployment detail"><strong>secret</strong></span>"#
+        )
+
+        XCTAssertEqual(segments.count, 2)
+        guard case let .spoiler(block) = segments[1] else {
+            return XCTFail("Expected a typed spoiler segment")
+        }
+        XCTAssertEqual(block.reason, "deployment detail")
+        XCTAssertEqual(block.content.plainText, "secret")
+        XCTAssertTrue(block.content.runs.first?.style.contains(.bold) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesNestedListsAndOrderedStart() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<ol start="4"><li>Outer<ul><li><strong>Inner</strong></li></ul></li><li>After</li></ol>"#
+        )
+
+        XCTAssertEqual(text.plainText, "4. Outer\n  • Inner\n5. After")
+        XCTAssertTrue(text.runs.first { $0.text == "Inner" }?.style.contains(.bold) == true)
+    }
+
+    func testMatrixHTMLRendererDoesNotInsertBlankLinesForParagraphWrappedListItems() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<ul><li><p>First</p></li><li><p><strong>Second</strong></p></li></ul>"#
+        )
+
+        XCTAssertEqual(text.plainText, "• First\n• Second")
+        XCTAssertTrue(text.runs.first { $0.text == "Second" }?.style.contains(.bold) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesMixedNestedListKindsAndIndependentOrderedStarts() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<ol start="7"><li>Seven<ul><li>Bullet<ol start="11"><li>Eleven</li><li>Twelve</li></ol></li></ul></li><li>Eight</li></ol>"#
+        )
+
+        XCTAssertEqual(
+            text.plainText,
+            """
+            7. Seven
+              • Bullet
+                11. Eleven
+                12. Twelve
+            8. Eight
+            """
+        )
+    }
+
+    func testMatrixHTMLRendererPreservesWhitespaceAcrossInlineElementBoundaries() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p><strong>Hello</strong> <em>careful</em> reader; <code>exact</code> tail</p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Hello careful reader; exact tail")
+        XCTAssertTrue(text.runs.first { $0.text == "Hello" }?.style.contains(.bold) == true)
+        XCTAssertTrue(text.runs.first { $0.text == "careful" }?.style.contains(.italic) == true)
+        XCTAssertTrue(text.runs.first { $0.text == "exact" }?.style.contains(.code) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesOnlyStrictMatrixColorsIncludingNestedOverride() throws {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: ##"<p><span data-mx-color="#a1b2c3" data-mx-bg-color="#010203">outer <span data-mx-color="#DDEEFF">inner</span></span> <span data-mx-color="red" data-mx-bg-color="#12345G">invalid</span></p>"##
+        )
+
+        let outer = try XCTUnwrap(text.runs.first { $0.text == "outer " })
+        XCTAssertEqual(outer.foregroundColorHex, "#A1B2C3")
+        XCTAssertEqual(outer.backgroundColorHex, "#010203")
+        let inner = try XCTUnwrap(text.runs.first { $0.text == "inner" })
+        XCTAssertEqual(inner.foregroundColorHex, "#DDEEFF")
+        XCTAssertEqual(inner.backgroundColorHex, "#010203")
+        let invalid = try XCTUnwrap(text.runs.first { $0.text.contains("invalid") })
+        XCTAssertNil(invalid.foregroundColorHex)
+        XCTAssertNil(invalid.backgroundColorHex)
+    }
+
+    func testMatrixHTMLRendererPreservesMathFallbackAndExplicitInlineImageFallback() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p>Inline <span data-mx-maths="x &lt; y"></span>.</p><div data-mx-maths="\int_0^1 x dx"></div><p><img src="mxc://example.org/id"></p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Inline x < y.\n\n\\int_0^1 x dx\n\n[Inline image]")
+        XCTAssertTrue(text.runs.first { $0.text.contains("x < y") }?.style.contains(.code) == true)
+        XCTAssertTrue(text.runs.first { $0.text.contains("\\int") }?.style.contains(.code) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesMixedInlineSpoilerOrderAndFormatting() throws {
+        let segments = MatrixHTMLRenderer.segments(
+            body: "before secret after",
+            html: #"<p>before <span data-mx-spoiler="reason"><strong>secret</strong></span> after</p>"#
+        )
+
+        guard segments.count == 1, case let .inline(group) = segments[0] else {
+            return XCTFail("Expected one wrapping inline presentation group")
+        }
+        XCTAssertEqual(group.pieces.count, 3)
+        guard case let .richText(before) = group.pieces[0],
+              case let .spoiler(spoiler) = group.pieces[1],
+              case let .richText(after) = group.pieces[2]
+        else { return XCTFail("Expected visible, spoiler, visible sibling order") }
+        XCTAssertEqual(before.plainText, "before ")
+        XCTAssertEqual(spoiler.reason, "reason")
+        XCTAssertEqual(spoiler.content.plainText, "secret")
+        XCTAssertTrue(spoiler.content.runs.first?.style.contains(.bold) == true)
+        XCTAssertEqual(after.plainText, " after")
+    }
+
+    func testMatrixInlineSpoilerPresentationNeverExposesHiddenContentToAccessibilityText() throws {
+        let segments = MatrixHTMLRenderer.segments(
+            body: "before secret after",
+            html: #"<p><strong>before</strong> <span data-mx-spoiler="private"><em>secret</em></span> after</p>"#
+        )
+        guard case let .inline(group)? = segments.first else {
+            return XCTFail("Expected inline spoiler group")
+        }
+
+        let hidden = matrixInlineAttributedText(group, revealedSpoilers: [])
+        let hiddenCharacters = String(hidden.characters)
+        XCTAssertEqual(hiddenCharacters, "before [Spoiler: private · Reveal] after")
+        XCTAssertFalse(hiddenCharacters.contains("secret"))
+        XCTAssertEqual(
+            Array(hidden.runs).compactMap(\.link).map(\.absoluteString),
+            [matrixInlineSpoilerURL(index: 0).absoluteString]
+        )
+
+        let revealed = matrixInlineAttributedText(group, revealedSpoilers: [0])
+        XCTAssertEqual(String(revealed.characters), "before secret after")
+        XCTAssertTrue(try XCTUnwrap(matrixInlineSpoilerIndex(matrixInlineSpoilerURL(index: 0))) == 0)
+    }
+
+    func testMatrixHTMLRendererPreservesNestedBlockquoteDepthAndInlineStyles() throws {
+        let segments = MatrixHTMLRenderer.segments(
+            body: "fallback",
+            html: #"<blockquote><p>Outer</p><blockquote><p><em>Inner</em></p></blockquote><p>Outer again</p></blockquote>"#
+        )
+
+        guard segments.count == 1, case let .quote(quote) = segments[0] else {
+            return XCTFail("Expected one semantic outer quote")
+        }
+        XCTAssertEqual(quote.plainText, "Outer\n\n> Inner\n\nOuter again")
+        XCTAssertTrue(quote.runs.first { $0.text == "Inner" }?.style.contains(.italic) == true)
+    }
+
+    func testMatrixHTMLRendererKeepsNestedDetailsAndTableContentWithoutRegexTruncation() throws {
+        let html = #"<details><summary>Outer</summary><p>Before</p><details><summary>Inner</summary><table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td><code>2</code></td></tr></table></details><p>After</p></details>"#
+        let details = MatrixHTMLRenderer.detailsBlocks(html: html)
+
+        XCTAssertEqual(details.map(\.summary), ["Outer", "Inner"])
+        let outer = try XCTUnwrap(details.first)
+        XCTAssertTrue(outer.body.contains("Before"))
+        XCTAssertTrue(outer.body.contains("Inner"))
+        XCTAssertTrue(outer.body.contains("A\tB"))
+        XCTAssertTrue(outer.body.contains("1\t2"))
+        XCTAssertTrue(outer.body.contains("After"))
+        XCTAssertEqual(MatrixHTMLRenderer.segments(body: "fallback", html: html), [.details(outer)])
+
+        guard outer.content.count == 3,
+              case let .details(inner) = outer.content[1],
+              case let .table(table) = inner.content.first
+        else { return XCTFail("Expected recursively typed details and table content") }
+        XCTAssertEqual(table.rows.map { $0.cells.map(\.plainText) }, [["A", "B"], ["1", "2"]])
+    }
+
+    func testMatrixHTMLRendererNeverDropsReadableMalformedSemanticContainerContent() throws {
+        let segments = MatrixHTMLRenderer.segments(
+            body: "fallback",
+            html: #"<p>Before</p><details><p>Missing summary</p><pre><code>exact</code></pre></details><table><caption>Caption only</caption></table><p>After</p>"#
+        )
+
+        XCTAssertEqual(segments.count, 5)
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[0])).plainText, "Before")
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[1])).plainText, "Missing summary")
+        XCTAssertEqual(segments[2], .code(.init(code: "exact", language: nil)))
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[3])).plainText, "Caption only")
+        XCTAssertEqual(try XCTUnwrap(richText(from: segments[4])).plainText, "After")
+    }
+
+    func testMatrixHTMLRendererMalformedSemanticFallbackRetainsEnclosingStyleAndLink() throws {
+        let segments = MatrixHTMLRenderer.segments(
+            body: "fallback",
+            html: #"<strong><a href="https://example.org"><details><p>Readable</p></details></a></strong>"#
+        )
+
+        guard segments.count == 1, case let .richText(text) = segments[0] else {
+            return XCTFail("Expected one readable fallback segment")
+        }
+        let run = try XCTUnwrap(text.runs.first { $0.text == "Readable" })
+        XCTAssertTrue(run.style.contains(.bold))
+        XCTAssertEqual(run.link?.absoluteString, "https://example.org")
+    }
+
+    func testMatrixHTMLRendererRetainsEverySemanticSegmentInsideDetails() throws {
+        let html = #"""
+        <details><summary><em>Diagnostics</em></summary>
+          <ol start="3"><li>Third<ul><li>Nested</li></ul></li></ol>
+          <blockquote><p>Quoted</p></blockquote>
+          <pre><code class="language-swift"> let value = 1&#10;</code></pre>
+          <span data-mx-spoiler="private"><strong>secret</strong></span>
+          <table><tr><th>Key</th><td>Value</td></tr></table>
+          <details><summary>Child</summary><p>Child body</p></details>
+        </details>
+        """#
+
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+        guard case let .details(details)? = segments.first else {
+            return XCTFail("Expected an outer semantic details segment")
+        }
+        XCTAssertEqual(details.summary, "Diagnostics")
+        XCTAssertTrue(details.summaryContent.runs.first?.style.contains(.italic) == true)
+        XCTAssertEqual(details.content.count, 6)
+
+        guard case let .richText(list) = details.content[0],
+              case let .quote(quote) = details.content[1],
+              case let .code(code) = details.content[2],
+              case let .spoiler(spoiler) = details.content[3],
+              case let .table(table) = details.content[4],
+              case let .details(child) = details.content[5]
+        else { return XCTFail("Expected list, quote, code, spoiler, table, and nested details in source order") }
+
+        XCTAssertEqual(list.plainText, "3. Third\n  • Nested")
+        XCTAssertEqual(quote.plainText, "Quoted")
+        XCTAssertEqual(code, .init(code: " let value = 1\n", language: "swift"))
+        XCTAssertEqual(spoiler.reason, "private")
+        XCTAssertEqual(spoiler.content.plainText, "secret")
+        XCTAssertTrue(spoiler.content.runs.first?.style.contains(.bold) == true)
+        XCTAssertEqual(table.rows.first?.cells.map(\.plainText), ["Key", "Value"])
+        XCTAssertEqual(child.summary, "Child")
+        XCTAssertEqual(child.body, "Child body")
+    }
+
+    func testMatrixHTMLRendererDoesNotPromoteNestedTableRowsIntoParentTable() throws {
+        let html = #"<table><tr><th>Outer</th><td><table><tr><td>Nested A</td><td>Nested B</td></tr></table></td></tr></table>"#
+        let table = try XCTUnwrap(MatrixHTMLRenderer.tableBlock(html: html))
+
+        XCTAssertEqual(table.rows.count, 1)
+        XCTAssertEqual(table.rows[0].cells.count, 2)
+        XCTAssertEqual(table.rows[0].cells[0].plainText, "Outer")
+        XCTAssertEqual(table.rows[0].cells[1].plainText, "Nested A\tNested B")
+    }
+
+    func testMatrixHTMLRendererPreservesExactPreCodeWhitespaceBreaksAndEntities() {
+        let html = "<pre><code class=\"language-sh\">  lead\t&amp;&copy;<br>middle&#10;&#x20;tail  \n\n</code></pre>"
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "fallback", html: html),
+            [.code(.init(code: "  lead\t&©\nmiddle\n tail  \n\n", language: "sh"))]
+        )
+    }
+
+    func testMatrixHTMLRendererBalancesMalformedOverlapAndPreservesText() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<p><strong>bold <em>both</strong> italic tail</em> plain</p>"#
+        )
+
+        XCTAssertEqual(text.plainText, "bold both italic tail plain")
+        XCTAssertTrue(text.runs.first { $0.text == "bold " }?.style.contains(.bold) == true)
+        let both = text.runs.first { $0.text == "both" }?.style
+        XCTAssertTrue(both?.contains(.bold) == true)
+        XCTAssertTrue(both?.contains(.italic) == true)
+        XCTAssertTrue(text.runs.first { $0.text.contains("italic tail") }?.style.isEmpty == true)
+    }
+
+    func testMatrixHTMLRendererDropsExecutableBlocksAndPreservesFollowingText() {
+        let text = MatrixHTMLRenderer.richText(
+            body: "fallback",
+            html: #"<script>alert(1)</script><style>p{display:none}</style><p>Visible &amp; safe</p><iframe>hidden</iframe>"#
+        )
+
+        XCTAssertEqual(text.plainText, "Visible & safe")
+    }
+
+    func testMatrixHTMLRendererFailsToBoundedPlainBodyForOversizeHTML() {
+        let html = "<strong>" + String(repeating: "x", count: 256 * 1_024) + "</strong>"
+        let text = MatrixHTMLRenderer.richText(body: "bounded fallback", html: html)
+
+        XCTAssertEqual(text, .init(runs: [.init(text: "bounded fallback", style: [], link: nil)]))
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "bounded fallback", html: html),
+            [.richText(.init(runs: [.init(text: "bounded fallback", style: [], link: nil)]))]
+        )
+    }
+
+    func testMatrixHTMLRendererPreservesExactHermesTableSections() {
+        let html = #"""
+        <table>
+        <thead>
+        <tr><th>Stage</th><th>Requested</th><th>Actual</th><th>Proof</th></tr>
+        </thead>
+        <tbody>
+        <tr><td>Ox Alpha</td><td>stealth/ox-alpha max</td><td>stealth/ox-alpha</td><td><code>content_chars=2702</code>, finish=stop</td></tr>
+        <tr><td>qwen</td><td>qwen3.8-max / alibaba</td><td>qwen3.8-max (self-report)</td><td>EXIT 0</td></tr>
+        </tbody>
+        </table>
+        """#
+
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+        guard segments.count == 1, case let .table(table) = segments[0] else {
+            return XCTFail("Expected exact Hermes table segment")
+        }
+        XCTAssertEqual(table.rows.map { $0.cells.map(\.plainText) }, [
+            ["Stage", "Requested", "Actual", "Proof"],
+            ["Ox Alpha", "stealth/ox-alpha max", "stealth/ox-alpha", "content_chars=2702, finish=stop"],
+            ["qwen", "qwen3.8-max / alibaba", "qwen3.8-max (self-report)", "EXIT 0"],
+        ])
+        XCTAssertEqual(table.rows.map(\.isHeader), [true, false, false])
+        XCTAssertTrue(table.rows[1].cells[3].content.runs.first?.style.contains(.code) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesTableCaptionAndMixedHeaderDataCellOrder() throws {
+        let html = #"<table><caption><strong>Build proof</strong></caption><tbody><tr><th>Stage</th><td><code>green</code></td></tr></tbody></table>"#
+
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+        guard segments.count == 1, case let .table(table) = segments[0] else {
+            return XCTFail("Expected table segment")
+        }
+        let caption = try XCTUnwrap(table.caption)
+        XCTAssertEqual(caption.plainText, "Build proof")
+        XCTAssertTrue(caption.runs.first?.style.contains(.bold) == true)
+        XCTAssertEqual(table.rows.map { $0.cells.map(\.plainText) }, [["Stage", "green"]])
+        XCTAssertEqual(table.rows.map(\.isHeader), [false])
+        XCTAssertEqual(table.rows[0].cells.map(\.isHeader), [true, false])
+        XCTAssertTrue(table.rows[0].cells[1].content.runs.first?.style.contains(.code) == true)
+    }
+
+    func testMatrixHTMLRendererPreservesExactHermesApprovalPayloadShape() throws {
+        let body = #"""
+        ⚠️ **Dangerous command requires approval**
+        ```
+        rm -rf /tmp/example
+        ```
+        Reason: destructive command
+
+        Reply `!approve` to execute, `!approve session` to approve this pattern for the session, `!approve always` to approve permanently, or `!deny` to cancel.
+
+        You can also react to this prompt:
+        ✅ = approve once
+        ♾️ = approve always
+        ❌ = deny
+        """#
+        let html = #"""
+        <p>⚠️ <strong>Dangerous command requires approval</strong></p>
+        <pre><code>rm -rf /tmp/example
+        </code></pre>
+        <p>Reason: destructive command</p>
+        <p>Reply <code>!approve</code> to execute, <code>!approve session</code> to approve this pattern for the session, <code>!approve always</code> to approve permanently, or <code>!deny</code> to cancel.</p>
+        <p>You can also react to this prompt:<br>
+        ✅ = approve once<br>
+        ♾️ = approve always<br>
+        ❌ = deny</p>
+        """#
+
+        let segments = MatrixHTMLRenderer.segments(body: body, html: html)
+        XCTAssertEqual(segments.count, 3)
+        let heading = try XCTUnwrap(richText(from: segments[0]))
+        XCTAssertEqual(heading.plainText, "⚠️ Dangerous command requires approval")
+        XCTAssertTrue(heading.runs.first { $0.text.contains("Dangerous command") }?.style.contains(.bold) == true)
+        XCTAssertEqual(segments[1], .code(.init(code: "rm -rf /tmp/example\n", language: nil)))
+        let instructions = try XCTUnwrap(richText(from: segments[2]))
+        XCTAssertEqual(
+            instructions.plainText,
+            """
+            Reason: destructive command
+
+            Reply !approve to execute, !approve session to approve this pattern for the session, !approve always to approve permanently, or !deny to cancel.
+
+            You can also react to this prompt:
+            ✅ = approve once
+            ♾️ = approve always
+            ❌ = deny
+            """
+        )
+        for command in ["!approve", "!approve session", "!approve always", "!deny"] {
+            XCTAssertTrue(
+                instructions.runs.contains { $0.text == command && $0.style.contains(.code) },
+                "Expected inline code semantics for \(command)"
+            )
+        }
+    }
+
+    func testMatrixHTMLRendererPreservesHermesFencedCodeLanguage() {
+        let html = "<pre><code class=\"language-python\">print(&quot;hello&quot;)\n</code></pre>"
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "```python\nprint(\"hello\")\n```", html: html),
+            [.code(.init(code: "print(\"hello\")\n", language: "python"))]
+        )
+    }
+
+    func testMatrixHTMLRendererPreservesExactCodeWhitespaceForCopying() {
+        let html = "<pre><code class=\"language-sh\">  printf 'x'  \n\n</code></pre>"
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "fallback", html: html),
+            [.code(.init(code: "  printf 'x'  \n\n", language: "sh"))]
+        )
+        XCTAssertEqual(MatrixHTMLRenderer.codeLineCount("  printf 'x'  \n\n"), 2)
     }
 
     func testAgentCardPayloadParserReadsHermesJSONMessageBody() throws {
@@ -1728,5 +2211,12 @@ final class TimelineServiceTests: XCTestCase {
         let filtered = TimelineSearchFilter.applySearchQuery("   ", to: items)
 
         XCTAssertEqual(filtered, items)
+    }
+
+    private func richText(from segment: MatrixHTMLRenderer.Segment?) -> MatrixHTMLRenderer.RichText? {
+        guard case let .richText(text) = segment else {
+            return nil
+        }
+        return text
     }
 }

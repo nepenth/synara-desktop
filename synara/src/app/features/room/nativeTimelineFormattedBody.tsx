@@ -5,7 +5,6 @@ import parse, {
   Element,
   HTMLReactParserOptions,
 } from 'html-react-parser';
-import { sanitizeCustomHtml } from '../../utils/sanitize';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
@@ -16,16 +15,19 @@ import {
   inferCodeLanguage,
   nativeCodeBlockFromPreChildren,
 } from './nativeTimelineCodeHighlight';
+import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import * as htmlCss from './nativeTimelineHtml.css';
 
 export function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
-  const displayCode = displayCodeText(code);
-  const lineCount = countCodeLines(displayCode);
+  // Chromium does not paint an extra gutter row for a final line terminator,
+  // but the code node itself must retain the exact source for selection/copy.
+  const gutterCode = displayCodeText(code);
+  const lineCount = countCodeLines(gutterCode);
   const lineNumbers = formatLineNumbers(lineCount);
-  const inferred = inferCodeLanguage(displayCode, languageClass);
+  const inferred = inferCodeLanguage(code, languageClass);
   const languageLabel = inferred ?? 'code';
   const className = inferred ? `language-${inferred}` : undefined;
-  const largeCode = displayCode.length > NATIVE_PRISM_CHAR_LIMIT;
+  const largeCode = code.length > NATIVE_PRISM_CHAR_LIMIT;
   const [highlightedHtml, setHighlightedHtml] = useState<string | undefined>(undefined);
 
   useEffect(() => {
@@ -40,7 +42,7 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
       .then(() => {
         if (cancelled) return;
         try {
-          const html = highlightNativeCode(displayCode, className);
+          const html = highlightNativeCode(code, className);
           if (cancelled) return;
           setHighlightedHtml(html);
         } catch {
@@ -54,7 +56,7 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
     return () => {
       cancelled = true;
     };
-  }, [displayCode, className, largeCode]);
+  }, [code, className, largeCode]);
 
   return (
     <pre className={htmlCss.CodePanel} data-native-code-block="true">
@@ -65,7 +67,7 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
         </span>
         <div className={htmlCss.CodeScroll}>
           {highlightedHtml === undefined ? (
-            <code className={className}>{displayCode}</code>
+            <code className={className}>{code}</code>
           ) : (
             <code
               className={className}
@@ -77,6 +79,26 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
         </div>
       </div>
     </pre>
+  );
+}
+
+function NativeSpoiler({ children, reason }: { children: React.ReactNode; reason?: string }) {
+  const [revealed, setRevealed] = useState(false);
+  const normalizedReason = reason?.trim().slice(0, 160);
+
+  if (revealed) {
+    return <span className={htmlCss.SpoilerContent}>{children}</span>;
+  }
+
+  return (
+    <button
+      type="button"
+      className={htmlCss.SpoilerButton}
+      aria-label={normalizedReason ? `Reveal spoiler: ${normalizedReason}` : 'Reveal spoiler'}
+      onClick={() => setRevealed(true)}
+    >
+      {normalizedReason ? `Spoiler: ${normalizedReason}` : 'Spoiler'} · reveal
+    </button>
   );
 }
 
@@ -101,6 +123,25 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </div>
       );
     }
+    if (domNode.name === 'span' && 'data-mx-spoiler' in domNode.attribs) {
+      return (
+        <NativeSpoiler reason={domNode.attribs['data-mx-spoiler']}>
+          {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+        </NativeSpoiler>
+      );
+    }
+    if (domNode.name === 'img') {
+      // Matrix formatted HTML only permits mxc:// image sources. Loading those
+      // directly in the webview bypasses shared-core media authentication and
+      // simply fails. Preserve the accessible producer fallback without a
+      // resource request until inline media has an authenticated core handle.
+      const label = domNode.attribs.alt?.trim() || domNode.attribs.title?.trim() || 'Inline image';
+      return (
+        <span className={htmlCss.InlineImageFallback} role="img" aria-label={label}>
+          {label}
+        </span>
+      );
+    }
     if (domNode.name !== 'pre') return undefined;
     const { code, languageClass } = nativeCodeBlockFromPreChildren(domNode.children);
     return <NativeCodeBlock code={code} languageClass={languageClass} />;
@@ -109,17 +150,29 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
 
 export function NativeFormattedBody({
   html,
+  fallbackBody,
   style,
 }: {
   html: string;
+  fallbackBody: string;
   style?: React.CSSProperties;
 }) {
-  const sanitized = useMemo(() => sanitizeCustomHtml(html), [html]);
-  const parsed = useMemo(() => parse(sanitized, nativeFormattedHtmlParserOptions), [sanitized]);
+  const sanitized = useMemo(() => prepareNativeFormattedBody(html), [html]);
+  const parsed = useMemo(() => {
+    if (!sanitized) return undefined;
+    try {
+      return parse(sanitized, nativeFormattedHtmlParserOptions);
+    } catch {
+      return undefined;
+    }
+  }, [sanitized]);
 
   return (
-    <div className={htmlCss.FormattedBody} style={style}>
-      {parsed}
+    <div
+      className={htmlCss.FormattedBody}
+      style={{ ...style, whiteSpace: parsed === undefined ? 'pre-wrap' : undefined }}
+    >
+      {parsed === undefined ? fallbackBody : parsed}
     </div>
   );
 }

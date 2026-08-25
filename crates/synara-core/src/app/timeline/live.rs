@@ -4,9 +4,9 @@
 //! product snapshot containing only stable identifiers, sender IDs,
 //! event types, timestamps, and safe display text.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use eyeball_im::VectorDiff;
 use futures_util::{stream, StreamExt};
@@ -38,8 +38,10 @@ use matrix_sdk_ui::timeline::{
     TimelineItemContent as SdkTimelineItemContent, TimelineReadReceiptTracking,
 };
 use serde::{Deserialize, Serialize};
+use tokio::time::{timeout, Duration};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
+use crate::app::agent_approvals::{plan_agent_approval, AgentApprovalDecisionStatus};
 use crate::app::send::{
     apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
     parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
@@ -53,15 +55,16 @@ use crate::dto::TimelineEncryptedUnavailableItem;
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
     project_timeline_item_with_media, reply_draft_readback, should_attach_formatted_body,
-    ComposerDraftRegistry, NativeComposerReplyDraft, NativeComposerReplyDraftReadback,
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCloseRequest,
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
-    NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
+    ComposerDraftRegistry, NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
+    NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
+    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
+    NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
+    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
     TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
     TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
     UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
@@ -75,6 +78,87 @@ const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+
+fn remember_agent_approval_decision(
+    decisions: &mut VecDeque<(String, String)>,
+    decision_key: (String, String),
+) {
+    if let Some(existing_index) = decisions.iter().position(|entry| entry == &decision_key) {
+        decisions.remove(existing_index);
+    }
+    if decisions.len() >= MAX_FOCUSED_EVENT_READBACKS {
+        decisions.pop_front();
+    }
+    decisions.push_back(decision_key);
+}
+
+fn agent_approval_now_ms() -> Result<u64, &'static str> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_err(|_| "agent-approval-clock-invalid")?
+        .as_millis()
+        .try_into()
+        .map_err(|_| "agent-approval-clock-invalid")
+}
+
+#[derive(Default)]
+struct ApprovalDecisionRegistry {
+    completed: VecDeque<(String, String)>,
+    /// Weak per-event locks serialize duplicate actions while allowing
+    /// unrelated rooms/events to progress independently. Expired entries are
+    /// discarded whenever a new action resolves its lock.
+    in_flight: HashMap<(String, String), Weak<AsyncMutex<()>>>,
+}
+
+impl ApprovalDecisionRegistry {
+    fn is_completed(&self, key: &(String, String)) -> bool {
+        self.completed.contains(key)
+    }
+
+    fn lock_for(&mut self, key: &(String, String)) -> Arc<AsyncMutex<()>> {
+        self.in_flight.retain(|_, lock| lock.strong_count() > 0);
+        if let Some(lock) = self.in_flight.get(key).and_then(Weak::upgrade) {
+            return lock;
+        }
+        let lock = Arc::new(AsyncMutex::new(()));
+        self.in_flight.insert(key.clone(), Arc::downgrade(&lock));
+        lock
+    }
+
+    fn remember(&mut self, key: (String, String)) {
+        remember_agent_approval_decision(&mut self.completed, key);
+    }
+}
+
+fn approval_reaction_readback(
+    existing: &[NativeTimelineReaction],
+    reaction_key: &str,
+    own_user_id: &str,
+    reaction_event_id: String,
+) -> NativeTimelineReaction {
+    let mut readback = existing
+        .iter()
+        .find(|reaction| reaction.key == reaction_key)
+        .cloned()
+        .unwrap_or_else(|| NativeTimelineReaction {
+            key: reaction_key.to_owned(),
+            count: 0,
+            me: false,
+            senders: Vec::new(),
+        });
+    if !readback.me {
+        readback.count = readback.count.saturating_add(1);
+    }
+    readback.me = true;
+    readback
+        .senders
+        .retain(|sender| sender.user_id != own_user_id);
+    readback.senders.push(NativeTimelineReactionSender {
+        user_id: own_user_id.to_owned(),
+        reaction_event_id: Some(reaction_event_id),
+    });
+    readback
+}
 
 struct LiveTimelineEntry {
     timeline: Arc<Timeline>,
@@ -107,6 +191,9 @@ pub struct NativeTimelineOwner {
     client: Client,
     emit: TimelineViewUpdateEmit,
     registry: tokio::sync::Mutex<NativeTimelineRegistry>,
+    /// Serializes duplicate decisions per exact event without monopolizing the
+    /// global timeline registry or blocking unrelated approval prompts.
+    approval_decisions: Arc<std::sync::Mutex<ApprovalDecisionRegistry>>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
     sends: tokio::sync::Mutex<SendQueue>,
 }
@@ -117,6 +204,9 @@ impl NativeTimelineOwner {
             client: client.clone(),
             emit,
             registry: tokio::sync::Mutex::new(NativeTimelineRegistry::new(session_generation)),
+            approval_decisions: Arc::new(
+                std::sync::Mutex::new(ApprovalDecisionRegistry::default()),
+            ),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
         }
@@ -222,6 +312,168 @@ impl NativeTimelineOwner {
             .await
             .ensure_reaction(&self.client, room_id, event_id, key)
             .await
+    }
+
+    pub async fn decide_agent_approval(
+        &self,
+        request: NativeAgentApprovalDecisionRequest,
+    ) -> Result<NativeAgentApprovalDecisionResult, &'static str> {
+        let room_id = parse_room_id(&request.room_id)?.to_string();
+        let event_id = parse_event_id(&request.event_id)?;
+        let decision_key = (room_id.clone(), event_id.to_string());
+
+        let decision_lock = {
+            let mut decisions = self
+                .approval_decisions
+                .lock()
+                .map_err(|_| "agent-approval-decision-state-poisoned")?;
+            if decisions.is_completed(&decision_key) {
+                return Ok(NativeAgentApprovalDecisionResult {
+                    room_id,
+                    event_id: event_id.to_string(),
+                    status: AgentApprovalDecisionStatus::AlreadyDecided,
+                    reaction: None,
+                });
+            }
+            decisions.lock_for(&decision_key)
+        };
+        // Cancellation before a Matrix side effect releases this guard. Once
+        // send begins, the guard moves into a detached task below.
+        let decision_guard = Arc::clone(&decision_lock).lock_owned().await;
+        if self
+            .approval_decisions
+            .lock()
+            .map_err(|_| "agent-approval-decision-state-poisoned")?
+            .is_completed(&decision_key)
+        {
+            return Ok(NativeAgentApprovalDecisionResult {
+                room_id,
+                event_id: event_id.to_string(),
+                status: AgentApprovalDecisionStatus::AlreadyDecided,
+                reaction: None,
+            });
+        }
+
+        let room = self
+            .client
+            .get_room(parse_room_id(&room_id)?.as_ref())
+            .ok_or("v-crypto.6-event-room-not-found")?;
+        // A focused encrypted event can arrive first as an undecrypted item
+        // and become projectable on a later SDK update. Re-evaluate the exact
+        // event for a short bounded window; never fall back to a room scan or
+        // another event with similar text. The timeout owns builder, initial
+        // subscribe, and update wait—not just the final stream read.
+        let (item, plan) = timeout(Duration::from_secs(3), async {
+            let timeline = TimelineBuilder::new(&room)
+                .with_focus(TimelineFocus::Event {
+                    target: event_id.clone(),
+                    num_context_events: 0,
+                    thread_mode: TimelineEventFocusThreadMode::Automatic {
+                        hide_threaded_events: false,
+                    },
+                })
+                .build()
+                .await
+                .map_err(|_| "v-crypto.6-event-open-failed")?;
+            let (mut items, mut updates) = timeline.subscribe().await;
+            loop {
+                let item = items
+                    .iter()
+                    .filter_map(|item| project_item(item, self.client.user_id()))
+                    .find(|item| item.event_id == event_id.as_str());
+                if let Some(item) = item {
+                    match plan_agent_approval(
+                        &request.action_id,
+                        &item.body,
+                        item.origin_server_ts,
+                        agent_approval_now_ms()?,
+                        item.reactions
+                            .iter()
+                            .map(|reaction| (reaction.key.as_str(), reaction.me)),
+                    ) {
+                        Ok(plan) => break Ok((item, plan)),
+                        Err(error) if item.decryption_state.is_none() => break Err(error),
+                        Err(_) => {}
+                    }
+                }
+                match updates.next().await {
+                    Some(diffs) => {
+                        for diff in diffs {
+                            diff.apply(&mut items);
+                        }
+                    }
+                    None => break Err("v-crypto.6-event-not-found"),
+                }
+            }
+        })
+        .await
+        .map_err(|_| "v-crypto.6-event-open-timeout")??;
+        if plan.status == AgentApprovalDecisionStatus::AlreadyDecided {
+            self.approval_decisions
+                .lock()
+                .map_err(|_| "agent-approval-decision-state-poisoned")?
+                .remember(decision_key);
+            return Ok(NativeAgentApprovalDecisionResult {
+                room_id,
+                event_id: event_id.to_string(),
+                status: plan.status,
+                reaction: None,
+            });
+        }
+
+        let reaction_key = plan
+            .reaction
+            .ok_or("agent-approval-plan-inconsistent")?
+            .to_owned();
+        // Capture all fallible local state before the network side effect. Once
+        // Matrix accepts the reaction, completed memory is recorded
+        // synchronously before any further cancellation point.
+        let own_user_id = self
+            .client
+            .user_id()
+            .ok_or("agent-approval-current-user-missing")?
+            .to_string();
+        let send_event_id = event_id.clone();
+        let send_reaction_key = reaction_key.clone();
+        let completed_decisions = Arc::clone(&self.approval_decisions);
+        // Tokio tasks continue when their JoinHandle is dropped. Moving the
+        // owned per-event guard into this task makes the Matrix side effect
+        // cancellation-safe: if iOS ends the callback after send begins, a
+        // duplicate waits until the original send either records completion
+        // or fails, instead of racing a second reaction.
+        let send_task = tokio::spawn(async move {
+            let _decision_guard = decision_guard;
+            let sent = room
+                .send(ReactionEventContent::from(Annotation::new(
+                    send_event_id,
+                    send_reaction_key,
+                )))
+                .await
+                .map_err(|_| "v-send.2-reaction-ensure-failed")?;
+            completed_decisions
+                .lock()
+                .map_err(|_| "agent-approval-decision-state-poisoned")?
+                .remember(decision_key);
+            Ok::<String, &'static str>(sent.response.event_id.to_string())
+        });
+        let sent_event_id = timeout(Duration::from_secs(5), send_task)
+            .await
+            .map_err(|_| "v-send.2-reaction-ensure-timeout")?
+            .map_err(|_| "v-send.2-reaction-ensure-failed")??;
+        let readback =
+            approval_reaction_readback(&item.reactions, &reaction_key, &own_user_id, sent_event_id);
+        Ok(NativeAgentApprovalDecisionResult {
+            room_id: room_id.clone(),
+            event_id: event_id.to_string(),
+            status: plan.status,
+            reaction: Some(NativeReactionMutationResult {
+                room_id,
+                target_event_id: event_id.to_string(),
+                key: reaction_key,
+                mutation: NativeReactionMutation::Added,
+                readback: Some(readback),
+            }),
+        })
     }
 
     pub async fn redact_reaction(
@@ -3343,5 +3595,112 @@ mod tests {
             assert!(!json.contains(forbidden));
         }
         assert!(json.contains("safe body"));
+    }
+
+    #[test]
+    fn approval_reaction_readback_preserves_aggregate_and_adds_exact_local_echo() {
+        let existing = vec![NativeTimelineReaction {
+            key: "✅".into(),
+            count: 2,
+            me: false,
+            senders: vec![NativeTimelineReactionSender {
+                user_id: "@hermes:example.org".into(),
+                reaction_event_id: Some("$seed".into()),
+            }],
+        }];
+
+        let readback =
+            approval_reaction_readback(&existing, "✅", "@alice:example.org", "$decision".into());
+
+        assert_eq!(readback.key, "✅");
+        assert_eq!(readback.count, 3);
+        assert!(readback.me);
+        assert_eq!(readback.senders.len(), 2);
+        assert_eq!(readback.senders[1].user_id, "@alice:example.org");
+        assert_eq!(
+            readback.senders[1].reaction_event_id.as_deref(),
+            Some("$decision")
+        );
+    }
+
+    #[test]
+    fn approval_reaction_readback_does_not_double_count_existing_self() {
+        let existing = vec![NativeTimelineReaction {
+            key: "❌".into(),
+            count: 4,
+            me: true,
+            senders: vec![NativeTimelineReactionSender {
+                user_id: "@alice:example.org".into(),
+                reaction_event_id: None,
+            }],
+        }];
+
+        let readback =
+            approval_reaction_readback(&existing, "❌", "@alice:example.org", "$remote".into());
+
+        assert_eq!(readback.count, 4);
+        assert_eq!(readback.senders.len(), 1);
+        assert_eq!(
+            readback.senders[0].reaction_event_id.as_deref(),
+            Some("$remote")
+        );
+    }
+
+    #[test]
+    fn approval_decision_memory_evicts_oldest_and_refreshes_existing_entry() {
+        let mut decisions = VecDeque::new();
+        for index in 0..MAX_FOCUSED_EVENT_READBACKS {
+            remember_agent_approval_decision(
+                &mut decisions,
+                ("!room:example.org".into(), format!("$event-{index}")),
+            );
+        }
+        remember_agent_approval_decision(
+            &mut decisions,
+            ("!room:example.org".into(), "$event-0".into()),
+        );
+        remember_agent_approval_decision(
+            &mut decisions,
+            ("!room:example.org".into(), "$newest".into()),
+        );
+
+        assert_eq!(decisions.len(), MAX_FOCUSED_EVENT_READBACKS);
+        assert!(decisions.contains(&("!room:example.org".into(), "$event-0".into())));
+        assert!(!decisions.contains(&("!room:example.org".into(), "$event-1".into())));
+        assert_eq!(
+            decisions.back().map(|entry| entry.1.as_str()),
+            Some("$newest")
+        );
+    }
+
+    #[test]
+    fn approval_decision_registry_serializes_only_the_same_exact_event() {
+        let mut registry = ApprovalDecisionRegistry::default();
+        let first_key = ("!room:example.org".into(), "$first".into());
+        let second_key = ("!room:example.org".into(), "$second".into());
+
+        let first = registry.lock_for(&first_key);
+        let duplicate = registry.lock_for(&first_key);
+        let unrelated = registry.lock_for(&second_key);
+
+        assert!(Arc::ptr_eq(&first, &duplicate));
+        assert!(!Arc::ptr_eq(&first, &unrelated));
+        registry.remember(first_key.clone());
+        assert!(registry.is_completed(&first_key));
+        assert!(!registry.is_completed(&second_key));
+    }
+
+    #[test]
+    fn approval_decision_registry_discards_expired_per_event_locks() {
+        let mut registry = ApprovalDecisionRegistry::default();
+        let old_key = ("!room:example.org".into(), "$old".into());
+        let old = registry.lock_for(&old_key);
+        drop(old);
+
+        let new_key = ("!room:example.org".into(), "$new".into());
+        let _new = registry.lock_for(&new_key);
+
+        assert!(!registry.in_flight.contains_key(&old_key));
+        assert!(registry.in_flight.contains_key(&new_key));
     }
 }

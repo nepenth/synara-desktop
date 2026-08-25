@@ -31,6 +31,8 @@ dictionary NsePreviewDto {
   string? sender_id;
   string? body;
   string? message_type;
+  boolean is_agent_approval;
+  u64 origin_server_ts;
 };
 
 [Error]

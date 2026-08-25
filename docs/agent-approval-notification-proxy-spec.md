@@ -1,6 +1,6 @@
 # Agent Approval Notification Proxy Spec
 
-Reviewed: 2026-07-08
+Reviewed: 2026-08-25
 
 Status: implementation handoff for the Matrix push gateway and APNs notification
 proxy that will support Synara iOS agent approval actions.
@@ -11,8 +11,10 @@ Synara needs remote iOS notifications that can surface approval prompts from
 agent rooms and let the user approve or deny from the native notification. The
 proxy must stay privacy-preserving and must not execute commands. Its job is to
 translate Matrix push requests into APNs notifications and, when a trusted
-approval metadata record exists for the same Matrix event, attach the APNs
-category that exposes the Synara approval actions.
+approval metadata record exists for the same Matrix event, attach a provisional
+APNs category hint. The iOS extension always removes that hint first and only
+restores approval actions after the exact event decrypts, matches the shared
+classifier, and is younger than five minutes.
 
 Desktop macOS and Linux notification actions are handled by the running desktop
 client. This proxy is required for iOS remote push and may be reused by desktop
@@ -36,21 +38,35 @@ only if a future remote-push path is designed.
 - Agent approval APNs category identifier:
   `synara.agent-approval`.
 - Registered iOS notification action identifiers exposed on the native category:
+  - `agent-approval.review` (first; opens the exact prompt)
   - `agent-approval.approve-once`
   - `agent-approval.deny`
 - `agent-approval.approve-always` is intentionally **not** offered on native OS
   notification actions. Permanent approval requires an explicit in-app
   confirmation path; if the action id is still received, the app opens the
   room/event and does **not** send `♾️`.
+- Every alert payload must include `aps.mutable-content = 1`. With the user's
+  separate time-sensitive approval setting enabled, the notification extension
+  can then decrypt and classify a Hermes prompt locally even when the proxy has
+  no trusted approval metadata. Review remains first so constrained surfaces
+  never make command execution the default action.
 - Client-side safety for native/push approval actions (desktop + iOS):
   - require valid kind/action/room/event identifiers;
-  - revalidate the Matrix event and approval detector before sending a reaction
-    (desktop resolves the event; iOS loads the focused timeline item and
-    requires `SynaraAgentApprovalPromptDetector.detect`);
-  - enforce a short TTL so stale notifications cannot approve old prompts
-    (prefer resolved event timestamp; fail closed when the event cannot be
-    resolved as an approval prompt);
-  - dedupe successful actions so the same native action is not double-sent.
+  - call the shared `matrix_agent_approval_decide` owner, which resolves the
+    exact event and applies the detector and reaction under a dedicated
+    per-event decision lock without holding the global timeline registry across
+    Matrix network awaits or serializing unrelated approval prompts;
+  - enforce Hermes's 300-second timeout from the resolved event timestamp;
+  - ignore Hermes's bot-owned ✅/♾️/❌ seed reactions while treating any
+    current-account terminal reaction as an already-decided prompt;
+  - dedupe by room/event, not by action id, so the same client cannot approve
+    and then deny from separate notification callbacks.
+- A cold-launched iOS notification action joins the same keyed, single-flight
+  Matrix-owner startup as the SwiftUI shell before it calls shared core; push
+  registration and notification-permission work are deliberately outside this
+  critical path. A callback received before dependency binding is retained and
+  replayed after binding. A superseded identity or absent restored session
+  fails closed and navigates to review rather than reporting success.
 - In-app approval cards show bounded full prompt context (reason, multi-line
   command including heredocs, and reply/reaction instructions).
 - In-app UI maps the three reactions on the approval prompt event:
@@ -58,14 +74,22 @@ only if a future remote-push path is designed.
   - `agent-approval.approve-always` -> `♾️` (in-app only; requires explicit
     confirmation before send on web/desktop and iOS room cards)
   - `agent-approval.deny` -> `❌` (one click)
+- iOS Settings → Notifications → Local Delivery Diagnostics exposes the most
+  recent 48 notification-extension stage codes and timestamps from App Group
+  storage. This device-only flight recorder never stores push payloads,
+  room/event/user IDs, sender names, message content, tokens, URLs,
+  credentials, or raw error text. Its fixed codes distinguish invalid payloads,
+  disabled preferences, missing shared session/store state, queued/cancelled
+  resolution, core resolution failure, successful preview/approval
+  classification, final delivery, and the system deadline.
 
 ### External / not complete in this repo
 
 The following remain **outside** this repository and must not be treated as done
 by client-only remediations:
 
-- Notification proxy trusted approval metadata ingest and category attachment
-  (`POST /v1/agent-approval-events` + matching Matrix push).
+- Optional notification proxy trusted approval metadata ingest and provisional
+  category hint (`POST /v1/agent-approval-events` + matching Matrix push).
 - Production APNs / TestFlight end-to-end validation of approval categories.
 - Installed-app updater smoke for desktop release channels.
 - Large-history timeline performance instrumentation beyond in-app `perfLog`
@@ -92,13 +116,16 @@ The proxy stores approval metadata in a short-lived cache keyed by:
 homeserver + room_id + event_id
 ```
 
-When a Matrix push arrives for the same key, the proxy sends an APNs payload with
-the `synara.agent-approval` category. If no metadata exists, it sends a generic
-Synara notification without approval actions.
+When a Matrix push arrives for the same key, the proxy may send an APNs payload
+with the `synara.agent-approval` category as a routing hint. The notification
+extension removes any incoming approval category before resolution; the hint
+never grants reaction controls. If no metadata exists, the proxy sends a
+generic Synara notification and the extension can still classify it locally.
 
 This split is important: because Synara uses `event_id_only`, a normal Matrix
-push gateway cannot inspect encrypted event content. Do not attach approve/deny
-actions to every notification as a workaround.
+push gateway cannot inspect encrypted event content. Do not treat proxy metadata
+or a category value as authorization, and do not attach approve/deny actions to
+every notification as a workaround.
 
 ## Approval Metadata Endpoint
 
@@ -164,7 +191,8 @@ Generic Matrix notification:
       "body": "New activity"
     },
     "badge": 3,
-    "sound": "default"
+    "sound": "default",
+    "mutable-content": 1
   },
   "room_id": "!room:matrix.example.com",
   "event_id": "$event:matrix.example.com",
@@ -181,7 +209,8 @@ such as title `Synara` and body `New activity`. An APNs payload with no
 `aps.alert.body`, an empty string body, or only `content-available` can deliver
 without useful preview text in Notification Center.
 
-Agent approval notification:
+Agent approval notification (the category is provisional and is locally
+removed/revalidated by the extension):
 
 ```json
 {
@@ -192,7 +221,8 @@ Agent approval notification:
     },
     "category": "synara.agent-approval",
     "badge": 3,
-    "sound": "default"
+    "sound": "default",
+    "mutable-content": 1
   },
   "room_id": "!room:matrix.example.com",
   "event_id": "$approval:matrix.example.com",
@@ -330,10 +360,12 @@ Context:
 - Synara registers Matrix pushers with format event_id_only.
 - The Matrix pusher pushkey is the APNs device token.
 - The iOS app registers category synara.agent-approval with native actions:
+  agent-approval.review,
   agent-approval.approve-once, agent-approval.deny.
 - Approve-always is in-app only; do not expect native ♾️ from notification actions.
 - iOS maps approve-once/deny notification actions to Matrix reactions ✅ / ❌
-  after client-side payload and TTL checks.
+  only through the shared-core event readback, classifier, current-account
+  terminal-state check, and 300-second TTL gate.
 
 Build:
 1. POST /_matrix/push/v1/notify for Matrix push gateway delivery.

@@ -185,6 +185,7 @@
     "allow-matrix-timeline-paginate",
     "allow-matrix-timeline-reaction-toggle",
     "allow-matrix-reaction-ensure",
+    "allow-matrix-agent-approval-decide",
     "allow-matrix-reaction-redact",
     "allow-matrix-timeline-set-read-state",
     "allow-matrix-timeline-event-readback",
