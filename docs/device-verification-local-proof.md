@@ -40,3 +40,30 @@ coordinated peer session labelled `Verified` in Account settings. A retry,
 second request, app restart before completion, store edit, or fallback trust
 flag invalidates the proof. `SYNARA_LIVE_VERIFICATION_REUSE_SESSION=1` also
 invalidates a clean-route durability claim because trust may predate the run.
+
+Both simulator runners must authenticate as the same Matrix user and create
+distinct fresh device sessions. The smoke exchanges the SDK-backed account user
+and device identities through temporary coordination files, fails before
+request creation when the users differ or device IDs match, and never prints
+those values. A second test account is appropriate for room/message tests, but
+cannot be substituted for the same-account session that this verification entry
+point targets.
+
+Account Settings observes the shared-core `devices` wakeup and reloads through
+the homeserver-backed device snapshot. The smoke also invokes the explicit
+Refresh Sessions action while waiting for the exact coordinated peer; repeatedly
+scrolling an old snapshot is not a discovery proof.
+
+A complete dark-mode visual proof contains six screenshots: painted SAS values,
+terminal completion, and post-relaunch durable peer trust for both initiator and
+responder. The two SAS captures are serialized because concurrently active
+Simulator instances can race the host compositor. If one simulator still
+captures placeholder cards, repeat the same unchanged route on a clean simulator
+instance; the run is visually acceptable only when both images paint all values.
+Each exact peer-trust row must be hittable and at least eight points above the
+floating tab bar before capture.
+
+Generated `.xctestrun` files contain test credentials. Keep role-specific copies
+beside the build products so Xcode's `__TESTROOT__` remains valid, isolate logs
+and result bundles in a temporary directory, and delete the configs, logs,
+result bundles, coordination files, and screenshots immediately after review.

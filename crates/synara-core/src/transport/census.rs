@@ -9,6 +9,7 @@
 /// Keep this lexically sorted. The parity test below compares it with the
 /// actual desktop invoke list, making surface drift explicit in CI.
 pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
+    "matrix_agent_approval_decide",
     "matrix_backup_repair",
     "matrix_backup_restore",
     "matrix_backup_setup",

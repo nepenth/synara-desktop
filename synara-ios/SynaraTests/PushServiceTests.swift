@@ -196,6 +196,37 @@ final class PushServiceTests: XCTestCase {
         )
     }
 
+    func testAgentApprovalReviewOpensExactPromptAndTTLMatchesHermes() {
+        XCTAssertEqual(SynaraNotificationActionContract.nativeActionTTL, 300)
+        let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: SynaraNotificationActionContract.reviewIdentifier,
+            userInfo: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$approval:matrix.org"
+            ]
+        )
+        XCTAssertEqual(
+            plan,
+            .openRoom(
+                roomID: "!room:matrix.org",
+                eventID: "$approval:matrix.org",
+                reason: "review-requested"
+            )
+        )
+
+        let expiredReview = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
+            actionIdentifier: SynaraNotificationActionContract.reviewIdentifier,
+            userInfo: [
+                "room_id": "!room:matrix.org",
+                "event_id": "$approval:matrix.org",
+                "event_ts": 1
+            ],
+            now: Date(timeIntervalSince1970: 10_000),
+            alreadyActed: true
+        )
+        XCTAssertEqual(expiredReview, plan)
+    }
+
     func testAgentApprovalNotificationActionRejectsExpiredAndAlreadyActedPayloads() {
         let staleCreatedAt = Date().addingTimeInterval(-(SynaraNotificationActionContract.nativeActionTTL + 60))
         let expiredPlan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
@@ -248,6 +279,12 @@ final class PushServiceTests: XCTestCase {
             eventID: "$approval:matrix.org",
             actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier
         )
+        let denyKey = SynaraAgentApprovalNotificationActionDedupeStore.key(
+            roomID: "!room:matrix.org",
+            eventID: "$approval:matrix.org",
+            actionIdentifier: SynaraNotificationActionContract.denyIdentifier
+        )
+        XCTAssertEqual(key, denyKey)
         let first = SynaraAgentApprovalNotificationActionDedupeStore(
             defaults: defaults,
             storageKey: storageKey

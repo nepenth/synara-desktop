@@ -162,6 +162,12 @@ fn emit_notification_action<R: Runtime>(
     .map_err(|error| error.to_string())
 }
 
+fn is_time_sensitive_agent_approval(
+    context: Option<&DesktopNotificationActionContext>,
+) -> bool {
+    context.is_some_and(|context| context.kind == "agent-approval")
+}
+
 fn show_notification_without_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
     title: &str,
@@ -184,6 +190,7 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     action_context: Option<&DesktopNotificationActionContext>,
 ) -> Result<(), String> {
     use notify_rust::Notification;
+    use notify_rust::Urgency;
 
     let mut notification = Notification::new();
     notification.summary(title);
@@ -191,6 +198,10 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         notification.body(body);
     }
     notification.auto_icon();
+    if is_time_sensitive_agent_approval(action_context) {
+        notification.urgency(Urgency::Critical);
+        notification.timeout(notify_rust::Timeout::Milliseconds(300_000));
+    }
     if route.is_some() {
         notification.action(DESKTOP_NOTIFICATION_DEFAULT_ACTION_ID, "Open Synara");
     }
@@ -262,7 +273,7 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     actions: &[DesktopNotificationAction],
     action_context: Option<&DesktopNotificationActionContext>,
 ) -> Result<(), String> {
-    use mac_notification_sys::{MainButton, Notification, NotificationResponse};
+    use mac_notification_sys::{MainButton, Notification, NotificationResponse, Sound};
 
     configure_macos_notification_application();
 
@@ -271,6 +282,7 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     let app = app.clone();
     let route = route.map(str::to_owned);
     let action_context = action_context.cloned();
+    let time_sensitive = is_time_sensitive_agent_approval(action_context.as_ref());
     let action_labels = actions
         .iter()
         .map(|action| action.label.clone())
@@ -290,6 +302,10 @@ fn show_notification_with_route_click_handler<R: Runtime>(
             notification.title(&title);
             if let Some(ref body) = body {
                 notification.message(body);
+            }
+            if time_sensitive {
+                notification.subtitle("Time-sensitive · expires in 5 minutes");
+                notification.sound(Sound::Default);
             }
             if action_labels.len() == 1 {
                 notification.main_button(MainButton::SingleAction(action_labels[0].as_str()));

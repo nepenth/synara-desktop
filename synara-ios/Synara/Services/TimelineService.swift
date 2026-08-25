@@ -1248,56 +1248,112 @@ final class MockTimelineService: TimelineServicing {
 }
 
 enum MatrixHTMLRenderer {
+    private struct NativeHTMLLinkProjection {
+        let html: String
+        let originalBySentinel: [String: URL]
+    }
+
+    private final class RichTextCacheEntry: NSObject {
+        let value: RichText
+
+        init(_ value: RichText) {
+            self.value = value
+        }
+    }
+
+    private static let richTextCache: NSCache<NSString, RichTextCacheEntry> = {
+        let cache = NSCache<NSString, RichTextCacheEntry>()
+        cache.countLimit = 600
+        cache.totalCostLimit = 8 * 1_024 * 1_024
+        return cache
+    }()
+    private static let maximumRichHTMLBytes = 256 * 1_024
+
+    struct RichText: Equatable {
+        struct Style: OptionSet, Hashable {
+            let rawValue: UInt8
+
+            static let bold = Style(rawValue: 1 << 0)
+            static let italic = Style(rawValue: 1 << 1)
+            static let strikethrough = Style(rawValue: 1 << 2)
+            static let underline = Style(rawValue: 1 << 3)
+            static let code = Style(rawValue: 1 << 4)
+        }
+
+        struct Run: Equatable {
+            let text: String
+            let style: Style
+            let link: URL?
+        }
+
+        let runs: [Run]
+
+        var plainText: String {
+            runs.map(\.text).joined()
+        }
+    }
+
+    struct CodeBlock: Equatable {
+        let code: String
+        let language: String?
+    }
+
     struct DetailsBlock: Equatable {
         let summary: String
-        let code: String?
+        let code: CodeBlock?
         let body: String
     }
 
+    struct SpoilerBlock: Equatable {
+        let content: RichText
+        let reason: String?
+    }
+
+    struct TableCell: Equatable {
+        let content: RichText
+        let isHeader: Bool
+
+        var plainText: String {
+            content.plainText
+        }
+    }
+
     struct TableRow: Equatable {
-        let cells: [String]
+        let cells: [TableCell]
         let isHeader: Bool
     }
 
     struct TableBlock: Equatable {
+        let caption: RichText?
         let rows: [TableRow]
     }
 
     enum Segment: Equatable {
-        case markdown(String)
-        case code(String)
-        case quote(String)
+        case richText(RichText)
+        case code(CodeBlock)
+        case quote(RichText)
+        case spoiler(SpoilerBlock)
         case details(DetailsBlock)
         case table(TableBlock)
     }
 
-    static func attributedString(body: String, html: String) -> AttributedString {
-        let markdown = sanitizedMarkdown(body: body, html: html)
-        if let attributed = try? AttributedString(
-            markdown: markdown,
-            options: AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            return attributed
-        }
-
-        return AttributedString(body)
-    }
-
     static func segments(body: String, html: String) -> [Segment] {
-        let sanitized = html
-            .removingHTMLBlocks(named: "script")
-            .removingHTMLBlocks(named: "style")
-        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>|<blockquote(?:\s+[^>]*)?>[\s\S]*?</blockquote\s*>|<table(?:\s+[^>]*)?>[\s\S]*?</table\s*>"#
+        guard html.utf8.count <= maximumRichHTMLBytes else {
+            let fallback = fallbackRichText(body)
+            return fallback.runs.isEmpty ? [] : [.richText(fallback)]
+        }
+        let sanitized = html.sanitizingMatrixHTMLForNativeImport()
+        let pattern = #"<details(?:\s+[^>]*)?>[\s\S]*?</details\s*>|<pre(?:\s+[^>]*)?>[\s\S]*?</pre\s*>|<blockquote(?:\s+[^>]*)?>[\s\S]*?</blockquote\s*>|<table(?:\s+[^>]*)?>[\s\S]*?</table\s*>|<span\b[^>]*\bdata-mx-spoiler(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?[^>]*>[\s\S]*?</span\s*>"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
-            let markdown = sanitizedMarkdown(body: body, html: html)
-            return markdown.isEmpty ? [] : [.markdown(markdown)]
+            let text = richText(body: body, html: html)
+            return text.runs.isEmpty ? [] : [.richText(text)]
         }
 
         let nsRange = NSRange(sanitized.startIndex ..< sanitized.endIndex, in: sanitized)
         let matches = regex.matches(in: sanitized, range: nsRange)
         guard matches.isEmpty == false else {
-            let markdown = sanitizedMarkdown(body: body, html: html)
-            return markdown.isEmpty ? [] : [.markdown(markdown)]
+            let text = richText(body: body, html: html)
+            return text.runs.isEmpty ? [] : [.richText(text)]
         }
 
         var segments: [Segment] = []
@@ -1308,7 +1364,7 @@ enum MatrixHTMLRenderer {
                 continue
             }
 
-            appendMarkdownSegment(from: String(sanitized[cursor ..< range.lowerBound]), to: &segments)
+            appendRichTextSegment(from: String(sanitized[cursor ..< range.lowerBound]), to: &segments)
 
             let blockHTML = String(sanitized[range])
             if blockHTML.range(of: #"^\s*<details"#, options: [.regularExpression, .caseInsensitive]) != nil {
@@ -1323,6 +1379,10 @@ enum MatrixHTMLRenderer {
                       let table = tableBlock(html: blockHTML)
             {
                 segments.append(.table(table))
+            } else if blockHTML.range(of: #"^\s*<span\b[^>]*\bdata-mx-spoiler"#, options: [.regularExpression, .caseInsensitive]) != nil,
+                      let spoiler = spoilerBlock(html: blockHTML)
+            {
+                segments.append(.spoiler(spoiler))
             } else if let code = codeBlock(html: blockHTML) {
                 segments.append(.code(code))
             }
@@ -1330,13 +1390,115 @@ enum MatrixHTMLRenderer {
             cursor = range.upperBound
         }
 
-        appendMarkdownSegment(from: String(sanitized[cursor...]), to: &segments)
+        appendRichTextSegment(from: String(sanitized[cursor...]), to: &segments)
 
         if segments.isEmpty {
-            let markdown = sanitizedMarkdown(body: body, html: html)
-            return markdown.isEmpty ? [] : [.markdown(markdown)]
+            let text = richText(body: body, html: html)
+            return text.runs.isEmpty ? [] : [.richText(text)]
         }
         return segments
+    }
+
+    /// Imports the SDK-sanitized Matrix HTML as HTML, never as Markdown. This
+    /// distinction is essential: literal `**`, `~~`, and backticks in an HTML
+    /// text node are user content and must not acquire formatting on a second
+    /// parse. We project only the small set of semantic attributes SwiftUI
+    /// needs and validate every link again before it reaches the view.
+    static func richText(body: String, html: String) -> RichText {
+        #if canImport(UIKit)
+            let cacheKey = "\(body)\u{0}\(html)" as NSString
+            if let cached = richTextCache.object(forKey: cacheKey) {
+                return cached.value
+            }
+            guard html.utf8.count <= maximumRichHTMLBytes else {
+                let fallback = fallbackRichText(body)
+                cacheRichText(fallback, forKey: cacheKey, body: body, html: html)
+                return fallback
+            }
+
+            let preparedHTML = html
+                .sanitizingMatrixHTMLForNativeImport()
+                .replacingHTMLListsForRichText()
+                // UIKit's HTML importer emits only a single line break between
+                // adjacent paragraphs. Matrix paragraphs are semantic blocks,
+                // so retain the visible paragraph separation explicitly.
+                .replacingHTMLPattern(#"</p\s*>"#, with: "</p><br>")
+            let linkProjection = projectingSafeLinksForNativeImport(preparedHTML)
+            let safeHTML = linkProjection.html
+
+            let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+                .documentType: NSAttributedString.DocumentType.html,
+                .characterEncoding: String.Encoding.utf8.rawValue,
+            ]
+            guard let imported = try? NSAttributedString(
+                data: Data(safeHTML.utf8),
+                options: options,
+                documentAttributes: nil
+            ) else {
+                let fallback = fallbackRichText(body)
+                cacheRichText(fallback, forKey: cacheKey, body: body, html: html)
+                return fallback
+            }
+
+            var runs: [RichText.Run] = []
+            imported.enumerateAttributes(
+                in: NSRange(location: 0, length: imported.length),
+                options: []
+            ) { attributes, range, _ in
+                guard range.length > 0 else {
+                    return
+                }
+
+                var text = imported.attributedSubstring(from: range).string
+                    .replacingOccurrences(of: "\u{2028}", with: "\n")
+                    .replacingOccurrences(of: "\u{2029}", with: "\n")
+                if let paragraph = attributes[.paragraphStyle] as? NSParagraphStyle,
+                   paragraph.paragraphSpacing > 0,
+                   paragraph.textLists.isEmpty,
+                   text.hasSuffix("\n"),
+                   text.hasSuffix("\n\n") == false
+                {
+                    text.append("\n")
+                }
+
+                var style: RichText.Style = []
+                if let font = attributes[.font] as? UIFont {
+                    let traits = font.fontDescriptor.symbolicTraits
+                    if traits.contains(.traitBold) {
+                        style.insert(.bold)
+                    }
+                    if traits.contains(.traitItalic) {
+                        style.insert(.italic)
+                    }
+                    if traits.contains(.traitMonoSpace) {
+                        style.insert(.code)
+                    }
+                }
+                if (attributes[.strikethroughStyle] as? NSNumber)?.intValue ?? 0 != 0 {
+                    style.insert(.strikethrough)
+                }
+                if (attributes[.underlineStyle] as? NSNumber)?.intValue ?? 0 != 0 {
+                    style.insert(.underline)
+                }
+
+                let rawLink = (attributes[.link] as? URL)?.absoluteString
+                    ?? attributes[.link] as? String
+                let link = rawLink.flatMap { candidate in
+                    if let original = linkProjection.originalBySentinel[candidate] {
+                        return original
+                    }
+                    return candidate.isSafeMatrixHTMLLink ? URL(string: candidate) : nil
+                }
+                appendRichTextRun(.init(text: text, style: style, link: link), to: &runs)
+            }
+
+            let trimmed = trimmingRichTextRuns(collapsingExcessiveNewlines(in: runs))
+            let result = trimmed.isEmpty ? fallbackRichText(body) : RichText(runs: trimmed)
+            cacheRichText(result, forKey: cacheKey, body: body, html: html)
+            return result
+        #else
+            return fallbackRichText(body)
+        #endif
     }
 
     static func detailsBlocks(html: String) -> [DetailsBlock] {
@@ -1365,11 +1527,7 @@ enum MatrixHTMLRenderer {
                 return nil
             }
 
-            let code = firstHTMLCapture(
-                in: content,
-                pattern: #"<pre(?:\s+[^>]*)?>\s*<code(?:\s+[^>]*)?>([\s\S]*?)</code\s*>\s*</pre\s*>"#
-            )?.decodingBasicHTMLEntities()
-                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let code = codeBlock(html: content)
 
             let body = content
                 .replacingHTMLPattern(#"<summary(?:\s+[^>]*)?>[\s\S]*?</summary\s*>"#, with: "")
@@ -1377,7 +1535,7 @@ enum MatrixHTMLRenderer {
                 .strippingHTMLTagsAndDecoding()
                 .trimmingCharacters(in: .whitespacesAndNewlines)
 
-            return DetailsBlock(summary: summary, code: code?.isEmpty == false ? code : nil, body: body)
+            return DetailsBlock(summary: summary, code: code, body: body)
         }
     }
 
@@ -1403,7 +1561,10 @@ enum MatrixHTMLRenderer {
         output = output.replacingTag("del", with: "~~")
         output = output.replacingTag("s", with: "~~")
         output = output.replacingTables()
-        output = output.replacingHTMLPattern(#"<br\s*/?>"#, with: "\n")
+        // Pretty-printed Matrix HTML commonly places a source newline after
+        // `<br>` (Hermes does this for approval choices). That source newline
+        // is formatting around the element, not a second user-visible break.
+        output = output.replacingHTMLPattern(#"<br\s*/?>[ \t]*(?:\r?\n)?"#, with: "\n")
         output = output.replacingHTMLPattern(#"</p\s*>"#, with: "\n\n")
         output = output.replacingHTMLPattern(#"<p(?:\s+[^>]*)?>"#, with: "")
         output = output.replacingOrderedLists()
@@ -1426,12 +1587,12 @@ enum MatrixHTMLRenderer {
         return output.isEmpty ? body : output
     }
 
-    private static func appendMarkdownSegment(from html: String, to segments: inout [Segment]) {
-        let markdown = sanitizedMarkdown(body: "", html: html)
-        guard markdown.isEmpty == false else {
+    private static func appendRichTextSegment(from html: String, to segments: inout [Segment]) {
+        let text = richText(body: "", html: html)
+        guard text.runs.isEmpty == false else {
             return
         }
-        segments.append(.markdown(markdown))
+        segments.append(.richText(text))
     }
 
     static func codeLineCount(_ code: String) -> Int {
@@ -1443,13 +1604,51 @@ enum MatrixHTMLRenderer {
     }
 
     static func tableBlock(html: String) -> TableBlock? {
-        let rows = html.htmlTableRows().map { row in
-            TableRow(cells: row.cells, isHeader: row.isHeader)
+        let caption = firstHTMLCapture(
+            in: html,
+            pattern: #"<caption(?:\s+[^>]*)?>([\s\S]*?)</caption\s*>"#
+        ).map { richText(body: "", html: $0) }
+            .flatMap { $0.runs.isEmpty ? nil : $0 }
+        let rows = html.htmlTableRowFragments().map { row in
+            TableRow(
+                cells: row.cells.map {
+                    TableCell(
+                        content: richText(body: "", html: $0.html),
+                        isHeader: $0.isHeader
+                    )
+                },
+                isHeader: row.isHeader
+            )
         }
-        return rows.isEmpty ? nil : TableBlock(rows: rows)
+        return rows.isEmpty ? nil : TableBlock(caption: caption, rows: rows)
     }
 
-    private static func codeBlock(html: String) -> String? {
+    private static func spoilerBlock(html: String) -> SpoilerBlock? {
+        guard let openingTag = firstHTMLCapture(
+            in: html,
+            pattern: #"^(<span\b[^>]*\bdata-mx-spoiler(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?[^>]*>)"#
+        ),
+            let contentHTML = firstHTMLCapture(
+                in: html,
+                pattern: #"^<span\b[^>]*\bdata-mx-spoiler(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?[^>]*>([\s\S]*)</span\s*>$"#
+            )
+        else {
+            return nil
+        }
+
+        let content = richText(body: "", html: contentHTML)
+        guard content.runs.isEmpty == false else { return nil }
+        let reason = MatrixHTMLTag(raw: String(openingTag.dropFirst().dropLast()))?
+            .attributes["data-mx-spoiler"]?
+            .decodingBasicHTMLEntities()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return SpoilerBlock(
+            content: content,
+            reason: reason.flatMap { $0.isEmpty ? nil : String($0.prefix(160)) }
+        )
+    }
+
+    private static func codeBlock(html: String) -> CodeBlock? {
         let rawCode = firstHTMLCapture(
             in: html,
             pattern: #"<pre(?:\s+[^>]*)?>\s*<code(?:\s+[^>]*)?>([\s\S]*?)</code\s*>\s*</pre\s*>"#
@@ -1460,20 +1659,147 @@ enum MatrixHTMLRenderer {
         let code = rawCode?
             .replacingHTMLPattern(#"</?code(?:\s+[^>]*)?>"#, with: "")
             .decodingBasicHTMLEntities()
-            .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        return code?.isEmpty == false ? code : nil
+        guard let code, code.isEmpty == false else {
+            return nil
+        }
+        return CodeBlock(code: code, language: codeLanguage(html: html))
     }
 
-    private static func quoteBlock(html: String) -> String? {
+    private static func codeLanguage(html: String) -> String? {
+        guard let classes = firstHTMLCapture(
+            in: html,
+            pattern: #"<code[^>]*\bclass\s*=\s*[\"']([^\"']*)[\"'][^>]*>"#
+        ) else {
+            return nil
+        }
+        let language = classes
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+            .first { $0.lowercased().hasPrefix("language-") }?
+            .dropFirst("language-".count)
+        guard let language, language.isEmpty == false, language.count <= 32,
+              language.unicodeScalars.allSatisfy({
+                  CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_+.-")).contains($0)
+              })
+        else {
+            return nil
+        }
+        return String(language)
+    }
+
+    private static func quoteBlock(html: String) -> RichText? {
         let rawQuote = firstHTMLCapture(
             in: html,
             pattern: #"<blockquote(?:\s+[^>]*)?>([\s\S]*?)</blockquote\s*>"#
         )
-        let quote = rawQuote.map { sanitizedMarkdown(body: "", html: $0) }
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        let quote = rawQuote.map { richText(body: "", html: $0) }
 
-        return quote?.isEmpty == false ? quote : nil
+        return quote?.runs.isEmpty == false ? quote : nil
+    }
+
+    private static func fallbackRichText(_ body: String) -> RichText {
+        let text = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard text.isEmpty == false else {
+            return RichText(runs: [])
+        }
+        return RichText(runs: [.init(text: text, style: [], link: nil)])
+    }
+
+    private static func cacheRichText(
+        _ text: RichText,
+        forKey key: NSString,
+        body: String,
+        html: String
+    ) {
+        let cost = body.utf8.count + html.utf8.count + text.plainText.utf8.count
+        richTextCache.setObject(RichTextCacheEntry(text), forKey: key, cost: cost)
+    }
+
+    /// Foundation's HTML importer silently drops some safe Matrix schemes
+    /// (notably `magnet:` and `matrix:`). Replace every already-validated href
+    /// with a local HTTPS sentinel for import, then restore the exact URL on
+    /// the typed run. This also prevents importer-specific URL rewriting.
+    private static func projectingSafeLinksForNativeImport(_ html: String) -> NativeHTMLLinkProjection {
+        let pattern = #"<a href=\"([^\"]+)\">"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return NativeHTMLLinkProjection(html: html, originalBySentinel: [:])
+        }
+        let range = NSRange(html.startIndex ..< html.endIndex, in: html)
+        let matches = regex.matches(in: html, range: range)
+        guard matches.isEmpty == false else {
+            return NativeHTMLLinkProjection(html: html, originalBySentinel: [:])
+        }
+
+        let source = html as NSString
+        let output = NSMutableString(string: html)
+        var links: [String: URL] = [:]
+        for (offset, match) in matches.enumerated().reversed() {
+            guard match.numberOfRanges == 2 else { continue }
+            let raw = source.substring(with: match.range(at: 1)).decodingBasicHTMLEntities()
+            guard raw.isSafeMatrixHTMLLink, let original = URL(string: raw) else { continue }
+            let sentinel = "https://synara.invalid/__matrix_link/\(offset)"
+            links[sentinel] = original
+            let replacement = "<a href=\"\(sentinel)\">"
+            output.replaceCharacters(in: match.range(at: 0), with: replacement)
+        }
+        return NativeHTMLLinkProjection(html: output as String, originalBySentinel: links)
+    }
+
+    private static func appendRichTextRun(_ run: RichText.Run, to runs: inout [RichText.Run]) {
+        guard run.text.isEmpty == false else {
+            return
+        }
+        if let last = runs.last, last.style == run.style, last.link == run.link {
+            runs[runs.count - 1] = .init(text: last.text + run.text, style: run.style, link: run.link)
+        } else {
+            runs.append(run)
+        }
+    }
+
+    private static func trimmingRichTextRuns(_ source: [RichText.Run]) -> [RichText.Run] {
+        var runs = source.filter { $0.text.isEmpty == false }
+        let edgeWhitespace = CharacterSet(charactersIn: " \r\n")
+        while let first = runs.first {
+            let text = first.text.trimmingLeadingCharacters(in: edgeWhitespace)
+            if text.isEmpty {
+                runs.removeFirst()
+            } else {
+                runs[0] = .init(text: text, style: first.style, link: first.link)
+                break
+            }
+        }
+        while let last = runs.last {
+            let text = last.text.trimmingTrailingCharacters(in: edgeWhitespace)
+            if text.isEmpty {
+                runs.removeLast()
+            } else {
+                runs[runs.count - 1] = .init(text: text, style: last.style, link: last.link)
+                break
+            }
+        }
+        return runs
+    }
+
+    private static func collapsingExcessiveNewlines(in source: [RichText.Run]) -> [RichText.Run] {
+        var output: [RichText.Run] = []
+        var newlineCount = 0
+        for run in source {
+            var text = ""
+            for character in run.text {
+                if character == "\n" {
+                    guard newlineCount < 2 else {
+                        continue
+                    }
+                    newlineCount += 1
+                } else {
+                    newlineCount = 0
+                }
+                text.append(character)
+            }
+            appendRichTextRun(.init(text: text, style: run.style, link: run.link), to: &output)
+        }
+        return output
     }
 
     private static func firstHTMLCapture(in html: String, pattern: String) -> String? {
@@ -1493,70 +1819,335 @@ enum MatrixHTMLRenderer {
     }
 }
 
-enum MatrixDisplayMarkdown {
-    static func normalize(_ markdown: String) -> String {
-        let normalizedNewlines = markdown
-            .replacingOccurrences(of: "\r\n", with: "\n")
-            .replacingOccurrences(of: "\r", with: "\n")
+private struct MatrixHTMLTag {
+    let name: String
+    let attributes: [String: String]
+    let isClosing: Bool
+    let isSelfClosing: Bool
 
-        var lines = normalizedNewlines
-            .components(separatedBy: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-
-        while lines.first?.isEmpty == true {
-            lines.removeFirst()
+    init?(raw: String) {
+        var characters = Array(raw)
+        while characters.first?.isWhitespace == true { characters.removeFirst() }
+        while characters.last?.isWhitespace == true { characters.removeLast() }
+        guard characters.isEmpty == false,
+              characters.first != "!",
+              characters.first != "?"
+        else {
+            return nil
         }
-        while lines.last?.isEmpty == true {
-            lines.removeLast()
+
+        var cursor = 0
+        let closing = characters[cursor] == "/"
+        if closing { cursor += 1 }
+        while cursor < characters.count, characters[cursor].isWhitespace { cursor += 1 }
+        let nameStart = cursor
+        while cursor < characters.count, characters[cursor].isASCIIHTMLNameCharacter {
+            cursor += 1
         }
+        guard cursor > nameStart else { return nil }
+        name = String(characters[nameStart..<cursor]).lowercased()
 
-        var output: [String] = []
-        var sawBlankLine = false
-
-        for line in lines {
-            if line.isEmpty {
-                sawBlankLine = output.isEmpty == false
+        var selfClosing = false
+        var parsed: [String: String] = [:]
+        while cursor < characters.count {
+            while cursor < characters.count, characters[cursor].isWhitespace { cursor += 1 }
+            guard cursor < characters.count else { break }
+            if characters[cursor] == "/" {
+                selfClosing = true
+                cursor += 1
                 continue
             }
-
-            if sawBlankLine,
-               let previous = output.last,
-               isListLine(line) == false,
-               isListLine(previous) == false,
-               isDivider(line) == false,
-               isDivider(previous) == false
-            {
-                output.append("")
+            let attributeStart = cursor
+            while cursor < characters.count, characters[cursor].isASCIIHTMLAttributeNameCharacter {
+                cursor += 1
             }
-
-            output.append(line)
-            sawBlankLine = false
+            guard cursor > attributeStart else {
+                cursor += 1
+                continue
+            }
+            let attributeName = String(characters[attributeStart..<cursor]).lowercased()
+            while cursor < characters.count, characters[cursor].isWhitespace { cursor += 1 }
+            var value = ""
+            if cursor < characters.count, characters[cursor] == "=" {
+                cursor += 1
+                while cursor < characters.count, characters[cursor].isWhitespace { cursor += 1 }
+                if cursor < characters.count, characters[cursor] == "\"" || characters[cursor] == "'" {
+                    let quote = characters[cursor]
+                    cursor += 1
+                    let valueStart = cursor
+                    while cursor < characters.count, characters[cursor] != quote { cursor += 1 }
+                    value = String(characters[valueStart..<cursor])
+                    if cursor < characters.count { cursor += 1 }
+                } else {
+                    let valueStart = cursor
+                    while cursor < characters.count,
+                          characters[cursor].isWhitespace == false,
+                          characters[cursor] != "/"
+                    {
+                        cursor += 1
+                    }
+                    value = String(characters[valueStart..<cursor])
+                }
+            }
+            // Match HTML's first-attribute-wins behavior and prevent a later
+            // duplicate from changing a value already validated by the scanner.
+            if parsed[attributeName] == nil {
+                parsed[attributeName] = value
+            }
         }
 
-        return output.joined(separator: "\n")
+        attributes = parsed
+        isClosing = closing
+        isSelfClosing = selfClosing
+    }
+}
+
+private extension Character {
+    var isASCIIHTMLNameCharacter: Bool {
+        isASCII && (isLetter || isNumber || self == "-" || self == ":")
     }
 
-    private static func isListLine(_ line: String) -> Bool {
-        if line.hasPrefix("- ") || line.hasPrefix("* ") || line.hasPrefix("+ ") {
-            return true
-        }
-
-        guard let dotIndex = line.firstIndex(of: ".") else {
-            return false
-        }
-        let prefix = line[..<dotIndex]
-        let suffix = line[line.index(after: dotIndex)...]
-        return prefix.isEmpty == false
-            && prefix.allSatisfy(\.isNumber)
-            && suffix.first == " "
-    }
-
-    private static func isDivider(_ line: String) -> Bool {
-        line == "---" || line == "***" || line == "___"
+    var isASCIIHTMLAttributeNameCharacter: Bool {
+        isASCII && isWhitespace == false && self != "=" && self != "/" && self != ">" && self != "<"
     }
 }
 
 private extension String {
+    /// Rebuilds Matrix rich HTML from a strict allowlist before it reaches
+    /// Foundation's HTML importer. Unknown tags keep their textual children,
+    /// but executable/resource-owning containers are removed with their
+    /// contents. Permitted tags are reconstructed without event handlers,
+    /// CSS, remote-resource attributes, or any other unapproved attribute.
+    ///
+    /// The scanner is quote-aware instead of using `<[^>]+>` so an attacker
+    /// cannot smuggle a second tag through a `>` inside an attribute value.
+    func sanitizingMatrixHTMLForNativeImport() -> String {
+        struct OpenTag {
+            let name: String
+            let emitted: Bool
+        }
+
+        let maximumTagNesting = 100
+        let allowedTags: Set<String> = [
+            "del", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "p", "a",
+            "ul", "ol", "sup", "sub", "li", "b", "i", "u", "strong", "em", "s",
+            "code", "hr", "br", "div", "table", "thead", "tbody", "tr", "th", "td",
+            "caption", "pre", "span", "img", "details", "summary",
+        ]
+        let contentDroppingTags: Set<String> = [
+            "script", "style", "iframe", "object", "embed", "svg", "math", "template",
+            "audio", "video", "source", "track", "canvas", "mx-reply",
+        ]
+        let voidTags: Set<String> = ["br", "hr", "img"]
+        let characters = Array(self)
+        var output = ""
+        output.reserveCapacity(utf8.count)
+        var index = 0
+        var suppressedTag: String?
+        var suppressedDepth = 0
+        var openTags: [OpenTag] = []
+
+        while index < characters.count {
+            guard characters[index] == "<" else {
+                if suppressedTag == nil {
+                    output.append(characters[index])
+                }
+                index += 1
+                continue
+            }
+
+            if characters[index...].starts(with: ["<", "!", "-", "-"]) {
+                if let end = closingCommentIndex(in: characters, after: index + 4) {
+                    index = end
+                    continue
+                }
+                // An unterminated comment owns the remainder of the input.
+                break
+            }
+
+            guard let end = htmlTagEnd(in: characters, after: index + 1) else {
+                if suppressedTag == nil {
+                    output.append("&lt;")
+                    output.append(contentsOf: characters[(index + 1)...])
+                }
+                break
+            }
+
+            let raw = String(characters[(index + 1)..<end])
+            index = end + 1
+            guard let tag = MatrixHTMLTag(raw: raw) else {
+                continue
+            }
+
+            if let currentSuppressedTag = suppressedTag {
+                if tag.name == currentSuppressedTag {
+                    if tag.isClosing {
+                        suppressedDepth -= 1
+                        if suppressedDepth == 0 {
+                            suppressedTag = nil
+                        }
+                    } else if tag.isSelfClosing == false {
+                        suppressedDepth += 1
+                    }
+                }
+                continue
+            }
+
+            if contentDroppingTags.contains(tag.name) {
+                if tag.isClosing == false, tag.isSelfClosing == false {
+                    suppressedTag = tag.name
+                    suppressedDepth = 1
+                }
+                continue
+            }
+            guard allowedTags.contains(tag.name) else {
+                continue
+            }
+
+            if tag.name == "img" {
+                guard tag.isClosing == false else { continue }
+                guard openTags.last?.emitted != false, openTags.count < maximumTagNesting else {
+                    continue
+                }
+                let fallback = tag.attributes["alt"] ?? tag.attributes["title"] ?? ""
+                output.append(fallback.escapingHTMLTextAttributePayload())
+                continue
+            }
+
+            if tag.isClosing {
+                guard voidTags.contains(tag.name) == false else { continue }
+                guard let matchingIndex = openTags.lastIndex(where: { $0.name == tag.name }) else {
+                    continue
+                }
+                for openTag in openTags[matchingIndex...].reversed() where openTag.emitted {
+                    output.append("</\(openTag.name)>")
+                }
+                openTags.removeSubrange(matchingIndex...)
+                continue
+            }
+
+            let shouldEmit = openTags.last?.emitted != false && openTags.count < maximumTagNesting
+            if voidTags.contains(tag.name) == false, tag.isSelfClosing == false {
+                openTags.append(OpenTag(name: tag.name, emitted: shouldEmit))
+            }
+            guard shouldEmit else { continue }
+
+            output.append("<\(tag.name)")
+            switch tag.name {
+            case "a":
+                if let rawHref = tag.attributes["href"]?.decodingBasicHTMLEntities(),
+                   rawHref.isSafeMatrixHTMLLink
+                {
+                    output.append(" href=\"\(rawHref.escapingHTMLAttributeValue())\"")
+                }
+            case "ol":
+                if let rawStart = tag.attributes["start"]?.decodingBasicHTMLEntities(),
+                   let start = Int(rawStart),
+                   (-1_000_000 ... 1_000_000).contains(start)
+                {
+                    output.append(" start=\"\(start)\"")
+                }
+            case "code":
+                if let classes = tag.attributes["class"]?.decodingBasicHTMLEntities(),
+                   let languageClass = classes.split(whereSeparator: \.isWhitespace)
+                    .map(String.init)
+                    .first(where: { $0.isSafeMatrixLanguageClass })
+                {
+                    output.append(" class=\"\(languageClass.escapingHTMLAttributeValue())\"")
+                }
+            case "span":
+                if let spoiler = tag.attributes["data-mx-spoiler"] {
+                    output.append(
+                        " data-mx-spoiler=\"\(spoiler.decodingBasicHTMLEntities().escapingHTMLAttributeValue())\""
+                    )
+                }
+            default:
+                break
+            }
+            output.append(">")
+
+            if tag.isSelfClosing, voidTags.contains(tag.name) == false {
+                output.append("</\(tag.name)>")
+            }
+        }
+
+        for openTag in openTags.reversed() where openTag.emitted {
+            output.append("</\(openTag.name)>")
+        }
+
+        return output
+    }
+
+    private func htmlTagEnd(in characters: [Character], after start: Int) -> Int? {
+        var cursor = start
+        var quote: Character?
+        while cursor < characters.count {
+            let character = characters[cursor]
+            if let activeQuote = quote {
+                if character == activeQuote {
+                    quote = nil
+                }
+            } else if character == "\"" || character == "'" {
+                quote = character
+            } else if character == ">" {
+                return cursor
+            }
+            cursor += 1
+        }
+        return nil
+    }
+
+    private func closingCommentIndex(in characters: [Character], after start: Int) -> Int? {
+        var cursor = start
+        while cursor + 2 < characters.count {
+            if characters[cursor] == "-",
+               characters[cursor + 1] == "-",
+               characters[cursor + 2] == ">"
+            {
+                return cursor + 3
+            }
+            cursor += 1
+        }
+        return nil
+    }
+
+    private func escapingHTMLAttributeValue() -> String {
+        replacingOccurrences(of: "&", with: "&amp;")
+            .replacingOccurrences(of: "\"", with: "&quot;")
+            .replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private func escapingHTMLTextAttributePayload() -> String {
+        replacingOccurrences(of: "<", with: "&lt;")
+            .replacingOccurrences(of: ">", with: "&gt;")
+    }
+
+    private var isSafeMatrixLanguageClass: Bool {
+        guard lowercased().hasPrefix("language-"), count > "language-".count, count <= 41 else {
+            return false
+        }
+        return dropFirst("language-".count).unicodeScalars.allSatisfy {
+            CharacterSet.alphanumerics.union(CharacterSet(charactersIn: "_+.-")).contains($0)
+        }
+    }
+
+    func trimmingLeadingCharacters(in set: CharacterSet) -> String {
+        var output = self
+        while let scalar = output.unicodeScalars.first, set.contains(scalar) {
+            output.removeFirst()
+        }
+        return output
+    }
+
+    func trimmingTrailingCharacters(in set: CharacterSet) -> String {
+        var output = self
+        while let scalar = output.unicodeScalars.last, set.contains(scalar) {
+            output.removeLast()
+        }
+        return output
+    }
+
     func removingHTMLBlocks(named tagName: String) -> String {
         replacingHTMLPattern(#"<\#(tagName)(?:\s+[^>]*)?>[\s\S]*?</\#(tagName)\s*>"#, with: "")
     }
@@ -1604,6 +2195,92 @@ private extension String {
         }
 
         return output as String
+    }
+
+    /// Native attributed-string HTML import may resolve image resources. Matrix
+    /// inline images are represented by their accessible `alt` text instead so
+    /// timeline rendering remains deterministic and performs no network I/O.
+    func replacingImageTagsWithAltText() -> String {
+        let pattern = #"<img\b[^>]*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+
+        let nsRange = NSRange(startIndex ..< endIndex, in: self)
+        let source = self as NSString
+        let output = NSMutableString(string: self)
+        for match in regex.matches(in: self, range: nsRange).reversed() {
+            let tag = source.substring(with: match.range(at: 0))
+            let alt = tag.firstQuotedHTMLAttribute(named: "alt") ?? ""
+            output.replaceCharacters(in: match.range(at: 0), with: alt)
+        }
+        return output as String
+    }
+
+    func replacingHTMLListsForRichText() -> String {
+        // Resolve innermost lists first. A single non-greedy regex pairs an
+        // outer opening tag with the first nested closing tag and corrupts
+        // valid nested Markdown output.
+        let pattern = #"<(ol|ul)\b([^>]*)>((?:(?!<(?:ol|ul)\b|</(?:ol|ul)\s*>)[\s\S])*)</\1\s*>"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+            return self
+        }
+
+        var value = self
+        for _ in 0 ..< 128 {
+            let range = NSRange(value.startIndex ..< value.endIndex, in: value)
+            let matches = regex.matches(in: value, range: range)
+            guard matches.isEmpty == false else { break }
+            let source = value as NSString
+            let output = NSMutableString(string: value)
+            var changed = false
+            for match in matches.reversed() {
+                guard match.numberOfRanges == 4 else { continue }
+                let tagName = source.substring(with: match.range(at: 1)).lowercased()
+                let attributes = source.substring(with: match.range(at: 2))
+                let items = source.substring(with: match.range(at: 3)).htmlListItems()
+                guard items.isEmpty == false else { continue }
+                let start = tagName == "ol"
+                    ? (attributes.firstQuotedHTMLAttribute(named: "start").flatMap(Int.init) ?? 1)
+                    : 1
+                var replacement = items.enumerated().map { offset, item in
+                    let marker = tagName == "ol" ? "\(start + offset). " : "• "
+                    return marker + item
+                }.joined(separator: "<br>")
+                let before = source.substring(to: match.range(at: 0).location)
+                if before.hasUnclosedHTMLListItem {
+                    replacement = "<br>" + replacement
+                }
+                output.replaceCharacters(in: match.range(at: 0), with: replacement)
+                changed = true
+            }
+            guard changed else { break }
+            value = output as String
+        }
+        return value
+    }
+
+    func firstQuotedHTMLAttribute(named name: String) -> String? {
+        let pattern = #"\b\#(name)\s*=\s*([\"'])([\s\S]*?)\1"#
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]),
+              let match = regex.firstMatch(
+                  in: self,
+                  range: NSRange(startIndex ..< endIndex, in: self)
+              ),
+              match.numberOfRanges == 3,
+              let range = Range(match.range(at: 2), in: self)
+        else {
+            return nil
+        }
+        return String(self[range])
+    }
+
+    private var hasUnclosedHTMLListItem: Bool {
+        let open = range(of: #"<li(?:\s+[^>]*)?>"#, options: [.regularExpression, .caseInsensitive, .backwards])
+        let close = range(of: #"</li\s*>"#, options: [.regularExpression, .caseInsensitive, .backwards])
+        guard let open else { return false }
+        guard let close else { return true }
+        return open.lowerBound > close.lowerBound
     }
 
     func replacingOrderedLists() -> String {
@@ -1716,15 +2393,34 @@ private extension String {
     }
 
     func htmlTableRows() -> [(cells: [String], isHeader: Bool)] {
+        htmlTableRowFragments().map { row in
+            (
+                cells: row.cells.map { $0.html.strippingHTMLTagsAndDecoding() },
+                isHeader: row.isHeader
+            )
+        }
+    }
+
+    func htmlTableRowFragments() -> [(cells: [(html: String, isHeader: Bool)], isHeader: Bool)] {
         htmlCaptures(pattern: #"<tr(?:\s+[^>]*)?>([\s\S]*?)</tr\s*>"#)
             .compactMap { rowHTML in
-                let headerCells = rowHTML.htmlCaptures(pattern: #"<th(?:\s+[^>]*)?>([\s\S]*?)</th\s*>"#)
-                let dataCells = rowHTML.htmlCaptures(pattern: #"<td(?:\s+[^>]*)?>([\s\S]*?)</td\s*>"#)
-                let cells = headerCells.isEmpty ? dataCells : headerCells
-                let trimmedCells = cells
-                    .map { $0.replacingHTMLPattern(#"</?[^>]+>"#, with: "").decodingBasicHTMLEntities().trimmingCharacters(in: .whitespacesAndNewlines) }
-                    .filter { $0.isEmpty == false }
-                return trimmedCells.isEmpty ? nil : (trimmedCells, headerCells.isEmpty == false)
+                guard let regex = try? NSRegularExpression(
+                    pattern: #"<(th|td)(?:\s+[^>]*)?>([\s\S]*?)</\1\s*>"#,
+                    options: [.caseInsensitive]
+                ) else {
+                    return nil
+                }
+                let range = NSRange(rowHTML.startIndex ..< rowHTML.endIndex, in: rowHTML)
+                let source = rowHTML as NSString
+                let parsed = regex.matches(in: rowHTML, range: range).compactMap { match -> (html: String, isHeader: Bool)? in
+                    guard match.numberOfRanges == 3 else { return nil }
+                    return (
+                        source.substring(with: match.range(at: 2)),
+                        source.substring(with: match.range(at: 1)).lowercased() == "th"
+                    )
+                }
+                guard parsed.isEmpty == false else { return nil }
+                return (parsed, parsed.allSatisfy { $0.isHeader })
             }
     }
 
@@ -1805,6 +2501,6 @@ private extension String {
             return false
         }
 
-        return ["https", "http", "matrix"].contains(scheme)
+        return ["https", "http", "ftp", "mailto", "magnet"].contains(scheme)
     }
 }

@@ -17,6 +17,13 @@ export type NativeReactionMutationResult = {
   readback?: NativeReactionReadback;
 };
 
+export type NativeAgentApprovalDecisionResult = {
+  roomId: string;
+  eventId: string;
+  status: 'applied' | 'already_decided';
+  reaction?: NativeReactionMutationResult;
+};
+
 export type NativeReactionInvoke = (
   command: string,
   args?: Record<string, unknown>
@@ -57,6 +64,26 @@ export function ensureReactionWithNativeOwner(
   invoke: NativeReactionInvoke = defaultInvoke
 ) {
   return invokeNativeReaction('matrix_reaction_ensure', input, invoke);
+}
+
+/**
+ * Shared-core approval authority. It resolves the exact event, enforces the
+ * five-minute policy and terminal-decision state, then applies at most one
+ * notification reaction under the native timeline lock.
+ */
+export async function decideAgentApprovalWithNativeOwner(input: {
+  roomId: string;
+  eventId: string;
+  actionId: string;
+}): Promise<NativeAgentApprovalDecisionResult> {
+  const result = await invokeDesktopWithAvailability<NativeAgentApprovalDecisionResult>(
+    'matrix_agent_approval_decide',
+    input
+  );
+  if (!result.available || !result.value) {
+    throw new Error('Native agent approval decisions are unavailable.');
+  }
+  return result.value;
 }
 
 /** Native arbitrary annotation redaction used by the reaction viewer. */

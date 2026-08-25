@@ -1,6 +1,8 @@
 //! Desktop bridges for timeline reaction mutations through `Core::command`.
 
-use synara_core::app::timeline::NativeReactionMutationResult;
+use synara_core::app::timeline::{
+    NativeAgentApprovalDecisionResult, NativeReactionMutationResult,
+};
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -9,6 +11,7 @@ use crate::matrix::auth::product::MatrixAuthCommandError;
 const REACTION_TOGGLE_COMMAND: &str = "matrix_timeline_reaction_toggle";
 const REACTION_ENSURE_COMMAND: &str = "matrix_reaction_ensure";
 const REACTION_REDACT_COMMAND: &str = "matrix_reaction_redact";
+const AGENT_APPROVAL_DECIDE_COMMAND: &str = "matrix_agent_approval_decide";
 const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn reaction_toggle(
@@ -27,6 +30,28 @@ pub(crate) async fn reaction_ensure(
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
     dispatch_reaction_key(core, REACTION_ENSURE_COMMAND, room_id, event_id, key).await
+}
+
+pub(crate) async fn agent_approval_decide(
+    core: &Core,
+    room_id: String,
+    event_id: String,
+    action_id: String,
+) -> Result<NativeAgentApprovalDecisionResult, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: AGENT_APPROVAL_DECIDE_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "eventId": event_id,
+                "actionId": action_id,
+            }),
+        })
+        .await
+        .map_err(map_reaction_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| reaction_response_error())
 }
 
 pub(crate) async fn reaction_redact(

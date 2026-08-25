@@ -7,13 +7,17 @@ enum SynaraSharedConstants {
     static let sharedCoreStoreReadyMarker = ".synara-nse-store-ready-v1"
     static let lockScreenMessagePreviewsKey = "synara.settings.lockScreenMessagePreviews"
     static let defaultLockScreenMessagePreviews = false
+    static let timeSensitiveAgentApprovalsKey = "synara.settings.timeSensitiveAgentApprovals"
+    static let defaultTimeSensitiveAgentApprovals = false
     static let themeBaseColorKey = "themeBaseColor"
     static let hour24ClockKey = "synara.settings.hour24Clock"
     static let hideActivityKey = "synara.settings.hideActivity"
+    static let notificationDiagnosticsKey = "synara.notification.previewDiagnostics.v1"
 
     static var registeredUserDefaults: [String: Any] {
         [
             lockScreenMessagePreviewsKey: defaultLockScreenMessagePreviews,
+            timeSensitiveAgentApprovalsKey: defaultTimeSensitiveAgentApprovals,
             hour24ClockKey: false,
             hideActivityKey: false
         ]
@@ -42,6 +46,83 @@ enum SynaraSharedConstants {
         fileManager.fileExists(
             atPath: storeRoot.appendingPathComponent(sharedCoreStoreReadyMarker).path
         )
+    }
+}
+
+struct SynaraNotificationDiagnosticEntry: Codable, Equatable, Identifiable {
+    let id: UUID
+    let timestamp: Date
+    let stage: String
+}
+
+/// A small, device-local notification-service flight recorder.
+///
+/// Entries intentionally contain only a fixed stage code and timestamp. They
+/// never contain Matrix IDs, APNs payloads, sender names, event content,
+/// credentials, device tokens, URLs, or raw errors. Both the app and NSE use
+/// the App Group defaults so a failed extension invocation can be diagnosed
+/// from Settings after the fact.
+enum SynaraNotificationDiagnostics {
+    enum Stage: String, CaseIterable {
+        case received
+        case contentCopyFailed = "content-copy-failed"
+        case payloadInvalid = "payload-invalid"
+        case preferencesDisabled = "preferences-disabled"
+        case resolutionQueued = "resolution-queued"
+        case resolutionCancelled = "resolution-cancelled"
+        case sharedSessionMissing = "shared-session-missing"
+        case sharedStoreNotReady = "shared-store-not-ready"
+        case coreResolutionFailed = "core-resolution-failed"
+        case resolvedWithoutPreview = "resolved-without-preview"
+        case resolvedPreview = "resolved-preview"
+        case resolvedApproval = "resolved-approval"
+        case delivered = "delivered"
+        case systemDeadline = "system-deadline"
+    }
+
+    static let maximumEntries = 48
+    private static let lock = NSLock()
+
+    static func record(
+        _ stage: Stage,
+        now: Date = Date(),
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) {
+        guard let defaults else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        var current = entriesWithoutLock(defaults: defaults)
+        current.append(.init(id: UUID(), timestamp: now, stage: stage.rawValue))
+        if current.count > maximumEntries {
+            current = Array(current.suffix(maximumEntries))
+        }
+        guard let data = try? JSONEncoder().encode(current) else { return }
+        defaults.set(data, forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+    }
+
+    static func entries(
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) -> [SynaraNotificationDiagnosticEntry] {
+        guard let defaults else { return [] }
+        lock.lock()
+        defer { lock.unlock() }
+        return entriesWithoutLock(defaults: defaults)
+    }
+
+    static func clear(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) {
+        guard let defaults else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        defaults.removeObject(forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+    }
+
+    private static func entriesWithoutLock(defaults: UserDefaults) -> [SynaraNotificationDiagnosticEntry] {
+        guard let data = defaults.data(forKey: SynaraSharedConstants.notificationDiagnosticsKey),
+              let decoded = try? JSONDecoder().decode([SynaraNotificationDiagnosticEntry].self, from: data)
+        else {
+            return []
+        }
+        return Array(decoded.suffix(maximumEntries))
     }
 }
 
@@ -119,6 +200,37 @@ enum SynaraNotificationPreviewPreference {
         }
 
         return defaults.bool(forKey: SynaraSharedConstants.lockScreenMessagePreviewsKey)
+    }
+}
+
+enum SynaraTimeSensitiveAgentApprovalPreference {
+    static func isEnabled(defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()) -> Bool {
+        guard let defaults else {
+            return SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
+        }
+        if defaults.object(forKey: SynaraSharedConstants.timeSensitiveAgentApprovalsKey) == nil {
+            return SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
+        }
+        return defaults.bool(forKey: SynaraSharedConstants.timeSensitiveAgentApprovalsKey)
+    }
+}
+
+enum SynaraAgentApprovalFreshness {
+    static let ttlMilliseconds: UInt64 = 5 * 60 * 1_000
+    static let futureToleranceMilliseconds: UInt64 = 60 * 1_000
+
+    static func isFresh(originServerTimestampMS: UInt64, now: Date = Date()) -> Bool {
+        let rawNow = now.timeIntervalSince1970 * 1_000
+        guard rawNow.isFinite, rawNow >= 0, rawNow <= Double(UInt64.max), originServerTimestampMS > 0 else {
+            return false
+        }
+        let nowMS = UInt64(rawNow)
+        let futureLimit = nowMS.addingReportingOverflow(futureToleranceMilliseconds)
+        guard futureLimit.overflow == false, originServerTimestampMS <= futureLimit.partialValue else {
+            return false
+        }
+        return nowMS >= originServerTimestampMS
+            && nowMS - originServerTimestampMS < ttlMilliseconds
     }
 }
 

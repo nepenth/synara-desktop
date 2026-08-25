@@ -11,11 +11,12 @@ protocol SparsePushRouteResolving {
 
 enum SynaraNotificationActionContract {
     static let agentApprovalCategoryIdentifier = "synara.agent-approval"
+    static let reviewIdentifier = SynaraAgentApprovalNotificationActionID.review.rawValue
     static let approveOnceIdentifier = SynaraAgentApprovalNotificationActionID.approveOnce.rawValue
     static let approveAlwaysIdentifier = SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
     static let denyIdentifier = SynaraAgentApprovalNotificationActionID.deny.rawValue
     /// Max age for acting on a native/push approval notification without in-app confirmation.
-    static let nativeActionTTL: TimeInterval = 10 * 60
+    static let nativeActionTTL: TimeInterval = 5 * 60
 
     static func registerCategories(
         center: UNUserNotificationCenter = UNUserNotificationCenter.current()
@@ -23,6 +24,11 @@ enum SynaraNotificationActionContract {
         // Approve-always is intentionally omitted from the native category: permanent
         // approval requires an explicit in-app confirmation path.
         let actions = [
+            UNNotificationAction(
+                identifier: reviewIdentifier,
+                title: "Review",
+                options: [.foreground]
+            ),
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
                 title: "Approve once",
@@ -45,7 +51,8 @@ enum SynaraNotificationActionContract {
     }
 
     /// Plans how a native/push notification action should be handled.
-    /// Does not send Matrix traffic; callers must still revalidate prompt content when possible.
+    /// Does not send Matrix traffic; reaction callers must use the shared-core
+    /// decision route for authoritative event and expiry validation.
     static func planAgentApprovalNotificationAction(
         actionIdentifier: String,
         userInfo: [AnyHashable: Any],
@@ -62,12 +69,12 @@ enum SynaraNotificationActionContract {
             return .ignore(reason: "missing-room-or-event-id")
         }
 
-        if alreadyActed {
-            return .ignore(reason: "already-acted")
-        }
-
-        if isExpired(candidates: candidates, now: now) {
-            return .ignore(reason: "expired-ttl")
+        if action == .review {
+            return .openRoom(
+                roomID: roomID,
+                eventID: eventID,
+                reason: "review-requested"
+            )
         }
 
         // Permanent approval must not fire from a background notification action.
@@ -79,11 +86,23 @@ enum SynaraNotificationActionContract {
             )
         }
 
+        if alreadyActed {
+            return .ignore(reason: "already-acted")
+        }
+
+        if isExpired(candidates: candidates, now: now) {
+            return .ignore(reason: "expired-ttl")
+        }
+
+        guard let reactionKey = action.reactionKey else {
+            return .ignore(reason: "unsupported-action")
+        }
+
         return .submitReaction(
             SynaraAgentApprovalReactionRequest(
                 roomID: roomID,
                 sourceEventID: eventID,
-                reactionKey: action.reactionKey
+                reactionKey: reactionKey
             )
         )
     }
@@ -213,8 +232,8 @@ final class SynaraAgentApprovalNotificationActionDedupeStore {
         defaults.set(storedKeys().filter { $0 != key }, forKey: storageKey)
     }
 
-    static func key(roomID: String, eventID: String, actionIdentifier: String) -> String {
-        "\(roomID)\u{0}\(eventID)\u{0}\(actionIdentifier)"
+    static func key(roomID: String, eventID: String, actionIdentifier _: String) -> String {
+        "\(roomID)\u{0}\(eventID)"
     }
 
     private func storedKeys() -> [String] {

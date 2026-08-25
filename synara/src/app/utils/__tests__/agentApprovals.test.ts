@@ -318,11 +318,7 @@ test('planAgentApprovalNativeNotificationAction requires validated approval prom
       eventId: '$event:matrix.org',
       actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
       reaction: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
-      dedupeKey: buildAgentApprovalNativeActionDedupeKey(
-        '!room:matrix.org',
-        '$event:matrix.org',
-        AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE
-      ),
+      dedupeKey: buildAgentApprovalNativeActionDedupeKey('!room:matrix.org', '$event:matrix.org'),
     }
   );
 
@@ -426,7 +422,8 @@ test('native action dedupe store persists across store instances sharing storage
   } as Storage;
 
   const first = createAgentApprovalNativeActionDedupeStore(storage);
-  const key = buildAgentApprovalNativeActionDedupeKey('!r', '$e', 'agent-approval.approve-once');
+  const key = buildAgentApprovalNativeActionDedupeKey('!r', '$e');
+  assert.equal(key, buildAgentApprovalNativeActionDedupeKey('!r', '$e'));
   assert.equal(first.has(key), false);
   first.add(key);
   assert.equal(first.has(key), true);

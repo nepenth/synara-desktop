@@ -975,6 +975,7 @@ const NativeTimelineRow = ({
                     {row.formattedBody ? (
                       <NativeFormattedBody
                         html={row.formattedBody}
+                        fallbackBody={row.body}
                         style={{
                           fontStyle: isEmote ? 'italic' : undefined,
                         }}

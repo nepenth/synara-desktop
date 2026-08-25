@@ -408,6 +408,19 @@ private struct AccountSettingsView: View {
         }
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task {
+                        await refreshSessionDevices()
+                    }
+                } label: {
+                    Label("Refresh Sessions", systemImage: "arrow.clockwise")
+                }
+                .disabled(isLoadingSessions)
+                .accessibilityIdentifier("RefreshSessionsButton")
+            }
+        }
         .accessibilityIdentifier("AccountSettingsScreen")
         .alert(
             "Sign out session?",
@@ -437,6 +450,12 @@ private struct AccountSettingsView: View {
         }
         .task {
             await sessionCrypto.start(crypto: environment.crypto)
+        }
+        .task {
+            for await _ in environment.crypto.sessionDeviceUpdates() {
+                guard Task.isCancelled == false else { break }
+                await refreshSessionDevices()
+            }
         }
         .onChange(of: selectedAvatarPhoto) { item in
             if let item {
@@ -715,9 +734,11 @@ private struct NotificationSettingsView: View {
     @State private var isRequestingNotifications = false
     @State private var isRegisteringPush = false
     @State private var showLockScreenMessagePreviews = SynaraSharedConstants.defaultLockScreenMessagePreviews
+    @State private var timeSensitiveAgentApprovals = SynaraSharedConstants.defaultTimeSensitiveAgentApprovals
     @State private var pushRules: SynaraPushRulesSnapshot?
     @State private var keywordDraft = ""
     @State private var pushRulesMessage: String?
+    @State private var notificationDiagnostics: [SynaraNotificationDiagnosticEntry] = []
 
     var body: some View {
         Form {
@@ -766,6 +787,21 @@ private struct NotificationSettingsView: View {
             }
 
             Section {
+                Toggle("Time-sensitive agent approvals", isOn: $timeSensitiveAgentApprovals)
+                    .accessibilityIdentifier("TimeSensitiveAgentApprovalsToggle")
+                    .onChange(of: timeSensitiveAgentApprovals) { value in
+                        environment.settings.set(
+                            value,
+                            for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
+                        )
+                    }
+            } header: {
+                Text("Agent Approvals")
+            } footer: {
+                Text("Marks locally verified approval prompts as Time Sensitive for five minutes. Review opens the exact prompt; Approve once and Deny require authentication. Always approval remains in-app only.")
+            }
+
+            Section {
                 Toggle("Show message content in notifications", isOn: $showLockScreenMessagePreviews)
                     .accessibilityIdentifier("LockScreenMessagePreviewsToggle")
                     .onChange(of: showLockScreenMessagePreviews) { value in
@@ -776,6 +812,37 @@ private struct NotificationSettingsView: View {
             } footer: {
                 Text("Off by default. Synara resolves content on this device; the push gateway receives only event IDs. Your iOS Show Previews setting still controls Lock Screen visibility.")
                     .accessibilityIdentifier("LockScreenMessagePreviewsHelp")
+            }
+
+            Section {
+                if notificationDiagnostics.isEmpty {
+                    Text("No notification-service activity recorded yet.")
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("NotificationDiagnosticsEmpty")
+                } else {
+                    ForEach(notificationDiagnostics.suffix(8).reversed()) { entry in
+                        LabeledContent(entry.stage) {
+                            Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                                .foregroundStyle(SynaraColor.secondaryText)
+                        }
+                        .accessibilityIdentifier("NotificationDiagnostic-\(entry.id.uuidString)")
+                    }
+                }
+                Button("Refresh Diagnostics") {
+                    reloadNotificationDiagnostics()
+                }
+                .accessibilityIdentifier("RefreshNotificationDiagnosticsButton")
+                if notificationDiagnostics.isEmpty == false {
+                    Button("Clear Diagnostics", role: .destructive) {
+                        SynaraNotificationDiagnostics.clear()
+                        reloadNotificationDiagnostics()
+                    }
+                    .accessibilityIdentifier("ClearNotificationDiagnosticsButton")
+                }
+            } header: {
+                Text("Local Delivery Diagnostics")
+            } footer: {
+                Text("Stores up to 48 stage codes and timestamps on this device. It never records message content, Matrix IDs, senders, push payloads, tokens, URLs, or account secrets.")
             }
 
             if let pushRules {
@@ -843,9 +910,17 @@ private struct NotificationSettingsView: View {
             showLockScreenMessagePreviews = environment.settings.bool(
                 for: SynaraSharedConstants.lockScreenMessagePreviewsKey
             )
+            timeSensitiveAgentApprovals = environment.settings.bool(
+                for: SynaraSharedConstants.timeSensitiveAgentApprovalsKey
+            )
             notificationStatus = await environment.notificationPermission.currentStatus()
             pushRules = await environment.matrix.pushRulesSnapshot()
+            reloadNotificationDiagnostics()
         }
+    }
+
+    private func reloadNotificationDiagnostics() {
+        notificationDiagnostics = SynaraNotificationDiagnostics.entries()
     }
 
     @ViewBuilder

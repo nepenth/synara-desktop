@@ -6,6 +6,7 @@
 //! src-tauri/`crate::matrix::*` surfaces, which re-export this module.
 
 pub mod account_data;
+pub mod agent_approvals;
 pub mod auth;
 pub mod backup;
 pub mod client_builder;

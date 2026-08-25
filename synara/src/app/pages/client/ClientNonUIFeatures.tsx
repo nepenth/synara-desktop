@@ -4,7 +4,6 @@ import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react
 import { useNavigate } from 'react-router-dom';
 import type { MatrixEventReading } from '../../utils/room';
 import type { EventedRoomReading } from '../../utils/roomEvents';
-import { eventFromWire } from '../../utils/nativeEventAdapter';
 
 type NonUIRoomReading = EventedRoomReading & {
   findEventById(eventId: string): MatrixEventReading | undefined;
@@ -71,7 +70,7 @@ import {
 } from '../../notifications/notificationCaches';
 import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
-import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
+import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeReactionOwner';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
@@ -81,23 +80,6 @@ const getSessionStorage = (): Storage | null => {
     return typeof sessionStorage === 'undefined' ? null : sessionStorage;
   } catch {
     return null;
-  }
-};
-
-const resolveAgentApprovalTargetEvent = async (
-  mx: ReturnType<typeof useMatrixClient>,
-  roomId: string,
-  eventId: string
-): Promise<MatrixEventReading | undefined> => {
-  const room = mx.getRoom(roomId);
-  const local = room?.findEventById(eventId);
-  if (local) return local;
-
-  try {
-    const raw = await mx.fetchRoomEvent(roomId, eventId);
-    return eventFromWire(raw, roomId);
-  } catch {
-    return undefined;
   }
 };
 
@@ -512,7 +494,6 @@ function AgentApprovalNotifications() {
       roomName,
       title,
       body,
-      commandPreview,
     }: {
       roomId: string;
       eventId: string;
@@ -522,7 +503,9 @@ function AgentApprovalNotifications() {
       body: string;
       commandPreview?: string;
     }) => {
-      const notificationBody = commandPreview ? `${body}\n${commandPreview}` : body;
+      // Keep dangerous command text out of OS-level notification surfaces.
+      // The exact prompt remains available through the Review route.
+      const notificationBody = body;
 
       if (supportsPlatformSystemNotifications()) {
         showPlatformNotification({
@@ -596,62 +579,31 @@ function AgentApprovalNotifications() {
       }
 
       const dedupe = nativeActionDedupeRef.current;
-      const provisionalDedupeKey = buildAgentApprovalNativeActionDedupeKey(
-        roomId,
-        eventId,
-        actionId
-      );
+      const provisionalDedupeKey = buildAgentApprovalNativeActionDedupeKey(roomId, eventId);
       if (dedupe.has(provisionalDedupeKey)) {
         return;
       }
 
-      const targetEvent = await resolveAgentApprovalTargetEvent(mx, roomId, eventId);
-      const isApprovalPrompt = targetEvent
-        ? Boolean(detectAgentApprovalPrompt(targetEvent.getContent<Record<string, unknown>>()))
-        : false;
-
-      const plan = planAgentApprovalNativeNotificationAction({
-        actionId,
-        context: { kind: context?.kind, roomId, eventId },
-        nowMs: Date.now(),
-        eventTsMs: targetEvent?.getTs(),
-        alreadyActed: dedupe.has(provisionalDedupeKey),
-        // The Rust owner reads its own timeline aggregation and performs an
-        // idempotent ensure. JS does not inspect or write reactions here.
-        alreadyReactedLocally: false,
-        eventResolved: Boolean(targetEvent),
-        isApprovalPrompt,
-      });
-
-      if (plan.type === 'open-room') {
-        if (import.meta.env?.DEV) {
-          // eslint-disable-next-line no-console
-          console.debug('[synara:agent-approval] native action open-room', plan.reason);
-        }
-        navigateRoom(plan.roomId, plan.eventId);
-        return;
-      }
-
-      if (plan.type === 'reject') {
-        if (import.meta.env?.DEV) {
-          // eslint-disable-next-line no-console
-          console.debug('[synara:agent-approval] native action rejected', plan.reason);
-        }
-        return;
-      }
-
-      dedupe.add(plan.dedupeKey);
+      dedupe.add(provisionalDedupeKey);
       try {
-        await ensureReactionWithNativeOwner({
-          roomId: plan.roomId,
-          eventId: plan.eventId,
-          key: plan.reaction,
+        await decideAgentApprovalWithNativeOwner({
+          roomId,
+          eventId,
+          actionId,
         });
-      } catch {
-        dedupe.remove(plan.dedupeKey);
+      } catch (error) {
+        dedupe.remove(provisionalDedupeKey);
+        // Expired, signed-out, stale, or otherwise rejected decisions fail
+        // closed, then open the exact event so the action never appears to
+        // have succeeded silently.
+        navigateRoom(roomId, eventId);
+        if (import.meta.env?.DEV) {
+          // eslint-disable-next-line no-console
+          console.debug('[synara:agent-approval] native decision failed closed', error);
+        }
       }
     },
-    [mx, navigateRoom]
+    [navigateRoom]
   );
 
   useEffect(() => {

@@ -14,7 +14,7 @@ export const AGENT_APPROVAL_NOTIFICATION_ACTION_DENY = 'agent-approval.deny';
 export const AGENT_APPROVAL_NOTIFICATION_KIND = 'agent-approval';
 
 /** Max age of an approval prompt event (or native action) that can be acted on from OS notifications. */
-export const AGENT_APPROVAL_NATIVE_ACTION_TTL_MS = 10 * 60 * 1000;
+export const AGENT_APPROVAL_NATIVE_ACTION_TTL_MS = 5 * 60 * 1000;
 
 export const AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY =
   'synara.agent-approval.native-action-dedupe';
@@ -126,11 +126,8 @@ export type PlanAgentApprovalNativeActionInput = {
   eventResolved?: boolean;
 };
 
-export const buildAgentApprovalNativeActionDedupeKey = (
-  roomId: string,
-  eventId: string,
-  actionId: string
-): string => `${roomId}\u0000${eventId}\u0000${actionId}`;
+export const buildAgentApprovalNativeActionDedupeKey = (roomId: string, eventId: string): string =>
+  `${roomId}\u0000${eventId}`;
 
 const isNonEmptyId = (value: string | undefined): value is string =>
   typeof value === 'string' && value.trim().length > 0;
@@ -233,7 +230,7 @@ export const planAgentApprovalNativeNotificationAction = (
     eventId,
     actionId,
     reaction,
-    dedupeKey: buildAgentApprovalNativeActionDedupeKey(roomId, eventId, actionId),
+    dedupeKey: buildAgentApprovalNativeActionDedupeKey(roomId, eventId),
   };
 };
 

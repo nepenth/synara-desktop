@@ -21,6 +21,10 @@ import {
   normalizePrismLanguage,
 } from '../nativeTimelineCodeHighlight';
 import {
+  MAX_NATIVE_FORMATTED_BODY_BYTES,
+  prepareNativeFormattedBody,
+} from '../nativeTimelineRichText';
+import {
   NATIVE_SYNTAX_PALETTES,
   NATIVE_SYNTAX_ROLES,
   type NativeSyntaxPalette,
@@ -92,10 +96,10 @@ const ensurePythonGrammar = () => {
 
 test('native presenter routes formatted HTML through the sanitized Prism code-block path', () => {
   assert.match(presenter, /NativeFormattedBody/);
-  assert.match(formattedBody, /sanitizeCustomHtml/);
+  assert.match(formattedBody, /prepareNativeFormattedBody/);
   assert.match(formattedBody, /react-prism\/ReactPrism/);
   assert.match(formattedBody, /highlightNativeCode/);
-  assert.match(formattedBody, /displayCodeText/);
+  assert.match(formattedBody, /gutterCode = displayCodeText/);
   assert.match(formattedBody, /data-native-code-block/);
   assert.match(formattedBody, /CodeLineNumbers/);
   assert.match(formattedBody, /CodeRow/);
@@ -204,7 +208,7 @@ test('unknown languages still produce a numbered code panel model', () => {
 
 const visualLinesForPre = (text: string): number => text.split('\n').length;
 
-test('Synara language-python fences strip one trailing newline so gutter count matches visual lines', () => {
+test('Synara language-python fences preserve source while gutter count matches visual lines', () => {
   const sanitized = sanitizeCustomHtml(PYTHON_FIXTURE);
   const block = nativeCodeBlockFromPreChildren(firstPreChildren(sanitized));
   assert.equal(block.languageClass, 'language-python');
@@ -222,10 +226,87 @@ test('Synara language-python fences strip one trailing newline so gutter count m
   assert.equal(gutterCount, 2);
   assert.notEqual(gutterCount, visualLinesForPre(block.code));
   assert.equal(formatLineNumbers(gutterCount), '1\n2');
-  assert.equal(formattedBody.includes('{displayCode}'), true);
+  assert.equal(formattedBody.includes('{code}'), true);
 
   const withInternalBlank = 'one\n\nthree\n';
   assert.equal(displayCodeText(withInternalBlank), 'one\n\nthree');
   assert.equal(countCodeLines(withInternalBlank), 3);
   assert.equal(visualLinesForPre(displayCodeText(withInternalBlank)), 3);
+});
+
+test('mixed pre content preserves siblings and exact trailing whitespace', () => {
+  const sanitized = sanitizeCustomHtml(
+    '<pre>prefix\n<code class="language-python">print("ok")\n</code>suffix\n</pre>'
+  );
+  const block = nativeCodeBlockFromPreChildren(firstPreChildren(sanitized));
+  assert.equal(block.languageClass, 'language-python');
+  assert.equal(block.code, 'prefix\nprint("ok")\nsuffix\n');
+  assert.equal(highlightNativeCode(block.code, block.languageClass).endsWith('\n'), true);
+});
+
+test('native formatted HTML is bounded and falls back when sanitization has no presentation', () => {
+  assert.equal(prepareNativeFormattedBody('<script>hidden()</script>'), undefined);
+  assert.equal(
+    prepareNativeFormattedBody('<mx-reply><blockquote>old</blockquote></mx-reply><p>current</p>'),
+    '<p>current</p>'
+  );
+  assert.equal(prepareNativeFormattedBody('<p>safe</p>'), '<p>safe</p>');
+  assert.equal(
+    prepareNativeFormattedBody('a'.repeat(MAX_NATIVE_FORMATTED_BODY_BYTES + 1)),
+    undefined
+  );
+  assert.equal(
+    prepareNativeFormattedBody('🙂'.repeat(MAX_NATIVE_FORMATTED_BODY_BYTES / 2)),
+    undefined
+  );
+});
+
+test('native formatted HTML never emits tags deeper than the Matrix limit', () => {
+  const html = `${'<div>'.repeat(100)}<strong>deep text</strong>${'</div>'.repeat(100)}`;
+  const sanitized = prepareNativeFormattedBody(html);
+  assert.ok(sanitized);
+  assert.doesNotMatch(sanitized, /<strong>/);
+  assert.match(sanitized, /deep text/);
+});
+
+test('native formatted HTML applies the exact Matrix v1.19 presentation profile', () => {
+  const sanitized = prepareNativeFormattedBody(
+    '<p data-md="x">safe</p>' +
+      '<a href="/relative" name="anchor">relative</a>' +
+      '<a href="matrix:roomid/r">matrix</a>' +
+      '<a href="https://example.org/path">web</a>' +
+      '<span data-mx-color="#abc" data-mx-bg-color="#123456" data-mx-pill="x">color</span>' +
+      '<font data-mx-color="#abcdef">legacy color</font>' +
+      '<strike>legacy strike</strike>' +
+      '<ol start="10"><li>ten</li></ol>' +
+      '<ol start="not-a-number"><li>one</li></ol>' +
+      '<img src="mxc://example.org/media" alt="diagram" data-mx-emoticon>'
+  );
+  assert.ok(sanitized);
+  assert.doesNotMatch(sanitized, /data-md|name=|data-mx-pill|data-mx-emoticon/);
+  assert.match(sanitized, /<a>relative<\/a>/);
+  assert.match(sanitized, /<a>matrix<\/a>/);
+  assert.match(
+    sanitized,
+    /<a href="https:\/\/example\.org\/path" target="_blank" rel="noreferrer noopener">web<\/a>/
+  );
+  assert.doesNotMatch(sanitized, /data-mx-color="#abc"/);
+  assert.match(sanitized, /data-mx-bg-color="#123456"/);
+  assert.match(
+    sanitized,
+    /<span data-mx-color="#abcdef" style="color:#abcdef">legacy color<\/span>/
+  );
+  assert.match(sanitized, /<s>legacy strike<\/s>/);
+  assert.match(sanitized, /<ol start="10">/);
+  assert.match(sanitized, /<ol><li>one<\/li><\/ol>/);
+  assert.match(sanitized, /<img src="mxc:\/\/example\.org\/media" alt="diagram" \/>/);
+});
+
+test('native formatted renderer explicitly owns spoilers, image fallback, and plain-body fallback', () => {
+  assert.match(formattedBody, /data-mx-spoiler/);
+  assert.match(formattedBody, /Reveal spoiler/);
+  assert.match(formattedBody, /InlineImageFallback/);
+  assert.match(formattedBody, /prepareNativeFormattedBody/);
+  assert.match(formattedBody, /fallbackBody/);
+  assert.doesNotMatch(formattedBody, /<img/);
 });

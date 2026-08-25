@@ -100,7 +100,10 @@ export const nativeCodeBlockFromPreChildren = (
   const codeEl = children.find((node) => isTag(node) && node.name === 'code');
   if (codeEl && isTag(codeEl)) {
     return {
-      code: extractTextFromHtmlChildren(codeEl.children),
+      // Matrix permits both `<pre><code>…</code></pre>` and plain `<pre>`.
+      // Preserve every text node in a mixed-but-valid `<pre>` instead of
+      // silently dropping siblings around the first `<code>` child.
+      code: extractTextFromHtmlChildren(children),
       languageClass: languageClassFromClassName(codeEl.attribs.class),
     };
   }

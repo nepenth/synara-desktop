@@ -211,14 +211,14 @@ use crate::app::sync::{
     build_sync_service, SyncReadiness, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
 };
 use crate::app::timeline::{
-    NativeComposerReplyDraft, NativeDecryptionState, NativeReactionMutation,
-    NativeReactionMutationResult, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineViewportHint,
-    TimelineMediaHandle, TimelinePageState, TimelineReaction, TimelineViewDeltaBatch,
-    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit,
-    TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeAgentApprovalDecisionResult, NativeComposerReplyDraft, NativeDecryptionState,
+    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineDirection,
+    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOwner, NativeTimelineReaction,
+    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineViewportHint, TimelineMediaHandle, TimelinePageState, TimelineReaction,
+    TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::verification::{
@@ -807,6 +807,7 @@ const TIMELINE_READ_STATE_OWNER_DESCRIPTION: &str =
     "The timeline read-state request is not available.";
 const TIMELINE_REACTION_GENERATION: u64 = 0;
 const REACTION_ENSURE_COMMAND: &str = "matrix_reaction_ensure";
+const AGENT_APPROVAL_DECIDE_COMMAND: &str = "matrix_agent_approval_decide";
 const REACTION_REDACT_COMMAND: &str = "matrix_reaction_redact";
 const TIMELINE_REACTION_TOGGLE_COMMAND: &str = "matrix_timeline_reaction_toggle";
 const REACTION_ENSURE_NO_SESSION_CODE: &str = "p2-reaction-ensure-no-session";
@@ -1508,6 +1509,15 @@ pub struct TimelineReactionMutationDto {
     pub key: String,
     pub mutation: String,
     pub readback: Option<TimelineReactionDto>,
+}
+
+/// Privacy-safe result of the shared-core approval decision route.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AgentApprovalDecisionDto {
+    pub room_id: String,
+    pub event_id: String,
+    pub status: String,
+    pub reaction: Option<TimelineReactionMutationDto>,
 }
 
 /// Static fail-closed timeline reaction error. Fields are source constants only.
@@ -5803,6 +5813,50 @@ impl SharedCore {
             }),
         )
         .await
+    }
+
+    pub async fn agent_approval_decide(
+        &self,
+        room_id: String,
+        event_id: String,
+        action_id: String,
+    ) -> Result<AgentApprovalDecisionDto, TimelineReactionError> {
+        let payload = timeline_reaction_envelope_payload(serde_json::json!({
+            "roomId": room_id,
+            "eventId": event_id,
+            "actionId": action_id,
+        }))?;
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: AGENT_APPROVAL_DECIDE_COMMAND.to_owned(),
+                session_generation: TIMELINE_REACTION_GENERATION,
+                request_id: None,
+                payload,
+            })
+            .await
+            .map_err(|error| {
+                map_timeline_reaction_core_error("agent-approval-no-session", error)
+            })?;
+        let result: NativeAgentApprovalDecisionResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                timeline_reaction_failed(
+                    TIMELINE_REACTION_FAILED_CODE,
+                    TIMELINE_REACTION_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(AgentApprovalDecisionDto {
+            room_id: result.room_id,
+            event_id: result.event_id,
+            status: match result.status {
+                crate::app::agent_approvals::AgentApprovalDecisionStatus::Applied => "applied",
+                crate::app::agent_approvals::AgentApprovalDecisionStatus::AlreadyDecided => {
+                    "already_decided"
+                }
+            }
+            .to_owned(),
+            reaction: result.reaction.map(timeline_reaction_mutation_dto),
+        })
     }
 
     pub async fn reaction_redact(
@@ -10972,7 +11026,8 @@ fn map_timeline_reaction_core_error(
                 || code.starts_with("p2-timeline-reaction-toggle-")
                 || code.starts_with("d0.3-timeline-")
                 || code.starts_with("v-crypto.6-")
-                || code.starts_with("v-send.2-reaction-") =>
+                || code.starts_with("v-send.2-reaction-")
+                || code.starts_with("agent-approval-") =>
         {
             timeline_reaction_failed(code, TIMELINE_REACTION_OWNER_DESCRIPTION)
         }

@@ -1,4 +1,5 @@
 use super::*;
+use synara_core::app::timeline::NativeAgentApprovalDecisionResult;
 
 #[tauri::command]
 pub async fn matrix_timeline_open(
@@ -106,6 +107,22 @@ pub async fn matrix_reaction_ensure(
         room_id,
         event_id,
         key,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_agent_approval_decide(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    event_id: String,
+    action_id: String,
+) -> Result<NativeAgentApprovalDecisionResult, MatrixAuthCommandError> {
+    crate::bridge::timeline_reactions::agent_approval_decide(
+        core.inner().as_ref(),
+        room_id,
+        event_id,
+        action_id,
     )
     .await
 }

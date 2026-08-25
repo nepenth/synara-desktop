@@ -63,9 +63,9 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var router: AppRouter?
     private var logger: LoggingServicing?
     private var agentApprovalReactions: AgentApprovalReactionServicing?
-    private var timeline: TimelineServicing?
     private var pendingRoute: AppRoute?
     private var pendingNotificationPayload: [AnyHashable: Any]?
+    private var pendingNotificationResponse: UNNotificationResponse?
     private let agentApprovalActionDedupe = SynaraAgentApprovalNotificationActionDedupeStore()
 
     func bind(to environment: AppEnvironment) {
@@ -75,7 +75,6 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         router = environment.router
         logger = environment.logger
         agentApprovalReactions = environment.agentApprovalReactions
-        timeline = environment.timeline
         UNUserNotificationCenter.current().delegate = self
 
         if let pendingRoute {
@@ -89,6 +88,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             Task { @MainActor in
                 await self.resolveNotificationRoute(from: payload)
             }
+        }
+        if let pendingNotificationResponse {
+            self.pendingNotificationResponse = nil
+            Task { await self.handleNotificationResponse(pendingNotificationResponse) }
         }
     }
 
@@ -141,10 +144,19 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        guard let push else {
+        guard push != nil else {
+            pendingNotificationResponse = response
             return
         }
 
+        await handleNotificationResponse(response)
+    }
+
+    private func handleNotificationResponse(_ response: UNNotificationResponse) async {
+        guard let push else {
+            pendingNotificationResponse = response
+            return
+        }
         let userInfo = response.notification.request.content.userInfo
         logNotificationPayloadShape(userInfo, context: "response")
         if SynaraAgentApprovalNotificationActionID(rawValue: response.actionIdentifier) != nil {
@@ -253,28 +265,13 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 return
             }
 
-            // Revalidate the focused Matrix event before reacting (desktop parity).
-            // Fail closed: unresolved / non-prompt / expired events open the room only.
-            let validation = await revalidateAgentApprovalNativeAction(
-                roomID: request.roomID,
-                eventID: request.sourceEventID,
-                userInfo: userInfo
-            )
-            guard validation.shouldSubmitReaction else {
-                logger?.info(
-                    "Agent approval notification action revalidation failed: \(validation.reason)",
-                    category: .push
-                )
-                routeToDestination(.room(id: request.roomID, eventID: request.sourceEventID))
-                await MainActor.run {
-                    push?.applyIncomingBadge(from: userInfo)
-                }
-                return
-            }
-
             agentApprovalActionDedupe.insert(dedupeKey)
             do {
-                try await agentApprovalReactions.submitReaction(request)
+                try await agentApprovalReactions.submitNativeDecision(
+                    roomID: request.roomID,
+                    eventID: request.sourceEventID,
+                    actionIdentifier: actionIdentifier
+                )
                 await MainActor.run {
                     push?.applyIncomingBadge(from: userInfo)
                 }
@@ -284,39 +281,6 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 await resolveNotificationRoute(from: userInfo)
             }
         }
-    }
-
-    /// Loads the focused timeline event and requires an approval-prompt detection hit.
-    private func revalidateAgentApprovalNativeAction(
-        roomID: String,
-        eventID: String,
-        userInfo: [AnyHashable: Any]
-    ) async -> SynaraAgentApprovalNativeActionValidator.Result {
-        guard let timeline else {
-            return SynaraAgentApprovalNativeActionValidator.Result(
-                eventResolved: false,
-                isApprovalPrompt: false,
-                eventTimestamp: nil,
-                shouldSubmitReaction: false,
-                reason: "timeline-unavailable"
-            )
-        }
-
-        let outcome = await timeline.loadInitialTimeline(roomID: roomID, focusedEventID: eventID)
-        let items: [TimelineItem]
-        switch outcome {
-        case .loaded(let loaded):
-            items = loaded
-        case .empty, .failed:
-            items = []
-        }
-
-        let payloadEventDate = SynaraNotificationActionContract.payloadEventDate(from: userInfo)
-        return SynaraAgentApprovalNativeActionValidator.validate(
-            items: items,
-            eventID: eventID,
-            payloadEventDate: payloadEventDate
-        )
     }
 
     private func routeToDestination(_ route: AppRoute) {

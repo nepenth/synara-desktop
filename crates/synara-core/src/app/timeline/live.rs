@@ -4,7 +4,7 @@
 //! product snapshot containing only stable identifiers, sender IDs,
 //! event types, timestamps, and safe display text.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 
@@ -40,6 +40,7 @@ use matrix_sdk_ui::timeline::{
 use serde::{Deserialize, Serialize};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
+use crate::app::agent_approvals::{plan_agent_approval, AgentApprovalDecisionStatus};
 use crate::app::send::{
     apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
     parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
@@ -53,15 +54,16 @@ use crate::dto::TimelineEncryptedUnavailableItem;
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
     project_timeline_item_with_media, reply_draft_readback, should_attach_formatted_body,
-    ComposerDraftRegistry, NativeComposerReplyDraft, NativeComposerReplyDraftReadback,
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineActionKind, NativeTimelineActionReadback, NativeTimelineCloseRequest,
-    NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
-    NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
+    ComposerDraftRegistry, NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
+    NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
+    NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
+    NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
+    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
+    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
     TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
     TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
     UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
@@ -94,6 +96,7 @@ pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    decided_agent_approvals: HashSet<(String, String)>,
     view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
     view_revisions: HashMap<String, Arc<AtomicU64>>,
@@ -221,6 +224,23 @@ impl NativeTimelineOwner {
             .lock()
             .await
             .ensure_reaction(&self.client, room_id, event_id, key)
+            .await
+    }
+
+    pub async fn decide_agent_approval(
+        &self,
+        request: NativeAgentApprovalDecisionRequest,
+    ) -> Result<NativeAgentApprovalDecisionResult, &'static str> {
+        let now_ms = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map_err(|_| "agent-approval-clock-invalid")?
+            .as_millis()
+            .try_into()
+            .map_err(|_| "agent-approval-clock-invalid")?;
+        self.registry
+            .lock()
+            .await
+            .decide_agent_approval(&self.client, request, now_ms)
             .await
     }
 
@@ -837,6 +857,7 @@ impl NativeTimelineRegistry {
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
+            decided_agent_approvals: HashSet::new(),
             view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
             view_revisions: HashMap::new(),
@@ -1708,6 +1729,64 @@ impl NativeTimelineRegistry {
             key: key.to_owned(),
             mutation: NativeReactionMutation::Added,
             readback,
+        })
+    }
+
+    /// Revalidate and apply one notification decision while holding the
+    /// timeline registry lock. This prevents contradictory actions from this
+    /// client from interleaving between readback and reaction submission.
+    pub async fn decide_agent_approval(
+        &mut self,
+        client: &Client,
+        request: NativeAgentApprovalDecisionRequest,
+        now_ms: u64,
+    ) -> Result<NativeAgentApprovalDecisionResult, &'static str> {
+        let readback = self
+            .event_readback(client, &request.room_id, &request.event_id)
+            .await?;
+        let decision_key = (readback.room_id.clone(), readback.event_id.clone());
+        if self.decided_agent_approvals.contains(&decision_key) {
+            return Ok(NativeAgentApprovalDecisionResult {
+                room_id: readback.room_id,
+                event_id: readback.event_id,
+                status: AgentApprovalDecisionStatus::AlreadyDecided,
+                reaction: None,
+            });
+        }
+        let plan = plan_agent_approval(
+            &request.action_id,
+            &readback.item.body,
+            readback.item.origin_server_ts,
+            now_ms,
+            readback
+                .item
+                .reactions
+                .iter()
+                .map(|reaction| (reaction.key.as_str(), reaction.me)),
+        )?;
+        if plan.status == AgentApprovalDecisionStatus::AlreadyDecided {
+            return Ok(NativeAgentApprovalDecisionResult {
+                room_id: readback.room_id,
+                event_id: readback.event_id,
+                status: plan.status,
+                reaction: None,
+            });
+        }
+        let reaction_key = plan.reaction.ok_or("agent-approval-plan-inconsistent")?;
+        let reaction = self
+            .ensure_reaction(client, &readback.room_id, &readback.event_id, reaction_key)
+            .await?;
+        if self.decided_agent_approvals.len() >= MAX_FOCUSED_EVENT_READBACKS {
+            if let Some(oldest) = self.decided_agent_approvals.iter().next().cloned() {
+                self.decided_agent_approvals.remove(&oldest);
+            }
+        }
+        self.decided_agent_approvals.insert(decision_key);
+        Ok(NativeAgentApprovalDecisionResult {
+            room_id: readback.room_id,
+            event_id: readback.event_id,
+            status: plan.status,
+            reaction: Some(reaction),
         })
     }
 

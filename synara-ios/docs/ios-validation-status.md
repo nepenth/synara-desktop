@@ -281,9 +281,12 @@ The repeatable live-smoke checklist is
 - Room details exposes read-only power-level thresholds and allowed/restricted
   status for message, invite, name/topic/avatar, and moderation permissions.
 - Daily messaging parity has started with safe Matrix HTML rendering for the
-  REST timeline mapper. Supported formatting includes emphasis, strong text,
-  inline code, safe links, quotes, lists, spoilers as safe text, and stripped
-  script/style content with body fallback.
+  shared-core timeline mapper. Supported formatting includes emphasis, strong
+  text, inline and fenced code with exact whitespace, allowlisted absolute
+  links, quotes, nested lists with ordered starts, tables, collapsed details,
+  concealed/revealable spoilers, and stripped executable content with bounded
+  body fallback. The native sanitizer also strips legacy `mx-reply` content
+  and caps emitted HTML nesting at 100 levels.
 - Phase 6.5 UI modernization adds shared native design primitives, product
   auth headers, modern room avatars/badges/search, grouped timeline message
   bubbles, a stronger composer, and first-class agent action cards.

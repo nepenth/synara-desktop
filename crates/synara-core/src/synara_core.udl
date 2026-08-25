@@ -471,6 +471,14 @@ dictionary TimelineReactionMutationDto {
   TimelineReactionDto? readback;
 };
 
+// Privacy-safe result of a shared-core approval notification decision.
+dictionary AgentApprovalDecisionDto {
+  string room_id;
+  string event_id;
+  string status;
+  TimelineReactionMutationDto? reaction;
+};
+
 // Static source constants only. Never echo room id, event id, reaction event id, key, token, or password.
 [Error]
 interface TimelineReactionError {
@@ -1936,6 +1944,9 @@ interface SharedCore {
 
   [Async, Throws=TimelineReactionError]
   TimelineReactionMutationDto reaction_ensure(string room_id, string event_id, string key);
+
+  [Async, Throws=TimelineReactionError]
+  AgentApprovalDecisionDto agent_approval_decide(string room_id, string event_id, string action_id);
 
   [Async, Throws=TimelineReactionError]
   TimelineReactionMutationDto reaction_redact(string room_id, string target_event_id, string reaction_event_id, string key);

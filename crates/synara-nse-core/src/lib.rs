@@ -41,6 +41,8 @@ pub struct NsePreviewDto {
     pub sender_id: Option<String>,
     pub body: Option<String>,
     pub message_type: Option<String>,
+    pub is_agent_approval: bool,
+    pub origin_server_ts: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -141,6 +143,8 @@ impl NsePreviewRequest {
                 sender_id: preview.sender_id,
                 body: preview.body,
                 message_type: preview.message_type,
+                is_agent_approval: preview.is_agent_approval,
+                origin_server_ts: preview.origin_server_ts,
             })
         })
         .await;
