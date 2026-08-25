@@ -37,7 +37,6 @@ type RoomJoinRulesEventContent = {
 };
 import FocusTrap from 'focus-trap-react';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { mDirectAtom } from '../../../state/mDirectList';
 import {
   NavCategory,
   NavCategoryHeader,
@@ -394,7 +393,6 @@ export function Space() {
   useNavToActivePathMapper(space.roomId);
   const spaceIdOrAlias = getCanonicalAliasOrRoomId(mx, space.roomId);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const mDirects = useAtomValue(mDirectAtom);
   const roomToUnread = useAtomValue(roomToUnreadAtom);
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
@@ -535,8 +533,6 @@ export function Space() {
                   <RoomNavItem
                     room={room}
                     selected={selectedRoomId === roomId}
-                    showAvatar
-                    direct={mDirects.has(roomId)}
                     linkPath={getToLink(roomId)}
                     notificationMode={getRoomNotificationMode(notificationPreferences, room.roomId)}
                   />

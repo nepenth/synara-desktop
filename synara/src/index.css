@@ -19,7 +19,20 @@
   --mx-uc-8: hsl(94, 100%, 35%);
 
   --font-emoji: 'Twemoji_DISABLED';
-  --font-secondary: 'InterVariable', var(--font-emoji), sans-serif;
+  --font-secondary: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Opaque reading roles. ThemeManager derives these against the active chat surface. */
+  --synara-content-heading: #111318;
+  --synara-content-primary: #24272c;
+  --synara-content-secondary: #50545b;
+  --synara-content-tertiary: #666b73;
+  --synara-content-separator: #777c84;
+  --synara-selected-surface: #e4e7eb;
+  --synara-table-canvas: #f2f3f5;
+  --synara-table-header: #e2e5e9;
+  --synara-table-odd: #ffffff;
+  --synara-table-even: #f5f6f8;
+  --synara-table-hover: #eceef1;
 }
 
 .dark-theme,
@@ -35,7 +48,19 @@
   --mx-uc-7: hsl(243, 100%, 80%);
   --mx-uc-8: hsl(94, 100%, 80%);
 
-  --font-secondary: 'InterVariable', var(--font-emoji), sans-serif;
+  --font-secondary: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  --synara-content-heading: #eef0f3;
+  --synara-content-primary: #c6c9ce;
+  --synara-content-secondary: #a5a9b0;
+  --synara-content-tertiary: #8e939b;
+  --synara-content-separator: #666b73;
+  --synara-selected-surface: #292c31;
+  --synara-table-canvas: #25272b;
+  --synara-table-header: #303339;
+  --synara-table-odd: #202226;
+  --synara-table-even: #26292e;
+  --synara-table-hover: #2d3036;
 }
 
 html {
@@ -74,6 +99,31 @@ a {
 }
 a:hover {
   text-decoration: underline;
+}
+
+@media (prefers-contrast: more) {
+  :root {
+    --synara-content-heading: #000000 !important;
+    --synara-content-primary: #111111 !important;
+    --synara-content-secondary: #292929 !important;
+    --synara-content-tertiary: #3d3d3d !important;
+    --synara-content-separator: #555555 !important;
+  }
+
+  .dark-theme,
+  .butter-theme {
+    --synara-content-heading: #ffffff !important;
+    --synara-content-primary: #f2f3f5 !important;
+    --synara-content-secondary: #d6d9dd !important;
+    --synara-content-tertiary: #bdc1c7 !important;
+    --synara-content-separator: #9da2aa !important;
+  }
+}
+
+@media (forced-colors: active) {
+  * {
+    forced-color-adjust: auto;
+  }
 }
 
 [data-mx-spoiler][aria-pressed='true'] a {

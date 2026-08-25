@@ -1,6 +1,5 @@
 import React, { MouseEventHandler, forwardRef, useState } from 'react';
 import {
-  Avatar,
   Box,
   Icon,
   IconButton,
@@ -20,9 +19,6 @@ import { useFocusWithin, useHover } from 'react-aria';
 import FocusTrap from 'focus-trap-react';
 import { NavItem, NavItemContent, NavItemOptions, NavLink } from '../../components/nav';
 import { UnreadBadge, UnreadBadgeCenter } from '../../components/unread-badge';
-import { RoomAvatar } from '../../components/room-avatar';
-import { getDirectRoomAvatarUrl, getRoomAvatarUrl } from '../../utils/room';
-import { roomAvatarTone, roomNameInitials } from '../../utils/common';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
@@ -37,7 +33,6 @@ import type { EventedRoomReading } from '../../utils/roomEvents';
 import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getCanonicalAliasOrRoomId, isRoomAlias } from '../../utils/matrix';
 import { getViaServers } from '../../plugins/via-servers';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { useSpaceOptionally } from '../../hooks/useSpace';
 import {
@@ -52,6 +47,7 @@ import { useRoomName } from '../../hooks/useRoomMeta';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import * as css from './styles.css';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -276,33 +272,21 @@ type RoomNavItemProps = {
   selected: boolean;
   linkPath: string;
   notificationMode?: RoomNotificationMode;
-  showAvatar?: boolean;
-  direct?: boolean;
 };
-function RoomNavItemImpl({
-  room,
-  selected,
-  showAvatar = true,
-  direct,
-  notificationMode,
-  linkPath,
-}: RoomNavItemProps) {
+function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNavItemProps) {
   const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
   const [hover, setHover] = useState(false);
   const { hoverProps } = useHover({ onHoverChange: setHover });
   const { focusWithinProps } = useFocusWithin({ onFocusWithinChange: setHover });
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const nativeRooms = useNativeRoomListSnapshot();
-  const unread = unreadFromNativeRoom(
-    nativeRooms.rooms.find((summary) => summary.roomId === room.roomId)
-  );
+  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
+  const unread = unreadFromNativeRoom(nativeRoom);
   const typingMember = useRoomTypingMember(room.roomId).filter(
     (receipt) => receipt.userId !== mx.getUserId()
   );
 
   const roomName = useRoomName(room);
-  const avatarTone = roomAvatarTone(room.roomId);
 
   const handleContextMenu: MouseEventHandler<HTMLElement> = (evt) => {
     evt.preventDefault();
@@ -334,32 +318,17 @@ function RoomNavItemImpl({
       <NavLink to={linkPath}>
         <NavItemContent>
           <Box as="span" grow="Yes" alignItems="Center" gap="200">
-            <Avatar size="200" radii="300">
-              <RoomAvatar
-                roomId={room.roomId}
-                src={
-                  showAvatar
-                    ? direct
-                      ? getDirectRoomAvatarUrl(mx, room, 96, useAuthentication)
-                      : getRoomAvatarUrl(mx, room, 96, useAuthentication)
-                    : undefined
-                }
-                alt={roomName}
-                fallbackBackground={avatarTone.background}
-                fallbackColor={avatarTone.color}
-                renderFallback={() => (
-                  <Text
-                    as="span"
-                    size="T200"
-                    style={{ textTransform: 'uppercase', fontWeight: 500, letterSpacing: '0.02em' }}
-                  >
-                    {roomNameInitials(roomName)}
-                  </Text>
-                )}
-              />
-            </Avatar>
+            <Text as="span" className={css.RoomGlyph} aria-hidden="true">
+              #
+            </Text>
             <Box as="span" grow="Yes" direction="Column">
-              <Text priority={unread ? '500' : '300'} as="span" size="Inherit" truncate>
+              <Text
+                priority={unread ? '500' : '300'}
+                as="span"
+                size="Inherit"
+                className={css.RoomName}
+                truncate
+              >
                 {roomName}
               </Text>
             </Box>
@@ -439,8 +408,6 @@ function areRoomNavItemPropsEqual(prev: RoomNavItemProps, next: RoomNavItemProps
   if (prev.selected !== next.selected) return false;
   if (prev.linkPath !== next.linkPath) return false;
   if (prev.notificationMode !== next.notificationMode) return false;
-  if (prev.showAvatar !== next.showAvatar) return false;
-  if (prev.direct !== next.direct) return false;
   return true;
 }
 

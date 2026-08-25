@@ -47,7 +47,7 @@ export const MessageRow = recipe({
     marginLeft: config.space.S200,
     marginRight: config.space.S200,
     boxSizing: 'border-box',
-    color: color.Surface.OnContainer,
+    color: 'var(--synara-content-primary)',
   },
   variants: {
     surface: {
@@ -95,16 +95,72 @@ export const MessageBody = style({
   fontSize: toRem(16),
   fontWeight: 400,
   lineHeight: 1.55,
-  color: color.Surface.OnContainer,
+  color: 'var(--synara-content-primary)',
 });
 
 export const FormattedBody = style({
-  overflowWrap: 'anywhere',
-  wordBreak: 'break-word',
+  overflowWrap: 'break-word',
+  wordBreak: 'normal',
   fontSize: toRem(16),
   fontWeight: 400,
   lineHeight: 1.55,
+  color: 'var(--synara-content-primary)',
   vars: syntaxPaletteVars(NATIVE_SYNTAX_PALETTES.light),
+});
+
+export const SenderName = style({
+  color: 'var(--synara-content-heading)',
+  fontWeight: 600,
+});
+
+export const Metadata = style({
+  color: 'var(--synara-content-secondary)',
+});
+
+export const ReplySurface = style({
+  width: '100%',
+  maxWidth: toRem(672),
+  padding: `${config.space.S200} ${config.space.S300}`,
+  margin: `${config.space.S100} 0`,
+  border: 'none',
+  borderLeft: `3px solid var(--synara-content-separator)`,
+  borderRadius: `0 ${config.radii.R300} ${config.radii.R300} 0`,
+  background: 'var(--synara-table-even)',
+  color: 'var(--synara-content-primary)',
+  textAlign: 'left',
+  cursor: 'pointer',
+  selectors: {
+    '&:hover, &:focus-visible': {
+      background: 'var(--synara-table-hover)',
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: toRem(2),
+    },
+  },
+});
+
+export const SystemRow = style({
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: config.space.S300,
+  color: 'var(--synara-content-tertiary)',
+  fontSize: toRem(13),
+  lineHeight: 1.35,
+  textAlign: 'center',
+});
+
+export const SystemRule = style({
+  flex: 1,
+  height: 1,
+  maxWidth: toRem(160),
+  background: 'var(--synara-content-separator)',
+});
+
+export const UnreadSystemRow = style({
+  color: color.Primary.Main,
+  fontWeight: 600,
 });
 
 globalStyle(`.prism-light ${FormattedBody}`, {
@@ -197,8 +253,15 @@ globalStyle(
     margin: `${config.space.S500} 0 ${config.space.S300}`,
     fontWeight: 600,
     lineHeight: 1.3,
+    color: 'var(--synara-content-heading)',
   }
 );
+globalStyle(`${FormattedBody} h1`, { fontSize: toRem(24), lineHeight: 1.22 });
+globalStyle(`${FormattedBody} h2`, { fontSize: toRem(21), lineHeight: 1.25 });
+globalStyle(`${FormattedBody} h3`, { fontSize: toRem(18), lineHeight: 1.3 });
+globalStyle(`${FormattedBody} h4, ${FormattedBody} h5, ${FormattedBody} h6`, {
+  fontSize: toRem(16),
+});
 globalStyle(
   `${FormattedBody} h1:first-child, ${FormattedBody} h2:first-child, ${FormattedBody} h3:first-child, ${FormattedBody} h4:first-child, ${FormattedBody} h5:first-child, ${FormattedBody} h6:first-child`,
   {
@@ -208,9 +271,9 @@ globalStyle(
 globalStyle(`${FormattedBody} blockquote`, {
   margin: `${config.space.S300} 0`,
   paddingLeft: config.space.S300,
-  borderLeft: `3px solid ${color.SurfaceVariant.ContainerLine}`,
+  borderLeft: `3px solid var(--synara-content-separator)`,
   fontStyle: 'italic',
-  opacity: 0.92,
+  color: 'var(--synara-content-secondary)',
 });
 globalStyle(`${FormattedBody} ul, ${FormattedBody} ol`, {
   margin: `${config.space.S300} 0`,
@@ -264,41 +327,81 @@ globalStyle(`${FormattedBody} pre code`, {
 });
 globalStyle(`${FormattedBody} a`, {
   color: 'var(--tc-link)',
+  textDecoration: 'underline',
+  textUnderlineOffset: toRem(2),
 });
 globalStyle(`${FormattedBody} hr`, {
   margin: `${config.space.S300} 0`,
   border: 'none',
   borderTop: `1px solid ${color.SurfaceVariant.ContainerLine}`,
 });
-globalStyle(`${FormattedBody} table`, {
+export const TableScroll = style({
   width: '100%',
+  maxWidth: '100%',
+  margin: `${config.space.S400} 0`,
+  overflowX: 'auto',
+  border: `1px solid var(--synara-content-separator)`,
+  borderRadius: config.radii.R400,
+  background: 'var(--synara-table-canvas)',
+  boxShadow: 'inset -14px 0 16px -18px rgba(0, 0, 0, 0.75)',
+  selectors: {
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: toRem(2),
+    },
+  },
+});
+
+globalStyle(`${TableScroll} table`, {
+  width: 'max-content',
+  minWidth: '100%',
   borderCollapse: 'separate',
   borderSpacing: 0,
-  margin: `${config.space.S300} 0`,
-  overflow: 'hidden',
-  border: `1px solid ${color.SurfaceVariant.ContainerLine}`,
-  borderRadius: config.radii.R400,
-  background: color.Surface.Container,
+  margin: 0,
+  background: 'var(--synara-table-canvas)',
 });
-globalStyle(`${FormattedBody} th, ${FormattedBody} td`, {
-  padding: `${config.space.S200} ${config.space.S300}`,
-  borderRight: `1px solid ${color.SurfaceVariant.ContainerLine}`,
-  borderBottom: `1px solid ${color.SurfaceVariant.ContainerLine}`,
+globalStyle(`${TableScroll} th, ${TableScroll} td`, {
+  minWidth: toRem(112),
+  maxWidth: toRem(360),
+  padding: `${toRem(10)} ${toRem(14)}`,
+  borderRight: `1px solid var(--synara-content-separator)`,
+  borderBottom: `1px solid var(--synara-content-separator)`,
   textAlign: 'left',
   verticalAlign: 'top',
+  overflowWrap: 'normal',
+  wordBreak: 'normal',
 });
-globalStyle(`${FormattedBody} th:last-child, ${FormattedBody} td:last-child`, {
+globalStyle(`${TableScroll} th:last-child, ${TableScroll} td:last-child`, {
   borderRight: 'none',
 });
-globalStyle(`${FormattedBody} tr:last-child td`, {
+globalStyle(`${TableScroll} tr:last-child td`, {
   borderBottom: 'none',
 });
-globalStyle(`${FormattedBody} th`, {
-  background: color.SurfaceVariant.ContainerActive,
+globalStyle(`${TableScroll} th`, {
+  background: 'var(--synara-table-header)',
+  color: 'var(--synara-content-heading)',
   fontWeight: 600,
 });
-globalStyle(`${FormattedBody} tbody tr:nth-child(even) td`, {
-  background: color.SurfaceVariant.Container,
+globalStyle(`${TableScroll} tbody tr:nth-child(odd) td`, {
+  background: 'var(--synara-table-odd)',
+});
+globalStyle(`${TableScroll} tr:nth-child(odd) td`, {
+  background: 'var(--synara-table-odd)',
+});
+globalStyle(`${TableScroll} tbody tr:nth-child(even) td`, {
+  background: 'var(--synara-table-even)',
+});
+globalStyle(`${TableScroll} tr:nth-child(even) td`, {
+  background: 'var(--synara-table-even)',
+});
+globalStyle(`${TableScroll} tbody tr:hover td`, {
+  background: 'var(--synara-table-hover)',
+});
+globalStyle(`${TableScroll} tr:hover td`, {
+  background: 'var(--synara-table-hover)',
+});
+globalStyle(`${TableScroll} td code`, {
+  whiteSpace: 'nowrap',
 });
 globalStyle(`${FormattedBody} img`, {
   maxWidth: toRem(296),

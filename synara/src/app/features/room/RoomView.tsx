@@ -111,13 +111,7 @@ export function RoomView({ eventId }: { eventId?: string }) {
           ) : (
             <>
               {canMessage && (
-                <RoomInput
-                  room={room}
-                  editor={editor}
-                  roomId={roomId}
-                  fileDropContainerRef={roomViewRef}
-                  ref={roomInputRef}
-                />
+                <RoomInput room={room} editor={editor} roomId={roomId} ref={roomInputRef} />
               )}
               {!canMessage && (
                 <RoomInputPlaceholder

@@ -2685,7 +2685,7 @@ private struct TimelineHeader: View {
                         .foregroundStyle(SynaraColor.secondaryText)
                     Text(title)
                         .font(SynaraTypography.sectionTitle.weight(.semibold))
-                        .foregroundStyle(SynaraColor.primaryText)
+                        .foregroundStyle(SynaraColor.headingText)
                         .lineLimit(1)
                 }
                 HStack(spacing: SynaraSpacing.small) {
@@ -3344,6 +3344,7 @@ private struct ThreadMessageRow: View {
             Text(body)
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.primaryText)
+                .lineSpacing(2.5)
                 .textSelection(.enabled)
                 .fixedSize(horizontal: false, vertical: true)
         case let .formattedText(body, html):
@@ -3413,6 +3414,7 @@ private struct MatrixFormattedMessageView: View {
         return Text(attributedMarkdown(displayMarkdown))
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
+            .lineSpacing(2.5)
             .lineLimit(nil)
             .textSelection(.enabled)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -3431,7 +3433,7 @@ private struct MatrixTableBlockView: View {
     let block: MatrixHTMLRenderer.TableBlock
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
+        ScrollView(.horizontal, showsIndicators: true) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(block.rows.enumerated()), id: \.offset) { rowIndex, row in
                     HStack(alignment: .top, spacing: 0) {
@@ -3446,11 +3448,22 @@ private struct MatrixTableBlockView: View {
                                 .lineLimit(nil)
                                 .fixedSize(horizontal: false, vertical: true)
                                 .frame(
-                                    width: cellIndex == 0 ? 112 : 168,
+                                    minWidth: cellIndex == 0 ? 128 : 176,
+                                    idealWidth: cellIndex == 0 ? 156 : 220,
+                                    maxWidth: cellIndex == 0 ? 220 : 320,
                                     alignment: .topLeading
                                 )
-                                .padding(.horizontal, SynaraSpacing.small)
-                                .padding(.vertical, SynaraSpacing.small)
+                                .padding(.horizontal, SynaraSpacing.medium)
+                                .padding(.vertical, 10)
+                                .accessibilityLabel(
+                                    tableCellAccessibilityLabel(
+                                        cell,
+                                        rowIndex: rowIndex,
+                                        cellIndex: cellIndex,
+                                        isHeader: row.isHeader
+                                    )
+                                )
+                                .accessibilityAddTraits(row.isHeader ? .isHeader : [])
 
                             if cellIndex < row.cells.count - 1 {
                                 Divider()
@@ -3458,7 +3471,7 @@ private struct MatrixTableBlockView: View {
                         }
                     }
                     .background(tableRowSurface(rowIndex: rowIndex, isHeader: row.isHeader))
-                    .accessibilityElement(children: .combine)
+                    .accessibilityElement(children: .contain)
 
                     if rowIndex < block.rows.count - 1 {
                         Divider()
@@ -3482,6 +3495,23 @@ private struct MatrixTableBlockView: View {
             return SynaraColor.elevatedSurface
         }
         return rowIndex.isMultiple(of: 2) ? SynaraColor.surface : SynaraColor.secondarySurface
+    }
+
+    private func tableCellAccessibilityLabel(
+        _ cell: String,
+        rowIndex: Int,
+        cellIndex: Int,
+        isHeader: Bool
+    ) -> String {
+        if isHeader {
+            return "Column \(cellIndex + 1), \(cell)"
+        }
+        let headers = block.rows.first(where: \.isHeader)?.cells ?? []
+        let header = headers.indices.contains(cellIndex) ? headers[cellIndex] : nil
+        if let header, header.isEmpty == false {
+            return "Row \(rowIndex + 1), \(header): \(cell)"
+        }
+        return "Row \(rowIndex + 1), column \(cellIndex + 1): \(cell)"
     }
 }
 
@@ -4310,7 +4340,7 @@ private struct TimelineRow: View {
                     HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
                         Text(senderDisplayName)
                             .font(SynaraTypography.emphasis)
-                            .foregroundStyle(SynaraColor.primaryText)
+                            .foregroundStyle(SynaraColor.headingText)
                             .lineLimit(1)
                         Text(item.timestamp.timelineTime)
                             .font(SynaraTypography.messageMeta)
@@ -4650,13 +4680,13 @@ private struct TimelineRow: View {
         if let preview = replyPreview {
             VStack(alignment: .leading, spacing: 2) {
                 Text("Replying to \(preview.senderName)")
-                    .font(SynaraTypography.messageMeta.weight(.semibold))
+                    .font(SynaraTypography.supporting.weight(.semibold))
                     .foregroundStyle(SynaraColor.secondaryText)
                     .lineLimit(1)
                 Text(preview.snippet)
-                    .font(SynaraTypography.messageMeta)
-                    .foregroundStyle(SynaraColor.tertiaryText)
-                    .lineLimit(2)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .lineLimit(3)
             }
             .padding(.leading, SynaraSpacing.small)
             .overlay(alignment: .leading) {

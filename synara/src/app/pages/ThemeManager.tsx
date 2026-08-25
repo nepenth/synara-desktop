@@ -15,8 +15,35 @@ import {
   deriveThemeSurfaceRamp,
   resolveThemeBaseColor,
   shouldApplyDerivedThemeRamp,
+  type ThemeContentRoles,
   type ThemeSurfaceScale,
 } from '../utils/themeBase';
+
+const CONTENT_ROLE_VARIABLES: Record<keyof ThemeContentRoles, string> = {
+  heading: '--synara-content-heading',
+  primary: '--synara-content-primary',
+  secondary: '--synara-content-secondary',
+  tertiary: '--synara-content-tertiary',
+  separator: '--synara-content-separator',
+  selectedSurface: '--synara-selected-surface',
+  tableCanvas: '--synara-table-canvas',
+  tableHeader: '--synara-table-header',
+  tableOdd: '--synara-table-odd',
+  tableEven: '--synara-table-even',
+  tableHover: '--synara-table-hover',
+};
+
+const syncContentRoles = (target: HTMLElement, roles: ThemeContentRoles) => {
+  (Object.keys(CONTENT_ROLE_VARIABLES) as Array<keyof ThemeContentRoles>).forEach((role) => {
+    target.style.setProperty(CONTENT_ROLE_VARIABLES[role], roles[role]);
+  });
+};
+
+const clearContentRoles = (target: HTMLElement) => {
+  Object.values(CONTENT_ROLE_VARIABLES).forEach((variable) => {
+    target.style.removeProperty(variable);
+  });
+};
 
 const syncDocumentThemeChrome = (themeKind: ThemeKind, chromeColor: string) => {
   const themeColorMeta = document.querySelector<HTMLMetaElement>('meta[name="theme-color"]');
@@ -73,7 +100,9 @@ const syncThemeBaseColor = (
   themeId?: string
 ): string => {
   const target = document.body;
+  const ramp = deriveThemeSurfaceRamp(resolveThemeBaseColor(baseColor), themeKind);
   if (!shouldApplyDerivedThemeRamp(themeId)) {
+    clearContentRoles(target);
     CONTAINER_TOKENS.forEach((tokens) => clearContainerScale(target, tokens));
     clearColorVar(target, color.Other.FocusRing);
     clearColorVar(target, color.Other.Shadow);
@@ -81,7 +110,7 @@ const syncThemeBaseColor = (
     return themeKind === ThemeKind.Dark ? '#1e1f22' : '#ffffff';
   }
 
-  const ramp = deriveThemeSurfaceRamp(resolveThemeBaseColor(baseColor), themeKind);
+  syncContentRoles(target, ramp.content);
   applyContainerScale(target, color.Background, ramp.background);
   applyContainerScale(target, color.Surface, ramp.surface);
   applyContainerScale(target, color.SurfaceVariant, ramp.surfaceVariant);

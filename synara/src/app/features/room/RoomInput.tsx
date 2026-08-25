@@ -2,7 +2,6 @@ import React, {
   ClipboardEventHandler,
   ChangeEventHandler,
   KeyboardEventHandler,
-  RefObject,
   forwardRef,
   useCallback,
   useEffect,
@@ -32,6 +31,8 @@ import {
   IconButton,
   Icons,
   Input,
+  Menu,
+  MenuItem,
   Overlay,
   OverlayBackdrop,
   OverlayCenter,
@@ -70,7 +71,6 @@ import {
   insertClipboardData,
 } from '../../components/editor';
 import { EmojiBoard, EmojiBoardTab } from '../../components/emoji-board';
-import { UseStateProvider } from '../../components/UseStateProvider';
 import { TUploadContent, getImageInfo, getMxIdLocalPart } from '../../utils/matrix';
 import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
 import { useFilePicker } from '../../hooks/useFilePicker';
@@ -110,7 +110,6 @@ import { getMemberDisplayName, getMentionContent, trimReplyFromBody } from '../.
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
 import { mobileOrTablet } from '../../utils/user-agent';
-import { useElementSizeObserver } from '../../hooks/useElementSizeObserver';
 import { ReplyLayout, ThreadIndicator } from '../../components/message';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
@@ -141,6 +140,7 @@ import {
   normalizePollParts,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
+import * as css from './RoomComposer.css';
 import {
   fileToNativeAttachmentBytes,
   nativeComposerAttachmentReady,
@@ -156,12 +156,11 @@ const NATIVE_PASTE_EVENT = 'synara://native-paste';
 
 interface RoomInputProps {
   editor: Editor;
-  fileDropContainerRef: RefObject<HTMLElement | null>;
   roomId: string;
   room: EventedRoomReading;
 }
 export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
-  ({ editor, fileDropContainerRef, roomId, room }, ref) => {
+  ({ editor, roomId, room }, ref) => {
     const mx = useMatrixClient();
     const clientConfig = useClientConfig();
     const useAuthentication = useMediaAuthentication();
@@ -178,8 +177,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const direct = useIsDirectRoom();
     const commands = useCommands(mx, room as unknown as Parameters<typeof useCommands>[1]);
     const emojiBtnRef = useRef<HTMLButtonElement>(null);
-    const gifBtnRef = useRef<HTMLButtonElement>(null);
-    const pollBtnRef = useRef<HTMLButtonElement>(null);
+    const composerToolsBtnRef = useRef<HTMLButtonElement>(null);
     const roomToParents = useAtomValue(roomToParentsAtom);
     const powerLevels = usePowerLevelsContext();
     const creators = useRoomCreators(room);
@@ -231,6 +229,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const imagePackRooms: string[] = useImagePackRooms(roomId, roomToParents);
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
+    const [composerToolsAnchor, setComposerToolsAnchor] = useState<RectCords>();
+    const [emojiBoardTab, setEmojiBoardTab] = useState<EmojiBoardTab>();
     const [autocompleteQuery, setAutocompleteQuery] =
       useState<AutocompleteQuery<AutocompletePrefix>>();
     const [gifPickerAnchor, setGifPickerAnchor] = useState<RectCords>();
@@ -407,7 +407,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       };
     }, [handleNativeClipboardPaste, roomInputPasteAvailable]);
     const dropZoneVisible = useFileDropZone(handleFiles);
-    const [hideStickerBtn, setHideStickerBtn] = useState(document.body.clientWidth < 500);
 
     const isComposing = useComposingCheck();
 
@@ -445,11 +444,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return relatedContent;
       },
       [mx, replyDraft, getReplyRelation]
-    );
-
-    useElementSizeObserver(
-      useCallback(() => fileDropContainerRef.current, [fileDropContainerRef]),
-      useCallback((width) => setHideStickerBtn(width < 500), [])
     );
 
     useEffect(() => {
@@ -930,10 +924,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           </OverlayCenter>
         </Overlay>
         {sendError && (
-          <Box style={{ padding: `0 ${config.space.S300} ${config.space.S200}` }}>
-            <Text size="T200" priority="300">
-              {sendError}
-            </Text>
+          <Box className={css.ComposerError} gap="200" alignItems="Center" role="alert">
+            <Icon src={Icons.Warning} size="100" />
+            <Box grow="Yes">
+              <Text size="T200">{sendError}</Text>
+            </Box>
+            <IconButton
+              onClick={() => setSendError(undefined)}
+              variant="Critical"
+              fill="Soft"
+              size="300"
+              radii="300"
+              aria-label="Dismiss send error"
+            >
+              <Icon src={Icons.Cross} size="50" />
+            </IconButton>
           </Box>
         )}
         {autocompleteQuery?.prefix === AutocompletePrefix.RoomMention && (
@@ -1016,15 +1021,82 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             )
           }
           leadingAction={
-            <IconButton
-              onClick={() => pickFile('*')}
-              variant="SurfaceVariant"
-              size="300"
-              radii="300"
-              aria-label={t('composer.attach_file_aria_label', 'Attach file')}
+            <PopOut
+              anchor={composerToolsAnchor}
+              position="Top"
+              align="Start"
+              offset={12}
+              content={
+                <Menu style={{ width: toRem(196) }}>
+                  <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+                    <MenuItem
+                      size="300"
+                      radii="300"
+                      after={<Icon src={Icons.File} size="100" />}
+                      onClick={() => {
+                        setComposerToolsAnchor(undefined);
+                        pickFile('*');
+                      }}
+                    >
+                      <Text size="T300">Attach file</Text>
+                    </MenuItem>
+                    <MenuItem
+                      size="300"
+                      radii="300"
+                      after={<Icon src={Icons.Sticker} size="100" />}
+                      onClick={() => {
+                        setComposerToolsAnchor(undefined);
+                        setEmojiBoardTab(EmojiBoardTab.Sticker);
+                      }}
+                    >
+                      <Text size="T300">Sticker</Text>
+                    </MenuItem>
+                    {(gifPickerAvailable || gifOnboardingVisible) && (
+                      <MenuItem
+                        size="300"
+                        radii="300"
+                        after={<Icon src={Icons.Photo} size="100" />}
+                        onClick={() => {
+                          const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
+                          setComposerToolsAnchor(undefined);
+                          setGifPickerAnchor(anchor);
+                        }}
+                      >
+                        <Text size="T300">GIF</Text>
+                      </MenuItem>
+                    )}
+                    <MenuItem
+                      size="300"
+                      radii="300"
+                      after={<Icon src={Icons.Message} size="100" />}
+                      onClick={() => {
+                        const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
+                        setComposerToolsAnchor(undefined);
+                        setPollAnchor(anchor);
+                      }}
+                    >
+                      <Text size="T300">Poll</Text>
+                    </MenuItem>
+                  </Box>
+                </Menu>
+              }
             >
-              <Icon src={Icons.PlusCircle} />
-            </IconButton>
+              <IconButton
+                ref={composerToolsBtnRef}
+                onClick={(event) =>
+                  setComposerToolsAnchor(
+                    composerToolsAnchor ? undefined : event.currentTarget.getBoundingClientRect()
+                  )
+                }
+                variant="SurfaceVariant"
+                size="300"
+                radii="300"
+                aria-label="More message actions"
+                aria-expanded={!!composerToolsAnchor}
+              >
+                <Icon src={Icons.PlusCircle} />
+              </IconButton>
+            </PopOut>
           }
           floatingActions={
             <>
@@ -1043,75 +1115,46 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               >
                 <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
               </IconButton>
-              <UseStateProvider initial={undefined}>
-                {(emojiBoardTab: EmojiBoardTab | undefined, setEmojiBoardTab) => (
-                  <PopOut
-                    offset={16}
-                    alignOffset={-44}
-                    position="Top"
-                    align="End"
-                    anchor={
-                      emojiBoardTab === undefined
-                        ? undefined
-                        : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
-                    }
-                    content={
-                      <EmojiBoard
-                        tab={emojiBoardTab}
-                        onTabChange={setEmojiBoardTab}
-                        imagePackRooms={imagePackRooms}
-                        returnFocusOnDeactivate={false}
-                        onEmojiSelect={handleEmoticonSelect}
-                        onCustomEmojiSelect={handleEmoticonSelect}
-                        onStickerSelect={handleStickerSelect}
-                        requestClose={() => {
-                          setEmojiBoardTab((tab) => {
-                            if (tab) {
-                              if (!mobileOrTablet()) ReactEditor.focus(editor);
-                              return undefined;
-                            }
-                            return tab;
-                          });
-                        }}
-                      />
-                    }
-                  >
-                    {!hideStickerBtn && (
-                      <IconButton
-                        aria-pressed={emojiBoardTab === EmojiBoardTab.Sticker}
-                        aria-label={t('composer.sticker_picker_aria_label', 'Sticker picker')}
-                        onClick={() => setEmojiBoardTab(EmojiBoardTab.Sticker)}
-                        variant="SurfaceVariant"
-                        size="300"
-                        radii="300"
-                      >
-                        <Icon
-                          src={Icons.Sticker}
-                          filled={emojiBoardTab === EmojiBoardTab.Sticker}
-                        />
-                      </IconButton>
-                    )}
-                    <IconButton
-                      ref={emojiBtnRef}
-                      aria-pressed={
-                        hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
-                      }
-                      aria-label={t('composer.emoji_picker_aria_label', 'Emoji picker')}
-                      onClick={() => setEmojiBoardTab(EmojiBoardTab.Emoji)}
-                      variant="SurfaceVariant"
-                      size="300"
-                      radii="300"
-                    >
-                      <Icon
-                        src={Icons.Smile}
-                        filled={
-                          hideStickerBtn ? !!emojiBoardTab : emojiBoardTab === EmojiBoardTab.Emoji
-                        }
-                      />
-                    </IconButton>
-                  </PopOut>
-                )}
-              </UseStateProvider>
+              <PopOut
+                offset={16}
+                alignOffset={-44}
+                position="Top"
+                align="End"
+                anchor={
+                  emojiBoardTab === undefined
+                    ? undefined
+                    : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
+                }
+                content={
+                  <EmojiBoard
+                    tab={emojiBoardTab}
+                    onTabChange={setEmojiBoardTab}
+                    imagePackRooms={imagePackRooms}
+                    returnFocusOnDeactivate={false}
+                    onEmojiSelect={handleEmoticonSelect}
+                    onCustomEmojiSelect={handleEmoticonSelect}
+                    onStickerSelect={handleStickerSelect}
+                    requestClose={() => {
+                      setEmojiBoardTab((tab) => {
+                        if (tab && !mobileOrTablet()) ReactEditor.focus(editor);
+                        return undefined;
+                      });
+                    }}
+                  />
+                }
+              >
+                <IconButton
+                  ref={emojiBtnRef}
+                  aria-pressed={!!emojiBoardTab}
+                  aria-label={t('composer.emoji_picker_aria_label', 'Emoji picker')}
+                  onClick={() => setEmojiBoardTab(EmojiBoardTab.Emoji)}
+                  variant="SurfaceVariant"
+                  size="300"
+                  radii="300"
+                >
+                  <Icon src={Icons.Smile} filled={!!emojiBoardTab} />
+                </IconButton>
+              </PopOut>
               {(gifPickerAvailable || gifOnboardingVisible) && (
                 <PopOut
                   offset={16}
@@ -1162,7 +1205,9 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                             onClick={() => {
                               setGifSearchEnabled(true);
                               setGifOnboardingDismissed(true);
-                              setGifPickerAnchor(gifBtnRef.current?.getBoundingClientRect());
+                              setGifPickerAnchor(
+                                composerToolsBtnRef.current?.getBoundingClientRect()
+                              );
                             }}
                           >
                             <Text size="B300">
@@ -1174,21 +1219,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     )
                   }
                 >
-                  <IconButton
-                    ref={gifBtnRef}
-                    variant="SurfaceVariant"
-                    size="300"
-                    radii="300"
-                    aria-label={t('modernization.gif.picker.aria_label', 'GIF Picker')}
-                    aria-pressed={!!gifPickerAnchor}
-                    onClick={() =>
-                      setGifPickerAnchor(
-                        gifPickerAnchor ? undefined : gifBtnRef.current?.getBoundingClientRect()
-                      )
-                    }
-                  >
-                    <Icon src={Icons.Photo} />
-                  </IconButton>
+                  {null}
                 </PopOut>
               )}
               <PopOut
@@ -1296,26 +1327,12 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   </Box>
                 }
               >
-                <IconButton
-                  ref={pollBtnRef}
-                  variant="SurfaceVariant"
-                  size="300"
-                  radii="300"
-                  aria-label={t('modernization.poll.create_aria_label', 'Create poll')}
-                  aria-pressed={!!pollAnchor}
-                  onClick={() =>
-                    setPollAnchor(
-                      pollAnchor ? undefined : pollBtnRef.current?.getBoundingClientRect()
-                    )
-                  }
-                >
-                  <Icon src={Icons.Message} />
-                </IconButton>
+                {null}
               </PopOut>
               <IconButton
                 onClick={submit}
                 disabled={sendingMessage}
-                variant="SurfaceVariant"
+                variant="Primary"
                 size="300"
                 radii="300"
                 aria-label={t('composer.send_aria_label', 'Send message')}

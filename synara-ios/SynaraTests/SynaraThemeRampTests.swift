@@ -126,6 +126,44 @@ final class SynaraThemeRampTests: XCTestCase {
         }
     }
 
+    func testEveryPresetMaintainsReadableTextHierarchyInBothAppearances() {
+        for preset in SynaraThemeRamp.presets {
+            for dark in [false, true] {
+                let tokens = SynaraThemeRamp.tokens(baseHex: preset.hex, dark: dark)
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.headingText, background: tokens.surface),
+                    12,
+                    "\(preset.label) heading contrast"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.primaryText, background: tokens.surface),
+                    7,
+                    "\(preset.label) primary contrast"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.secondaryText, background: tokens.surface),
+                    4.5,
+                    "\(preset.label) secondary contrast"
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.tertiaryText, background: tokens.surface),
+                    4.5,
+                    "\(preset.label) tertiary contrast"
+                )
+
+                let increased = SynaraThemeRamp.tokens(
+                    baseHex: preset.hex,
+                    dark: dark,
+                    increasedContrast: true
+                )
+                XCTAssertGreaterThan(
+                    SynaraThemeRamp.contrastRatio(foreground: increased.primaryText, background: increased.surface),
+                    SynaraThemeRamp.contrastRatio(foreground: tokens.primaryText, background: tokens.surface)
+                )
+            }
+        }
+    }
+
     func testChromeRolesReadThePassedBaseHexNotTheStoredDefault() {
         let stored = SynaraThemeRamp.colorHex(
             SynaraChrome.chatToken,

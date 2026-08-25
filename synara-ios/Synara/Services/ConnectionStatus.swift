@@ -133,7 +133,9 @@ enum ConnectionStatusCopy {
             return connectedFlashVisible
         case .stopped:
             return false
-        case .syncing, .starting, .reconnecting, .disconnected, .restoreFailed, .failed:
+        case .syncing:
+            return false
+        case .starting, .reconnecting, .disconnected, .restoreFailed, .failed:
             return true
         }
     }

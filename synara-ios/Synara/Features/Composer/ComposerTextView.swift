@@ -95,6 +95,10 @@ struct ComposerTextView: UIViewRepresentable {
                 context.coordinator.refreshAccessibilityPlaceholder()
             }
 
+            if uiView.placeholderLabel.font != textView.font {
+                uiView.placeholderLabel.font = textView.font
+            }
+
             if context.coordinator.lastFormattingRevision != formattingRevision {
                 context.coordinator.lastFormattingRevision = formattingRevision
                 textView.text = text
@@ -158,6 +162,7 @@ struct ComposerTextView: UIViewRepresentable {
         private var lastMeasuredText: String?
         private var lastMeasuredWidth: CGFloat = 0
         private var lastMeasuredShowsPlaceholder: Bool?
+        private var lastMeasuredFontPointSize: CGFloat = 0
         private var lastMeasuredHeight: CGFloat?
         private var lastAccessibilityShowsPlaceholder: Bool?
 
@@ -240,10 +245,12 @@ struct ComposerTextView: UIViewRepresentable {
         func preferredHeight(for textView: UITextView, width: CGFloat, force: Bool = false) -> CGFloat {
             guard let container else { return parent.height }
             let showsPlaceholder = textView.text.isEmpty
+            let fontPointSize = textView.font?.pointSize ?? 0
             guard force
                 || lastMeasuredText != textView.text
                 || abs(lastMeasuredWidth - width) > 0.5
                 || lastMeasuredShowsPlaceholder != showsPlaceholder
+                || abs(lastMeasuredFontPointSize - fontPointSize) > 0.1
                 || lastMeasuredHeight == nil
             else {
                 return lastMeasuredHeight ?? parent.height
@@ -251,6 +258,7 @@ struct ComposerTextView: UIViewRepresentable {
             lastMeasuredText = textView.text
             lastMeasuredWidth = width
             lastMeasuredShowsPlaceholder = showsPlaceholder
+            lastMeasuredFontPointSize = fontPointSize
             let measuredHeight = container.preferredHeight(
                 forWidth: width,
                 showsPlaceholder: showsPlaceholder
@@ -382,6 +390,16 @@ final class ComposerTextContainer: UIView {
             return
         }
         lastMeasuredWidth = width
+        onWidthChange?()
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        guard previousTraitCollection?.preferredContentSizeCategory
+            != traitCollection.preferredContentSizeCategory
+        else {
+            return
+        }
         onWidthChange?()
     }
 

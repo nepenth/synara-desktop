@@ -136,7 +136,7 @@ test('native timeline message rows sit on chat chrome and highlight on hover', (
   assert.match(messageRowCss, /borderRadius: config\.radii\.R400/);
   assert.match(messageRowCss, /MessageActionSurface\}:hover/);
   assert.match(messageBodyCss, /background: 'transparent'/);
-  assert.match(messageBodyCss, /color: color\.Surface\.OnContainer/);
+  assert.match(messageBodyCss, /color: 'var\(--synara-content-primary\)'/);
 
   assert.match(presenter, /htmlCss\.MessageRow\(\{/);
   assert.match(presenter, /hasMessageSurface/);
@@ -180,6 +180,8 @@ test('formatted messages use a readable measure, body size, and layered tables',
   assert.match(messageBodyCss, /fontSize: toRem\(16\)/);
   assert.match(messageBodyCss, /lineHeight: 1\.55/);
   assert.match(htmlCss, /borderCollapse: 'separate'/);
-  assert.match(htmlCss, /background: color\.SurfaceVariant\.ContainerActive/);
+  assert.match(htmlCss, /background: 'var\(--synara-table-even\)'/);
+  assert.match(htmlCss, /background: 'var\(--synara-table-odd\)'/);
+  assert.match(htmlCss, /background: 'var\(--synara-table-header\)'/);
   assert.match(htmlCss, /tbody tr:nth-child\(even\) td/);
 });

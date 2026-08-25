@@ -274,6 +274,7 @@ extension SynaraMessageBubble where Content == AnyView {
                 Text(text)
                     .font(SynaraTypography.messageBody)
                     .foregroundStyle(synaraMessageBubbleTextColor(for: variant))
+                    .lineSpacing(2.5)
                     .lineLimit(nil)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: showsBackground && alignment == .own ? .trailing : .leading)
