@@ -1,6 +1,11 @@
 import { atom } from 'jotai';
 import { normalizeAccentColor } from '../utils/themeAccent';
 import { normalizeThemeBaseColor } from '../utils/themeBase';
+import {
+  DEFAULT_MESSAGE_TEXT_TONE,
+  normalizeMessageTextTone,
+  type MessageTextTone,
+} from '../utils/messageTextTone';
 
 const SHARED_SETTINGS_STORAGE_KEY = 'settings';
 const PLATFORM_SETTINGS_STORAGE_KEY = 'platformSettings';
@@ -26,6 +31,7 @@ export interface SharedSettings {
   monochromeMode?: boolean;
   customAccentColor?: string;
   themeBaseColor?: string;
+  messageTextTone: MessageTextTone;
   isMarkdown: boolean;
   editorToolbar: boolean;
   twitterEmoji: boolean;
@@ -93,6 +99,7 @@ export const defaultSharedSettings: SharedSettings = {
   monochromeMode: false,
   customAccentColor: undefined,
   themeBaseColor: undefined,
+  messageTextTone: DEFAULT_MESSAGE_TEXT_TONE,
   isMarkdown: true,
   editorToolbar: false,
   twitterEmoji: false,
@@ -187,6 +194,7 @@ const sanitizeSharedSettings = (settings: SharedSettings): SharedSettings => ({
   themeBaseColor: normalizeThemeBaseColor(
     typeof settings.themeBaseColor === 'string' ? settings.themeBaseColor : undefined
   ),
+  messageTextTone: normalizeMessageTextTone(settings.messageTextTone),
 });
 
 export const mergeSettingsSnapshot = (snapshot: SettingsSnapshot): Settings => ({

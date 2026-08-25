@@ -11,6 +11,7 @@ import {
 import { useSetting } from '../state/hooks/settings';
 import { getSharedSettings, settingsAtom } from '../state/settings';
 import { normalizeAccentColor } from '../utils/themeAccent';
+import { messageTextForeground } from '../utils/messageTextTone';
 import {
   deriveThemeSurfaceRamp,
   resolveThemeBaseColor,
@@ -198,6 +199,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
   const [monochromeMode] = useSetting(settingsAtom, 'monochromeMode');
   const [customAccentColor] = useSetting(settingsAtom, 'customAccentColor');
   const [themeBaseColor] = useSetting(settingsAtom, 'themeBaseColor');
+  const [messageTextTone] = useSetting(settingsAtom, 'messageTextTone');
 
   useEffect(() => {
     document.body.className = '';
@@ -207,13 +209,17 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     const chrome = syncThemeBaseColor(themeBaseColor, activeTheme.kind, activeTheme.id);
     syncDocumentThemeChrome(activeTheme.kind, chrome);
     syncAccentColor(customAccentColor, activeTheme.kind);
+    document.body.style.setProperty(
+      '--synara-message-foreground',
+      messageTextForeground(messageTextTone)
+    );
 
     if (monochromeMode) {
       document.body.style.filter = 'grayscale(1)';
     } else {
       document.body.style.filter = '';
     }
-  }, [activeTheme, monochromeMode, customAccentColor, themeBaseColor]);
+  }, [activeTheme, monochromeMode, customAccentColor, themeBaseColor, messageTextTone]);
 
   return <ThemeContextProvider value={activeTheme}>{children}</ThemeContextProvider>;
 }
