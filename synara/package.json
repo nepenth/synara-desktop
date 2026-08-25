@@ -1,6 +1,6 @@
 {
   "name": "synara",
-  "version": "2.1.9",
+  "version": "2.1.10",
   "description": "Synara app runtime for the native desktop shell",
   "main": "index.js",
   "type": "module",

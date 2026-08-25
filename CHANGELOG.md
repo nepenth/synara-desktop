@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 2.1.10 - 2026-08-25
+
+- Room lists across iOS, macOS, and Linux now use compact channel markers and
+  Slack-like `# Room Name` labels instead of decorative room avatars.
+- Cross-client semantic colors, spacing, and typography soften dark-mode
+  contrast while preserving readable hierarchy in timelines, tables, replies,
+  settings, and composers.
+- iOS room notes can be reordered by dragging, and message composition avoids
+  unnecessary synchronous layout work for more responsive typing.
+- iOS surfaces, Dynamic Type composer sizing, notification disclosure rows,
+  and final-list-item clearance are hardened across light and dark appearance.
+- Desktop room-note ordering and conflict handling now match the mobile
+  behavior, with richer formatted-message and code presentation.
+- See [`docs/releases/v2.1.10.md`](docs/releases/v2.1.10.md) for details.
+
 ## 2.1.9 - 2026-08-24
 
 - iOS room timelines now include Notes backed by shared Matrix account data,
