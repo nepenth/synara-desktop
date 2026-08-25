@@ -512,9 +512,11 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
-    # Bounded cap allows post-test output/upload.
-    # 90m: S3b + UniFFI merge-ups exceed the 60m GitHub default (cancelled at ~61m).
-    timeout-minutes: 90
+    # Bounded cap allows post-test device-Release proof and result upload.
+    # The complete simulator suite can pass around 65m, after which the clean
+    # arm64 device build still needs roughly 30m; a 90m cap canceled that valid
+    # second proof mid-compile on PR #1047.
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
