@@ -228,6 +228,11 @@ struct RoomListView: View {
                     .refreshable {
                         await reloadRoomsForRefresh()
                     }
+                    .safeAreaInset(edge: .bottom, spacing: 0) {
+                        Color.clear
+                            .frame(height: SynaraTabRootContentReachability.minimumSeparation)
+                            .accessibilityHidden(true)
+                    }
                     .accessibilityIdentifier("RoomList")
                     .onAppear {
                         seedExpandedSpacesIfNeeded(
