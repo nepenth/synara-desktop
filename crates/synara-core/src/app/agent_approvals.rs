@@ -44,9 +44,7 @@ pub fn is_agent_approval_prompt(body: &str) -> bool {
         .trim_start_matches(['⚠', '️', ' ', '*'])
         .trim_end_matches([' ', '*', ':'])
         .trim();
-    APPROVAL_HEADINGS
-        .iter()
-        .any(|heading| normalized == *heading)
+    APPROVAL_HEADINGS.contains(&normalized)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
