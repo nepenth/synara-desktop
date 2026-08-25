@@ -68,7 +68,7 @@ macOS platform-integration cases remain release-candidate gates.
   before attempting another Timeline behavior change.
 - macOS updater signoff remains open. Linux updates are package-manager-owned;
   the app may notify and instruct, but install should still happen through
-  `paru -Syu` or `pacman -Syu` after repo setup.
+  `apt upgrade`, `paru -Syu`, or `pacman -Syu` after repo setup.
 
 ## Evidence Rules
 

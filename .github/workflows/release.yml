@@ -263,6 +263,9 @@ jobs:
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
+      - name: Install APT repository tools
+        run: sudo apt-get install -y dpkg-dev apt-utils
+
       - name: Install desktop dependencies
         run: npm ci
 
@@ -283,6 +286,16 @@ jobs:
         with:
           name: gh-release-linux-deb
           path: src-tauri/target/release/bundle/deb/Synara_*.deb
+          if-no-files-found: error
+
+      - name: Generate APT repository assets
+        run: scripts/build-apt-repo.sh
+
+      - name: Upload APT repository assets
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: synara-apt-repo-assets
+          path: dist/apt-repo/*
           if-no-files-found: error
 
   linux-arch:
@@ -959,6 +972,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
       PACMAN_REPO_TAG: pacman-repo
+      APT_REPO_TAG: apt-repo
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -976,6 +990,12 @@ jobs:
         with:
           path: release-artifacts
 
+      - name: Sign APT repository metadata
+        env:
+          SYNARA_APT_SIGNING_PRIVATE_KEY: ${{ secrets.SYNARA_APT_SIGNING_PRIVATE_KEY }}
+          SYNARA_APT_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.SYNARA_APT_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: scripts/sign-apt-repo.sh release-artifacts/synara-apt-repo-assets
+
       - name: Verify complete release artifact set
         shell: bash
         run: |
@@ -986,6 +1006,20 @@ jobs:
           test -f release-artifacts/gh-release-macos/macos/Synara.app.tar.gz.sig
           test -f release-artifacts/gh-release-updater/latest.json
           compgen -G 'release-artifacts/synara-pacman-repo-assets/synara-desktop-bin-*.pkg.tar.zst' >/dev/null
+          test -f release-artifacts/synara-apt-repo-assets/Packages
+          test -f release-artifacts/synara-apt-repo-assets/Packages.gz
+          test -f release-artifacts/synara-apt-repo-assets/Release
+          test -f release-artifacts/synara-apt-repo-assets/Release.gpg
+          test -f release-artifacts/synara-apt-repo-assets/InRelease
+          test -s release-artifacts/synara-apt-repo-assets/synara-archive-keyring.gpg
+          compgen -G 'release-artifacts/synara-apt-repo-assets/Synara_*.deb' >/dev/null
+          gpgv \
+            --keyring release-artifacts/synara-apt-repo-assets/synara-archive-keyring.gpg \
+            release-artifacts/synara-apt-repo-assets/Release.gpg \
+            release-artifacts/synara-apt-repo-assets/Release
+          gpgv \
+            --keyring release-artifacts/synara-apt-repo-assets/synara-archive-keyring.gpg \
+            release-artifacts/synara-apt-repo-assets/InRelease
 
       - name: Recheck immutable release version before publication
         run: node scripts/assert-release-version.mjs
@@ -1035,3 +1069,41 @@ jobs:
           done
 
           gh release upload "$PACMAN_REPO_TAG" "$pacman_assets"/* --clobber
+
+      - name: Create fixed APT repository release
+        run: |
+          if gh release view "$APT_REPO_TAG" >/dev/null 2>&1; then
+            exit 0
+          fi
+
+          gh release create "$APT_REPO_TAG" \
+            --target "$GITHUB_SHA" \
+            --title "Synara APT repository" \
+            --notes "Stable APT repository assets for Synara Desktop Debian-family installs." \
+            --latest=false
+
+      - name: Publish fixed APT repository assets
+        shell: bash
+        run: |
+          apt_assets="release-artifacts/synara-apt-repo-assets"
+          package_asset="$(compgen -G "$apt_assets/Synara_*.deb")"
+          package_name="$(basename "$package_asset")"
+
+          # Keep the old index usable until its replacement package exists.
+          gh release upload "$APT_REPO_TAG" "$apt_assets/synara-archive-keyring.gpg" --clobber
+          gh release upload "$APT_REPO_TAG" "$package_asset" --clobber
+          gh release upload "$APT_REPO_TAG" "$apt_assets/Packages" --clobber
+          gh release upload "$APT_REPO_TAG" "$apt_assets/Packages.gz" --clobber
+          gh release upload "$APT_REPO_TAG" "$apt_assets/Release" --clobber
+          gh release upload "$APT_REPO_TAG" "$apt_assets/Release.gpg" --clobber
+          gh release upload "$APT_REPO_TAG" "$apt_assets/InRelease" --clobber
+
+          mapfile -t obsolete_packages < <(
+            gh release view "$APT_REPO_TAG" --json assets --jq '.assets[].name' |
+              grep -E '^Synara_.*[.]deb$' |
+              grep -Fvx "$package_name" ||
+              true
+          )
+          for obsolete_package in "${obsolete_packages[@]}"; do
+            gh release delete-asset "$APT_REPO_TAG" "$obsolete_package" --yes
+          done

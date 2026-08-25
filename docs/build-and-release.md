@@ -133,7 +133,8 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
    tagged SHA. After that gate, desktop packaging starts immediately:
    - macOS signed/notarized DMG, macOS updater archive, signatures, and
      `latest.json`.
-   - Linux `.deb`.
+   - Linux `.deb` plus fixed `apt-repo` release assets (`Packages`,
+     `Packages.gz`, `Release`, and the package).
    - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
      assets (`synara.db`, `synara.files`, and package file).
 5. GitHub Release publishes those desktop artifacts through the
@@ -142,17 +143,18 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
    track. Confirm the TestFlight state snapshot; Apple should report the exact
    build as `IN_BETA_TESTING`.
 7. Confirm hosted macOS `latest.json`.
-8. Verify the fixed pacman repo URL:
+8. Verify the fixed Linux repository URLs:
 
 ```text
 https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db
+https://github.com/nepenth/synara-desktop/releases/download/apt-repo/Packages
 ```
 
 9. Confirm installed-app update behavior:
    - iOS updates through TestFlight.
    - macOS updates through the Tauri updater flow.
-   - Linux updates through `paru -Syu` or `sudo pacman -Syu`; the app may only
-     notify/instruct.
+   - Linux updates through `sudo apt upgrade`, `paru -Syu`, or
+     `sudo pacman -Syu`; the app may only notify/instruct.
 
 The updater implementation plan and required GitHub variables/secrets live in
 [../GITHUB_RELEASE_UPDATER_PLAN.md](../GITHUB_RELEASE_UPDATER_PLAN.md). The
@@ -172,6 +174,24 @@ Updater-enabled releases require:
 - `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`
 - `SYNARA_UPDATER_PUBKEY`
 - `SYNARA_UPDATER_ENDPOINT`
+
+Signed APT repository publication additionally requires these GitHub Actions
+secrets, preferably scoped to the protected `production-release` environment:
+
+- `SYNARA_APT_SIGNING_PRIVATE_KEY`: ASCII-armored export of the dedicated
+  repository signing private key.
+- `SYNARA_APT_SIGNING_PRIVATE_KEY_PASSWORD`: the private-key passphrase.
+
+Create and retain the production key outside the repository, store its recovery
+copy in an approved password manager or offline encrypted storage, and publish
+only the exported binary public keyring. Record its full fingerprint in the
+release operations record so rotations can be independently verified.
+
+Current production APT signing-key fingerprint (expires 2028-08-24):
+
+```text
+EB88 3952 04C1 EE19 7EE8  3B2F 3E02 F509 BB6B 0D2B
+```
 
 Never commit updater private keys, Apple certificates, passwords, or notarization
 credentials.
@@ -217,6 +237,26 @@ Release CI must own every production repo mutation:
 
 Maintainers and agents should not manually run `repo-add` for production
 publication. Manual commands are acceptable only for local smoke packages.
+
+## Linux APT Repo
+
+The Debian-family repository is a flat signed public repository backed by
+the fixed `apt-repo` GitHub Release:
+
+```text
+deb [arch=amd64 signed-by=/etc/apt/keyrings/synara-archive-keyring.gpg] https://github.com/nepenth/synara-desktop/releases/download/ apt-repo/
+```
+
+Release CI builds the `.deb`, runs `scripts/build-apt-repo.sh`, uploads the new
+package, imports the private key only inside the protected publication job,
+generates and verifies `InRelease` and `Release.gpg`, publishes the public
+keyring, and then removes obsolete package assets. Do not manually rebuild or
+sign production metadata.
+
+GitHub Release asset replacement is not transactional. The supported bootstrap
+publisher minimizes the inconsistent window and keeps the prior package until
+the new signed metadata is live, but the production-hardening target is an
+atomically deployed static repository.
 
 ## Release Constraints
 

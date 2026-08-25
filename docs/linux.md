@@ -6,7 +6,8 @@ Synara Desktop is a Tauri 2 app. Linux builds should be produced on Linux, becau
 
 Start with these package formats:
 
-- `.deb` for Debian, Ubuntu, KDE neon, and related distributions.
+- `.deb` for Debian, Ubuntu, Pop!_OS, KDE neon, and related distributions
+  through the Synara GitHub Release-backed APT repository.
 - Native pacman package for CachyOS, Arch, and other Arch-family installs
   through the Synara GitHub Release-backed pacman repository.
 
@@ -14,8 +15,10 @@ Tauri can also target RPM, Flatpak, Snap, and AppImage packaging, but those form
 
 For the current release goal, Linux updates are package-manager-owned. The app
 may notify users that a newer Linux package is available, but it must not
-self-update a pacman/paru installation. Arch-family users configure the Synara
-pacman repo once, then update with normal `paru -Syu` or `sudo pacman -Syu`.
+self-update a package-manager installation. Debian-family users configure the
+Synara APT repo once and update with `sudo apt update && sudo apt upgrade`.
+Arch-family users configure the Synara pacman repo once, then update with
+normal `paru -Syu` or `sudo pacman -Syu`.
 
 ## Workstation Prerequisites
 
@@ -115,6 +118,69 @@ The desktop build runs `scripts/build-runtime.mjs`, which copies the repository
 root `config.json` into `synara/config.json`, builds the `synara/` app runtime,
 copies `synara/dist` into `devAssets`, then packages with Tauri. Edit the root
 `config.json` only; the build pipeline keeps `synara/config.json` in sync.
+
+### Debian / Ubuntu / Pop!_OS package
+
+Configure the repository once:
+
+```sh
+sudo install -d -m 0755 /etc/apt/keyrings
+curl -fsSL \
+  https://github.com/nepenth/synara-desktop/releases/download/apt-repo/synara-archive-keyring.gpg |
+  sudo tee /etc/apt/keyrings/synara-archive-keyring.gpg >/dev/null
+sudo chmod 0644 /etc/apt/keyrings/synara-archive-keyring.gpg
+gpg --show-keys --with-fingerprint /etc/apt/keyrings/synara-archive-keyring.gpg
+
+sudo tee /etc/apt/sources.list.d/synara.sources >/dev/null <<'EOF'
+Types: deb
+URIs: https://github.com/nepenth/synara-desktop/releases/download/
+Suites: apt-repo/
+Architectures: amd64
+Signed-By: /etc/apt/keyrings/synara-archive-keyring.gpg
+EOF
+
+sudo apt update
+sudo apt install synara
+```
+
+Verify that the displayed primary-key fingerprint is exactly:
+
+```text
+EB88 3952 04C1 EE19 7EE8  3B2F 3E02 F509 BB6B 0D2B
+```
+
+The trailing slash in `apt-repo/` selects a flat repository. Its package index
+is published at:
+
+```text
+https://github.com/nepenth/synara-desktop/releases/download/apt-repo/Packages
+```
+
+After setup, Synara participates in normal system updates:
+
+```sh
+sudo apt update
+sudo apt upgrade
+```
+
+Verify the installed and candidate versions with `apt-cache policy synara`.
+The fixed `apt-repo` GitHub Release is refreshed by production release CI from
+the same `.deb` uploaded to each versioned release. CI signs `InRelease` and
+`Release.gpg` with the dedicated Synara APT key; `Signed-By` scopes trust in that
+key to this repository instead of granting it system-wide trust.
+
+GitHub Release asset replacement is not transactional. Publication keeps the
+prior package until signed metadata for the replacement is live, but the
+long-term hardening target remains an atomically deployed static package host.
+
+To remove Synara and the repository:
+
+```sh
+sudo apt remove synara
+sudo rm /etc/apt/sources.list.d/synara.sources
+sudo rm /etc/apt/keyrings/synara-archive-keyring.gpg
+sudo apt update
+```
 
 ### CachyOS / Arch-family package
 

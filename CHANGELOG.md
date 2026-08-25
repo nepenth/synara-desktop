@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Added a Pop!_OS/Debian-family APT repository path that publishes the tagged
+  `.deb` and signed flat repository metadata alongside every production
+  release.
+- Updated Linux update guidance to cover APT as well as pacman/paru, with
+  focused repository generation and signature verification tests.
+
 ## 2.1.10 - 2026-08-25
 
 - Room lists across iOS, macOS, and Linux now use compact channel markers and

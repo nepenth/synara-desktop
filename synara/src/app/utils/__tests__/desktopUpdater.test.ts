@@ -105,6 +105,7 @@ test('desktop updater reports linux release availability without self-install', 
   assert.equal(result.status, 'available');
   assert.equal(result.platform, 'linux');
   assert.equal(result.version, '1.2.22');
+  assert.match(result.packageManagerHint ?? '', /apt upgrade/);
   assert.match(result.packageManagerHint ?? '', /paru -Syu/);
 });
 
