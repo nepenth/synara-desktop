@@ -5,13 +5,6 @@ package_dir="${1:-src-tauri/target/release/bundle/deb}"
 output_dir="${2:-dist/apt-repo}"
 repo_tag="${SYNARA_APT_REPO_TAG:-apt-repo}"
 
-for command in dpkg-scanpackages apt-ftparchive; do
-  if ! command -v "${command}" >/dev/null 2>&1; then
-    printf '%s is required (install dpkg-dev and apt-utils).\n' "${command}" >&2
-    exit 1
-  fi
-done
-
 root_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
 resolve_input_dir() {
@@ -37,6 +30,13 @@ if [[ ${#package_files[@]} -ne 1 ]]; then
     "${package_dir}" "${#package_files[@]}" >&2
   exit 1
 fi
+
+for command in dpkg-scanpackages apt-ftparchive; do
+  if ! command -v "${command}" >/dev/null 2>&1; then
+    printf '%s is required (install dpkg-dev and apt-utils).\n' "${command}" >&2
+    exit 1
+  fi
+done
 
 package_file="${package_files[0]}"
 
