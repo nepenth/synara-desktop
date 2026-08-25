@@ -8,6 +8,7 @@ import {
   moveRoomTodoItem,
   normalizeRoomNotesContent,
   putRoomNoteItem,
+  rankRoomNoteItem,
   removeRoomNoteItem,
 } from '../roomNotes';
 
@@ -76,6 +77,30 @@ test('room notes reorder ToDo items within active and completed groups', () => {
   assert.deepEqual(
     getRoomNoteItems(movedCompleted, '!room:example.org').map((item) => item.body),
     ['third', 'second', 'first']
+  );
+});
+
+test('room notes assign a stable fractional rank when moving an ordinary note', () => {
+  const first = createManualRoomNoteItem('!room:example.org', 'note', 'first', 100);
+  const second = createManualRoomNoteItem('!room:example.org', 'note', 'second', 200);
+  const third = createManualRoomNoteItem('!room:example.org', 'note', 'third', 300);
+  assert.ok(first);
+  assert.ok(second);
+  assert.ok(third);
+
+  const roomItems = [third, second, first];
+  const ranked = rankRoomNoteItem(roomItems, first.id, 'up');
+  assert.ok(ranked);
+  assert.equal(ranked.updatedAt, first.updatedAt);
+  assert.equal(ranked.order, 250);
+
+  const content = putRoomNoteItem(
+    putRoomNoteItem(putRoomNoteItem(undefined, third), second),
+    ranked
+  );
+  assert.deepEqual(
+    getRoomNoteItems(content, '!room:example.org').map((item) => item.body),
+    ['third', 'first', 'second']
   );
 });
 

@@ -264,7 +264,8 @@ final class SynaraUITests: XCTestCase {
         let noteRow = app.staticTexts["Discuss the migration privately"]
         XCTAssertTrue(noteRow.waitForExistence(timeout: 5))
         noteRow.press(forDuration: 0.8)
-        tap(app.buttons["Edit"], timeout: 5)
+        XCTAssertTrue(app.buttons["Move Down"].waitForExistence(timeout: 5))
+        tap(app.buttons["pencil"], timeout: 5)
 
         let editBody = app.textViews["RoomNotesEditBody"]
         XCTAssertTrue(editBody.waitForExistence(timeout: 5))

@@ -61,9 +61,11 @@ struct ComposerTextView: UIViewRepresentable {
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         container.placeholderLabel.text = placeholder
         container.placeholderLabel.font = textView.font
+        container.placeholderLabel.adjustsFontForContentSizeCategory = true
         container.placeholderLabel.textColor = .placeholderText
         context.coordinator.container = container
         context.coordinator.lastFormattingRevision = formattingRevision
+        context.coordinator.lastPlaceholder = placeholder
         context.coordinator.performProgrammaticUpdate {
             textView.text = text
             applySelection(to: textView)
@@ -78,7 +80,7 @@ struct ComposerTextView: UIViewRepresentable {
         }
         ComposerTextInputRegistry.register(textView)
         context.coordinator.syncPlaceholder()
-        context.coordinator.updateHeight(for: textView)
+        context.coordinator.updateHeight(for: textView, force: true)
         return container
     }
 
@@ -87,10 +89,11 @@ struct ComposerTextView: UIViewRepresentable {
         context.coordinator.parent = self
         textView.onPasteImages = onPasteImages
         context.coordinator.performProgrammaticUpdate {
-            uiView.placeholderLabel.text = placeholder
-            applyTextAppearance(to: textView)
-            uiView.placeholderLabel.font = textView.font
-            uiView.placeholderLabel.textColor = .placeholderText
+            if context.coordinator.lastPlaceholder != placeholder {
+                context.coordinator.lastPlaceholder = placeholder
+                uiView.placeholderLabel.text = placeholder
+                context.coordinator.refreshAccessibilityPlaceholder()
+            }
 
             if context.coordinator.lastFormattingRevision != formattingRevision {
                 context.coordinator.lastFormattingRevision = formattingRevision
@@ -117,11 +120,7 @@ struct ComposerTextView: UIViewRepresentable {
         guard width > 0 else {
             return nil
         }
-        let measuredHeight = uiView.preferredHeight(
-            forWidth: width,
-            collapsed: text.isEmpty && isFocused.wrappedValue == false
-        )
-        return CGSize(width: width, height: measuredHeight)
+        return CGSize(width: width, height: height)
     }
 
     private func applySelection(to textView: UITextView) {
@@ -150,14 +149,21 @@ struct ComposerTextView: UIViewRepresentable {
         var parent: ComposerTextView
         weak var container: ComposerTextContainer?
         var lastFormattingRevision = -1
+        var lastPlaceholder = ""
         private var isApplyingProgrammaticState = false
+        private var lastMeasuredText: String?
+        private var lastMeasuredWidth: CGFloat = 0
+        private var lastMeasuredCollapsed: Bool?
+        private var lastAccessibilityShowsPlaceholder: Bool?
 
         init(parent: ComposerTextView) {
             self.parent = parent
         }
 
         func publishContent(from textView: UITextView) {
-            parent.text = textView.text
+            if parent.text != textView.text {
+                parent.text = textView.text
+            }
             updateSelection(from: textView)
             syncPlaceholder()
         }
@@ -201,7 +207,7 @@ struct ComposerTextView: UIViewRepresentable {
             isApplyingProgrammaticState = false
         }
 
-        func updateHeight(for textView: UITextView) {
+        func updateHeight(for textView: UITextView, force: Bool = false) {
             guard let container = container else {
                 return
             }
@@ -211,6 +217,16 @@ struct ComposerTextView: UIViewRepresentable {
             }
 
             let collapsed = textView.text.isEmpty && textView.isFirstResponder == false
+            guard force
+                || lastMeasuredText != textView.text
+                || abs(lastMeasuredWidth - width) > 0.5
+                || lastMeasuredCollapsed != collapsed
+            else {
+                return
+            }
+            lastMeasuredText = textView.text
+            lastMeasuredWidth = width
+            lastMeasuredCollapsed = collapsed
             let measuredHeight = container.preferredHeight(forWidth: width, collapsed: collapsed)
             textView.isScrollEnabled = collapsed == false && measuredHeight >= ComposerTextMetrics.maxHeight
 
@@ -226,21 +242,31 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func syncPlaceholder() {
-            container?.placeholderLabel.isHidden = (container?.textView.text.isEmpty == false)
+            let isEmpty = container?.textView.text.isEmpty ?? true
+            container?.placeholderLabel.isHidden = isEmpty == false
             if let textView = container?.textView {
-                if textView.text.isEmpty {
+                guard lastAccessibilityShowsPlaceholder != isEmpty else { return }
+                lastAccessibilityShowsPlaceholder = isEmpty
+                if isEmpty {
                     textView.accessibilityValue = parent.placeholder
                 } else {
-                    textView.accessibilityValue = textView.text
+                    textView.accessibilityValue = nil
                 }
             }
         }
 
+        func refreshAccessibilityPlaceholder() {
+            lastAccessibilityShowsPlaceholder = nil
+        }
+
         private func updateSelection(from textView: UITextView) {
-            parent.selection = ComposerTextSelection(
+            let selection = ComposerTextSelection(
                 location: textView.selectedRange.location,
                 length: textView.selectedRange.length
             )
+            if parent.selection != selection {
+                parent.selection = selection
+            }
         }
     }
 }

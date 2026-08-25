@@ -118,10 +118,7 @@ export const getRoomNoteItems = (
       const rank = { todo: 0, note: 1, message: 2 };
       return rank[a.kind] - rank[b.kind];
     }
-    if (a.kind === 'todo' && b.kind === 'todo') {
-      return (b.order ?? b.updatedAt) - (a.order ?? a.updatedAt);
-    }
-    return b.updatedAt - a.updatedAt;
+    return (b.order ?? b.updatedAt) - (a.order ?? a.updatedAt);
   });
 };
 
@@ -233,6 +230,50 @@ export const moveRoomTodoItem = (
   );
 };
 
+export const rankRoomNoteItem = (
+  roomItems: SynaraRoomNoteItem[],
+  itemId: string,
+  direction: 'up' | 'down'
+): SynaraRoomNoteItem | undefined => {
+  const item = roomItems.find((candidate) => candidate.id === itemId);
+  if (!item || (item.kind !== 'note' && item.kind !== 'todo')) return undefined;
+
+  const group = roomItems.filter(
+    (candidate) =>
+      candidate.kind === item.kind &&
+      (item.kind !== 'todo' || Boolean(candidate.completedAt) === Boolean(item.completedAt))
+  );
+  const sourceIndex = group.findIndex((candidate) => candidate.id === itemId);
+  const targetIndex = direction === 'up' ? sourceIndex - 1 : sourceIndex + 1;
+  if (sourceIndex < 0 || targetIndex < 0 || targetIndex >= group.length) return undefined;
+
+  const reordered = [...group];
+  const [moved] = reordered.splice(sourceIndex, 1);
+  reordered.splice(targetIndex, 0, moved);
+  const previous = reordered[targetIndex - 1];
+  const next = reordered[targetIndex + 1];
+  const score = (candidate: SynaraRoomNoteItem): number => candidate.order ?? candidate.updatedAt;
+  const edgeStep = (value: number): number => Math.max(1, Math.abs(value) * 1e-9);
+
+  let order: number;
+  if (previous && next) {
+    const previousOrder = score(previous);
+    const nextOrder = score(next);
+    if (previousOrder <= nextOrder) return undefined;
+    order = nextOrder + (previousOrder - nextOrder) / 2;
+  } else if (previous) {
+    const previousOrder = score(previous);
+    order = previousOrder - edgeStep(previousOrder);
+  } else if (next) {
+    const nextOrder = score(next);
+    order = nextOrder + edgeStep(nextOrder);
+  } else {
+    return undefined;
+  }
+
+  return { ...moved, order };
+};
+
 export const createManualRoomNoteItem = (
   roomId: string,
   kind: Extract<SynaraRoomNoteItemKind, 'note' | 'todo'>,
@@ -248,6 +289,6 @@ export const createManualRoomNoteItem = (
     body: normalizedBody,
     createdAt: now,
     updatedAt: now,
-    order: kind === 'todo' ? now : undefined,
+    order: now,
   };
 };

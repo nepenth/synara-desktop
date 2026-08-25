@@ -45,8 +45,10 @@ struct RoomNotesView: View {
                     .accessibilityIdentifier("RoomNotesEmptyState")
                 }
             } else {
-                notesSection(title: "Active", items: items.filter { $0.isCompleted == false })
-                notesSection(title: "Completed", items: items.filter { $0.isCompleted })
+                reorderableSection(title: "ToDos", items: activeTodos)
+                reorderableSection(title: "Notes", items: notes)
+                staticSection(title: "Pinned Messages", items: pinnedMessages)
+                reorderableSection(title: "Completed", items: completedTodos)
             }
         }
         .listStyle(.insetGrouped)
@@ -56,6 +58,14 @@ struct RoomNotesView: View {
         .refreshable { await load() }
         .task { await load() }
         .toolbar {
+            if hasReorderableItems {
+                ToolbarItem(placement: .primaryAction) {
+                    EditButton()
+                        .disabled(isMutating)
+                        .accessibilityLabel("Reorder notes and ToDos")
+                        .accessibilityIdentifier("RoomNotesReorderButton")
+                }
+            }
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
                 Button("Done") { isDraftFocused = false }
@@ -110,29 +120,35 @@ struct RoomNotesView: View {
         }
     }
 
+    private var activeTodos: [SynaraRoomNoteItem] {
+        items.filter { $0.kind == .todo && $0.isCompleted == false }
+    }
+
+    private var completedTodos: [SynaraRoomNoteItem] {
+        items.filter { $0.kind == .todo && $0.isCompleted }
+    }
+
+    private var notes: [SynaraRoomNoteItem] {
+        items.filter { $0.kind == .note }
+    }
+
+    private var pinnedMessages: [SynaraRoomNoteItem] {
+        items.filter { $0.kind == .message }
+    }
+
+    private var hasReorderableItems: Bool {
+        activeTodos.count > 1 || completedTodos.count > 1 || notes.count > 1
+    }
+
     @ViewBuilder
-    private func notesSection(title: String, items sectionItems: [SynaraRoomNoteItem]) -> some View {
+    private func reorderableSection(title: String, items sectionItems: [SynaraRoomNoteItem]) -> some View {
         if sectionItems.isEmpty == false {
             Section(title) {
                 ForEach(sectionItems) { item in
-                    RoomNoteRow(
-                        item: item,
-                        canMoveUp: canMove(item, direction: .up),
-                        canMoveDown: canMove(item, direction: .down),
-                        onToggle: { setCompleted(item, completed: item.isCompleted == false) },
-                        onMove: { move(item, direction: $0) },
-                        onEdit: { editingItem = item },
-                        onDelete: { delete(item) },
-                        onOpenMessage: { eventID in onOpenMessage(eventID) }
-                    )
-                    .swipeActions(edge: .trailing, allowsFullSwipe: false) {
-                        Button(role: .destructive) {
-                            delete(item)
-                        } label: {
-                            Label("Delete", systemImage: "trash")
-                        }
-                        .accessibilityIdentifier("RoomNotesDelete-\(item.id)")
-                    }
+                    noteRow(item)
+                }
+                .onMove { offsets, destination in
+                    move(sectionItems, from: offsets, to: destination)
                 }
                 .onDelete { offsets in
                     for index in offsets {
@@ -140,6 +156,43 @@ struct RoomNotesView: View {
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private func staticSection(title: String, items sectionItems: [SynaraRoomNoteItem]) -> some View {
+        if sectionItems.isEmpty == false {
+            Section(title) {
+                ForEach(sectionItems) { item in
+                    noteRow(item)
+                }
+                .onDelete { offsets in
+                    for index in offsets {
+                        delete(sectionItems[index])
+                    }
+                }
+            }
+        }
+    }
+
+    private func noteRow(_ item: SynaraRoomNoteItem) -> some View {
+        RoomNoteRow(
+            item: item,
+            canMoveUp: canMove(item, direction: .up),
+            canMoveDown: canMove(item, direction: .down),
+            onToggle: { setCompleted(item, completed: item.isCompleted == false) },
+            onMove: { move(item, direction: $0) },
+            onEdit: { editingItem = item },
+            onDelete: { delete(item) },
+            onOpenMessage: { eventID in onOpenMessage(eventID) }
+        )
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            Button(role: .destructive) {
+                delete(item)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+            .accessibilityIdentifier("RoomNotesDelete-\(item.id)")
         }
     }
 
@@ -194,8 +247,39 @@ struct RoomNotesView: View {
     }
 
     private func move(_ item: SynaraRoomNoteItem, direction: RoomNoteMoveDirection) {
-        mutate {
-            await environment.roomNotes.moveTodo(roomID: roomID, itemID: item.id, direction: direction)
+        let group = reorderableGroup(containing: item)
+        guard let sourceIndex = group.firstIndex(where: { $0.id == item.id }) else { return }
+        let targetIndex = direction == .up ? sourceIndex - 1 : sourceIndex + 1
+        persistMove(itemID: item.id, to: targetIndex, in: group)
+    }
+
+    private func move(_ sectionItems: [SynaraRoomNoteItem], from offsets: IndexSet, to destination: Int) {
+        guard offsets.count == 1, let sourceIndex = offsets.first else { return }
+        let targetIndex = destination > sourceIndex ? destination - 1 : destination
+        persistMove(itemID: sectionItems[sourceIndex].id, to: targetIndex, in: sectionItems)
+    }
+
+    private func persistMove(itemID: String, to targetIndex: Int, in group: [SynaraRoomNoteItem]) {
+        guard isMutating == false,
+              let move = RoomNoteOrdering.moving(itemID: itemID, to: targetIndex, in: group)
+        else {
+            return
+        }
+        let previousItems = items
+        let optimisticByID = Dictionary(uniqueKeysWithValues: move.items.map { ($0.id, $0) })
+        withAnimation(.easeInOut(duration: 0.16)) {
+            items = SynaraRoomNoteItem.sorted(items.map { optimisticByID[$0.id] ?? $0 })
+        }
+        isMutating = true
+        Task {
+            let result = await environment.roomNotes.setItemOrder(move.movedItem, order: move.order)
+            await MainActor.run {
+                if case .failure = result {
+                    items = previousItems
+                }
+                apply(result, clearDraft: false)
+                isMutating = false
+            }
         }
     }
 
@@ -227,10 +311,17 @@ struct RoomNotesView: View {
     }
 
     private func canMove(_ item: SynaraRoomNoteItem, direction: RoomNoteMoveDirection) -> Bool {
-        guard item.kind == .todo else { return false }
-        let group = items.filter { $0.kind == .todo && $0.isCompleted == item.isCompleted }
+        guard item.kind == .todo || item.kind == .note else { return false }
+        let group = reorderableGroup(containing: item)
         guard let index = group.firstIndex(where: { $0.id == item.id }) else { return false }
         return direction == .up ? index > 0 : index < group.count - 1
+    }
+
+    private func reorderableGroup(containing item: SynaraRoomNoteItem) -> [SynaraRoomNoteItem] {
+        items.filter { candidate in
+            candidate.kind == item.kind
+                && (item.kind != .todo || candidate.isCompleted == item.isCompleted)
+        }
     }
 }
 
@@ -303,8 +394,10 @@ private struct RoomNoteRow: View {
             if item.kind == .note || item.kind == .todo {
                 Button("Edit", systemImage: "pencil", action: onEdit)
             }
-            if item.kind == .todo {
-                Button(item.isCompleted ? "Mark Active" : "Complete", action: onToggle)
+            if item.kind == .todo || item.kind == .note {
+                if item.kind == .todo {
+                    Button(item.isCompleted ? "Mark Active" : "Complete", action: onToggle)
+                }
                 Button("Move Up") { onMove(.up) }
                     .disabled(canMoveUp == false)
                 Button("Move Down") { onMove(.down) }

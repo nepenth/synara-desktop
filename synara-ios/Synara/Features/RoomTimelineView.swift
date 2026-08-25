@@ -5327,6 +5327,8 @@ private struct ComposerView: View {
     @State private var isFormattingBarVisible = false
     @State private var composerSelection = ComposerTextSelection.empty
     @State private var formattingRevision = 0
+    @State private var liveText: String?
+    @State private var draftPublishTask: Task<Void, Never>?
     @State private var composerFieldHeight: CGFloat = {
         #if canImport(UIKit)
             ComposerTextMetrics.singleLineHeight(font: UIFont.preferredFont(forTextStyle: .callout))
@@ -5477,14 +5479,21 @@ private struct ComposerView: View {
             isFocusedExternally = focused
             updateOutgoingTyping()
         }
-        .onChange(of: text) { _ in
+        .onChange(of: currentText) { _ in
             updateOutgoingTyping()
         }
+        .onChange(of: text) { value in
+            reconcileExternalText(value)
+        }
         .onAppear {
+            if liveText == nil {
+                liveText = text
+            }
             isFocusedExternally = isComposerFocused
             updateOutgoingTyping()
         }
         .onDisappear {
+            flushExternalText()
             isFocusedExternally = false
             setOutgoingTyping(false)
         }
@@ -5563,7 +5572,7 @@ private struct ComposerView: View {
     }
 
     private var canSubmit: Bool {
-        ComposerAttachmentDraftList.canSend(text: text, drafts: attachmentDrafts)
+        ComposerAttachmentDraftList.canSend(text: currentText, drafts: attachmentDrafts)
     }
 
     private var resolvedPlaceholder: String {
@@ -5609,17 +5618,17 @@ private struct ComposerView: View {
     }
 
     private var shouldShowPromptMetrics: Bool {
-        text.isEmpty == false || isComposerFocused
+        currentText.isEmpty == false || isComposerFocused
     }
 
     private var composerLineCount: Int {
-        max(1, text.components(separatedBy: .newlines).count)
+        max(1, currentText.components(separatedBy: .newlines).count)
     }
 
     private var composerPromptMetrics: some View {
         HStack(spacing: SynaraSpacing.small) {
             Spacer()
-            Text("\(text.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
+            Text("\(currentText.count) chars · \(composerLineCount) line\(composerLineCount == 1 ? "" : "s")")
                 .font(SynaraTypography.composerMetric)
                 .foregroundStyle(SynaraColor.tertiaryText)
                 .monospacedDigit()
@@ -5632,7 +5641,7 @@ private struct ComposerView: View {
     private var composerField: some View {
         #if canImport(UIKit)
             ComposerTextView(
-                text: $text,
+                text: composerTextBinding,
                 selection: $composerSelection,
                 height: $composerFieldHeight,
                 placeholder: resolvedPlaceholder,
@@ -5642,13 +5651,13 @@ private struct ComposerView: View {
             )
             .frame(height: composerFieldHeight)
         #else
-            TextField(resolvedPlaceholder, text: $text, axis: .vertical)
+            TextField(resolvedPlaceholder, text: composerTextBinding, axis: .vertical)
                 .font(SynaraTypography.body)
                 .focused($isComposerFocused)
                 .lineLimit(1 ... 5)
                 .frame(minHeight: composerFieldHeight)
                 .accessibilityIdentifier("ComposerTextField")
-                .onChange(of: text) { _ in
+                .onChange(of: currentText) { _ in
                     updateComposerFieldHeight()
                 }
                 .onChange(of: isComposerFocused) { _ in
@@ -5662,12 +5671,12 @@ private struct ComposerView: View {
             let singleLineHeight = ComposerTextMetrics.singleLineHeight(
                 font: UIFont.preferredFont(forTextStyle: .callout)
             )
-            if text.isEmpty, isComposerFocused == false {
+            if currentText.isEmpty, isComposerFocused == false {
                 composerFieldHeight = singleLineHeight
                 return
             }
 
-            let lineCount = max(1, text.components(separatedBy: .newlines).count)
+            let lineCount = max(1, currentText.components(separatedBy: .newlines).count)
             let estimatedLineHeight = UIFont.preferredFont(forTextStyle: .callout).lineHeight
             let estimatedHeight = ceil(estimatedLineHeight * CGFloat(lineCount))
                 + ComposerTextMetrics.textContainerInset.top
@@ -5680,8 +5689,8 @@ private struct ComposerView: View {
     }
 
     private func applyFormatting(_ format: ComposerMarkdownFormat) {
-        let result = ComposerMarkdown.apply(format, to: text, selection: composerSelection)
-        text = result.text
+        let result = ComposerMarkdown.apply(format, to: currentText, selection: composerSelection)
+        setLiveText(result.text)
         composerSelection = result.selection
         formattingRevision += 1
         isComposerFocused = true
@@ -5696,7 +5705,7 @@ private struct ComposerView: View {
         #endif
         isComposerFocused = false
         setOutgoingTyping(false)
-        let messageBody = text
+        let messageBody = currentText
         text = messageBody
         onSend(messageBody)
     }
@@ -5704,7 +5713,7 @@ private struct ComposerView: View {
     private func updateOutgoingTyping() {
         let shouldType =
             isComposerFocused
-            && text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+            && currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             && SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) == false
         setOutgoingTyping(shouldType)
     }
@@ -5716,6 +5725,41 @@ private struct ComposerView: View {
         lastOutgoingTyping = typing
         Task {
             await environment.matrix.setOutgoingTyping(roomID: roomID, typing: typing)
+        }
+    }
+
+    private var currentText: String {
+        liveText ?? text
+    }
+
+    private var composerTextBinding: Binding<String> {
+        Binding(
+            get: { currentText },
+            set: { setLiveText($0) }
+        )
+    }
+
+    private func setLiveText(_ value: String) {
+        liveText = value
+        draftPublishTask?.cancel()
+        draftPublishTask = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard Task.isCancelled == false, text != value else { return }
+            text = value
+        }
+    }
+
+    private func reconcileExternalText(_ value: String) {
+        guard value != currentText else { return }
+        draftPublishTask?.cancel()
+        liveText = value
+    }
+
+    private func flushExternalText() {
+        draftPublishTask?.cancel()
+        let value = currentText
+        if text != value {
+            text = value
         }
     }
 }

@@ -1547,7 +1547,34 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(items.first?.isCompleted == true)
     }
 
-    func testMockRoomNotesServiceRunsRoomScopedCrudAndTodoOrderingPath() async {
+    func testRoomNoteOrderingMovesOrdinaryNoteWithoutChangingEditTimestamp() {
+        let timestamp = Date(timeIntervalSince1970: 1_800_000_000)
+        let notes = [
+            SynaraRoomNoteItem(
+                id: "third", kind: .note, roomID: "!room:example.org", createdAt: timestamp,
+                updatedAt: timestamp, body: "Third", completedAt: nil, order: 300,
+                eventID: nil, eventTimestamp: nil, senderID: nil
+            ),
+            SynaraRoomNoteItem(
+                id: "second", kind: .note, roomID: "!room:example.org", createdAt: timestamp,
+                updatedAt: timestamp, body: "Second", completedAt: nil, order: 200,
+                eventID: nil, eventTimestamp: nil, senderID: nil
+            ),
+            SynaraRoomNoteItem(
+                id: "first", kind: .note, roomID: "!room:example.org", createdAt: timestamp,
+                updatedAt: timestamp, body: "First", completedAt: nil, order: 100,
+                eventID: nil, eventTimestamp: nil, senderID: nil
+            ),
+        ]
+
+        let result = RoomNoteOrdering.moving(itemID: "first", to: 1, in: notes)
+
+        XCTAssertEqual(result?.items.map(\.id), ["third", "first", "second"])
+        XCTAssertEqual(result?.order, 250)
+        XCTAssertEqual(result?.movedItem.updatedAt, timestamp)
+    }
+
+    func testMockRoomNotesServiceRunsRoomScopedCrudAndItemOrderingPath() async {
         let now = Date(timeIntervalSince1970: 1_800_000_000)
         let first = SynaraRoomNoteItem(
             id: "first", kind: .todo, roomID: "!room:example.org", createdAt: now,
@@ -1609,6 +1636,13 @@ final class TimelineServiceTests: XCTestCase {
             return XCTFail("Expected updated snapshot")
         }
         XCTAssertEqual(updated.first(where: { $0.id == addedNote.id })?.body, "Updated private note")
+
+        guard let updatedNote = updated.first(where: { $0.id == addedNote.id }),
+              case let .success(ranked) = await service.setItemOrder(updatedNote, order: 9_999)
+        else {
+            return XCTFail("Expected reordered note snapshot")
+        }
+        XCTAssertEqual(ranked.first(where: { $0.kind == .note })?.order, 9_999)
 
         guard case let .success(deleted) = await service.deleteItem(roomID: first.roomID, itemID: first.id) else {
             return XCTFail("Expected deleted snapshot")
