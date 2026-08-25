@@ -118,10 +118,9 @@ struct SettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .settingsTabBarClearance()
         .background {
-            // Include the clearance inset in the same opaque content plane and
-            // continue it behind the floating navigation and tab-bar layers.
+            // Continue the settings plane behind translucent system chrome;
+            // RootShellView owns the clear scroll tail above the tab bar.
             SynaraChrome.settings
                 .ignoresSafeArea()
         }
@@ -407,7 +406,6 @@ private struct AccountSettingsView: View {
         .refreshable {
             await refreshSessionDevices()
         }
-        .settingsTabBarClearance()
         .navigationTitle("Account")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("AccountSettingsScreen")
@@ -838,7 +836,6 @@ private struct NotificationSettingsView: View {
                 }
             }
         }
-        .settingsTabBarClearance()
         .navigationTitle("Notifications")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("NotificationSettingsScreen")
@@ -1001,7 +998,6 @@ private struct AppearanceSettingsView: View {
         }
         .scrollContentBackground(.hidden)
         .background(SynaraChrome.settings)
-        .settingsTabBarClearance()
         .navigationTitle("Appearance")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("AppearanceSettingsScreen")
@@ -1179,7 +1175,6 @@ private struct SecuritySettingsView: View {
                 }
             }
         }
-        .settingsTabBarClearance()
         .navigationTitle("Security")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("SecuritySettingsScreen")
@@ -1350,7 +1345,6 @@ private struct AboutSettingsView: View {
                 .accessibilityIdentifier("AboutSupportLink")
             }
         }
-        .settingsTabBarClearance()
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("AboutSettingsScreen")
@@ -1369,7 +1363,6 @@ private struct LicensesSettingsView: View {
                 LicenseRow(name: "Apple SwiftUI and iOS SDK", license: "Apple platform SDK", note: "Provided by Xcode and iOS.")
             }
         }
-        .settingsTabBarClearance()
         .navigationTitle("Licenses")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("LicensesSettingsScreen")
@@ -1414,7 +1407,6 @@ private struct PrivacyPolicySettingsView: View {
                 DataInventoryRow(title: "Diagnostics", detail: "No analytics or crash SDK is enabled. Logs are local and redacted.")
             }
         }
-        .settingsTabBarClearance()
         .navigationTitle("Privacy")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("PrivacyPolicySettingsScreen")
@@ -1438,7 +1430,6 @@ private struct SupportSettingsView: View {
                 SettingsInfoRow(title: "Bundle", value: AppBuildInfo.bundleIdentifier)
             }
         }
-        .settingsTabBarClearance()
         .navigationTitle("Support")
         .navigationBarTitleDisplayMode(.inline)
         .accessibilityIdentifier("SupportSettingsScreen")
@@ -1458,20 +1449,6 @@ private struct DataInventoryRow: View {
                 .foregroundStyle(SynaraColor.secondaryText)
         }
         .accessibilityElement(children: .combine)
-    }
-}
-
-private extension View {
-    func settingsTabBarClearance() -> some View {
-        safeAreaInset(edge: .bottom, spacing: 0) {
-            Color.clear
-                // The iOS floating tab bar occupies more than its visible
-                // capsule: content also needs room for the bar's outer margin
-                // and a readable separation above it. Keep the final Form row
-                // scrollable completely above that obstruction.
-                .frame(height: 104)
-                .accessibilityHidden(true)
-        }
     }
 }
 

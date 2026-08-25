@@ -5318,6 +5318,7 @@ private struct ComposerView: View {
     #endif
     @Binding var isFocusedExternally: Bool
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @State private var lastOutgoingTyping = false
     @State private var isAttachmentSheetPresented = false
     @State private var isFileImporterPresented = false
@@ -5368,92 +5369,7 @@ private struct ComposerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
-                Button {
-                    isAttachmentSheetPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .frame(width: 34, height: 34)
-                        .background(SynaraColor.secondarySurface)
-                        .foregroundStyle(SynaraColor.secondaryText)
-                        .clipShape(Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
-                                .allowsHitTesting(false)
-                        )
-                }
-                .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .disabled(isSending)
-                .accessibilityLabel("Attach")
-                .accessibilityIdentifier("AttachmentButton")
-
-                if let onOpenStickers {
-                    Button(action: onOpenStickers) {
-                        Image(systemName: "face.smiling")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                            .background(SynaraColor.secondarySurface)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Stickers")
-                    .accessibilityIdentifier("StickerPackButton")
-                }
-
-                HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
-                    composerField
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            isFormattingBarVisible.toggle()
-                        }
-                        isComposerFocused = true
-                    } label: {
-                        Image(systemName: isFormattingBarVisible ? "textformat.alt" : "textformat")
-                            .font(.system(size: 14, weight: .semibold))
-                            .frame(width: 28, height: 28)
-                            .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel(isFormattingBarVisible ? "Hide formatting toolbar" : "Show formatting toolbar")
-                    .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
-                    .accessibilityIdentifier("ComposerFormattingToggle")
-                }
-                .padding(.leading, SynaraSpacing.small)
-                .padding(.trailing, SynaraSpacing.xSmall)
-                .padding(.vertical, 5)
-                .background {
-                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                        .fill(SynaraColor.surface)
-                }
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                        .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
-                        .allowsHitTesting(false)
-                )
-
-                if canSubmit {
-                    Button(action: submitMessage) {
-                        Image(systemName: "paperplane.fill")
-                            .font(.system(size: 16, weight: .semibold))
-                            .frame(width: 34, height: 34)
-                            .background(sendButtonTint)
-                            .foregroundStyle(Color.white)
-                            .clipShape(Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .disabled(isSending)
-                    .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
-                    .accessibilityHint(composerSendAccessibilityHint)
-                    .accessibilityIdentifier("ComposerSendButton")
-                }
-            }
+            composerControls
 
             if showsPromptMetrics, shouldShowPromptMetrics {
                 composerPromptMetrics
@@ -5569,6 +5485,136 @@ private struct ComposerView: View {
 
     private var sendButtonTint: Color {
         canSubmit && isSending == false ? SynaraColor.accent : SynaraColor.secondarySurface
+    }
+
+    @ViewBuilder
+    private var composerControls: some View {
+        if dynamicTypeSize.isAccessibilitySize {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                composerInputSurface(showsFormattingToggle: false)
+
+                HStack(spacing: SynaraSpacing.small) {
+                    attachmentButton
+                    stickerButton
+                    formattingButton
+                    Spacer(minLength: SynaraSpacing.small)
+                    sendButton
+                }
+            }
+        } else {
+            HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
+                attachmentButton
+                stickerButton
+                composerInputSurface(showsFormattingToggle: true)
+                sendButton
+            }
+        }
+    }
+
+    private var attachmentButton: some View {
+        Button {
+            isAttachmentSheetPresented = true
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 16, weight: .semibold))
+                .frame(width: 34, height: 34)
+                .background(SynaraColor.secondarySurface)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .clipShape(Circle())
+                .overlay(
+                    Circle()
+                        .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                )
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .disabled(isSending)
+        .accessibilityLabel("Attach")
+        .accessibilityIdentifier("AttachmentButton")
+    }
+
+    @ViewBuilder
+    private var stickerButton: some View {
+        if let onOpenStickers {
+            Button(action: onOpenStickers) {
+                Image(systemName: "face.smiling")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(SynaraColor.secondarySurface)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .clipShape(Circle())
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .accessibilityLabel("Stickers")
+            .accessibilityIdentifier("StickerPackButton")
+        }
+    }
+
+    private var formattingButton: some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.18)) {
+                isFormattingBarVisible.toggle()
+            }
+            isComposerFocused = true
+        } label: {
+            Image(systemName: isFormattingBarVisible ? "textformat.alt" : "textformat")
+                .font(.system(size: 14, weight: .semibold))
+                .frame(width: 28, height: 28)
+                .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
+                .frame(width: 44, height: 44)
+        }
+        .buttonStyle(.plain)
+        .contentShape(Rectangle())
+        .accessibilityLabel(isFormattingBarVisible ? "Hide formatting toolbar" : "Show formatting toolbar")
+        .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
+        .accessibilityIdentifier("ComposerFormattingToggle")
+    }
+
+    @ViewBuilder
+    private var sendButton: some View {
+        if canSubmit {
+            Button(action: submitMessage) {
+                Image(systemName: "paperplane.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 34, height: 34)
+                    .background(sendButtonTint)
+                    .foregroundStyle(Color.white)
+                    .clipShape(Circle())
+                    .frame(width: 44, height: 44)
+            }
+            .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .disabled(isSending)
+            .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
+            .accessibilityHint(composerSendAccessibilityHint)
+            .accessibilityIdentifier("ComposerSendButton")
+        }
+    }
+
+    private func composerInputSurface(showsFormattingToggle: Bool) -> some View {
+        HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
+            composerField
+
+            if showsFormattingToggle {
+                formattingButton
+            }
+        }
+        .padding(.leading, SynaraSpacing.small)
+        .padding(.trailing, SynaraSpacing.xSmall)
+        .padding(.vertical, 5)
+        .background {
+            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                .fill(SynaraColor.surface)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
+                .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
+                .allowsHitTesting(false)
+        )
     }
 
     private var canSubmit: Bool {
@@ -5785,6 +5831,7 @@ private struct ComposerFormattingBar: View {
                                     .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
                                     .allowsHitTesting(false)
                             )
+                            .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
                     .contentShape(Rectangle())

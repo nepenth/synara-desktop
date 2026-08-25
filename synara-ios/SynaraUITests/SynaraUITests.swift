@@ -403,6 +403,56 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(sentMessage.waitForExistence(timeout: 5))
     }
 
+    func testAccessibilityComposerContainsEditorAndPrimaryToolsAreActuallyHittable() {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
+        app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        launch(app, contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL")
+
+        let window = app.windows.firstMatch
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(composer.frame.minX, window.frame.minX)
+        XCTAssertLessThanOrEqual(composer.frame.maxX, window.frame.maxX)
+        XCTAssertGreaterThan(composer.frame.height, 34)
+
+        for identifier in ["AttachmentButton", "StickerPackButton", "ComposerFormattingToggle"] {
+            let control = app.buttons[identifier]
+            XCTAssertTrue(control.waitForExistence(timeout: 5), "Missing \(identifier)")
+            assertNominalMinimumHitRegion(control, identifier: identifier)
+            XCTAssertTrue(control.isHittable, "Obscured hit region for \(identifier)")
+        }
+
+        app.buttons["ComposerFormattingToggle"].tap()
+        let formattingBar = app.scrollViews["ComposerFormattingBar"]
+        XCTAssertTrue(formattingBar.waitForExistence(timeout: 5))
+        let visibleFormatActions = formattingBar.buttons.allElementsBoundByIndex.filter(\.isHittable)
+        XCTAssertGreaterThanOrEqual(visibleFormatActions.count, 2)
+        for action in visibleFormatActions {
+            assertNominalMinimumHitRegion(action, identifier: action.identifier)
+        }
+        let bold = app.buttons["ComposerFormat-bold"]
+        XCTAssertTrue(bold.isHittable)
+        bold.tap()
+
+        app.buttons["AttachmentButton"].tap()
+        XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
+        tap(app.buttons["AttachmentOption-Photo or Video"])
+
+        composer.tap()
+        composer.typeText("Accessible send")
+        let send = app.buttons["ComposerSendButton"]
+        XCTAssertTrue(send.waitForExistence(timeout: 5))
+        assertNominalMinimumHitRegion(send, identifier: "ComposerSendButton")
+        XCTAssertTrue(send.isHittable)
+        send.tap()
+        let sentMessage = app.staticTexts.containing(
+            NSPredicate(format: "label CONTAINS %@", "Accessible send")
+        ).firstMatch
+        XCTAssertTrue(sentMessage.waitForExistence(timeout: 5))
+    }
+
     func testComposerFormattingToolbarSendsRenderedMessage() {
         let app = launchRoomApp()
 
@@ -510,6 +560,22 @@ final class SynaraUITests: XCTestCase {
         }
     }
 
+    func testAccessibilityNotificationFinalRowCanScrollAboveAndReceiveTap() {
+        let app = launchSignedInNotificationsApp(
+            contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
+        )
+        let disclosure = identifiedElement(in: app, "NotificationsUnreadRoomsDisclosure")
+        let inbox = app.collectionViews["NotificationsInboxList"]
+        XCTAssertTrue(revealForExistence(disclosure, in: inbox))
+        tap(disclosure)
+
+        let row = app.buttons["NotificationsRow-!general:matrix.org"]
+        XCTAssertTrue(revealForDirectHit(row, in: inbox, app: app))
+        assertAboveFloatingTabBar(row, app: app)
+        row.tap()
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 8))
+    }
+
     func testLogoutReturnsToSignedOutShell() {
         let app = launchSignedInSettingsApp()
 
@@ -517,6 +583,40 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["ConfirmLogoutButton"].firstMatch, timeout: 5)
 
         XCTAssertTrue(app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5))
+    }
+
+    func testAccessibilitySettingsFinalActionCanScrollAboveAndReceiveTap() {
+        let app = launchSignedInSettingsApp(
+            contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
+        )
+        let logout = app.buttons["LogoutButton"]
+        XCTAssertTrue(revealForDirectHit(logout, in: app.collectionViews["SettingsScreen"], app: app))
+        assertAboveFloatingTabBar(logout, app: app)
+        logout.tap()
+        XCTAssertTrue(app.buttons["ConfirmLogoutButton"].waitForExistence(timeout: 5))
+    }
+
+    func testAccessibilityPushedSettingsFinalActionCanScrollAboveAndReceiveTap() {
+        let app = launchSignedInSettingsApp(
+            contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
+        )
+        tapSettingsElement(app.buttons["AppearanceSettingsLink"], app: app, timeout: 10)
+        let appearanceList = app.collectionViews["AppearanceSettingsScreen"]
+        XCTAssertTrue(appearanceList.waitForExistence(timeout: 5))
+
+        let finalAction = app.switches["AppearanceHideActivityToggle"]
+        XCTAssertTrue(revealForDirectHit(finalAction, in: appearanceList, app: app))
+        assertAboveFloatingTabBar(finalAction, app: app)
+        let originalValue = finalAction.value as? String
+        finalAction.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.5)).tap()
+        let valueChanged = NSPredicate { evaluated, _ in
+            guard let control = evaluated as? XCUIElement else {
+                return false
+            }
+            return control.value as? String != originalValue
+        }
+        expectation(for: valueChanged, evaluatedWith: finalAction)
+        waitForExpectations(timeout: 3)
     }
 
     func testSettingsShowsNotificationSectionsAndReleaseLinks() {
@@ -640,6 +740,28 @@ final class SynaraUITests: XCTestCase {
         tap(row)
 
         XCTAssertTrue(app.buttons["TimelineSearchButton"].waitForExistence(timeout: 10))
+    }
+
+    func testAccessibilityLaterFinalRowCanScrollAboveAndReceiveTap() {
+        let app = launchLaterApp(contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL")
+        let row = app.buttons["LaterRow-$done"]
+        XCTAssertTrue(revealForDirectHit(row, in: app.collectionViews["LaterList"], app: app))
+        assertAboveFloatingTabBar(row, app: app)
+        row.tap()
+        XCTAssertTrue(app.buttons["TimelineSearchButton"].waitForExistence(timeout: 8))
+    }
+
+    func testAccessibilityRoomsFinalRowCanScrollAboveAndReceiveTap() {
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        launch(app, contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL")
+
+        let row = app.buttons["RoomRow-!mina:matrix.org"]
+        XCTAssertTrue(revealForDirectHit(row, in: app.collectionViews["RoomList"], app: app))
+        assertAboveFloatingTabBar(row, app: app)
+        row.tap()
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 8))
     }
 
     func testAgentCardApproveActionShowsSubmittedState() {
@@ -1686,21 +1808,21 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchSignedInNotificationsApp() -> XCUIApplication {
+    private func launchSignedInNotificationsApp(contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "notifications"
-        launch(app)
+        launch(app, contentSizeCategory: contentSizeCategory)
         return app
     }
 
-    private func launchSignedInSettingsApp() -> XCUIApplication {
+    private func launchSignedInSettingsApp(contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "settings"
-        launch(app)
+        launch(app, contentSizeCategory: contentSizeCategory)
         return app
     }
 
@@ -1742,13 +1864,13 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchLaterApp() -> XCUIApplication {
+    private func launchLaterApp(contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SELECTED_TAB"] = "later"
         app.launchEnvironment["SYNARA_UI_TEST_LATER_ITEMS"] = "1"
-        launch(app)
+        launch(app, contentSizeCategory: contentSizeCategory)
         return app
     }
 
@@ -1775,13 +1897,13 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launch(_ app: XCUIApplication) {
+    private func launch(_ app: XCUIApplication, contentSizeCategory: String? = nil) {
         app.launchEnvironment["SYNARA_DISABLE_ANIMATIONS"] = "1"
         let stableArguments = [
             "-ApplePersistenceIgnoreState",
             "YES",
             "-UIPreferredContentSizeCategoryName",
-            "UICTContentSizeCategoryM",
+            contentSizeCategory ?? "UICTContentSizeCategoryM",
         ]
         for argument in stableArguments {
             if app.launchArguments.contains(argument) == false {
@@ -1911,6 +2033,95 @@ final class SynaraUITests: XCTestCase {
     private func tapSettingsElement(_ element: XCUIElement, app: XCUIApplication, timeout: TimeInterval) {
         XCTAssertTrue(revealSettingsElement(element, app: app, timeout: timeout))
         tap(element, timeout: 1)
+    }
+
+    private func revealForDirectHit(
+        _ element: XCUIElement,
+        in scrollView: XCUIElement,
+        app: XCUIApplication,
+        maxSwipes: Int = 14
+    ) -> Bool {
+        guard scrollView.waitForExistence(timeout: 5) else {
+            return false
+        }
+        for _ in 0..<maxSwipes {
+            if clearsFloatingTabBar(element, app: app) {
+                return true
+            }
+            scrollView.swipeUp()
+        }
+        return clearsFloatingTabBar(element, app: app)
+    }
+
+    private func revealForExistence(
+        _ element: XCUIElement,
+        in scrollView: XCUIElement,
+        maxSwipes: Int = 14
+    ) -> Bool {
+        guard scrollView.waitForExistence(timeout: 5) else {
+            return false
+        }
+        for _ in 0..<maxSwipes {
+            if element.exists {
+                return true
+            }
+            scrollView.swipeUp()
+        }
+        return element.exists
+    }
+
+    private func clearsFloatingTabBar(_ element: XCUIElement, app: XCUIApplication) -> Bool {
+        guard element.exists, element.isHittable else {
+            return false
+        }
+        let tabBar = app.tabBars.firstMatch
+        guard tabBar.exists else {
+            return true
+        }
+        return element.frame.maxY + 8 <= tabBar.frame.minY
+    }
+
+    private func assertNominalMinimumHitRegion(
+        _ element: XCUIElement,
+        identifier: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        // XCUI geometry can round an exact 44-point SwiftUI frame to
+        // 43.99999999999994. A hundredth-point tolerance distinguishes that
+        // representation artifact from a genuinely undersized hit region.
+        XCTAssertGreaterThanOrEqual(
+            element.frame.width + 0.01,
+            44,
+            "Narrow hit region for \(identifier)",
+            file: file,
+            line: line
+        )
+        XCTAssertGreaterThanOrEqual(
+            element.frame.height + 0.01,
+            44,
+            "Short hit region for \(identifier)",
+            file: file,
+            line: line
+        )
+    }
+
+    private func assertAboveFloatingTabBar(
+        _ element: XCUIElement,
+        app: XCUIApplication,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let tabBar = app.tabBars.firstMatch
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 2), file: file, line: line)
+        XCTAssertTrue(element.isHittable, file: file, line: line)
+        XCTAssertLessThanOrEqual(
+            element.frame.maxY + 8,
+            tabBar.frame.minY,
+            "The final action remains beneath the floating tab bar",
+            file: file,
+            line: line
+        )
     }
 
     private func navigateBack(app: XCUIApplication) {

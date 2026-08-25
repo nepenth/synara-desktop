@@ -120,7 +120,11 @@ struct ComposerTextView: UIViewRepresentable {
         guard width > 0 else {
             return nil
         }
-        return CGSize(width: width, height: height)
+        let measuredHeight = context.coordinator.preferredHeight(
+            for: uiView.textView,
+            width: width
+        )
+        return CGSize(width: width, height: measuredHeight)
     }
 
     private func applySelection(to textView: UITextView) {
@@ -153,7 +157,8 @@ struct ComposerTextView: UIViewRepresentable {
         private var isApplyingProgrammaticState = false
         private var lastMeasuredText: String?
         private var lastMeasuredWidth: CGFloat = 0
-        private var lastMeasuredCollapsed: Bool?
+        private var lastMeasuredShowsPlaceholder: Bool?
+        private var lastMeasuredHeight: CGFloat?
         private var lastAccessibilityShowsPlaceholder: Bool?
 
         init(parent: ComposerTextView) {
@@ -216,19 +221,10 @@ struct ComposerTextView: UIViewRepresentable {
                 return
             }
 
-            let collapsed = textView.text.isEmpty && textView.isFirstResponder == false
-            guard force
-                || lastMeasuredText != textView.text
-                || abs(lastMeasuredWidth - width) > 0.5
-                || lastMeasuredCollapsed != collapsed
-            else {
-                return
-            }
-            lastMeasuredText = textView.text
-            lastMeasuredWidth = width
-            lastMeasuredCollapsed = collapsed
-            let measuredHeight = container.preferredHeight(forWidth: width, collapsed: collapsed)
-            textView.isScrollEnabled = collapsed == false && measuredHeight >= ComposerTextMetrics.maxHeight
+            let measuredHeight = preferredHeight(for: textView, width: width, force: force)
+            let showsPlaceholder = textView.text.isEmpty
+            textView.isScrollEnabled = showsPlaceholder == false
+                && measuredHeight >= ComposerTextMetrics.maxHeight
 
             guard abs(parent.height - measuredHeight) > 0.5 else {
                 return
@@ -239,6 +235,28 @@ struct ComposerTextView: UIViewRepresentable {
                 }
                 self.parent.height = measuredHeight
             }
+        }
+
+        func preferredHeight(for textView: UITextView, width: CGFloat, force: Bool = false) -> CGFloat {
+            guard let container else { return parent.height }
+            let showsPlaceholder = textView.text.isEmpty
+            guard force
+                || lastMeasuredText != textView.text
+                || abs(lastMeasuredWidth - width) > 0.5
+                || lastMeasuredShowsPlaceholder != showsPlaceholder
+                || lastMeasuredHeight == nil
+            else {
+                return lastMeasuredHeight ?? parent.height
+            }
+            lastMeasuredText = textView.text
+            lastMeasuredWidth = width
+            lastMeasuredShowsPlaceholder = showsPlaceholder
+            let measuredHeight = container.preferredHeight(
+                forWidth: width,
+                showsPlaceholder: showsPlaceholder
+            )
+            lastMeasuredHeight = measuredHeight
+            return measuredHeight
         }
 
         func syncPlaceholder() {
@@ -307,11 +325,17 @@ final class ComposerTextContainer: UIView {
     private var lastMeasuredWidth: CGFloat = 0
     var onWidthChange: (() -> Void)?
 
-    func preferredHeight(forWidth width: CGFloat, collapsed: Bool) -> CGFloat {
+    func preferredHeight(forWidth width: CGFloat, showsPlaceholder: Bool) -> CGFloat {
         let font = textView.font ?? .preferredFont(forTextStyle: .callout)
         let singleLineHeight = ComposerTextMetrics.singleLineHeight(font: font)
-        if collapsed {
-            return singleLineHeight
+        if showsPlaceholder {
+            let placeholderHeight = placeholderLabel.sizeThatFits(
+                CGSize(width: max(width, 1), height: .greatestFiniteMagnitude)
+            ).height + ComposerTextMetrics.textContainerInset.top + ComposerTextMetrics.textContainerInset.bottom
+            return min(
+                max(ceil(placeholderHeight), singleLineHeight),
+                ComposerTextMetrics.maxHeight
+            )
         }
 
         let fittingHeight = textView.sizeThatFits(
@@ -323,6 +347,7 @@ final class ComposerTextContainer: UIView {
     override init(frame: CGRect) {
         super.init(frame: frame)
         backgroundColor = .clear
+        clipsToBounds = true
 
         placeholderLabel.numberOfLines = 0
         placeholderLabel.isUserInteractionEnabled = false
@@ -339,7 +364,14 @@ final class ComposerTextContainer: UIView {
             textView.bottomAnchor.constraint(equalTo: bottomAnchor),
             placeholderLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
             placeholderLabel.trailingAnchor.constraint(equalTo: trailingAnchor),
-            placeholderLabel.topAnchor.constraint(equalTo: topAnchor, constant: 6)
+            placeholderLabel.topAnchor.constraint(
+                equalTo: topAnchor,
+                constant: ComposerTextMetrics.textContainerInset.top
+            ),
+            placeholderLabel.bottomAnchor.constraint(
+                lessThanOrEqualTo: bottomAnchor,
+                constant: -ComposerTextMetrics.textContainerInset.bottom
+            )
         ])
     }
 

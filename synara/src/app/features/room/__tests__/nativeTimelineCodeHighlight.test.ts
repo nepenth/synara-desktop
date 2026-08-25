@@ -6,6 +6,11 @@ import { isTag } from 'domhandler';
 import Prism from 'prismjs';
 import { sanitizeCustomHtml } from '../../../utils/sanitize';
 import {
+  deriveThemeSurfaceRamp,
+  THEME_BASE_PRESETS,
+  themeContrastRatio,
+} from '../../../utils/themeBase';
+import {
   countCodeLines,
   displayCodeText,
   formatLineNumbers,
@@ -15,11 +20,49 @@ import {
   nativeCodeBlockFromPreChildren,
   normalizePrismLanguage,
 } from '../nativeTimelineCodeHighlight';
+import {
+  NATIVE_SYNTAX_PALETTES,
+  NATIVE_SYNTAX_ROLES,
+  type NativeSyntaxPalette,
+} from '../nativeTimelineSyntaxPalette';
 
 const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
 const formattedBody = readFileSync('src/app/features/room/nativeTimelineFormattedBody.tsx', 'utf8');
 const highlight = readFileSync('src/app/features/room/nativeTimelineCodeHighlight.ts', 'utf8');
 const htmlCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
+
+const THEME_BASE_FIXTURES = [
+  ...THEME_BASE_PRESETS.map(({ hex }) => hex),
+  '#000000',
+  '#ffffff',
+  '#ff0000',
+  '#00ff00',
+  '#0000ff',
+];
+
+const codePanelBackgrounds = (kind: 'light' | 'dark'): string[] => [
+  ...(kind === 'light' ? ['#F2F3F5', '#EAEAEA'] : ['#2B2D31', '#262621']),
+  ...THEME_BASE_FIXTURES.map((base) => deriveThemeSurfaceRamp(base, kind).surface.Container),
+];
+
+const assertPaletteContrast = (
+  paletteName: string,
+  palette: NativeSyntaxPalette,
+  backgrounds: string[],
+  minimum: number
+) => {
+  NATIVE_SYNTAX_ROLES.forEach((role) => {
+    backgrounds.forEach((background) => {
+      const ratio = themeContrastRatio(palette[role], background);
+      assert.ok(
+        ratio >= minimum,
+        `${paletteName}.${role} ${palette[role]} is ${ratio.toFixed(
+          2
+        )}:1 on ${background}; expected ${minimum}:1`
+      );
+    });
+  });
+};
 
 const PYTHON_FIXTURE = `<p>run this:</p><pre><code class="language-python">def greet(name):
     return f"hi {name}"
@@ -66,11 +109,48 @@ test('native presenter routes formatted HTML through the sanitized Prism code-bl
   assert.match(htmlCss, /fontSize: '0\.92em'/);
   assert.match(htmlCss, /lineHeight: 1\.5/);
   assert.match(htmlCss, /color\.Surface\.Container/);
+  assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.light/);
+  assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.dark/);
+  assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.moreLight/);
+  assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.moreDark/);
+  assert.match(htmlCss, /prefers-contrast: more/);
+  assert.match(htmlCss, /color: syntaxMeta/);
+  assert.match(htmlCss, /token\.namespace[\s\S]*?opacity: 1/);
+  assert.doesNotMatch(
+    htmlCss,
+    /#7a8478|#9aa0a6|#e06c75|#d19a66|#98c379|#56b6c2|#61afef|#c678dd|#e5c07b/i
+  );
   assert.doesNotMatch(htmlCss, /color\.Background\.Container/);
   assert.match(htmlCss, /export const CodeScroll[\s\S]*?overflowX: 'auto'/);
   assert.match(formattedBody, /htmlCss\.CodeLineNumbers[\s\S]*?htmlCss\.CodeScroll/);
   assert.doesNotMatch(formattedBody, /matrix-js-sdk/);
   assert.doesNotMatch(highlight, /matrix-js-sdk/);
+});
+
+test('native syntax palettes meet ordinary and increased text contrast on every code surface', () => {
+  const lightBackgrounds = codePanelBackgrounds('light');
+  const darkBackgrounds = codePanelBackgrounds('dark');
+
+  assertPaletteContrast('light', NATIVE_SYNTAX_PALETTES.light, lightBackgrounds, 4.5);
+  assertPaletteContrast('dark', NATIVE_SYNTAX_PALETTES.dark, darkBackgrounds, 4.5);
+  assertPaletteContrast('moreLight', NATIVE_SYNTAX_PALETTES.moreLight, lightBackgrounds, 7);
+  assertPaletteContrast('moreDark', NATIVE_SYNTAX_PALETTES.moreDark, darkBackgrounds, 7);
+});
+
+test('code metadata and line numbers use an opaque semantic syntax role', () => {
+  const languageStyle = htmlCss.slice(
+    htmlCss.indexOf('export const CodeLanguage'),
+    htmlCss.indexOf('export const CodeRow')
+  );
+  const lineNumberStyle = htmlCss.slice(
+    htmlCss.indexOf('export const CodeLineNumbers'),
+    htmlCss.indexOf('globalStyle(`${FormattedBody} p`')
+  );
+
+  assert.match(languageStyle, /color: syntaxMeta/);
+  assert.doesNotMatch(languageStyle, /opacity:/);
+  assert.match(lineNumberStyle, /color: syntaxMeta/);
+  assert.doesNotMatch(lineNumberStyle, /opacity:/);
 });
 
 test('sanitized language-python fixtures become highlighted tokens with line numbers', () => {

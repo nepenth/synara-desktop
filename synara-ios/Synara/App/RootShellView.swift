@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct RootShellView: View {
     let environment: AppEnvironment
@@ -11,6 +14,7 @@ struct RootShellView: View {
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
     @State private var cryptoVerificationActionError: String?
     @State private var signOutError: String?
+    @State private var tabBarScrollTailHeight: CGFloat = 0
     @ObservedObject private var themePaint = SynaraThemePaint.shared
 
     init(environment: AppEnvironment = .mock()) {
@@ -80,6 +84,14 @@ struct RootShellView: View {
                 tab(.notifications)
                 tab(.settings)
             }
+            #if canImport(UIKit)
+                .overlay(alignment: .topLeading) {
+                    SynaraTabBarGeometryReader(scrollTailHeight: $tabBarScrollTailHeight)
+                        .frame(width: 0, height: 0)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+            #endif
         }
         .onChange(of: connectionStatus.status) { status in
             guard OutgoingSendPolicy.isSendReady(status) else {
@@ -193,6 +205,7 @@ struct RootShellView: View {
                     RoutePlaceholderView(route: route)
                 }
         }
+        .synaraTabRootContentReachability(scrollTailHeight: tabBarScrollTailHeight)
         .tabItem {
             tab.label(badgeCounts: tabBadgeCounts)
         }
@@ -297,6 +310,100 @@ struct RootShellView: View {
         return rooms
     }
 }
+
+#if canImport(UIKit)
+private struct SynaraTabBarGeometryReader: UIViewRepresentable {
+    @Binding var scrollTailHeight: CGFloat
+
+    func makeUIView(context: Context) -> TabBarGeometryProbeView {
+        let view = TabBarGeometryProbeView()
+        view.onGeometryChange = { height in
+            guard abs(scrollTailHeight - height) > 0.5 else {
+                return
+            }
+            DispatchQueue.main.async {
+                scrollTailHeight = height
+            }
+        }
+        return view
+    }
+
+    func updateUIView(_ uiView: TabBarGeometryProbeView, context: Context) {
+        uiView.onGeometryChange = { height in
+            guard abs(scrollTailHeight - height) > 0.5 else {
+                return
+            }
+            DispatchQueue.main.async {
+                scrollTailHeight = height
+            }
+        }
+        uiView.resolveGeometry()
+    }
+}
+
+private final class TabBarGeometryProbeView: UIView {
+    var onGeometryChange: ((CGFloat) -> Void)?
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        resolveGeometry()
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        resolveGeometry()
+    }
+
+    func resolveGeometry() {
+        guard let window else {
+            onGeometryChange?(0)
+            return
+        }
+        guard let tabBar = findTabBarController()?.tabBar else {
+            onGeometryChange?(0)
+            return
+        }
+        let frame = tabBar.convert(tabBar.bounds, to: window)
+        let isVisible = tabBar.isHidden == false && tabBar.alpha > 0.01
+        onGeometryChange?(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: window.bounds,
+                tabBarFrame: frame,
+                isVisible: isVisible
+            )
+        )
+    }
+
+    private func findTabBarController() -> UITabBarController? {
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let tabBarController = current as? UITabBarController {
+                return tabBarController
+            }
+            responder = current.next
+        }
+        return findTabBarController(in: window?.rootViewController)
+    }
+
+    private func findTabBarController(in controller: UIViewController?) -> UITabBarController? {
+        guard let controller else {
+            return nil
+        }
+        if let tabBarController = controller as? UITabBarController {
+            return tabBarController
+        }
+        for child in controller.children {
+            if let tabBarController = findTabBarController(in: child) {
+                return tabBarController
+            }
+        }
+        if let presented = controller.presentedViewController {
+            return findTabBarController(in: presented)
+        }
+        return nil
+    }
+}
+#endif
 
 struct RootShellView_Previews: PreviewProvider {
     static var previews: some View {
