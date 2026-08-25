@@ -1,0 +1,13 @@
+Synara 2.1.11 improves exact message rendering, device verification, and agent notifications.
+
+What changed:
+- Rich Matrix and Hermes messages preserve nested lists, tables, code, links, details, spoilers, and readable malformed-content fallbacks.
+- Device verification completes the full SAS flow and keeps verified trust after relaunch.
+- Fresh Hermes approval prompts can appear as Time Sensitive notifications with Review, Approve once, and Deny actions.
+- Opt-in notification previews more reliably show decrypted message content when available, with privacy-safe fallback text.
+- Pending verification and notification actions survive cold app launch until your signed-in session is ready.
+
+What to test:
+- Compare formatted technical messages across iPhone, Mac, and Linux.
+- Verify another device and confirm trust remains after relaunch.
+- Test notification previews and approval actions from this TestFlight build.

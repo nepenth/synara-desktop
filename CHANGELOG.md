@@ -2,11 +2,27 @@
 
 ## Unreleased
 
+## 2.1.11 - 2026-08-25
+
+- Rich Matrix messages now use semantic, sanitized renderers across iOS and
+  desktop, preserving exact code whitespace, nested and ordered lists, tables,
+  details, spoilers, headings, colors, links, media fallbacks, and readable
+  malformed-content fallbacks without reparsing HTML as Markdown.
+- Hermes approval prompts are classified in the shared native core, surfaced as
+  time-sensitive notification actions on iOS and distinctive desktop alerts,
+  and resolved through the native Matrix reaction path with expiry, existing-
+  decision, authentication, and cold-launch safeguards.
+- Device verification is proven through the complete Matrix SAS operating path:
+  both clients exchange identical emoji/decimal values, confirm trust, and read
+  the peer back as Verified after relaunch.
+- Opt-in iOS notification previews more reliably retain decrypted message
+  content when available while preserving privacy-safe fallback text.
 - Added a Pop!_OS/Debian-family APT repository path that publishes the tagged
   `.deb` and signed flat repository metadata alongside every production
   release.
 - Updated Linux update guidance to cover APT as well as pacman/paru, with
   focused repository generation and signature verification tests.
+- See [`docs/releases/v2.1.11.md`](docs/releases/v2.1.11.md) for details.
 
 ## 2.1.10 - 2026-08-25
 
