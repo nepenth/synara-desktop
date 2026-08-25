@@ -1,8 +1,6 @@
 //! Desktop bridges for timeline reaction mutations through `Core::command`.
 
-use synara_core::app::timeline::{
-    NativeAgentApprovalDecisionResult, NativeReactionMutationResult,
-};
+use synara_core::app::timeline::{NativeAgentApprovalDecisionResult, NativeReactionMutationResult};
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 

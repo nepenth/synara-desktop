@@ -162,9 +162,7 @@ fn emit_notification_action<R: Runtime>(
     .map_err(|error| error.to_string())
 }
 
-fn is_time_sensitive_agent_approval(
-    context: Option<&DesktopNotificationActionContext>,
-) -> bool {
+fn is_time_sensitive_agent_approval(context: Option<&DesktopNotificationActionContext>) -> bool {
     context.is_some_and(|context| context.kind == "agent-approval")
 }
 
