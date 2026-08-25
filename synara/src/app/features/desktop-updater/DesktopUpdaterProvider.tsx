@@ -86,7 +86,7 @@ const describeResult = (result?: DesktopUpdateCheckResult, checkedAt?: number): 
   const checkedText = checkedAt ? ` Last checked ${new Date(checkedAt).toLocaleString()}.` : '';
   if (result.status === 'available') {
     if (result.platform === 'linux') {
-      return `Version ${result.version} is available. Use paru -Syu or pacman -Syu to update.${checkedText}`;
+      return `Version ${result.version} is available. Use apt upgrade, paru -Syu, or pacman -Syu to update.${checkedText}`;
     }
     return `Version ${result.version} is available.${checkedText}`;
   }

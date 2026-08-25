@@ -10,6 +10,8 @@
     "build:runtime": "node scripts/build-runtime.mjs",
     "build:macos:local": "scripts/build-macos-local-release.sh",
     "build:pacman-repo": "scripts/build-pacman-repo.sh",
+    "build:apt-repo": "scripts/build-apt-repo.sh",
+    "sign:apt-repo": "scripts/sign-apt-repo.sh",
     "audit:matrix-public": "node scripts/audit-matrix-public.mjs",
     "check:matrix-boundaries": "node scripts/check-matrix-boundaries.mjs",
     "check:matrix-rust-program-status": "node scripts/check-matrix-rust-sdk-program-status.mjs",

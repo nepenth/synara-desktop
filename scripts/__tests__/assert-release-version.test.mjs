@@ -144,6 +144,7 @@ test("drafts reserve exact versions but same-run retries can resume only the sam
 test("fixed and malformed non-app release tags never influence the application ledger", () => {
   const ledger = [
     release("pacman-repo"),
+    release("apt-repo"),
     release("vbad"),
     release("v1.2.3-rc.1"),
   ];
@@ -160,6 +161,7 @@ test("fixed and malformed non-app release tags never influence the application l
     }
   );
   assert.equal(parseApplicationRelease(release("pacman-repo")), undefined);
+  assert.equal(parseApplicationRelease(release("apt-repo")), undefined);
 });
 
 test("all GitHub Release pages are collected, including a later duplicate", async () => {

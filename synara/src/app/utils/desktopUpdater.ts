@@ -234,7 +234,7 @@ const checkLinuxUpdate = async ({
     date: typeof metadata.pub_date === 'string' ? metadata.pub_date : undefined,
     releaseUrl,
     packageManagerHint:
-      'Update from your package manager with paru -Syu or pacman -Syu after syncing the Synara repository.',
+      'Update with apt upgrade on Debian/Ubuntu/Pop!_OS, or paru -Syu / pacman -Syu on Arch, after syncing the Synara repository.',
   };
 };
 
