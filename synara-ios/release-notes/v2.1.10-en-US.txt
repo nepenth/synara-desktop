@@ -1,0 +1,13 @@
+Synara 2.1.10 improves readability and responsiveness across the app.
+
+What changed:
+- Room lists use compact channel markers and clearer # Room Name labels.
+- Softer dark-mode colors, spacing, tables, replies, and message typography make long conversations easier to read.
+- Drag to reorder synced room notes and keep their ordering across clients.
+- Message composition does less synchronous layout work for more responsive typing.
+- Dynamic Type, notification disclosure, surface continuity, and floating-tab-bar clearance are improved.
+
+What to test:
+- Reorder room notes on iOS and confirm their order on another signed-in client.
+- Type rapidly or compose a long message at standard and very large text sizes.
+- Review rooms, Settings, and technical messages in both light and dark appearance.
