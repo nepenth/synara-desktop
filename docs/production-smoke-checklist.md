@@ -1,6 +1,6 @@
 # Production Smoke Checklist
 
-Reviewed: 2026-08-18
+Reviewed: 2026-08-25
 
 This checklist is the release handoff surface for human-run desktop and iOS
 validation gates. Automated commands and release sequencing live in

@@ -1,6 +1,6 @@
 # Agent Approval Notification Proxy Spec
 
-Reviewed: 2026-07-08
+Reviewed: 2026-08-25
 
 Status: implementation handoff for the Matrix push gateway and APNs notification
 proxy that will support Synara iOS agent approval actions.
@@ -53,12 +53,20 @@ only if a future remote-push path is designed.
 - Client-side safety for native/push approval actions (desktop + iOS):
   - require valid kind/action/room/event identifiers;
   - call the shared `matrix_agent_approval_decide` owner, which resolves the
-    exact event and applies the detector and reaction under one local lock;
+    exact event and applies the detector and reaction under a dedicated
+    per-event decision lock without holding the global timeline registry across
+    Matrix network awaits or serializing unrelated approval prompts;
   - enforce Hermes's 300-second timeout from the resolved event timestamp;
   - ignore Hermes's bot-owned ✅/♾️/❌ seed reactions while treating any
     current-account terminal reaction as an already-decided prompt;
   - dedupe by room/event, not by action id, so the same client cannot approve
     and then deny from separate notification callbacks.
+- A cold-launched iOS notification action joins the same keyed, single-flight
+  Matrix-owner startup as the SwiftUI shell before it calls shared core; push
+  registration and notification-permission work are deliberately outside this
+  critical path. A callback received before dependency binding is retained and
+  replayed after binding. A superseded identity or absent restored session
+  fails closed and navigates to review rather than reporting success.
 - In-app approval cards show bounded full prompt context (reason, multi-line
   command including heredocs, and reply/reaction instructions).
 - In-app UI maps the three reactions on the approval prompt event:

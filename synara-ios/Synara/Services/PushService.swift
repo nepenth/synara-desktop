@@ -22,13 +22,10 @@ enum SynaraNotificationActionContract {
         center: UNUserNotificationCenter = UNUserNotificationCenter.current()
     ) {
         // Approve-always is intentionally omitted from the native category: permanent
-        // approval requires an explicit in-app confirmation path.
+        // approval requires an explicit in-app confirmation path. Keep the two
+        // time-critical decisions first for compact notification surfaces;
+        // tapping the notification body remains the primary Review path.
         let actions = [
-            UNNotificationAction(
-                identifier: reviewIdentifier,
-                title: "Review",
-                options: [.foreground]
-            ),
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
                 title: "Approve once",
@@ -38,6 +35,11 @@ enum SynaraNotificationActionContract {
                 identifier: denyIdentifier,
                 title: "Deny",
                 options: [.authenticationRequired, .destructive]
+            ),
+            UNNotificationAction(
+                identifier: reviewIdentifier,
+                title: "Review",
+                options: [.foreground]
             )
         ]
 
@@ -56,7 +58,7 @@ enum SynaraNotificationActionContract {
     static func planAgentApprovalNotificationAction(
         actionIdentifier: String,
         userInfo: [AnyHashable: Any],
-        now: Date = Date(),
+        now _: Date = Date(),
         alreadyActed: Bool = false
     ) -> SynaraAgentApprovalNotificationActionPlan {
         guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier) else {
@@ -90,10 +92,6 @@ enum SynaraNotificationActionContract {
             return .ignore(reason: "already-acted")
         }
 
-        if isExpired(candidates: candidates, now: now) {
-            return .ignore(reason: "expired-ttl")
-        }
-
         guard let reactionKey = action.reactionKey else {
             return .ignore(reason: "unsupported-action")
         }
@@ -122,63 +120,6 @@ enum SynaraNotificationActionContract {
             alreadyActed: alreadyActed
         ) {
             return request
-        }
-        return nil
-    }
-
-    /// Best-effort event/notification creation timestamp from a push payload.
-    static func payloadEventDate(from userInfo: [AnyHashable: Any]) -> Date? {
-        let candidates = NotificationPushRouteParser.flattenPayload(userInfo)
-        return dateValue(
-            candidates,
-            keys: [
-                "origin_server_ts",
-                "originServerTs",
-                "created_at",
-                "createdAt"
-            ]
-        )
-    }
-
-    private static func isExpired(candidates: [String: Any], now: Date) -> Bool {
-        if let expiresAt = dateValue(candidates, keys: ["expires_at", "expiresAt"]),
-           expiresAt < now {
-            return true
-        }
-
-        if let createdAt = dateValue(candidates, keys: ["created_at", "createdAt", "origin_server_ts", "originServerTs"]) {
-            if now.timeIntervalSince(createdAt) > nativeActionTTL {
-                return true
-            }
-        }
-
-        // No payload timestamp: defer TTL to revalidation against the resolved
-        // Matrix event. Unresolved events fail closed before reactions are sent.
-        return false
-    }
-
-    private static func dateValue(_ values: [String: Any], keys: [String]) -> Date? {
-        for key in keys {
-            guard let raw = values[key] else { continue }
-            if let date = raw as? Date {
-                return date
-            }
-            if let number = raw as? NSNumber {
-                let value = number.doubleValue
-                // Matrix origin_server_ts is milliseconds.
-                let seconds = value > 1_000_000_000_000 ? value / 1000 : value
-                return Date(timeIntervalSince1970: seconds)
-            }
-            if let string = raw as? String {
-                let trimmed = string.trimmingCharacters(in: .whitespacesAndNewlines)
-                if let asDouble = Double(trimmed) {
-                    let seconds = asDouble > 1_000_000_000_000 ? asDouble / 1000 : asDouble
-                    return Date(timeIntervalSince1970: seconds)
-                }
-                if let iso = ISO8601DateFormatter().date(from: trimmed) {
-                    return iso
-                }
-            }
         }
         return nil
     }

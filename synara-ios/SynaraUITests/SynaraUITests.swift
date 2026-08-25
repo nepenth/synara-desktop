@@ -1566,6 +1566,7 @@ final class SynaraUITests: XCTestCase {
         {
             let directory = URL(fileURLWithPath: screenshotDirectory, isDirectory: true)
             let initiatorCaptured = directory.appendingPathComponent("\(proofID)-initiator-sas-captured.txt")
+            let responderCaptured = directory.appendingPathComponent("\(proofID)-responder-sas-captured.txt")
             if role == "responder" {
                 let deadline = Date().addingTimeInterval(15)
                 while FileManager.default.fileExists(atPath: initiatorCaptured.path) == false,
@@ -1581,8 +1582,14 @@ final class SynaraUITests: XCTestCase {
             // Two concurrent simulator runners otherwise race for the active
             // scene and one screenshot can capture unpainted emoji cards even
             // though the accessibility values are complete and identical.
+            // A real background/foreground transition forces SwiftUI and the
+            // emoji font layers to repaint on the simulator that was not most
+            // recently frontmost, while also proving the live SAS survives a
+            // normal app lifecycle transition.
+            XCUIDevice.shared.press(.home)
+            RunLoop.current.run(until: Date().addingTimeInterval(0.35))
             app.activate()
-            RunLoop.current.run(until: Date().addingTimeInterval(1))
+            RunLoop.current.run(until: Date().addingTimeInterval(1.5))
             try saveScreenshot(
                 app: app,
                 directory: screenshotDirectory,
@@ -1590,6 +1597,18 @@ final class SynaraUITests: XCTestCase {
             )
             if role == "initiator" {
                 try "captured".write(to: initiatorCaptured, atomically: true, encoding: .utf8)
+                let deadline = Date().addingTimeInterval(15)
+                while FileManager.default.fileExists(atPath: responderCaptured.path) == false,
+                      Date() < deadline
+                {
+                    RunLoop.current.run(until: Date().addingTimeInterval(0.2))
+                }
+                XCTAssertTrue(
+                    FileManager.default.fileExists(atPath: responderCaptured.path),
+                    "The responder did not finish its serialized SAS visual capture."
+                )
+            } else {
+                try "captured".write(to: responderCaptured, atomically: true, encoding: .utf8)
             }
         }
         tap(confirmButton, timeout: 1)

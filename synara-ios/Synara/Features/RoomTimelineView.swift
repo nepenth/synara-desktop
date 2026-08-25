@@ -3382,22 +3382,35 @@ private struct MatrixFormattedMessageView: View {
 
     var body: some View {
         if segments.count == 1, case let .richText(text) = segments[0] {
-            richTextView(text)
+            MatrixRichTextView(text: text, fallbackBody: fallbackBody, font: font)
         } else {
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                ForEach(Array(segments.enumerated()), id: \.offset) { _, segment in
-                    segmentView(segment)
+                ForEach(identifiedMatrixSegments(segments)) { item in
+                    MatrixSemanticSegmentView(
+                        segment: item.segment,
+                        fallbackBody: fallbackBody,
+                        font: font
+                    )
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
     }
+}
 
-    @ViewBuilder
-    private func segmentView(_ segment: MatrixHTMLRenderer.Segment) -> some View {
+private struct MatrixSemanticSegmentView: View {
+    let segment: MatrixHTMLRenderer.Segment
+    let fallbackBody: String
+    let font: Font
+
+    @ViewBuilder var body: some View {
         switch segment {
         case let .richText(text):
-            richTextView(text)
+            MatrixRichTextView(text: text, fallbackBody: fallbackBody, font: font)
+        case let .inline(group):
+            MatrixInlineGroupView(group: group, font: font)
+        case let .heading(block):
+            MatrixHeadingBlockView(block: block)
         case let .code(block):
             MatrixCodeBlockView(block: block)
         case let .quote(text):
@@ -3405,17 +3418,94 @@ private struct MatrixFormattedMessageView: View {
         case let .spoiler(block):
             MatrixSpoilerBlockView(block: block, font: font)
         case let .details(block):
-            MatrixDetailsBlockView(block: block)
+            MatrixDetailsBlockView(block: block, font: font)
         case let .table(block):
             MatrixTableBlockView(block: block)
         }
     }
+}
 
-    private func richTextView(_ text: MatrixHTMLRenderer.RichText) -> some View {
+private struct MatrixHeadingBlockView: View {
+    let block: MatrixHTMLRenderer.HeadingBlock
+
+    var body: some View {
+        Text(attributedRichText(block.content, includeHeadingFonts: false))
+            .font(headingFont)
+            .foregroundStyle(SynaraColor.primaryText)
+            .lineSpacing(2.5)
+            .lineLimit(nil)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    private var headingFont: Font {
+        switch block.level {
+        case 1: return SynaraTypography.messageBody.weight(.bold)
+        case 2: return SynaraTypography.messageBody.weight(.bold)
+        case 3: return SynaraTypography.messageBody.weight(.semibold)
+        case 4: return SynaraTypography.messageBody.weight(.semibold)
+        case 5: return SynaraTypography.messageMeta.weight(.semibold)
+        default: return SynaraTypography.messageMeta.weight(.medium)
+        }
+    }
+}
+
+private struct IdentifiedMatrixSegment: Identifiable {
+    let id: String
+    let segment: MatrixHTMLRenderer.Segment
+}
+
+/// Content-derived identities preserve disclosure/spoiler state when an
+/// unrelated timeline update reconstructs the message view. The occurrence
+/// suffix keeps duplicate semantic blocks distinct without relying on hashes.
+private func identifiedMatrixSegments(
+    _ segments: [MatrixHTMLRenderer.Segment]
+) -> [IdentifiedMatrixSegment] {
+    var occurrences: [String: Int] = [:]
+    return segments.map { segment in
+        let signature = matrixSegmentSignature(segment)
+        let occurrence = occurrences[signature, default: 0]
+        occurrences[signature] = occurrence + 1
+        return IdentifiedMatrixSegment(
+            id: "\(signature)\u{0}\(occurrence)",
+            segment: segment
+        )
+    }
+}
+
+private func matrixSegmentSignature(_ segment: MatrixHTMLRenderer.Segment) -> String {
+    switch segment {
+    case let .richText(text): return "text\u{0}\(text.plainText)"
+    case let .inline(group):
+        return "inline\u{0}" + group.pieces.map { piece in
+            switch piece {
+            case let .richText(text): return "text:\(text.plainText)"
+            case let .spoiler(block): return "spoiler:\(block.reason ?? ""):\(block.content.plainText)"
+            }
+        }.joined(separator: "\u{1}")
+    case let .heading(block): return "heading:\(block.level)\u{0}\(block.content.plainText)"
+    case let .code(block): return "code:\(block.language ?? "")\u{0}\(block.code)"
+    case let .quote(text): return "quote\u{0}\(text.plainText)"
+    case let .spoiler(block): return "spoiler:\(block.reason ?? "")\u{0}\(block.content.plainText)"
+    case let .details(block): return "details\u{0}\(block.summary)\u{1}\(block.body)"
+    case let .table(block):
+        return "table\u{0}" + block.rows.map { $0.cells.map(\.plainText).joined(separator: "\u{2}") }
+            .joined(separator: "\u{1}")
+    }
+}
+
+private struct MatrixRichTextView: View {
+    let text: MatrixHTMLRenderer.RichText
+    let fallbackBody: String
+    let font: Font
+
+    var body: some View {
         let displayText = text.runs.isEmpty
             ? MatrixHTMLRenderer.RichText(runs: [.init(text: fallbackBody, style: [], link: nil)])
             : text
-        return Text(attributedRichText(displayText))
+        Text(attributedRichText(displayText))
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
             .lineSpacing(2.5)
@@ -3424,7 +3514,70 @@ private struct MatrixFormattedMessageView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
     }
+}
 
+private let matrixInlineSpoilerScheme = "synara-inline-spoiler"
+
+func matrixInlineSpoilerURL(index: Int) -> URL {
+    URL(string: "\(matrixInlineSpoilerScheme)://reveal/\(index)")!
+}
+
+func matrixInlineSpoilerIndex(_ url: URL) -> Int? {
+    guard url.scheme == matrixInlineSpoilerScheme,
+          url.host == "reveal",
+          let component = url.pathComponents.last,
+          let index = Int(component), index >= 0
+    else { return nil }
+    return index
+}
+
+func matrixInlineAttributedText(
+    _ group: MatrixHTMLRenderer.InlineGroup,
+    revealedSpoilers: Set<Int>
+) -> AttributedString {
+    var output = AttributedString()
+    var spoilerIndex = 0
+    for piece in group.pieces {
+        switch piece {
+        case let .richText(text):
+            output.append(attributedRichText(text))
+        case let .spoiler(block):
+            if revealedSpoilers.contains(spoilerIndex) {
+                output.append(attributedRichText(block.content))
+            } else {
+                let label = block.reason.map { "[Spoiler: \($0) · Reveal]" } ?? "[Spoiler · Reveal]"
+                var placeholder = AttributedString(label)
+                placeholder.link = matrixInlineSpoilerURL(index: spoilerIndex)
+                placeholder.foregroundColor = SynaraColor.secondaryText
+                placeholder.backgroundColor = SynaraColor.secondarySurface
+                output.append(placeholder)
+            }
+            spoilerIndex += 1
+        }
+    }
+    return output
+}
+
+private struct MatrixInlineGroupView: View {
+    let group: MatrixHTMLRenderer.InlineGroup
+    let font: Font
+    @State private var revealedSpoilers: Set<Int> = []
+
+    var body: some View {
+        Text(matrixInlineAttributedText(group, revealedSpoilers: revealedSpoilers))
+            .font(font)
+            .foregroundStyle(SynaraColor.primaryText)
+            .lineSpacing(2.5)
+            .lineLimit(nil)
+            .textSelection(.enabled)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .environment(\.openURL, OpenURLAction { url in
+                guard let index = matrixInlineSpoilerIndex(url) else { return .systemAction }
+                revealedSpoilers.insert(index)
+                return .handled
+            })
+    }
 }
 
 private struct MatrixSpoilerBlockView: View {
@@ -3560,7 +3713,7 @@ private struct MatrixQuoteBlockView: View {
     let font: Font
 
     var body: some View {
-        Text(attributedRichText(text))
+        Text(attributedRichText(text, includeHeadingFonts: false))
             .font(font)
             .foregroundStyle(SynaraColor.secondaryText)
             .lineLimit(nil)
@@ -3577,7 +3730,10 @@ private struct MatrixQuoteBlockView: View {
 
 }
 
-private func attributedRichText(_ richText: MatrixHTMLRenderer.RichText) -> AttributedString {
+private func attributedRichText(
+    _ richText: MatrixHTMLRenderer.RichText,
+    includeHeadingFonts: Bool = true
+) -> AttributedString {
     var output = AttributedString()
     for run in richText.runs {
         var value = AttributedString(run.text)
@@ -3600,34 +3756,68 @@ private func attributedRichText(_ richText: MatrixHTMLRenderer.RichText) -> Attr
         if run.style.contains(.underline) {
             value.underlineStyle = .single
         }
+        if run.style.contains(.superscript) {
+            value.baselineOffset = 4
+        } else if run.style.contains(.subscriptText) {
+            value.baselineOffset = -3
+        }
+        if includeHeadingFonts, run.style.contains(.heading1) {
+            value.font = .largeTitle.bold()
+        } else if includeHeadingFonts, run.style.contains(.heading2) {
+            value.font = .title.bold()
+        } else if includeHeadingFonts, run.style.contains(.heading3) {
+            value.font = .title2.bold()
+        } else if includeHeadingFonts, run.style.contains(.heading4) {
+            value.font = .title3.bold()
+        } else if includeHeadingFonts, run.style.contains(.heading5) {
+            value.font = .headline
+        } else if includeHeadingFonts, run.style.contains(.heading6) {
+            value.font = .subheadline.weight(.semibold)
+        }
+        if let color = run.foregroundColorHex.flatMap(matrixColor(hex:)) {
+            value.foregroundColor = color
+        }
+        if let color = run.backgroundColorHex.flatMap(matrixColor(hex:)) {
+            value.backgroundColor = color
+        }
         value.link = run.link
         output.append(value)
     }
     return output
 }
 
+private func matrixColor(hex: String) -> Color? {
+    guard hex.count == 7, hex.first == "#",
+          let value = UInt32(hex.dropFirst(), radix: 16)
+    else { return nil }
+    return Color(
+        .sRGB,
+        red: Double((value >> 16) & 0xFF) / 255,
+        green: Double((value >> 8) & 0xFF) / 255,
+        blue: Double(value & 0xFF) / 255,
+        opacity: 1
+    )
+}
+
 private struct MatrixDetailsBlockView: View {
     let block: MatrixHTMLRenderer.DetailsBlock
+    let font: Font
     @State private var isExpanded = false
 
     var body: some View {
         DisclosureGroup(isExpanded: $isExpanded) {
             VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                if let code = block.code {
-                    MatrixCodeBlockView(block: code)
-                }
-
-                if block.body.isEmpty == false {
-                    Text(block.body)
-                        .font(SynaraTypography.messageBody)
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                ForEach(identifiedMatrixSegments(block.content)) { item in
+                    MatrixSemanticSegmentView(
+                        segment: item.segment,
+                        fallbackBody: "",
+                        font: font
+                    )
                 }
             }
             .padding(.top, SynaraSpacing.xSmall)
         } label: {
-            Text(block.summary)
+            Text(attributedRichText(block.summaryContent))
                 .font(SynaraTypography.messageBody.weight(.semibold))
                 .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)

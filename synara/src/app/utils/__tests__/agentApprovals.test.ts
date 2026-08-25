@@ -6,6 +6,7 @@ import {
   AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
   AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
   AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW,
   AGENT_APPROVAL_NOTIFICATION_ACTIONS,
   AGENT_APPROVAL_NOTIFICATION_KIND,
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
@@ -231,7 +232,32 @@ test('native notification actions exclude approve-always', () => {
   );
   assert.deepEqual(
     AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS.map((action) => action.id),
-    [AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE, AGENT_APPROVAL_NOTIFICATION_ACTION_DENY]
+    [
+      AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+      AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
+      AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW,
+    ]
+  );
+});
+
+test('native Review action opens the exact prompt without requiring event validation', () => {
+  assert.deepEqual(
+    planAgentApprovalNativeNotificationAction({
+      actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW,
+      context: {
+        kind: AGENT_APPROVAL_NOTIFICATION_KIND,
+        roomId: '!room:matrix.org',
+        eventId: '$event:matrix.org',
+      },
+      nowMs: 10_000_000,
+      eventTsMs: 1,
+    }),
+    {
+      type: 'open-room',
+      roomId: '!room:matrix.org',
+      eventId: '$event:matrix.org',
+      reason: 'review-requested',
+    }
   );
 });
 
@@ -421,15 +447,17 @@ test('native action dedupe store persists across store instances sharing storage
     length: 0,
   } as Storage;
 
-  const first = createAgentApprovalNativeActionDedupeStore(storage);
+  const first = createAgentApprovalNativeActionDedupeStore(storage, '@alice:example.org');
   const key = buildAgentApprovalNativeActionDedupeKey('!r', '$e');
   assert.equal(key, buildAgentApprovalNativeActionDedupeKey('!r', '$e'));
   assert.equal(first.has(key), false);
   first.add(key);
   assert.equal(first.has(key), true);
 
-  const second = createAgentApprovalNativeActionDedupeStore(storage);
+  const second = createAgentApprovalNativeActionDedupeStore(storage, '@alice:example.org');
   assert.equal(second.has(key), true);
+  const otherAccount = createAgentApprovalNativeActionDedupeStore(storage, '@bob:example.org');
+  assert.equal(otherAccount.has(key), false);
   second.remove(key);
   assert.equal(second.has(key), false);
 });

@@ -33,14 +33,16 @@ On iOS, ordinary rich text is imported as sanitized HTML into a typed run
 model. It is never converted to Markdown and parsed a second time. This is a
 correctness boundary: literal `**`, `~~`, or backticks in an HTML text node
 remain literal, while actual `<strong>`, `<del>`, and `<code>` elements retain
-their semantics. Only bold, emphasis, strike, underline, code, and revalidated
-safe-link attributes cross into SwiftUI. Images become their accessible `alt`
-text without resource loading. Code blocks, blockquotes, tables, spoilers, and
-`details` blocks retain purpose-built presentation; table cells use the same
-typed rich-text runs so inline code and links are not flattened. Spoilers are
-concealed until an explicit accessible reveal action, while `details` starts
-collapsed unless the client later gains support for a spec-permitted expanded
-state.
+their semantics. Bold, emphasis, strike, underline, code, heading hierarchy,
+superscript/subscript, strict Matrix foreground/background colors, and
+revalidated safe-link attributes cross into SwiftUI. Images become their
+accessible `alt`/`title` fallback without resource loading. Code blocks,
+blockquotes, tables, spoilers, and `details` blocks retain purpose-built
+presentation; table cells use the same typed rich-text runs so inline code and
+links are not flattened. Spoilers are concealed from both display and
+accessibility text until an explicit accessible reveal action. `details`
+starts collapsed and recursively retains nested lists, quotes, code, spoilers,
+tables, and details in source order.
 
 ## Compatibility rules
 
@@ -58,9 +60,12 @@ state.
   content must not introduce scripts, unsafe URL schemes, or event handlers.
 - Enforce the Matrix v1.19 HTML boundary identically on desktop and iOS:
   discard `mx-reply` with its contents, reject relative and non-allowlisted
-  hyperlink schemes, retain only `mxc://` inline-image references or accessible
-  fallback text, preserve numeric `ol[start]`, and emit no tags deeper than 100
-  levels. Unsupported or empty rich presentation falls back to `body`.
+  hyperlink schemes, never load inline-image resources and retain only their
+  accessible fallback text, preserve numeric `ol[start]`, accept color attributes only as
+  exact `#RRGGBB`, retain only `language-*` code classes, and emit no tags
+  deeper than 100 levels. Quoted and unquoted safe absolute link attributes
+  follow the same validation. Unsupported or empty rich presentation falls
+  back to `body`.
 - Preserve semantic block boundaries deterministically: one visible line
   between list items, one blank line between paragraphs, and no duplicate
   break for Hermes' pretty-printed `<br>\n` form.

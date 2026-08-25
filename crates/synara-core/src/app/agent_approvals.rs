@@ -70,12 +70,12 @@ pub struct AgentApprovalPlan<'a> {
 /// client, another notification action must not add a contradictory decision.
 /// Approve-always is intentionally not accepted from an OS notification; it
 /// requires the in-app confirmation route.
-pub fn plan_agent_approval<'a>(
+pub fn plan_agent_approval<'a, 'b>(
     action_id: &'a str,
     body: &str,
     origin_server_ts: u64,
     now_ms: u64,
-    existing_reactions: impl IntoIterator<Item = (&'a str, bool)>,
+    existing_reactions: impl IntoIterator<Item = (&'b str, bool)>,
 ) -> Result<AgentApprovalPlan<'a>, &'static str> {
     let reaction = match action_id {
         AGENT_APPROVAL_ACTION_APPROVE_ONCE => AGENT_APPROVAL_REACTION_APPROVE_ONCE,

@@ -57,6 +57,7 @@ struct SynaraApp: App {
 }
 
 final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    private var environment: AppEnvironment?
     private var push: PushServicing?
     private var matrix: MatrixClientServicing?
     private var session: AppSessionStore?
@@ -69,6 +70,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private let agentApprovalActionDedupe = SynaraAgentApprovalNotificationActionDedupeStore()
 
     func bind(to environment: AppEnvironment) {
+        self.environment = environment
         push = environment.push
         matrix = environment.matrix
         session = environment.session
@@ -260,6 +262,17 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 return
             }
 
+            // A notification action may cold-launch the process before the
+            // signed-in SwiftUI shell has attached the shared Matrix owners.
+            // Join the same single-flight startup used by RootShellView before
+            // invoking the authoritative decision route; never consume the OS
+            // action after one transient no-owner failure.
+            guard await prepareSignedInSessionIfNeeded() else {
+                logger?.error("Agent approval notification action failed: signed-in Matrix owner unavailable", category: .push)
+                await resolveNotificationRoute(from: userInfo)
+                return
+            }
+
             guard let agentApprovalReactions else {
                 routeToDestination(.room(id: request.roomID, eventID: request.sourceEventID))
                 return
@@ -281,6 +294,18 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 await resolveNotificationRoute(from: userInfo)
             }
         }
+    }
+
+    private func prepareSignedInSessionIfNeeded() async -> Bool {
+        guard let environment,
+              case let .signedIn(authenticatedSession) = environment.session.currentState
+        else {
+            return false
+        }
+        return await SessionCoordinator.prepareMatrixOwner(
+            environment: environment,
+            session: authenticatedSession
+        )
     }
 
     private func routeToDestination(_ route: AppRoute) {

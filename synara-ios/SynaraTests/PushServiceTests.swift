@@ -227,7 +227,7 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(expiredReview, plan)
     }
 
-    func testAgentApprovalNotificationActionRejectsExpiredAndAlreadyActedPayloads() {
+    func testAgentApprovalNotificationActionDefersUntrustedPayloadClockAndRejectsAlreadyActed() {
         let staleCreatedAt = Date().addingTimeInterval(-(SynaraNotificationActionContract.nativeActionTTL + 60))
         let expiredPlan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
             actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier,
@@ -237,7 +237,10 @@ final class PushServiceTests: XCTestCase {
                 "created_at": staleCreatedAt.timeIntervalSince1970 * 1000
             ]
         )
-        XCTAssertEqual(expiredPlan, .ignore(reason: "expired-ttl"))
+        guard case .submitReaction(let request) = expiredPlan else {
+            return XCTFail("Payload clocks must defer to authoritative Matrix event validation")
+        }
+        XCTAssertEqual(request.reactionKey, "✅")
 
         let alreadyActed = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
             actionIdentifier: SynaraNotificationActionContract.denyIdentifier,

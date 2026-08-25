@@ -354,8 +354,7 @@ enum SynaraAgentApprovalNativeActionValidator {
         items: [TimelineItem],
         eventID: String,
         now: Date = Date(),
-        ttl: TimeInterval = SynaraNotificationActionContract.nativeActionTTL,
-        payloadEventDate: Date? = nil
+        ttl: TimeInterval = SynaraNotificationActionContract.nativeActionTTL
     ) -> Result {
         guard let item = findTargetItem(in: items, eventID: eventID) else {
             return Result(
@@ -380,16 +379,6 @@ enum SynaraAgentApprovalNativeActionValidator {
 
         let eventTimestamp = item.timestamp
         if now.timeIntervalSince(eventTimestamp) > ttl {
-            return Result(
-                eventResolved: true,
-                isApprovalPrompt: true,
-                eventTimestamp: eventTimestamp,
-                shouldSubmitReaction: false,
-                reason: "expired-ttl"
-            )
-        }
-
-        if let payloadEventDate, now.timeIntervalSince(payloadEventDate) > ttl {
             return Result(
                 eventResolved: true,
                 isApprovalPrompt: true,
@@ -615,6 +604,7 @@ final class MockAgentApprovalReactionService: AgentApprovalReactionServicing {
         actionIdentifier: String
     ) async throws {
         guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier),
+              action == .approveOnce || action == .deny,
               let reactionKey = action.reactionKey else {
             throw SynaraAgentApprovalError.unsupportedAction
         }

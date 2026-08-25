@@ -75,9 +75,9 @@ import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLate
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
 
-const getSessionStorage = (): Storage | null => {
+const getDurableApprovalStorage = (): Storage | null => {
   try {
-    return typeof sessionStorage === 'undefined' ? null : sessionStorage;
+    return typeof localStorage === 'undefined' ? null : localStorage;
   } catch {
     return null;
   }
@@ -478,11 +478,15 @@ function MessageNotifications() {
 
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
-  const nativeActionDedupeRef = useRef(
-    createAgentApprovalNativeActionDedupeStore(getSessionStorage())
-  );
-
   const mx = useMatrixClient();
+  const accountScope = mx.getUserId();
+  const nativeActionDedupe = useMemo(
+    () =>
+      accountScope
+        ? createAgentApprovalNativeActionDedupeStore(getDurableApprovalStorage(), accountScope)
+        : undefined,
+    [accountScope]
+  );
   const { navigateRoom } = useRoomNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
@@ -578,7 +582,11 @@ function AgentApprovalNotifications() {
         return;
       }
 
-      const dedupe = nativeActionDedupeRef.current;
+      const dedupe = nativeActionDedupe;
+      if (!dedupe) {
+        navigateRoom(roomId, eventId);
+        return;
+      }
       const provisionalDedupeKey = buildAgentApprovalNativeActionDedupeKey(roomId, eventId);
       if (dedupe.has(provisionalDedupeKey)) {
         return;
@@ -603,7 +611,7 @@ function AgentApprovalNotifications() {
         }
       }
     },
-    [navigateRoom]
+    [nativeActionDedupe, navigateRoom]
   );
 
   useEffect(() => {
@@ -643,14 +651,15 @@ function AgentApprovalNotifications() {
       if (!prompt) return;
 
       notifiedEventIdsCache.add(eventId);
-      const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
       ) {
         notify({
           roomId: room.roomId,
-          eventId: openEventId,
+          // Review/default-click must focus the exact approval prompt. The
+          // room router can still expose its thread context after anchoring.
+          eventId,
           approvalEventId: eventId,
           roomName: room.name ?? 'Unknown',
           title: prompt.title,

@@ -312,7 +312,10 @@ struct RoomListView: View {
                 return
             }
             hasStartedInitialLoad = true
-            await environment.sessionReadiness.waitUntilPrepared(for: session)
+            guard await environment.sessionReadiness.waitUntilPrepared(for: session) else {
+                hasStartedInitialLoad = false
+                return
+            }
             startRoomUpdates()
         }
         .onAppear {
