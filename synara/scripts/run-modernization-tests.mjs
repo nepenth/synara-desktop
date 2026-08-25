@@ -43,6 +43,7 @@ const tests = [
   'src/app/utils/__tests__/matrix.test.ts',
   'src/app/utils/__tests__/themeAccent.test.ts',
   'src/app/utils/__tests__/themeBase.test.ts',
+  'src/app/utils/__tests__/messageTextTone.test.ts',
   'src/app/utils/__tests__/syncLifecycle.test.ts',
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',

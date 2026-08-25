@@ -136,7 +136,7 @@ test('native timeline message rows sit on chat chrome and highlight on hover', (
   assert.match(messageRowCss, /borderRadius: config\.radii\.R400/);
   assert.match(messageRowCss, /MessageActionSurface\}:hover/);
   assert.match(messageBodyCss, /background: 'transparent'/);
-  assert.match(messageBodyCss, /color: 'var\(--synara-content-primary\)'/);
+  assert.match(messageBodyCss, /color: 'var\(--synara-message-foreground\)'/);
 
   assert.match(presenter, /htmlCss\.MessageRow\(\{/);
   assert.match(presenter, /hasMessageSurface/);

@@ -7,8 +7,9 @@
 
 use std::{
     collections::HashMap,
+    fmt::Write as _,
     sync::{Arc, Mutex as StdMutex},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use futures_util::StreamExt;
@@ -27,6 +28,7 @@ use matrix_sdk::{
     Client,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use tokio::{sync::Mutex, task::JoinHandle};
 
 use super::{
@@ -62,9 +64,15 @@ struct VerificationRegistry {
     requests: HashMap<String, ManagedVerification>,
 }
 
+struct VerificationRegistrationTasks {
+    active: bool,
+    handles: Vec<JoinHandle<()>>,
+}
+
 pub struct NativeVerificationOwner {
     client: Client,
     registry: Arc<Mutex<VerificationRegistry>>,
+    registrations: Arc<StdMutex<VerificationRegistrationTasks>>,
     watches: Arc<StdMutex<HashMap<String, JoinHandle<()>>>>,
     emit: VerificationUpdateEmit,
     session_generation: u64,
@@ -86,29 +94,73 @@ impl NativeVerificationOwner {
             session_generation,
             requests: HashMap::new(),
         }));
+        let registrations = Arc::new(StdMutex::new(VerificationRegistrationTasks {
+            active: true,
+            handles: Vec::new(),
+        }));
         let watches = Arc::new(StdMutex::new(HashMap::new()));
         let handler_registry = registry.clone();
+        let handler_registrations = Arc::clone(&registrations);
         let handler_watches = Arc::clone(&watches);
         let handler_emit = Arc::clone(&emit);
         let request_handler = client.add_event_handler(
             move |event: ToDeviceKeyVerificationRequestEvent, client: Client| {
                 let registry = handler_registry.clone();
+                let registrations = Arc::clone(&handler_registrations);
                 let watches = Arc::clone(&handler_watches);
                 let emit = Arc::clone(&handler_emit);
                 async move {
-                    if let Some(request) =
-                        register_incoming_request(&registry, &client, event).await
-                    {
-                        let flow_id = request.flow_id().to_owned();
-                        arm_watch(
-                            watches.as_ref(),
-                            request,
-                            flow_id,
-                            registry,
-                            Arc::clone(&emit),
-                            session_generation,
-                        );
-                        emit(NativeVerificationUpdateSignal { session_generation });
+                    let flow_id = event.content.transaction_id.to_string();
+                    verification_trace(&flow_id, "incoming_event", None, None);
+
+                    // Event handlers run inside the client's sync dispatch. Do not
+                    // poll the SDK verification cache from this callback: on some
+                    // sync paths the cache publishes the request only after event
+                    // dispatch yields, making every in-handler lookup miss. Keep
+                    // the SDK as the sole request owner, but observe it from a
+                    // detached task that can keep polling after this handler
+                    // yields. The lifecycle gate makes that task owner-scoped:
+                    // it cannot arm a watcher after the owner begins teardown.
+                    let task_registrations = Arc::clone(&registrations);
+                    let handle = tokio::spawn(async move {
+                        if let Some(request) =
+                            register_incoming_request(&registry, &client, event).await
+                        {
+                            let flow_id = request.flow_id().to_owned();
+                            let Ok(lifecycle) = task_registrations.lock() else {
+                                return;
+                            };
+                            if !lifecycle.active {
+                                return;
+                            }
+                            arm_watch(
+                                watches.as_ref(),
+                                request,
+                                flow_id.clone(),
+                                registry,
+                                Arc::clone(&emit),
+                                session_generation,
+                            );
+                            verification_trace(&flow_id, "incoming_registered", None, None);
+                            emit(NativeVerificationUpdateSignal { session_generation });
+                        } else {
+                            verification_trace(
+                                &flow_id,
+                                "incoming_registration_missed",
+                                None,
+                                None,
+                            );
+                        }
+                    });
+                    if let Ok(mut lifecycle) = registrations.lock() {
+                        lifecycle.handles.retain(|handle| !handle.is_finished());
+                        if lifecycle.active {
+                            lifecycle.handles.push(handle);
+                        } else {
+                            handle.abort();
+                        }
+                    } else {
+                        handle.abort();
                     }
                 }
             },
@@ -126,6 +178,7 @@ impl NativeVerificationOwner {
         Self {
             client: client.clone(),
             registry,
+            registrations,
             watches,
             emit,
             session_generation,
@@ -183,6 +236,12 @@ impl NativeVerificationOwner {
         };
 
         let flow_id = request.flow_id().to_owned();
+        verification_trace(
+            &flow_id,
+            "request_sent",
+            Some(request_state_label(&request.state())),
+            None,
+        );
         let managed = ManagedVerification {
             request,
             other_user_id: user_id.to_owned(),
@@ -217,6 +276,12 @@ impl NativeVerificationOwner {
 
     pub async fn accept(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
         let request = self.request(flow_id).await?;
+        verification_trace(
+            flow_id,
+            "request_accepting",
+            Some(request_state_label(&request.state())),
+            None,
+        );
         request
             .accept_with_methods(vec![VerificationMethod::SasV1])
             .await
@@ -231,6 +296,12 @@ impl NativeVerificationOwner {
         flow_id: &str,
     ) -> Result<NativeVerificationRequest, &'static str> {
         let request = self.request(flow_id).await?;
+        verification_trace(
+            flow_id,
+            "sas_beginning",
+            Some(request_state_label(&request.state())),
+            None,
+        );
         let sas = match request.state() {
             VerificationRequestState::Ready { .. } => request
                 .start_sas()
@@ -250,6 +321,12 @@ impl NativeVerificationOwner {
         sas.accept()
             .await
             .map_err(|_| "v-crypto.1-sas-accept-failed")?;
+        verification_trace(
+            flow_id,
+            "sas_accepted",
+            Some(request_state_label(&request.state())),
+            Some(sas_state_label(&sas.state())),
+        );
         let mut registry = self.registry.lock().await;
         let managed = registry
             .requests
@@ -274,6 +351,12 @@ impl NativeVerificationOwner {
 
     pub async fn confirm(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
         let sas = self.sas(flow_id).await?;
+        verification_trace(
+            flow_id,
+            "sas_confirming",
+            None,
+            Some(sas_state_label(&sas.state())),
+        );
         if !sas.can_be_presented() {
             return Err("v-crypto.1-confirm-before-sas");
         }
@@ -386,10 +469,22 @@ impl NativeVerificationOwner {
 
 impl Drop for NativeVerificationOwner {
     fn drop(&mut self) {
+        // Hold the lifecycle gate through cancellation so an event callback
+        // cannot register a late observer or arm a watcher after this drain.
+        retire_registration_tasks(self.registrations.as_ref());
         if let Ok(mut watches) = self.watches.lock() {
             for (_, handle) in watches.drain() {
                 handle.abort();
             }
+        }
+    }
+}
+
+fn retire_registration_tasks(registrations: &StdMutex<VerificationRegistrationTasks>) {
+    if let Ok(mut lifecycle) = registrations.lock() {
+        lifecycle.active = false;
+        for handle in lifecycle.handles.drain(..) {
+            handle.abort();
         }
     }
 }
@@ -453,7 +548,8 @@ async fn register_incoming_request(
 ) -> Option<VerificationRequest> {
     let flow_id = event.content.transaction_id.to_string();
     let mut request = None;
-    for _ in 0..8 {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while tokio::time::Instant::now() < deadline {
         request = client
             .encryption()
             .get_verification_request(&event.sender, &flow_id)
@@ -461,7 +557,7 @@ async fn register_incoming_request(
         if request.is_some() {
             break;
         }
-        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        tokio::time::sleep(Duration::from_millis(50)).await;
     }
     let request = request?;
     let own_user = client.user_id()?;
@@ -547,6 +643,12 @@ async fn watch_request(
                 let Some(state) = maybe_state else {
                     break;
                 };
+                verification_trace(
+                    &flow_id,
+                    "request_state",
+                    Some(request_state_label(&state)),
+                    None,
+                );
                 if let VerificationRequestState::Transitioned {
                     verification: Verification::SasV1(sas),
                 } = &state
@@ -575,10 +677,16 @@ async fn watch_request(
                     std::future::pending::<Option<SasState>>().await
                 }
             } => {
-                if maybe_sas.is_none() {
+                let Some(state) = maybe_sas else {
                     sas_stream = None;
                     continue;
-                }
+                };
+                verification_trace(
+                    &flow_id,
+                    "sas_state",
+                    None,
+                    Some(sas_state_label(&state)),
+                );
                 emit(NativeVerificationUpdateSignal { session_generation });
             }
         }
@@ -665,4 +773,94 @@ fn now_ms() -> Option<u64> {
         .duration_since(UNIX_EPOCH)
         .ok()
         .and_then(|duration| u64::try_from(duration.as_millis()).ok())
+}
+
+fn verification_trace(
+    flow_id: &str,
+    event: &str,
+    request_state: Option<&str>,
+    sas_state: Option<&str>,
+) {
+    if std::env::var("SYNARA_VERIFICATION_DIAGNOSTICS").as_deref() != Ok("1") {
+        return;
+    }
+    eprintln!(
+        "synara_verification event={event} flow={} request={} sas={}",
+        verification_flow_tag(flow_id),
+        request_state.unwrap_or("none"),
+        sas_state.unwrap_or("none"),
+    );
+}
+
+pub(super) fn verification_flow_tag(flow_id: &str) -> String {
+    let digest = Sha256::digest(flow_id.as_bytes());
+    let mut tag = String::with_capacity(12);
+    for byte in digest.iter().take(6) {
+        let _ = write!(&mut tag, "{byte:02x}");
+    }
+    tag
+}
+
+fn request_state_label(state: &VerificationRequestState) -> &'static str {
+    match state {
+        VerificationRequestState::Created { .. } => "created",
+        VerificationRequestState::Requested { .. } => "requested",
+        VerificationRequestState::Ready { .. } => "ready",
+        VerificationRequestState::Transitioned { .. } => "transitioned",
+        VerificationRequestState::Done => "done",
+        VerificationRequestState::Cancelled(_) => "cancelled",
+    }
+}
+
+fn sas_state_label(state: &SasState) -> &'static str {
+    match state {
+        SasState::Created { .. } => "created",
+        SasState::Started { .. } => "started",
+        SasState::Accepted { .. } => "accepted",
+        SasState::KeysExchanged { .. } => "keys_exchanged",
+        SasState::Confirmed => "confirmed",
+        SasState::Done { .. } => "done",
+        SasState::Cancelled(_) => "cancelled",
+    }
+}
+
+#[cfg(test)]
+mod registration_lifecycle_tests {
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    };
+
+    use super::*;
+
+    struct MarksDrop(Arc<AtomicBool>);
+
+    impl Drop for MarksDrop {
+        fn drop(&mut self) {
+            self.0.store(true, Ordering::SeqCst);
+        }
+    }
+
+    #[tokio::test]
+    async fn retiring_registration_tasks_closes_gate_and_aborts_pending_observers() {
+        let dropped = Arc::new(AtomicBool::new(false));
+        let mark = MarksDrop(Arc::clone(&dropped));
+        let handle = tokio::spawn(async move {
+            let _mark = mark;
+            std::future::pending::<()>().await;
+        });
+        tokio::task::yield_now().await;
+
+        let registrations = StdMutex::new(VerificationRegistrationTasks {
+            active: true,
+            handles: vec![handle],
+        });
+        retire_registration_tasks(&registrations);
+        tokio::task::yield_now().await;
+
+        let lifecycle = registrations.lock().expect("registration lifecycle lock");
+        assert!(!lifecycle.active);
+        assert!(lifecycle.handles.is_empty());
+        assert!(dropped.load(Ordering::SeqCst));
+    }
 }

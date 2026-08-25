@@ -18,6 +18,7 @@
     "enterForNewline",
     "messageLayout",
     "messageSpacing",
+    "messageTextTone",
     "hideMembershipEvents",
     "hideNickAvatarEvents",
     "mediaAutoLoad",
@@ -67,6 +68,10 @@
     "messageSpacing": {
       "type": "string",
       "enum": ["0", "100", "200", "300", "400", "500"]
+    },
+    "messageTextTone": {
+      "type": "string",
+      "enum": ["soft", "balanced", "bright"]
     },
     "hideMembershipEvents": { "type": "boolean" },
     "hideNickAvatarEvents": { "type": "boolean" },
