@@ -104,6 +104,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_room_notifications_snapshot",
     "matrix_timeline_reaction_toggle",
     "matrix_reaction_ensure",
+    "matrix_agent_approval_decide",
     "matrix_reaction_redact",
     "matrix_space_parents_snapshot",
     "matrix_space_hierarchy_snapshot",
