@@ -59,8 +59,8 @@ Implemented:
   non-blocking prompts for available updates.
 - macOS available-update prompts can download, install, and relaunch through
   the Tauri updater/process plugins.
-- Linux checks the GitHub latest-release metadata and shows `paru -Syu` /
-  `pacman -Syu` guidance without self-installing.
+- Linux checks the GitHub latest-release metadata and shows APT or pacman/paru
+  guidance without self-installing.
 - The macOS app menu includes `Check for Updates...` and emits the same
   frontend manual-check event used by Settings/About.
 - `scripts/check-release-updater.mjs` provides advisory and strict readiness
@@ -76,6 +76,10 @@ Implemented:
   product decision adds them back.
 - `scripts/build-pacman-repo.sh` generates a GitHub Release-backed pacman repo
   database for Arch-family Linux updates.
+- `scripts/build-apt-repo.sh` generates a GitHub Release-backed flat APT repo
+  for Debian-family Linux updates.
+- `scripts/sign-apt-repo.sh` publishes independently verified `InRelease`,
+  `Release.gpg`, and a client-scoped binary public keyring.
 
 Configured:
 
@@ -93,8 +97,8 @@ Deferred:
 - Hosted `latest.json` verification.
 - Installed-app update check/install smoke.
 - Linux AppImage self-update. Product decision on 2026-06-30 is to use a
-  package-manager-owned Linux update path through a GitHub Release-backed
-  pacman repo instead.
+  package-manager-owned Linux update path through GitHub Release-backed APT
+  and pacman repositories instead.
 
 Current release-proof precondition:
 
@@ -197,6 +201,8 @@ the key is being moved into an approved password manager.
    - Linux builds the `synara-desktop-bin` pacman package in an Arch container.
    - Linux runs `scripts/build-pacman-repo.sh` and publishes the fixed
      `pacman-repo` release assets.
+   - Linux runs `scripts/build-apt-repo.sh` and publishes the fixed `apt-repo`
+     release assets.
    - Linux does not self-install updates from inside the app for this goal.
 
 3. Metadata job generates `latest.json`.
@@ -214,7 +220,7 @@ the key is being moved into an approved password manager.
 
 Decision, 2026-06-30:
 
-- Linux release distribution is pacman/paru-owned for the current goal.
+- Linux release distribution is APT- or pacman/paru-owned for the current goal.
 - Do not support Linux AppImage self-update right now.
 - The Linux desktop app may notify that a newer package-managed release exists,
   but it must not download/install/replace itself.
@@ -223,9 +229,12 @@ Recommended Linux release shape:
 
 1. Publish a fixed `pacman-repo` GitHub Release containing `synara.db`,
    `synara.files`, and `synara-desktop-bin-<version>-<pkgrel>-x86_64.pkg.tar.zst`.
-2. Users configure `/etc/pacman.conf` once with the `synara` repository URL.
-3. Users update with `paru -Syu` or `sudo pacman -Syu`.
-4. In-app Linux update UI reports package-manager instructions only.
+2. Publish a fixed `apt-repo` GitHub Release containing `Packages`,
+   `Packages.gz`, signed `Release` metadata, the public keyring, and
+   `Synara_<version>_amd64.deb`.
+3. Users configure the matching package-manager repository once.
+4. Users update with APT, paru, or pacman.
+5. In-app Linux update UI reports package-manager instructions only.
 
 For notification-only UX, prefer checking the fixed pacman repo database or
 package version for `synara-desktop-bin` when network access is available.
