@@ -207,12 +207,12 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func stop() async {
-        stopStatusWatch()
-        stopPathMonitor()
-        await publish(.stopped)
+        await enqueueBackgroundPause(clearLastSession: true)
     }
 
-    func pauseForBackground() async {}
+    func pauseForBackground() async {
+        await enqueueBackgroundPause(clearLastSession: false)
+    }
 
     func resumeFromForeground(session: AuthenticatedSession) async {
         await enqueueLiveSession(session)
@@ -229,6 +229,36 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
             return next
         }
         await queued.value
+    }
+
+    private func enqueueBackgroundPause(clearLastSession: Bool) async {
+        stopStatusWatch()
+        stopPathMonitor()
+        let queued: Task<Void, Never> = applyLock.withLock {
+            let previous = applyChain
+            let next = Task { [weak self] in
+                await previous.value
+                await self?.applyBackgroundPause(clearLastSession: clearLastSession)
+            }
+            applyChain = next
+            return next
+        }
+        await queued.value
+    }
+
+    private func applyBackgroundPause(clearLastSession: Bool) async {
+        do {
+            let stopped = try await SharedCoreSyncStop.stopSync(core: host.core)
+            if clearLastSession {
+                lastSession = nil
+            }
+            await publish(stopped.stopped ? .stopped : .failed("Native sync did not stop"))
+        } catch {
+            if clearLastSession {
+                lastSession = nil
+            }
+            await publish(.failed("Native sync stop failed"))
+        }
     }
 
     private func applyLiveSession(_ session: AuthenticatedSession) async {

@@ -5,7 +5,6 @@ import UserNotifications
 @main
 struct SynaraApp: App {
     @UIApplicationDelegateAdaptor(SynaraAppDelegate.self) private var appDelegate
-    @Environment(\.scenePhase) private var scenePhase
 
     private let environment: AppEnvironment = {
         PerformanceTrace.event("AppEnvironmentCreate")
@@ -23,23 +22,6 @@ struct SynaraApp: App {
         }
     }
 
-    private func handleScenePhaseChange(_ phase: ScenePhase) async {
-        switch phase {
-        case .active:
-            PerformanceTrace.event("SceneActive")
-            if case .signedIn(let session) = environment.session.currentState {
-                await environment.matrix.resumeFromForeground(session: session)
-            }
-        case .background:
-            PerformanceTrace.event("SceneBackground")
-            await environment.matrix.pauseForBackground()
-        case .inactive:
-            PerformanceTrace.event("SceneInactive")
-        @unknown default:
-            PerformanceTrace.event("SceneUnknown")
-        }
-    }
-
     var body: some Scene {
         WindowGroup {
             RootShellView(environment: environment)
@@ -47,12 +29,101 @@ struct SynaraApp: App {
                     PerformanceTrace.event("RootShellAppear")
                     appDelegate.bind(to: environment)
                 }
-                .onChange(of: scenePhase) { phase in
-                    Task {
-                        await handleScenePhaseChange(phase)
-                    }
-                }
         }
+    }
+}
+
+@MainActor
+protocol SynaraBackgroundTaskManaging: AnyObject {
+    func beginBackgroundTask(
+        withName taskName: String?,
+        expirationHandler handler: (@Sendable () -> Void)?
+    ) -> UIBackgroundTaskIdentifier
+    func endBackgroundTask(_ identifier: UIBackgroundTaskIdentifier)
+}
+
+extension UIApplication: SynaraBackgroundTaskManaging {}
+
+/// Owns the sole iOS background transition. The UIKit background assertion
+/// keeps the process runnable while the retained native SyncService finishes
+/// its SQLite work and stops. A foreground transition waits for that stop
+/// before restarting the same session owner.
+@MainActor
+final class SynaraBackgroundSyncCoordinator {
+    private var backgroundTaskIdentifier: UIBackgroundTaskIdentifier = .invalid
+    private var pauseTask: Task<Void, Never>?
+    private var needsForegroundResume = false
+    private var isForeground = true
+
+    var hasPendingPause: Bool {
+        pauseTask != nil
+    }
+
+    func enterBackground(
+        application: SynaraBackgroundTaskManaging,
+        matrix: MatrixClientServicing
+    ) {
+        isForeground = false
+        needsForegroundResume = true
+
+        if backgroundTaskIdentifier == .invalid {
+            backgroundTaskIdentifier = application.beginBackgroundTask(
+                withName: "Stop Matrix sync before suspension"
+            ) { [weak self, weak application] in
+                Task { @MainActor [weak self, weak application] in
+                    guard let self, let application else {
+                        return
+                    }
+                    PerformanceTrace.event("BackgroundSyncAssertionExpired")
+                    self.finishBackgroundTask(application: application)
+                }
+            }
+        }
+
+        guard pauseTask == nil else {
+            return
+        }
+        PerformanceTrace.event("BackgroundSyncPauseBegin")
+
+        pauseTask = Task { [weak self, weak application] in
+            await matrix.pauseForBackground()
+            guard let self, let application else {
+                return
+            }
+            self.pauseTask = nil
+            PerformanceTrace.event("BackgroundSyncPauseComplete")
+            self.finishBackgroundTask(application: application)
+        }
+    }
+
+    func enterForeground(
+        matrix: MatrixClientServicing,
+        session: AuthenticatedSession
+    ) {
+        isForeground = true
+        guard needsForegroundResume else {
+            return
+        }
+        needsForegroundResume = false
+        let pendingPause = pauseTask
+        Task { [weak self] in
+            await pendingPause?.value
+            guard let self, self.isForeground else {
+                PerformanceTrace.event("ForegroundSyncResumeSuppressed")
+                return
+            }
+            PerformanceTrace.event("ForegroundSyncResumeBegin")
+            await matrix.resumeFromForeground(session: session)
+        }
+    }
+
+    private func finishBackgroundTask(application: SynaraBackgroundTaskManaging) {
+        guard backgroundTaskIdentifier != .invalid else {
+            return
+        }
+        let identifier = backgroundTaskIdentifier
+        backgroundTaskIdentifier = .invalid
+        application.endBackgroundTask(identifier)
     }
 }
 
@@ -68,6 +139,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var pendingNotificationPayload: [AnyHashable: Any]?
     private var pendingNotificationResponse: UNNotificationResponse?
     private let agentApprovalActionDedupe = SynaraAgentApprovalNotificationActionDedupeStore()
+    private let backgroundSyncCoordinator = SynaraBackgroundSyncCoordinator()
 
     func bind(to environment: AppEnvironment) {
         self.environment = environment
@@ -178,9 +250,24 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
+        PerformanceTrace.event("SceneActive")
+        if let matrix, let session, case .signedIn(let authenticatedSession) = session.currentState {
+            backgroundSyncCoordinator.enterForeground(
+                matrix: matrix,
+                session: authenticatedSession
+            )
+        }
         Task { @MainActor in
             clearBadgeToZero()
         }
+    }
+
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        PerformanceTrace.event("SceneBackground")
+        guard let matrix else {
+            return
+        }
+        backgroundSyncCoordinator.enterBackground(application: application, matrix: matrix)
     }
 
     func userNotificationCenter(

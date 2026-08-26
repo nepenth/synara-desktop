@@ -223,6 +223,21 @@ interface SyncStartError {
   Failed(string code, string description);
 };
 
+// Privacy-safe stop of the attached SyncService while retaining the Client and
+// session owners for foreground restart.
+dictionary SyncStopDto {
+  string readiness;
+  u64 session_generation;
+  boolean stopped;
+  boolean offline_mode_enabled;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface SyncStopError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe drained timeline view-delta summary. No row bodies, tokens,
 // or password. iOS re-fetches snapshot via the existing timeline commands.
 dictionary TimelineViewUpdateDto {
@@ -1596,6 +1611,9 @@ interface SharedCore {
 
   [Async, Throws=SyncStartError]
   SyncStartDto start_sync();
+
+  [Async, Throws=SyncStopError]
+  SyncStopDto stop_sync();
 
   [Async, Throws=TimelineViewUpdateError]
   sequence<TimelineViewUpdateDto> poll_timeline_view_updates();

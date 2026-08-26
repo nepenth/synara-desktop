@@ -272,6 +272,8 @@ const NSE_FORBIDS_ATTACH_DESCRIPTION: &str =
     "The NSE read-only store cannot attach session owners.";
 const NSE_FORBIDS_START_CODE: &str = "p4-s12-nse-forbids-start";
 const NSE_FORBIDS_START_DESCRIPTION: &str = "The NSE read-only store cannot start SyncService.";
+const NSE_FORBIDS_STOP_CODE: &str = "p4-s12-nse-forbids-stop";
+const NSE_FORBIDS_STOP_DESCRIPTION: &str = "The NSE read-only store cannot stop SyncService.";
 const NSE_FORBIDS_MEDIA_CODE: &str = "p4-s33-nse-forbids-media";
 const NSE_FORBIDS_MEDIA_DESCRIPTION: &str =
     "The NSE read-only store cannot download timeline media.";
@@ -287,6 +289,8 @@ const SYNC_NOT_ATTACHED_CODE: &str = "p4-s12-sync-not-attached";
 const SYNC_NOT_ATTACHED_DESCRIPTION: &str = "Session owners are not attached.";
 const SYNC_START_FAILED_CODE: &str = "p4-s12-sync-start-failed";
 const SYNC_START_FAILED_DESCRIPTION: &str = "SyncService could not be started.";
+const SYNC_STOP_FAILED_CODE: &str = "p4-s12-sync-stop-failed";
+const SYNC_STOP_FAILED_DESCRIPTION: &str = "SyncService could not be stopped.";
 const NSE_FORBIDS_POLL_CODE: &str = "p4-s14-nse-forbids-poll";
 const NSE_FORBIDS_POLL_DESCRIPTION: &str =
     "The NSE read-only store cannot poll timeline view updates.";
@@ -1042,6 +1046,38 @@ pub struct SyncStartDto {
     pub session_generation: u64,
     pub started: bool,
     pub offline_mode_enabled: bool,
+}
+
+/// Privacy-safe stop outcome. No tokens, URLs, paths, or SDK error text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SyncStopDto {
+    pub readiness: String,
+    pub session_generation: u64,
+    pub stopped: bool,
+    pub offline_mode_enabled: bool,
+}
+
+/// Static fail-closed stop error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum SyncStopError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for SyncStopError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for SyncStopError {}
+
+fn sync_stop_failed(code: &'static str, description: &'static str) -> SyncStopError {
+    SyncStopError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
 }
 
 /// Static fail-closed start error. Fields are source constants only.
@@ -3577,6 +3613,34 @@ impl SharedCore {
             None => snapshot,
         };
         Ok(sync_start_dto_from_snapshot(snapshot))
+    }
+
+    /// Stop the attached SyncService for iOS suspension without logging out,
+    /// dropping the retained Client, or replacing the session owner set.
+    pub async fn stop_sync(&self) -> Result<SyncStopDto, SyncStopError> {
+        if self.is_nse_read_only() {
+            return Err(sync_stop_failed(
+                NSE_FORBIDS_STOP_CODE,
+                NSE_FORBIDS_STOP_DESCRIPTION,
+            ));
+        }
+        if !self.owners_attached() {
+            return Err(sync_stop_failed(
+                SYNC_NOT_ATTACHED_CODE,
+                SYNC_NOT_ATTACHED_DESCRIPTION,
+            ));
+        }
+        if let Ok(mut live) = self.room_list_live.lock() {
+            *live = None;
+        }
+        let snapshot = self.core.stop_attached_sync().await.map_err(|code| {
+            if code == SYNC_NOT_ATTACHED_CODE {
+                sync_stop_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
+            } else {
+                sync_stop_failed(SYNC_STOP_FAILED_CODE, SYNC_STOP_FAILED_DESCRIPTION)
+            }
+        })?;
+        Ok(sync_stop_dto_from_snapshot(snapshot))
     }
 
     fn spawn_room_list_live(&self) {
@@ -12067,6 +12131,18 @@ fn sync_start_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> SyncStartDto
         readiness: snapshot.readiness.as_str().to_owned(),
         session_generation: snapshot.session_generation,
         started: product_live_readiness(snapshot.readiness),
+        offline_mode_enabled: snapshot.offline_mode_enabled,
+    }
+}
+
+fn sync_stop_dto_from_snapshot(snapshot: SyncReadinessSnapshot) -> SyncStopDto {
+    SyncStopDto {
+        readiness: snapshot.readiness.as_str().to_owned(),
+        session_generation: snapshot.session_generation,
+        stopped: matches!(
+            snapshot.readiness,
+            SyncReadiness::Idle | SyncReadiness::Terminated
+        ),
         offline_mode_enabled: snapshot.offline_mode_enabled,
     }
 }

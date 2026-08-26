@@ -13,3 +13,11 @@ enum SharedCoreSyncStart {
         try await core.startSync()
     }
 }
+
+/// Stops the retained native SyncService without logging out or replacing its
+/// owner set, allowing the same session to restart on foreground entry.
+enum SharedCoreSyncStop {
+    static func stopSync(core: SharedCore) async throws -> SyncStopDto {
+        try await core.stopSync()
+    }
+}

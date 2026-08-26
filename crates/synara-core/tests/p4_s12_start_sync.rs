@@ -1,4 +1,4 @@
-//! P4-S12: start the already-attached SyncService on SharedCore.
+//! P4-S12: start and stop the already-attached SyncService on SharedCore.
 //!
 //! This is not Core.command, not leftover registration, and not P4
 //! acceptance. NSE still cannot start sync.
@@ -52,11 +52,14 @@ fn test_runtime() -> tokio::runtime::Runtime {
 }
 
 #[test]
-fn start_sync_surface_is_attached_only_and_not_a_leftover() {
+fn sync_lifecycle_surface_is_attached_only_and_not_a_leftover() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("dictionary SyncStartDto"));
     assert!(udl.contains("interface SyncStartError"));
     assert!(udl.contains("SyncStartDto start_sync()"));
+    assert!(udl.contains("dictionary SyncStopDto"));
+    assert!(udl.contains("interface SyncStopError"));
+    assert!(udl.contains("SyncStopDto stop_sync()"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
     let shared_core = udl
@@ -65,8 +68,23 @@ fn start_sync_surface_is_attached_only_and_not_a_leftover() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("start_sync()"));
+    assert!(shared_core.contains("stop_sync()"));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("matrix_login_password"));
+}
+
+#[test]
+fn stop_sync_without_attach_fails_closed_without_echo() {
+    let shared = SharedCore::new();
+    let error = test_runtime()
+        .block_on(shared.stop_sync())
+        .expect_err("stop requires attach");
+    let text = format!("{error:?}{error}");
+    assert!(text.contains("p4-s12-sync-not-attached"));
+    assert!(!text.contains("password"));
+    assert!(!text.contains("syt_"));
+    assert!(!text.contains("@alice"));
+    assert!(!text.contains("https://"));
 }
 
 #[test]
@@ -142,6 +160,77 @@ fn start_sync_after_planted_attach_returns_privacy_safe_readiness() {
     );
     assert!(!second_text.contains(access));
     assert!(!second_text.contains(refresh));
+    let stopped = rt
+        .block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(15), shared.stop_sync())
+                .await
+                .expect("stop_sync timed out")
+        })
+        .expect("stop after start");
+    let stopped_text = format!("{stopped:?}");
+    assert!(
+        stopped.stopped,
+        "unexpected stop readiness: {}",
+        stopped.readiness
+    );
+    assert_eq!(stopped.session_generation, second.session_generation);
+    assert!(stopped.offline_mode_enabled);
+    assert!(!stopped_text.contains(access));
+    assert!(!stopped_text.contains(refresh));
+    assert!(!stopped_text.contains("password"));
+    assert!(!stopped_text.contains("@alice"));
+    assert!(!stopped_text.contains("https://"));
+
+    let restarted = rt
+        .block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(15), shared.start_sync())
+                .await
+                .expect("restart after stop timed out")
+        })
+        .expect("restart after stop");
+    assert_eq!(restarted.session_generation, stopped.session_generation);
+    assert_eq!(
+        restarted.started,
+        restarted.readiness == "running" || restarted.readiness == "offline"
+    );
+    drop(shared);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn stop_sync_on_nse_store_fails_closed_without_echo() {
+    let access = "syt_s12_nse_stop_access";
+    let identity = alice();
+    let map = Arc::new(Mutex::new(HashMap::new()));
+    let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::clone(&map))));
+    let root = temp_root("nse-forbids-stop");
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    rt.block_on(shared.persist_planted_session_for_test(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+        "DEVICEABC".to_owned(),
+        access.to_owned(),
+        None,
+    ))
+    .expect("planted persist");
+    rt.block_on(shared.nse_open_read_only_store(
+        identity.user_id().to_owned(),
+        identity.homeserver_url().to_owned(),
+        root.to_string_lossy().into_owned(),
+    ))
+    .expect("planted NSE open");
+    let error = rt
+        .block_on(shared.stop_sync())
+        .expect_err("NSE cannot stop sync");
+    let text = format!("{error:?}{error}");
+    assert!(text.contains("p4-s12-nse-forbids-stop"));
+    assert!(!text.contains(access));
+    assert!(!text.contains("@alice"));
+    assert!(!text.contains("https://"));
     drop(shared);
     drop(_enter);
     drop(rt);

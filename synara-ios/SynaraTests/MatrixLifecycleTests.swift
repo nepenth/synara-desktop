@@ -1,4 +1,5 @@
 import XCTest
+import UIKit
 @testable import Synara
 
 final class MatrixLifecycleTests: XCTestCase {
@@ -36,6 +37,92 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertEqual(matrix.resumeCallCount, 1)
         XCTAssertEqual(matrix.resumedSessions, [session])
         XCTAssertEqual(matrix.syncStatus, .syncing)
+    }
+
+    @MainActor
+    func testBackgroundCoordinatorEndsAssertionAfterNativePause() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+
+        coordinator.enterBackground(application: application, matrix: matrix)
+
+        try await waitUntil { coordinator.hasPendingPause == false }
+        XCTAssertEqual(matrix.pauseCallCount, 1)
+        XCTAssertEqual(application.beginNames, ["Stop Matrix sync before suspension"])
+        XCTAssertEqual(application.endedIdentifiers, [application.issuedIdentifier])
+    }
+
+    @MainActor
+    func testBackgroundCoordinatorDoesNotRestartOnInitialActivation() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let coordinator = SynaraBackgroundSyncCoordinator()
+        let session = try makeSession()
+
+        coordinator.enterForeground(matrix: matrix, session: session)
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(matrix.resumeCallCount, 0)
+    }
+
+    @MainActor
+    func testBackgroundCoordinatorSerializesPauseBeforeForegroundResume() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        matrix.pauseDelayNanoseconds = 50_000_000
+        var operations: [String] = []
+        matrix.onOperation = { operations.append($0) }
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+        let session = try makeSession()
+
+        coordinator.enterBackground(application: application, matrix: matrix)
+        coordinator.enterBackground(application: application, matrix: matrix)
+        coordinator.enterForeground(matrix: matrix, session: session)
+
+        try await waitUntil { matrix.resumeCallCount == 1 }
+        XCTAssertEqual(application.beginNames.count, 1)
+        XCTAssertEqual(
+            operations,
+            ["matrix-pause-begin", "matrix-pause-end", "matrix-resume"]
+        )
+        XCTAssertEqual(matrix.resumedSessions, [session])
+    }
+
+    @MainActor
+    func testBackgroundCoordinatorDoesNotResumeAfterRapidReentryToBackground() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        matrix.pauseDelayNanoseconds = 50_000_000
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+        let session = try makeSession()
+
+        coordinator.enterBackground(application: application, matrix: matrix)
+        coordinator.enterForeground(matrix: matrix, session: session)
+        coordinator.enterBackground(application: application, matrix: matrix)
+
+        try await waitUntil { coordinator.hasPendingPause == false }
+        try await Task.sleep(nanoseconds: 20_000_000)
+        XCTAssertEqual(matrix.resumeCallCount, 0)
+
+        coordinator.enterForeground(matrix: matrix, session: session)
+        try await waitUntil { matrix.resumeCallCount == 1 }
+        XCTAssertEqual(application.beginNames.count, 1)
+    }
+
+    @MainActor
+    func testBackgroundCoordinatorExpirationEndsAssertionExactlyOnce() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        matrix.pauseDelayNanoseconds = 50_000_000
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+
+        coordinator.enterBackground(application: application, matrix: matrix)
+        application.expire()
+
+        try await waitUntil { application.endedIdentifiers == [application.issuedIdentifier] }
+        try await waitUntil { coordinator.hasPendingPause == false }
+        XCTAssertEqual(matrix.pauseCallCount, 1)
+        XCTAssertEqual(application.endedIdentifiers, [application.issuedIdentifier])
     }
 
     func testBackgroundNotificationSyncReportsResult() async throws {
@@ -303,6 +390,46 @@ final class MatrixLifecycleTests: XCTestCase {
             homeserverURL: try XCTUnwrap(URL(string: "https://matrix.org")),
             accessToken: "token"
         )
+    }
+}
+
+@MainActor
+private final class MockBackgroundTaskManager: SynaraBackgroundTaskManaging {
+    let issuedIdentifier = UIBackgroundTaskIdentifier(rawValue: 42)
+    private(set) var beginNames: [String] = []
+    private(set) var endedIdentifiers: [UIBackgroundTaskIdentifier] = []
+    private var expirationHandler: (@Sendable () -> Void)?
+
+    func beginBackgroundTask(
+        withName taskName: String?,
+        expirationHandler handler: (@Sendable () -> Void)?
+    ) -> UIBackgroundTaskIdentifier {
+        beginNames.append(taskName ?? "")
+        expirationHandler = handler
+        return issuedIdentifier
+    }
+
+    func endBackgroundTask(_ identifier: UIBackgroundTaskIdentifier) {
+        endedIdentifiers.append(identifier)
+    }
+
+    func expire() {
+        expirationHandler?()
+    }
+}
+
+@MainActor
+private func waitUntil(
+    timeoutNanoseconds: UInt64 = 1_000_000_000,
+    condition: @escaping () -> Bool
+) async throws {
+    let started = DispatchTime.now().uptimeNanoseconds
+    while condition() == false {
+        if DispatchTime.now().uptimeNanoseconds - started >= timeoutNanoseconds {
+            XCTFail("Timed out waiting for lifecycle transition")
+            return
+        }
+        try await Task.sleep(nanoseconds: 5_000_000)
     }
 }
 

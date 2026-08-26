@@ -1905,6 +1905,17 @@ impl Core {
         owner.start().await.map_err(|_| "p4-s12-sync-start-failed")
     }
 
+    /// Stop the already-attached SyncService and wait for the SDK stop call.
+    /// The owner and retained Client remain attached for foreground restart.
+    pub async fn stop_attached_sync(&self) -> Result<SyncReadinessSnapshot, &'static str> {
+        let owner = self
+            .state
+            .sync_owner()
+            .map_err(|_| "p4-s12-sync-stop-failed")?
+            .ok_or("p4-s12-sync-not-attached")?;
+        owner.stop().await.map_err(|_| "p4-s12-sync-stop-failed")
+    }
+
     pub fn registered_commands(&self) -> Vec<String> {
         self.registry.command_names()
     }

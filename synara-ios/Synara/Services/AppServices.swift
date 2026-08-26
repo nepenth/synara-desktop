@@ -1249,13 +1249,20 @@ final class MockMatrixClientService: MatrixClientServicing {
     private(set) var resumedSessions: [AuthenticatedSession] = []
     private(set) var backgroundSyncCallCount = 0
     var backgroundSyncResult = false
+    var pauseDelayNanoseconds: UInt64 = 0
 
     func pauseForBackground() async {
+        onOperation?("matrix-pause-begin")
+        if pauseDelayNanoseconds > 0 {
+            try? await Task.sleep(nanoseconds: pauseDelayNanoseconds)
+        }
         pauseCallCount += 1
         syncStatus = .stopped
+        onOperation?("matrix-pause-end")
     }
 
     func resumeFromForeground(session: AuthenticatedSession) async {
+        onOperation?("matrix-resume")
         resumeCallCount += 1
         resumedSessions.append(session)
         syncStatus = .syncing
