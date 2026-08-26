@@ -385,6 +385,25 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(streamedItems.last?.eventID, "$synthetic-499:matrix.org")
     }
 
+    func testTimelineSessionSuppressesIdenticalSnapshotsBeforePublishingChange() async throws {
+        let initial = TimelineFixtures.largeTimeline(count: 20)
+        let changed = TimelineFixtures.largeTimeline(count: 21)
+        let service = MockTimelineService(items: initial)
+        service.updateOutcomes = [.loaded(initial), .loaded(changed)]
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+
+        let openedFeed = await session.open(mode: .live)
+        let feed = try XCTUnwrap(openedFeed)
+        var iterator = feed.updates.makeAsyncIterator()
+        let nextOutcome = await iterator.next()
+        let outcome = try XCTUnwrap(nextOutcome)
+        let items = try loadedItems(from: outcome)
+        let finishedOutcome = await iterator.next()
+
+        XCTAssertEqual(items, changed)
+        XCTAssertNil(finishedOutcome)
+    }
+
     func testTimelineSessionRejectsInitialLoadFromInvalidatedGeneration() async {
         let service = MockTimelineService(items: TimelineFixtures.largeTimeline(count: 20))
         service.loadDelayNanoseconds = 100_000_000
@@ -1000,6 +1019,15 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(
             MatrixHTMLRenderer.segments(body: "fallback", html: html),
             [.code(.init(code: "  lead\t&©\nmiddle\n tail  \n\n", language: "sh"))]
+        )
+    }
+
+    func testMatrixHTMLRendererDecodesNamedEntitiesWithoutHTMLDocumentImport() {
+        let html = "<pre><code>&amp;&copy;&Alpha;&euro;&trade;&apos;&bogus;&#10;&#x1F642;</code></pre>"
+
+        XCTAssertEqual(
+            MatrixHTMLRenderer.segments(body: "fallback", html: html),
+            [.code(.init(code: "&©Α€™'&bogus;\n🙂", language: nil))]
         )
     }
 

@@ -149,6 +149,45 @@ import SwiftUI
         }
     }
 
+    /// Serializes diffable-data-source mutations while retaining only the
+    /// newest requested state. UIKit rejects reentrant snapshot application,
+    /// which can otherwise occur when a cell's synchronous layout spins the
+    /// main run loop before the current apply has completed.
+    struct StableTimelineSnapshotApplyGate<Value> {
+        struct Request {
+            let value: Value
+            let resetPosition: Bool
+        }
+
+        private(set) var isApplying = false
+        private var pending: Request?
+
+        mutating func schedule(value: Value, resetPosition: Bool) -> Request? {
+            let request = Request(value: value, resetPosition: resetPosition)
+            guard isApplying else {
+                isApplying = true
+                return request
+            }
+
+            pending = .init(
+                value: value,
+                resetPosition: resetPosition || (pending?.resetPosition ?? false)
+            )
+            return nil
+        }
+
+        mutating func complete() -> Request? {
+            precondition(isApplying, "A timeline snapshot cannot complete without an active apply")
+            isApplying = false
+            defer { pending = nil }
+            return pending
+        }
+
+        mutating func discardPending() {
+            pending = nil
+        }
+    }
+
     enum StableTimelineViewportItemID: Hashable {
         case event(String)
         case unreadDivider(String)
@@ -341,6 +380,8 @@ import SwiftUI
         private var visualRows: [StableTimelineViewportRow] = []
         private var configuration: Configuration?
         private var pendingConfiguration: Configuration?
+        private var pendingConfigurationResetsPosition = false
+        private var snapshotApplyGate = StableTimelineSnapshotApplyGate<Configuration>()
         private var updateSerial: UInt64 = 0
         private var lastExecutedCommandID: UInt64?
         private var pendingAnimatedCommand: PendingAnimatedCommand?
@@ -398,6 +439,8 @@ import SwiftUI
             let isNewGeneration = isNewRoute || configuration?.sessionGeneration != newConfiguration.sessionGeneration
             if isNewGeneration {
                 pendingConfiguration = nil
+                pendingConfigurationResetsPosition = false
+                snapshotApplyGate.discardPending()
                 cancelPendingAnimatedCommand()
                 pendingCommandRetry?.cancel()
                 pendingCommandRetry = nil
@@ -421,10 +464,13 @@ import SwiftUI
                 isDecelerating: isDecelerating
             ) {
                 pendingConfiguration = newConfiguration
+                pendingConfigurationResetsPosition = pendingConfigurationResetsPosition
+                    || isNewRoute
+                    || (isNewGeneration && newConfiguration.command != nil)
                 return
             }
 
-            applySnapshot(
+            scheduleSnapshot(
                 configuration: newConfiguration,
                 resetPosition: isNewRoute || (isNewGeneration && newConfiguration.command != nil)
             )
@@ -467,8 +513,21 @@ import SwiftUI
             dataSource.defaultRowAnimation = UIAccessibility.isReduceMotionEnabled ? .none : .fade
         }
 
-        private func applySnapshot(configuration: Configuration, resetPosition: Bool) {
+        private func scheduleSnapshot(configuration: Configuration, resetPosition: Bool) {
+            guard let request = snapshotApplyGate.schedule(
+                value: configuration,
+                resetPosition: resetPosition
+            ) else {
+                return
+            }
+            applySnapshot(request)
+        }
+
+        private func applySnapshot(_ request: StableTimelineSnapshotApplyGate<Configuration>.Request) {
+            let configuration = request.value
+            let resetPosition = request.resetPosition
             pendingConfiguration = nil
+            pendingConfigurationResetsPosition = false
             let incomingIDs = Set(configuration.rows.map(\.id))
             let wasConfirmedPinned = isConfirmedPinned()
             let anchor = resetPosition ? nil : snapshotLayout(retaining: incomingIDs)
@@ -502,36 +561,48 @@ import SwiftUI
                 && UIAccessibility.isReduceMotionEnabled == false
 
             dataSource.apply(snapshot, animatingDifferences: shouldAnimate) { [weak self] in
-                guard let self,
-                      serial == updateSerial,
-                      self.configuration?.routeID == configuration.routeID,
-                      self.configuration?.sessionGeneration == configuration.sessionGeneration
-                else {
-                    return
-                }
+                guard let self else { return }
+                let nextRequest = snapshotApplyGate.complete()
 
-                tableView.layoutIfNeeded()
-                if executeCommandIfNeeded(configuration.command) {
+                if serial == updateSerial,
+                   self.configuration?.routeID == configuration.routeID,
+                   self.configuration?.sessionGeneration == configuration.sessionGeneration
+                {
+                    tableView.layoutIfNeeded()
+                    if executeCommandIfNeeded(configuration.command) == false {
+                        if StableTimelineViewportPolicy.shouldFollowNewest(
+                            isLive: configuration.isLive,
+                            wasConfirmedPinned: wasConfirmedPinned
+                        ) {
+                            scrollToNewest(animated: shouldAnimate)
+                        } else if StableTimelineViewportPolicy.shouldRestoreAnchor(
+                            isDragging: isDragging,
+                            isDecelerating: isDecelerating,
+                            hasAnchor: anchor != nil
+                        ), let anchor {
+                            restoreLayout(anchor)
+                        }
+
+                        reportBottomPinnedIfChanged(force: true)
+                        requestPaginationIfNeeded()
+                    }
                     updateDiagnostics()
-                    return
                 }
 
-                if StableTimelineViewportPolicy.shouldFollowNewest(
-                    isLive: configuration.isLive,
-                    wasConfirmedPinned: wasConfirmedPinned
-                ) {
-                    scrollToNewest(animated: shouldAnimate)
-                } else if StableTimelineViewportPolicy.shouldRestoreAnchor(
-                    isDragging: isDragging,
-                    isDecelerating: isDecelerating,
-                    hasAnchor: anchor != nil
-                ), let anchor {
-                    restoreLayout(anchor)
+                if let nextRequest {
+                    if StableTimelineViewportPolicy.shouldDeferSnapshot(
+                        isDragging: isDragging,
+                        isDecelerating: isDecelerating
+                    ) {
+                        pendingConfiguration = nextRequest.value
+                        pendingConfigurationResetsPosition = nextRequest.resetPosition
+                    } else {
+                        scheduleSnapshot(
+                            configuration: nextRequest.value,
+                            resetPosition: nextRequest.resetPosition
+                        )
+                    }
                 }
-
-                reportBottomPinnedIfChanged(force: true)
-                requestPaginationIfNeeded()
-                updateDiagnostics()
             }
         }
 
@@ -544,7 +615,10 @@ import SwiftUI
             else {
                 return
             }
-            applySnapshot(configuration: pendingConfiguration, resetPosition: false)
+            scheduleSnapshot(
+                configuration: pendingConfiguration,
+                resetPosition: pendingConfigurationResetsPosition
+            )
         }
 
         @discardableResult

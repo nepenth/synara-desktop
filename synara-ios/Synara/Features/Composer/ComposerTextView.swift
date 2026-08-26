@@ -13,6 +13,34 @@ enum ComposerTextMetrics {
     }
 }
 
+enum ComposerHeightMeasurementPolicy {
+    static func canReuseCappedHeight(
+        previousText: String?,
+        currentText: String,
+        previousHeight: CGFloat?,
+        previousWidth: CGFloat,
+        currentWidth: CGFloat,
+        previousShowsPlaceholder: Bool?,
+        currentShowsPlaceholder: Bool,
+        previousFontPointSize: CGFloat,
+        currentFontPointSize: CGFloat,
+        force: Bool
+    ) -> Bool {
+        guard force == false,
+              previousHeight == ComposerTextMetrics.maxHeight,
+              abs(previousWidth - currentWidth) <= 0.5,
+              previousShowsPlaceholder == false,
+              currentShowsPlaceholder == false,
+              abs(previousFontPointSize - currentFontPointSize) <= 0.1,
+              let previousText
+        else {
+            return false
+        }
+        return currentText.hasPrefix(previousText)
+            && currentText.utf16.count > previousText.utf16.count
+    }
+}
+
 enum ComposerTextInputRegistry {
     private(set) static weak var activeTextView: UITextView?
 
@@ -124,11 +152,10 @@ struct ComposerTextView: UIViewRepresentable {
         guard width > 0 else {
             return nil
         }
-        let measuredHeight = context.coordinator.preferredHeight(
-            for: uiView.textView,
-            width: width
-        )
-        return CGSize(width: width, height: measuredHeight)
+        // The coordinator measures after content or width changes and publishes
+        // `height`. Measuring again here forces a second synchronous text
+        // layout during the same keystroke.
+        return CGSize(width: width, height: height)
     }
 
     private func applySelection(to textView: UITextView) {
@@ -182,6 +209,8 @@ struct ComposerTextView: UIViewRepresentable {
             guard isApplyingProgrammaticState == false else {
                 return
             }
+            let traceID = PerformanceTrace.begin("ComposerTextChange")
+            defer { PerformanceTrace.end("ComposerTextChange", id: traceID) }
             publishContent(from: textView)
             updateHeight(for: textView)
         }
@@ -246,6 +275,22 @@ struct ComposerTextView: UIViewRepresentable {
             guard let container else { return parent.height }
             let showsPlaceholder = textView.text.isEmpty
             let fontPointSize = textView.font?.pointSize ?? 0
+            let canReuseCappedHeight = ComposerHeightMeasurementPolicy.canReuseCappedHeight(
+                previousText: lastMeasuredText,
+                currentText: textView.text,
+                previousHeight: lastMeasuredHeight,
+                previousWidth: lastMeasuredWidth,
+                currentWidth: width,
+                previousShowsPlaceholder: lastMeasuredShowsPlaceholder,
+                currentShowsPlaceholder: showsPlaceholder,
+                previousFontPointSize: lastMeasuredFontPointSize,
+                currentFontPointSize: fontPointSize,
+                force: force
+            )
+            if canReuseCappedHeight {
+                lastMeasuredText = textView.text
+                return ComposerTextMetrics.maxHeight
+            }
             guard force
                 || lastMeasuredText != textView.text
                 || abs(lastMeasuredWidth - width) > 0.5
@@ -259,6 +304,8 @@ struct ComposerTextView: UIViewRepresentable {
             lastMeasuredWidth = width
             lastMeasuredShowsPlaceholder = showsPlaceholder
             lastMeasuredFontPointSize = fontPointSize
+            let traceID = PerformanceTrace.begin("ComposerHeightMeasure")
+            defer { PerformanceTrace.end("ComposerHeightMeasure", id: traceID) }
             let measuredHeight = container.preferredHeight(
                 forWidth: width,
                 showsPlaceholder: showsPlaceholder

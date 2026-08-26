@@ -144,6 +144,22 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
+    func testComposerRetainsEveryCharacterDuringBusyTimelineUpdates() {
+        let app = launchRoomApp(
+            largeTimelineCount: 300,
+            viewportScenario: "busy-composer"
+        )
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        let paragraph = "This paragraph must remain responsive and preserve every character while new room messages arrive in a sustained burst. The composer owns keyboard input and timeline refresh work must never queue ahead of it."
+
+        composer.tap()
+        composer.typeText(paragraph)
+
+        XCTAssertEqual(composer.value as? String, paragraph)
+        XCTAssertEqual(app.state, .runningForeground)
+    }
+
     func testUnreadRoomRoutePositionsAfterSharedReadMarker() {
         let app = launchRoomApp(
             readMarkerEventID: "$synthetic-30:matrix.org",
@@ -1837,7 +1853,8 @@ final class SynaraUITests: XCTestCase {
     private func launchRoomApp(
         readMarkerEventID: String? = nil,
         largeTimelineCount: Int? = nil,
-        roomNotes: Bool = false
+        roomNotes: Bool = false,
+        viewportScenario: String? = nil
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -1849,6 +1866,9 @@ final class SynaraUITests: XCTestCase {
         if let largeTimelineCount {
             app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] = "1"
             app.launchEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"] = "\(largeTimelineCount)"
+        }
+        if let viewportScenario {
+            app.launchEnvironment["SYNARA_UI_TEST_VIEWPORT_SCENARIO"] = viewportScenario
         }
         if roomNotes {
             app.launchEnvironment["SYNARA_UI_TEST_ROOM_NOTES"] = "1"

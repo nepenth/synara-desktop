@@ -479,6 +479,20 @@ private extension AppEnvironment {
             let count = processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE_COUNT"]
                 .flatMap(Int.init) ?? 10_000
             switch processEnvironment["SYNARA_UI_TEST_VIEWPORT_SCENARIO"] {
+            case "busy-composer":
+                let service = MockTimelineService(
+                    items: TimelineFixtures.largeTimeline(indices: 0..<300, usesFormattedHTML: true)
+                )
+                service.updateIntervalNanoseconds = 25_000_000
+                service.updateOutcomes = (300..<360).map { newestIndex in
+                    .loaded(
+                        TimelineFixtures.largeTimeline(
+                            indices: (newestIndex - 299)..<(newestIndex + 1),
+                            usesFormattedHTML: true
+                        )
+                    )
+                }
+                timeline = service
             case "height-change":
                 let service = MockTimelineService(items: TimelineFixtures.largeTimeline(indices: 100..<140))
                 service.updateDelayNanoseconds = 5_000_000_000

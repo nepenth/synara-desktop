@@ -50,5 +50,62 @@ final class ComposerMatrixFormattingTests: XCTestCase {
             ComposerTextMetrics.maxHeight
         )
     }
+
+    func testCappedComposerReusesHeightOnlyForAppendOnlyTyping() {
+        let longText = String(repeating: "Long message text ", count: 40)
+        let common = (
+            previousHeight: Optional(ComposerTextMetrics.maxHeight),
+            previousWidth: CGFloat(320),
+            currentWidth: CGFloat(320),
+            previousShowsPlaceholder: Optional(false),
+            currentShowsPlaceholder: false,
+            previousFontPointSize: CGFloat(17),
+            currentFontPointSize: CGFloat(17),
+            force: false
+        )
+
+        XCTAssertTrue(
+            ComposerHeightMeasurementPolicy.canReuseCappedHeight(
+                previousText: longText,
+                currentText: longText + "a",
+                previousHeight: common.previousHeight,
+                previousWidth: common.previousWidth,
+                currentWidth: common.currentWidth,
+                previousShowsPlaceholder: common.previousShowsPlaceholder,
+                currentShowsPlaceholder: common.currentShowsPlaceholder,
+                previousFontPointSize: common.previousFontPointSize,
+                currentFontPointSize: common.currentFontPointSize,
+                force: common.force
+            )
+        )
+        XCTAssertFalse(
+            ComposerHeightMeasurementPolicy.canReuseCappedHeight(
+                previousText: longText,
+                currentText: String(longText.dropLast()),
+                previousHeight: common.previousHeight,
+                previousWidth: common.previousWidth,
+                currentWidth: common.currentWidth,
+                previousShowsPlaceholder: common.previousShowsPlaceholder,
+                currentShowsPlaceholder: common.currentShowsPlaceholder,
+                previousFontPointSize: common.previousFontPointSize,
+                currentFontPointSize: common.currentFontPointSize,
+                force: common.force
+            )
+        )
+        XCTAssertFalse(
+            ComposerHeightMeasurementPolicy.canReuseCappedHeight(
+                previousText: longText,
+                currentText: longText + "a",
+                previousHeight: common.previousHeight,
+                previousWidth: common.previousWidth,
+                currentWidth: 280,
+                previousShowsPlaceholder: common.previousShowsPlaceholder,
+                currentShowsPlaceholder: common.currentShowsPlaceholder,
+                previousFontPointSize: common.previousFontPointSize,
+                currentFontPointSize: common.currentFontPointSize,
+                force: common.force
+            )
+        )
+    }
     #endif
 }

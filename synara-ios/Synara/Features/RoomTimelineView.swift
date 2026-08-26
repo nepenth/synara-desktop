@@ -1196,6 +1196,8 @@ struct RoomTimelineView: View {
     }
 
     private func applyTimelineOutcome(_ outcome: TimelineLoadOutcome, isPaginating: Bool = false) {
+        let traceID = PerformanceTrace.begin("TimelineOutcomeApply")
+        defer { PerformanceTrace.end("TimelineOutcomeApply", id: traceID) }
         let shouldRemainPaginating = isPaginating || currentTimelineIsPaginating
         switch outcome {
         case let .loaded(items):

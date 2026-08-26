@@ -550,6 +550,49 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
     }
 
+    func testTimelineSignalBatchKeepsOnlyNewestInvalidationPerStream() {
+        let updates = [
+            TimelineViewUpdateDto(
+                schemaVersion: 1,
+                sessionGeneration: 7,
+                streamId: "view-a",
+                roomId: "!a:example.org",
+                revision: 3,
+                opCount: 1
+            ),
+            TimelineViewUpdateDto(
+                schemaVersion: 1,
+                sessionGeneration: 7,
+                streamId: "view-a",
+                roomId: "!a:example.org",
+                revision: 5,
+                opCount: 2
+            ),
+            TimelineViewUpdateDto(
+                schemaVersion: 1,
+                sessionGeneration: 7,
+                streamId: "view-b",
+                roomId: "!b:example.org",
+                revision: 4,
+                opCount: 1
+            ),
+            TimelineViewUpdateDto(
+                schemaVersion: 1,
+                sessionGeneration: 7,
+                streamId: "view-a",
+                roomId: "!a:example.org",
+                revision: 4,
+                opCount: 1
+            ),
+        ]
+
+        let coalesced = SharedCoreTimelineSignalBatch.coalesced(updates)
+
+        XCTAssertEqual(coalesced.count, 2)
+        XCTAssertEqual(coalesced.first(where: { $0.streamId == "view-a" })?.revision, 5)
+        XCTAssertEqual(coalesced.first(where: { $0.streamId == "view-b" })?.revision, 4)
+    }
+
     func testSharedCoreTimelineUpdatesWithoutSessionYieldsEmptyWithoutEcho() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),

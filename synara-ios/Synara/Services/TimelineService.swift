@@ -770,6 +770,12 @@ enum RoomTimelineLiveTransition {
 }
 
 actor RoomTimelineSession {
+    private enum UpdateAcceptance {
+        case accepted(TimelineLoadOutcome)
+        case unchanged
+        case superseded
+    }
+
     private let roomID: String
     private let service: TimelineServicing
     private var generation: UInt64 = 0
@@ -889,11 +895,23 @@ actor RoomTimelineSession {
     private func acceptedUpdate(
         _ outcome: TimelineLoadOutcome,
         generation requestedGeneration: UInt64
-    ) -> TimelineLoadOutcome? {
+    ) -> UpdateAcceptance {
         guard requestedGeneration == generation else {
-            return nil
+            return .superseded
         }
-        return accept(outcome, generation: requestedGeneration)
+        switch outcome {
+        case let .loaded(items):
+            let nextItems = TimelineWindowPolicy.replacingServerWindow(items)
+            guard nextItems != serverItems else {
+                return .unchanged
+            }
+            serverItems = nextItems
+            return .accepted(nextItems.isEmpty ? .empty : .loaded(nextItems))
+        case .empty:
+            return .accepted(.empty)
+        case let .failed(message):
+            return .accepted(.failed(message))
+        }
     }
 
     private func makeUpdateStream(
@@ -915,13 +933,19 @@ actor RoomTimelineSession {
                     guard Task.isCancelled == false else {
                         break
                     }
-                    guard let accepted = await self.acceptedUpdate(
+                    let acceptance = await self.acceptedUpdate(
                         outcome,
                         generation: requestedGeneration
-                    ) else {
-                        break
+                    )
+                    switch acceptance {
+                    case let .accepted(accepted):
+                        continuation.yield(accepted)
+                    case .unchanged:
+                        continue
+                    case .superseded:
+                        continuation.finish()
+                        return
                     }
-                    continuation.yield(accepted)
                 }
                 continuation.finish()
             }
@@ -1060,7 +1084,8 @@ enum TimelineFixtures {
     static func largeTimeline(
         indices: Range<Int>,
         expandedMessageIndex: Int? = nil,
-        expandedLineCount: Int = 180
+        expandedLineCount: Int = 180,
+        usesFormattedHTML: Bool = false
     ) -> [TimelineItem] {
         var items: [TimelineItem] = []
         items.reserveCapacity(indices.count)
@@ -1073,12 +1098,18 @@ enum TimelineFixtures {
             } else {
                 body = "Synthetic message \(index)"
             }
+            let kind: TimelineItem.Kind = usesFormattedHTML
+                ? .formattedText(
+                    body: "\(body) & live ©",
+                    html: "<p>\(body) &amp; <strong>live</strong> &copy;</p>"
+                )
+                : .text(body)
             let item = TimelineItem(
                 id: "$synthetic-\(index):matrix.org",
                 eventID: "$synthetic-\(index):matrix.org",
                 senderID: index % 2 == 0 ? "@alice:matrix.org" : "@bob:matrix.org",
                 timestamp: baseDate.addingTimeInterval(TimeInterval(index)),
-                kind: .text(body),
+                kind: kind,
                 replyToEventID: nil,
                 isEdited: false,
                 reactions: [:]
@@ -1113,6 +1144,7 @@ final class MockTimelineService: TimelineServicing {
     var olderOutcome: TimelineLoadOutcome?
     var loadDelayNanoseconds: UInt64 = 0
     var updateDelayNanoseconds: UInt64 = 0
+    var updateIntervalNanoseconds: UInt64 = 0
     private(set) var clearSessionCachesCallCount = 0
     private let usesRoomSpecificCommonEvents: Bool
 
@@ -1225,6 +1257,12 @@ final class MockTimelineService: TimelineServicing {
                     try? await Task.sleep(nanoseconds: updateDelayNanoseconds)
                 }
                 for outcome in outcomes {
+                    if updateIntervalNanoseconds > 0 {
+                        try? await Task.sleep(nanoseconds: updateIntervalNanoseconds)
+                    }
+                    guard Task.isCancelled == false else {
+                        break
+                    }
                     continuation.yield(outcome)
                 }
                 continuation.finish()
@@ -2122,20 +2160,270 @@ enum MatrixHTMLRenderer {
             return String(Character(scalar))
         }
 
-        #if canImport(UIKit)
-            let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
-                .documentType: NSAttributedString.DocumentType.html,
-                .characterEncoding: String.Encoding.utf8.rawValue,
-            ]
-            return try? NSAttributedString(
-                data: Data(entity.utf8),
-                options: options,
-                documentAttributes: nil
-            ).string
-        #else
-            return entity.decodingBasicHTMLEntities()
-        #endif
+        return namedHTMLEntities[String(name)]
     }
+
+    // HTML 4's complete named-character-reference set plus the HTML5 apos
+    // reference. Matrix formatted bodies use semicolon-terminated references;
+    // decoding them directly keeps rendering deterministic and avoids the
+    // WebKit-backed NSAttributedString HTML importer, which can spin the main
+    // run loop while a diffable snapshot is being applied.
+    private static let namedHTMLEntities: [String: String] = [
+            "AElig": "Æ",
+            "Aacute": "Á",
+            "Acirc": "Â",
+            "Agrave": "À",
+            "Alpha": "Α",
+            "Aring": "Å",
+            "Atilde": "Ã",
+            "Auml": "Ä",
+            "Beta": "Β",
+            "Ccedil": "Ç",
+            "Chi": "Χ",
+            "Dagger": "‡",
+            "Delta": "Δ",
+            "ETH": "Ð",
+            "Eacute": "É",
+            "Ecirc": "Ê",
+            "Egrave": "È",
+            "Epsilon": "Ε",
+            "Eta": "Η",
+            "Euml": "Ë",
+            "Gamma": "Γ",
+            "Iacute": "Í",
+            "Icirc": "Î",
+            "Igrave": "Ì",
+            "Iota": "Ι",
+            "Iuml": "Ï",
+            "Kappa": "Κ",
+            "Lambda": "Λ",
+            "Mu": "Μ",
+            "Ntilde": "Ñ",
+            "Nu": "Ν",
+            "OElig": "Œ",
+            "Oacute": "Ó",
+            "Ocirc": "Ô",
+            "Ograve": "Ò",
+            "Omega": "Ω",
+            "Omicron": "Ο",
+            "Oslash": "Ø",
+            "Otilde": "Õ",
+            "Ouml": "Ö",
+            "Phi": "Φ",
+            "Pi": "Π",
+            "Prime": "″",
+            "Psi": "Ψ",
+            "Rho": "Ρ",
+            "Scaron": "Š",
+            "Sigma": "Σ",
+            "THORN": "Þ",
+            "Tau": "Τ",
+            "Theta": "Θ",
+            "Uacute": "Ú",
+            "Ucirc": "Û",
+            "Ugrave": "Ù",
+            "Upsilon": "Υ",
+            "Uuml": "Ü",
+            "Xi": "Ξ",
+            "Yacute": "Ý",
+            "Yuml": "Ÿ",
+            "Zeta": "Ζ",
+            "aacute": "á",
+            "acirc": "â",
+            "acute": "´",
+            "aelig": "æ",
+            "agrave": "à",
+            "alefsym": "ℵ",
+            "alpha": "α",
+            "amp": "&",
+            "and": "∧",
+            "ang": "∠",
+            "aring": "å",
+            "asymp": "≈",
+            "atilde": "ã",
+            "auml": "ä",
+            "bdquo": "„",
+            "beta": "β",
+            "brvbar": "¦",
+            "bull": "•",
+            "cap": "∩",
+            "ccedil": "ç",
+            "cedil": "¸",
+            "cent": "¢",
+            "chi": "χ",
+            "circ": "ˆ",
+            "clubs": "♣",
+            "cong": "≅",
+            "copy": "©",
+            "crarr": "↵",
+            "cup": "∪",
+            "curren": "¤",
+            "dArr": "⇓",
+            "dagger": "†",
+            "darr": "↓",
+            "deg": "°",
+            "delta": "δ",
+            "diams": "♦",
+            "divide": "÷",
+            "eacute": "é",
+            "ecirc": "ê",
+            "egrave": "è",
+            "empty": "∅",
+            "emsp": " ",
+            "ensp": " ",
+            "epsilon": "ε",
+            "equiv": "≡",
+            "eta": "η",
+            "eth": "ð",
+            "euml": "ë",
+            "euro": "€",
+            "exist": "∃",
+            "fnof": "ƒ",
+            "forall": "∀",
+            "frac12": "½",
+            "frac14": "¼",
+            "frac34": "¾",
+            "frasl": "⁄",
+            "gamma": "γ",
+            "ge": "≥",
+            "gt": ">",
+            "hArr": "⇔",
+            "harr": "↔",
+            "hearts": "♥",
+            "hellip": "…",
+            "iacute": "í",
+            "icirc": "î",
+            "iexcl": "¡",
+            "igrave": "ì",
+            "image": "ℑ",
+            "infin": "∞",
+            "int": "∫",
+            "iota": "ι",
+            "iquest": "¿",
+            "isin": "∈",
+            "iuml": "ï",
+            "kappa": "κ",
+            "lArr": "⇐",
+            "lambda": "λ",
+            "lang": "〈",
+            "laquo": "«",
+            "larr": "←",
+            "lceil": "⌈",
+            "ldquo": "“",
+            "le": "≤",
+            "lfloor": "⌊",
+            "lowast": "∗",
+            "loz": "◊",
+            "lrm": "‎",
+            "lsaquo": "‹",
+            "lsquo": "‘",
+            "lt": "<",
+            "macr": "¯",
+            "mdash": "—",
+            "micro": "µ",
+            "middot": "·",
+            "minus": "−",
+            "mu": "μ",
+            "nabla": "∇",
+            "nbsp": " ",
+            "ndash": "–",
+            "ne": "≠",
+            "ni": "∋",
+            "not": "¬",
+            "notin": "∉",
+            "nsub": "⊄",
+            "ntilde": "ñ",
+            "nu": "ν",
+            "oacute": "ó",
+            "ocirc": "ô",
+            "oelig": "œ",
+            "ograve": "ò",
+            "oline": "‾",
+            "omega": "ω",
+            "omicron": "ο",
+            "oplus": "⊕",
+            "or": "∨",
+            "ordf": "ª",
+            "ordm": "º",
+            "oslash": "ø",
+            "otilde": "õ",
+            "otimes": "⊗",
+            "ouml": "ö",
+            "para": "¶",
+            "part": "∂",
+            "permil": "‰",
+            "perp": "⊥",
+            "phi": "φ",
+            "pi": "π",
+            "piv": "ϖ",
+            "plusmn": "±",
+            "pound": "£",
+            "prime": "′",
+            "prod": "∏",
+            "prop": "∝",
+            "psi": "ψ",
+            "quot": "\"",
+            "rArr": "⇒",
+            "radic": "√",
+            "rang": "〉",
+            "raquo": "»",
+            "rarr": "→",
+            "rceil": "⌉",
+            "rdquo": "”",
+            "real": "ℜ",
+            "reg": "®",
+            "rfloor": "⌋",
+            "rho": "ρ",
+            "rlm": "‏",
+            "rsaquo": "›",
+            "rsquo": "’",
+            "sbquo": "‚",
+            "scaron": "š",
+            "sdot": "⋅",
+            "sect": "§",
+            "shy": "­",
+            "sigma": "σ",
+            "sigmaf": "ς",
+            "sim": "∼",
+            "spades": "♠",
+            "sub": "⊂",
+            "sube": "⊆",
+            "sum": "∑",
+            "sup": "⊃",
+            "sup1": "¹",
+            "sup2": "²",
+            "sup3": "³",
+            "supe": "⊇",
+            "szlig": "ß",
+            "tau": "τ",
+            "there4": "∴",
+            "theta": "θ",
+            "thetasym": "ϑ",
+            "thinsp": " ",
+            "thorn": "þ",
+            "tilde": "˜",
+            "times": "×",
+            "trade": "™",
+            "uArr": "⇑",
+            "uacute": "ú",
+            "uarr": "↑",
+            "ucirc": "û",
+            "ugrave": "ù",
+            "uml": "¨",
+            "upsih": "ϒ",
+            "upsilon": "υ",
+            "uuml": "ü",
+            "weierp": "℘",
+            "xi": "ξ",
+            "yacute": "ý",
+            "yen": "¥",
+            "yuml": "ÿ",
+            "zeta": "ζ",
+            "zwj": "‍",
+            "zwnj": "‌",
+
+            "apos": "'",
+    ]
 
     private static func renderTableAsText(
         node: HTMLNode,
