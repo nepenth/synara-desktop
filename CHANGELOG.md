@@ -2,11 +2,16 @@
 
 ## Unreleased
 
+## 2.1.12 - 2026-08-25
+
 - Fixed iOS background suspension crashes by stopping and awaiting the retained
   native Matrix SyncService under a bounded UIKit background assertion before
   suspension, then serializing foreground restart through the same session
   owner. Rapid foreground/background transitions cannot restart sync while the
   app is backgrounded.
+- Added privacy-safe iOS lifecycle signposts for native sync pause, background
+  assertion expiry, suppressed stale resume, and foreground restart.
+- See [`docs/releases/v2.1.12.md`](docs/releases/v2.1.12.md) for details.
 
 ## 2.1.11 - 2026-08-25
 
