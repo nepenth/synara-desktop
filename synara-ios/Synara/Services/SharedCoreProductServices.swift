@@ -827,7 +827,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         // Register before the task begins so an SDK update cannot be lost
         // between the initial snapshot and the first live readback.
         let signals = host.livePoller.timelineSignals(roomId: roomID)
-        return AsyncStream { continuation in
+        return AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let task = Task {
                 if SharedCoreTimelineUpdateBootstrap.shouldRefreshOpenStream(
                     focusedEventID: focusedEventID
@@ -895,6 +895,8 @@ final class SharedCoreTimelineService: TimelineServicing {
     }
 
     private func refreshOpenTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
+        let traceID = PerformanceTrace.begin("TimelineSnapshotRefresh")
+        defer { PerformanceTrace.end("TimelineSnapshotRefresh", id: traceID) }
         if let streamId = stream(for: roomID) {
             do {
                 let snapshot = try await SharedCoreTimeline.timelineSnapshot(

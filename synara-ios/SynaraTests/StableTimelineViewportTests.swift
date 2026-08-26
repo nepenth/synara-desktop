@@ -22,6 +22,40 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testSnapshotApplyGateCoalescesReentrantRequestsToNewestState() throws {
+        var gate = StableTimelineSnapshotApplyGate<String>()
+
+        let first = try XCTUnwrap(gate.schedule(value: "revision-1", resetPosition: false))
+        XCTAssertEqual(first.value, "revision-1")
+        XCTAssertTrue(gate.isApplying)
+        XCTAssertNil(gate.schedule(value: "revision-2", resetPosition: true))
+        XCTAssertNil(gate.schedule(value: "revision-3", resetPosition: false))
+
+        let coalesced = try XCTUnwrap(gate.complete())
+        XCTAssertEqual(coalesced.value, "revision-3")
+        XCTAssertTrue(coalesced.resetPosition)
+        XCTAssertFalse(gate.isApplying)
+
+        let newest = try XCTUnwrap(
+            gate.schedule(value: coalesced.value, resetPosition: coalesced.resetPosition)
+        )
+        XCTAssertEqual(newest.value, "revision-3")
+        XCTAssertTrue(newest.resetPosition)
+        XCTAssertNil(gate.complete())
+        XCTAssertFalse(gate.isApplying)
+    }
+
+    func testSnapshotApplyGateCanDiscardSupersededPendingGeneration() throws {
+        var gate = StableTimelineSnapshotApplyGate<Int>()
+
+        _ = try XCTUnwrap(gate.schedule(value: 1, resetPosition: false))
+        XCTAssertNil(gate.schedule(value: 2, resetPosition: false))
+        gate.discardPending()
+
+        XCTAssertNil(gate.complete())
+        XCTAssertFalse(gate.isApplying)
+    }
+
     func testExactAnchorDeltaRestoresPrependAndHeightChangeOffset() {
         XCTAssertEqual(
             StableTimelineViewportPolicy.restoredContentOffset(

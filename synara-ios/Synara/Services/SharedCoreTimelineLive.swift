@@ -32,6 +32,34 @@ enum SharedCoreTimelineUpdateBootstrap {
     }
 }
 
+/// Core timeline updates are invalidations, not a sequence Swift must replay.
+/// The consumer reads the authoritative current snapshot, so only the newest
+/// invalidation for each native stream is useful. Replaying every queued
+/// summary repeats the same full snapshot work and can outrun the UI.
+enum SharedCoreTimelineSignalBatch {
+    static func coalesced(_ updates: [TimelineViewUpdateDto]) -> [TimelineViewUpdateDto] {
+        var latestByStream: [String: TimelineViewUpdateDto] = [:]
+        latestByStream.reserveCapacity(updates.count)
+
+        for update in updates {
+            let key = update.streamId.isEmpty
+                ? "room:\(update.roomId)"
+                : "stream:\(update.streamId)"
+            if let current = latestByStream[key], current.revision > update.revision {
+                continue
+            }
+            latestByStream[key] = update
+        }
+
+        return latestByStream.values.sorted { lhs, rhs in
+            if lhs.roomId != rhs.roomId {
+                return lhs.roomId < rhs.roomId
+            }
+            return lhs.streamId < rhs.streamId
+        }
+    }
+}
+
 /// One SharedCore poller so two open rooms cannot steal each other's S14
 /// summaries. Starts only while a timeline stream is listening. NSE still
 /// cannot poll (the Core method fail-closes).
@@ -48,7 +76,7 @@ final class SharedCoreLivePoller: @unchecked Sendable {
     }
 
     func timelineSignals(roomId: String) -> AsyncStream<TimelineViewUpdateDto> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let id = UUID()
             lock.lock()
             waiters[id] = (roomId, continuation)
@@ -61,7 +89,7 @@ final class SharedCoreLivePoller: @unchecked Sendable {
     }
 
     func roomListSignals() -> AsyncStream<Void> {
-        AsyncStream { continuation in
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let id = UUID()
             lock.lock()
             roomListWaiters[id] = continuation
@@ -120,8 +148,6 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         }
         let core = self.core
         pollTask = Task { [weak self] in
-            var emptyTimelineTicks = 0
-            var emptyRoomTicks = 0
             while Task.isCancelled == false {
                 try? await Task.sleep(nanoseconds: 250_000_000)
                 guard Task.isCancelled == false else {
@@ -140,27 +166,10 @@ final class SharedCoreLivePoller: @unchecked Sendable {
                     ? ((try? await SharedCoreOwnerUpdates.poll(core: core)) ?? [])
                     : []
                 if updates.isEmpty == false {
-                    self?.dispatch(updates)
-                } else if wantsTimeline {
-                    emptyTimelineTicks += 1
-                    if emptyTimelineTicks >= 4 {
-                        emptyTimelineTicks = 0
-                        self?.dispatchSyntheticTimelineWakes()
-                    }
-                } else {
-                    emptyTimelineTicks = 0
+                    self?.dispatch(SharedCoreTimelineSignalBatch.coalesced(updates))
                 }
                 if rooms.isEmpty == false {
-                    emptyRoomTicks = 0
                     self?.dispatchRoomList()
-                } else if wantsRooms {
-                    emptyRoomTicks += 1
-                    if emptyRoomTicks >= 4 {
-                        emptyRoomTicks = 0
-                        self?.dispatchRoomList()
-                    }
-                } else {
-                    emptyRoomTicks = 0
                 }
                 if owners.isEmpty == false {
                     self?.dispatchOwners(owners)
@@ -195,24 +204,6 @@ final class SharedCoreLivePoller: @unchecked Sendable {
             for waiter in waiters.values where waiter.roomId == update.roomId {
                 waiter.continuation.yield(update)
             }
-        }
-    }
-
-    private func dispatchSyntheticTimelineWakes() {
-        lock.lock()
-        let waiters = self.waiters
-        lock.unlock()
-        for waiter in waiters.values {
-            waiter.continuation.yield(
-                TimelineViewUpdateDto(
-                    schemaVersion: 1,
-                    sessionGeneration: 0,
-                    streamId: "",
-                    roomId: waiter.roomId,
-                    revision: 0,
-                    opCount: 0
-                )
-            )
         }
     }
 
