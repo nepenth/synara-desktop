@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2.1.14 - 2026-08-26
+
+- Fixed the iOS background `RUNNINGBOARD 0xdead10cc` termination by stopping
+  Matrix sync, draining in-flight store work, and closing every retained SQLite
+  connection before suspension; foreground activation reopens the stores before
+  restarting sync through the same serialized native lifecycle route.
+- Started iOS store quiescence at `applicationWillResignActive` so the complete
+  persistence boundary begins before UIKit can suspend the process.
+- Fixed the desktop message-text appearance setting across both timeline
+  renderers and made Bright use true white in dark mode (true black in light
+  mode), with distinct AAA-readable Soft and Balanced choices.
+- See [`docs/releases/v2.1.14.md`](docs/releases/v2.1.14.md) for details.
+
 ## 2.1.13 - 2026-08-26
 
 - Fixed an iOS foreground room crash by serializing and coalescing diffable

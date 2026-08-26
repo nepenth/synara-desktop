@@ -1,0 +1,13 @@
+Synara 2.1.14 fixes an iOS background suspension crash and improves desktop message readability.
+
+What changed:
+- Matrix sync and every retained SQLite store are now fully quiesced before iOS suspension.
+- Store shutdown begins earlier in the app lifecycle and is serialized with foreground resume.
+- A real SQLite regression verifies that background shutdown closes the event cache and foreground resume reopens it.
+- The desktop Message text setting now affects every message renderer.
+- Bright message text is true white in dark mode, with distinct high-contrast Soft and Balanced options.
+
+What to test:
+- Background Synara while an active room is receiving messages, then return and confirm sync resumes normally.
+- Repeat quick foreground/background transitions and submit any TestFlight crash prompt if one appears.
+- On desktop, switch the Message text appearance between Soft, Balanced, and Bright.
