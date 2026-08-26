@@ -27,7 +27,7 @@
   --synara-content-secondary: #50545b;
   --synara-content-tertiary: #666b73;
   --synara-content-separator: #777c84;
-  --synara-message-foreground: var(--synara-content-primary);
+  --synara-message-foreground: #000000;
   --synara-selected-surface: #e4e7eb;
   --synara-table-canvas: #f2f3f5;
   --synara-table-header: #e2e5e9;
@@ -56,6 +56,7 @@
   --synara-content-secondary: #a5a9b0;
   --synara-content-tertiary: #8e939b;
   --synara-content-separator: #666b73;
+  --synara-message-foreground: #ffffff;
   --synara-selected-surface: #292c31;
   --synara-table-canvas: #25272b;
   --synara-table-header: #303339;
@@ -109,7 +110,6 @@ a:hover {
     --synara-content-secondary: #292929 !important;
     --synara-content-tertiary: #3d3d3d !important;
     --synara-content-separator: #555555 !important;
-    --synara-message-foreground: var(--synara-content-primary) !important;
   }
 
   .dark-theme,
@@ -119,11 +119,6 @@ a:hover {
     --synara-content-secondary: #d6d9dd !important;
     --synara-content-tertiary: #bdc1c7 !important;
     --synara-content-separator: #9da2aa !important;
-    --synara-message-foreground: var(--synara-content-primary) !important;
-  }
-
-  body {
-    --synara-message-foreground: var(--synara-content-primary) !important;
   }
 }
 

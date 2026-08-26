@@ -49,7 +49,7 @@ final class MatrixLifecycleTests: XCTestCase {
 
         try await waitUntil { coordinator.hasPendingPause == false }
         XCTAssertEqual(matrix.pauseCallCount, 1)
-        XCTAssertEqual(application.beginNames, ["Stop Matrix sync before suspension"])
+        XCTAssertEqual(application.beginNames, ["Quiesce Matrix stores before suspension"])
         XCTAssertEqual(application.endedIdentifiers, [application.issuedIdentifier])
     }
 
