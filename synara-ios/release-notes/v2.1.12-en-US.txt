@@ -1,0 +1,12 @@
+Synara 2.1.12 fixes iOS crashes that could occur after the app moved to the background.
+
+What changed:
+- Synara now waits for its native Matrix sync service to stop before iOS suspends the app.
+- Returning to the foreground safely restarts the same signed-in session after shutdown completes.
+- Rapid app switching can no longer trigger a stale sync restart while Synara is backgrounded.
+- New privacy-safe lifecycle diagnostics help identify any remaining suspension issue without recording message or account data.
+
+What to test:
+- Background and foreground Synara repeatedly while rooms are actively receiving messages.
+- Switch rapidly between Synara and other apps, then confirm rooms and timelines resume normally.
+- Submit any TestFlight crash prompt if one appears.
