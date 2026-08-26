@@ -183,6 +183,7 @@ export const UsernameBold = style({
 export const MessageTextBody = recipe({
   base: {
     wordBreak: 'break-word',
+    color: 'var(--synara-message-foreground)',
   },
   variants: {
     preWrap: {
@@ -198,7 +199,6 @@ export const MessageTextBody = recipe({
     },
     emote: {
       true: {
-        color: color.Success.Main,
         fontStyle: 'italic',
       },
     },

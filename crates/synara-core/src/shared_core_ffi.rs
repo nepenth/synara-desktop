@@ -289,8 +289,12 @@ const SYNC_NOT_ATTACHED_CODE: &str = "p4-s12-sync-not-attached";
 const SYNC_NOT_ATTACHED_DESCRIPTION: &str = "Session owners are not attached.";
 const SYNC_START_FAILED_CODE: &str = "p4-s12-sync-start-failed";
 const SYNC_START_FAILED_DESCRIPTION: &str = "SyncService could not be started.";
+const CLIENT_RESUME_FAILED_CODE: &str = "p4-s12-client-resume-failed";
+const CLIENT_RESUME_FAILED_DESCRIPTION: &str = "The Matrix client stores could not be resumed.";
 const SYNC_STOP_FAILED_CODE: &str = "p4-s12-sync-stop-failed";
 const SYNC_STOP_FAILED_DESCRIPTION: &str = "SyncService could not be stopped.";
+const CLIENT_PAUSE_FAILED_CODE: &str = "p4-s12-client-pause-failed";
+const CLIENT_PAUSE_FAILED_DESCRIPTION: &str = "The Matrix client stores could not be paused.";
 const NSE_FORBIDS_POLL_CODE: &str = "p4-s14-nse-forbids-poll";
 const NSE_FORBIDS_POLL_DESCRIPTION: &str =
     "The NSE read-only store cannot poll timeline view updates.";
@@ -3037,6 +3041,10 @@ pub struct SharedCore {
     secret_store: Arc<dyn SecretVault + Send + Sync>,
     restored_client: Mutex<RestoredClientSlot>,
     owner_attach: Mutex<OwnerAttachSlot>,
+    /// Serializes the complete SyncService/Client lifecycle transaction.
+    /// Shell-side ordering remains useful, but the persistence boundary must
+    /// remain correct for every current and future FFI caller.
+    sync_lifecycle: tokio::sync::Mutex<()>,
     nse_read_only: Mutex<bool>,
     timeline_view_updates: Arc<Mutex<Vec<TimelineViewDeltaBatch>>>,
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
@@ -3060,6 +3068,7 @@ impl SharedCore {
             secret_store,
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
+            sync_lifecycle: tokio::sync::Mutex::new(()),
             nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
@@ -3078,6 +3087,7 @@ impl SharedCore {
             secret_store: vault,
             restored_client: Mutex::new(RestoredClientSlot::Empty),
             owner_attach: Mutex::new(OwnerAttachSlot::Empty),
+            sync_lifecycle: tokio::sync::Mutex::new(()),
             nse_read_only: Mutex::new(false),
             timeline_view_updates: Arc::new(Mutex::new(Vec::new())),
             owner_updates: Arc::new(Mutex::new(Vec::new())),
@@ -3585,8 +3595,10 @@ impl SharedCore {
     ///
     /// NSE forbids this. Missing attach fail-closes. Start failures stay
     /// static and never echo user id, homeserver, device id, or tokens.
-    /// A second start is a restart of the same owner. This is not
-    /// iOS-on-engine and not P4 acceptance.
+    /// Reopens every retained Client store before starting sync. `resume()` is
+    /// idempotent, so the first start and repeated foreground activation share
+    /// one lifecycle route. A second start is a restart of the same owner.
+    /// This is not iOS-on-engine and not P4 acceptance.
     pub async fn start_sync(&self) -> Result<SyncStartDto, SyncStartError> {
         if self.is_nse_read_only() {
             return Err(sync_start_failed(
@@ -3594,12 +3606,19 @@ impl SharedCore {
                 NSE_FORBIDS_START_DESCRIPTION,
             ));
         }
+        let _lifecycle = self.sync_lifecycle.lock().await;
         if !self.owners_attached() {
             return Err(sync_start_failed(
                 SYNC_NOT_ATTACHED_CODE,
                 SYNC_NOT_ATTACHED_DESCRIPTION,
             ));
         }
+        let client = self.retained_client().map_err(|_| {
+            sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
+        })?;
+        client.resume().await.map_err(|_| {
+            sync_start_failed(CLIENT_RESUME_FAILED_CODE, CLIENT_RESUME_FAILED_DESCRIPTION)
+        })?;
         let snapshot = self.core.start_attached_sync().await.map_err(|code| {
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_start_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
@@ -3615,8 +3634,14 @@ impl SharedCore {
         Ok(sync_start_dto_from_snapshot(snapshot))
     }
 
-    /// Stop the attached SyncService for iOS suspension without logging out,
-    /// dropping the retained Client, or replacing the session owner set.
+    /// Quiesce the retained Client for iOS suspension without logging out or
+    /// replacing the session owner set.
+    ///
+    /// Matrix SDK lifecycle order is authoritative: stop SyncService first,
+    /// then `Client::pause()` to disable send queues, await every in-flight
+    /// store operation, and release all SQLite connections and file locks.
+    /// Returning `stopped = true` therefore means the complete persistence
+    /// boundary is safe for OS suspension, not merely that network sync ended.
     pub async fn stop_sync(&self) -> Result<SyncStopDto, SyncStopError> {
         if self.is_nse_read_only() {
             return Err(sync_stop_failed(
@@ -3624,6 +3649,7 @@ impl SharedCore {
                 NSE_FORBIDS_STOP_DESCRIPTION,
             ));
         }
+        let _lifecycle = self.sync_lifecycle.lock().await;
         if !self.owners_attached() {
             return Err(sync_stop_failed(
                 SYNC_NOT_ATTACHED_CODE,
@@ -3639,6 +3665,12 @@ impl SharedCore {
             } else {
                 sync_stop_failed(SYNC_STOP_FAILED_CODE, SYNC_STOP_FAILED_DESCRIPTION)
             }
+        })?;
+        let client = self.retained_client().map_err(|_| {
+            sync_stop_failed(CLIENT_PAUSE_FAILED_CODE, CLIENT_PAUSE_FAILED_DESCRIPTION)
+        })?;
+        client.pause().await.map_err(|_| {
+            sync_stop_failed(CLIENT_PAUSE_FAILED_CODE, CLIENT_PAUSE_FAILED_DESCRIPTION)
         })?;
         Ok(sync_stop_dto_from_snapshot(snapshot))
     }
@@ -13132,6 +13164,62 @@ mod tests {
             !shared.core.registered_commands().is_empty(),
             "P4-S3a must still retain a real Core"
         );
+    }
+
+    #[test]
+    fn sync_stop_closes_retained_client_stores_and_start_reopens_them() {
+        let identity = alice();
+        let values = std::sync::Arc::new(Mutex::new(HashMap::new()));
+        let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(
+            std::sync::Arc::clone(&values),
+        )));
+        let root = temp_root("sync-store-quiescence");
+        let rt = test_runtime();
+        let _enter = rt.enter();
+
+        rt.block_on(shared.persist_planted_session_for_test(
+            identity.user_id().to_owned(),
+            identity.homeserver_url().to_owned(),
+            root.to_string_lossy().into_owned(),
+            "DEVICEABC".to_owned(),
+            "syt_sync_store_quiescence_access".to_owned(),
+            None,
+        ))
+        .expect("planted persist retains a SQLite-backed Client");
+        rt.block_on(shared.attach_session_owners())
+            .expect("attach retained session owners");
+        let client = shared.retained_client().expect("retained Client");
+
+        let stopped = rt
+            .block_on(shared.stop_sync())
+            .expect("stop must complete the full store quiescence boundary");
+        assert!(stopped.stopped);
+        let paused_store_access = rt.block_on(client.event_cache_store().lock());
+        assert!(
+            paused_store_access.is_err(),
+            "stop_sync returned before the retained event-cache store was closed"
+        );
+
+        rt.block_on(async {
+            tokio::time::timeout(std::time::Duration::from_secs(15), shared.start_sync())
+                .await
+                .expect("start_sync timed out")
+        })
+        .expect("start must resume stores before restarting SyncService");
+        let resumed_store_access = rt.block_on(client.event_cache_store().lock());
+        assert!(
+            resumed_store_access.is_ok(),
+            "start_sync did not reopen the retained event-cache store"
+        );
+        drop(resumed_store_access);
+
+        rt.block_on(shared.stop_sync())
+            .expect("final stop releases store resources before teardown");
+        drop(client);
+        drop(shared);
+        drop(_enter);
+        drop(rt);
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]

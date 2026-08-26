@@ -211,7 +211,7 @@ export function AuthRouteThemeManager({ children }: { children: ReactNode }) {
     syncAccentColor(customAccentColor, activeTheme.kind);
     document.body.style.setProperty(
       '--synara-message-foreground',
-      messageTextForeground(messageTextTone)
+      messageTextForeground(messageTextTone, activeTheme.kind === ThemeKind.Dark ? 'dark' : 'light')
     );
 
     if (monochromeMode) {

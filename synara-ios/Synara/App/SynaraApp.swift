@@ -44,9 +44,11 @@ protocol SynaraBackgroundTaskManaging: AnyObject {
 
 extension UIApplication: SynaraBackgroundTaskManaging {}
 
-/// Owns the sole iOS background transition. The UIKit background assertion
-/// keeps the process runnable while the retained native SyncService finishes
-/// its SQLite work and stops. A foreground transition waits for that stop
+/// Owns the sole iOS suspension transition. Quiescence begins at
+/// `applicationWillResignActive`, before UIKit can suspend the process. The
+/// background assertion remains held until the native lifecycle transaction
+/// has stopped SyncService, drained all in-flight store work, and released
+/// every SQLite connection. Foreground activation serially reopens the stores
 /// before restarting the same session owner.
 @MainActor
 final class SynaraBackgroundSyncCoordinator {
@@ -68,7 +70,7 @@ final class SynaraBackgroundSyncCoordinator {
 
         if backgroundTaskIdentifier == .invalid {
             backgroundTaskIdentifier = application.beginBackgroundTask(
-                withName: "Stop Matrix sync before suspension"
+                withName: "Quiesce Matrix stores before suspension"
             ) { [weak self, weak application] in
                 Task { @MainActor [weak self, weak application] in
                     guard let self, let application else {
@@ -260,6 +262,18 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         Task { @MainActor in
             clearBadgeToZero()
         }
+    }
+
+    func applicationWillResignActive(_ application: UIApplication) {
+        PerformanceTrace.event("SceneWillResignActive")
+        guard let matrix else {
+            return
+        }
+        // Start before `applicationDidEnterBackground`: a sync response can be
+        // committing an event-cache transaction while UIKit advances the app
+        // toward suspension. The coordinator is idempotent, so the later
+        // did-enter-background callback cannot create a second pause.
+        backgroundSyncCoordinator.enterBackground(application: application, matrix: matrix)
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
