@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Fixed iOS background suspension crashes by stopping and awaiting the retained
+  native Matrix SyncService under a bounded UIKit background assertion before
+  suspension, then serializing foreground restart through the same session
+  owner. Rapid foreground/background transitions cannot restart sync while the
+  app is backgrounded.
+
 ## 2.1.11 - 2026-08-25
 
 - Rich Matrix messages now use semantic, sanitized renderers across iOS and
