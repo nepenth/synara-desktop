@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 2.1.13 - 2026-08-26
+
+- Fixed an iOS foreground room crash by serializing and coalescing diffable
+  timeline snapshots and replacing run-loop-pumping HTML entity decoding with
+  deterministic decoding.
+- Improved typing responsiveness in busy rooms by coalescing native timeline
+  invalidations, bounding streams to newest state, suppressing unchanged
+  snapshots, removing synthetic refreshes, and avoiding redundant full-text
+  composer layout work.
+- Added privacy-safe performance signposts plus unit and UI regressions for
+  snapshot reentrancy, formatted HTML, and exact long-paragraph input during
+  rapid live updates.
+- See [`docs/releases/v2.1.13.md`](docs/releases/v2.1.13.md) for details.
+
 ## 2.1.12 - 2026-08-25
 
 - Fixed iOS background suspension crashes by stopping and awaiting the retained

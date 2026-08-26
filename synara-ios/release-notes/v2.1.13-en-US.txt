@@ -1,0 +1,13 @@
+Synara 2.1.13 fixes a crash that could occur while viewing an actively updating room and improves typing responsiveness in busy conversations.
+
+What changed:
+- Timeline updates are serialized and coalesced to prevent a UIKit snapshot crash.
+- Formatted messages no longer invoke a run-loop-pumping decoder while rendering.
+- Redundant and unchanged timeline refreshes are removed before reaching the screen.
+- Long message drafts avoid repeated full-text layout work on every keystroke.
+- Privacy-safe performance diagnostics help identify any remaining stalls without recording message content.
+
+What to test:
+- Read a busy room while new formatted messages arrive.
+- Type and edit a long paragraph while the room is updating.
+- Submit any TestFlight crash prompt if one appears.
