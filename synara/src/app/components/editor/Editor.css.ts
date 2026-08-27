@@ -38,6 +38,7 @@ export const EditorTextarea = style([
   {
     flexGrow: 1,
     height: '100%',
+    color: 'var(--synara-message-foreground)',
     padding: `${toRem(13)} ${toRem(1)}`,
     selectors: {
       [`${EditorTextareaScroll}:first-child &`]: {

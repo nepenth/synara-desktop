@@ -1,0 +1,13 @@
+Synara 2.1.15 fixes the remaining iOS suspension crash and aligns the macOS composer with your message-text setting.
+
+What changed:
+- Matrix stores now stay closed during cold notification and background launches until both the app and scene are active.
+- Foreground/background transitions are serialized and duplicate suspension callbacks safely coalesce.
+- Approval notification actions wait for an active, resumed Matrix session before sending a response.
+- Added lifecycle regressions and reusable TestFlight crash diagnostics.
+- The macOS message composer now follows the selected Soft, Balanced, or Bright message-text tone.
+
+What to test:
+- Background Synara from a busy room, return, and confirm the room resumes normally.
+- Open an approval action from a notification and confirm the response is delivered after Synara activates.
+- On macOS, change the Message text setting and confirm composer text changes with the timeline.

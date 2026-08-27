@@ -24,12 +24,54 @@ struct SynaraApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootShellView(environment: environment)
-                .onAppear {
-                    PerformanceTrace.event("RootShellAppear")
-                    appDelegate.bind(to: environment)
-                }
+            SynaraRootHost(environment: environment, appDelegate: appDelegate)
         }
+    }
+}
+
+/// Structurally binds lifecycle authority before constructing RootShellView.
+/// This removes any scheduler race between the shell's signed-in `.task` and
+/// the app delegate's foreground/background gate.
+private struct SynaraRootHost: View {
+    let environment: AppEnvironment
+    let appDelegate: SynaraAppDelegate
+    @Environment(\.scenePhase) private var scenePhase
+    @State private var delegateBound = false
+    @State private var shellReady = false
+
+    var body: some View {
+        Group {
+            if shellReady {
+                RootShellView(environment: environment)
+            } else {
+                Color.clear
+            }
+        }
+        .onAppear {
+            apply(phase: scenePhase)
+        }
+        .onChange(of: scenePhase) { phase in
+            apply(phase: phase)
+        }
+    }
+
+    private func apply(phase: ScenePhase) {
+        // Bind services in every launch mode so push routing is available, but
+        // do not construct RootShellView (and therefore its Matrix `.task`)
+        // until both SwiftUI and UIKit say the process is foreground-active.
+        appDelegate.updateScenePhase(phase)
+        if delegateBound == false {
+            appDelegate.bind(to: environment)
+            delegateBound = true
+        }
+        guard shellReady == false,
+              phase == .active,
+              UIApplication.shared.applicationState == .active
+        else {
+            return
+        }
+        PerformanceTrace.event("RootShellAppear")
+        shellReady = true
     }
 }
 
@@ -43,6 +85,34 @@ protocol SynaraBackgroundTaskManaging: AnyObject {
 }
 
 extension UIApplication: SynaraBackgroundTaskManaging {}
+
+enum SynaraForegroundMatrixMutationPolicy {
+    static func hasAuthority(
+        lifecycleActive: Bool,
+        applicationState: UIApplication.State
+    ) -> Bool {
+        lifecycleActive && applicationState == .active
+    }
+
+    static func allowsMutation(
+        lifecycleActive: Bool,
+        applicationState: UIApplication.State,
+        syncStatus: MatrixSyncStatus
+    ) -> Bool {
+        guard hasAuthority(
+            lifecycleActive: lifecycleActive,
+            applicationState: applicationState
+        ) else {
+            return false
+        }
+        switch syncStatus {
+        case .starting, .syncing, .connected, .reconnecting:
+            return true
+        case .stopped, .disconnected, .restoreFailed, .failed:
+            return false
+        }
+    }
+}
 
 /// Owns the sole iOS suspension transition. Quiescence begins at
 /// `applicationWillResignActive`, before UIKit can suspend the process. The
@@ -61,12 +131,35 @@ final class SynaraBackgroundSyncCoordinator {
         pauseTask != nil
     }
 
+    func bind(
+        application: SynaraBackgroundTaskManaging,
+        matrix: MatrixClientServicing,
+        foregroundActive: Bool
+    ) {
+        guard foregroundActive == false else {
+            isForeground = true
+            matrix.setForegroundActive(true)
+            return
+        }
+        enterBackground(application: application, matrix: matrix)
+    }
+
     func enterBackground(
         application: SynaraBackgroundTaskManaging,
         matrix: MatrixClientServicing
     ) {
+        let wasForeground = isForeground
         isForeground = false
         needsForegroundResume = true
+        matrix.setForegroundActive(false)
+
+        // SwiftUI delivers `.inactive` before `.background`, and UIKit may
+        // independently report the same transition. Once quiescence has
+        // completed, later duplicate callbacks must not checkpoint closed
+        // stores a second time.
+        guard wasForeground || pauseTask != nil else {
+            return
+        }
 
         if backgroundTaskIdentifier == .invalid {
             backgroundTaskIdentifier = application.beginBackgroundTask(
@@ -103,6 +196,7 @@ final class SynaraBackgroundSyncCoordinator {
         session: AuthenticatedSession
     ) {
         isForeground = true
+        matrix.setForegroundActive(true)
         guard needsForegroundResume else {
             return
         }
@@ -130,7 +224,6 @@ final class SynaraBackgroundSyncCoordinator {
 }
 
 final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
-    private var environment: AppEnvironment?
     private var push: PushServicing?
     private var matrix: MatrixClientServicing?
     private var session: AppSessionStore?
@@ -140,11 +233,14 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var pendingRoute: AppRoute?
     private var pendingNotificationPayload: [AnyHashable: Any]?
     private var pendingNotificationResponse: UNNotificationResponse?
+    /// UIKit lifecycle callbacks can precede SwiftUI's `.onAppear`, where the
+    /// shared environment is bound. Retain foreground authority independently
+    /// so a callback is never lost merely because Matrix is not attached yet.
+    private var foregroundActive = false
     private let agentApprovalActionDedupe = SynaraAgentApprovalNotificationActionDedupeStore()
     private let backgroundSyncCoordinator = SynaraBackgroundSyncCoordinator()
 
     func bind(to environment: AppEnvironment) {
-        self.environment = environment
         push = environment.push
         matrix = environment.matrix
         session = environment.session
@@ -152,6 +248,11 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         logger = environment.logger
         agentApprovalReactions = environment.agentApprovalReactions
         UNUserNotificationCenter.current().delegate = self
+        backgroundSyncCoordinator.bind(
+            application: UIApplication.shared,
+            matrix: environment.matrix,
+            foregroundActive: foregroundActive
+        )
 
         if let pendingRoute {
             routeToDestination(pendingRoute)
@@ -165,10 +266,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 await self.resolveNotificationRoute(from: payload)
             }
         }
-        if let pendingNotificationResponse {
-            self.pendingNotificationResponse = nil
-            Task { await self.handleNotificationResponse(pendingNotificationResponse) }
-        }
+        drainPendingNotificationResponseIfReady()
     }
 
     func application(
@@ -220,7 +318,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        guard push != nil else {
+        guard push != nil, foregroundActive else {
             pendingNotificationResponse = response
             return
         }
@@ -252,36 +350,75 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     }
 
     func applicationDidBecomeActive(_ application: UIApplication) {
-        PerformanceTrace.event("SceneActive")
-        if let matrix, let session, case .signedIn(let authenticatedSession) = session.currentState {
-            backgroundSyncCoordinator.enterForeground(
-                matrix: matrix,
-                session: authenticatedSession
-            )
-        }
+        updateForegroundActive(true)
         Task { @MainActor in
             clearBadgeToZero()
         }
     }
 
     func applicationWillResignActive(_ application: UIApplication) {
-        PerformanceTrace.event("SceneWillResignActive")
-        guard let matrix else {
-            return
-        }
-        // Start before `applicationDidEnterBackground`: a sync response can be
-        // committing an event-cache transaction while UIKit advances the app
-        // toward suspension. The coordinator is idempotent, so the later
-        // did-enter-background callback cannot create a second pause.
-        backgroundSyncCoordinator.enterBackground(application: application, matrix: matrix)
+        updateForegroundActive(false)
     }
 
     func applicationDidEnterBackground(_ application: UIApplication) {
-        PerformanceTrace.event("SceneBackground")
+        updateForegroundActive(false)
+    }
+
+    /// SwiftUI is the authoritative lifecycle source for the window scene.
+    /// UIApplicationDelegate callbacks remain as a redundant early signal,
+    /// while this bridge closes pre-bind and scene-only delivery gaps.
+    func updateScenePhase(_ phase: ScenePhase) {
+        switch phase {
+        case .active:
+            // A SwiftUI scene sample cannot overrule process-level UIKit
+            // background state during notification or restoration launches.
+            updateForegroundActive(UIApplication.shared.applicationState == .active)
+        case .inactive, .background:
+            updateForegroundActive(false)
+        @unknown default:
+            updateForegroundActive(false)
+        }
+    }
+
+    private func updateForegroundActive(_ active: Bool) {
+        foregroundActive = active
         guard let matrix else {
             return
         }
-        backgroundSyncCoordinator.enterBackground(application: application, matrix: matrix)
+        if active,
+           let session,
+           case .signedIn(let authenticatedSession) = session.currentState {
+            PerformanceTrace.event("SceneActive")
+            backgroundSyncCoordinator.enterForeground(
+                matrix: matrix,
+                session: authenticatedSession
+            )
+            drainPendingNotificationResponseIfReady()
+            return
+        }
+
+        guard active == false else {
+            matrix.setForegroundActive(true)
+            drainPendingNotificationResponseIfReady()
+            return
+        }
+        PerformanceTrace.event("SceneBackground")
+        // Start at inactive, before background: a sync response can be
+        // committing an event-cache transaction while UIKit advances the app
+        // toward suspension. The coordinator is idempotent across duplicate
+        // SwiftUI and UIApplication lifecycle delivery.
+        backgroundSyncCoordinator.enterBackground(
+            application: UIApplication.shared,
+            matrix: matrix
+        )
+    }
+
+    private func drainPendingNotificationResponseIfReady() {
+        guard foregroundActive, push != nil, let pendingNotificationResponse else {
+            return
+        }
+        self.pendingNotificationResponse = nil
+        Task { await self.handleNotificationResponse(pendingNotificationResponse) }
     }
 
     func userNotificationCenter(
@@ -363,12 +500,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 return
             }
 
-            // A notification action may cold-launch the process before the
-            // signed-in SwiftUI shell has attached the shared Matrix owners.
-            // Join the same single-flight startup used by RootShellView before
-            // invoking the authoritative decision route; never consume the OS
-            // action after one transient no-owner failure.
-            guard await prepareSignedInSessionIfNeeded() else {
+            // A foreground notification action may cold-launch the process,
+            // and its delegate callback can beat asynchronous store resume.
+            // Join the serialized lifecycle chain before touching Matrix.
+            guard await prepareForegroundApprovalSessionIfNeeded() else {
                 logger?.error("Agent approval notification action failed: signed-in Matrix owner unavailable", category: .push)
                 await resolveNotificationRoute(from: userInfo)
                 return
@@ -397,15 +532,24 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         }
     }
 
-    private func prepareSignedInSessionIfNeeded() async -> Bool {
-        guard let environment,
-              case let .signedIn(authenticatedSession) = environment.session.currentState
+    private func prepareForegroundApprovalSessionIfNeeded() async -> Bool {
+        let applicationState = UIApplication.shared.applicationState
+        guard SynaraForegroundMatrixMutationPolicy.hasAuthority(
+            lifecycleActive: foregroundActive,
+            applicationState: applicationState
+        ),
+              let matrix,
+              let session,
+              case let .signedIn(authenticatedSession) = session.currentState
         else {
             return false
         }
-        return await SessionCoordinator.prepareMatrixOwner(
-            environment: environment,
-            session: authenticatedSession
+
+        await matrix.resumeFromForeground(session: authenticatedSession)
+        return SynaraForegroundMatrixMutationPolicy.allowsMutation(
+            lifecycleActive: foregroundActive,
+            applicationState: UIApplication.shared.applicationState,
+            syncStatus: matrix.syncStatus
         )
     }
 

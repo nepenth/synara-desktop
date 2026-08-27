@@ -173,11 +173,16 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     private let connectionStatus: ConnectionStatusStore
     private let applyLock = NSLock()
     private var applyChain: Task<Void, Never> = Task {}
+    /// Fail closed until the app delegate binds UIKit's actual state. This
+    /// prevents the signed-in SwiftUI shell from starting live SQLite owners
+    /// during a notification-driven background launch.
+    private var foregroundActive = false
     private var lastSession: AuthenticatedSession?
     private var pathMonitor: NWPathMonitor?
     private let pathQueue = DispatchQueue(label: "com.whylandcreative.synara.connection-path")
     private var statusWatchTask: Task<Void, Never>?
     private(set) var syncStatus: MatrixSyncStatus = .stopped
+    private static let syncNotAttachedCode = "p4-s12-sync-not-attached"
 
     var syncStatusDescription: String {
         syncStatus.description
@@ -210,20 +215,39 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         await enqueueBackgroundPause(clearLastSession: true)
     }
 
+    func setForegroundActive(_ active: Bool) {
+        applyLock.withLock {
+            foregroundActive = active
+        }
+    }
+
     func pauseForBackground() async {
+        setForegroundActive(false)
         await enqueueBackgroundPause(clearLastSession: false)
     }
 
     func resumeFromForeground(session: AuthenticatedSession) async {
+        setForegroundActive(true)
         await enqueueLiveSession(session)
     }
 
     private func enqueueLiveSession(_ session: AuthenticatedSession) async {
         let queued: Task<Void, Never> = applyLock.withLock {
+            lastSession = session
             let previous = applyChain
             let next = Task { [weak self] in
                 await previous.value
-                await self?.applyLiveSession(session)
+                guard let self else {
+                    return
+                }
+                let mayStart = self.applyLock.withLock { self.foregroundActive }
+                guard mayStart else {
+                    PerformanceTrace.event("MatrixStoreOpenSuppressed")
+                    await self.publish(.stopped)
+                    return
+                }
+                PerformanceTrace.event("MatrixStoreOpenAuthorized")
+                await self.applyLiveSession(session)
             }
             applyChain = next
             return next
@@ -247,12 +271,22 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     private func applyBackgroundPause(clearLastSession: Bool) async {
+        PerformanceTrace.event("MatrixStoreCloseBegin")
+        defer { PerformanceTrace.event("MatrixStoreCloseComplete") }
         do {
             let stopped = try await SharedCoreSyncStop.stopSync(core: host.core)
             if clearLastSession {
                 lastSession = nil
             }
             await publish(stopped.stopped ? .stopped : .failed("Native sync did not stop"))
+        } catch let SyncStopError.Failed(code, _) where code == Self.syncNotAttachedCode {
+            if clearLastSession {
+                lastSession = nil
+            }
+            // A cold background launch has no native owners or open stores to
+            // quiesce. Preserve the fail-closed state instead of inventing a
+            // connection failure that could trigger recovery work.
+            await publish(.stopped)
         } catch {
             if clearLastSession {
                 lastSession = nil

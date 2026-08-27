@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2.1.15 - 2026-08-27
+
+- Fixed the remaining iOS suspension crash by making foreground authority a
+  prerequisite for constructing the active app shell or opening Matrix stores,
+  including cold notification/background launches and rapid scene transitions.
+- Deferred notification approval handling until the app is active and Matrix
+  has resumed, while keeping Approve and Deny actions visibly foregrounded.
+- Added reusable TestFlight crash diagnostics and lifecycle regressions for
+  cold-background startup, duplicate suspension callbacks, and session relogin.
+- Fixed the macOS message composer so its text follows the selected Appearance
+  > Message text tone just like the timeline.
+- See [`docs/releases/v2.1.15.md`](docs/releases/v2.1.15.md) for details.
+
 ## 2.1.14 - 2026-08-26
 
 - Fixed the iOS background `RUNNINGBOARD 0xdead10cc` termination by stopping

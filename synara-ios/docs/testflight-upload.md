@@ -73,6 +73,24 @@ future metadata work, but the private key must remain outside the repository.
 Do not commit `.p8` files. The repo ignores `AuthKey_*.p8` and `*.p8` as a
 defense-in-depth measure.
 
+### Local TestFlight crash diagnostics
+
+The same API key can retrieve the newest tester-submitted crash logs without
+depending on Xcode Organizer or an App Store Connect browser session:
+
+```sh
+source "$HOME/.private_keys/appstoreconnect/synara.env"
+SYNARA_ASC_APP_ID="6777089267" \
+SYNARA_IOS_CRASH_DIAGNOSTICS_DIR="/tmp/synara-testflight-crashes" \
+node synara-ios/scripts/fetch-testflight-crashes.mjs --build "X.Y.Z"
+```
+
+The command writes one standard `.crash` file per submission plus `index.json`.
+The output can contain tester comments, device details, and process state, so
+keep it outside the repository and do not attach it to public issues without
+reviewing and redacting it first. Omitting `--build` downloads the newest page
+across recent builds.
+
 The script disables Xcode-managed build-number mutation so App Store Connect uses
 the build number committed in `Synara.xcodeproj` and `project.yml`.
 

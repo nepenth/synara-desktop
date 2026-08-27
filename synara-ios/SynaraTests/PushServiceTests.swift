@@ -3,6 +3,53 @@ import XCTest
 
 @MainActor
 final class PushServiceTests: XCTestCase {
+    func testAgentApprovalMutationsRequireForegroundStoreAuthority() throws {
+        let actions = SynaraNotificationActionContract.agentApprovalActions()
+        let approve = try XCTUnwrap(
+            actions.first { $0.identifier == SynaraNotificationActionContract.approveOnceIdentifier }
+        )
+        let deny = try XCTUnwrap(
+            actions.first { $0.identifier == SynaraNotificationActionContract.denyIdentifier }
+        )
+
+        XCTAssertTrue(approve.options.contains(.authenticationRequired))
+        XCTAssertTrue(approve.options.contains(.foreground))
+        XCTAssertTrue(deny.options.contains(.authenticationRequired))
+        XCTAssertTrue(deny.options.contains(.destructive))
+        XCTAssertTrue(deny.options.contains(.foreground))
+    }
+
+    func testForegroundApprovalPolicyRequiresActiveProcessAndLiveMatrixOwner() {
+        XCTAssertTrue(
+            SynaraForegroundMatrixMutationPolicy.allowsMutation(
+                lifecycleActive: true,
+                applicationState: .active,
+                syncStatus: .connected
+            )
+        )
+        XCTAssertFalse(
+            SynaraForegroundMatrixMutationPolicy.allowsMutation(
+                lifecycleActive: true,
+                applicationState: .background,
+                syncStatus: .connected
+            )
+        )
+        XCTAssertFalse(
+            SynaraForegroundMatrixMutationPolicy.allowsMutation(
+                lifecycleActive: false,
+                applicationState: .active,
+                syncStatus: .connected
+            )
+        )
+        XCTAssertFalse(
+            SynaraForegroundMatrixMutationPolicy.allowsMutation(
+                lifecycleActive: true,
+                applicationState: .active,
+                syncStatus: .stopped
+            )
+        )
+    }
+
     func testSparseEventIDParserReturnsEventWhenRoomMissing() {
         XCTAssertEqual(
             NotificationPushRouteParser.sparseEventID(from: ["event_id": "$sparse:matrix.org"]),
