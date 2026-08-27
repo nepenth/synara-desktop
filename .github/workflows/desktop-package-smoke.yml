@@ -55,6 +55,18 @@ jobs:
           fi
 
           if [[ -n "${BASE_SHA:-}" && "${BASE_SHA}" != "0000000000000000000000000000000000000000" && -n "${HEAD_SHA:-}" ]]; then
+            if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-icon-only.mjs; then
+              node scripts/check-app-icons.mjs
+              if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | grep -Eq '^(assets/branding/synara-symbolic\.svg|packaging/arch/PKGBUILD|src-tauri/tauri\.conf\.json)$'; then
+                echo "packages=true" >> "$GITHUB_OUTPUT"
+                echo "reason=app_icon_packaging_contract_changed"
+              else
+                echo "packages=false" >> "$GITHUB_OUTPUT"
+                echo "reason=app_icon_only_release_build_owns_package_proof"
+              fi
+              exit 0
+            fi
+
             if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-metadata-only.mjs; then
               echo "packages=false" >> "$GITHUB_OUTPUT"
               echo "reason=metadata-only"

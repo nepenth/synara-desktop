@@ -54,7 +54,9 @@ package() {
   install -Dm755 "${srcdir}/synara" "${pkgdir}/usr/bin/synara"
   install -Dm644 "${desktop_file}" "${pkgdir}/usr/share/applications/Synara.desktop"
   install -Dm644 "${_repo_root}/src-tauri/icons/32x32.png" "${pkgdir}/usr/share/icons/hicolor/32x32/apps/synara.png"
+  install -Dm644 "${_repo_root}/src-tauri/icons/48x48.png" "${pkgdir}/usr/share/icons/hicolor/48x48/apps/synara.png"
   install -Dm644 "${_repo_root}/src-tauri/icons/128x128.png" "${pkgdir}/usr/share/icons/hicolor/128x128/apps/synara.png"
   install -Dm644 "${_repo_root}/src-tauri/icons/128x128@2x.png" "${pkgdir}/usr/share/icons/hicolor/256x256/apps/synara.png"
+  install -Dm644 "${_repo_root}/assets/branding/synara-symbolic.svg" "${pkgdir}/usr/share/icons/hicolor/symbolic/apps/synara-symbolic.svg"
   install -Dm644 "${_repo_root}/LICENSE" "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
 }

@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## 2.1.16 - 2026-08-27
+
+- Refreshed the existing Synara wing-and-network app icon for stronger visual
+  mass and small-size legibility across iOS, macOS, Linux, and Windows.
+- Added platform-correct iOS, ICNS, ICO, desktop PNG, and Linux symbolic assets,
+  including Debian and Arch symbolic-icon installation.
+- Added deterministic icon generation, a reviewed asset manifest, and a
+  fail-closed icon-only CI path that preserves packaging/signing release proof
+  without repeating unrelated hour-plus runtime suites.
+- See [`docs/releases/v2.1.16.md`](docs/releases/v2.1.16.md) for details.
+
 ## 2.1.15 - 2026-08-27
 
 - Fixed the remaining iOS suspension crash by making foreground authority a

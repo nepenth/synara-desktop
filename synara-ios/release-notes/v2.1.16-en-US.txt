@@ -1,0 +1,11 @@
+Synara 2.1.16 refreshes the app icon while preserving the familiar Synara identity.
+
+What changed:
+- The wing-and-network mark is larger, cleaner, and easier to recognize at small sizes.
+- iPhone and iPad artwork now follows Apple’s opaque, unmasked app-icon requirements.
+- Desktop exports are tuned for the macOS Dock, Linux launchers, and Windows taskbars.
+- Added deterministic icon generation and focused integrity checks for every shipped size.
+
+What to test:
+- Check Synara on the Home Screen, in Settings, notifications, and the app switcher.
+- Confirm the mark remains clear at both small and large display sizes.
