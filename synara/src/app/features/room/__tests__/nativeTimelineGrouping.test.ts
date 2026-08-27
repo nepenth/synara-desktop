@@ -4,7 +4,7 @@ import test from 'node:test';
 import {
   NATIVE_TIMELINE_GROUP_WINDOW_MS,
   shouldGroupNativeTimelineRows,
-} from '../nativeTimelineGrouping.ts';
+} from '../nativeTimelineGrouping';
 
 const row = (senderId: string, originServerTs: number) => ({ senderId, originServerTs });
 

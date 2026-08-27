@@ -95,6 +95,8 @@ const tests = [
   'src/app/features/room/__tests__/nativeTimelineActions.test.ts',
   'src/app/features/room/__tests__/nativeTimelineCodeHighlight.test.ts',
   'src/app/features/room/__tests__/nativeTimelinePresenterActions.test.ts',
+  'src/app/features/room/__tests__/nativeTimelineGrouping.test.ts',
+  'src/app/features/room/__tests__/timelinePresentationRegression.test.ts',
   'src/app/features/room/__tests__/roomViewTypingLayout.test.ts',
   'src/app/features/room/__tests__/nativeTimelineViewportPolicy.test.ts',
   'src/app/features/room/__tests__/nativeTimelineViewDelta.test.ts',
