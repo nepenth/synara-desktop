@@ -33,9 +33,10 @@ use matrix_sdk::{
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    EncryptedMessage, ReactionStatus, Timeline, TimelineBuilder, TimelineEventFocusThreadMode,
-    TimelineEventItemId, TimelineFocus, TimelineItem as SdkTimelineItem,
-    TimelineItemContent as SdkTimelineItemContent, TimelineReadReceiptTracking,
+    EncryptedMessage, ReactionStatus, Timeline, TimelineBuilder, TimelineDetails,
+    TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
+    TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
+    TimelineReadReceiptTracking,
 };
 use serde::{Deserialize, Serialize};
 use tokio::time::{timeout, Duration};
@@ -1399,6 +1400,10 @@ impl NativeTimelineRegistry {
             .iter()
             .map(|item| item.unique_id().0.clone())
             .collect();
+        let hydrate_sender_profiles = items
+            .iter()
+            .filter_map(|item| item.as_event())
+            .any(|event| !matches!(event.sender_profile(), TimelineDetails::Ready(_)));
         let rows = {
             let mut registry = media.lock().await;
             items
@@ -1436,6 +1441,7 @@ impl NativeTimelineRegistry {
                     timeline: timeline.clone(),
                     position: view_position.clone(),
                     hit_start,
+                    hydrate_sender_profiles,
                 },
                 updates,
             ),
@@ -2427,6 +2433,7 @@ struct ViewUpdateOwnerInput {
     timeline: Arc<Timeline>,
     position: TimelineViewPosition,
     hit_start: Arc<AtomicBool>,
+    hydrate_sender_profiles: bool,
 }
 fn spawn_view_update_owner(
     input: ViewUpdateOwnerInput,
@@ -2444,6 +2451,7 @@ fn spawn_view_update_owner(
         timeline,
         position,
         hit_start,
+        hydrate_sender_profiles,
     } = input;
     tokio::spawn(async move {
         let emitter = ViewDeltaEmitter::new(emit, session_generation, stream_id, room_id, revision);
@@ -2465,10 +2473,26 @@ fn spawn_view_update_owner(
             None => Box::pin(stream::pending()),
         };
 
+        // The SDK intentionally leaves sender profiles unresolved until the
+        // room member list is synchronized. Hydrate it without blocking live
+        // timeline diffs; profile completion is emitted back through `updates`
+        // as Set operations, so an existing session gains avatars/display names
+        // without requiring a logout/login cycle.
+        let member_hydration = async {
+            if hydrate_sender_profiles {
+                timeline.fetch_members().await;
+            }
+        };
+        tokio::pin!(member_hydration);
+        let mut members_hydrated = !hydrate_sender_profiles;
+
         futures_util::pin_mut!(updates);
 
         loop {
             tokio::select! {
+                () = &mut member_hydration, if !members_hydrated => {
+                    members_hydrated = true;
+                }
                 Some(diffs) = updates.next() => {
                     apply_item_id_diffs(&mut item_ids, &diffs);
                     let ops = {

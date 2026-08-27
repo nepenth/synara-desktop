@@ -187,8 +187,19 @@ export function inspectWorkflowPolicy({
     );
   }
   const packageChangeContract = packageChanges.join("\n");
+  const packageDiffStart = packageChangeContract.indexOf(
+    'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --'
+  );
+  const packageDiffEnd =
+    packageDiffStart >= 0
+      ? packageChangeContract.indexOf("; then", packageDiffStart)
+      : -1;
+  const packageDiffContract =
+    packageDiffStart >= 0 && packageDiffEnd >= 0
+      ? packageChangeContract.slice(packageDiffStart, packageDiffEnd)
+      : "";
   for (const pathRoot of ["scripts", "packaging/arch", "src-tauri", "synara"]) {
-    if (!packageChangeContract.includes(pathRoot)) {
+    if (!packageDiffContract.includes(pathRoot)) {
       errors.push(
         `Desktop package change detection must retain the ${pathRoot} path.`
       );

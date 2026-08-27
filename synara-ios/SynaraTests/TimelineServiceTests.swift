@@ -1508,6 +1508,52 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(enrichedItem.isLocalPending)
     }
 
+    func testMessageGroupingUsesTwoHourWindowAndSenderBoundary() {
+        let calendar = Calendar.current
+        let baseDate = calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 27, hour: 12)
+        )!
+
+        func item(sender: String, offset: TimeInterval) -> TimelineItem {
+            TimelineItem(
+                id: "\(sender)-\(offset)",
+                eventID: "\(sender)-\(offset)",
+                senderID: sender,
+                timestamp: baseDate.addingTimeInterval(offset),
+                kind: .text("Message"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+        }
+
+        let first = item(sender: "@alice:matrix.org", offset: 0)
+        XCTAssertTrue(
+            TimelineMessageGroupingPolicy.shouldGroup(
+                previous: first,
+                current: item(sender: "@alice:matrix.org", offset: 2 * 60 * 60 - 1)
+            )
+        )
+        XCTAssertFalse(
+            TimelineMessageGroupingPolicy.shouldGroup(
+                previous: first,
+                current: item(sender: "@alice:matrix.org", offset: 2 * 60 * 60)
+            )
+        )
+        XCTAssertFalse(
+            TimelineMessageGroupingPolicy.shouldGroup(
+                previous: first,
+                current: item(sender: "@bob:matrix.org", offset: 1)
+            )
+        )
+
+        let late = item(sender: "@alice:matrix.org", offset: 11.5 * 60 * 60)
+        let afterMidnight = item(sender: "@alice:matrix.org", offset: 12.5 * 60 * 60)
+        XCTAssertFalse(
+            TimelineMessageGroupingPolicy.shouldGroup(previous: late, current: afterMidnight)
+        )
+    }
+
     func testPendingReconcilerPreservesAuthoritativeServerVectorOrder() {
         func item(_ id: String, offset: TimeInterval) -> Synara.TimelineItem {
             Synara.TimelineItem(

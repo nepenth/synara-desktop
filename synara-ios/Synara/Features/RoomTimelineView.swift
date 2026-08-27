@@ -1096,14 +1096,9 @@ struct RoomTimelineView: View {
     }
 
     private func isGroupedWithPrevious(index: Int, items: [TimelineItem]) -> Bool {
-        guard index > 0 else {
-            return false
-        }
-
-        let previous = items[index - 1]
-        let current = items[index]
-        return previous.senderID == current.senderID
-            && current.timestamp.timeIntervalSince(previous.timestamp) < 5 * 60
+        guard items.indices.contains(index) else { return false }
+        let previous = index > 0 ? items[index - 1] : nil
+        return TimelineMessageGroupingPolicy.shouldGroup(previous: previous, current: items[index])
     }
 
     private var timelineTaskID: String {
@@ -4582,6 +4577,7 @@ private struct TimelineRow: View {
     let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @GestureState private var timestampRevealOffset: CGFloat = 0
 
     var body: some View {
         let row = HStack(alignment: .top, spacing: rowHorizontalSpacing) {
@@ -4632,13 +4628,44 @@ private struct TimelineRow: View {
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
 
+        let timestampRevealProgress = min(1, abs(timestampRevealOffset) / timestampRevealWidth)
+
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            withFailedRetryAccessibilityAction(row)
+            ZStack(alignment: .trailing) {
+                if isGroupedWithPrevious {
+                    Text(item.timestamp.timelineTime)
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .opacity(timestampRevealProgress)
+                        .accessibilityHidden(true)
+                }
+                withFailedRetryAccessibilityAction(row)
+                    .offset(x: isGroupedWithPrevious ? timestampRevealOffset : 0)
+            }
+            .simultaneousGesture(groupedTimestampRevealGesture)
+            .clipped()
                 .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
             if item.deliveryStatus == .failed, availability.canEdit {
                 failedMessageEditButton
             }
         }
+    }
+
+    private var groupedTimestampRevealGesture: some Gesture {
+        DragGesture(minimumDistance: 12)
+            .updating($timestampRevealOffset) { value, state, _ in
+                guard isGroupedWithPrevious,
+                      value.translation.width < 0,
+                      abs(value.translation.width) > abs(value.translation.height)
+                else {
+                    return
+                }
+                state = max(-timestampRevealWidth, value.translation.width)
+            }
+    }
+
+    private var timestampRevealWidth: CGFloat {
+        64
     }
 
     @ViewBuilder
@@ -4858,27 +4885,28 @@ private struct TimelineRow: View {
     }
 
     private var accessibilitySummary: String {
+        let senderAndTime = "\(item.senderID) at \(item.timestamp.timelineTime)"
         switch item.kind {
         case let .text(body):
-            return "\(item.senderID): \(body)"
+            return "\(senderAndTime): \(body)"
         case let .formattedText(body, _):
-            return "\(item.senderID): \(body)"
+            return "\(senderAndTime): \(body)"
         case let .mediaPlaceholder(resource):
             if resource.isEncrypted {
-                return "\(item.senderID) sent encrypted media that cannot be opened until keys are available"
+                return "\(senderAndTime) sent encrypted media that cannot be opened until keys are available"
             }
-            return "\(item.senderID) sent \(resource.safeDescription)"
+            return "\(senderAndTime) sent \(resource.safeDescription)"
         case .redacted:
-            return "\(item.senderID): message deleted"
+            return "\(senderAndTime): message deleted"
         case .encryptedPlaceholder:
-            return "\(item.senderID): encrypted message unavailable"
+            return "\(senderAndTime): encrypted message unavailable"
         case let .unknown(type):
-            return "\(item.senderID): unsupported event \(type)"
+            return "\(senderAndTime): unsupported event \(type)"
         case let .agentCard(card):
             let status = card.status.map { ", status \($0)" } ?? ""
             let primaryAction = card.actions.first(where: SynaraAgentCardActionResolver.shouldRender)
                 .map { ", primary action \($0.title)" } ?? ""
-            return "\(item.senderID): agent card: \(card.title)\(status)\(primaryAction)"
+            return "\(senderAndTime): agent card: \(card.title)\(status)\(primaryAction)"
         }
     }
 
@@ -4906,7 +4934,9 @@ private struct TimelineRow: View {
         case .agentCard:
             return "Review available agent actions"
         default:
-            return "Long press for message actions"
+            return isGroupedWithPrevious
+                ? "Swipe left to reveal the sent time. Long press for message actions"
+                : "Long press for message actions"
         }
     }
 

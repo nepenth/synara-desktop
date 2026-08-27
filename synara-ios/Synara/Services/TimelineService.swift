@@ -50,6 +50,20 @@ enum TimelineDeliveryStatus: Equatable {
     case failed
 }
 
+enum TimelineMessageGroupingPolicy {
+    static let maximumInterval: TimeInterval = 2 * 60 * 60
+
+    static func shouldGroup(previous: TimelineItem?, current: TimelineItem) -> Bool {
+        guard let previous, previous.senderID == current.senderID else {
+            return false
+        }
+        let elapsed = current.timestamp.timeIntervalSince(previous.timestamp)
+        return elapsed >= 0
+            && elapsed < maximumInterval
+            && Calendar.current.isDate(previous.timestamp, inSameDayAs: current.timestamp)
+    }
+}
+
 struct TimelineItem: Identifiable, Equatable {
     enum Kind: Equatable {
         case text(String)

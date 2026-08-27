@@ -69,6 +69,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import { shouldShowJumpToLatest } from './nativeTimelineViewportPolicy';
+import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
 import * as htmlCss from './nativeTimelineHtml.css';
 
 const HermesAgentCard = React.lazy(() =>
@@ -163,15 +164,13 @@ const displayNameForRow = (row: NativeTimelineViewRow): string => {
 const isGroupedWithPrevious = (
   previous: NativeTimelineViewRow | undefined,
   row: NativeTimelineViewRow | undefined
-): boolean => {
-  if (!previous || !row) return false;
-  const previousId = rowSenderId(previous);
-  const senderId = rowSenderId(row);
-  const previousTs = previous ? rowOriginServerTs(previous) : undefined;
-  const ts = rowOriginServerTs(row);
-  if (!previousId || !senderId || previousId !== senderId || !previousTs || !ts) return false;
-  return Math.abs(ts - previousTs) < 5 * 60 * 1000;
-};
+): boolean =>
+  shouldGroupNativeTimelineRows(
+    previous
+      ? { senderId: rowSenderId(previous), originServerTs: rowOriginServerTs(previous) }
+      : undefined,
+    row ? { senderId: rowSenderId(row), originServerTs: rowOriginServerTs(row) } : undefined
+  );
 
 const mediaStyle = (media?: NativeTimelineMediaHandle): React.CSSProperties => {
   const maxWidth = media?.width ? Math.min(media.width, 480) : 480;
@@ -835,6 +834,9 @@ const NativeTimelineRow = ({
   onReplyDraftChanged,
   onFocusEvent,
 }: NativeTimelineRowProps) => {
+  const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
+  const swipeStartX = useRef<number | undefined>(undefined);
+  const wheelResetTimer = useRef<number | undefined>(undefined);
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const surface = hasMessageSurface(row.kind);
@@ -852,6 +854,45 @@ const NativeTimelineRow = ({
   const eventId = rowEventId(row);
   const originServerTs = rowOriginServerTs(row);
   const pinned = isNativeTimelineEventPinned(pinnedEventIds, eventId);
+  const groupedTimestampRevealWidth = 72;
+  const clampGroupedTimestampOffset = (offset: number) =>
+    Math.max(-groupedTimestampRevealWidth, Math.min(0, offset));
+  const updateGroupedTimestampOffset = (offset: number) => {
+    if (!grouped) return;
+    setGroupedTimestampOffset(clampGroupedTimestampOffset(offset));
+  };
+  const finishGroupedTimestampGesture = () => {
+    swipeStartX.current = undefined;
+    setGroupedTimestampOffset(0);
+  };
+  useEffect(
+    () => () => {
+      if (wheelResetTimer.current !== undefined) window.clearTimeout(wheelResetTimer.current);
+    },
+    []
+  );
+  const groupedTimestampGestureProps = grouped
+    ? {
+        onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
+          if (event.isPrimary) swipeStartX.current = event.clientX;
+        },
+        onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
+          if (swipeStartX.current === undefined) return;
+          updateGroupedTimestampOffset(event.clientX - swipeStartX.current);
+        },
+        onPointerUp: finishGroupedTimestampGesture,
+        onPointerCancel: finishGroupedTimestampGesture,
+        onPointerLeave: finishGroupedTimestampGesture,
+        onWheel: (event: React.WheelEvent<HTMLDivElement>) => {
+          if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
+          setGroupedTimestampOffset((current) =>
+            clampGroupedTimestampOffset(current - event.deltaX)
+          );
+          if (wheelResetTimer.current !== undefined) window.clearTimeout(wheelResetTimer.current);
+          wheelResetTimer.current = window.setTimeout(() => setGroupedTimestampOffset(0), 600);
+        },
+      }
+    : {};
   const runReaction = (key: string) => {
     if (!eventId || !capabilities?.react) return;
     void toggleReactionWithNativeOwner({ roomId, eventId, key }).catch((error) => {
@@ -909,128 +950,144 @@ const NativeTimelineRow = ({
           }}
           onReaction={runReaction}
         >
-          <Box direction="Column" gap="100" className={rowClassName} style={rowStyle}>
-            <Box gap="300" alignItems="Start">
-              <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
-                {grouped ? (
-                  originServerTs ? (
-                    <Time
-                      compact
-                      ts={originServerTs}
-                      hour24Clock={hour24Clock}
-                      dateFormatString={dateFormatString}
-                    />
-                  ) : null
-                ) : (
-                  <NativeTimelineSenderAvatar row={row} />
-                )}
-              </Box>
-              <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
-                {grouped ? null : (
-                  <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
-                    <Text size="T300" className={htmlCss.SenderName}>
-                      {displayNameForRow(row)}
-                    </Text>
-                    {originServerTs ? (
-                      <Time
-                        ts={originServerTs}
-                        hour24Clock={hour24Clock}
-                        dateFormatString={dateFormatString}
-                      />
-                    ) : null}
-                    {pinned ? (
-                      <Text size="T200" className={htmlCss.Metadata}>
-                        Pinned
-                      </Text>
-                    ) : null}
-                  </Box>
-                )}
-                {row.reply && (
-                  <Box
-                    as="button"
-                    direction="Column"
-                    gap="100"
-                    onClick={() => onFocusEvent(row.reply!.eventId)}
-                    className={htmlCss.ReplySurface}
-                    aria-label={`Open message from ${row.reply.senderName}`}
-                  >
-                    <Text size="T300" className={htmlCss.SenderName}>
-                      Replying to {row.reply.senderName}
-                    </Text>
-                    <Text size="T300" style={{ whiteSpace: 'pre-wrap' }}>
-                      {row.reply.body}
-                    </Text>
-                  </Box>
-                )}
-                {agentPayload ? (
-                  <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
-                    <React.Suspense
-                      fallback={<Spinner size="200" aria-label="Loading agent output" />}
-                    >
-                      <HermesAgentCard payload={agentPayload} />
-                    </React.Suspense>
-                  </ErrorBoundary>
-                ) : (
-                  <div className={htmlCss.MessageBody}>
-                    {row.formattedBody ? (
-                      <NativeFormattedBody
-                        html={row.formattedBody}
-                        fallbackBody={row.body}
-                        style={{
-                          fontStyle: isEmote ? 'italic' : undefined,
-                        }}
-                      />
-                    ) : (
-                      <Text
-                        size="T300"
-                        style={{
-                          whiteSpace: 'pre-wrap',
-                          fontWeight: 400,
-                          lineHeight: 1.55,
-                          fontStyle: isEmote ? 'italic' : undefined,
-                        }}
-                      >
-                        {isEmote ? `* ${row.body}` : row.body}
-                      </Text>
-                    )}
-                    {row.edited ? (
-                      <Text size="T200" className={htmlCss.Metadata}>
-                        Edited
-                      </Text>
-                    ) : null}
-                  </div>
-                )}
-                {row.thread && threadFocus ? (
-                  <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
-                    Thread · {row.thread.replyCount}{' '}
-                    {row.thread.replyCount === 1 ? 'reply' : 'replies'}
-                    {row.thread.latestEventId ? ' · open latest' : ' · open root'}
-                  </Button>
-                ) : null}
-                <NativeTimelineMedia
-                  media={row.media}
-                  messageType={row.messageType}
-                  body={row.body}
+          <div
+            {...groupedTimestampGestureProps}
+            className={htmlCss.MessageSwipeSurface}
+            title={
+              grouped && originServerTs ? new Date(originServerTs).toLocaleString() : undefined
+            }
+          >
+            {grouped && originServerTs ? (
+              <div
+                className={htmlCss.GroupedTimestampReveal}
+                style={{ opacity: Math.min(1, Math.abs(groupedTimestampOffset) / 36) }}
+                aria-hidden={groupedTimestampOffset === 0}
+              >
+                <Time
+                  compact
+                  ts={originServerTs}
+                  hour24Clock={hour24Clock}
+                  dateFormatString={dateFormatString}
                 />
-                {row.reactions?.length ? (
-                  <Box gap="100" wrap="Wrap">
-                    {row.reactions.map((reaction) => (
-                      <Button
-                        key={reaction.key}
-                        size="300"
-                        variant={reaction.own ? 'Primary' : 'Secondary'}
-                        fill="Soft"
-                        disabled={!capabilities?.react}
-                        onClick={() => runReaction(reaction.key)}
+              </div>
+            ) : null}
+            <Box
+              direction="Column"
+              gap="100"
+              className={`${rowClassName} ${htmlCss.MessageSwipeContent}`}
+              style={{ ...rowStyle, transform: `translateX(${groupedTimestampOffset}px)` }}
+            >
+              <Box gap="300" alignItems="Start">
+                <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
+                  {grouped ? null : <NativeTimelineSenderAvatar row={row} />}
+                </Box>
+                <Box direction="Column" gap="100" grow="Yes" style={{ minWidth: 0 }}>
+                  {grouped ? null : (
+                    <Box gap="200" alignItems="Baseline" className={htmlCss.Metadata}>
+                      <Text size="T300" className={htmlCss.SenderName}>
+                        {displayNameForRow(row)}
+                      </Text>
+                      {originServerTs ? (
+                        <Time
+                          ts={originServerTs}
+                          hour24Clock={hour24Clock}
+                          dateFormatString={dateFormatString}
+                        />
+                      ) : null}
+                      {pinned ? (
+                        <Text size="T200" className={htmlCss.Metadata}>
+                          Pinned
+                        </Text>
+                      ) : null}
+                    </Box>
+                  )}
+                  {row.reply && (
+                    <Box
+                      as="button"
+                      direction="Column"
+                      gap="100"
+                      onClick={() => onFocusEvent(row.reply!.eventId)}
+                      className={htmlCss.ReplySurface}
+                      aria-label={`Open message from ${row.reply.senderName}`}
+                    >
+                      <Text size="T300" className={htmlCss.SenderName}>
+                        Replying to {row.reply.senderName}
+                      </Text>
+                      <Text size="T300" style={{ whiteSpace: 'pre-wrap' }}>
+                        {row.reply.body}
+                      </Text>
+                    </Box>
+                  )}
+                  {agentPayload ? (
+                    <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
+                      <React.Suspense
+                        fallback={<Spinner size="200" aria-label="Loading agent output" />}
                       >
-                        {reaction.key} {reaction.count}
-                      </Button>
-                    ))}
-                  </Box>
-                ) : null}
+                        <HermesAgentCard payload={agentPayload} />
+                      </React.Suspense>
+                    </ErrorBoundary>
+                  ) : (
+                    <div className={htmlCss.MessageBody}>
+                      {row.formattedBody ? (
+                        <NativeFormattedBody
+                          html={row.formattedBody}
+                          fallbackBody={row.body}
+                          style={{
+                            fontStyle: isEmote ? 'italic' : undefined,
+                          }}
+                        />
+                      ) : (
+                        <Text
+                          size="T300"
+                          style={{
+                            whiteSpace: 'pre-wrap',
+                            fontWeight: 400,
+                            lineHeight: 1.55,
+                            fontStyle: isEmote ? 'italic' : undefined,
+                          }}
+                        >
+                          {isEmote ? `* ${row.body}` : row.body}
+                        </Text>
+                      )}
+                      {row.edited ? (
+                        <Text size="T200" className={htmlCss.Metadata}>
+                          Edited
+                        </Text>
+                      ) : null}
+                    </div>
+                  )}
+                  {row.thread && threadFocus ? (
+                    <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
+                      Thread · {row.thread.replyCount}{' '}
+                      {row.thread.replyCount === 1 ? 'reply' : 'replies'}
+                      {row.thread.latestEventId ? ' · open latest' : ' · open root'}
+                    </Button>
+                  ) : null}
+                  <NativeTimelineMedia
+                    media={row.media}
+                    messageType={row.messageType}
+                    body={row.body}
+                  />
+                  {row.reactions?.length ? (
+                    <Box gap="100" wrap="Wrap">
+                      {row.reactions.map((reaction) => (
+                        <Button
+                          key={reaction.key}
+                          size="300"
+                          variant={reaction.own ? 'Primary' : 'Secondary'}
+                          fill="Soft"
+                          disabled={!capabilities?.react}
+                          onClick={() => runReaction(reaction.key)}
+                        >
+                          {reaction.key} {reaction.count}
+                        </Button>
+                      ))}
+                    </Box>
+                  ) : null}
+                </Box>
               </Box>
             </Box>
-          </Box>
+          </div>
         </NativeTimelineRowActionSurface>
       );
     }

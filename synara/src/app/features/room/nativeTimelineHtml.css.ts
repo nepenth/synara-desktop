@@ -31,6 +31,30 @@ export const MessageActionSurface = style({
   position: 'relative',
 });
 
+export const MessageSwipeSurface = style({
+  position: 'relative',
+  overflow: 'hidden',
+});
+
+export const MessageSwipeContent = style({
+  position: 'relative',
+  zIndex: 1,
+  transition: 'transform 140ms ease-out',
+});
+
+export const GroupedTimestampReveal = style({
+  position: 'absolute',
+  zIndex: 0,
+  top: '50%',
+  right: config.space.S300,
+  transform: 'translateY(-50%)',
+  color: 'var(--synara-content-secondary)',
+  opacity: 0,
+  transition: 'opacity 120ms ease-out',
+  pointerEvents: 'none',
+  whiteSpace: 'nowrap',
+});
+
 export const MessageActionRail = style({
   position: 'absolute',
   top: config.space.S100,
