@@ -1,0 +1,13 @@
+Synara 2.1.17 makes busy room timelines calmer and restores sender identity without requiring a new login.
+
+What changed:
+- Consecutive messages from the same sender now form readable two-hour groups on iOS, macOS, and Linux.
+- Repeated timestamps stay hidden and can be revealed with a leftward gesture.
+- Sender profiles hydrate in the background so avatars and display names update during the active session.
+- The desktop message composer now uses one clean circular add button without the dark square backing.
+
+What to test:
+- Open a busy room and confirm consecutive messages are visually grouped.
+- Swipe left on a grouped message to reveal its timestamp.
+- Confirm avatars populate without signing out and back in.
+- On macOS, confirm the add button has no dark square behind it.
