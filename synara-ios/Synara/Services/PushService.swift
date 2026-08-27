@@ -25,16 +25,29 @@ enum SynaraNotificationActionContract {
         // approval requires an explicit in-app confirmation path. Keep the two
         // time-critical decisions first for compact notification surfaces;
         // tapping the notification body remains the primary Review path.
-        let actions = [
+        let category = UNNotificationCategory(
+            identifier: agentApprovalCategoryIdentifier,
+            actions: agentApprovalActions(),
+            intentIdentifiers: [],
+            options: []
+        )
+        center.setNotificationCategories([category])
+    }
+
+    static func agentApprovalActions() -> [UNNotificationAction] {
+        [
             UNNotificationAction(
                 identifier: approveOnceIdentifier,
                 title: "Approve once",
-                options: [.authenticationRequired]
+                // Native Matrix approval is an authenticated store mutation.
+                // Bring the app to foreground first so UIKit foreground
+                // authority—not a notification wake—owns store open/use.
+                options: [.authenticationRequired, .foreground]
             ),
             UNNotificationAction(
                 identifier: denyIdentifier,
                 title: "Deny",
-                options: [.authenticationRequired, .destructive]
+                options: [.authenticationRequired, .destructive, .foreground]
             ),
             UNNotificationAction(
                 identifier: reviewIdentifier,
@@ -42,14 +55,6 @@ enum SynaraNotificationActionContract {
                 options: [.foreground]
             )
         ]
-
-        let category = UNNotificationCategory(
-            identifier: agentApprovalCategoryIdentifier,
-            actions: actions,
-            intentIdentifiers: [],
-            options: []
-        )
-        center.setNotificationCategories([category])
     }
 
     /// Plans how a native/push notification action should be handled.

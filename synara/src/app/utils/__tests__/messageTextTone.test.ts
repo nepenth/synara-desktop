@@ -65,9 +65,11 @@ test('increased contrast does not collapse explicit message tone choices', () =>
   );
 });
 
-test('native and compatibility message renderers consume the same foreground', () => {
+test('message renderers and composer consume the same foreground', () => {
   const nativeCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
   const compatibilityCss = readFileSync('src/app/components/message/layout/layout.css.ts', 'utf8');
+  const composerCss = readFileSync('src/app/components/editor/Editor.css.ts', 'utf8');
   assert.match(nativeCss, /color: 'var\(--synara-message-foreground\)'/);
   assert.match(compatibilityCss, /color: 'var\(--synara-message-foreground\)'/);
+  assert.match(composerCss, /color: 'var\(--synara-message-foreground\)'/);
 });

@@ -289,6 +289,63 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreColdBackgroundStartDoesNotOpenStoresBeforeForegroundAuthority() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+
+        await service.start(session: session)
+        XCTAssertEqual(service.syncStatus, .stopped)
+
+        await service.resumeFromForeground(session: session)
+        XCTAssertEqual(service.syncStatus, .restoreFailed)
+    }
+
+    func testSharedCoreColdBackgroundPauseWithoutOwnersStaysStopped() async {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+
+        await service.pauseForBackground()
+
+        XCTAssertEqual(service.syncStatus, .stopped)
+    }
+
+    func testSharedCoreSessionStopDoesNotRevokeForegroundAuthorityForRelogin() async throws {
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let service = SharedCoreMatrixClientService(host: host)
+        let session = AuthenticatedSession(
+            userID: "@alice:example.org",
+            deviceID: "DEVICE",
+            homeserverURL: try XCTUnwrap(URL(string: "https://matrix.example.org")),
+            accessToken: "syt_secret_token"
+        )
+
+        service.setForegroundActive(true)
+        await service.start(session: session)
+        XCTAssertEqual(service.syncStatus, .restoreFailed)
+
+        await service.stop()
+        await service.start(session: session)
+        XCTAssertEqual(service.syncStatus, .restoreFailed)
+    }
+
     func testSharedCoreStartSyncWithoutAttachFailsClosed() async {
         let core = SharedCore()
 

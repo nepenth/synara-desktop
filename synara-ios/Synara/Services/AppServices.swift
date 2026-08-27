@@ -60,6 +60,9 @@ protocol MatrixClientServicing: AnyObject {
     /// client. Must not create or repair a crypto store during local wipe.
     func revokeServerSession(_ session: AuthenticatedSession) async -> Bool
     func stop() async
+    /// Synchronously records UIKit's foreground authority before any queued
+    /// startup or shutdown task can touch the native stores.
+    func setForegroundActive(_ active: Bool)
     func pauseForBackground() async
     func resumeFromForeground(session: AuthenticatedSession) async
     func syncForBackgroundNotification(session: AuthenticatedSession) async -> Bool
@@ -806,6 +809,12 @@ final class PlaceholderMatrixClientService: MatrixClientServicing {
         syncStatus = .stopped
     }
 
+    func setForegroundActive(_ active: Bool) {
+        if active == false {
+            syncStatus = .stopped
+        }
+    }
+
     func pauseForBackground() async {
         syncStatus = .stopped
     }
@@ -1246,10 +1255,15 @@ final class MockMatrixClientService: MatrixClientServicing {
 
     private(set) var pauseCallCount = 0
     private(set) var resumeCallCount = 0
+    private(set) var foregroundActivity: [Bool] = []
     private(set) var resumedSessions: [AuthenticatedSession] = []
     private(set) var backgroundSyncCallCount = 0
     var backgroundSyncResult = false
     var pauseDelayNanoseconds: UInt64 = 0
+
+    func setForegroundActive(_ active: Bool) {
+        foregroundActivity.append(active)
+    }
 
     func pauseForBackground() async {
         onOperation?("matrix-pause-begin")

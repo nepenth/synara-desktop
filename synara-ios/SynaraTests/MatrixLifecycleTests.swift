@@ -54,6 +54,40 @@ final class MatrixLifecycleTests: XCTestCase {
     }
 
     @MainActor
+    func testSequentialDuplicateBackgroundCallbacksDoNotRecloseStores() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+
+        coordinator.enterBackground(application: application, matrix: matrix)
+        try await waitUntil { coordinator.hasPendingPause == false }
+        coordinator.enterBackground(application: application, matrix: matrix)
+        try await Task.sleep(nanoseconds: 20_000_000)
+
+        XCTAssertEqual(matrix.pauseCallCount, 1)
+        XCTAssertEqual(application.beginNames.count, 1)
+        XCTAssertEqual(application.endedIdentifiers, [application.issuedIdentifier])
+    }
+
+    @MainActor
+    func testBackgroundBindQuiescesServiceBeforeDeferredShellStartup() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+
+        coordinator.bind(
+            application: application,
+            matrix: matrix,
+            foregroundActive: false
+        )
+
+        try await waitUntil { coordinator.hasPendingPause == false }
+        XCTAssertEqual(matrix.foregroundActivity, [false])
+        XCTAssertEqual(matrix.pauseCallCount, 1)
+        XCTAssertEqual(application.endedIdentifiers, [application.issuedIdentifier])
+    }
+
+    @MainActor
     func testBackgroundCoordinatorDoesNotRestartOnInitialActivation() async throws {
         let matrix = MockMatrixClientService(syncStatus: .syncing)
         let coordinator = SynaraBackgroundSyncCoordinator()
@@ -63,6 +97,23 @@ final class MatrixLifecycleTests: XCTestCase {
         try await Task.sleep(nanoseconds: 20_000_000)
 
         XCTAssertEqual(matrix.resumeCallCount, 0)
+    }
+
+    @MainActor
+    func testForegroundBindRestoresAuthorityAfterPreBindActivation() async throws {
+        let matrix = MockMatrixClientService(syncStatus: .stopped)
+        let application = MockBackgroundTaskManager()
+        let coordinator = SynaraBackgroundSyncCoordinator()
+
+        coordinator.bind(
+            application: application,
+            matrix: matrix,
+            foregroundActive: true
+        )
+
+        XCTAssertEqual(matrix.foregroundActivity, [true])
+        XCTAssertEqual(matrix.pauseCallCount, 0)
+        XCTAssertTrue(application.beginNames.isEmpty)
     }
 
     @MainActor
