@@ -1509,12 +1509,17 @@ final class TimelineServiceTests: XCTestCase {
     }
 
     func testMessageGroupingUsesTwoHourWindowAndSenderBoundary() {
+        let calendar = Calendar.current
+        let baseDate = calendar.date(
+            from: DateComponents(year: 2026, month: 8, day: 27, hour: 12)
+        )!
+
         func item(sender: String, offset: TimeInterval) -> TimelineItem {
             TimelineItem(
                 id: "\(sender)-\(offset)",
                 eventID: "\(sender)-\(offset)",
                 senderID: sender,
-                timestamp: TimelineFixtures.baseDate.addingTimeInterval(offset),
+                timestamp: baseDate.addingTimeInterval(offset),
                 kind: .text("Message"),
                 replyToEventID: nil,
                 isEdited: false,
@@ -1540,6 +1545,12 @@ final class TimelineServiceTests: XCTestCase {
                 previous: first,
                 current: item(sender: "@bob:matrix.org", offset: 1)
             )
+        )
+
+        let late = item(sender: "@alice:matrix.org", offset: 11.5 * 60 * 60)
+        let afterMidnight = item(sender: "@alice:matrix.org", offset: 12.5 * 60 * 60)
+        XCTAssertFalse(
+            TimelineMessageGroupingPolicy.shouldGroup(previous: late, current: afterMidnight)
         )
     }
 
