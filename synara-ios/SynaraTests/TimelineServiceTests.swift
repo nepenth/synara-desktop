@@ -1508,6 +1508,41 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(enrichedItem.isLocalPending)
     }
 
+    func testMessageGroupingUsesTwoHourWindowAndSenderBoundary() {
+        func item(sender: String, offset: TimeInterval) -> TimelineItem {
+            TimelineItem(
+                id: "\(sender)-\(offset)",
+                eventID: "\(sender)-\(offset)",
+                senderID: sender,
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(offset),
+                kind: .text("Message"),
+                replyToEventID: nil,
+                isEdited: false,
+                reactions: [:]
+            )
+        }
+
+        let first = item(sender: "@alice:matrix.org", offset: 0)
+        XCTAssertTrue(
+            TimelineMessageGroupingPolicy.shouldGroup(
+                previous: first,
+                current: item(sender: "@alice:matrix.org", offset: 2 * 60 * 60 - 1)
+            )
+        )
+        XCTAssertFalse(
+            TimelineMessageGroupingPolicy.shouldGroup(
+                previous: first,
+                current: item(sender: "@alice:matrix.org", offset: 2 * 60 * 60)
+            )
+        )
+        XCTAssertFalse(
+            TimelineMessageGroupingPolicy.shouldGroup(
+                previous: first,
+                current: item(sender: "@bob:matrix.org", offset: 1)
+            )
+        )
+    }
+
     func testPendingReconcilerPreservesAuthoritativeServerVectorOrder() {
         func item(_ id: String, offset: TimeInterval) -> Synara.TimelineItem {
             Synara.TimelineItem(

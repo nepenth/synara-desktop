@@ -1088,13 +1088,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     composerToolsAnchor ? undefined : event.currentTarget.getBoundingClientRect()
                   )
                 }
-                variant="SurfaceVariant"
+                variant="Surface"
                 size="300"
-                radii="300"
+                radii="Pill"
                 aria-label="More message actions"
                 aria-expanded={!!composerToolsAnchor}
               >
-                <Icon src={Icons.PlusCircle} />
+                <Icon src={Icons.Plus} size="100" />
               </IconButton>
             </PopOut>
           }
