@@ -1213,10 +1213,6 @@ private struct SecuritySettingsView: View {
                     .accessibilityIdentifier("SecurityMatrixSDKRow")
                 SettingsInfoRow(title: "Device Verification", value: sessionCrypto.status.verification.settingsDisplayName)
                     .accessibilityIdentifier("SecurityDeviceVerificationRow")
-                    // Keep the machine-readable proof value separate from the
-                    // human label. An exact value predicate cannot confuse
-                    // "Unverified" with "Verified".
-                    .accessibilityValue(sessionCrypto.status.verification.settingsDisplayName)
                 SettingsInfoRow(title: "Key Recovery", value: sessionCrypto.status.recovery.settingsDisplayName)
                     .accessibilityIdentifier("SecurityKeyRecoveryRow")
                 SettingsInfoRow(title: "Key Backup", value: sessionCrypto.status.backup.settingsDisplayName)
@@ -1333,7 +1329,11 @@ private struct SettingsInfoRow: View {
                 .textSelection(.enabled)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title), \(value)")
+        // Keep the human title and machine-readable state separate. Besides
+        // producing a clearer VoiceOver announcement, exact value predicates
+        // cannot confuse states such as "Unverified" with "Verified".
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 
