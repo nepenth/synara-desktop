@@ -39,6 +39,17 @@ pub struct NativeDeviceSummary {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeDeviceSnapshot {
     pub session_generation: u64,
+    /// Matrix SDK's authoritative cross-signing state for this exact device.
+    ///
+    /// This is intentionally separate from the current row's local trust. A
+    /// direct SAS can make the peer locally trusted without the user's
+    /// cross-signing identity signing this device.
+    pub own_verification: NativeOwnDeviceVerification,
+    /// Whether the SDK found an eligible, cross-signed peer authority for
+    /// verifying this device. `None` means the initial key query failed and is
+    /// deliberately not collapsed to "no authority". This is not inferred
+    /// from local row trust.
+    pub has_devices_to_verify_against: Option<bool>,
     pub devices: Vec<NativeDeviceSummary>,
 }
 
@@ -48,6 +59,14 @@ impl NativeDeviceSnapshot {
             .iter()
             .any(|device| device.device_id == device_id)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeOwnDeviceVerification {
+    Unknown,
+    Unverified,
+    Verified,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
@@ -96,6 +115,8 @@ mod tests {
     fn snapshot_projection_contains_presentation_fields_but_no_device_keys() {
         let snapshot = NativeDeviceSnapshot {
             session_generation: 7,
+            own_verification: NativeOwnDeviceVerification::Verified,
+            has_devices_to_verify_against: Some(true),
             devices: vec![NativeDeviceSummary {
                 device_id: "DEVICE".into(),
                 display_name: Some("Synara macOS".into()),
@@ -133,6 +154,32 @@ mod tests {
     }
 
     #[test]
+    fn verification_authority_query_failure_remains_unknown() {
+        let snapshot = NativeDeviceSnapshot {
+            session_generation: 1,
+            own_verification: NativeOwnDeviceVerification::Unknown,
+            has_devices_to_verify_against: None,
+            devices: Vec::new(),
+        };
+        let value = serde_json::to_value(snapshot).expect("serialize unknown authority");
+        assert!(value["hasDevicesToVerifyAgainst"].is_null());
+    }
+
+    #[test]
+    fn authority_query_is_recoverable_metadata_not_a_snapshot_failure() {
+        let source = include_str!("live.rs");
+        let snapshot = source
+            .split("pub async fn snapshot(\n")
+            .nth(1)
+            .and_then(|rest| rest.split("pub fn supported_delete_authentication").next())
+            .expect("device snapshot owner");
+        assert!(snapshot.contains("has_devices_to_verify_against()"));
+        assert!(snapshot.contains("Duration::from_secs(8)"));
+        assert!(snapshot.contains("Ok(Err(_)) | Err(_) => None"));
+        assert!(!snapshot.contains("device-verification-state-failed"));
+    }
+
+    #[test]
     fn sort_puts_current_first_then_recent_then_id() {
         let mut devices = vec![
             NativeDeviceSummary {
@@ -166,6 +213,8 @@ mod tests {
         assert_eq!(devices[2].device_id, "B");
         assert!(NativeDeviceSnapshot {
             session_generation: 1,
+            own_verification: NativeOwnDeviceVerification::Unverified,
+            has_devices_to_verify_against: Some(false),
             devices,
         }
         .contains("CUR"));

@@ -14,6 +14,8 @@ export type NativeDevice = {
 
 export type NativeDeviceSnapshot = {
   sessionGeneration: number;
+  ownVerification: 'unknown' | 'unverified' | 'verified';
+  hasDevicesToVerifyAgainst: boolean | null;
   devices: NativeDevice[];
 };
 

@@ -306,6 +306,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
 
   return (
     <NavItem
+      className={css.RoomSurface}
       variant="Surface"
       radii="300"
       highlight={unread !== undefined}

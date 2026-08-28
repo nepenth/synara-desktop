@@ -34,6 +34,20 @@
   --synara-table-odd: #ffffff;
   --synara-table-even: #f5f6f8;
   --synara-table-hover: #eceef1;
+
+  /* Quiet depth is theme-aware so pale surfaces keep a visible lower edge. */
+  --synara-depth-edge-top: rgba(255, 255, 255, 0.76);
+  --synara-depth-edge-top-strong: rgba(255, 255, 255, 0.82);
+  --synara-depth-edge-bottom: rgba(17, 19, 24, 0.16);
+  --synara-depth-shadow-near: rgba(17, 19, 24, 0.15);
+  --synara-depth-shadow-far: rgba(17, 19, 24, 0.08);
+  --synara-depth-surface-highlight: rgba(255, 255, 255, 0.34);
+  --synara-depth-surface-shade: rgba(17, 19, 24, 0.025);
+  --synara-depth-avatar-boundary: rgba(17, 19, 24, 0.24);
+  --synara-depth-rest-edge: rgba(17, 19, 24, 0.08);
+  --synara-depth-avatar-shadow: rgba(17, 19, 24, 0.08);
+  --synara-depth-contrast-edge: #555b64;
+  --synara-depth-contrast-strong-edge: #111318;
 }
 
 .dark-theme,
@@ -63,6 +77,20 @@
   --synara-table-odd: #202226;
   --synara-table-even: #26292e;
   --synara-table-hover: #2d3036;
+
+  /* Dark surfaces need edge light as well as occlusion; black shadow alone disappears. */
+  --synara-depth-edge-top: rgba(255, 255, 255, 0.15);
+  --synara-depth-edge-top-strong: rgba(255, 255, 255, 0.18);
+  --synara-depth-edge-bottom: rgba(0, 0, 0, 0.58);
+  --synara-depth-shadow-near: rgba(0, 0, 0, 0.58);
+  --synara-depth-shadow-far: rgba(0, 0, 0, 0.34);
+  --synara-depth-surface-highlight: rgba(255, 255, 255, 0.055);
+  --synara-depth-surface-shade: rgba(0, 0, 0, 0.08);
+  --synara-depth-avatar-boundary: rgba(255, 255, 255, 0.22);
+  --synara-depth-rest-edge: rgba(255, 255, 255, 0.045);
+  --synara-depth-avatar-shadow: rgba(0, 0, 0, 0.2);
+  --synara-depth-contrast-edge: #aeb4bd;
+  --synara-depth-contrast-strong-edge: #eef0f3;
 }
 
 html {

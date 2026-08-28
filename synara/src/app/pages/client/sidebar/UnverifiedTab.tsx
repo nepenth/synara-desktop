@@ -14,11 +14,12 @@ import { Modal500 } from '../../../components/Modal500';
 import { Settings, SettingsPages } from '../../../features/settings';
 
 function UnverifiedIndicator() {
-  const [devices] = useDeviceList();
+  const [deviceSnapshot] = useDeviceList();
+  const devices = deviceSnapshot?.devices;
 
-  const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
+  const [, otherDevices] = useSplitCurrentDevice(devices);
 
-  const unverified = currentDevice?.trust === 'unverified';
+  const unverified = deviceSnapshot?.ownVerification === 'unverified';
   const unverifiedDeviceCount =
     otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
 

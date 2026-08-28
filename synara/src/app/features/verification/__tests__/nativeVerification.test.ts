@@ -21,10 +21,10 @@ const request = (
 
 test('SAS start projection follows Matrix request ownership', () => {
   assert.equal(verificationRequestNeedsSasStart(request('outgoing', 'ready')), true);
-  assert.equal(verificationRequestNeedsSasStart(request('incoming', 'started')), true);
+  assert.equal(verificationRequestNeedsSasStart(request('incoming', 'started')), false);
   assert.equal(verificationRequestNeedsSasStart(request('incoming', 'ready')), false);
   assert.equal(verificationRequestNeedsSasStart(request('outgoing', 'requested')), false);
-  assert.equal(verificationRequestNeedsSasStart(request('outgoing', 'sas_ready')), true);
+  assert.equal(verificationRequestNeedsSasStart(request('outgoing', 'sas_ready')), false);
   assert.equal(
     verificationRequestNeedsSasStart({
       ...request('outgoing', 'sas_ready'),
@@ -76,6 +76,7 @@ test('inbox keeps the in-progress flow instead of always taking requests[0]', ()
   };
   const done = { ...request('outgoing', 'done'), flowId: 'done' };
   assert.equal(isNativeVerificationTerminal('done'), true);
+  assert.equal(isNativeVerificationTerminal('failed'), true);
   assert.equal(isNativeVerificationTerminal('sas_ready'), false);
   assert.equal(selectNativeVerificationRequest([incoming, sas])?.flowId, 'incoming');
   assert.equal(selectNativeVerificationRequest([incoming, sas], 'sas')?.flowId, 'sas');

@@ -225,7 +225,8 @@ export function NativeDeviceVerification({
       if (
         request.phase === 'done' ||
         request.phase === 'mismatched' ||
-        request.phase === 'cancelled'
+        request.phase === 'cancelled' ||
+        request.phase === 'failed'
       ) {
         await dismissNativeVerification(request.flowId);
       } else {
@@ -283,7 +284,9 @@ export function NativeDeviceVerification({
                 ) : (
                   <Waiting>Starting secure comparison…</Waiting>
                 ))}
-              {request.phase === 'started' && <Waiting>Preparing comparison codes…</Waiting>}
+              {(request.phase === 'started' || request.phase === 'keys_exchanging') && (
+                <Waiting>Preparing comparison codes…</Waiting>
+              )}
               {request.phase === 'sas_ready' && (
                 <NativeSas request={request} update={setRequest} fail={() => setError(true)} />
               )}
@@ -309,6 +312,16 @@ export function NativeDeviceVerification({
               {request.phase === 'mismatched' && (
                 <>
                   <Text>The security codes did not match. Verification was canceled safely.</Text>
+                  <Button variant="Secondary" fill="Soft" onClick={() => void close()}>
+                    <Text size="B400">Close</Text>
+                  </Button>
+                </>
+              )}
+              {request.phase === 'failed' && (
+                <>
+                  <Text>
+                    Verification stopped because the secure comparison could not be accepted.
+                  </Text>
                   <Button variant="Secondary" fill="Soft" onClick={() => void close()}>
                     <Text size="B400">Close</Text>
                   </Button>

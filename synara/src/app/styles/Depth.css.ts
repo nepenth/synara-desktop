@@ -6,18 +6,36 @@ import { color, config, toRem } from 'folds';
  * upper plane and soft occlusion separates it from the surface beneath. Text
  * never receives depth directly.
  */
-export const quietEdgeLight = 'rgba(255, 255, 255, 0.1)';
-export const quietEdgeLightStrong = 'rgba(255, 255, 255, 0.16)';
-export const quietShadowNear = `color-mix(in srgb, ${color.Other.Shadow} 48%, transparent)`;
-export const quietShadowFar = `color-mix(in srgb, ${color.Other.Shadow} 28%, transparent)`;
+export const quietEdgeLight = 'var(--synara-depth-edge-top)';
+const quietEdgeLightStrong = 'var(--synara-depth-edge-top-strong)';
+const quietEdgeDark = 'var(--synara-depth-edge-bottom)';
+const quietShadowNear = 'var(--synara-depth-shadow-near)';
+const quietShadowFar = 'var(--synara-depth-shadow-far)';
+const quietRestEdge = 'var(--synara-depth-rest-edge)';
+const quietAvatarShadow = 'var(--synara-depth-avatar-shadow)';
 
-export const raisedShadow = `inset 0 1px 0 ${quietEdgeLight}, 0 ${toRem(1)} ${toRem(
-  2
-)} ${quietShadowNear}, 0 ${toRem(4)} ${toRem(12)} ${quietShadowFar}`;
+/**
+ * A tiny opaque tonal fold makes depth legible even on near-black WebKit/WebView
+ * surfaces, where a conventional black drop shadow has no visible contrast.
+ */
+export const quietSurfaceFold = `linear-gradient(180deg, var(--synara-depth-surface-highlight), var(--synara-depth-surface-shade))`;
 
-export const floatingShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, 0 ${toRem(2)} ${toRem(
-  4
-)} ${quietShadowNear}, 0 ${toRem(10)} ${toRem(28)} ${quietShadowFar}`;
+/**
+ * Resting collection content stays on the reading plane. This single inner
+ * edge is intentionally below card-level contrast; elevation arrives only
+ * when an item is selected, hovered, or focused.
+ */
+export const restingInnerEdge = `inset 0 1px 0 ${quietRestEdge}`;
+
+export const raisedShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, inset 0 -1px 0 ${quietEdgeDark}, 0 ${toRem(
+  1
+)} ${toRem(3)} color-mix(in srgb, ${quietShadowNear} 72%, transparent), 0 ${toRem(3)} ${toRem(
+  8
+)} color-mix(in srgb, ${quietShadowFar} 68%, transparent)`;
+
+export const floatingShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, inset 0 -1px 0 ${quietEdgeDark}, 0 ${toRem(
+  3
+)} ${toRem(7)} ${quietShadowNear}, 0 ${toRem(12)} ${toRem(30)} ${quietShadowFar}`;
 
 export const criticalShadow = `inset 0 1px 0 ${quietEdgeLightStrong}, 0 ${toRem(3)} ${toRem(
   8
@@ -29,20 +47,16 @@ const accessibilityFallbacks = {
       backdropFilter: 'none',
     },
     '(prefers-contrast: more)': {
+      backgroundImage: 'none',
       boxShadow: 'none',
-      borderColor: color.Surface.OnContainer,
+      borderColor: 'var(--synara-depth-contrast-strong-edge)',
     },
   },
 } as const;
 
-export const raisedSurface = style({
-  border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
-  boxShadow: raisedShadow,
-  ...accessibilityFallbacks,
-});
-
 export const floatingSurface = style({
   backgroundColor: `color-mix(in srgb, ${color.SurfaceVariant.Container} 96%, transparent)`,
+  backgroundImage: quietSurfaceFold,
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   boxShadow: floatingShadow,
   backdropFilter: 'blur(18px) saturate(1.08)',
@@ -52,8 +66,9 @@ export const floatingSurface = style({
       backdropFilter: 'none',
     },
     '(prefers-contrast: more)': {
+      backgroundImage: 'none',
       boxShadow: 'none',
-      borderColor: color.Surface.OnContainer,
+      borderColor: 'var(--synara-depth-contrast-strong-edge)',
     },
   },
 });
@@ -64,22 +79,22 @@ export const criticalSurface = style({
 });
 
 export const avatarSurface = style({
-  boxShadow: `0 ${toRem(1)} ${toRem(2)} ${quietShadowNear}, 0 ${toRem(3)} ${toRem(
-    8
-  )} ${quietShadowFar}`,
+  boxShadow: `inset 0 0 0 ${config.borderWidth.B300} var(--synara-depth-avatar-boundary), 0 ${toRem(
+    1
+  )} ${toRem(2)} ${quietAvatarShadow}`,
   '@media': {
     '(prefers-contrast: more)': {
-      boxShadow: 'none',
+      boxShadow: `inset 0 0 0 ${config.borderWidth.B300} var(--synara-depth-contrast-edge)`,
     },
   },
 });
 
 export const avatarMedia = style({
-  outline: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
+  outline: `${config.borderWidth.B300} solid var(--synara-depth-avatar-boundary)`,
   outlineOffset: `calc(-1 * ${config.borderWidth.B300})`,
   '@media': {
     '(prefers-contrast: more)': {
-      outlineColor: color.Surface.OnContainer,
+      outlineColor: 'var(--synara-depth-contrast-strong-edge)',
     },
   },
 });

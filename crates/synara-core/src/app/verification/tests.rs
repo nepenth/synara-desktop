@@ -3,7 +3,12 @@
 use super::*;
 use crate::app::sync::{build_sync_service, SyncServiceConfig};
 use crate::transport::MatrixIpcErrorCategory;
-use matrix_sdk::Client;
+use matrix_sdk::{
+    encryption::VerificationState,
+    ruma::api::client::uiaa::{AuthData, AuthType, MatrixUserIdentifier, Password, UserIdentifier},
+    store::RoomLoadSettings,
+    Client,
+};
 use std::{path::PathBuf, time::Duration};
 
 fn flow(id: &str, phase: VerificationPhase) -> VerificationFlow {
@@ -165,30 +170,48 @@ fn retire_generation() {
 }
 
 #[test]
-fn self_verification_start_prefers_a_trusted_peer_then_identity_then_any_peer() {
+fn self_verification_start_uses_the_own_identity_and_never_substitutes_peer_trust() {
     let source = include_str!("live.rs");
     assert!(source.contains("fn start_self_verification"));
     assert!(source.contains("query_own_identity"));
-    assert!(source.contains("get_user_devices"));
-    assert!(source.contains("is_verified_with_cross_signing"));
-    assert!(source.contains("v-crypto.1-no-peer-device"));
     let helper = source
         .split("async fn start_self_verification")
         .nth(1)
         .and_then(|rest| rest.split("async fn register_incoming_request").next())
         .expect("start_self_verification helper");
-    let trusted_peer = helper
-        .find("is_verified_with_cross_signing")
-        .expect("trusted peer first");
-    let identity = helper
-        .find("query_own_identity")
-        .expect("identity fallback");
-    let any_peer = helper
-        .find("peers.first()")
-        .expect("unverified peer fallback");
+    assert!(helper.contains("query_own_identity"));
+    assert!(helper.contains("v-crypto.1-own-identity-not-found"));
+    assert!(helper.contains("request_verification_with_methods"));
+    assert!(!helper.contains("get_user_devices"));
+}
+
+#[test]
+fn transitioned_sas_is_owner_accepted_for_both_directions_and_confirmed_is_stable() {
+    let source = include_str!("live.rs");
+    let watcher = source
+        .split("async fn watch_request")
+        .nth(1)
+        .and_then(|rest| rest.split("fn project_request").next())
+        .expect("verification watcher");
+    assert!(watcher.contains("accept_transitioned_sas(&flow_id, sas).await"));
+    assert!(watcher.contains("managed.owner_failed |= accept_failed"));
+    assert!(watcher.contains("sas_owner_accept_failed"));
+    assert!(!watcher.contains("NativeVerificationDirection"));
+
+    let projection = source
+        .split("fn project_request")
+        .nth(1)
+        .and_then(|rest| rest.split("fn refresh_sas").next())
+        .expect("verification projection");
+    let confirmed = projection
+        .find("SasState::Confirmed")
+        .expect("confirmed projection");
+    let presentable = projection
+        .find("sas.can_be_presented()")
+        .expect("SAS projection");
     assert!(
-        trusted_peer < identity && identity < any_peer,
-        "trusted peer, own identity, and unverified peer must stay in authority order"
+        confirmed < presentable,
+        "Confirmed must not regress to Started"
     );
 }
 
@@ -218,7 +241,7 @@ fn live_verification_diagnostics_use_an_opaque_flow_tag() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 #[ignore = "requires SYNARA_LIVE_HOMESERVER, SYNARA_LIVE_USERNAME, and SYNARA_LIVE_PASSWORD"]
-async fn live_two_device_sas_completes_through_product_owner_and_sync() {
+async fn live_direct_peer_sas_transport_completes_through_product_owner_and_sync() {
     let homeserver =
         std::env::var("SYNARA_LIVE_HOMESERVER").expect("SYNARA_LIVE_HOMESERVER is required");
     let username = std::env::var("SYNARA_LIVE_USERNAME").expect("SYNARA_LIVE_USERNAME is required");
@@ -257,11 +280,19 @@ async fn live_two_device_sas_completes_through_product_owner_and_sync() {
         .device_id()
         .expect("responder device id")
         .to_string();
+    let initiator_device = initiator
+        .device_id()
+        .expect("initiator device id")
+        .to_string();
+    // The crypto state machine must know both endpoints before the request.
+    // Seeing only the target from the initiator is insufficient: the responder
+    // drops an incoming request whose sender device key is not in its store.
     wait_for_live_device(&initiator, &responder_device).await;
+    wait_for_live_device(&responder, &initiator_device).await;
     let started = initiator_owner
         .start(Some(responder_device.clone()))
         .await
-        .expect("verification request");
+        .expect("direct peer verification request");
     let flow_id = started.flow_id;
     wait_for_live_phase(
         &responder_owner,
@@ -278,12 +309,10 @@ async fn live_two_device_sas_completes_through_product_owner_and_sync() {
         .begin_sas(&flow_id)
         .await
         .expect("initiator starts SAS");
-    wait_for_live_phase(&responder_owner, &flow_id, NativeVerificationPhase::Started).await;
-    responder_owner
-        .begin_sas(&flow_id)
-        .await
-        .expect("responder accepts SAS");
 
+    // Owner acceptance can coalesce Started into Accepted/KeysExchanged before
+    // a polling client samples it. SasReady is the first required stable
+    // presentation state; do not turn an unobservable transient into a gate.
     let initiator_sas = wait_for_live_phase(
         &initiator_owner,
         &flow_id,
@@ -336,6 +365,12 @@ async fn live_two_device_sas_completes_through_product_owner_and_sync() {
         crate::app::devices::NativeDeviceTrust::Verified,
         "product trust projection must preserve direct SAS verification"
     );
+    // This fixture intentionally proves only direct-peer SAS transport. Two
+    // fresh sessions are not eligible authorities for the SDK own-identity
+    // route, and peer trust must never be reported as proof that the current
+    // device became cross-signed. The production proof separately requires
+    // `DeviceSnapshot::own_verification == Verified` after a nil-target request
+    // to an already cross-signed authority session.
 
     initiator_sync.stop().await.expect("initiator sync stop");
     responder_sync.stop().await.expect("responder sync stop");
@@ -350,6 +385,315 @@ async fn live_two_device_sas_completes_through_product_owner_and_sync() {
         .await
         .expect("responder logout");
     std::fs::remove_dir_all(&proof_root).expect("remove disposable proof stores");
+}
+
+/// Full production-route proof for current-device verification.
+///
+/// The responder store is intentionally durable across proof runs. If the
+/// account has no published cross-signing identity, the first run bootstraps
+/// one through password UIA and persists its private identity. If an identity
+/// already exists but this store does not contain its matching private keys,
+/// the proof fails rather than replacing the account's real authority.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+#[ignore = "requires authorized SYNARA_LIVE_* credentials and mutates test-account cross-signing/device state"]
+async fn live_own_device_verification_is_authoritative_and_durable() {
+    let homeserver =
+        std::env::var("SYNARA_LIVE_HOMESERVER").expect("SYNARA_LIVE_HOMESERVER is required");
+    let username = std::env::var("SYNARA_LIVE_USERNAME").expect("SYNARA_LIVE_USERNAME is required");
+    let password = std::env::var("SYNARA_LIVE_PASSWORD").expect("SYNARA_LIVE_PASSWORD is required");
+    let authority_root = live_authority_root(&homeserver, &username);
+    let authority_store = authority_root.join("responder-store");
+    let authority_device_file = authority_root.join("responder-device-id");
+    let authority_store_preexisted = authority_store.exists();
+    let persisted_device_id = std::fs::read_to_string(&authority_device_file)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty());
+    assert!(
+        !authority_store_preexisted || persisted_device_id.is_some(),
+        "persisted authority store is missing its non-secret device metadata"
+    );
+    std::fs::create_dir_all(&authority_root).expect("create durable authority proof root");
+
+    let responder = live_proof_client(&homeserver, authority_store).await;
+    let responder_login = responder
+        .matrix_auth()
+        .login_username(&username, &password)
+        .initial_device_display_name("Synara persisted verification authority");
+    let responder_login = match persisted_device_id.as_deref() {
+        Some(device_id) => responder_login.device_id(device_id),
+        None => responder_login,
+    };
+    responder_login
+        .send()
+        .await
+        .expect("persisted responder login");
+    let responder_device_id = responder
+        .device_id()
+        .expect("persisted responder device id")
+        .to_string();
+    std::fs::write(&authority_device_file, &responder_device_id)
+        .expect("persist responder device metadata");
+
+    let responder_owner = NativeVerificationOwner::new(&responder, 1);
+    let responder_sync = build_sync_service(&responder, 1, SyncServiceConfig::default())
+        .await
+        .expect("responder sync build");
+    responder_sync.start().await.expect("responder sync start");
+    ensure_live_responder_authority(&responder, &password).await;
+    eprintln!("synara_own_device_proof checkpoint=responder_authority_verified");
+
+    let initiator_root = live_proof_root();
+    let initiator_store = initiator_root.join("initiator-store");
+    let initiator = live_proof_client(&homeserver, initiator_store.clone()).await;
+    initiator
+        .matrix_auth()
+        .login_username(&username, &password)
+        .initial_device_display_name("Synara fresh OwnIdentity proof initiator")
+        .send()
+        .await
+        .expect("fresh initiator login");
+    let initiator_session = initiator
+        .matrix_auth()
+        .session()
+        .expect("fresh initiator Matrix session");
+    let initiator_owner = NativeVerificationOwner::new(&initiator, 1);
+    let initiator_sync = build_sync_service(&initiator, 1, SyncServiceConfig::default())
+        .await
+        .expect("initiator sync build");
+    initiator_sync.start().await.expect("initiator sync start");
+
+    let initiator_device_id = initiator
+        .device_id()
+        .expect("fresh initiator device id")
+        .to_string();
+    wait_for_live_device(&initiator, &responder_device_id).await;
+    wait_for_live_device(&responder, &initiator_device_id).await;
+    wait_for_fresh_initiator_authority(&initiator).await;
+    eprintln!("synara_own_device_proof checkpoint=fresh_initiator_eligible");
+
+    // The nil target is the actual product route. Supplying the responder
+    // device id here would prove only direct peer trust and is disqualifying.
+    let started = initiator_owner
+        .start(None)
+        .await
+        .expect("OwnUserIdentity verification request");
+    let flow_id = started.flow_id;
+    wait_for_live_phase(
+        &responder_owner,
+        &flow_id,
+        NativeVerificationPhase::Requested,
+    )
+    .await;
+    responder_owner
+        .accept(&flow_id)
+        .await
+        .expect("authority accepts own-device request");
+    wait_for_live_phase(&initiator_owner, &flow_id, NativeVerificationPhase::Ready).await;
+    initiator_owner
+        .begin_sas(&flow_id)
+        .await
+        .expect("initiator starts SAS");
+
+    let initiator_sas = wait_for_live_phase(
+        &initiator_owner,
+        &flow_id,
+        NativeVerificationPhase::SasReady,
+    )
+    .await;
+    let responder_sas = wait_for_live_phase(
+        &responder_owner,
+        &flow_id,
+        NativeVerificationPhase::SasReady,
+    )
+    .await;
+    assert_eq!(
+        initiator_sas.sas, responder_sas.sas,
+        "OwnIdentity participants must present identical SAS"
+    );
+    eprintln!("synara_own_device_proof checkpoint=sas_matched");
+
+    initiator_owner
+        .confirm(&flow_id)
+        .await
+        .expect("initiator confirms SAS");
+    responder_owner
+        .confirm(&flow_id)
+        .await
+        .expect("authority confirms SAS");
+    wait_for_live_phase(&initiator_owner, &flow_id, NativeVerificationPhase::Done).await;
+    wait_for_live_phase(&responder_owner, &flow_id, NativeVerificationPhase::Done).await;
+    wait_for_live_verification_state(&initiator, VerificationState::Verified).await;
+    assert_eq!(
+        crate::app::devices::snapshot(&initiator, 1)
+            .await
+            .expect("initiator authoritative device snapshot")
+            .own_verification,
+        crate::app::devices::NativeOwnDeviceVerification::Verified
+    );
+    eprintln!("synara_own_device_proof checkpoint=initiator_verified");
+
+    initiator_sync.stop().await.expect("initiator sync stop");
+    drop(initiator_owner);
+    drop(initiator_sync);
+    drop(initiator);
+
+    // Rebuild the same product crypto store and restore the exact Matrix
+    // session. This is the durable owner readback, independent of the flow.
+    let rebuilt = live_proof_client(&homeserver, initiator_store).await;
+    rebuilt
+        .matrix_auth()
+        .restore_session(initiator_session, RoomLoadSettings::default())
+        .await
+        .expect("restore initiator session into rebuilt client");
+    let rebuilt_sync = build_sync_service(&rebuilt, 2, SyncServiceConfig::default())
+        .await
+        .expect("rebuilt initiator sync build");
+    rebuilt_sync
+        .start()
+        .await
+        .expect("rebuilt initiator sync start");
+    wait_for_live_verification_state(&rebuilt, VerificationState::Verified).await;
+    assert_eq!(
+        crate::app::devices::snapshot(&rebuilt, 2)
+            .await
+            .expect("rebuilt authoritative device snapshot")
+            .own_verification,
+        crate::app::devices::NativeOwnDeviceVerification::Verified
+    );
+    eprintln!("synara_own_device_proof checkpoint=rebuilt_store_verified");
+
+    rebuilt_sync
+        .stop()
+        .await
+        .expect("rebuilt initiator sync stop");
+    responder_sync.stop().await.expect("responder sync stop");
+    rebuilt
+        .matrix_auth()
+        .logout()
+        .await
+        .expect("dispose fresh initiator session");
+    std::fs::remove_dir_all(&initiator_root).expect("remove disposable initiator store");
+}
+
+async fn ensure_live_responder_authority(client: &Client, password: &str) {
+    let encryption = client.encryption();
+    let user_id = client.user_id().expect("responder user id");
+    let own_identity = encryption
+        .request_user_identity(user_id)
+        .await
+        .expect("query responder own identity");
+    let private_status = encryption.cross_signing_status().await;
+
+    if own_identity.is_some() {
+        assert!(
+            private_status.as_ref().is_some_and(|status| status.is_complete()),
+            "published cross-signing identity exists but the persisted responder lacks its private authority; refusing to replace it"
+        );
+    } else {
+        match encryption.bootstrap_cross_signing_if_needed(None).await {
+            Ok(()) => {}
+            Err(error) => {
+                let info = error
+                    .as_uiaa_response()
+                    .expect("cross-signing bootstrap did not return a UIA challenge");
+                assert!(
+                    info.flows.iter().any(|flow| {
+                        flow.stages.iter().all(|stage| {
+                            info.completed.contains(stage) || stage == &AuthType::Password
+                        })
+                    }),
+                    "cross-signing bootstrap does not offer a supported password UIA flow"
+                );
+                let session = info
+                    .session
+                    .clone()
+                    .expect("cross-signing password UIA session");
+                let mut auth = Password::new(
+                    UserIdentifier::Matrix(MatrixUserIdentifier::new(user_id.to_string())),
+                    password.to_owned(),
+                );
+                auth.session = Some(session);
+                encryption
+                    .bootstrap_cross_signing(Some(AuthData::Password(auth)))
+                    .await
+                    .expect("password-authorized cross-signing bootstrap");
+            }
+        }
+    }
+
+    wait_for_live_verification_state(client, VerificationState::Verified).await;
+    let status = encryption
+        .cross_signing_status()
+        .await
+        .expect("responder cross-signing private status");
+    assert!(
+        status.is_complete(),
+        "responder private authority is incomplete"
+    );
+    let identity = encryption
+        .request_user_identity(user_id)
+        .await
+        .expect("refresh responder own identity")
+        .expect("responder own identity after bootstrap");
+    assert!(
+        identity.is_verified(),
+        "responder own identity is not verified"
+    );
+}
+
+async fn wait_for_fresh_initiator_authority(client: &Client) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+    let user_id = client.user_id().expect("fresh initiator user id");
+    loop {
+        let _ = client.encryption().request_user_identity(user_id).await;
+        let state = client.encryption().verification_state().get();
+        assert_ne!(
+            state,
+            VerificationState::Verified,
+            "fresh initiator was already verified before the product action"
+        );
+        if state == VerificationState::Unverified
+            && matches!(
+                client.encryption().has_devices_to_verify_against().await,
+                Ok(true)
+            )
+        {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "fresh initiator did not discover an eligible verified authority"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+async fn wait_for_live_verification_state(client: &Client, expected: VerificationState) {
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
+    let user_id = client.user_id().expect("signed-in user");
+    loop {
+        let _ = client.encryption().request_user_identity(user_id).await;
+        if client.encryption().verification_state().get() == expected {
+            return;
+        }
+        assert!(
+            tokio::time::Instant::now() < deadline,
+            "authoritative current-device verification state did not converge"
+        );
+        tokio::time::sleep(Duration::from_millis(250)).await;
+    }
+}
+
+fn live_authority_root(homeserver: &str, username: &str) -> PathBuf {
+    let base = std::env::var_os("SYNARA_LIVE_VERIFICATION_STORE_ROOT")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| {
+            PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("../../target/live-own-device-verification")
+        });
+    let account_tag = live::verification_flow_tag(&format!("{homeserver}\n{username}"));
+    base.join(account_tag)
 }
 
 async fn wait_for_live_device(client: &Client, device_id: &str) {
@@ -412,7 +756,9 @@ async fn wait_for_live_phase(
             assert!(
                 !matches!(
                     request.phase,
-                    NativeVerificationPhase::Cancelled | NativeVerificationPhase::Mismatched
+                    NativeVerificationPhase::Cancelled
+                        | NativeVerificationPhase::Mismatched
+                        | NativeVerificationPhase::Failed
                 ),
                 "verification became {:?} before {expected:?}",
                 request.phase

@@ -378,10 +378,20 @@ private struct AccountSettingsView: View {
                             Text("Verify This Device")
                         }
                     }
-                    .disabled(isRequestingVerification)
+                    .disabled(isRequestingVerification || sessionCrypto.enablesVerifyThisDevice == false)
                     .accessibilityIdentifier("AccountVerifyThisDeviceButton")
+
+                    if sessionCrypto.status.hasDevicesToVerifyAgainst == nil {
+                        Button("Retry Availability Check") {
+                            Task {
+                                await sessionCrypto.refresh(crypto: environment.crypto)
+                            }
+                        }
+                        .disabled(isRequestingVerification)
+                        .accessibilityIdentifier("AccountRetryVerificationAvailabilityButton")
+                    }
                 } footer: {
-                    Text("Compare emoji or number codes with another signed-in Synara or Element session.")
+                    Text(sessionCrypto.verificationAvailabilityMessage)
                 }
             }
 
@@ -1163,6 +1173,14 @@ final class SessionCryptoStatusObserver: ObservableObject {
         SecuritySettingsVerificationPolicy.showsVerifyThisDevice(status)
     }
 
+    var enablesVerifyThisDevice: Bool {
+        SecuritySettingsVerificationPolicy.enablesVerifyThisDevice(status)
+    }
+
+    var verificationAvailabilityMessage: String {
+        SecuritySettingsVerificationPolicy.availabilityMessage(status)
+    }
+
     func start(crypto: CryptoStatusServicing) async {
         await refresh(crypto: crypto)
         for await _ in crypto.verificationUpdates() {
@@ -1212,10 +1230,20 @@ private struct SecuritySettingsView: View {
                     } label: {
                         cryptoActionLabel("Verify This Device")
                     }
-                    .disabled(isRunningCryptoAction)
+                    .disabled(isRunningCryptoAction || sessionCrypto.enablesVerifyThisDevice == false)
                     .accessibilityIdentifier("RequestDeviceVerificationButton")
+
+                    if sessionCrypto.status.hasDevicesToVerifyAgainst == nil {
+                        Button("Retry Availability Check") {
+                            Task {
+                                await sessionCrypto.refresh(crypto: environment.crypto)
+                            }
+                        }
+                        .disabled(isRunningCryptoAction)
+                        .accessibilityIdentifier("RetryVerificationAvailabilityButton")
+                    }
                 } footer: {
-                    Text("Compare emoji or number codes with another signed-in Synara or Element session. Synara does not mark this device verified until both sides confirm.")
+                    Text(sessionCrypto.verificationAvailabilityMessage)
                 }
             }
 
@@ -1301,7 +1329,11 @@ private struct SettingsInfoRow: View {
                 .textSelection(.enabled)
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title), \(value)")
+        // Keep the human title and machine-readable state separate. Besides
+        // producing a clearer VoiceOver announcement, exact value predicates
+        // cannot confuse states such as "Unverified" with "Verified".
+        .accessibilityLabel(title)
+        .accessibilityValue(value)
     }
 }
 

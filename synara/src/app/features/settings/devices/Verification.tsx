@@ -27,6 +27,7 @@ import {
 } from '../../cross-signing/nativeCrossSigning';
 import { PasswordInput } from '../../../components/password-input';
 import { NativeSecretStorageGate } from '../../../components/SecretStorage';
+import { currentDeviceVerificationAvailabilityMessage } from './deviceVerificationStatus';
 
 type VerificationStatusBadgeProps = {
   verificationStatus: VerificationStatus;
@@ -63,13 +64,34 @@ export function VerificationStatusBadge({
   );
 }
 
-export function VerifyCurrentDeviceTile({ onVerified }: { onVerified?: () => void }) {
+export function VerifyCurrentDeviceTile({
+  hasDevicesToVerifyAgainst,
+  canStart,
+  onRetry,
+  onVerified,
+}: {
+  hasDevicesToVerifyAgainst: boolean | null;
+  canStart: boolean;
+  onRetry?: () => void;
+  onVerified?: () => void;
+}) {
+  const retry = hasDevicesToVerifyAgainst === null && onRetry;
   return (
     <InfoCard
       variant="Critical"
       title="Unverified"
-      description="Use another verified device to compare emoji or decimal security codes."
-      after={<NativeStartVerification onExit={() => onVerified?.()} />}
+      description={currentDeviceVerificationAvailabilityMessage(hasDevicesToVerifyAgainst)}
+      after={
+        canStart ? (
+          <NativeStartVerification onExit={() => onVerified?.()} />
+        ) : retry ? (
+          <Button size="300" radii="300" onClick={onRetry}>
+            <Text as="span" size="B300">
+              Retry Availability Check
+            </Text>
+          </Button>
+        ) : undefined
+      }
     />
   );
 }

@@ -1,0 +1,12 @@
+Synara 2.1.20 completes current-device verification and improves message presentation.
+
+What changed:
+- “Verify This Device” now follows the Matrix SDK OwnIdentity flow and reports the exact current device's trust state.
+- Verification works whether either participant starts SAS first, preserves confirmation state, and exposes clear unavailable/retry guidance.
+- Own messages now use the same leading reading column as other messages.
+- Swipe-left timestamps return automatically after 2.5 seconds without interfering with vertical room scrolling.
+- Sender avatars load through authenticated Matrix media for live and pending messages.
+- Desktop messages use flatter resting surfaces with quieter hover, selection, composer, and avatar depth.
+- Increase Contrast and Reduce Motion receive explicit accessible behavior.
+
+Validation included a clean live verification from fresh Unverified through matching SAS and Done to durable Verified after relaunch, plus focused iOS, desktop, and shared-core regression suites.

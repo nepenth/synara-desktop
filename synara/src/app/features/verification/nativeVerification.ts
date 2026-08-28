@@ -6,11 +6,13 @@ export type NativeVerificationPhase =
   | 'requested'
   | 'ready'
   | 'started'
+  | 'keys_exchanging'
   | 'sas_ready'
   | 'confirmed'
   | 'done'
   | 'mismatched'
-  | 'cancelled';
+  | 'cancelled'
+  | 'failed';
 
 export type NativeVerificationEmoji = {
   symbol: string;
@@ -50,7 +52,7 @@ export const NATIVE_VERIFICATION_CHANGED = 'synara-native-verification-changed';
 export const VERIFICATION_UPDATED_EVENT = 'matrix-verification-updated';
 
 export const isNativeVerificationTerminal = (phase: NativeVerificationPhase): boolean =>
-  phase === 'done' || phase === 'mismatched' || phase === 'cancelled';
+  phase === 'done' || phase === 'mismatched' || phase === 'cancelled' || phase === 'failed';
 
 export const selectNativeVerificationRequest = (
   requests: NativeVerificationRequest[],
@@ -71,9 +73,7 @@ export const verificationRequestHasSasCodes = (request: NativeVerificationReques
 };
 
 export const verificationRequestNeedsSasStart = (request: NativeVerificationRequest): boolean =>
-  (request.direction === 'outgoing' && request.phase === 'ready') ||
-  (request.direction === 'incoming' && request.phase === 'started') ||
-  (request.phase === 'sas_ready' && !verificationRequestHasSasCodes(request));
+  request.direction === 'outgoing' && request.phase === 'ready';
 
 export const announceNativeVerificationChanged = (): void => {
   if (typeof window !== 'undefined') {

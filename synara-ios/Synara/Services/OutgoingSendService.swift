@@ -120,6 +120,7 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
     let formattedBody: String?
     let replyToEventID: String?
     let senderID: String
+    var senderAvatarURL: URL?
     let timestamp: Date
     var deliveryStatus: TimelineDeliveryStatus
 
@@ -129,6 +130,7 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             body: body,
             formattedBody: formattedBody,
             senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
             replyToEventID: replyToEventID,
             deliveryStatus: deliveryStatus,
             timestamp: timestamp
@@ -185,6 +187,14 @@ final class OutgoingMessageQueue: ObservableObject {
         }
     }
 
+    func hydrateSenderAvatarURL(senderID: String, avatarURL: URL) {
+        mutate { items in
+            for index in items.indices where items[index].senderID == senderID {
+                items[index].senderAvatarURL = avatarURL
+            }
+        }
+    }
+
     func remove(id: String) {
         mutate { items in
             items.removeAll { $0.id == id }
@@ -235,6 +245,7 @@ final class OutgoingSendCoordinator {
         formattedBody: String?,
         replyToEventID: String?,
         senderID: String,
+        senderAvatarURL: URL? = nil,
         timestamp: Date
     ) -> OutgoingQueuedMessage {
         let message = OutgoingQueuedMessage(
@@ -244,6 +255,7 @@ final class OutgoingSendCoordinator {
             formattedBody: formattedBody,
             replyToEventID: replyToEventID,
             senderID: senderID,
+            senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
             deliveryStatus: OutgoingSendPolicy.initialDeliveryStatus(
                 isSendReady: OutgoingSendPolicy.isSendReady(connectionStatus.status)
@@ -266,8 +278,16 @@ final class OutgoingSendCoordinator {
             formattedBody: TimelinePendingReconciler.formattedBody(for: item),
             replyToEventID: item.replyToEventID,
             senderID: senderID,
+            senderAvatarURL: item.senderAvatarURL,
             timestamp: item.timestamp
         )
+    }
+
+    /// Reconciles optimistic rows created before the account profile finished
+    /// loading. The queue remains the single owner, so leaving or switching a
+    /// room cannot race an unstructured view task into a stale local echo.
+    func hydrateSenderAvatarURL(senderID: String, avatarURL: URL) {
+        queue.hydrateSenderAvatarURL(senderID: senderID, avatarURL: avatarURL)
     }
 
     func transmitIfNeeded(id: String) async {

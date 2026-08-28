@@ -1,6 +1,23 @@
 # iOS Validation Status
 
-Reviewed: 2026-08-25
+Reviewed: 2026-08-28
+
+## 2026-08-28 Device Verification Contract Audit
+
+The earlier paired run below is now classified as a direct-peer SAS transport
+proof, not a current-device cross-signing proof. It targeted a concrete session
+row and read that peer row back as locally `Verified`; the Matrix Rust SDK's
+authoritative current-device surface is instead
+`Encryption::verification_state()`. A local peer trust result cannot substitute
+for that readback.
+
+The implementation now preserves nil as the own-identity verification route,
+projects `verification_state()` and `has_devices_to_verify_against()` through
+the shared Core, and makes Rust direction-independently accept a transitioned
+SAS handle. A new clean live run must begin with an unverified fresh initiator
+and an already cross-signed authority, use **Verify This Device**, and read the
+initiator as `Verified` after relaunch. Until that run is recorded, the runtime
+current-device proof verdict is **Not confirmed**.
 
 ## 2026-08-25 Device Verification Validation
 

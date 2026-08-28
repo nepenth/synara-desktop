@@ -41,29 +41,6 @@ enum SharedCoreDevicesLive {
         }
     }
 
-    /// Choose a concrete peer for SAS verification. A verified session is the
-    /// strongest bootstrap authority; otherwise use the most recently active
-    /// peer instead of broadcasting an identity request to stale devices.
-    static func preferredVerificationDeviceId(
-        from devices: [SharedCoreSessionDevice]
-    ) -> String? {
-        devices
-            .filter { $0.isCurrent == false }
-            .sorted { left, right in
-                let leftVerified = left.trust == "verified"
-                let rightVerified = right.trust == "verified"
-                if leftVerified != rightVerified {
-                    return leftVerified
-                }
-                if left.lastSeenTs != right.lastSeenTs {
-                    return (left.lastSeenTs ?? 0) > (right.lastSeenTs ?? 0)
-                }
-                return left.id < right.id
-            }
-            .first?
-            .id
-    }
-
     static func lastActivityDisplay(lastSeenTs: UInt64?, now: Date = Date()) -> String? {
         guard let lastSeenTs else { return nil }
         let seconds = TimeInterval(lastSeenTs) / 1000

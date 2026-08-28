@@ -12,7 +12,7 @@ const DEVICE_LIST_UPDATED_EVENT = 'matrix-device-list-updated';
 
 export type RefreshDeviceList = (snapshot?: NativeDeviceSnapshot) => Promise<void>;
 
-export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList] {
+export function useDeviceList(): [undefined | NativeDeviceSnapshot, RefreshDeviceList] {
   const queryClient = useQueryClient();
   const sessionGeneration = getActiveSession()?.sessionGeneration;
   const queryKey = useMemo(
@@ -70,7 +70,7 @@ export function useDeviceList(): [undefined | NativeDevice[], RefreshDeviceList]
     };
   }, [refreshDeviceList, snapshot]);
 
-  return [snapshot?.devices, refreshDeviceList];
+  return [snapshot, refreshDeviceList];
 }
 
 export const useSplitCurrentDevice = (

@@ -34,6 +34,7 @@ enum SharedCoreTimelineRows {
             id: row.itemId,
             eventID: eventID,
             senderID: row.sender,
+            senderAvatarURL: senderAvatarURL(row.senderAvatarUrl),
             timestamp: timestamp,
             kind: kind,
             replyToEventID: row.replyToEventId,
@@ -41,6 +42,21 @@ enum SharedCoreTimelineRows {
             reactions: reactions(from: row.reactions),
             isEncrypted: row.kind == "encrypted"
         )
+    }
+
+    /// Timeline avatars are metadata-only Matrix content URIs. Reject every
+    /// other scheme at the Swift boundary before it can reach the media owner.
+    static func senderAvatarURL(_ rawValue: String?) -> URL? {
+        guard let rawValue,
+              rawValue.hasPrefix("mxc://"),
+              let url = URL(string: rawValue),
+              url.scheme == "mxc",
+              url.host?.isEmpty == false,
+              url.pathComponents.count > 1
+        else {
+            return nil
+        }
+        return url
     }
 
     static func displayKind(

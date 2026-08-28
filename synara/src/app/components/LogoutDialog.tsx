@@ -5,7 +5,7 @@ import { performLogout } from '../../client/initMatrix';
 import { useMatrixClient } from '../hooks/useMatrixClient';
 import { useCrossSigningActive } from '../hooks/useCrossSigning';
 import { InfoCard } from './info-card';
-import { useDeviceList, useSplitCurrentDevice } from '../hooks/useDeviceList';
+import { useDeviceList } from '../hooks/useDeviceList';
 
 type LogoutDialogProps = {
   handleClose: () => void;
@@ -15,8 +15,7 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
     const mx = useMatrixClient();
     const hasEncryptedRoom = !!mx.getRooms().find((room) => room.hasEncryptionStateEvent());
     const crossSigningActive = useCrossSigningActive();
-    const [devices] = useDeviceList();
-    const [currentDevice] = useSplitCurrentDevice(devices);
+    const [deviceSnapshot] = useDeviceList();
 
     const [logoutState, logout] = useAsyncCallback<void, Error, []>(
       useCallback(async () => {
@@ -43,7 +42,7 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
         <Box style={{ padding: config.space.S400 }} direction="Column" gap="400">
           {hasEncryptedRoom &&
             (crossSigningActive ? (
-              currentDevice?.trust === 'unverified' && (
+              deviceSnapshot?.ownVerification === 'unverified' && (
                 <InfoCard
                   variant="Critical"
                   title="Unverified Device"

@@ -30,6 +30,7 @@ fn timeline_snapshot_surface_includes_rows_and_not_leftovers() {
     assert!(udl.contains("dictionary TimelineViewRowDto"));
     assert!(udl.contains("sequence<TimelineViewRowDto> rows"));
     assert!(udl.contains("sequence<TimelineViewReactionDto> reactions"));
+    assert!(udl.contains("string? sender_avatar_url"));
     assert!(udl.contains("string? media_handle_id"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_login_password"));

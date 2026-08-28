@@ -110,6 +110,49 @@ final class OutgoingSendServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testPendingOwnMessagePreservesAvatarThroughTimelineProjectionAndRetry() throws {
+        let sender = RecordingMessageSendService()
+        let connection = ConnectionStatusStore(reconnectingHold: 0)
+        connection.update(.disconnected)
+        let coordinator = OutgoingSendCoordinator(messageSender: sender, connectionStatus: connection)
+        let avatarURL = try XCTUnwrap(URL(string: "mxc://matrix.org/alice-avatar"))
+
+        let queued = coordinator.enqueue(
+            localID: "$pending-avatar",
+            roomID: "!room:matrix.org",
+            body: "Identity stays hydrated",
+            formattedBody: nil,
+            replyToEventID: nil,
+            senderID: "@alice:matrix.org",
+            timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+        )
+        XCTAssertNil(queued.asTimelineItem().senderAvatarURL)
+
+        coordinator.hydrateSenderAvatarURL(
+            senderID: "@alice:matrix.org",
+            avatarURL: avatarURL
+        )
+        let hydrated = try XCTUnwrap(coordinator.queue.item(id: queued.id))
+        let projected = hydrated.asTimelineItem()
+
+        XCTAssertEqual(projected.senderAvatarURL, avatarURL)
+
+        coordinator.queue.updateDeliveryStatus(id: queued.id, .failed)
+        let failedProjection = try XCTUnwrap(
+            coordinator.queue.item(id: queued.id)?.asTimelineItem()
+        )
+
+        let retried = try XCTUnwrap(
+            coordinator.retry(
+                failedProjection,
+                roomID: "!room:matrix.org",
+                senderID: "@alice:matrix.org"
+            )
+        )
+        XCTAssertEqual(retried.senderAvatarURL, avatarURL)
+    }
+
+    @MainActor
     func testFlushWhenConnectedSendsQueuedAndFailedText() async {
         let sender = RecordingMessageSendService()
         let connection = ConnectionStatusStore(reconnectingHold: 0)

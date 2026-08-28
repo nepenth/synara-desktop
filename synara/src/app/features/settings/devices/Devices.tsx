@@ -8,7 +8,10 @@ import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceLi
 import { LocalBackup } from './LocalBackup';
 import { DeviceLogoutBtn, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
 import { OtherDevices } from './OtherDevices';
-import { resolveDeviceVerificationStatus } from './deviceVerificationStatus';
+import {
+  canStartCurrentDeviceVerification,
+  resolveDeviceVerificationStatus,
+} from './deviceVerificationStatus';
 import {
   EnableVerification,
   VerificationStatusBadge,
@@ -36,19 +39,17 @@ export function Devices({ requestClose }: DevicesProps) {
   const nativeSession = isNativeMatrixSession();
   const crossSigning = useCrossSigning();
   const crossSigningActive = crossSigning.active;
-  const [devices, refreshDeviceList] = useDeviceList();
+  const [deviceSnapshot, refreshDeviceList] = useDeviceList();
+  const devices = deviceSnapshot?.devices;
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
-  const verificationStatus = resolveDeviceVerificationStatus(
-    currentDevice?.trust,
-    crossSigning.nativeStatus?.ownIdentityVerification,
-    crossSigning.loading
-  );
+  const verificationStatus = resolveDeviceVerificationStatus(deviceSnapshot);
   const unverifiedDeviceCount =
     otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
   const offerCurrentVerification =
     canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
     verificationStatus !== 'verified';
+  const canStartCurrentVerification = canStartCurrentDeviceVerification(deviceSnapshot);
 
   return (
     <Page>
@@ -101,7 +102,12 @@ export function Devices({ requestClose }: DevicesProps) {
                     }
                   />
                   {offerCurrentVerification && (
-                    <VerifyCurrentDeviceTile onVerified={() => void refreshDeviceList()} />
+                    <VerifyCurrentDeviceTile
+                      hasDevicesToVerifyAgainst={deviceSnapshot?.hasDevicesToVerifyAgainst ?? null}
+                      canStart={canStartCurrentVerification}
+                      onRetry={() => void refreshDeviceList()}
+                      onVerified={() => void refreshDeviceList()}
+                    />
                   )}
                 </SequenceCard>
                 {nativeSession && (
@@ -140,7 +146,7 @@ export function Devices({ requestClose }: DevicesProps) {
                 <OtherDevices
                   devices={otherDevices}
                   refreshDeviceList={refreshDeviceList}
-                  showVerification={crossSigningActive && verificationStatus === 'verified'}
+                  showVerification={verificationStatus === 'verified'}
                 />
               )}
               <LocalBackup />
