@@ -14,7 +14,8 @@ export const MessageBase = style({
   border: `${config.borderWidth.B300} solid transparent`,
   borderRadius: config.radii.R400,
   boxShadow: 'none',
-  transition: 'background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out',
+  transition:
+    'background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out',
   selectors: {
     '&:hover, &:focus-within': {
       backgroundColor: 'color-mix(in srgb, currentColor 3%, transparent)',

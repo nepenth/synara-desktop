@@ -319,7 +319,9 @@ export function NativeDeviceVerification({
               )}
               {request.phase === 'failed' && (
                 <>
-                  <Text>Verification stopped because the secure comparison could not be accepted.</Text>
+                  <Text>
+                    Verification stopped because the secure comparison could not be accepted.
+                  </Text>
                   <Button variant="Secondary" fill="Soft" onClick={() => void close()}>
                     <Text size="B400">Close</Text>
                   </Button>

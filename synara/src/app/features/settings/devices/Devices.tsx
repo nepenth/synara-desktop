@@ -103,9 +103,7 @@ export function Devices({ requestClose }: DevicesProps) {
                   />
                   {offerCurrentVerification && (
                     <VerifyCurrentDeviceTile
-                      hasDevicesToVerifyAgainst={
-                        deviceSnapshot?.hasDevicesToVerifyAgainst ?? null
-                      }
+                      hasDevicesToVerifyAgainst={deviceSnapshot?.hasDevicesToVerifyAgainst ?? null}
                       canStart={canStartCurrentVerification}
                       onRetry={() => void refreshDeviceList()}
                       onVerified={() => void refreshDeviceList()}
