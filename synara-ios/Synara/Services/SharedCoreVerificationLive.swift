@@ -7,7 +7,7 @@ import SynaraCore
 /// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreVerificationLive {
     static func isTerminal(phase: String) -> Bool {
-        phase == "done" || phase == "mismatched" || phase == "cancelled"
+        phase == "done" || phase == "mismatched" || phase == "cancelled" || phase == "failed"
     }
 
     static func selectedFlowId(
@@ -76,12 +76,11 @@ enum SharedCoreVerificationLive {
                 )
             }
             return .requestSent
-        case "ready", "started":
-            // Match desktop SAS ownership: only the side that should call
-            // begin_sas gets `.accepted` (Start Comparison). Everyone else waits.
-            if needsSasStart(phase: phase, direction: direction) {
-                return .accepted
-            }
+        case "ready":
+            return needsSasStart(phase: phase, direction: direction) ? .accepted : .sasStarted
+        case "started":
+            // The Rust owner accepts every transitioned SAS handle. Started is
+            // therefore observation-only; the UI must never own protocol accept.
             return .sasStarted
         case "keys_exchanging":
             return .keysExchanging
@@ -104,6 +103,8 @@ enum SharedCoreVerificationLive {
             return .cancelled
         case "mismatched":
             return .mismatched
+        case "failed":
+            return .failed
         default:
             return .failed
         }
@@ -111,7 +112,6 @@ enum SharedCoreVerificationLive {
 
     /// Same rule as desktop `verificationRequestNeedsSasStart`.
     static func needsSasStart(phase: String, direction: String) -> Bool {
-        (direction == "outgoing" && phase == "ready")
-            || (direction == "incoming" && phase == "started")
+        direction == "outgoing" && phase == "ready"
     }
 }

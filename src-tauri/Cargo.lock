@@ -6003,7 +6003,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "2.1.19"
+version = "2.1.20"
 dependencies = [
  "eyeball-im",
  "futures-util",

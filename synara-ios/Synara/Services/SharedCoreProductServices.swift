@@ -1272,8 +1272,9 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         let crypto = try? await SharedCoreLeftovers.cryptoStatus(core: host.core)
         let backup = try? await SharedCoreLeftovers.backupStatus(core: host.core)
         let secretStorage = try? await SharedCoreSessionStatus.secretStorageStatus(core: host.core)
-        let devices = (try? await SharedCoreDevices.deviceSnapshot(core: host.core))?.devices ?? []
-        guard crypto != nil || backup != nil || secretStorage != nil || devices.isEmpty == false else {
+        let deviceSnapshot = try? await SharedCoreDevices.deviceSnapshot(core: host.core)
+        let devices = deviceSnapshot?.devices ?? []
+        guard crypto != nil || backup != nil || secretStorage != nil || deviceSnapshot != nil else {
             return .unknown
         }
         let mapped = SharedCoreSessionCrypto.status(
@@ -1284,11 +1285,9 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             recoveryState: backup?.recoveryState,
             secretStorageState: secretStorage?.state
         )
-        let current = devices.first(where: \.isCurrent)
         let hasOtherDevices = devices.contains { $0.isCurrent == false }
-        let hasVerifiedPeer = devices.contains { $0.isCurrent == false && $0.trust == "verified" }
         let verification: SynaraCryptoVerificationStatus
-        switch current?.trust {
+        switch deviceSnapshot?.ownVerification {
         case "verified":
             verification = .verified
         case "unverified":
@@ -1300,7 +1299,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             verification: verification,
             recovery: mapped.recovery,
             backup: mapped.backup,
-            hasDevicesToVerifyAgainst: hasVerifiedPeer,
+            hasDevicesToVerifyAgainst: deviceSnapshot?.hasDevicesToVerifyAgainst,
             isLastDevice: devices.isEmpty ? nil : hasOtherDevices == false,
             unableToDecryptCount: mapped.unableToDecryptCount
         )
@@ -1335,17 +1334,12 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult {
         await runVerification {
-            let targetDeviceId: String?
-            if let deviceId {
-                targetDeviceId = deviceId
-            } else {
-                targetDeviceId = SharedCoreDevicesLive.preferredVerificationDeviceId(
-                    from: await sessionDevices()
-                )
-            }
             let dto = try await SharedCoreVerificationSas.verificationStart(
                 core: host.core,
-                deviceId: targetDeviceId
+                // nil is semantically meaningful: it requests verification of
+                // this device through the account's own cross-signing identity.
+                // Explicit session-row IDs remain direct peer verification.
+                deviceId: deviceId
             )
             storeFlow(dto.flowId)
             return "Device verification request sent."

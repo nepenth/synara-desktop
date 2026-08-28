@@ -118,25 +118,15 @@ struct SynaraMessageBubble<Content: View>: View {
     }
 
     private var frameAlignment: Alignment {
-        guard showsBackground else {
-            return .leading
-        }
-
-        switch alignment {
-        case .own:
-            return .trailing
-        case .other:
-            return .leading
-        }
+        SynaraMessageBubbleMetrics.usesLeadingContentColumn(alignment: alignment)
+            ? .leading
+            : .trailing
     }
 
     private var overlayAlignment: Alignment {
-        switch alignment {
-        case .own:
-            return .bottomTrailing
-        case .other:
-            return .bottomLeading
-        }
+        SynaraMessageBubbleMetrics.usesLeadingStatusOverlay(alignment: alignment)
+            ? .bottomLeading
+            : .bottomTrailing
     }
 
     private var bubbleShape: UnevenRoundedRectangle {
@@ -213,6 +203,14 @@ enum SynaraMessageBubbleMetrics {
         let topTrailing: CGFloat
     }
 
+    static func usesLeadingContentColumn(alignment _: SynaraMessageBubbleAlignment) -> Bool {
+        true
+    }
+
+    static func usesLeadingStatusOverlay(alignment _: SynaraMessageBubbleAlignment) -> Bool {
+        true
+    }
+
     static func cornerRadii(
         alignment: SynaraMessageBubbleAlignment,
         isGrouped: Bool
@@ -226,22 +224,12 @@ enum SynaraMessageBubbleMetrics {
             )
         }
 
-        switch alignment {
-        case .other:
-            return CornerRadii(
-                topLeading: groupedRadius,
-                bottomLeading: groupedRadius,
-                bottomTrailing: largeRadius,
-                topTrailing: largeRadius
-            )
-        case .own:
-            return CornerRadii(
-                topLeading: largeRadius,
-                bottomLeading: largeRadius,
-                bottomTrailing: groupedRadius,
-                topTrailing: groupedRadius
-            )
-        }
+        return CornerRadii(
+            topLeading: groupedRadius,
+            bottomLeading: groupedRadius,
+            bottomTrailing: largeRadius,
+            topTrailing: largeRadius
+        )
     }
 }
 
@@ -293,7 +281,12 @@ extension SynaraMessageBubble where Content == AnyView {
                     .lineSpacing(2.5)
                     .lineLimit(nil)
                     .textSelection(.enabled)
-                    .frame(maxWidth: .infinity, alignment: showsBackground && alignment == .own ? .trailing : .leading)
+                    .frame(
+                        maxWidth: .infinity,
+                        alignment: SynaraMessageBubbleMetrics.usesLeadingContentColumn(alignment: alignment)
+                            ? .leading
+                            : .trailing
+                    )
                     .fixedSize(horizontal: false, vertical: true)
             )
         }

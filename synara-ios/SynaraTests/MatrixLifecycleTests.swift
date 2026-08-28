@@ -358,6 +358,7 @@ final class MatrixLifecycleTests: XCTestCase {
             unableToDecryptCount: 0
         )
         XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(unverified))
+        XCTAssertTrue(SecuritySettingsVerificationPolicy.enablesVerifyThisDevice(unverified))
         XCTAssertFalse(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(verified))
         let unverifiedWithoutTrustedPeer = SessionCryptoStatus(
             verification: .unverified,
@@ -368,6 +369,7 @@ final class MatrixLifecycleTests: XCTestCase {
             unableToDecryptCount: 0
         )
         XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(unverifiedWithoutTrustedPeer))
+        XCTAssertFalse(SecuritySettingsVerificationPolicy.enablesVerifyThisDevice(unverifiedWithoutTrustedPeer))
         let lastDevice = SessionCryptoStatus(
             verification: .unverified,
             recovery: .unknown,
@@ -376,7 +378,23 @@ final class MatrixLifecycleTests: XCTestCase {
             isLastDevice: true,
             unableToDecryptCount: 0
         )
-        XCTAssertFalse(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(lastDevice))
+        XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(lastDevice))
+        XCTAssertFalse(SecuritySettingsVerificationPolicy.enablesVerifyThisDevice(lastDevice))
+
+        let unknownAuthority = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: nil,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        XCTAssertTrue(SecuritySettingsVerificationPolicy.showsVerifyThisDevice(unknownAuthority))
+        XCTAssertFalse(SecuritySettingsVerificationPolicy.enablesVerifyThisDevice(unknownAuthority))
+        XCTAssertTrue(
+            SecuritySettingsVerificationPolicy.availabilityMessage(unknownAuthority)
+                .contains("could not check")
+        )
 
         let crypto = SequencingCryptoStatusService(statuses: [unverified, verified])
         let observer = SessionCryptoStatusObserver()

@@ -1,11 +1,17 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, DefaultReset, toRem } from 'folds';
-import { floatingShadow, raisedShadow, tactileSurface } from '../../styles/Depth.css';
+import {
+  floatingShadow,
+  quietSurfaceFold,
+  raisedShadow,
+  tactileSurface,
+} from '../../styles/Depth.css';
 
 export const Editor = style([
   DefaultReset,
   {
     backgroundColor: color.Secondary.Container,
+    backgroundImage: quietSurfaceFold,
     color: color.Secondary.OnContainer,
     border: `${config.borderWidth.B300} solid ${color.Secondary.ContainerLine}`,
     boxShadow: raisedShadow,
@@ -23,6 +29,7 @@ export const Editor = style([
         transition: 'none',
       },
       '(prefers-contrast: more)': {
+        backgroundImage: 'none',
         boxShadow: 'none',
         borderColor: color.Secondary.OnContainer,
         selectors: {
@@ -136,6 +143,7 @@ export const EditorFloatingOptions = style([
     padding: toRem(3),
     borderRadius: config.radii.R300,
     backgroundColor: color.SurfaceVariant.Container,
+    backgroundImage: quietSurfaceFold,
     border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
     boxShadow: floatingShadow,
     backdropFilter: 'blur(18px) saturate(1.08)',
@@ -146,6 +154,7 @@ export const EditorFloatingOptions = style([
         backgroundColor: color.SurfaceVariant.Container,
       },
       '(prefers-contrast: more)': {
+        backgroundImage: 'none',
         boxShadow: 'none',
         borderColor: color.SurfaceVariant.OnContainer,
       },

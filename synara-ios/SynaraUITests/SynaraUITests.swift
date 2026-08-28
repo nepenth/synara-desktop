@@ -1587,11 +1587,30 @@ final class SynaraUITests: XCTestCase {
                 )
             }
         }
-        if liveEnvironmentValue("SYNARA_LIVE_VERIFICATION_REUSE_SESSION", in: environment) != "1" {
+        if role == "initiator" {
+            // The device under test must start as a genuinely fresh,
+            // un-cross-signed session. Never let the authority reuse flag
+            // weaken this starting-state requirement.
             app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        } else {
+            guard liveEnvironmentValue(
+                "SYNARA_LIVE_VERIFICATION_REUSE_SESSION",
+                in: environment
+            ) == "1" else {
+                XCTFail(
+                    "The responder must reuse a pre-existing persisted, cross-signed authority session."
+                )
+                return
+            }
         }
         launch(app)
         if app.textFields["HomeserverAddressField"].waitForExistence(timeout: 5) {
+            if role == "responder" {
+                XCTFail(
+                    "The responder authority session was not persisted; signing in now would create an ineligible fresh device."
+                )
+                return
+            }
             loginLive(app: app, homeserver: homeserver, username: username, password: password)
             // Login starts the native crypto restore before the signed-in shell
             // appears. Opening the Settings URL while that work is in flight
@@ -1617,50 +1636,52 @@ final class SynaraUITests: XCTestCase {
         // replays this pending deep link after that production startup work.
         XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 90))
 
-        let coordinatedPeerDeviceID = try coordinateVerificationDevices(
+        _ = try coordinateVerificationDevices(
             app: app,
             role: role,
             environment: environment
         )
 
+        navigateBack(app: app)
+        tapSettingsElement(identifiedElement(in: app, "SecuritySettingsLink"), app: app, timeout: 20)
+        XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 20))
+
+        let ownVerification = identifiedElement(in: app, "SecurityDeviceVerificationRow")
+        XCTAssertTrue(ownVerification.waitForExistence(timeout: 30))
+        let requiredStartingState = role == "initiator" ? "Unverified" : "Verified"
+        expectation(
+            for: exactVerificationStatePredicate(requiredStartingState),
+            evaluatedWith: ownVerification
+        )
+        waitForExpectations(timeout: 60)
+
         if role == "initiator" {
-            let targetDeviceId = liveEnvironmentValue(
-                "SYNARA_LIVE_VERIFICATION_TARGET_DEVICE_ID",
-                in: environment
-            ) ?? coordinatedPeerDeviceID
-            let actionsButton = identifiedElement(in: app, "SessionActionsButton-\(targetDeviceId)")
-            XCTAssertTrue(
-                revealVerificationSession(
-                    actionsButton,
-                    app: app,
-                    timeout: 180
-                ),
-                "The homeserver-backed session list never exposed the coordinated peer device."
+            // This is the production current-device entry point. It passes a
+            // nil target through Swift/UniFFI so OwnUserIdentity selects the
+            // already cross-signed authority. Never substitute a session row.
+            let verifyButton = app.buttons["RequestDeviceVerificationButton"]
+            expectation(
+                for: NSPredicate(format: "exists == true AND enabled == true"),
+                evaluatedWith: verifyButton
             )
-            tap(actionsButton, timeout: 1)
-            let verifyButton = app.buttons["VerifySessionButton-\(targetDeviceId)"]
-            if verifyButton.waitForExistence(timeout: 3) {
-                tap(verifyButton, timeout: 1)
-            } else {
-                tap(app.buttons["Verify"], timeout: 1)
-            }
+            waitForExpectations(timeout: 180)
+            tap(verifyButton, timeout: 1)
             XCTAssertTrue(app.staticTexts["Request sent"].waitForExistence(timeout: 30))
         } else {
-            navigateBack(app: app)
-            tapSettingsElement(identifiedElement(in: app, "SecuritySettingsLink"), app: app, timeout: 20)
-            XCTAssertTrue(app.collectionViews["SecuritySettingsScreen"].waitForExistence(timeout: 20))
             let acceptButton = app.buttons["AcceptDeviceVerificationButton"]
             XCTAssertTrue(acceptButton.waitForExistence(timeout: 300))
             tap(acceptButton, timeout: 1)
         }
 
-        // Keep SAS ownership deterministic across real devices. The requester
-        // starts the comparison after Ready; the recipient accepts the SAS
-        // after Started. RootShell deliberately does not duplicate this action
-        // from a state-observer callback.
-        let startButton = app.buttons["StartDeviceVerificationSasButton"]
-        XCTAssertTrue(startButton.waitForExistence(timeout: 120))
-        tap(startButton, timeout: 1)
+        // Keep SAS ownership deterministic across real devices. Only the
+        // requester starts comparison from Ready. Rust direction-independently
+        // accepts the transitioned SAS handle for both participants, so the
+        // recipient must not issue a second begin/start action from Started.
+        if role == "initiator" {
+            let startButton = app.buttons["StartDeviceVerificationSasButton"]
+            XCTAssertTrue(startButton.waitForExistence(timeout: 120))
+            tap(startButton, timeout: 1)
+        }
 
         let confirmButton = app.buttons["ConfirmDeviceVerificationButton"]
         XCTAssertTrue(confirmButton.waitForExistence(timeout: 120))
@@ -1746,17 +1767,15 @@ final class SynaraUITests: XCTestCase {
                 name: "17-live-verification-\(role)-done"
             )
         }
-        try assertPeerSessionVerified(
+        try assertOwnDeviceVerifiedAfterRelaunch(
             app: app,
-            peerDeviceID: coordinatedPeerDeviceID,
             screenshotDirectory: liveEnvironmentValue("SYNARA_SCREENSHOT_DIR", in: environment),
             role: role
         )
     }
 
-    private func assertPeerSessionVerified(
+    private func assertOwnDeviceVerifiedAfterRelaunch(
         app: XCUIApplication,
-        peerDeviceID: String,
         screenshotDirectory: String?,
         role: String
     ) throws {
@@ -1771,28 +1790,28 @@ final class SynaraUITests: XCTestCase {
             throw XCTSkip("The durable verification readback needs Settings deep-link support.")
         }
         XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 30))
-        tapSettingsElement(identifiedElement(in: app, "AccountSettingsLink"), app: app, timeout: 20)
-        let accountScreen = app.collectionViews["AccountSettingsScreen"]
-        XCTAssertTrue(accountScreen.waitForExistence(timeout: 20))
-        accountScreen.swipeDown()
-        let peerTrust = identifiedElement(in: app, "SettingsSessionTrust-\(peerDeviceID)")
-        XCTAssertTrue(revealSettingsElement(peerTrust, app: app, timeout: 30))
+        tapSettingsElement(identifiedElement(in: app, "SecuritySettingsLink"), app: app, timeout: 20)
+        let securityScreen = app.collectionViews["SecuritySettingsScreen"]
+        XCTAssertTrue(securityScreen.waitForExistence(timeout: 20))
+        let ownVerification = identifiedElement(in: app, "SecurityDeviceVerificationRow")
+        XCTAssertTrue(ownVerification.waitForExistence(timeout: 30))
+        expectation(
+            for: exactVerificationStatePredicate("Verified"),
+            evaluatedWith: ownVerification
+        )
+        waitForExpectations(timeout: 60)
         XCTAssertTrue(
-            revealForDirectHit(peerTrust, in: accountScreen, app: app),
-            "The durable peer-trust value must clear the floating tab bar for visual proof."
+            revealForDirectHit(ownVerification, in: securityScreen, app: app),
+            "The durable own-device value must clear the floating tab bar for visual proof."
         )
-        XCTAssertEqual(
-            peerTrust.label,
-            "Verified",
-            "The SDK-backed Account snapshot must durably report the paired device verified."
-        )
+        assertAboveFloatingTabBar(ownVerification, app: app)
         if let screenshotDirectory {
             app.activate()
             RunLoop.current.run(until: Date().addingTimeInterval(0.35))
             try saveScreenshot(
                 app: app,
                 directory: screenshotDirectory,
-                name: "18-live-verification-\(role)-durable-trust"
+                name: "18-live-verification-\(role)-durable-own-device"
             )
         }
     }
@@ -1883,6 +1902,17 @@ final class SynaraUITests: XCTestCase {
             XCTAssertFalse(value.label.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
         return values.map(\.label).joined(separator: "|")
+    }
+
+    func testExactVerificationStatePredicateRejectsSubstringFalsePositive() {
+        let predicate = exactVerificationStatePredicate("Verified")
+
+        XCTAssertTrue(predicate.evaluate(with: ["value": "Verified"]))
+        XCTAssertFalse(
+            predicate.evaluate(with: ["value": "Unverified"]),
+            "Unverified must never satisfy the Verified completion predicate."
+        )
+        XCTAssertFalse(predicate.evaluate(with: ["value": "Device Verification, Verified"]))
     }
 
     func testMockThreadVisualScreenshotWhenConfigured() throws {
@@ -2385,6 +2415,10 @@ final class SynaraUITests: XCTestCase {
             file: file,
             line: line
         )
+    }
+
+    private func exactVerificationStatePredicate(_ expected: String) -> NSPredicate {
+        NSPredicate(format: "value == %@", expected)
     }
 
     private func navigateBack(app: XCUIApplication) {

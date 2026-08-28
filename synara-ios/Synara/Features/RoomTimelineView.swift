@@ -180,6 +180,36 @@ enum RoomTimelineReadMarkerTaskPolicy {
     }
 }
 
+enum RoomTimelineTimestampRevealPolicy {
+    static let displayDurationNanoseconds: UInt64 = 2_500_000_000
+
+    static func taskMayDismiss(
+        taskGeneration: UInt64,
+        currentGeneration: UInt64,
+        taskEventID: String,
+        revealedEventID: String?,
+        isCancelled: Bool
+    ) -> Bool {
+        isCancelled == false
+            && taskGeneration == currentGeneration
+            && revealedEventID == taskEventID
+    }
+}
+
+enum RoomTimelineOwnAvatarPolicy {
+    static func mayInstall(
+        profileUserID: String?,
+        expectedUserID: String,
+        expectedTimelineTaskID: String,
+        currentTimelineTaskID: String,
+        isCancelled: Bool
+    ) -> Bool {
+        isCancelled == false
+            && profileUserID == expectedUserID
+            && expectedTimelineTaskID == currentTimelineTaskID
+    }
+}
+
 enum RoomTimelineJumpLatestPolicy {
     static func shouldShow(isLive: Bool, isConfirmedPinned: Bool, hasItems: Bool, requested: Bool) -> Bool {
         hasItems && (isLive == false || (requested && isConfirmedPinned == false))
@@ -290,6 +320,8 @@ struct RoomTimelineView: View {
     @State private var stableViewportCommandID: UInt64 = 0
     @State private var revealedTimestampEventID: String?
     @State private var timestampRevealTask: Task<Void, Never>?
+    @State private var timestampRevealGeneration: UInt64 = 0
+    @State private var ownAvatarURL: URL?
     private let timelineLogger = AppLogger()
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
@@ -420,18 +452,24 @@ struct RoomTimelineView: View {
         }
         .task(id: timelineTaskID) {
             resetTimelineState()
+            let expectedTimelineTaskID = timelineTaskID
+            let expectedUserID = currentUserID
             let roomOpenSignpostID = PerformanceTrace.begin("RoomOpen")
             defer {
                 PerformanceTrace.end("RoomOpen", id: roomOpenSignpostID)
             }
-            Task {
-                _ = await loadCryptoStatus()
-            }
+            async let initialCryptoStatus = loadCryptoStatus()
+            async let ownAvatarLoad: Void = loadOwnAvatarURL(
+                expectedTimelineTaskID: expectedTimelineTaskID,
+                expectedUserID: expectedUserID
+            )
             startTypingUpdates()
             startVerificationAutoRetry()
             await loadTimeline()
             applyOutgoingQueueToTimeline()
             flushOutgoingSendsIfReady(environment.connectionStatus.status)
+            _ = await initialCryptoStatus
+            await ownAvatarLoad
             _ = await loadCryptoStatus()
         }
         .onDisappear {
@@ -858,16 +896,24 @@ struct RoomTimelineView: View {
 
     private func revealTimestamp(for eventID: String) {
         timestampRevealTask?.cancel()
+        timestampRevealGeneration &+= 1
+        let generation = timestampRevealGeneration
         withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.16)) {
             revealedTimestampEventID = eventID
         }
         timestampRevealTask = Task { @MainActor in
             do {
-                try await Task.sleep(nanoseconds: 3_000_000_000)
+                try await Task.sleep(nanoseconds: RoomTimelineTimestampRevealPolicy.displayDurationNanoseconds)
             } catch {
                 return
             }
-            guard Task.isCancelled == false, revealedTimestampEventID == eventID else {
+            guard RoomTimelineTimestampRevealPolicy.taskMayDismiss(
+                taskGeneration: generation,
+                currentGeneration: timestampRevealGeneration,
+                taskEventID: eventID,
+                revealedEventID: revealedTimestampEventID,
+                isCancelled: Task.isCancelled
+            ) else {
                 return
             }
             withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.16)) {
@@ -879,6 +925,7 @@ struct RoomTimelineView: View {
 
     private func cancelTimestampReveal() {
         timestampRevealTask?.cancel()
+        timestampRevealGeneration &+= 1
         timestampRevealTask = nil
         revealedTimestampEventID = nil
     }
@@ -1162,6 +1209,7 @@ struct RoomTimelineView: View {
         stopTypingUpdates()
         cancelTimelineScroll()
         cancelTimestampReveal()
+        ownAvatarURL = nil
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
         replyTarget = nil
@@ -1531,6 +1579,37 @@ struct RoomTimelineView: View {
         return status
     }
 
+    private func loadOwnAvatarURL(
+        expectedTimelineTaskID: String,
+        expectedUserID: String
+    ) async {
+        let profile = await environment.matrix.ownProfile()
+        guard Task.isCancelled == false else {
+            return
+        }
+        let resolvedAvatarURL = SharedCoreTimelineRows.senderAvatarURL(profile?.avatarURL)
+        await MainActor.run {
+            guard RoomTimelineOwnAvatarPolicy.mayInstall(
+                profileUserID: profile?.userID,
+                expectedUserID: expectedUserID,
+                expectedTimelineTaskID: expectedTimelineTaskID,
+                currentTimelineTaskID: timelineTaskID,
+                isCancelled: Task.isCancelled
+            ), currentUserID == expectedUserID
+            else {
+                return
+            }
+            ownAvatarURL = resolvedAvatarURL
+            if let resolvedAvatarURL {
+                environment.outgoingSends.hydrateSenderAvatarURL(
+                    senderID: expectedUserID,
+                    avatarURL: resolvedAvatarURL
+                )
+                applyOutgoingQueueToTimeline()
+            }
+        }
+    }
+
     private func startVerificationAutoRetry() {
         Task {
             for await update in environment.crypto.verificationUpdates() {
@@ -1729,6 +1808,7 @@ struct RoomTimelineView: View {
             formattedBody: request.formattedBody,
             replyToEventID: replyToEventID,
             senderID: currentUserID,
+            senderAvatarURL: ownAvatarURL,
             timestamp: failedItem?.timestamp ?? Date()
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)

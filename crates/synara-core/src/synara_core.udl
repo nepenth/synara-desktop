@@ -366,13 +366,14 @@ dictionary TimelineViewReactionDto {
   boolean? own;
 };
 
-// Privacy-safe timeline view row. Message text and opaque media handles
-// only; no media bytes, mxc URIs, or tokens.
+// Privacy-safe timeline view row. Message text, sender-avatar mxc metadata,
+// and opaque media handles only; no media bytes or tokens.
 dictionary TimelineViewRowDto {
   string kind;
   string item_id;
   string event_id;
   string sender;
+  string? sender_avatar_url;
   string body;
   u64 origin_server_ts;
   boolean edited;
@@ -878,6 +879,8 @@ dictionary DeviceSummaryDto {
 // Privacy-safe device inbox. No tokens or password.
 dictionary DeviceSnapshotDto {
   u64 session_generation;
+  string own_verification;
+  boolean? has_devices_to_verify_against;
   sequence<DeviceSummaryDto> devices;
 };
 

@@ -6,6 +6,7 @@ import {
   avatarSurface,
   floatingSurface,
   quietEdgeLight,
+  raisedShadow,
   tactileSurface,
 } from '../../styles/Depth.css';
 
@@ -90,27 +91,35 @@ export const MessageRow = recipe({
   variants: {
     surface: {
       true: {
+        backgroundColor: 'transparent',
+        border: `${config.borderWidth.B300} solid transparent`,
+        boxShadow: 'none',
         borderRadius: config.radii.R400,
         selectors: {
           [`${MessageActionSurface}:hover &`]: {
             backgroundColor: color.SurfaceVariant.ContainerHover,
-            boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+            borderColor: color.SurfaceVariant.ContainerLine,
+            boxShadow: raisedShadow,
           },
           [`${MessageActionSurface}:focus-within &`]: {
             backgroundColor: color.SurfaceVariant.ContainerHover,
-            boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+            borderColor: color.SurfaceVariant.ContainerLine,
+            boxShadow: raisedShadow,
           },
         },
-        transition: 'background-color 140ms ease-out, box-shadow 140ms ease-out',
+        transition:
+          'background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out',
         '@media': {
           '(prefers-reduced-motion: reduce)': {
             transition: 'none',
           },
           '(prefers-contrast: more)': {
             boxShadow: 'none',
+            borderColor: 'var(--synara-depth-contrast-edge)',
             selectors: {
               [`${MessageActionSurface}:hover &, ${MessageActionSurface}:focus-within &`]: {
                 boxShadow: 'none',
+                borderColor: 'var(--synara-depth-contrast-strong-edge)',
               },
             },
           },

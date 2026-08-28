@@ -1447,6 +1447,9 @@ pub struct TimelineViewRowDto {
     pub item_id: String,
     pub event_id: String,
     pub sender: String,
+    /// Optional SDK-projected sender avatar. Metadata only and restricted to
+    /// the Matrix `mxc://` content URI carried by the timeline profile.
+    pub sender_avatar_url: Option<String>,
     pub body: String,
     pub origin_server_ts: u64,
     pub edited: bool,
@@ -2397,6 +2400,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 item_id: message.event.item_id,
                 event_id: message.event.event_id.unwrap_or_default(),
                 sender: message.event.sender_id,
+                sender_avatar_url: message.event.sender_avatar_url,
                 body: message.body,
                 origin_server_ts: message.event.origin_server_ts,
                 edited: message.edited,
@@ -2421,6 +2425,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 item_id: event.item_id,
                 event_id: event.event_id.unwrap_or_default(),
                 sender: event.sender_id,
+                sender_avatar_url: event.sender_avatar_url,
                 body: String::new(),
                 origin_server_ts: event.origin_server_ts,
                 edited: false,
@@ -2442,6 +2447,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: poll.event.item_id,
             event_id: poll.event.event_id.unwrap_or_default(),
             sender: poll.event.sender_id,
+            sender_avatar_url: poll.event.sender_avatar_url,
             body: poll.question,
             origin_server_ts: poll.event.origin_server_ts,
             edited: false,
@@ -2462,6 +2468,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: membership.event.item_id,
             event_id: membership.event.event_id.unwrap_or_default(),
             sender: membership.event.sender_id,
+            sender_avatar_url: membership.event.sender_avatar_url,
             body: membership.summary,
             origin_server_ts: membership.event.origin_server_ts,
             edited: false,
@@ -2482,6 +2489,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: state.event.item_id,
             event_id: state.event.event_id.unwrap_or_default(),
             sender: state.event.sender_id,
+            sender_avatar_url: state.event.sender_avatar_url,
             body: state.summary,
             origin_server_ts: state.event.origin_server_ts,
             edited: false,
@@ -2502,6 +2510,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: call.event.item_id,
             event_id: call.event.event_id.unwrap_or_default(),
             sender: call.event.sender_id,
+            sender_avatar_url: call.event.sender_avatar_url,
             body: call.call_kind,
             origin_server_ts: call.event.origin_server_ts,
             edited: false,
@@ -2522,6 +2531,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: redacted.item_id,
             event_id: redacted.event_id,
             sender: String::new(),
+            sender_avatar_url: None,
             body: redacted.summary,
             origin_server_ts: 0,
             edited: false,
@@ -2542,6 +2552,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: encrypted.item_id,
             event_id: encrypted.event_id,
             sender: String::new(),
+            sender_avatar_url: None,
             body: encrypted.reason_code.clone(),
             origin_server_ts: 0,
             edited: false,
@@ -2562,6 +2573,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: other.item_id,
             event_id: other.event_id.unwrap_or_default(),
             sender: String::new(),
+            sender_avatar_url: None,
             body: other.summary,
             origin_server_ts: 0,
             edited: false,
@@ -2585,6 +2597,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id,
             event_id: String::new(),
             sender: String::new(),
+            sender_avatar_url: None,
             body: String::new(),
             origin_server_ts: timestamp_ms,
             edited: false,
@@ -2613,6 +2626,7 @@ fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
         item_id,
         event_id: String::new(),
         sender: String::new(),
+        sender_avatar_url: None,
         body: String::new(),
         origin_server_ts: 0,
         edited: false,
@@ -2949,6 +2963,7 @@ fn verification_phase_as_str(phase: NativeVerificationPhase) -> String {
         NativeVerificationPhase::Done => "done",
         NativeVerificationPhase::Mismatched => "mismatched",
         NativeVerificationPhase::Cancelled => "cancelled",
+        NativeVerificationPhase::Failed => "failed",
     }
     .to_owned()
 }
@@ -7670,6 +7685,8 @@ pub struct DeviceSummaryDto {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceSnapshotDto {
     pub session_generation: u64,
+    pub own_verification: String,
+    pub has_devices_to_verify_against: Option<bool>,
     pub devices: Vec<DeviceSummaryDto>,
 }
 
@@ -12540,6 +12557,13 @@ fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
 fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnapshotDto {
     DeviceSnapshotDto {
         session_generation: snapshot.session_generation,
+        own_verification: match snapshot.own_verification {
+            crate::app::devices::NativeOwnDeviceVerification::Unknown => "unknown",
+            crate::app::devices::NativeOwnDeviceVerification::Unverified => "unverified",
+            crate::app::devices::NativeOwnDeviceVerification::Verified => "verified",
+        }
+        .to_owned(),
+        has_devices_to_verify_against: snapshot.has_devices_to_verify_against,
         devices: snapshot
             .devices
             .into_iter()
@@ -13525,7 +13549,7 @@ mod tests {
                 event_id: Some("$evt:example.org".to_owned()),
                 sender_id: "@alice:example.org".to_owned(),
                 sender_name: "@alice:example.org".to_owned(),
-                sender_avatar_url: None,
+                sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
                 origin_server_ts: 1_700_000_000_000,
                 capabilities: TimelineRowCapabilities {
                     react: true,
@@ -13553,6 +13577,10 @@ mod tests {
         assert_eq!(dto.kind, "message");
         assert_eq!(dto.item_id, "item-1");
         assert_eq!(dto.event_id, "$evt:example.org");
+        assert_eq!(
+            dto.sender_avatar_url.as_deref(),
+            Some("mxc://example.org/alice")
+        );
         assert_eq!(dto.body, "hello");
         assert_eq!(dto.message_type.as_deref(), Some("m.text"));
         assert_eq!(
@@ -13564,6 +13592,6 @@ mod tests {
         let text = format!("{dto:?}");
         assert!(!text.contains("syt_"));
         assert!(!text.contains("password"));
-        assert!(!text.contains("mxc://"));
+        assert!(text.contains("mxc://example.org/alice"));
     }
 }

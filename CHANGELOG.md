@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## 2.1.20 - 2026-08-28
+
+- Rebuilt current-device verification around the Matrix SDK OwnIdentity route,
+  authoritative current-device trust, tri-state eligibility, and Rust-owned SAS
+  acceptance for either participant's start direction.
+- Added a repeatable live proof that begins with a fresh unverified device,
+  compares identical SAS values, reaches `Done`, reads the exact device as
+  verified, and preserves that result after rebuilding the same crypto store.
+- Fixed desktop and iOS verification presentation so peer-row trust cannot be
+  mistaken for current-device cross-signing, and hardened the iOS proof against
+  `Unverified`/`Verified` substring false positives.
+- Kept iOS messages in one leading reading column, automatically returned
+  revealed timestamps after 2.5 seconds, and restored authenticated avatar
+  hydration for live and pending messages without racing room changes.
+- Refined desktop dimensionality into a quieter hierarchy: flat resting message
+  planes, restrained selected/hover depth, accessible high-contrast boundaries,
+  and reduced-motion-safe transitions.
+
 ## 2.1.19 - 2026-08-28
 
 - Corrected the iOS depth rollout so its hierarchy is visibly present on the

@@ -57,6 +57,7 @@ struct ManagedVerification {
     sas: Option<SasVerification>,
     user_confirmed: bool,
     user_mismatched: bool,
+    owner_failed: bool,
 }
 
 struct VerificationRegistry {
@@ -123,33 +124,44 @@ impl NativeVerificationOwner {
                     // it cannot arm a watcher after the owner begins teardown.
                     let task_registrations = Arc::clone(&registrations);
                     let handle = tokio::spawn(async move {
-                        if let Some(request) =
-                            register_incoming_request(&registry, &client, event).await
-                        {
-                            let flow_id = request.flow_id().to_owned();
-                            let Ok(lifecycle) = task_registrations.lock() else {
-                                return;
-                            };
-                            if !lifecycle.active {
-                                return;
+                        match register_incoming_request(&registry, &client, event).await {
+                            IncomingRegistration::Registered(request) => {
+                                let flow_id = request.flow_id().to_owned();
+                                let Ok(lifecycle) = task_registrations.lock() else {
+                                    return;
+                                };
+                                if !lifecycle.active {
+                                    return;
+                                }
+                                arm_watch(
+                                    watches.as_ref(),
+                                    request,
+                                    flow_id.clone(),
+                                    registry,
+                                    Arc::clone(&emit),
+                                    session_generation,
+                                );
+                                verification_trace(&flow_id, "incoming_registered", None, None);
+                                emit(NativeVerificationUpdateSignal { session_generation });
                             }
-                            arm_watch(
-                                watches.as_ref(),
-                                request,
-                                flow_id.clone(),
-                                registry,
-                                Arc::clone(&emit),
-                                session_generation,
-                            );
-                            verification_trace(&flow_id, "incoming_registered", None, None);
-                            emit(NativeVerificationUpdateSignal { session_generation });
-                        } else {
-                            verification_trace(
+                            IncomingRegistration::AlreadyRegistered => verification_trace(
                                 &flow_id,
-                                "incoming_registration_missed",
+                                "incoming_already_registered",
                                 None,
                                 None,
-                            );
+                            ),
+                            IncomingRegistration::SdkRequestUnavailable => verification_trace(
+                                &flow_id,
+                                "incoming_sdk_request_unavailable",
+                                None,
+                                None,
+                            ),
+                            IncomingRegistration::Rejected => verification_trace(
+                                &flow_id,
+                                "incoming_request_rejected",
+                                None,
+                                None,
+                            ),
                         }
                     });
                     if let Ok(mut lifecycle) = registrations.lock() {
@@ -251,6 +263,7 @@ impl NativeVerificationOwner {
             sas: None,
             user_confirmed: false,
             user_mismatched: false,
+            owner_failed: false,
         };
         let request_for_watch = managed.request.clone();
         let mut registry = self.registry.lock().await;
@@ -315,15 +328,9 @@ impl NativeVerificationOwner {
                 return Err("v-crypto.1-sas-invalid-state");
             }
         };
-        // The SDK atomically emits Accept only while the SAS is actionable and
-        // otherwise returns Ok without sending. Delegating that decision avoids
-        // racing a separate `state()` snapshot during start-collision handling.
-        sas.accept()
-            .await
-            .map_err(|_| "v-crypto.1-sas-accept-failed")?;
         verification_trace(
             flow_id,
-            "sas_accepted",
+            "sas_started",
             Some(request_state_label(&request.state())),
             Some(sas_state_label(&sas.state())),
         );
@@ -428,6 +435,7 @@ impl NativeVerificationOwner {
             NativeVerificationPhase::Done
                 | NativeVerificationPhase::Mismatched
                 | NativeVerificationPhase::Cancelled
+                | NativeVerificationPhase::Failed
         ) {
             return Err("v-crypto.1-dismiss-active-flow");
         }
@@ -494,58 +502,33 @@ async fn start_self_verification(
     user_id: &matrix_sdk::ruma::UserId,
 ) -> Result<(VerificationRequest, Option<OwnedDeviceId>), &'static str> {
     let encryption = client.encryption();
-    let current = client.device_id().map(|id| id.to_owned());
-    let devices = encryption
-        .get_user_devices(user_id)
-        .await
-        .map_err(|_| "v-crypto.1-device-query-failed")?;
-    let peers: Vec<_> = devices
-        .devices()
-        .filter(|device| {
-            current
-                .as_ref()
-                .is_none_or(|current_id| device.device_id() != current_id)
-        })
-        .collect();
-
-    // A concrete trusted device is the least ambiguous authority for verifying
-    // a new session. Target it directly instead of broadcasting an identity
-    // request to every historical device on the account.
-    if let Some(device) = peers
-        .iter()
-        .find(|device| device.is_verified_with_cross_signing())
-    {
-        let device_id = device.device_id().to_owned();
-        let request = device
-            .request_verification_with_methods(vec![VerificationMethod::SasV1])
-            .await
-            .map_err(|_| "v-crypto.1-device-request-failed")?;
-        return Ok((request, Some(device_id)));
-    }
-
-    if let Some(identity) =
-        crate::app::cross_signing::query_own_identity(&encryption, user_id).await?
-    {
-        let request = identity
-            .request_verification_with_methods(vec![VerificationMethod::SasV1])
-            .await
-            .map_err(|_| "v-crypto.1-own-request-failed")?;
-        return Ok((request, None));
-    }
-    let device = peers.first().ok_or("v-crypto.1-no-peer-device")?;
-    let device_id = device.device_id().to_owned();
-    let request = device
+    // "Verify this device" is an own-identity operation. The SDK broadcasts
+    // this request to the user's E2EE-capable devices and, after successful
+    // SAS, updates the authoritative `Encryption::verification_state()` for
+    // this device. A direct `Device::request_verification` only establishes
+    // local peer trust and therefore cannot implement this route.
+    let identity = crate::app::cross_signing::query_own_identity(&encryption, user_id)
+        .await?
+        .ok_or("v-crypto.1-own-identity-not-found")?;
+    let request = identity
         .request_verification_with_methods(vec![VerificationMethod::SasV1])
         .await
-        .map_err(|_| "v-crypto.1-device-request-failed")?;
-    Ok((request, Some(device_id)))
+        .map_err(|_| "v-crypto.1-own-request-failed")?;
+    Ok((request, None))
+}
+
+enum IncomingRegistration {
+    Registered(VerificationRequest),
+    AlreadyRegistered,
+    SdkRequestUnavailable,
+    Rejected,
 }
 
 async fn register_incoming_request(
     registry: &Arc<Mutex<VerificationRegistry>>,
     client: &Client,
     event: ToDeviceKeyVerificationRequestEvent,
-) -> Option<VerificationRequest> {
+) -> IncomingRegistration {
     let flow_id = event.content.transaction_id.to_string();
     let mut request = None;
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
@@ -559,14 +542,18 @@ async fn register_incoming_request(
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    let request = request?;
-    let own_user = client.user_id()?;
+    let Some(request) = request else {
+        return IncomingRegistration::SdkRequestUnavailable;
+    };
+    let Some(own_user) = client.user_id() else {
+        return IncomingRegistration::Rejected;
+    };
     if !request.is_self_verification() && event.sender != *own_user {
-        return None;
+        return IncomingRegistration::Rejected;
     }
     let mut registry = registry.lock().await;
     if registry.requests.contains_key(&flow_id) {
-        return None;
+        return IncomingRegistration::AlreadyRegistered;
     }
     let cloned = request.clone();
     registry.requests.insert(
@@ -580,9 +567,10 @@ async fn register_incoming_request(
             sas: None,
             user_confirmed: false,
             user_mismatched: false,
+            owner_failed: false,
         },
     );
-    Some(cloned)
+    IncomingRegistration::Registered(cloned)
 }
 
 fn is_verification_to_device(event: &AnyToDeviceEvent) -> bool {
@@ -628,13 +616,21 @@ async fn watch_request(
 ) {
     let mut request_changes = request.changes();
     let mut sas_stream = None;
+    let mut initial_sas = None;
     {
         let mut registry = registry.lock().await;
         if let Some(managed) = registry.requests.get_mut(&flow_id) {
             refresh_sas(managed);
             if let Some(sas) = managed.sas.as_ref() {
+                initial_sas = Some(sas.clone());
                 sas_stream = Some(sas.changes());
             }
+        }
+    }
+    if let Some(sas) = initial_sas {
+        if accept_transitioned_sas(&flow_id, &sas).await.is_err() {
+            mark_owner_failed(&registry, &flow_id).await;
+            emit(NativeVerificationUpdateSignal { session_generation });
         }
     }
     loop {
@@ -653,8 +649,15 @@ async fn watch_request(
                     verification: Verification::SasV1(sas),
                 } = &state
                 {
+                    // Protocol acceptance belongs to the owner, not a UI phase.
+                    // Either side may start SAS after Ready, so accept every
+                    // transitioned handle direction-independently. The SDK sends
+                    // m.key.verification.accept only when this handle is in the
+                    // actionable Started state and is otherwise idempotent.
+                    let accept_failed = accept_transitioned_sas(&flow_id, sas).await.is_err();
                     let mut registry = registry.lock().await;
                     if let Some(managed) = registry.requests.get_mut(&flow_id) {
+                        managed.owner_failed |= accept_failed;
                         managed.other_device_id =
                             Some(sas.other_device().device_id().to_owned());
                         managed.sas = Some(sas.clone());
@@ -693,15 +696,49 @@ async fn watch_request(
     }
 }
 
+async fn accept_transitioned_sas(flow_id: &str, sas: &SasVerification) -> Result<(), &'static str> {
+    match sas.accept().await {
+        Ok(()) => {
+            verification_trace(
+                flow_id,
+                "sas_owner_accept",
+                None,
+                Some(sas_state_label(&sas.state())),
+            );
+            Ok(())
+        }
+        Err(_) => {
+            verification_trace(
+                flow_id,
+                "sas_owner_accept_failed",
+                None,
+                Some(sas_state_label(&sas.state())),
+            );
+            Err("v-crypto.1-sas-owner-accept-failed")
+        }
+    }
+}
+
+async fn mark_owner_failed(registry: &Arc<Mutex<VerificationRegistry>>, flow_id: &str) {
+    let mut registry = registry.lock().await;
+    if let Some(managed) = registry.requests.get_mut(flow_id) {
+        managed.owner_failed = true;
+    }
+}
+
 fn project_request(managed: &mut ManagedVerification) -> NativeVerificationRequest {
     refresh_sas(managed);
-    let (phase, sas) = if let Some(sas) = managed.sas.as_ref() {
+    let (phase, sas) = if managed.owner_failed {
+        (NativeVerificationPhase::Failed, None)
+    } else if let Some(sas) = managed.sas.as_ref() {
         if managed.user_mismatched {
             (NativeVerificationPhase::Mismatched, None)
         } else if sas.is_done() {
             (NativeVerificationPhase::Done, None)
         } else if sas.is_cancelled() {
             (NativeVerificationPhase::Cancelled, None)
+        } else if managed.user_confirmed || matches!(sas.state(), SasState::Confirmed) {
+            (NativeVerificationPhase::Confirmed, None)
         } else if sas.can_be_presented() {
             let display = NativeVerificationSas {
                 emoji: sas.emoji().map(|emoji| {
@@ -717,14 +754,7 @@ fn project_request(managed: &mut ManagedVerification) -> NativeVerificationReque
                     .decimals()
                     .map(|(first, second, third)| [first, second, third]),
             };
-            (
-                if managed.user_confirmed {
-                    NativeVerificationPhase::Confirmed
-                } else {
-                    NativeVerificationPhase::SasReady
-                },
-                Some(display),
-            )
+            (NativeVerificationPhase::SasReady, Some(display))
         } else if matches!(sas.state(), SasState::Accepted { .. }) {
             (NativeVerificationPhase::KeysExchanging, None)
         } else {

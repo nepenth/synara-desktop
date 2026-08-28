@@ -99,6 +99,17 @@ final class SynaraThemeRampTests: XCTestCase {
         XCTAssertEqual(bubble.depth, .layered)
     }
 
+    func testOwnAndOtherGroupedBubblesShareTheLeadingContentColumn() {
+        XCTAssertEqual(
+            SynaraMessageBubbleMetrics.cornerRadii(alignment: .own, isGrouped: true),
+            SynaraMessageBubbleMetrics.cornerRadii(alignment: .other, isGrouped: true)
+        )
+        XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingContentColumn(alignment: .own))
+        XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingContentColumn(alignment: .other))
+        XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingStatusOverlay(alignment: .own))
+        XCTAssertTrue(SynaraMessageBubbleMetrics.usesLeadingStatusOverlay(alignment: .other))
+    }
+
     func testCoreSurfaceRolesRemainVisiblyDimensional() {
         XCTAssertEqual(SynaraSurfaceDepthRole.roomRow, .layered)
         XCTAssertEqual(SynaraSurfaceDepthRole.standardMessage, .layered)

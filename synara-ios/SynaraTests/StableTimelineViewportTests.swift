@@ -107,6 +107,91 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testTimestampRevealAutoReturnsAfterTwoAndAHalfSeconds() {
+        XCTAssertEqual(
+            RoomTimelineTimestampRevealPolicy.displayDurationNanoseconds,
+            2_500_000_000
+        )
+    }
+
+    func testTimestampRevealDismissTaskMustOwnLatestRestartedGeneration() {
+        XCTAssertTrue(
+            RoomTimelineTimestampRevealPolicy.taskMayDismiss(
+                taskGeneration: 8,
+                currentGeneration: 8,
+                taskEventID: "$second",
+                revealedEventID: "$second",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineTimestampRevealPolicy.taskMayDismiss(
+                taskGeneration: 7,
+                currentGeneration: 8,
+                taskEventID: "$second",
+                revealedEventID: "$second",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineTimestampRevealPolicy.taskMayDismiss(
+                taskGeneration: 8,
+                currentGeneration: 8,
+                taskEventID: "$first",
+                revealedEventID: "$second",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineTimestampRevealPolicy.taskMayDismiss(
+                taskGeneration: 8,
+                currentGeneration: 8,
+                taskEventID: "$second",
+                revealedEventID: "$second",
+                isCancelled: true
+            )
+        )
+    }
+
+    func testOwnAvatarHydrationInstallsOnlyForTheActiveUserAndTimelineTask() {
+        XCTAssertTrue(
+            RoomTimelineOwnAvatarPolicy.mayInstall(
+                profileUserID: "@alice:matrix.org",
+                expectedUserID: "@alice:matrix.org",
+                expectedTimelineTaskID: "!room:matrix.org",
+                currentTimelineTaskID: "!room:matrix.org",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineOwnAvatarPolicy.mayInstall(
+                profileUserID: "@alice:matrix.org",
+                expectedUserID: "@alice:matrix.org",
+                expectedTimelineTaskID: "!old:matrix.org",
+                currentTimelineTaskID: "!new:matrix.org",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineOwnAvatarPolicy.mayInstall(
+                profileUserID: "@other:matrix.org",
+                expectedUserID: "@alice:matrix.org",
+                expectedTimelineTaskID: "!room:matrix.org",
+                currentTimelineTaskID: "!room:matrix.org",
+                isCancelled: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineOwnAvatarPolicy.mayInstall(
+                profileUserID: "@alice:matrix.org",
+                expectedUserID: "@alice:matrix.org",
+                expectedTimelineTaskID: "!room:matrix.org",
+                currentTimelineTaskID: "!room:matrix.org",
+                isCancelled: true
+            )
+        )
+    }
+
     func testContentOnlyRowChangesAreReconfiguredForStableIdentifiers() {
         let changed = StableTimelineViewportPolicy.changedIdentifiers(
             currentIDs: Set(["message", "unchanged", "removed"]),

@@ -1,19 +1,24 @@
-import type { NativeCrossSigningStatus } from '../../cross-signing/nativeCrossSigning';
-import type { VerificationStatus } from './nativeDevices';
+import type { NativeDeviceSnapshot, VerificationStatus } from './nativeDevices';
 
 export function resolveDeviceVerificationStatus(
-  currentTrust: VerificationStatus | undefined,
-  ownIdentityVerification: NativeCrossSigningStatus['ownIdentityVerification'] | undefined,
-  loading: boolean
+  snapshot: NativeDeviceSnapshot | undefined
 ): VerificationStatus {
-  if (currentTrust && currentTrust !== 'unknown') {
-    return currentTrust;
-  }
-  if (ownIdentityVerification === 'verified') {
-    return 'verified';
-  }
-  if (ownIdentityVerification === 'unverified') {
-    return 'unverified';
-  }
-  return loading ? 'unknown' : 'unverified';
+  return snapshot?.ownVerification ?? 'unknown';
 }
+
+export const canStartCurrentDeviceVerification = (
+  snapshot: NativeDeviceSnapshot | undefined
+): boolean =>
+  snapshot?.ownVerification !== 'verified' && snapshot?.hasDevicesToVerifyAgainst === true;
+
+export const currentDeviceVerificationAvailabilityMessage = (
+  hasDevicesToVerifyAgainst: boolean | null | undefined
+): string => {
+  if (hasDevicesToVerifyAgainst === true) {
+    return 'Compare emoji or number codes with another verified session. Synara does not mark this device verified until both sides confirm.';
+  }
+  if (hasDevicesToVerifyAgainst === false) {
+    return 'No eligible verified session is available yet. Open Synara or Element on a device that already verified this account, then refresh.';
+  }
+  return 'Synara could not check eligible verified sessions. Check your connection and retry.';
+};

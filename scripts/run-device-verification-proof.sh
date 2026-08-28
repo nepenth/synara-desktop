@@ -20,7 +20,7 @@ export CARGO_INCREMENTAL=0
 cargo test \
   -p synara-core \
   --lib \
-  live_two_device_sas_completes_through_product_owner_and_sync \
+  live_direct_peer_sas_transport_completes_through_product_owner_and_sync \
   -- \
   --ignored \
   --nocapture

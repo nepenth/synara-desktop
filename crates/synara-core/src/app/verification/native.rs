@@ -25,6 +25,7 @@ pub enum NativeVerificationPhase {
     Done,
     Mismatched,
     Cancelled,
+    Failed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -71,6 +72,7 @@ pub fn phase_rank(phase: NativeVerificationPhase) -> u8 {
         NativeVerificationPhase::Done => 6,
         NativeVerificationPhase::Mismatched => 7,
         NativeVerificationPhase::Cancelled => 8,
+        NativeVerificationPhase::Failed => 9,
     }
 }
 
@@ -100,6 +102,9 @@ mod tests {
         assert!(
             phase_rank(NativeVerificationPhase::SasReady)
                 < phase_rank(NativeVerificationPhase::Done)
+        );
+        assert!(
+            phase_rank(NativeVerificationPhase::Done) < phase_rank(NativeVerificationPhase::Failed)
         );
     }
 

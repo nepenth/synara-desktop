@@ -2,11 +2,13 @@
 
 use std::collections::BTreeSet;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 use tokio::sync::Mutex as AsyncMutex;
 
 use futures_util::StreamExt;
 use matrix_sdk::{
+    encryption::VerificationState,
     ruma::{
         api::client::uiaa::{
             AuthData, AuthType, MatrixUserIdentifier, Password, UiaaInfo, UserIdentifier,
@@ -25,6 +27,7 @@ use crate::app::room_keys::{
 use super::{
     sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge,
     NativeDeviceDeleteResult, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
+    NativeOwnDeviceVerification,
 };
 
 /// Shell-supplied sink for device-list wakeups. Desktop maps this to the
@@ -422,21 +425,43 @@ pub async fn snapshot(
     client: &Client,
     session_generation: u64,
 ) -> Result<NativeDeviceSnapshot, &'static str> {
+    let encryption = client.encryption();
+    // This performs the SDK's initial own-key query before we sample the
+    // subscriber, avoiding a UI-visible Unknown -> hidden-button race. A
+    // failed key query is recoverable verification metadata, not permission to
+    // erase the authoritative homeserver session list below.
     let current_device_id = client
         .device_id()
         .ok_or("v-crypto.7-device-snapshot-current-missing")?;
     let user_id = client
         .user_id()
         .ok_or("v-crypto.7-device-snapshot-user-missing")?;
-    let server_devices = client
-        .devices()
-        .await
-        .map_err(|_| "v-crypto.7-device-snapshot-server-failed")?;
+    // Eligibility can perform an initial `/keys/query`. Run it beside the
+    // authoritative homeserver session fetch and local crypto enrichment so a
+    // slow authority lookup cannot hold the entire Sessions screen hostage.
+    let (eligibility, server_devices, crypto_devices) = tokio::join!(
+        tokio::time::timeout(
+            Duration::from_secs(8),
+            encryption.has_devices_to_verify_against(),
+        ),
+        client.devices(),
+        encryption.get_user_devices(user_id),
+    );
+    let has_devices_to_verify_against = match eligibility {
+        Ok(Ok(has_devices)) => Some(has_devices),
+        Ok(Err(_)) | Err(_) => None,
+    };
+    let own_verification = match encryption.verification_state().get() {
+        VerificationState::Unknown => NativeOwnDeviceVerification::Unknown,
+        VerificationState::Unverified => NativeOwnDeviceVerification::Unverified,
+        VerificationState::Verified => NativeOwnDeviceVerification::Verified,
+    };
+    let server_devices = server_devices.map_err(|_| "v-crypto.7-device-snapshot-server-failed")?;
     // The homeserver session list is authoritative for account/device actions.
     // Crypto trust enrichment may be temporarily unavailable while a fresh
     // store is still processing device keys; do not erase valid sessions in
     // that case or the user loses the only path to target verification.
-    let crypto_devices = client.encryption().get_user_devices(user_id).await.ok();
+    let crypto_devices = crypto_devices.ok();
 
     let mut devices = server_devices
         .devices
@@ -474,6 +499,8 @@ pub async fn snapshot(
 
     Ok(NativeDeviceSnapshot {
         session_generation,
+        own_verification,
+        has_devices_to_verify_against,
         devices,
     })
 }

@@ -440,6 +440,17 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(SharedCoreTimelineRows.outcome(from: []), .empty)
     }
 
+    func testSharedCoreTimelineSenderAvatarAcceptsOnlyValidMXCMetadata() {
+        XCTAssertEqual(
+            SharedCoreTimelineRows.senderAvatarURL("mxc://example.org/alice")?.absoluteString,
+            "mxc://example.org/alice"
+        )
+        XCTAssertNil(SharedCoreTimelineRows.senderAvatarURL(nil))
+        XCTAssertNil(SharedCoreTimelineRows.senderAvatarURL("https://example.org/alice.png"))
+        XCTAssertNil(SharedCoreTimelineRows.senderAvatarURL("mxc://example.org"))
+        XCTAssertNil(SharedCoreTimelineRows.senderAvatarURL("mxc:///alice"))
+    }
+
     func testSharedCoreTimelineRowsMapsNonMessageBodiesWithoutEcho() {
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
@@ -1274,13 +1285,24 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             .failed
         )
+        XCTAssertEqual(
+            SharedCoreVerificationLive.state(
+                phase: "failed",
+                direction: "incoming",
+                flowId: "flow-8",
+                otherUserId: "@bob:example.org",
+                otherDeviceId: "DEVICE1"
+            ),
+            .failed
+        )
         XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
-        XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
+        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
         XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "done"))
         XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "cancelled"))
+        XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "failed"))
         XCTAssertFalse(SharedCoreVerificationLive.isTerminal(phase: "sas_ready"))
         XCTAssertEqual(
             SharedCoreVerificationLive.selectedFlowId(
@@ -1341,7 +1363,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
             ),
-            .accepted
+            .sasStarted,
+            "Incoming Started is observation-only because Rust owns protocol acceptance"
         )
         XCTAssertEqual(
             SharedCoreVerificationLive.state(

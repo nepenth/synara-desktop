@@ -1,5 +1,6 @@
 import { style } from '@vanilla-extract/css';
-import { config, toRem } from 'folds';
+import { color, config, toRem } from 'folds';
+import { raisedShadow, restingInnerEdge } from '../../styles/Depth.css';
 
 export const CategoryButton = style({
   flexGrow: 1,
@@ -21,4 +22,30 @@ export const RoomGlyph = style({
 export const RoomName = style({
   color: 'var(--synara-content-primary)',
   letterSpacing: '-0.005em',
+});
+
+/** Resting rows remain on the reading plane; interaction supplies elevation. */
+export const RoomSurface = style({
+  backgroundColor: 'transparent',
+  borderColor: 'transparent',
+  boxShadow: restingInnerEdge,
+  selectors: {
+    '&:hover, &:focus-within': {
+      backgroundColor: color.Surface.ContainerHover,
+      borderColor: color.Surface.ContainerLine,
+      boxShadow: raisedShadow,
+    },
+  },
+  '@media': {
+    '(prefers-contrast: more)': {
+      boxShadow: 'none',
+      borderColor: 'var(--synara-depth-contrast-edge)',
+      selectors: {
+        '&:hover, &:focus-within': {
+          borderColor: 'var(--synara-depth-contrast-strong-edge)',
+          boxShadow: 'none',
+        },
+      },
+    },
+  },
 });
