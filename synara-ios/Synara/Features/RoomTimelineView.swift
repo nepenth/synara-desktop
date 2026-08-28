@@ -288,10 +288,13 @@ struct RoomTimelineView: View {
     @State private var timelineTraceStartedAt = Date()
     @State private var stableViewportCommand: StableTimelineViewportCommand?
     @State private var stableViewportCommandID: UInt64 = 0
+    @State private var revealedTimestampEventID: String?
+    @State private var timestampRevealTask: Task<Void, Never>?
     private let timelineLogger = AppLogger()
     @Environment(\.openURL) private var openURL
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
 
     init(roomID: String, roomTitle: String?, focusedEventID: String? = nil) {
         self.roomID = roomID
@@ -343,7 +346,10 @@ struct RoomTimelineView: View {
                 isFocusedExternally: $isComposerFocused
             )
             .background(SynaraChrome.composer)
-            .shadow(color: Color.black.opacity(isAgentRoom ? 0.22 : 0.06), radius: 10, x: 0, y: -3)
+            .synaraDockedDepth(
+                .floating,
+                boundaryColor: isAgentRoom ? SynaraColor.agent : SynaraColor.separator
+            )
         }
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
         .navigationTitle(roomTitle ?? "Room")
@@ -434,6 +440,7 @@ struct RoomTimelineView: View {
             stopTypingUpdates()
             cancelTimelineScroll()
             flushMarkFullyRead()
+            cancelTimestampReveal()
         }
         .onReceive(environment.outgoingSends.queue.$items) { _ in
             applyOutgoingQueueToTimeline()
@@ -443,6 +450,9 @@ struct RoomTimelineView: View {
         }
         .onChange(of: draft) { value in
             environment.drafts.setDraft(value, roomID: roomID)
+        }
+        .onChange(of: timelineBottomAnchorGeneration) { _ in
+            cancelTimestampReveal()
         }
         .onChange(of: isRoomDetailsPresented) { isPresented in
             guard isPresented == false, shouldReturnToListAfterDetailsDismiss else {
@@ -520,6 +530,7 @@ struct RoomTimelineView: View {
                                     item: item,
                                     currentUserID: currentUserID,
                                     isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                                    isTimestampRevealed: false,
                                     animateSend: sendAnimationItemIDs.contains(item.id),
                                     replyPreview: item.replyToEventID.flatMap { replyPreviewsByEventID[$0] },
                                     replyCount: threadReplyCounts[item.eventID] ?? 0,
@@ -716,6 +727,14 @@ struct RoomTimelineView: View {
                 }
                 return loadOlderTimeline(before: oldestEventID, scrollAnchorID: anchorEventID)
             },
+            onTimestampRevealRequested: { callbackRouteID, callbackGeneration, eventID in
+                guard callbackRouteID == stableViewportRouteID,
+                      callbackGeneration == timelineBottomAnchorGeneration
+                else {
+                    return
+                }
+                revealTimestamp(for: eventID)
+            },
             onCommandCompleted: { callbackRouteID, callbackGeneration, command, success, targetEventID in
                 guard callbackRouteID == stableViewportRouteID,
                       callbackGeneration == timelineBottomAnchorGeneration
@@ -771,6 +790,7 @@ struct RoomTimelineView: View {
                 item: eventRow.item,
                 currentUserID: currentUserID,
                 isGroupedWithPrevious: eventRow.isGroupedWithPrevious,
+                isTimestampRevealed: eventRow.isTimestampRevealed,
                 animateSend: eventRow.animateSend,
                 replyPreview: eventRow.replyPreview,
                 replyCount: eventRow.replyCount,
@@ -820,6 +840,7 @@ struct RoomTimelineView: View {
                         .init(
                             item: item,
                             isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
+                            isTimestampRevealed: revealedTimestampEventID == stableEventID,
                             animateSend: sendAnimationItemIDs.contains(item.id),
                             replyPreview: item.replyToEventID.flatMap { previews[$0] },
                             replyCount: replyCounts[item.eventID] ?? 0,
@@ -833,6 +854,33 @@ struct RoomTimelineView: View {
             )
         }
         return rows
+    }
+
+    private func revealTimestamp(for eventID: String) {
+        timestampRevealTask?.cancel()
+        withAnimation(accessibilityReduceMotion ? nil : .easeOut(duration: 0.16)) {
+            revealedTimestampEventID = eventID
+        }
+        timestampRevealTask = Task { @MainActor in
+            do {
+                try await Task.sleep(nanoseconds: 3_000_000_000)
+            } catch {
+                return
+            }
+            guard Task.isCancelled == false, revealedTimestampEventID == eventID else {
+                return
+            }
+            withAnimation(accessibilityReduceMotion ? nil : .easeInOut(duration: 0.16)) {
+                revealedTimestampEventID = nil
+            }
+            timestampRevealTask = nil
+        }
+    }
+
+    private func cancelTimestampReveal() {
+        timestampRevealTask?.cancel()
+        timestampRevealTask = nil
+        revealedTimestampEventID = nil
     }
 
     @discardableResult
@@ -1113,6 +1161,7 @@ struct RoomTimelineView: View {
         stopTimelineUpdates(reason: "room-reset")
         stopTypingUpdates()
         cancelTimelineScroll()
+        cancelTimestampReveal()
         state = .idle
         draft = environment.drafts.draft(roomID: roomID)
         replyTarget = nil
@@ -3898,6 +3947,7 @@ private struct TimelineAvatar: View {
     var body: some View {
         avatarContent
             .frame(width: size, height: size)
+            .synaraDepth(.avatar, shape: Circle())
             .task(id: avatarTaskID) {
                 await loadAvatar()
             }
@@ -4535,7 +4585,7 @@ private struct CryptoRecoveryBanner: View {
             }
         }
         .padding(SynaraSpacing.medium)
-        .synaraCard(fill: SynaraColor.warning.opacity(0.10), stroke: SynaraColor.warning.opacity(0.30))
+        .synaraCard(fill: SynaraColor.warning.opacity(0.10), stroke: SynaraColor.warning)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("EncryptedRecoveryBanner")
     }
@@ -4562,6 +4612,7 @@ private struct TimelineRow: View {
     let item: TimelineItem
     let currentUserID: String
     let isGroupedWithPrevious: Bool
+    let isTimestampRevealed: Bool
     let animateSend: Bool
     let replyPreview: TimelineReplyPreview?
     let replyCount: Int
@@ -4577,7 +4628,6 @@ private struct TimelineRow: View {
     let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
-    @GestureState private var timestampRevealOffset: CGFloat = 0
 
     var body: some View {
         let row = HStack(alignment: .top, spacing: rowHorizontalSpacing) {
@@ -4628,7 +4678,8 @@ private struct TimelineRow: View {
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
 
-        let timestampRevealProgress = min(1, abs(timestampRevealOffset) / timestampRevealWidth)
+        let timestampRevealOffset = isGroupedWithPrevious && isTimestampRevealed ? -timestampRevealWidth : 0
+        let timestampRevealProgress = isTimestampRevealed ? 1.0 : 0.0
 
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             ZStack(alignment: .trailing) {
@@ -4642,26 +4693,12 @@ private struct TimelineRow: View {
                 withFailedRetryAccessibilityAction(row)
                     .offset(x: isGroupedWithPrevious ? timestampRevealOffset : 0)
             }
-            .simultaneousGesture(groupedTimestampRevealGesture)
             .clipped()
-                .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
+            .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
             if item.deliveryStatus == .failed, availability.canEdit {
                 failedMessageEditButton
             }
         }
-    }
-
-    private var groupedTimestampRevealGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
-            .updating($timestampRevealOffset) { value, state, _ in
-                guard isGroupedWithPrevious,
-                      value.translation.width < 0,
-                      abs(value.translation.width) > abs(value.translation.height)
-                else {
-                    return
-                }
-                state = max(-timestampRevealWidth, value.translation.width)
-            }
     }
 
     private var timestampRevealWidth: CGFloat {
@@ -4767,6 +4804,7 @@ private struct TimelineRow: View {
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
                 variant: .agent,
+                depth: .critical,
                 isGrouped: isGroupedWithPrevious,
                 showsBackground: true,
                 deliveryStatus: nil
@@ -5257,12 +5295,16 @@ private struct AgentApprovalPromptTimelineCard: View {
                         .lineLimit(2)
                 }
                 .padding(SynaraSpacing.small)
-                .background(SynaraColor.surface.opacity(0.72))
-                .overlay(
-                    RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                        .stroke(SynaraColor.critical.opacity(0.22), lineWidth: 1)
+                .synaraAccessibleSurfaceFill(
+                    SynaraColor.surface.opacity(0.72),
+                    opaqueFill: SynaraColor.surface
                 )
                 .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .synaraDepth(
+                    .raised,
+                    cornerRadius: SynaraRadius.control,
+                    boundaryColor: SynaraColor.critical
+                )
             }
 
             if let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
@@ -5291,8 +5333,12 @@ private struct AgentApprovalPromptTimelineCard: View {
                         .foregroundStyle(SynaraColor.primaryText)
                 }
                 .padding(SynaraSpacing.small)
-                .background(SynaraColor.surface.opacity(0.55))
+                .synaraAccessibleSurfaceFill(
+                    SynaraColor.surface.opacity(0.55),
+                    opaqueFill: SynaraColor.surface
+                )
                 .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .synaraDepth(.raised, cornerRadius: SynaraRadius.control)
             }
 
             if confirmApproveAlways {
@@ -5317,8 +5363,16 @@ private struct AgentApprovalPromptTimelineCard: View {
                     }
                 }
                 .padding(SynaraSpacing.small)
-                .background(SynaraColor.critical.opacity(0.08))
+                .synaraAccessibleSurfaceFill(
+                    SynaraColor.critical.opacity(0.08),
+                    opaqueFill: SynaraColor.secondarySurface
+                )
                 .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                .synaraDepth(
+                    .floating,
+                    cornerRadius: SynaraRadius.control,
+                    boundaryColor: SynaraColor.critical
+                )
             }
 
             LazyVGrid(columns: actionColumns, spacing: SynaraSpacing.small) {
@@ -5344,15 +5398,19 @@ private struct AgentApprovalPromptTimelineCard: View {
                             }
                             .frame(maxWidth: .infinity)
                             .frame(minHeight: 58)
+                            .foregroundStyle(action.tint)
+                            .synaraAccessibleSurfaceFill(
+                                action.tint.opacity(action == .deny ? 0.08 : 0.10),
+                                opaqueFill: SynaraColor.secondarySurface
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                            .synaraDepth(
+                                .raised,
+                                cornerRadius: SynaraRadius.control,
+                                boundaryColor: action.tint
+                            )
                         }
-                        .buttonStyle(.plain)
-                        .foregroundStyle(action.tint)
-                        .background(action.tint.opacity(action == .deny ? 0.08 : 0.10))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
-                                .stroke(action.tint.opacity(0.68), lineWidth: 1)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                        .buttonStyle(SynaraTactileButtonStyle())
                         .accessibilityLabel("\(action.title) \(action.reactionKey)")
                         .accessibilityIdentifier("AgentApprovalPromptReaction-\(action.accessibilityIdentifierSuffix)-\(eventID)")
                     }
@@ -5432,7 +5490,11 @@ private struct AgentCardLinkPreview: View {
             }
         }
         .padding(SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.surface.opacity(0.7), stroke: SynaraColor.agent.opacity(0.2))
+        .synaraCard(
+            fill: SynaraColor.surface.opacity(0.7),
+            opaqueFill: SynaraColor.surface,
+            stroke: SynaraColor.agent
+        )
     }
 }
 
@@ -5538,7 +5600,11 @@ private struct AgentApprovalDetails: View {
             AgentDetailRow(title: "Summary", value: card.summary ?? card.title)
         }
         .padding(SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.surface.opacity(0.65), stroke: SynaraColor.agent.opacity(0.22))
+        .synaraCard(
+            fill: SynaraColor.surface.opacity(0.65),
+            opaqueFill: SynaraColor.surface,
+            stroke: SynaraColor.agent
+        )
     }
 
     private var changeSummary: String {
@@ -5840,14 +5906,10 @@ private struct ComposerView: View {
                 .background(SynaraColor.secondarySurface)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
-                        .allowsHitTesting(false)
-                )
+                .synaraDepth(.raised, shape: Circle())
                 .frame(width: 44, height: 44)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SynaraTactileButtonStyle())
         .contentShape(Rectangle())
         .disabled(isSending)
         .accessibilityLabel("Attach")
@@ -5864,9 +5926,10 @@ private struct ComposerView: View {
                     .background(SynaraColor.secondarySurface)
                     .foregroundStyle(SynaraColor.secondaryText)
                     .clipShape(Circle())
+                    .synaraDepth(.raised, shape: Circle())
                     .frame(width: 44, height: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SynaraTactileButtonStyle())
             .contentShape(Rectangle())
             .accessibilityLabel("Stickers")
             .accessibilityIdentifier("StickerPackButton")
@@ -5884,9 +5947,12 @@ private struct ComposerView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .frame(width: 28, height: 28)
                 .foregroundStyle(isFormattingBarVisible ? SynaraColor.accent : SynaraColor.secondaryText)
+                .background(isFormattingBarVisible ? SynaraColor.accent.opacity(0.12) : Color.clear)
+                .clipShape(Circle())
+                .synaraDepth(isFormattingBarVisible ? .raised : .content, shape: Circle())
                 .frame(width: 44, height: 44)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SynaraTactileButtonStyle())
         .contentShape(Rectangle())
         .accessibilityLabel(isFormattingBarVisible ? "Hide formatting toolbar" : "Show formatting toolbar")
         .accessibilityAddTraits(isFormattingBarVisible ? .isSelected : [])
@@ -5903,9 +5969,10 @@ private struct ComposerView: View {
                     .background(sendButtonTint)
                     .foregroundStyle(Color.white)
                     .clipShape(Circle())
+                    .synaraDepth(.raised, shape: Circle(), boundaryColor: SynaraColor.accent)
                     .frame(width: 44, height: 44)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SynaraTactileButtonStyle())
             .contentShape(Rectangle())
             .disabled(isSending)
             .accessibilityLabel(editTarget == nil ? "Send" : "Save edit")
@@ -5929,11 +5996,7 @@ private struct ComposerView: View {
             RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                 .fill(SynaraColor.surface)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                .stroke(SynaraColor.separator.opacity(0.35), lineWidth: 0.5)
-                .allowsHitTesting(false)
-        )
+        .synaraDepth(.raised, cornerRadius: SynaraRadius.composer)
     }
 
     private var canSubmit: Bool {
@@ -6144,15 +6207,19 @@ private struct ComposerFormattingBar: View {
                             .frame(width: 36, height: 36)
                             .background(SynaraColor.surface)
                             .foregroundStyle(SynaraColor.primaryText)
-                            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: SynaraRadius.control)
-                                    .stroke(SynaraColor.separator.opacity(0.45), lineWidth: 0.5)
-                                    .allowsHitTesting(false)
+                            .clipShape(
+                                RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                            )
+                            .synaraDepth(
+                                .raised,
+                                shape: RoundedRectangle(
+                                    cornerRadius: SynaraRadius.control,
+                                    style: .continuous
+                                )
                             )
                             .frame(width: 44, height: 44)
                     }
-                    .buttonStyle(.plain)
+                    .buttonStyle(SynaraTactileButtonStyle())
                     .contentShape(Rectangle())
                     .accessibilityLabel(format.accessibilityLabel)
                     .accessibilityIdentifier("ComposerFormat-\(format.rawValue)")
@@ -6166,12 +6233,7 @@ private struct ComposerFormattingBar: View {
             RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
                 .fill(SynaraColor.secondarySurface)
         }
-        .overlay(
-            RoundedRectangle(cornerRadius: SynaraRadius.composer, style: .continuous)
-                .stroke(SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
-                .allowsHitTesting(false)
-        )
-        .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
+        .synaraDepth(.floating, cornerRadius: SynaraRadius.composer)
         .accessibilityIdentifier("ComposerFormattingBar")
     }
 }
@@ -6435,7 +6497,7 @@ private struct ComposerRelationBanner: View {
                 .accessibilityLabel("Cancel \(target.kind == .edit ? "editing" : "reply")")
         }
         .padding(SynaraSpacing.small)
-        .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent.opacity(0.18))
+        .synaraCard(fill: SynaraColor.accent.opacity(0.08), stroke: SynaraColor.accent)
         .accessibilityIdentifier(target.kind == .edit ? "ComposerEditBanner" : "ComposerReplyBanner")
     }
 }

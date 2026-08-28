@@ -20,6 +20,7 @@ import {
   type GifPickerConfig,
   type GifResult,
 } from '../../../utils/gifProvider';
+import * as depthCss from '../../../styles/Depth.css';
 
 type GifPickerProps = {
   config?: GifPickerConfig;
@@ -87,7 +88,14 @@ export function GifPicker({
 
   if (!enabled) {
     return (
-      <Box style={{ padding: config.space.S400, width: toRem(280) }}>
+      <Box
+        className={depthCss.floatingSurface}
+        style={{
+          padding: config.space.S400,
+          width: toRem(280),
+          borderRadius: config.radii.R400,
+        }}
+      >
         <Text size="T300" priority="300">
           {t(
             'modernization.gif.disabled_by_config',
@@ -99,7 +107,11 @@ export function GifPicker({
   }
 
   return (
-    <Box direction="Column" style={{ width: toRem(360), maxWidth: '80vw' }}>
+    <Box
+      className={depthCss.floatingSurface}
+      direction="Column"
+      style={{ width: toRem(360), maxWidth: '80vw', borderRadius: config.radii.R400 }}
+    >
       <Header size="500" style={{ padding: `0 ${config.space.S300}` }}>
         <Box as="form" onSubmit={handleSubmit} grow="Yes" gap="200">
           <Input

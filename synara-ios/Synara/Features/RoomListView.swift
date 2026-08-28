@@ -758,9 +758,13 @@ private struct RoomListHeader: View {
                     .frame(width: 42, height: 42)
                     .background(SynaraColor.secondaryText.opacity(0.10))
                     .foregroundStyle(SynaraColor.secondaryText)
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                    .synaraDepth(
+                        .raised,
+                        shape: RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                    )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SynaraTactileButtonStyle())
             .contentShape(Rectangle())
             .accessibilityLabel("Search rooms")
             .accessibilityIdentifier("RoomSearchButton")
@@ -771,9 +775,13 @@ private struct RoomListHeader: View {
                     .frame(width: 42, height: 42)
                     .background(SynaraColor.secondaryText.opacity(0.12))
                     .foregroundStyle(SynaraColor.secondaryText)
-                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))
+                    .synaraDepth(
+                        .raised,
+                        shape: RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+                    )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SynaraTactileButtonStyle())
             .contentShape(Rectangle())
             .accessibilityLabel("New room")
             .accessibilityIdentifier("NewRoomButton")
@@ -1325,7 +1333,7 @@ private struct InviteRoomListRow: View {
             }
         }
         .padding(SynaraSpacing.medium)
-        .synaraCard(fill: SynaraColor.warning.opacity(0.08), stroke: SynaraColor.warning.opacity(0.25))
+        .synaraCard(fill: SynaraColor.warning.opacity(0.08), stroke: SynaraColor.warning)
     }
 }
 

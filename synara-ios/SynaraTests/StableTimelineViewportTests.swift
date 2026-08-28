@@ -2,6 +2,90 @@
 import XCTest
 
 final class StableTimelineViewportTests: XCTestCase {
+    func testTimestampRevealGestureWaitsUntilDirectionIsKnown() {
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -8, y: 7)),
+            .pending
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -11, y: 2)),
+            .pending
+        )
+    }
+
+    func testTimestampRevealGestureAcceptsOnlyDominantLeftwardIntent() {
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -20, y: 5)),
+            .reveal
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -15, y: 14)),
+            .reject
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: 20, y: 2)),
+            .reject
+        )
+    }
+
+    func testTimestampRevealGestureRejectsVerticalScrollingAtActivationThreshold() {
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -2, y: -12)),
+            .reject
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: 4, y: 24)),
+            .reject
+        )
+    }
+
+    func testTimestampRevealGestureKeepsHorizontalIntentLatchedAfterRecognition() {
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.intent(
+                translation: CGPoint(x: -20, y: 80),
+                hasLockedHorizontalIntent: true
+            ),
+            .reveal
+        )
+    }
+
+    func testTimestampRevealGestureRequiresExclusiveTrackedTouchOwnership() {
+        XCTAssertTrue(
+            TimelineTimestampRevealGesturePolicy.ownsSingleTouch(
+                activeTouchCount: 1,
+                isTrackedTouch: true
+            )
+        )
+        XCTAssertFalse(
+            TimelineTimestampRevealGesturePolicy.ownsSingleTouch(
+                activeTouchCount: 2,
+                isTrackedTouch: true
+            )
+        )
+        XCTAssertFalse(
+            TimelineTimestampRevealGesturePolicy.ownsSingleTouch(
+                activeTouchCount: 1,
+                isTrackedTouch: false
+            )
+        )
+    }
+
+    func testTimestampRevealGestureUsesValidCancellationTransition() {
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.cancellationState(from: .possible),
+            .failed
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.cancellationState(from: .began),
+            .cancelled
+        )
+        XCTAssertEqual(
+            TimelineTimestampRevealGesturePolicy.cancellationState(from: .changed),
+            .cancelled
+        )
+        XCTAssertNil(TimelineTimestampRevealGesturePolicy.cancellationState(from: .ended))
+    }
+
     func testFeatureFlagDefaultsEnabledAndHonorsExplicitOverrides() {
         XCTAssertTrue(StableScrollAnchoringFeatureFlag.resolve(environmentValue: nil, persistedValue: nil))
         XCTAssertFalse(StableScrollAnchoringFeatureFlag.resolve(environmentValue: "false", persistedValue: true))

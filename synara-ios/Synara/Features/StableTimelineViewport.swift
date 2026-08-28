@@ -149,6 +149,156 @@ import SwiftUI
         }
     }
 
+    enum TimelineTimestampRevealGesturePolicy {
+        enum Intent: Equatable {
+            case pending
+            case reveal
+            case reject
+        }
+
+        static let activationDistance: CGFloat = 12
+        static let directionDominance: CGFloat = 1.15
+
+        static func intent(
+            translation: CGPoint,
+            hasLockedHorizontalIntent: Bool = false,
+            activationDistance: CGFloat = activationDistance,
+            directionDominance: CGFloat = directionDominance
+        ) -> Intent {
+            if hasLockedHorizontalIntent {
+                return .reveal
+            }
+            let horizontalDistance = abs(translation.x)
+            let verticalDistance = abs(translation.y)
+            guard max(horizontalDistance, verticalDistance) >= activationDistance else {
+                return .pending
+            }
+            guard translation.x < 0 else {
+                return .reject
+            }
+            return horizontalDistance > verticalDistance * directionDominance ? .reveal : .reject
+        }
+
+        static func ownsSingleTouch(activeTouchCount: Int, isTrackedTouch: Bool) -> Bool {
+            activeTouchCount == 1 && isTrackedTouch
+        }
+
+        static func cancellationState(
+            from state: UIGestureRecognizer.State
+        ) -> UIGestureRecognizer.State? {
+            switch state {
+            case .possible:
+                return .failed
+            case .began, .changed:
+                return .cancelled
+            case .ended, .cancelled, .failed:
+                return nil
+            @unknown default:
+                return nil
+            }
+        }
+    }
+
+    /// A narrow gesture recognizer for the secondary timestamp affordance.
+    ///
+    /// Unlike SwiftUI's broad `DragGesture`, this recognizer remains possible until
+    /// direction is known and fails as soon as the movement is vertical or rightward.
+    /// The enclosing table's pan recognizer therefore retains ownership of ordinary
+    /// timeline scrolling.
+    private final class TimelineTimestampRevealGestureRecognizer: UIGestureRecognizer {
+        private var initialLocation: CGPoint?
+        private weak var trackedTouch: UITouch?
+        var onRecognitionAborted: (() -> Void)?
+        var onReset: (() -> Void)?
+
+        var translation: CGPoint {
+            guard let initialLocation, let view else { return .zero }
+            let currentLocation = location(in: view)
+            return CGPoint(
+                x: currentLocation.x - initialLocation.x,
+                y: currentLocation.y - initialLocation.y
+            )
+        }
+
+        override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+            let activeTouchCount = event.allTouches?.reduce(into: 0) { count, touch in
+                if touch.phase == .began || touch.phase == .moved || touch.phase == .stationary {
+                    count += 1
+                }
+            } ?? touches.count
+            guard trackedTouch == nil,
+                  touches.count == 1,
+                  activeTouchCount == 1,
+                  let touch = touches.first,
+                  let view
+            else {
+                cancelRecognition()
+                return
+            }
+            trackedTouch = touch
+            initialLocation = touch.location(in: view)
+        }
+
+        override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+            let activeTouchCount = event.allTouches?.reduce(into: 0) { count, touch in
+                if touch.phase == .began || touch.phase == .moved || touch.phase == .stationary {
+                    count += 1
+                }
+            } ?? touches.count
+            let movedTouch = touches.count == 1 ? touches.first : nil
+            guard TimelineTimestampRevealGesturePolicy.ownsSingleTouch(
+                activeTouchCount: activeTouchCount,
+                isTrackedTouch: movedTouch === trackedTouch
+            ) else {
+                cancelRecognition()
+                return
+            }
+            switch TimelineTimestampRevealGesturePolicy.intent(
+                translation: translation,
+                hasLockedHorizontalIntent: state == .began || state == .changed
+            ) {
+            case .pending:
+                break
+            case .reveal:
+                state = state == .possible ? .began : .changed
+            case .reject:
+                cancelRecognition()
+            }
+        }
+
+        override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+            guard touches.count == 1, touches.first === trackedTouch else {
+                cancelRecognition()
+                return
+            }
+            switch state {
+            case .began, .changed:
+                state = .ended
+            default:
+                cancelRecognition()
+            }
+        }
+
+        override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+            cancelRecognition()
+        }
+
+        func cancelRecognition() {
+            guard let cancellationState = TimelineTimestampRevealGesturePolicy.cancellationState(from: state) else {
+                return
+            }
+            state = cancellationState
+            onRecognitionAborted?()
+        }
+
+        override func reset() {
+            super.reset()
+            initialLocation = nil
+            trackedTouch = nil
+            onReset?()
+        }
+    }
+
     /// Serializes diffable-data-source mutations while retaining only the
     /// newest requested state. UIKit rejects reentrant snapshot application,
     /// which can otherwise occur when a cell's synchronous layout spins the
@@ -198,6 +348,7 @@ import SwiftUI
     struct StableTimelineViewportEventRow: Equatable {
         let item: TimelineItem
         let isGroupedWithPrevious: Bool
+        let isTimestampRevealed: Bool
         let animateSend: Bool
         let replyPreview: TimelineReplyPreview?
         let replyCount: Int
@@ -266,6 +417,7 @@ import SwiftUI
         let onBottomPinnedChanged: (String, UInt64, Bool, String?) -> Void
         let onUserInteractionChanged: (String, UInt64, Bool) -> Void
         let onPaginationThresholdReached: (String, UInt64, String?) -> Bool
+        let onTimestampRevealRequested: (String, UInt64, String) -> Void
         let onCommandCompleted: (String, UInt64, StableTimelineViewportCommand, Bool, String?) -> Void
 
         func makeCoordinator() -> Coordinator {
@@ -322,6 +474,12 @@ import SwiftUI
                 parent.onPaginationThresholdReached(routeID, generation, anchorEventID)
             }
 
+            func timestampRevealRequested(routeID: String, generation: UInt64, eventID: String) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.parent.onTimestampRevealRequested(routeID, generation, eventID)
+                }
+            }
+
             func commandCompleted(
                 routeID: String,
                 generation: UInt64,
@@ -336,7 +494,7 @@ import SwiftUI
         }
     }
 
-    final class StableTimelineViewController: UIViewController, UITableViewDelegate {
+    final class StableTimelineViewController: UIViewController, UITableViewDelegate, UIGestureRecognizerDelegate {
         struct Configuration {
             let routeID: String
             let sessionGeneration: UInt64
@@ -363,6 +521,13 @@ import SwiftUI
             let timeout: DispatchWorkItem
         }
 
+        private struct TimestampRevealGestureSession {
+            let routeID: String
+            let generation: UInt64
+            let itemID: StableTimelineViewportItemID
+            let eventID: String
+        }
+
         private final class Cell: UITableViewCell {
             var stableID: StableTimelineViewportItemID?
 
@@ -375,6 +540,22 @@ import SwiftUI
 
         private let coordinator: StableTimelineViewport.Coordinator
         private let tableView = UITableView(frame: .zero, style: .plain)
+        private lazy var timestampRevealGesture: TimelineTimestampRevealGestureRecognizer = {
+            let recognizer = TimelineTimestampRevealGestureRecognizer(
+                target: self,
+                action: #selector(handleTimestampRevealGesture(_:))
+            )
+            recognizer.onRecognitionAborted = { [weak self] in
+                self?.timestampRevealGestureSession = nil
+            }
+            recognizer.onReset = { [weak self] in
+                self?.timestampRevealGestureSession = nil
+            }
+            return recognizer
+        }()
+        private var timestampRevealGestureSession: TimestampRevealGestureSession?
+        private var timestampRevealAppliedRouteID: String?
+        private var timestampRevealAppliedGeneration: UInt64?
         private var dataSource: UITableViewDiffableDataSource<Section, StableTimelineViewportItemID>!
         private var rowsByID: [StableTimelineViewportItemID: StableTimelineViewportRow] = [:]
         private var visualRows: [StableTimelineViewportRow] = []
@@ -438,6 +619,10 @@ import SwiftUI
             let isNewRoute = configuration?.routeID != newConfiguration.routeID
             let isNewGeneration = isNewRoute || configuration?.sessionGeneration != newConfiguration.sessionGeneration
             if isNewGeneration {
+                timestampRevealGesture.cancelRecognition()
+                timestampRevealGestureSession = nil
+                timestampRevealAppliedRouteID = nil
+                timestampRevealAppliedGeneration = nil
                 pendingConfiguration = nil
                 pendingConfigurationResetsPosition = false
                 snapshotApplyGate.discardPending()
@@ -487,6 +672,73 @@ import SwiftUI
             tableView.transform = CGAffineTransform(scaleX: 1, y: -1)
             tableView.accessibilityIdentifier = "TimelineList"
             tableView.accessibilityLabel = "Room timeline"
+            timestampRevealGesture.delegate = self
+            timestampRevealGesture.cancelsTouchesInView = false
+            timestampRevealGesture.delaysTouchesBegan = false
+            timestampRevealGesture.delaysTouchesEnded = false
+            tableView.addGestureRecognizer(timestampRevealGesture)
+        }
+
+        @objc private func handleTimestampRevealGesture(
+            _ recognizer: TimelineTimestampRevealGestureRecognizer
+        ) {
+            let session = timestampRevealGestureSession
+            if recognizer.state == .ended || recognizer.state == .cancelled || recognizer.state == .failed {
+                timestampRevealGestureSession = nil
+            }
+            guard recognizer.state == .ended,
+                  let session,
+                  let configuration,
+                  configuration.routeID == session.routeID,
+                  configuration.sessionGeneration == session.generation,
+                  let row = rowsByID[session.itemID],
+                  case let .event(eventRow) = row.content,
+                  eventRow.isGroupedWithPrevious,
+                  eventRow.item.eventID == session.eventID
+            else {
+                return
+            }
+            coordinator.timestampRevealRequested(
+                routeID: session.routeID,
+                generation: session.generation,
+                eventID: session.eventID
+            )
+        }
+
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+            guard gestureRecognizer === timestampRevealGesture else {
+                return true
+            }
+            if timestampRevealGestureSession != nil {
+                // Receive additional touches so the recognizer rejects the
+                // entire interaction instead of silently continuing one-finger recognition.
+                return true
+            }
+            guard let configuration,
+                  timestampRevealAppliedRouteID == configuration.routeID,
+                  timestampRevealAppliedGeneration == configuration.sessionGeneration,
+                  let indexPath = tableView.indexPathForRow(at: touch.location(in: tableView)),
+                  let itemID = dataSource.itemIdentifier(for: indexPath),
+                  let row = rowsByID[itemID],
+                  case let .event(eventRow) = row.content,
+                  eventRow.isGroupedWithPrevious
+            else {
+                return false
+            }
+            timestampRevealGestureSession = .init(
+                routeID: configuration.routeID,
+                generation: configuration.sessionGeneration,
+                itemID: itemID,
+                eventID: eventRow.item.eventID
+            )
+            return true
+        }
+
+        func gestureRecognizer(
+            _ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer
+        ) -> Bool {
+            gestureRecognizer === timestampRevealGesture || otherGestureRecognizer === timestampRevealGesture
         }
 
         private func configureDataSource() {
@@ -568,6 +820,8 @@ import SwiftUI
                    self.configuration?.routeID == configuration.routeID,
                    self.configuration?.sessionGeneration == configuration.sessionGeneration
                 {
+                    timestampRevealAppliedRouteID = configuration.routeID
+                    timestampRevealAppliedGeneration = configuration.sessionGeneration
                     tableView.layoutIfNeeded()
                     if executeCommandIfNeeded(configuration.command) == false {
                         if StableTimelineViewportPolicy.shouldFollowNewest(
@@ -1085,7 +1339,15 @@ import SwiftUI
             }
             let renderedEvents = visualRows.filter { $0.eventID != nil }.count
             let topEventID = visuallyTopmostVisibleEventID() ?? "none"
-            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned())"
+            let revealedTimestampEventID = visualRows.compactMap { row -> String? in
+                guard case let .event(eventRow) = row.content,
+                      eventRow.isTimestampRevealed
+                else {
+                    return nil
+                }
+                return eventRow.item.eventID
+            }.first ?? "none"
+            tableView.accessibilityValue = "routeID=\(configuration.routeID);generation=\(configuration.sessionGeneration);renderedEvents=\(renderedEvents);visibleCells=\(tableView.visibleCells.count);topEvent=\(topEventID);newestEvent=\(newestEventRow()?.eventID ?? "none");pinned=\(isConfirmedPinned());revealedTimestamp=\(revealedTimestampEventID)"
         }
 
         func scrollViewDidScroll(_: UIScrollView) {

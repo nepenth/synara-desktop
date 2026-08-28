@@ -2,6 +2,107 @@ import XCTest
 @testable import Synara
 
 final class SynaraThemeRampTests: XCTestCase {
+    func testContentDepthRemainsFlatAcrossAccessibilityModes() {
+        for dark in [false, true] {
+            for increasedContrast in [false, true] {
+                for reduceTransparency in [false, true] {
+                    let metrics = SynaraDepthLevel.content.metrics(
+                        dark: dark,
+                        increasedContrast: increasedContrast,
+                        reduceTransparency: reduceTransparency
+                    )
+                    XCTAssertEqual(metrics.shadowOpacity, 0)
+                    XCTAssertEqual(metrics.shadowRadius, 0)
+                    XCTAssertEqual(metrics.shadowOffsetY, 0)
+                    XCTAssertEqual(metrics.edgeOpacity, 0)
+                    XCTAssertEqual(metrics.boundaryOpacity, 0)
+                    XCTAssertEqual(metrics.boundaryWidth, 0)
+                }
+            }
+        }
+    }
+
+    func testDepthLevelsFormAQuietVisualHierarchy() {
+        for dark in [false, true] {
+            let avatar = SynaraDepthLevel.avatar.metrics(
+                dark: dark,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
+            let raised = SynaraDepthLevel.raised.metrics(
+                dark: dark,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
+            let floating = SynaraDepthLevel.floating.metrics(
+                dark: dark,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
+            let critical = SynaraDepthLevel.critical.metrics(
+                dark: dark,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
+
+            XCTAssertLessThan(avatar.shadowRadius, raised.shadowRadius)
+            XCTAssertLessThanOrEqual(avatar.shadowOpacity, raised.shadowOpacity)
+            XCTAssertLessThanOrEqual(avatar.edgeOpacity, raised.edgeOpacity)
+            XCTAssertLessThanOrEqual(avatar.boundaryOpacity, raised.boundaryOpacity)
+            XCTAssertLessThan(raised.shadowRadius, floating.shadowRadius)
+            XCTAssertLessThan(floating.shadowRadius, critical.shadowRadius)
+            XCTAssertLessThan(raised.shadowOpacity, floating.shadowOpacity)
+            XCTAssertLessThan(floating.shadowOpacity, critical.shadowOpacity)
+            XCTAssertLessThan(raised.shadowOffsetY, floating.shadowOffsetY)
+            XCTAssertLessThan(floating.shadowOffsetY, critical.shadowOffsetY)
+            XCTAssertLessThanOrEqual(raised.edgeOpacity, 0.24)
+            XCTAssertLessThanOrEqual(floating.edgeOpacity, 0.24)
+        }
+    }
+
+    func testReduceTransparencyShiftsDepthFromShadowTowardBoundary() {
+        let standard = SynaraDepthLevel.floating.metrics(
+            dark: true,
+            increasedContrast: false,
+            reduceTransparency: false
+        )
+        let reduced = SynaraDepthLevel.floating.metrics(
+            dark: true,
+            increasedContrast: false,
+            reduceTransparency: true
+        )
+
+        XCTAssertLessThan(reduced.shadowOpacity, standard.shadowOpacity)
+        XCTAssertGreaterThan(reduced.boundaryOpacity, standard.boundaryOpacity)
+        XCTAssertEqual(reduced.shadowRadius, standard.shadowRadius)
+    }
+
+    func testIncreasedContrastUsesBoundariesAndPreservesSemanticHierarchy() {
+        let raised = SynaraDepthLevel.raised.metrics(
+            dark: true,
+            increasedContrast: true,
+            reduceTransparency: false
+        )
+        let floating = SynaraDepthLevel.floating.metrics(
+            dark: true,
+            increasedContrast: true,
+            reduceTransparency: false
+        )
+        let critical = SynaraDepthLevel.critical.metrics(
+            dark: true,
+            increasedContrast: true,
+            reduceTransparency: false
+        )
+
+        XCTAssertEqual(raised.shadowOpacity, 0)
+        XCTAssertEqual(floating.shadowOpacity, 0)
+        XCTAssertEqual(critical.shadowOpacity, 0)
+        XCTAssertLessThan(raised.boundaryWidth, floating.boundaryWidth)
+        XCTAssertLessThan(floating.boundaryWidth, critical.boundaryWidth)
+        XCTAssertLessThan(raised.boundaryOpacity, floating.boundaryOpacity)
+        XCTAssertLessThan(floating.boundaryOpacity, critical.boundaryOpacity)
+    }
+
     func testTabBarScrollTailTracksActualVisibleOcclusion() {
         XCTAssertEqual(
             SynaraTabRootContentReachability.scrollTailHeight(

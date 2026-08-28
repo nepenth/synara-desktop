@@ -1,14 +1,40 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, DefaultReset, toRem } from 'folds';
+import { floatingShadow, raisedShadow, tactileSurface } from '../../styles/Depth.css';
 
 export const Editor = style([
   DefaultReset,
   {
     backgroundColor: color.Secondary.Container,
     color: color.Secondary.OnContainer,
-    boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.Secondary.ContainerLine}`,
+    border: `${config.borderWidth.B300} solid ${color.Secondary.ContainerLine}`,
+    boxShadow: raisedShadow,
     borderRadius: config.radii.R400,
     overflow: 'hidden',
+    transition: 'border-color 140ms ease-out, box-shadow 140ms ease-out',
+    selectors: {
+      '&:focus-within': {
+        borderColor: color.Primary.MainLine,
+        boxShadow: `${raisedShadow}, 0 0 0 ${config.borderWidth.B300} color-mix(in srgb, ${color.Primary.Main} 26%, transparent)`,
+      },
+    },
+    '@media': {
+      '(prefers-reduced-motion: reduce)': {
+        transition: 'none',
+      },
+      '(prefers-contrast: more)': {
+        boxShadow: 'none',
+        borderColor: color.Secondary.OnContainer,
+        selectors: {
+          '&:focus-within': {
+            boxShadow: 'none',
+            borderColor: color.Primary.Main,
+            outline: `${config.borderWidth.B600} solid ${color.Primary.Main}`,
+            outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
+          },
+        },
+      },
+    },
   },
 ]);
 
@@ -98,6 +124,7 @@ export const MarkdownBtnBox = style({
 
 export const EditorFloatingOptions = style([
   DefaultReset,
+  tactileSurface,
   {
     position: 'absolute',
     zIndex: 1,
@@ -109,10 +136,19 @@ export const EditorFloatingOptions = style([
     padding: toRem(3),
     borderRadius: config.radii.R300,
     backgroundColor: color.SurfaceVariant.Container,
-    boxShadow: `0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}, 0 ${toRem(
-      4
-    )} ${toRem(18)} #00000026`,
-    backdropFilter: 'blur(16px)',
+    border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+    boxShadow: floatingShadow,
+    backdropFilter: 'blur(18px) saturate(1.08)',
     pointerEvents: 'auto',
+    '@media': {
+      '(prefers-reduced-transparency: reduce)': {
+        backdropFilter: 'none',
+        backgroundColor: color.SurfaceVariant.Container,
+      },
+      '(prefers-contrast: more)': {
+        boxShadow: 'none',
+        borderColor: color.SurfaceVariant.OnContainer,
+      },
+    },
   },
 ]);

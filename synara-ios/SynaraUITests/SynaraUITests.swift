@@ -316,6 +316,78 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["TimelineSearchButton"].exists)
     }
 
+    func testVerticalTimelineDragStartingOnGroupedMessageRetainsScrollOwnership() {
+        let app = launchRoomApp(timestampGestureRegression: true)
+        let viewport = timelineViewport(in: app)
+        let verticallyDraggedGroupedMessage = app.descendants(matching: .any)
+            .matching(identifier: "TimelineItem-$media:!project:matrix.org")
+            .firstMatch
+        let horizontallySwipedGroupedMessage = app.descendants(matching: .any)
+            .matching(identifier: "TimelineItem-$gesture-b:!project:matrix.org")
+            .firstMatch
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(verticallyDraggedGroupedMessage.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+
+        let start = verticallyDraggedGroupedMessage.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5))
+        let end = start.withOffset(CGVector(dx: 0, dy: 220))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        XCTAssertTrue(
+            waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5),
+            "A vertical drag beginning on a grouped message must scroll the native timeline. Diagnostics: \(String(describing: viewport.value))"
+        )
+        XCTAssertTrue(app.buttons["JumpToLatestButton"].waitForExistence(timeout: 5))
+
+        tap(app.buttons["JumpToLatestButton"])
+        XCTAssertTrue(horizontallySwipedGroupedMessage.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5),
+            "The timeline must settle at live before testing the horizontal affordance. Diagnostics: \(String(describing: viewport.value))"
+        )
+        let horizontalStart = horizontallySwipedGroupedMessage.coordinate(
+            withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)
+        )
+        let horizontalEnd = horizontalStart.withOffset(CGVector(dx: -120, dy: 0))
+        horizontalStart.press(forDuration: 0.05, thenDragTo: horizontalEnd)
+        XCTAssertTrue(
+            waitForViewportDiagnostics(
+                viewport,
+                containing: "revealedTimestamp=$gesture-b:!project:matrix.org",
+                timeout: 1.5
+            ),
+            "A new left swipe must reveal only its own grouped row, never the row from a failed vertical gesture. Diagnostics: \(String(describing: viewport.value))"
+        )
+    }
+
+    func testTimestampRevealIgnoresUngroupedMessageAfterGestureSettles() {
+        let app = launchRoomApp(timestampGestureRegression: true)
+        let viewport = timelineViewport(in: app)
+        let ungroupedMessage = app.descendants(matching: .any)
+            .matching(identifier: "TimelineItem-$alex-thread:!project:matrix.org")
+            .firstMatch
+
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(ungroupedMessage.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+
+        let start = ungroupedMessage.coordinate(withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5))
+        let end = start.withOffset(CGVector(dx: -120, dy: 0))
+        start.press(forDuration: 0.05, thenDragTo: end)
+
+        let gestureSettlement = expectation(description: "Allow any asynchronous reveal callback and snapshot to settle")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.75) {
+            gestureSettlement.fulfill()
+        }
+        wait(for: [gestureSettlement], timeout: 1.5)
+
+        XCTAssertTrue(
+            String(describing: viewport.value).contains("revealedTimestamp=none"),
+            "A deliberate swipe beginning on an ungrouped row must not reveal any timestamp. Diagnostics: \(String(describing: viewport.value))"
+        )
+    }
+
     func testStableViewportThreeMessageScrollJumpLatestAndFiveThousandEventBoundedness() {
         let app = launchLargeTimelineApp(count: 5000)
         let viewport = timelineViewport(in: app)
@@ -1854,7 +1926,8 @@ final class SynaraUITests: XCTestCase {
         readMarkerEventID: String? = nil,
         largeTimelineCount: Int? = nil,
         roomNotes: Bool = false,
-        viewportScenario: String? = nil
+        viewportScenario: String? = nil,
+        timestampGestureRegression: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
@@ -1872,6 +1945,9 @@ final class SynaraUITests: XCTestCase {
         }
         if roomNotes {
             app.launchEnvironment["SYNARA_UI_TEST_ROOM_NOTES"] = "1"
+        }
+        if timestampGestureRegression {
+            app.launchEnvironment["SYNARA_UI_TEST_TIMESTAMP_GESTURE"] = "1"
         }
         launch(app)
         return app

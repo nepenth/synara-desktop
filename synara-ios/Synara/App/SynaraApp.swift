@@ -631,6 +631,8 @@ private extension AppEnvironment {
             timeline = MockTimelineService(events: uiTestAgentCardEvents())
         } else if processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] == "1" {
             timeline = MockTimelineService(events: uiTestAgentApprovalPromptEvents())
+        } else if processEnvironment["SYNARA_UI_TEST_TIMESTAMP_GESTURE"] == "1" {
+            timeline = MockTimelineService(events: uiTestTimestampGestureEvents())
         } else if processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1" {
             timeline = MockTimelineService(items: uiTestEncryptedTimelineItems())
         } else if processEnvironment["SYNARA_UI_TEST_LARGE_TIMELINE"] == "1" {
@@ -772,6 +774,21 @@ private extension AppEnvironment {
                 completedAt: 1_770_000_100_000,
                 createdAt: 1_769_998_000_000,
                 isCompleted: true
+            )
+        ]
+    }
+
+    static func uiTestTimestampGestureEvents() -> [RawTimelineEvent] {
+        TimelineFixtures.commonEvents() + [
+            RawTimelineEvent(
+                eventID: "$gesture-b:!project:matrix.org",
+                senderID: "@alex:matrix.org",
+                timestamp: TimelineFixtures.baseDate.addingTimeInterval(370),
+                type: "m.room.message",
+                body: "Second grouped message for timestamp gesture regression.",
+                replyToEventID: nil,
+                isEdited: false,
+                mediaURL: nil
             )
         ]
     }

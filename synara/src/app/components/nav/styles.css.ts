@@ -1,6 +1,7 @@
 import { ComplexStyleRule, createVar, style } from '@vanilla-extract/css';
 import { RecipeVariants, recipe } from '@vanilla-extract/recipes';
 import { ContainerColor, DefaultReset, Disabled, RadiiVariant, color, config, toRem } from 'folds';
+import { quietEdgeLight, raisedShadow } from '../../styles/Depth.css';
 
 export const NavCategory = style([
   DefaultReset,
@@ -54,6 +55,9 @@ const NavItemBase = style({
   color: OnContainer,
   outline: 'none',
   minHeight: toRem(40),
+  border: `${config.borderWidth.B300} solid transparent`,
+  transition:
+    'background-color 140ms ease-out, border-color 140ms ease-out, box-shadow 140ms ease-out, transform 140ms ease-out',
 
   selectors: {
     '&::before': {
@@ -78,6 +82,9 @@ const NavItemBase = style({
     },
     '&[aria-selected=true]': {
       backgroundColor: 'var(--synara-selected-surface)',
+      borderColor: ContainerLine,
+      boxShadow: raisedShadow,
+      transform: `translateY(-${toRem(1)})`,
     },
     '&[aria-selected=true]::before': {
       opacity: 1,
@@ -85,6 +92,29 @@ const NavItemBase = style({
     [`&:has(.${NavLink}:focus-visible)`]: {
       outline: `${config.borderWidth.B600} solid ${ContainerLine}`,
       outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
+    },
+    '&[aria-selected=true]:active': {
+      transform: 'translateY(0)',
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+      transform: 'none',
+      selectors: {
+        '&[aria-selected=true], &[aria-selected=true]:active': {
+          transform: 'none',
+        },
+      },
+    },
+    '(prefers-contrast: more)': {
+      boxShadow: 'none',
+      selectors: {
+        '&[aria-selected=true], &[aria-selected=true]:active': {
+          boxShadow: 'none',
+        },
+      },
     },
   },
   '@supports': {

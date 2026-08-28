@@ -446,6 +446,287 @@ enum SynaraRadius {
     static let composer: CGFloat = 22
 }
 
+enum SynaraDepthLevel: String, CaseIterable {
+    case content
+    case raised
+    case floating
+    case avatar
+    case critical
+
+    func metrics(
+        dark: Bool,
+        increasedContrast: Bool,
+        reduceTransparency: Bool
+    ) -> SynaraDepthMetrics {
+        if self == .content {
+            return SynaraDepthMetrics(
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffsetY: 0,
+                edgeOpacity: 0,
+                boundaryOpacity: 0,
+                boundaryWidth: 0
+            )
+        }
+
+        if increasedContrast {
+            switch self {
+            case .content:
+                preconditionFailure("Content depth is handled before increased-contrast metrics")
+            case .avatar, .raised:
+                return SynaraDepthMetrics(
+                    shadowOpacity: 0,
+                    shadowRadius: 0,
+                    shadowOffsetY: 0,
+                    edgeOpacity: 0,
+                    boundaryOpacity: 0.88,
+                    boundaryWidth: 1
+                )
+            case .floating:
+                return SynaraDepthMetrics(
+                    shadowOpacity: 0,
+                    shadowRadius: 0,
+                    shadowOffsetY: 0,
+                    edgeOpacity: 0,
+                    boundaryOpacity: 0.96,
+                    boundaryWidth: 1.25
+                )
+            case .critical:
+                return SynaraDepthMetrics(
+                    shadowOpacity: 0,
+                    shadowRadius: 0,
+                    shadowOffsetY: 0,
+                    edgeOpacity: 0,
+                    boundaryOpacity: 1,
+                    boundaryWidth: 1.5
+                )
+            }
+        }
+
+        let transparencyScale = reduceTransparency ? 0.72 : 1.0
+        let boundaryScale = reduceTransparency ? 1.18 : 1.0
+        switch self {
+        case .content:
+            preconditionFailure("Content depth is handled before standard metrics")
+        case .raised:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.26 : 0.12) * transparencyScale,
+                shadowRadius: 7,
+                shadowOffsetY: 2,
+                edgeOpacity: dark ? 0.09 : 0.20,
+                boundaryOpacity: (dark ? 0.42 : 0.36) * boundaryScale,
+                boundaryWidth: 0.5
+            )
+        case .floating:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.34 : 0.16) * transparencyScale,
+                shadowRadius: 14,
+                shadowOffsetY: 5,
+                edgeOpacity: dark ? 0.12 : 0.24,
+                boundaryOpacity: (dark ? 0.50 : 0.42) * boundaryScale,
+                boundaryWidth: 0.65
+            )
+        case .avatar:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.24 : 0.12) * transparencyScale,
+                shadowRadius: 5,
+                shadowOffsetY: 2,
+                edgeOpacity: dark ? 0.08 : 0.16,
+                boundaryOpacity: (dark ? 0.34 : 0.28) * boundaryScale,
+                boundaryWidth: 0.5
+            )
+        case .critical:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.40 : 0.20) * transparencyScale,
+                shadowRadius: 18,
+                shadowOffsetY: 7,
+                edgeOpacity: dark ? 0.14 : 0.28,
+                boundaryOpacity: (dark ? 0.56 : 0.48) * boundaryScale,
+                boundaryWidth: 0.75
+            )
+        }
+    }
+}
+
+struct SynaraDepthMetrics: Equatable {
+    let shadowOpacity: Double
+    let shadowRadius: CGFloat
+    let shadowOffsetY: CGFloat
+    let edgeOpacity: Double
+    let boundaryOpacity: Double
+    let boundaryWidth: CGFloat
+}
+
+private struct SynaraDepthModifier<Outline: Shape>: ViewModifier {
+    let level: SynaraDepthLevel
+    let outline: Outline
+    let boundaryColor: Color
+    let shadowVerticalDirection: CGFloat
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if level == .content {
+            content
+        } else {
+            let metrics = level.metrics(
+                dark: colorScheme == .dark,
+                increasedContrast: colorSchemeContrast == .increased,
+                reduceTransparency: reduceTransparency
+            )
+
+            content
+                .overlay {
+                    outline
+                        .stroke(boundaryColor.opacity(metrics.boundaryOpacity), lineWidth: metrics.boundaryWidth)
+                        .allowsHitTesting(false)
+                }
+                .overlay {
+                    outline
+                        .stroke(Color.white.opacity(metrics.edgeOpacity), lineWidth: 0.5)
+                        .blendMode(.screen)
+                        .allowsHitTesting(false)
+                }
+                .shadow(
+                    color: Color.black.opacity(metrics.shadowOpacity),
+                    radius: metrics.shadowRadius,
+                    x: 0,
+                    y: metrics.shadowOffsetY * shadowVerticalDirection
+                )
+        }
+    }
+}
+
+private struct SynaraDockedDepthModifier: ViewModifier {
+    let level: SynaraDepthLevel
+    let boundaryColor: Color
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.colorSchemeContrast) private var colorSchemeContrast
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if level == .content {
+            content
+        } else {
+            let metrics = level.metrics(
+                dark: colorScheme == .dark,
+                increasedContrast: colorSchemeContrast == .increased,
+                reduceTransparency: reduceTransparency
+            )
+
+            content
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(boundaryColor.opacity(metrics.boundaryOpacity))
+                        .frame(height: metrics.boundaryWidth)
+                        .allowsHitTesting(false)
+                }
+                .overlay(alignment: .top) {
+                    Rectangle()
+                        .fill(Color.white.opacity(metrics.edgeOpacity))
+                        .frame(height: 0.5)
+                        .blendMode(.screen)
+                        .allowsHitTesting(false)
+                }
+                .shadow(
+                    color: Color.black.opacity(metrics.shadowOpacity),
+                    radius: metrics.shadowRadius,
+                    x: 0,
+                    y: -metrics.shadowOffsetY
+                )
+        }
+    }
+}
+
+struct SynaraTactileButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed && reduceMotion == false ? 0.985 : 1)
+            .offset(y: configuration.isPressed && reduceMotion == false ? 1 : 0)
+            .opacity(configuration.isPressed ? 0.88 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
+    }
+}
+
+private struct SynaraAccessibleSurfaceFillModifier: ViewModifier {
+    let standardFill: Color
+    let opaqueFill: Color
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        if reduceTransparency {
+            content.background {
+                ZStack {
+                    opaqueFill
+                    standardFill
+                }
+            }
+        } else {
+            content.background(standardFill)
+        }
+    }
+}
+
+extension View {
+    /// Preserves a surface's semantic color while replacing alpha-composited
+    /// fills with an opaque plane when Reduce Transparency is enabled.
+    func synaraAccessibleSurfaceFill(
+        _ standardFill: Color,
+        opaqueFill: Color
+    ) -> some View {
+        modifier(
+            SynaraAccessibleSurfaceFillModifier(
+                standardFill: standardFill,
+                opaqueFill: opaqueFill
+            )
+        )
+    }
+
+    func synaraDepth<Outline: Shape>(
+        _ level: SynaraDepthLevel,
+        shape: Outline,
+        boundaryColor: Color = SynaraColor.separator,
+        shadowVerticalDirection: CGFloat = 1
+    ) -> some View {
+        modifier(
+            SynaraDepthModifier(
+                level: level,
+                outline: shape,
+                boundaryColor: boundaryColor,
+                shadowVerticalDirection: shadowVerticalDirection
+            )
+        )
+    }
+
+    func synaraDepth(
+        _ level: SynaraDepthLevel,
+        cornerRadius: CGFloat,
+        boundaryColor: Color = SynaraColor.separator,
+        shadowVerticalDirection: CGFloat = 1
+    ) -> some View {
+        synaraDepth(
+            level,
+            shape: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous),
+            boundaryColor: boundaryColor,
+            shadowVerticalDirection: shadowVerticalDirection
+        )
+    }
+
+    /// Adds upward occlusion and a top separator to a full-width bottom
+    /// surface without outlining the screen edges like a floating card.
+    func synaraDockedDepth(
+        _ level: SynaraDepthLevel,
+        boundaryColor: Color = SynaraColor.separator
+    ) -> some View {
+        modifier(SynaraDockedDepthModifier(level: level, boundaryColor: boundaryColor))
+    }
+}
+
 enum SynaraTypography {
     static let screenTitle = Font.title2.weight(.semibold)
     static let sectionTitle = Font.headline
@@ -477,8 +758,10 @@ struct SynaraAvatar: View {
     }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+
         ZStack {
-            RoundedRectangle(cornerRadius: SynaraRadius.card)
+            shape
                 .fill(tint.opacity(0.18))
 
             if let systemImage {
@@ -493,6 +776,8 @@ struct SynaraAvatar: View {
             }
         }
         .frame(width: size, height: size)
+        .clipShape(shape)
+        .synaraDepth(.avatar, shape: shape)
         .accessibilityHidden(true)
     }
 
@@ -588,13 +873,20 @@ struct SynaraUnreadBadge: View {
 }
 
 struct SynaraListRowButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .background(
                 RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
                     .fill(configuration.isPressed ? SynaraColor.secondaryText.opacity(0.10) : Color.clear)
             )
-            .animation(.easeOut(duration: 0.14), value: configuration.isPressed)
+            .synaraDepth(
+                configuration.isPressed ? .raised : .content,
+                cornerRadius: SynaraRadius.card
+            )
+            .scaleEffect(configuration.isPressed && reduceMotion == false ? 0.995 : 1)
+            .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)
     }
 }
 
@@ -607,8 +899,8 @@ struct SynaraFilterChip: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: SynaraSpacing.xSmall) {
-            Text(title)
-                .font(SynaraTypography.chipLabel.weight(.medium))
+                Text(title)
+                    .font(SynaraTypography.chipLabel.weight(.medium))
                     .lineLimit(1)
 
                 if let badgeCount, badgeCount > 0 {
@@ -627,13 +919,16 @@ struct SynaraFilterChip: View {
             .background(isSelected ? SynaraColor.accent : SynaraColor.secondarySurface)
             .foregroundStyle(isSelected ? Color.white : SynaraColor.secondaryText)
             .clipShape(Capsule())
-            .overlay(
-                Capsule()
-                    .stroke(isSelected ? Color.clear : SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
-                    .allowsHitTesting(false)
-            )
+            .overlay {
+                if isSelected == false {
+                    Capsule()
+                        .stroke(SynaraColor.separator.opacity(0.55), lineWidth: 0.5)
+                        .allowsHitTesting(false)
+                }
+            }
+            .synaraDepth(isSelected ? .raised : .content, cornerRadius: 16)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SynaraTactileButtonStyle())
         .accessibilityLabel(accessibilityLabel)
         .accessibilityAddTraits(isSelected ? .isSelected : [])
     }
@@ -665,15 +960,18 @@ struct SynaraActionIconButton: View {
     }
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: 17, weight: .semibold))
                 .frame(width: 44, height: 44)
                 .background(tint.opacity(0.12))
                 .foregroundStyle(tint)
-                .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control))
+                .clipShape(shape)
+                .synaraDepth(.raised, shape: shape)
         }
-        .buttonStyle(.plain)
+        .buttonStyle(SynaraTactileButtonStyle())
         .contentShape(Rectangle())
         .accessibilityLabel(Text(accessibilityLabel))
     }
@@ -724,26 +1022,35 @@ struct SynaraProductHeader: View {
 
 struct SynaraCardModifier: ViewModifier {
     var fill: Color = SynaraColor.secondarySurface
-    var stroke: Color = SynaraColor.separator.opacity(0.35)
+    var opaqueFill: Color = SynaraColor.secondarySurface
+    var stroke: Color = SynaraColor.separator
+    var depth: SynaraDepthLevel = .raised
 
     func body(content: Content) -> some View {
+        let shape = RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+
         content
-            .background(fill)
-            .overlay(
-                RoundedRectangle(cornerRadius: SynaraRadius.card)
-                    .stroke(stroke, lineWidth: 0.5)
-                    .allowsHitTesting(false)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card))
+            .synaraAccessibleSurfaceFill(fill, opaqueFill: opaqueFill)
+            .clipShape(shape)
+            .synaraDepth(depth, shape: shape, boundaryColor: stroke)
     }
 }
 
 extension View {
     func synaraCard(
         fill: Color = SynaraColor.secondarySurface,
-        stroke: Color = SynaraColor.separator.opacity(0.35)
+        opaqueFill: Color = SynaraColor.secondarySurface,
+        stroke: Color = SynaraColor.separator,
+        depth: SynaraDepthLevel = .raised
     ) -> some View {
-        modifier(SynaraCardModifier(fill: fill, stroke: stroke))
+        modifier(
+            SynaraCardModifier(
+                fill: fill,
+                opaqueFill: opaqueFill,
+                stroke: stroke,
+                depth: depth
+            )
+        )
     }
 }
 
@@ -969,10 +1276,16 @@ struct SynaraToolbarIconButton: View {
     let action: () -> Void
 
     var body: some View {
+        let shape = RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous)
+
         Button(action: action) {
             Image(systemName: systemImage)
                 .frame(width: 28, height: 28)
+                .background(SynaraColor.elevatedSurface)
+                .clipShape(shape)
+                .synaraDepth(.raised, shape: shape)
         }
+        .buttonStyle(SynaraTactileButtonStyle())
         .accessibilityLabel(Text(accessibilityLabel))
     }
 }
