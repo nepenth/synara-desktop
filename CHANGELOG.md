@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## 2.1.19 - 2026-08-28
+
+- Corrected the iOS depth rollout so its hierarchy is visibly present on the
+  actual room rows, standard and formatted messages, avatars, reactions,
+  message actions, and composer rather than only on isolated controls.
+- Added restrained light- and dark-mode surface edges and shadows, with
+  boundary-first behavior for Increase Contrast and reduced shadow emphasis
+  when Reduce Transparency is enabled.
+- Added a discoverable 44-point message-actions control while preserving
+  grouped-message timestamp reveal and native vertical room-history scrolling.
+- Added simulator screenshot, typing, scroll ownership, bottom-content
+  reachability, Dynamic Type, and semantic depth regression coverage.
+
 ## 2.1.18 - 2026-08-27
 
 - Added a restrained, cross-client depth system for room rows, composers,

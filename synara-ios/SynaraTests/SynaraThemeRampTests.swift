@@ -29,6 +29,11 @@ final class SynaraThemeRampTests: XCTestCase {
                 increasedContrast: false,
                 reduceTransparency: false
             )
+            let layered = SynaraDepthLevel.layered.metrics(
+                dark: dark,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
             let raised = SynaraDepthLevel.raised.metrics(
                 dark: dark,
                 increasedContrast: false,
@@ -45,9 +50,14 @@ final class SynaraThemeRampTests: XCTestCase {
                 reduceTransparency: false
             )
 
+            XCTAssertGreaterThan(layered.shadowOpacity, 0)
+            XCTAssertGreaterThan(layered.edgeOpacity, 0)
+            XCTAssertGreaterThan(layered.boundaryWidth, 0)
+            XCTAssertLessThan(layered.shadowRadius, raised.shadowRadius)
+            XCTAssertLessThan(layered.shadowOpacity, raised.shadowOpacity)
             XCTAssertLessThan(avatar.shadowRadius, raised.shadowRadius)
             XCTAssertLessThanOrEqual(avatar.shadowOpacity, raised.shadowOpacity)
-            XCTAssertLessThanOrEqual(avatar.edgeOpacity, raised.edgeOpacity)
+            XCTAssertLessThanOrEqual(avatar.edgeOpacity, 0.18)
             XCTAssertLessThanOrEqual(avatar.boundaryOpacity, raised.boundaryOpacity)
             XCTAssertLessThan(raised.shadowRadius, floating.shadowRadius)
             XCTAssertLessThan(floating.shadowRadius, critical.shadowRadius)
@@ -58,6 +68,42 @@ final class SynaraThemeRampTests: XCTestCase {
             XCTAssertLessThanOrEqual(raised.edgeOpacity, 0.24)
             XCTAssertLessThanOrEqual(floating.edgeOpacity, 0.24)
         }
+    }
+
+    func testLightDepthRemainsQuieterThanDarkDepth() {
+        for level in SynaraDepthLevel.allCases where level != .content {
+            let light = level.metrics(
+                dark: false,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
+            let dark = level.metrics(
+                dark: true,
+                increasedContrast: false,
+                reduceTransparency: false
+            )
+
+            XCTAssertLessThan(light.shadowOpacity, dark.shadowOpacity)
+            XCTAssertLessThanOrEqual(light.shadowRadius, dark.shadowRadius)
+            XCTAssertLessThanOrEqual(light.shadowOffsetY, dark.shadowOffsetY)
+        }
+    }
+
+    func testStandardTextBubbleIsLayeredByDefault() {
+        let bubble = SynaraMessageBubble(
+            text: "Readable message",
+            alignment: .other
+        )
+
+        XCTAssertTrue(bubble.showsBackground)
+        XCTAssertEqual(bubble.depth, .layered)
+    }
+
+    func testCoreSurfaceRolesRemainVisiblyDimensional() {
+        XCTAssertEqual(SynaraSurfaceDepthRole.roomRow, .layered)
+        XCTAssertEqual(SynaraSurfaceDepthRole.standardMessage, .layered)
+        XCTAssertEqual(SynaraSurfaceDepthRole.emphasizedMessage, .raised)
+        XCTAssertTrue(SynaraSurfaceDepthRole.standardMessageShowsBackground)
     }
 
     func testReduceTransparencyShiftsDepthFromShadowTowardBoundary() {
@@ -83,6 +129,11 @@ final class SynaraThemeRampTests: XCTestCase {
             increasedContrast: true,
             reduceTransparency: false
         )
+        let layered = SynaraDepthLevel.layered.metrics(
+            dark: true,
+            increasedContrast: true,
+            reduceTransparency: false
+        )
         let floating = SynaraDepthLevel.floating.metrics(
             dark: true,
             increasedContrast: true,
@@ -94,9 +145,11 @@ final class SynaraThemeRampTests: XCTestCase {
             reduceTransparency: false
         )
 
+        XCTAssertEqual(layered.shadowOpacity, 0)
         XCTAssertEqual(raised.shadowOpacity, 0)
         XCTAssertEqual(floating.shadowOpacity, 0)
         XCTAssertEqual(critical.shadowOpacity, 0)
+        XCTAssertLessThan(layered.boundaryWidth, raised.boundaryWidth)
         XCTAssertLessThan(raised.boundaryWidth, floating.boundaryWidth)
         XCTAssertLessThan(floating.boundaryWidth, critical.boundaryWidth)
         XCTAssertLessThan(raised.boundaryOpacity, floating.boundaryOpacity)

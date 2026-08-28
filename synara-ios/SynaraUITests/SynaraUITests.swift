@@ -144,6 +144,35 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
+    func testQuietDepthSurfacesKeepRoomTimelineActionsAndComposerDiscoverable() {
+        let app = launchSignedInRoomsApp()
+        let projectRoom = app.buttons["RoomRow-!project:matrix.org"]
+        XCTAssertTrue(projectRoom.waitForExistence(timeout: 5))
+
+        let roomListScreenshot = XCTAttachment(screenshot: app.screenshot())
+        roomListScreenshot.name = "quiet-depth-room-list"
+        roomListScreenshot.lifetime = .keepAlways
+        add(roomListScreenshot)
+
+        tap(projectRoom)
+        XCTAssertTrue(timelineViewport(in: app).waitForExistence(timeout: 5))
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
+
+        let actions = app.buttons["TimelineItemActions-$alex-thread:!project:matrix.org"]
+        XCTAssertTrue(actions.waitForExistence(timeout: 5))
+        XCTAssertTrue(actions.isHittable)
+
+        let timelineScreenshot = XCTAttachment(screenshot: app.screenshot())
+        timelineScreenshot.name = "quiet-depth-timeline"
+        timelineScreenshot.lifetime = .keepAlways
+        add(timelineScreenshot)
+
+        actions.tap()
+        XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["React"].exists)
+        XCTAssertTrue(app.buttons["Pin to Notes"].exists)
+    }
+
     func testComposerRetainsEveryCharacterDuringBusyTimelineUpdates() {
         let app = launchRoomApp(
             largeTimelineCount: 300,
@@ -320,7 +349,7 @@ final class SynaraUITests: XCTestCase {
         let app = launchRoomApp(timestampGestureRegression: true)
         let viewport = timelineViewport(in: app)
         let verticallyDraggedGroupedMessage = app.descendants(matching: .any)
-            .matching(identifier: "TimelineItem-$media:!project:matrix.org")
+            .matching(identifier: "TimelineItem-$gesture-b:!project:matrix.org")
             .firstMatch
         let horizontallySwipedGroupedMessage = app.descendants(matching: .any)
             .matching(identifier: "TimelineItem-$gesture-b:!project:matrix.org")

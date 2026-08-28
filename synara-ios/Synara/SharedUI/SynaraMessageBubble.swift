@@ -14,7 +14,7 @@ enum SynaraMessageBubbleVariant {
 struct SynaraMessageBubble<Content: View>: View {
     let alignment: SynaraMessageBubbleAlignment
     let variant: SynaraMessageBubbleVariant
-    var depth: SynaraDepthLevel = .raised
+    var depth: SynaraDepthLevel = SynaraSurfaceDepthRole.standardMessage
     let isGrouped: Bool
     let showsBackground: Bool
     let deliveryStatus: TimelineDeliveryStatus?
@@ -273,7 +273,7 @@ extension SynaraMessageBubble where Content == AnyView {
         alignment: SynaraMessageBubbleAlignment,
         variant: SynaraMessageBubbleVariant = .standard,
         isGrouped: Bool = false,
-        showsBackground: Bool = false,
+        showsBackground: Bool = SynaraSurfaceDepthRole.standardMessageShowsBackground,
         deliveryStatus: TimelineDeliveryStatus? = nil,
         statusEventID: String? = nil,
         onRetryFailedSend: (() -> Void)? = nil

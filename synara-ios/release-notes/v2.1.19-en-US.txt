@@ -1,0 +1,15 @@
+Synara 2.1.19 makes the iOS interface's quiet dimensionality clearly visible while keeping it restrained and readable.
+
+What changed:
+- Room rows and message bodies now use real layered surfaces instead of appearing flat.
+- Avatars, reactions, message actions, and the composer have a clearer visual hierarchy.
+- Agent, encrypted, deleted, and unsupported messages receive stronger emphasis than ordinary conversation.
+- Message actions now have a visible, accessible 44-point button, while long press remains available.
+- Vertical room-history scrolling and grouped-message timestamp reveal remain independent and responsive.
+- Increase Contrast and Reduce Transparency use accessible boundary and shadow behavior.
+
+What to test:
+- Compare Rooms and a room timeline in both light and dark mode.
+- Scroll a busy room vertically, then swipe a grouped message left to reveal its timestamp.
+- Open the visible message actions button and confirm Copy, Reply, React, and Pin to Notes as available.
+- Type a paragraph while new messages arrive and confirm input remains responsive.
