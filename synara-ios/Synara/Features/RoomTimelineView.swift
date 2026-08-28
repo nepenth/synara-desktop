@@ -4679,7 +4679,7 @@ private struct TimelineRow: View {
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
 
         let timestampRevealOffset = isGroupedWithPrevious && isTimestampRevealed ? -timestampRevealWidth : 0
-        let timestampRevealProgress = isTimestampRevealed ? 1.0 : 0.0
+        let timestampRevealProgress = isGroupedWithPrevious && isTimestampRevealed ? 1.0 : 0.0
 
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             ZStack(alignment: .trailing) {

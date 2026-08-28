@@ -349,6 +349,7 @@ final class SynaraUITests: XCTestCase {
         let horizontalStart = horizontallySwipedGroupedMessage.coordinate(
             withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)
         )
+        let unrevealedMinX = horizontallySwipedGroupedMessage.frame.minX
         let horizontalEnd = horizontalStart.withOffset(CGVector(dx: -120, dy: 0))
         horizontalStart.press(forDuration: 0.05, thenDragTo: horizontalEnd)
         XCTAssertTrue(
@@ -359,6 +360,14 @@ final class SynaraUITests: XCTestCase {
             ),
             "A new left swipe must reveal only its own grouped row, never the row from a failed vertical gesture. Diagnostics: \(String(describing: viewport.value))"
         )
+        let visiblyShifted = NSPredicate { evaluated, _ in
+            guard let element = evaluated as? XCUIElement else {
+                return false
+            }
+            return element.frame.minX <= unrevealedMinX - 40
+        }
+        expectation(for: visiblyShifted, evaluatedWith: horizontallySwipedGroupedMessage)
+        waitForExpectations(timeout: 1.5)
     }
 
     func testTimestampRevealIgnoresUngroupedMessageAfterGestureSettles() {

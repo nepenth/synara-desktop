@@ -86,6 +86,45 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertNil(TimelineTimestampRevealGesturePolicy.cancellationState(from: .ended))
     }
 
+    func testTimestampRevealSessionRequiresTheCurrentlyAppliedSnapshot() {
+        XCTAssertTrue(
+            TimelineTimestampRevealGesturePolicy.sessionMatchesAppliedSnapshot(
+                sessionRevision: 7,
+                appliedRevision: 7
+            )
+        )
+        XCTAssertFalse(
+            TimelineTimestampRevealGesturePolicy.sessionMatchesAppliedSnapshot(
+                sessionRevision: 7,
+                appliedRevision: 8
+            )
+        )
+        XCTAssertFalse(
+            TimelineTimestampRevealGesturePolicy.sessionMatchesAppliedSnapshot(
+                sessionRevision: 7,
+                appliedRevision: nil
+            )
+        )
+    }
+
+    func testContentOnlyRowChangesAreReconfiguredForStableIdentifiers() {
+        let changed = StableTimelineViewportPolicy.changedIdentifiers(
+            currentIDs: Set(["message", "unchanged", "removed"]),
+            currentValues: [
+                "message": false,
+                "unchanged": true,
+                "removed": false,
+            ],
+            incomingValues: [
+                (id: "message", value: true),
+                (id: "unchanged", value: true),
+                (id: "inserted", value: true),
+            ]
+        )
+
+        XCTAssertEqual(changed, ["message"])
+    }
+
     func testFeatureFlagDefaultsEnabledAndHonorsExplicitOverrides() {
         XCTAssertTrue(StableScrollAnchoringFeatureFlag.resolve(environmentValue: nil, persistedValue: nil))
         XCTAssertFalse(StableScrollAnchoringFeatureFlag.resolve(environmentValue: "false", persistedValue: true))

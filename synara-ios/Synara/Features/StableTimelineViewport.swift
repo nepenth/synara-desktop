@@ -147,6 +147,21 @@ import SwiftUI
         ) -> Bool {
             targetsLatest ? isConfirmedPinned : isTargetVisible
         }
+
+        static func changedIdentifiers<ID: Hashable, Value: Equatable>(
+            currentIDs: Set<ID>,
+            currentValues: [ID: Value],
+            incomingValues: [(id: ID, value: Value)]
+        ) -> [ID] {
+            incomingValues.compactMap { incoming in
+                guard currentIDs.contains(incoming.id),
+                      currentValues[incoming.id] != incoming.value
+                else {
+                    return nil
+                }
+                return incoming.id
+            }
+        }
     }
 
     enum TimelineTimestampRevealGesturePolicy {
@@ -197,6 +212,13 @@ import SwiftUI
                 return nil
             }
         }
+
+        static func sessionMatchesAppliedSnapshot(
+            sessionRevision: UInt64,
+            appliedRevision: UInt64?
+        ) -> Bool {
+            appliedRevision == sessionRevision
+        }
     }
 
     /// A narrow gesture recognizer for the secondary timestamp affordance.
@@ -211,6 +233,10 @@ import SwiftUI
         var onRecognitionAborted: (() -> Void)?
         var onReset: (() -> Void)?
 
+        var isTrackingTouch: Bool {
+            trackedTouch != nil
+        }
+
         var translation: CGPoint {
             guard let initialLocation, let view else { return .zero }
             let currentLocation = location(in: view)
@@ -218,6 +244,11 @@ import SwiftUI
                 x: currentLocation.x - initialLocation.x,
                 y: currentLocation.y - initialLocation.y
             )
+        }
+
+        func initialLocation(in targetView: UIView) -> CGPoint? {
+            guard let initialLocation, let view else { return nil }
+            return view.convert(initialLocation, to: targetView)
         }
 
         override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
@@ -524,6 +555,7 @@ import SwiftUI
         private struct TimestampRevealGestureSession {
             let routeID: String
             let generation: UInt64
+            let snapshotRevision: UInt64
             let itemID: StableTimelineViewportItemID
             let eventID: String
         }
@@ -556,6 +588,7 @@ import SwiftUI
         private var timestampRevealGestureSession: TimestampRevealGestureSession?
         private var timestampRevealAppliedRouteID: String?
         private var timestampRevealAppliedGeneration: UInt64?
+        private var timestampRevealAppliedSnapshotRevision: UInt64?
         private var dataSource: UITableViewDiffableDataSource<Section, StableTimelineViewportItemID>!
         private var rowsByID: [StableTimelineViewportItemID: StableTimelineViewportRow] = [:]
         private var visualRows: [StableTimelineViewportRow] = []
@@ -623,6 +656,7 @@ import SwiftUI
                 timestampRevealGestureSession = nil
                 timestampRevealAppliedRouteID = nil
                 timestampRevealAppliedGeneration = nil
+                timestampRevealAppliedSnapshotRevision = nil
                 pendingConfiguration = nil
                 pendingConfigurationResetsPosition = false
                 snapshotApplyGate.discardPending()
@@ -682,6 +716,13 @@ import SwiftUI
         @objc private func handleTimestampRevealGesture(
             _ recognizer: TimelineTimestampRevealGestureRecognizer
         ) {
+            if recognizer.state == .began {
+                timestampRevealGestureSession = timestampRevealSession(at: recognizer.initialLocation(in: tableView))
+                if timestampRevealGestureSession == nil {
+                    recognizer.cancelRecognition()
+                }
+                return
+            }
             let session = timestampRevealGestureSession
             if recognizer.state == .ended || recognizer.state == .cancelled || recognizer.state == .failed {
                 timestampRevealGestureSession = nil
@@ -691,6 +732,10 @@ import SwiftUI
                   let configuration,
                   configuration.routeID == session.routeID,
                   configuration.sessionGeneration == session.generation,
+                  TimelineTimestampRevealGesturePolicy.sessionMatchesAppliedSnapshot(
+                      sessionRevision: session.snapshotRevision,
+                      appliedRevision: timestampRevealAppliedSnapshotRevision
+                  ),
                   let row = rowsByID[session.itemID],
                   case let .event(eventRow) = row.content,
                   eventRow.isGroupedWithPrevious,
@@ -705,11 +750,34 @@ import SwiftUI
             )
         }
 
+        private func timestampRevealSession(at origin: CGPoint?) -> TimestampRevealGestureSession? {
+            guard let origin,
+                  let configuration,
+                  let snapshotRevision = timestampRevealAppliedSnapshotRevision,
+                  timestampRevealAppliedRouteID == configuration.routeID,
+                  timestampRevealAppliedGeneration == configuration.sessionGeneration,
+                  let indexPath = tableView.indexPathForRow(at: origin),
+                  let itemID = dataSource.itemIdentifier(for: indexPath),
+                  let row = rowsByID[itemID],
+                  case let .event(eventRow) = row.content,
+                  eventRow.isGroupedWithPrevious
+            else {
+                return nil
+            }
+            return .init(
+                routeID: configuration.routeID,
+                generation: configuration.sessionGeneration,
+                snapshotRevision: snapshotRevision,
+                itemID: itemID,
+                eventID: eventRow.item.eventID
+            )
+        }
+
         func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
             guard gestureRecognizer === timestampRevealGesture else {
                 return true
             }
-            if timestampRevealGestureSession != nil {
+            if timestampRevealGesture.isTrackingTouch {
                 // Receive additional touches so the recognizer rejects the
                 // entire interaction instead of silently continuing one-finger recognition.
                 return true
@@ -725,12 +793,6 @@ import SwiftUI
             else {
                 return false
             }
-            timestampRevealGestureSession = .init(
-                routeID: configuration.routeID,
-                generation: configuration.sessionGeneration,
-                itemID: itemID,
-                eventID: eventRow.item.eventID
-            )
             return true
         }
 
@@ -786,6 +848,18 @@ import SwiftUI
             let currentRows = rowsByID
             let previousVisualRows = visualRows
 
+            // A gesture may remain in `.possible` while SwiftUI publishes a
+            // content-only update for this same room generation. Invalidate it
+            // before replacing row identity so the eventual finger-up can never
+            // act on a row captured from an earlier snapshot.
+            if timestampRevealGesture.isTrackingTouch {
+                timestampRevealGesture.cancelRecognition()
+            }
+            timestampRevealGestureSession = nil
+            timestampRevealAppliedRouteID = nil
+            timestampRevealAppliedGeneration = nil
+            timestampRevealAppliedSnapshotRevision = nil
+
             visualRows = configuration.rows
             rowsByID = Dictionary(uniqueKeysWithValues: configuration.rows.map { ($0.id, $0) })
 
@@ -794,12 +868,11 @@ import SwiftUI
             snapshot.appendItems(configuration.rows.reversed().map(\.id), toSection: .main)
 
             let currentIDs = Set(dataSource.snapshot().itemIdentifiers)
-            let changedIDs = configuration.rows.compactMap { row -> StableTimelineViewportItemID? in
-                guard currentIDs.contains(row.id), currentRows[row.id] != row else {
-                    return nil
-                }
-                return row.id
-            }
+            let changedIDs = StableTimelineViewportPolicy.changedIdentifiers(
+                currentIDs: currentIDs,
+                currentValues: currentRows,
+                incomingValues: configuration.rows.map { (id: $0.id, value: $0) }
+            )
             if changedIDs.isEmpty == false {
                 snapshot.reconfigureItems(changedIDs)
             }
@@ -822,6 +895,7 @@ import SwiftUI
                 {
                     timestampRevealAppliedRouteID = configuration.routeID
                     timestampRevealAppliedGeneration = configuration.sessionGeneration
+                    timestampRevealAppliedSnapshotRevision = serial
                     tableView.layoutIfNeeded()
                     if executeCommandIfNeeded(configuration.command) == false {
                         if StableTimelineViewportPolicy.shouldFollowNewest(
