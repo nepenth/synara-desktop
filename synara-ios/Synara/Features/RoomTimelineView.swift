@@ -3947,7 +3947,8 @@ private struct TimelineAvatar: View {
     var body: some View {
         avatarContent
             .frame(width: size, height: size)
-            .synaraDepth(.avatar, shape: Circle())
+            .clipShape(Circle())
+            .synaraDepth(.avatar, shape: Circle(), boundaryColor: SynaraColor.elevatedSurface)
             .task(id: avatarTaskID) {
                 await loadAvatar()
             }
@@ -4642,19 +4643,40 @@ private struct TimelineRow: View {
 
             VStack(alignment: .leading, spacing: 5) {
                 if isGroupedWithPrevious == false {
-                    HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
-                        Text(senderDisplayName)
-                            .font(SynaraTypography.emphasis)
-                            .foregroundStyle(SynaraColor.headingText)
-                            .lineLimit(1)
-                        Text(item.timestamp.timelineTime)
-                            .font(SynaraTypography.messageMeta)
-                            .foregroundStyle(SynaraColor.secondaryText)
-                        if item.isEdited {
-                            Text("edited")
+                    HStack(alignment: .center, spacing: SynaraSpacing.small) {
+                        HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                            Text(senderDisplayName)
+                                .font(SynaraTypography.emphasis)
+                                .foregroundStyle(SynaraColor.headingText)
+                                .lineLimit(1)
+                            Text(item.timestamp.timelineTime)
                                 .font(SynaraTypography.messageMeta)
-                                .foregroundStyle(SynaraColor.tertiaryText)
+                                .foregroundStyle(SynaraColor.secondaryText)
+                            if item.isEdited {
+                                Text("edited")
+                                    .font(SynaraTypography.messageMeta)
+                                    .foregroundStyle(SynaraColor.tertiaryText)
+                            }
                         }
+
+                        Spacer(minLength: SynaraSpacing.xSmall)
+
+                        Menu {
+                            messageActions
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(SynaraColor.secondaryText)
+                                .frame(width: 28, height: 28)
+                                .background(SynaraColor.elevatedSurface)
+                                .clipShape(Circle())
+                                .synaraDepth(.raised, shape: Circle())
+                                .frame(width: 44, height: 44)
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("Message actions")
+                        .accessibilityIdentifier("TimelineItemActions-\(item.eventID)")
                     }
                 }
 
@@ -4665,13 +4687,7 @@ private struct TimelineRow: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
         .contextMenu {
-            if let copyText = TimelineMessageCopy.payload(for: item) {
-                Button("Copy") {
-                    TimelineMessageCopy.copyToPasteboard(copyText)
-                }
-                .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
-            }
-            messageContextMenu
+            messageActions
         }
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
@@ -4715,7 +4731,13 @@ private struct TimelineRow: View {
     }
 
     @ViewBuilder
-    private var messageContextMenu: some View {
+    private var messageActions: some View {
+        if let copyText = TimelineMessageCopy.payload(for: item) {
+            Button("Copy") {
+                TimelineMessageCopy.copyToPasteboard(copyText)
+            }
+            .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+        }
         if availability.canReply {
             Button("Reply", action: onReply)
         }
@@ -4830,8 +4852,9 @@ private struct TimelineRow: View {
                 SynaraMessageBubble(
                     alignment: bubbleAlignment,
                     variant: .standard,
+                    depth: SynaraSurfaceDepthRole.standardMessage,
                     isGrouped: isGroupedWithPrevious,
-                    showsBackground: false,
+                    showsBackground: SynaraSurfaceDepthRole.standardMessageShowsBackground,
                     deliveryStatus: item.deliveryStatus,
                     statusEventID: item.eventID,
                     onRetryFailedSend: item.deliveryStatus == .failed ? onRetryFailedSend : nil
@@ -4846,6 +4869,7 @@ private struct TimelineRow: View {
                 SynaraMessageBubble(
                     alignment: bubbleAlignment,
                     variant: .encrypted,
+                    depth: SynaraSurfaceDepthRole.emphasizedMessage,
                     isGrouped: isGroupedWithPrevious,
                     showsBackground: true,
                     deliveryStatus: nil
@@ -4861,6 +4885,7 @@ private struct TimelineRow: View {
                 SynaraMessageBubble(
                     alignment: bubbleAlignment,
                     variant: .agent,
+                    depth: SynaraSurfaceDepthRole.emphasizedMessage,
                     isGrouped: isGroupedWithPrevious,
                     showsBackground: true,
                     deliveryStatus: nil
@@ -4895,6 +4920,7 @@ private struct TimelineRow: View {
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
                 variant: .standard,
+                depth: SynaraSurfaceDepthRole.emphasizedMessage,
                 isGrouped: isGroupedWithPrevious,
                 showsBackground: true,
                 deliveryStatus: nil
@@ -4907,6 +4933,7 @@ private struct TimelineRow: View {
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
                 variant: .standard,
+                depth: SynaraSurfaceDepthRole.emphasizedMessage,
                 isGrouped: isGroupedWithPrevious,
                 showsBackground: true,
                 deliveryStatus: nil
@@ -4949,7 +4976,11 @@ private struct TimelineRow: View {
     }
 
     private var accessibilityChildBehavior: AccessibilityChildBehavior {
-        TimelineRowAccessibility.containsChildren(
+        if isGroupedWithPrevious == false {
+            return .contain
+        }
+
+        return TimelineRowAccessibility.containsChildren(
             deliveryStatus: item.deliveryStatus,
             kind: item.kind,
             replyCount: replyCount,
@@ -4974,7 +5005,7 @@ private struct TimelineRow: View {
         default:
             return isGroupedWithPrevious
                 ? "Swipe left to reveal the sent time. Long press for message actions"
-                : "Long press for message actions"
+                : "Use the Message actions button or long press for message actions"
         }
     }
 
@@ -5237,6 +5268,7 @@ private struct ReactionPill: View {
         .padding(.vertical, 3)
         .background(SynaraColor.elevatedSurface)
         .clipShape(Capsule())
+        .synaraDepth(.raised, shape: Capsule())
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
 }

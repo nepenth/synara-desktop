@@ -448,6 +448,7 @@ enum SynaraRadius {
 
 enum SynaraDepthLevel: String, CaseIterable {
     case content
+    case layered
     case raised
     case floating
     case avatar
@@ -473,6 +474,15 @@ enum SynaraDepthLevel: String, CaseIterable {
             switch self {
             case .content:
                 preconditionFailure("Content depth is handled before increased-contrast metrics")
+            case .layered:
+                return SynaraDepthMetrics(
+                    shadowOpacity: 0,
+                    shadowRadius: 0,
+                    shadowOffsetY: 0,
+                    edgeOpacity: 0,
+                    boundaryOpacity: 0.78,
+                    boundaryWidth: 0.8
+                )
             case .avatar, .raised:
                 return SynaraDepthMetrics(
                     shadowOpacity: 0,
@@ -508,44 +518,61 @@ enum SynaraDepthLevel: String, CaseIterable {
         switch self {
         case .content:
             preconditionFailure("Content depth is handled before standard metrics")
+        case .layered:
+            return SynaraDepthMetrics(
+                shadowOpacity: (dark ? 0.24 : 0.055) * transparencyScale,
+                shadowRadius: dark ? 3 : 2,
+                shadowOffsetY: 1,
+                edgeOpacity: dark ? 0.13 : 0.12,
+                boundaryOpacity: (dark ? 0.46 : 0.26) * boundaryScale,
+                boundaryWidth: 0.6
+            )
         case .raised:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.26 : 0.12) * transparencyScale,
-                shadowRadius: 7,
-                shadowOffsetY: 2,
-                edgeOpacity: dark ? 0.09 : 0.20,
-                boundaryOpacity: (dark ? 0.42 : 0.36) * boundaryScale,
-                boundaryWidth: 0.5
+                shadowOpacity: (dark ? 0.30 : 0.08) * transparencyScale,
+                shadowRadius: dark ? 7 : 5,
+                shadowOffsetY: dark ? 2 : 1.5,
+                edgeOpacity: dark ? 0.17 : 0.14,
+                boundaryOpacity: (dark ? 0.52 : 0.30) * boundaryScale,
+                boundaryWidth: 0.7
             )
         case .floating:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.34 : 0.16) * transparencyScale,
-                shadowRadius: 14,
-                shadowOffsetY: 5,
-                edgeOpacity: dark ? 0.12 : 0.24,
-                boundaryOpacity: (dark ? 0.50 : 0.42) * boundaryScale,
-                boundaryWidth: 0.65
+                shadowOpacity: (dark ? 0.38 : 0.12) * transparencyScale,
+                shadowRadius: dark ? 14 : 11,
+                shadowOffsetY: dark ? 5 : 4,
+                edgeOpacity: dark ? 0.21 : 0.18,
+                boundaryOpacity: (dark ? 0.60 : 0.36) * boundaryScale,
+                boundaryWidth: 0.8
             )
         case .avatar:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.24 : 0.12) * transparencyScale,
-                shadowRadius: 5,
-                shadowOffsetY: 2,
-                edgeOpacity: dark ? 0.08 : 0.16,
-                boundaryOpacity: (dark ? 0.34 : 0.28) * boundaryScale,
-                boundaryWidth: 0.5
+                shadowOpacity: (dark ? 0.30 : 0.08) * transparencyScale,
+                shadowRadius: dark ? 5 : 4,
+                shadowOffsetY: dark ? 2 : 1.5,
+                edgeOpacity: dark ? 0.18 : 0.12,
+                boundaryOpacity: (dark ? 0.50 : 0.28) * boundaryScale,
+                boundaryWidth: 0.8
             )
         case .critical:
             return SynaraDepthMetrics(
-                shadowOpacity: (dark ? 0.40 : 0.20) * transparencyScale,
-                shadowRadius: 18,
-                shadowOffsetY: 7,
-                edgeOpacity: dark ? 0.14 : 0.28,
-                boundaryOpacity: (dark ? 0.56 : 0.48) * boundaryScale,
-                boundaryWidth: 0.75
+                shadowOpacity: (dark ? 0.44 : 0.16) * transparencyScale,
+                shadowRadius: dark ? 18 : 15,
+                shadowOffsetY: dark ? 7 : 5,
+                edgeOpacity: dark ? 0.24 : 0.22,
+                boundaryOpacity: (dark ? 0.68 : 0.44) * boundaryScale,
+                boundaryWidth: 0.9
             )
         }
     }
+}
+
+/// Semantic depth roles keep core surfaces consistent when visual metrics evolve.
+enum SynaraSurfaceDepthRole {
+    static let roomRow: SynaraDepthLevel = .layered
+    static let standardMessage: SynaraDepthLevel = .layered
+    static let emphasizedMessage: SynaraDepthLevel = .raised
+    static let standardMessageShowsBackground = true
 }
 
 struct SynaraDepthMetrics: Equatable {
@@ -585,8 +612,18 @@ private struct SynaraDepthModifier<Outline: Shape>: ViewModifier {
                 }
                 .overlay {
                     outline
-                        .stroke(Color.white.opacity(metrics.edgeOpacity), lineWidth: 0.5)
-                        .blendMode(.screen)
+                        .stroke(
+                            LinearGradient(
+                                colors: [
+                                    Color.white.opacity(metrics.edgeOpacity),
+                                    Color.clear,
+                                    Color.black.opacity(metrics.edgeOpacity * 0.72),
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: max(0.75, metrics.boundaryWidth)
+                        )
                         .allowsHitTesting(false)
                 }
                 .shadow(
@@ -628,7 +665,6 @@ private struct SynaraDockedDepthModifier: ViewModifier {
                     Rectangle()
                         .fill(Color.white.opacity(metrics.edgeOpacity))
                         .frame(height: 0.5)
-                        .blendMode(.screen)
                         .allowsHitTesting(false)
                 }
                 .shadow(
@@ -880,10 +916,6 @@ struct SynaraListRowButtonStyle: ButtonStyle {
             .background(
                 RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
                     .fill(configuration.isPressed ? SynaraColor.secondaryText.opacity(0.10) : Color.clear)
-            )
-            .synaraDepth(
-                configuration.isPressed ? .raised : .content,
-                cornerRadius: SynaraRadius.card
             )
             .scaleEffect(configuration.isPressed && reduceMotion == false ? 0.995 : 1)
             .animation(reduceMotion ? nil : .easeOut(duration: 0.14), value: configuration.isPressed)

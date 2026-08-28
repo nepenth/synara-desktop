@@ -535,9 +535,22 @@ struct RoomListView: View {
             } label: {
                 RoomListRow(room: room)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, SynaraSpacing.medium)
+                    .padding(.vertical, SynaraSpacing.small)
+                    .background {
+                        RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
+                            .fill(room.hasHighlight || room.unreadCount > 0
+                                ? SynaraColor.elevatedSurface
+                                : SynaraColor.surface)
+                    }
+                    .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
+                    .synaraDepth(
+                        SynaraSurfaceDepthRole.roomRow,
+                        cornerRadius: SynaraRadius.card,
+                        boundaryColor: room.hasHighlight ? SynaraColor.accent : SynaraColor.separator
+                    )
                     .contentShape(Rectangle())
                     .accessibilityIdentifier("RoomRow-\(room.id)")
-                    .padding(.vertical, SynaraSpacing.xSmall)
             }
             .buttonStyle(SynaraListRowButtonStyle())
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -546,7 +559,7 @@ struct RoomListView: View {
             .accessibilityHint("Opens the room timeline")
             .accessibilityIdentifier("RoomRow-\(room.id)")
             .listRowSeparator(.hidden)
-            .listRowInsets(EdgeInsets(top: 3, leading: SynaraSpacing.large, bottom: 3, trailing: SynaraSpacing.large))
+            .listRowInsets(EdgeInsets(top: 4, leading: SynaraSpacing.medium, bottom: 4, trailing: SynaraSpacing.medium))
             .listRowBackground(SynaraChrome.roomList)
             .swipeActions(edge: .leading, allowsFullSwipe: true) {
                 Button {
