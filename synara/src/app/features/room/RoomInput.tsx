@@ -45,6 +45,7 @@ import {
 } from 'folds';
 
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import * as depthCss from '../../styles/Depth.css';
 import {
   EditorChangeHandler,
   Toolbar,
@@ -1027,7 +1028,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               align="Start"
               offset={12}
               content={
-                <Menu style={{ width: toRem(196) }}>
+                <Menu className={depthCss.floatingSurface} style={{ width: toRem(196) }}>
                   <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                     <MenuItem
                       size="300"
@@ -1172,9 +1173,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                       />
                     ) : (
                       <Box
+                        className={depthCss.floatingSurface}
                         direction="Column"
                         gap="300"
-                        style={{ padding: config.space.S400, width: toRem(280) }}
+                        style={{
+                          padding: config.space.S400,
+                          width: toRem(280),
+                          borderRadius: config.radii.R400,
+                        }}
                       >
                         <Text size="H5">
                           {t('modernization.gif.onboarding.title', 'Enable GIFs?')}
@@ -1230,9 +1236,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 anchor={pollAnchor}
                 content={
                   <Box
+                    className={depthCss.floatingSurface}
                     direction="Column"
                     gap="300"
-                    style={{ padding: config.space.S400, width: toRem(320) }}
+                    style={{
+                      padding: config.space.S400,
+                      width: toRem(320),
+                      borderRadius: config.radii.R400,
+                    }}
                     role="group"
                     aria-label={t('modernization.poll.create_aria_label', 'Create poll')}
                   >

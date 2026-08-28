@@ -807,7 +807,7 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
   const senderId = rowSenderId(row) ?? '';
   const displayName = displayNameForRow(row);
   return (
-    <Avatar size="300" radii="400">
+    <Avatar className={htmlCss.TimelineAvatar} size="300" radii="400">
       <UserAvatar
         userId={senderId}
         src={rowSenderAvatarUrl(row)}

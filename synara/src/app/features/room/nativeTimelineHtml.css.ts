@@ -2,6 +2,12 @@ import { createVar, globalStyle, style } from '@vanilla-extract/css';
 import { recipe } from '@vanilla-extract/recipes';
 import { color, config, toRem } from 'folds';
 import { NATIVE_SYNTAX_PALETTES, type NativeSyntaxPalette } from './nativeTimelineSyntaxPalette';
+import {
+  avatarSurface,
+  floatingSurface,
+  quietEdgeLight,
+  tactileSurface,
+} from '../../styles/Depth.css';
 
 const syntaxMeta = createVar();
 const syntaxComment = createVar();
@@ -55,12 +61,20 @@ export const GroupedTimestampReveal = style({
   whiteSpace: 'nowrap',
 });
 
-export const MessageActionRail = style({
-  position: 'absolute',
-  top: config.space.S100,
-  right: `calc(${config.space.S400} + ${config.space.S200})`,
-  zIndex: 2,
-});
+export const MessageActionRail = style([
+  floatingSurface,
+  tactileSurface,
+  {
+    position: 'absolute',
+    top: config.space.S100,
+    right: `calc(${config.space.S400} + ${config.space.S200})`,
+    zIndex: 2,
+    borderRadius: config.radii.R400,
+    overflow: 'hidden',
+  },
+]);
+
+export const TimelineAvatar = style([avatarSurface]);
 
 export const MessageRow = recipe({
   base: {
@@ -80,9 +94,25 @@ export const MessageRow = recipe({
         selectors: {
           [`${MessageActionSurface}:hover &`]: {
             backgroundColor: color.SurfaceVariant.ContainerHover,
+            boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
           },
           [`${MessageActionSurface}:focus-within &`]: {
             backgroundColor: color.SurfaceVariant.ContainerHover,
+            boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+          },
+        },
+        transition: 'background-color 140ms ease-out, box-shadow 140ms ease-out',
+        '@media': {
+          '(prefers-reduced-motion: reduce)': {
+            transition: 'none',
+          },
+          '(prefers-contrast: more)': {
+            boxShadow: 'none',
+            selectors: {
+              [`${MessageActionSurface}:hover &, ${MessageActionSurface}:focus-within &`]: {
+                boxShadow: 'none',
+              },
+            },
           },
         },
       },
@@ -186,6 +216,7 @@ export const ReplySurface = style({
   borderLeft: `3px solid var(--synara-content-separator)`,
   borderRadius: `0 ${config.radii.R300} ${config.radii.R300} 0`,
   background: 'var(--synara-table-even)',
+  boxShadow: `inset 0 1px 0 ${quietEdgeLight}, 0 1px 2px color-mix(in srgb, ${color.Other.Shadow} 18%, transparent)`,
   color: 'var(--synara-message-foreground)',
   textAlign: 'left',
   cursor: 'pointer',
@@ -196,6 +227,14 @@ export const ReplySurface = style({
     '&:focus-visible': {
       outline: `2px solid ${color.Primary.Main}`,
       outlineOffset: toRem(2),
+    },
+  },
+  '@media': {
+    '(prefers-reduced-transparency: reduce)': {
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+    },
+    '(prefers-contrast: more)': {
+      boxShadow: 'none',
     },
   },
 });

@@ -14,12 +14,14 @@ enum SynaraMessageBubbleVariant {
 struct SynaraMessageBubble<Content: View>: View {
     let alignment: SynaraMessageBubbleAlignment
     let variant: SynaraMessageBubbleVariant
+    var depth: SynaraDepthLevel = .raised
     let isGrouped: Bool
     let showsBackground: Bool
     let deliveryStatus: TimelineDeliveryStatus?
     var statusEventID: String? = nil
     var onRetryFailedSend: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     var body: some View {
         content()
@@ -28,17 +30,15 @@ struct SynaraMessageBubble<Content: View>: View {
             .background {
                 if showsBackground {
                     bubbleShape
-                        .fill(fillColor)
-                }
-            }
-            .overlay {
-                if showsBackground {
-                    bubbleShape
-                        .stroke(strokeColor, lineWidth: 0.5)
-                        .allowsHitTesting(false)
+                        .fill(resolvedFillColor)
                 }
             }
             .modifier(SynaraMessageBubbleClipModifier(showsBackground: showsBackground, shape: bubbleShape))
+            .synaraDepth(
+                showsBackground ? depth : .content,
+                shape: bubbleShape,
+                boundaryColor: boundaryColor
+            )
             .opacity(deliveryStatusOpacity)
             .overlay(alignment: overlayAlignment) {
                 deliveryStatusIndicator
@@ -169,21 +169,37 @@ struct SynaraMessageBubble<Content: View>: View {
         }
     }
 
-    private var strokeColor: Color {
+    private var resolvedFillColor: Color {
+        guard reduceTransparency else {
+            return fillColor
+        }
+
+        switch variant {
+        case .standard:
+            return alignment == .own ? SynaraColor.elevatedSurface : SynaraColor.secondarySurface
+        case .agent:
+            return SynaraColor.agentReviewSurface
+        case .encrypted:
+            return SynaraColor.mutedControl
+        }
+    }
+
+    private var boundaryColor: Color {
         switch variant {
         case .standard:
             switch alignment {
             case .own:
-                return SynaraColor.accent.opacity(0.22)
+                return SynaraColor.accent
             case .other:
-                return SynaraColor.separator.opacity(0.35)
+                return SynaraColor.separator
             }
         case .agent:
-            return SynaraColor.agent.opacity(0.28)
+            return SynaraColor.agent
         case .encrypted:
-            return SynaraColor.separator.opacity(0.28)
+            return SynaraColor.separator
         }
     }
+
 }
 
 enum SynaraMessageBubbleMetrics {

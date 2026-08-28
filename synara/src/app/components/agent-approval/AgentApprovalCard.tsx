@@ -7,6 +7,7 @@ import {
   type AgentApprovalPrompt,
 } from '../../utils/agentApprovals';
 import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
+import * as css from './AgentApprovalCard.css';
 
 export type AgentApprovalTarget = {
   roomId: string;
@@ -120,12 +121,10 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
     <Box
       direction="Column"
       gap="300"
+      className={css.ApprovalCard}
       style={{
         maxWidth: toRem(760),
-        border: `${config.borderWidth.B300} solid ${color.Critical.Main}`,
-        borderRadius: config.radii.R400,
         padding: config.space.S400,
-        backgroundColor: color.Surface.Container,
       }}
     >
       <Box justifyContent="SpaceBetween" alignItems="Start" gap="300">
@@ -142,6 +141,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         <Box
           direction="Column"
           gap="200"
+          className={css.ApprovalDetail}
           style={{
             border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
             borderRadius: config.radii.R300,
@@ -162,6 +162,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
           as="details"
           direction="Column"
           gap="200"
+          className={css.ApprovalDetail}
           style={{
             border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
             borderRadius: config.radii.R300,

@@ -1,21 +1,23 @@
 import { style } from '@vanilla-extract/css';
 import { toRem, color, config, DefaultReset, FocusOutline } from 'folds';
+import { floatingSurface } from '../../../styles/Depth.css';
 
 /**
  * Layout
  */
 
-export const Base = style({
-  maxWidth: toRem(432),
-  width: `calc(100vw - 2 * ${config.space.S400})`,
-  height: toRem(450),
-  backgroundColor: color.Surface.Container,
-  color: color.Surface.OnContainer,
-  border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
-  borderRadius: config.radii.R400,
-  boxShadow: config.shadow.E200,
-  overflow: 'hidden',
-});
+export const Base = style([
+  floatingSurface,
+  {
+    maxWidth: toRem(432),
+    width: `calc(100vw - 2 * ${config.space.S400})`,
+    height: toRem(450),
+    backgroundColor: color.Surface.Container,
+    color: color.Surface.OnContainer,
+    borderRadius: config.radii.R400,
+    overflow: 'hidden',
+  },
+]);
 
 export const Header = style({
   padding: config.space.S300,
