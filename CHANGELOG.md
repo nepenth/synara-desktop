@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 2.1.18 - 2026-08-27
+
+- Added a restrained, cross-client depth system for room rows, composers,
+  message actions, approval cards, pickers, avatars, and message surfaces,
+  preserving contrast, hierarchy, reduced-motion behavior, and touch clarity.
+- Rebuilt iOS grouped-message timestamp reveal around a timeline-owned,
+  direction-locked gesture so vertical room-history scrolling remains native
+  and responsive while a deliberate leftward swipe reveals message time.
+- Bound timestamp gestures to exact diffable-snapshot revisions and explicitly
+  reconfigured stable identifiers when visible content changes, preventing
+  stale gestures or cells from surviving live timeline updates.
+- Added focused viewport policy, snapshot repaint, accessibility, and iOS UI
+  regressions, including coordinate-level proof of both vertical scrolling and
+  visible timestamp reveal.
+
 ## 2.1.16 - 2026-08-27
 
 - Refreshed the existing Synara wing-and-network app icon for stronger visual

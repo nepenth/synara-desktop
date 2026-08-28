@@ -1,0 +1,12 @@
+Synara 2.1.18 adds subtle visual depth across the app and restores dependable room-history scrolling.
+
+What changed:
+- Room rows, composers, message controls, avatars, and message surfaces now use restrained depth to make interactive areas easier to distinguish.
+- Vertical scrolling in busy room histories remains responsive, including when a drag begins on a grouped message.
+- A deliberate leftward swipe on a grouped message still reveals its timestamp without competing with ordinary scrolling.
+- Live timeline updates can no longer leave a stale timestamp gesture or visible message cell behind.
+
+What to test:
+- Scroll quickly up and down through a busy room, starting drags directly on grouped messages.
+- Swipe a grouped message left and confirm its timestamp appears, then returns cleanly.
+- Review Rooms, a room timeline, the composer, message actions, and approval prompts in light and dark mode.
