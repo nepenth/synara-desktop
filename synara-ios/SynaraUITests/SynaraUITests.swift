@@ -755,9 +755,16 @@ final class SynaraUITests: XCTestCase {
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         tapSettingsElement(app.buttons["AppearanceSettingsLink"], app: app, timeout: 10)
-        XCTAssertTrue(app.collectionViews["AppearanceSettingsScreen"].waitForExistence(timeout: 5))
+        let appearanceScreen = app.collectionViews["AppearanceSettingsScreen"]
+        XCTAssertTrue(appearanceScreen.waitForExistence(timeout: 5))
         XCTAssertTrue(app.staticTexts["Appearance"].exists)
-        XCTAssertTrue(revealSettingsElement(app.staticTexts["Text Size"], app: app, timeout: 10))
+        XCTAssertTrue(
+            revealForDirectHit(
+                identifiedElement(in: app, "AppearanceTextSizeRow"),
+                in: appearanceScreen,
+                app: app
+            )
+        )
         app.navigationBars.buttons.element(boundBy: 0).tap()
 
         tapSettingsElement(app.buttons["SecuritySettingsLink"], app: app, timeout: 10)
