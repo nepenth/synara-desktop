@@ -77,7 +77,7 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("interface PollRespondError"));
     assert!(udl.contains("edit_message("));
     assert!(udl.contains("send_poll("));
-    assert!(udl.contains("send_sticker("));
+    assert!(!udl.contains("send_sticker("));
     assert!(udl.contains("send_text("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
@@ -94,7 +94,7 @@ fn poll_respond_surface_exposes_only_the_registered_family() {
     assert!(shared_core.contains("poll_respond("));
     assert!(shared_core.contains("edit_message("));
     assert!(shared_core.contains("send_poll("));
-    assert!(shared_core.contains("send_sticker("));
+    assert!(!shared_core.contains("send_sticker("));
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));

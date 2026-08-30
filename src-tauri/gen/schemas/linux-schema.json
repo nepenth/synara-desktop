@@ -899,7 +899,6 @@
         {
           "description": "Enables the matrix_room_set_power_level command without any pre-configured scope.",
           "type": "string",
-          "const": "allow-matrix-room-set-favorite",
           "const": "allow-matrix-room-set-power-level",
           "markdownDescription": "Enables the matrix_room_set_power_level command without any pre-configured scope."
         },
@@ -962,12 +961,6 @@
           "type": "string",
           "const": "allow-matrix-send-poll",
           "markdownDescription": "Enables the matrix_send_poll command without any pre-configured scope."
-        },
-        {
-          "description": "Enables the matrix_send_sticker command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-send-sticker",
-          "markdownDescription": "Enables the matrix_send_sticker command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_send_text command without any pre-configured scope.",
@@ -2010,7 +2003,6 @@
         {
           "description": "Denies the matrix_room_set_power_level command without any pre-configured scope.",
           "type": "string",
-          "const": "deny-matrix-room-set-favorite",
           "const": "deny-matrix-room-set-power-level",
           "markdownDescription": "Denies the matrix_room_set_power_level command without any pre-configured scope."
         },
@@ -2073,12 +2065,6 @@
           "type": "string",
           "const": "deny-matrix-send-poll",
           "markdownDescription": "Denies the matrix_send_poll command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_send_sticker command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-send-sticker",
-          "markdownDescription": "Denies the matrix_send_sticker command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_send_text command without any pre-configured scope.",

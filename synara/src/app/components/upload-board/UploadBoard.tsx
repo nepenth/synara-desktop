@@ -24,14 +24,23 @@ export const UploadBoard = as<'div', UploadBoardProps>(({ header, children, ...p
   </Box>
 ));
 
-export type UploadBoardImperativeHandlers = { handleSend: () => Promise<void> };
+export type UploadSendOptions = {
+  caption?: string;
+  formattedCaption?: string;
+  mentionUserIds?: string[];
+  mentionRoom?: boolean;
+};
+
+export type UploadBoardImperativeHandlers = {
+  handleSend: (options?: UploadSendOptions) => Promise<void>;
+};
 
 type UploadBoardHeaderProps = {
   open: boolean;
   onToggle: () => void;
   uploadFamilyObserverAtom: TUploadFamilyObserverAtom;
   onCancel: (uploads: Upload[]) => void;
-  onSend: (uploads: UploadSuccess[]) => Promise<void>;
+  onSend: (uploads: UploadSuccess[], options?: UploadSendOptions) => Promise<void>;
   imperativeHandlerRef: MutableRefObject<UploadBoardImperativeHandlers | undefined>;
 };
 
@@ -62,13 +71,20 @@ export function UploadBoardHeader({
     { loaded: 0, total: 0 }
   );
 
-  const handleSend = async () => {
+  const handleSend = async (options?: UploadSendOptions) => {
     if (sendingRef.current) return;
+    if (!isSuccess || uploads.length === 0) {
+      throw new Error('Attachments are still preparing.');
+    }
     sendingRef.current = true;
-    await onSend(
-      uploads.filter((upload) => upload.status === UploadStatus.Success) as UploadSuccess[]
-    );
-    sendingRef.current = false;
+    try {
+      await onSend(
+        uploads.filter((upload) => upload.status === UploadStatus.Success) as UploadSuccess[],
+        options
+      );
+    } finally {
+      sendingRef.current = false;
+    }
   };
 
   useImperativeHandle(imperativeHandlerRef, () => ({
@@ -94,7 +110,7 @@ export function UploadBoardHeader({
         {isSuccess && (
           <Chip
             as="button"
-            onClick={handleSend}
+            onClick={() => void handleSend()}
             variant="Primary"
             radii="Pill"
             outlined

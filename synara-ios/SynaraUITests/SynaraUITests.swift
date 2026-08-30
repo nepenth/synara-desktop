@@ -76,6 +76,30 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["RoomRow-!agent-workflows:matrix.org"].exists)
     }
 
+    func testRoomRowsKeepTitlesReadableAndExposeCombinedStatusAtLargeText() {
+        let app = launchSignedInRoomsApp(
+            contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
+        )
+        let window = app.windows.firstMatch
+        let mentionedRoom = app.buttons["RoomRow-!project:matrix.org"]
+        XCTAssertTrue(mentionedRoom.waitForExistence(timeout: 5))
+        XCTAssertGreaterThanOrEqual(mentionedRoom.frame.minX, window.frame.minX)
+        XCTAssertLessThanOrEqual(mentionedRoom.frame.maxX, window.frame.maxX)
+        XCTAssertTrue(mentionedRoom.label.contains("Product"))
+        XCTAssertTrue(mentionedRoom.label.contains("mentioned"))
+        XCTAssertTrue(mentionedRoom.label.contains("3 unread"))
+        let mentionedTitle = app.staticTexts["RoomRowTitle-!project:matrix.org"]
+        XCTAssertTrue(mentionedTitle.exists, "The rendered room title must remain independently inspectable")
+        XCTAssertGreaterThan(mentionedTitle.frame.width, 44, "The visible room title must not collapse behind status controls")
+        XCTAssertGreaterThanOrEqual(mentionedTitle.frame.minX, mentionedRoom.frame.minX)
+        XCTAssertLessThanOrEqual(mentionedTitle.frame.maxX, mentionedRoom.frame.maxX)
+
+        let approvalRoom = app.buttons["RoomRow-!agent-workflows:matrix.org"]
+        XCTAssertTrue(approvalRoom.exists)
+        XCTAssertTrue(approvalRoom.label.contains("Agent Workflows"))
+        XCTAssertTrue(approvalRoom.label.contains("approval required"))
+    }
+
     func testRoomHeaderAccountMenuShowsSettingsAndLogout() {
         let app = launchSignedInRoomsApp()
 
@@ -543,12 +567,13 @@ final class SynaraUITests: XCTestCase {
         XCTAssertLessThanOrEqual(composer.frame.maxX, window.frame.maxX)
         XCTAssertGreaterThan(composer.frame.height, 34)
 
-        for identifier in ["AttachmentButton", "StickerPackButton", "ComposerFormattingToggle"] {
+        for identifier in ["AttachmentButton", "ComposerFormattingToggle"] {
             let control = app.buttons[identifier]
             XCTAssertTrue(control.waitForExistence(timeout: 5), "Missing \(identifier)")
             assertNominalMinimumHitRegion(control, identifier: identifier)
             XCTAssertTrue(control.isHittable, "Obscured hit region for \(identifier)")
         }
+        XCTAssertFalse(app.buttons["StickerPackButton"].exists)
 
         app.buttons["ComposerFormattingToggle"].tap()
         let formattingBar = app.scrollViews["ComposerFormattingBar"]
@@ -2034,11 +2059,11 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchSignedInRoomsApp() -> XCUIApplication {
+    private func launchSignedInRoomsApp(contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
-        launch(app)
+        launch(app, contentSizeCategory: contentSizeCategory)
         return app
     }
 

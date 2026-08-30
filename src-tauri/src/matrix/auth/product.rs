@@ -10,10 +10,8 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use matrix_sdk::{
-    attachment::AttachmentConfig,
     authentication::matrix::MatrixSession,
     media::{MediaFormat, MediaRequestParameters},
-    room::reply::{EnforceThread, Reply as AttachmentReply},
     ruma::{
         api::client::{
             room::{create_room, Visibility},
@@ -28,7 +26,6 @@ use matrix_sdk::{
                 },
                 ImageInfo, MediaSource,
             },
-            sticker::StickerEventContent,
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
             StateEventType,
         },
@@ -189,7 +186,7 @@ pub use synara_core::app::media::{
 pub use synara_core::app::members::NativeRoomMembersSnapshot;
 pub use synara_core::app::send::{
     MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
-    MatrixSendStickerResult, MatrixSendTextResult,
+    MatrixSendTextResult,
 };
 pub use synara_core::app::user_profile::MatrixProfileWriteResult;
 

@@ -47,8 +47,7 @@ use crate::app::send::{
     apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
     parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
     parse_transaction_id, poll_response_content, poll_start_content, send_message_to_room,
-    sticker_content, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendStickerResult,
-    MatrixSendTextResult, SendQueue,
+    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult, SendQueue,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::TimelineEncryptedUnavailableItem;
@@ -583,47 +582,6 @@ impl NativeTimelineOwner {
         })
     }
 
-    #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed m.sticker contract.
-    pub async fn send_sticker(
-        &self,
-        room_id: String,
-        body: String,
-        mxc: String,
-        width: Option<u64>,
-        height: Option<u64>,
-        mimetype: Option<String>,
-        size: Option<u64>,
-        reply_to: Option<String>,
-        thread_root: Option<String>,
-    ) -> Result<MatrixSendStickerResult, &'static str> {
-        let parsed_room = parse_send_room_id(&room_id)?;
-        let reply_to = parse_reply_event_id(reply_to)?;
-        let thread_root = parse_thread_root_event_id(thread_root)?;
-        let content = sticker_content(
-            body,
-            mxc,
-            width,
-            height,
-            mimetype,
-            size,
-            reply_to,
-            thread_root,
-        )?;
-        let room = self
-            .client
-            .get_room(&parsed_room)
-            .ok_or("v-send-sticker-room-not-found")?;
-        let response = room
-            .send(content)
-            .await
-            .map_err(|_| "v-send-sticker-sdk-failed")?;
-        Ok(MatrixSendStickerResult {
-            room_id: parsed_room.to_string(),
-            event_id: response.response.event_id.to_string(),
-            status: "sent",
-        })
-    }
-
     pub async fn send_poll(
         &self,
         room_id: String,
@@ -1110,11 +1068,13 @@ impl NativeTimelineRegistry {
             let room = client
                 .get_room(&room_id)
                 .ok_or("d0.3-timeline-room-not-found")?;
-            let is_encrypted = room
-                .latest_encryption_state()
-                .await
-                .map_err(|_| "d0.5-timeline-encryption-state-unavailable")?
-                .is_encrypted();
+            // Timeline open is a persisted read path. `latest_encryption_state`
+            // deliberately performs a homeserver request when the state has not
+            // been marked synchronized, which prevents cached messages from
+            // opening after a cold offline restart. The SDK room store is the
+            // authoritative readback here; send owners independently refresh
+            // encryption state before performing network writes.
+            let is_encrypted = room.encryption_state().is_encrypted();
             let timeline = TimelineBuilder::new(&room)
                 .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
                 .build()

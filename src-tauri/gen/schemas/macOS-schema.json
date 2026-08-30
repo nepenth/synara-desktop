@@ -1149,12 +1149,6 @@
           "markdownDescription": "Enables the matrix_send_poll command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_send_sticker command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-send-sticker",
-          "markdownDescription": "Enables the matrix_send_sticker command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_send_text command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-send-text",
@@ -2281,12 +2275,6 @@
           "type": "string",
           "const": "deny-matrix-send-poll",
           "markdownDescription": "Denies the matrix_send_poll command without any pre-configured scope."
-        },
-        {
-          "description": "Denies the matrix_send_sticker command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-send-sticker",
-          "markdownDescription": "Denies the matrix_send_sticker command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_send_text command without any pre-configured scope.",

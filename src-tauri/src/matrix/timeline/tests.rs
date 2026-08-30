@@ -1164,6 +1164,8 @@ mod view_pure {
             body: "Reply body".into(),
             formatted_body: None,
             message_type: Some("text".into()),
+            media_filename: None,
+            media_caption: None,
             edited: false,
             reply: Some(reply),
             thread: Some(thread),

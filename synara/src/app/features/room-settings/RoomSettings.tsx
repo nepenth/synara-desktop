@@ -44,7 +44,7 @@ const useRoomSettingsMenuItems = (): RoomSettingsMenuItem[] =>
       },
       {
         page: RoomSettingsPage.EmojisStickersPage,
-        name: 'Emojis & Stickers',
+        name: 'Custom Emoji',
         icon: Icons.Smile,
       },
       {

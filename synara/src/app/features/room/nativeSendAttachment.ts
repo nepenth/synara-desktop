@@ -1,8 +1,8 @@
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import {
   isNativeMatrixLoggedIn,
-  sendAttachmentsWithNativeOwner,
-  type NativeSendAttachmentFile,
+  sendAttachmentPlanWithNativeOwner,
+  type NativeSendAttachmentInput,
 } from './nativeSendAttachmentOwner';
 
 export const nativeComposerAttachmentReady = (): Promise<boolean> =>
@@ -10,19 +10,15 @@ export const nativeComposerAttachmentReady = (): Promise<boolean> =>
     invokeDesktopWithAvailability(command, args)
   );
 
-export const sendComposerAttachmentsWithNativeOwner = (
-  roomId: string,
-  files: NativeSendAttachmentFile[],
-  replyTo?: string,
-  threadRoot?: string
+export const sendComposerAttachmentPlanWithNativeOwner = (
+  inputs: NativeSendAttachmentInput[],
+  onSent: (index: number) => void | Promise<void>
 ): Promise<'native' | 'legacy'> =>
-  sendAttachmentsWithNativeOwner(
-    roomId,
-    files,
-    replyTo,
-    threadRoot,
+  sendAttachmentPlanWithNativeOwner(
+    inputs,
     isSynaraDesktop(),
-    (command, args) => invokeDesktopWithAvailability(command, args)
+    (command, args) => invokeDesktopWithAvailability(command, args),
+    onSent
   );
 
 export async function fileToNativeAttachmentBytes(file: Blob): Promise<number[]> {

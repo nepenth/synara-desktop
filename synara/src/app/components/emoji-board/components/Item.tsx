@@ -73,33 +73,3 @@ export function CustomEmojiItem({ mx, useAuthentication, image }: CustomEmojiIte
     </Box>
   );
 }
-
-type StickerItemProps = {
-  mx: MatrixClientReading;
-  useAuthentication?: boolean;
-  image: PackImageReader;
-};
-
-export function StickerItem({ mx, useAuthentication, image }: StickerItemProps) {
-  return (
-    <Box
-      as="button"
-      type="button"
-      alignItems="Center"
-      justifyContent="Center"
-      className={css.StickerItem}
-      title={image.body || image.shortcode}
-      aria-label={`${image.body || image.shortcode} emoji`}
-      data-emoji-type={EmojiType.Sticker}
-      data-emoji-data={image.url}
-      data-emoji-shortcode={image.shortcode}
-    >
-      <img
-        loading="lazy"
-        className={css.StickerImg}
-        alt={image.body || image.shortcode}
-        src={resolveOptionalMatrixMediaUrl(mx, image.url, { useAuthentication }) ?? ''}
-      />
-    </Box>
-  );
-}

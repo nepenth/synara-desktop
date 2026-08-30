@@ -12,6 +12,7 @@ import {
 } from '../../state/room/roomInputDrafts';
 import { useObjectURL } from '../../hooks/useObjectURL';
 import { useMediaConfig } from '../../hooks/useMediaConfig';
+import { effectiveNativeAttachmentLimit } from '../../utils/nativeMediaLimits';
 
 type PreviewImageProps = {
   fileItem: TUploadItem;
@@ -117,7 +118,10 @@ export function UploadCardRenderer({
 }: UploadCardRendererProps) {
   const mx = useMatrixClient();
   const mediaConfig = useMediaConfig();
-  const allowSize = mediaConfig['m.upload.size'] || Infinity;
+  const serverAllowSize = mediaConfig['m.upload.size'];
+  const allowSize = nativeComposerSend
+    ? effectiveNativeAttachmentLimit(serverAllowSize)
+    : serverAllowSize || Infinity;
 
   const uploadAtom = roomUploadAtomFamily(fileItem.file);
   const { metadata } = fileItem;
@@ -127,7 +131,7 @@ export function UploadCardRenderer({
     isEncrypted
   );
   const { file } = upload;
-  const fileSizeExceeded = file.size >= allowSize;
+  const fileSizeExceeded = file.size > allowSize;
 
   if (upload.status === UploadStatus.Idle && !fileSizeExceeded) {
     if (nativeComposerSend) {

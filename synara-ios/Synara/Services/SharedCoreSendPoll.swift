@@ -8,7 +8,6 @@ import SynaraCore
 /// This wraps the registered send-poll command only.
 /// No media bytes. Failed errors stay static and must not echo question,
 /// options, or room id.
-/// Send sticker stays on SharedCoreSendSticker.
 /// Edit and respond stay off.
 /// It is not a generic `Core.command` FFI and not a product swap.
 enum SharedCoreSendPoll {

@@ -136,6 +136,7 @@ export function ImagePackProfileEdit({ meta, onCancel, onSave }: ImagePackProfil
     if (!name) return;
 
     const metaReader = new PackMetaReader({
+      ...meta.content,
       avatar_url: avatar,
       display_name: name,
       attribution,

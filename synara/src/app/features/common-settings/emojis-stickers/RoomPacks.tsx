@@ -56,6 +56,7 @@ function CreatePackTile({ packs, roomId }: CreatePackTileProps) {
         const content: PackContent = {
           pack: {
             display_name: name,
+            usage: [ImageUsage.Emoticon],
           },
         };
         // V-SEND.R-PACK-WRITE: native room-pack create is fail-closed on
@@ -103,10 +104,7 @@ function CreatePackTile({ packs, roomId }: CreatePackTileProps) {
       direction="Column"
       gap="400"
     >
-      <SettingTile
-        title="New Pack"
-        description="Add your own emoji and sticker pack to use in room."
-      >
+      <SettingTile title="New Pack" description="Add a custom emoji pack to use in this room.">
         <Box
           style={{ marginTop: config.space.S200 }}
           as="form"
@@ -258,7 +256,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
                   <NativeAvatarImage style={{ objectFit: 'contain' }} src={avatarUrl} />
                 ) : (
                   <AvatarFallback>
-                    <Icon size="400" src={Icons.Sticker} filled />
+                    <Icon size="400" src={Icons.Smile} filled />
                   </AvatarFallback>
                 )}
               </Avatar>
@@ -310,7 +308,7 @@ export function RoomPacks({ onViewPack }: RoomPacksProps) {
                 No Packs
               </Text>
               <Text size="T200" align="Center">
-                There are no emoji or sticker packs to display at the moment.
+                There are no custom emoji packs to display at the moment.
               </Text>
             </Box>
           </SequenceCard>

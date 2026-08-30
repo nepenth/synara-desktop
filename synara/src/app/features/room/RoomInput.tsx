@@ -71,8 +71,8 @@ import {
   getMentions,
   insertClipboardData,
 } from '../../components/editor';
-import { EmojiBoard, EmojiBoardTab } from '../../components/emoji-board';
-import { TUploadContent, getImageInfo, getMxIdLocalPart } from '../../utils/matrix';
+import { EmojiBoard } from '../../components/emoji-board';
+import { TUploadContent, getMxIdLocalPart } from '../../utils/matrix';
 import { useTypingStatusUpdater } from '../../hooks/useTypingStatusUpdater';
 import { useFilePicker } from '../../hooks/useFilePicker';
 import { useFileDropZone } from '../../hooks/useFileDrop';
@@ -90,6 +90,7 @@ import {
   UploadBoardContent,
   UploadBoardHeader,
   UploadBoardImperativeHandlers,
+  UploadSendOptions,
 } from '../../components/upload-board';
 import {
   Upload,
@@ -100,9 +101,7 @@ import {
 import {
   editableActiveElement,
   getDataTransferFiles,
-  getImageUrlBlob,
   shouldProbeNativeClipboardImage,
-  loadImageElement,
 } from '../../utils/dom';
 import { safeFile } from '../../utils/mimeTypes';
 import { useSetting } from '../../state/hooks/settings';
@@ -113,7 +112,6 @@ import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useC
 import { mobileOrTablet } from '../../utils/user-agent';
 import { ReplyLayout, ThreadIndicator } from '../../components/message';
 import { roomToParentsAtom } from '../../state/room/roomToParents';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { useImagePackRooms } from '../../hooks/useImagePackRooms';
 import { usePowerLevelsContext } from '../../hooks/usePowerLevels';
 import colorMXID from '../../../util/colorMXID';
@@ -123,7 +121,6 @@ import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { useTheme } from '../../hooks/useTheme';
 import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
-import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useClientConfig } from '../../hooks/useClientConfig';
 import {
@@ -145,13 +142,18 @@ import * as css from './RoomComposer.css';
 import {
   fileToNativeAttachmentBytes,
   nativeComposerAttachmentReady,
-  sendComposerAttachmentsWithNativeOwner,
+  sendComposerAttachmentPlanWithNativeOwner,
 } from './nativeSendAttachment';
 import { sendComposerGifWithNativeOwner } from './nativeSendGif';
-import { sendComposerStickerWithNativeOwner } from './nativeSendSticker';
 import { sendPollWithNativeDesktopOwner } from './nativePoll';
 import { sendPlainTextWithNativeOwner } from './nativeSendText';
 import { clearNativeComposerReplyDraft } from './nativeComposerDraft';
+import type { AttachmentSendPlan } from './attachmentSendPlan';
+import {
+  completeAttachmentSendStep,
+  hasTrailingAttachmentText,
+  makeOrReuseAttachmentSendPlan,
+} from './attachmentSendPlan';
 
 const NATIVE_PASTE_EVENT = 'synara://native-paste';
 
@@ -164,7 +166,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
   ({ editor, roomId, room }, ref) => {
     const mx = useMatrixClient();
     const clientConfig = useClientConfig();
-    const useAuthentication = useMediaAuthentication();
     const [enterForNewline] = useSetting(settingsAtom, 'enterForNewline');
     const [isMarkdown] = useSetting(settingsAtom, 'isMarkdown');
     const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
@@ -216,6 +217,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       selectedFiles.map((f) => f.file)
     );
     const uploadBoardHandlers = useRef<UploadBoardImperativeHandlers | undefined>(undefined);
+    const attachmentSendPlan = useRef<AttachmentSendPlan | undefined>(undefined);
 
     useEffect(() => {
       let cancelled = false;
@@ -231,7 +233,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
     const [composerToolsAnchor, setComposerToolsAnchor] = useState<RectCords>();
-    const [emojiBoardTab, setEmojiBoardTab] = useState<EmojiBoardTab>();
+    const [emojiBoardOpen, setEmojiBoardOpen] = useState(false);
     const [autocompleteQuery, setAutocompleteQuery] =
       useState<AutocompleteQuery<AutocompletePrefix>>();
     const [gifPickerAnchor, setGifPickerAnchor] = useState<RectCords>();
@@ -264,6 +266,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         }
         safeFiles.forEach((f) =>
           fileItems.push({
+            transactionId: `synara-attachment-${crypto.randomUUID()}`,
             file: f,
             originalFile: f,
             encInfo: undefined,
@@ -428,25 +431,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       return relation;
     }, [replyDraft]);
 
-    const addReplyRelationToContent = useCallback(
-      (content: IContent): IContent => {
-        const relation = getReplyRelation();
-        if (!replyDraft || !relation) return content;
-
-        const relatedContent: IContent = {
-          ...content,
-          'm.relates_to': relation,
-        };
-
-        if (replyDraft.userId !== mx.getUserId()) {
-          relatedContent['m.mentions'] = getMentionContent([replyDraft.userId], false);
-        }
-
-        return relatedContent;
-      },
-      [mx, replyDraft, getReplyRelation]
-    );
-
     useEffect(() => {
       const storedDraft = loadRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
       const draft = msgDraft.length > 0 ? msgDraft : storedDraft;
@@ -514,43 +498,55 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       handleRemoveUpload(uploads.map((upload) => upload.file));
     };
 
-    const handleSendUpload = async (uploads: UploadSuccess[]) => {
+    const handleSendUpload = async (uploads: UploadSuccess[], options?: UploadSendOptions) => {
       const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
       const threadRoot =
         replyDraft?.relation?.rel_type === RelationType.Thread &&
         typeof replyDraft.relation.event_id === 'string'
           ? replyDraft.relation.event_id
           : undefined;
-      const nativeFiles = await Promise.all(
+      const nativeInputs = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
           if (!fileItem) throw new Error('Broken upload');
           const source = fileItem.originalFile;
           return {
-            filename: source.name || 'attachment',
-            mimeType: source.type || 'application/octet-stream',
-            bytes: await fileToNativeAttachmentBytes(source),
+            roomId,
+            transactionId: fileItem.transactionId,
+            file: {
+              filename: source.name || 'attachment',
+              mimeType: source.type || 'application/octet-stream',
+              bytes: await fileToNativeAttachmentBytes(source),
+            },
+            caption: uploads.length === 1 ? options?.caption : undefined,
+            formattedCaption: uploads.length === 1 ? options?.formattedCaption : undefined,
+            mentionUserIds: uploads.length === 1 ? options?.mentionUserIds : undefined,
+            mentionRoom: uploads.length === 1 ? options?.mentionRoom : undefined,
+            replyTo: threadRoot ? undefined : replyTo,
+            threadRoot,
           };
         })
       );
-      const owner = await sendComposerAttachmentsWithNativeOwner(
-        roomId,
-        nativeFiles,
-        replyTo,
-        threadRoot
-      );
+      const owner = await sendComposerAttachmentPlanWithNativeOwner(nativeInputs, (index) => {
+        const sentTransactionId = nativeInputs[index].transactionId;
+        if (attachmentSendPlan.current) {
+          attachmentSendPlan.current = completeAttachmentSendStep(
+            attachmentSendPlan.current,
+            sentTransactionId
+          );
+        }
+        handleRemoveUpload(uploads[index].file);
+      });
       if (owner !== 'native') {
         throw new Error('Native Matrix attachment send is unavailable.');
       }
-      handleCancelUpload(uploads);
-      if (nativeFiles.length > 0) {
+      if (nativeInputs.length > 0) {
         setReplyDraft(undefined);
       }
     };
 
     const submit = useCallback(async () => {
       if (sendingMessage) return;
-      uploadBoardHandlers.current?.handleSend();
 
       const commandName = getBeginCommand(editor);
       let plainText = toPlainText(editor.children, isMarkdown).trim();
@@ -591,7 +587,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return;
       }
 
-      if (plainText === '') return;
+      const attachmentCount = selectedFiles.length;
+      if (plainText === '' && attachmentCount === 0) return;
 
       const body = plainText;
       const formattedBody = customHtml;
@@ -627,6 +624,40 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       try {
         setSendingMessage(true);
         setSendError(undefined);
+        if (attachmentCount > 0) {
+          const transactionIds = selectedFiles.map((file) => file.transactionId);
+          const plan = makeOrReuseAttachmentSendPlan(
+            attachmentSendPlan.current,
+            transactionIds,
+            body
+          );
+          attachmentSendPlan.current = plan;
+          const attachmentCaption = plan.textRole === 'caption' ? body : undefined;
+          const formattedCaption =
+            attachmentCaption && !customHtmlEqualsPlainText(formattedBody, body)
+              ? formattedBody
+              : undefined;
+          const uploadSender = uploadBoardHandlers.current;
+          if (!uploadSender) {
+            throw new Error('Attachments are still preparing.');
+          }
+          await uploadSender.handleSend({
+            caption: attachmentCaption,
+            formattedCaption,
+            mentionUserIds: attachmentCaption ? Array.from(mentionData.users) : undefined,
+            mentionRoom: attachmentCaption ? mentionData.room : undefined,
+          });
+          if (!hasTrailingAttachmentText(plan)) {
+            attachmentSendPlan.current = undefined;
+            resetEditor(editor);
+            resetEditorHistory(editor);
+            clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+            clearReplyDraft();
+            sendTypingStatus(false);
+            return;
+          }
+          attachmentSendPlan.current = undefined;
+        }
         const nativeOwner = await sendPlainTextWithNativeOwner({
           roomId,
           body,
@@ -670,6 +701,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       commands,
       getReplyRelation,
       sendingMessage,
+      selectedFiles,
       t,
     ]);
 
@@ -787,62 +819,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleEmoticonSelect = (key: string, shortcode: string) => {
       editor.insertNode(createEmoticonElement(key, shortcode));
       moveCursor(editor);
-    };
-
-    const handleStickerSelect = async (mxc: string, shortcode: string, label: string) => {
-      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
-      const threadRoot =
-        replyDraft?.relation?.rel_type === RelationType.Thread &&
-        typeof replyDraft.relation.event_id === 'string'
-          ? replyDraft.relation.event_id
-          : undefined;
-
-      // Prefer pack media info when resolvable; native send still works without it.
-      let info: { w?: number; h?: number; mimetype?: string; size?: number } | undefined;
-      const stickerUrl = resolveOptionalMatrixMediaUrl(mx, mxc, { useAuthentication });
-      if (stickerUrl) {
-        try {
-          info = await getImageInfo(
-            await loadImageElement(stickerUrl),
-            await getImageUrlBlob(stickerUrl)
-          );
-        } catch {
-          info = undefined;
-        }
-      }
-
-      const nativeOwner = await sendComposerStickerWithNativeOwner({
-        roomId,
-        body: label || shortcode || 'sticker',
-        mxc,
-        info: info
-          ? {
-              width: info.w,
-              height: info.h,
-              mimetype: info.mimetype,
-              size: info.size,
-            }
-          : undefined,
-        replyTo,
-        threadRoot,
-      });
-      if (nativeOwner === 'native') {
-        setReplyDraft(undefined);
-        return;
-      }
-
-      // Legacy web path — only when no native Matrix session is live.
-      if (!stickerUrl || !info) return;
-      mx.sendEvent(
-        roomId,
-        'm.sticker' as any,
-        addReplyRelationToContent({
-          body: label,
-          url: mxc,
-          info,
-        }) as any
-      );
-      clearReplyDraft();
     };
 
     const handleGifSelect = async (gif: GifResult) => {
@@ -1041,17 +1017,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     >
                       <Text size="T300">Attach file</Text>
                     </MenuItem>
-                    <MenuItem
-                      size="300"
-                      radii="300"
-                      after={<Icon src={Icons.Sticker} size="100" />}
-                      onClick={() => {
-                        setComposerToolsAnchor(undefined);
-                        setEmojiBoardTab(EmojiBoardTab.Sticker);
-                      }}
-                    >
-                      <Text size="T300">Sticker</Text>
-                    </MenuItem>
                     {(gifPickerAvailable || gifOnboardingVisible) && (
                       <MenuItem
                         size="300"
@@ -1122,38 +1087,33 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 position="Top"
                 align="End"
                 anchor={
-                  emojiBoardTab === undefined
+                  !emojiBoardOpen
                     ? undefined
                     : emojiBtnRef.current?.getBoundingClientRect() ?? undefined
                 }
                 content={
                   <EmojiBoard
-                    tab={emojiBoardTab}
-                    onTabChange={setEmojiBoardTab}
                     imagePackRooms={imagePackRooms}
                     returnFocusOnDeactivate={false}
                     onEmojiSelect={handleEmoticonSelect}
                     onCustomEmojiSelect={handleEmoticonSelect}
-                    onStickerSelect={handleStickerSelect}
                     requestClose={() => {
-                      setEmojiBoardTab((tab) => {
-                        if (tab && !mobileOrTablet()) ReactEditor.focus(editor);
-                        return undefined;
-                      });
+                      if (emojiBoardOpen && !mobileOrTablet()) ReactEditor.focus(editor);
+                      setEmojiBoardOpen(false);
                     }}
                   />
                 }
               >
                 <IconButton
                   ref={emojiBtnRef}
-                  aria-pressed={!!emojiBoardTab}
+                  aria-pressed={emojiBoardOpen}
                   aria-label={t('composer.emoji_picker_aria_label', 'Emoji picker')}
-                  onClick={() => setEmojiBoardTab(EmojiBoardTab.Emoji)}
+                  onClick={() => setEmojiBoardOpen((open) => !open)}
                   variant="SurfaceVariant"
                   size="300"
                   radii="300"
                 >
-                  <Icon src={Icons.Smile} filled={!!emojiBoardTab} />
+                  <Icon src={Icons.Smile} filled={emojiBoardOpen} />
                 </IconButton>
               </PopOut>
               {(gifPickerAvailable || gifOnboardingVisible) && (

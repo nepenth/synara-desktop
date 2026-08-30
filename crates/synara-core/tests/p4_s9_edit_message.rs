@@ -76,7 +76,7 @@ fn edit_message_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("dictionary EditMessageDto"));
     assert!(udl.contains("interface EditMessageError"));
     assert!(udl.contains("send_poll("));
-    assert!(udl.contains("send_sticker("));
+    assert!(!udl.contains("send_sticker("));
     assert!(udl.contains("send_text("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
@@ -88,7 +88,7 @@ fn edit_message_surface_exposes_only_the_registered_family() {
         .expect("SharedCore");
     assert!(shared_core.contains("edit_message("));
     assert!(shared_core.contains("send_poll("));
-    assert!(shared_core.contains("send_sticker("));
+    assert!(!shared_core.contains("send_sticker("));
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));

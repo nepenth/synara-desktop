@@ -663,10 +663,69 @@ struct RawTimelineEvent: Equatable {
     }
 }
 
+struct TimelineLoadFailure: Equatable {
+    enum Kind: Equatable {
+        case sessionUnavailable
+        case roomUnavailable
+        case viewUnavailable
+        case temporarilyUnavailable
+    }
+
+    let kind: Kind
+    let diagnosticCode: String
+
+    init(kind: Kind, diagnosticCode: String) {
+        self.kind = kind
+        self.diagnosticCode = Self.privacySafeDiagnosticCode(diagnosticCode)
+    }
+
+    private static func privacySafeDiagnosticCode(_ candidate: String) -> String {
+        guard candidate.isEmpty == false,
+              candidate.utf8.count <= 80,
+              candidate.utf8.allSatisfy({ byte in
+                  switch byte {
+                  case 45, 46, 48 ... 57, 65 ... 90, 95, 97 ... 122:
+                      return true
+                  default:
+                      return false
+                  }
+              })
+        else {
+            return "timeline-invalid-diagnostic-code"
+        }
+        return candidate
+    }
+
+    var userMessage: String {
+        switch kind {
+        case .sessionUnavailable:
+            return "Sign in again to load this timeline."
+        case .roomUnavailable:
+            return "This room is not available."
+        case .viewUnavailable, .temporarilyUnavailable:
+            return "Messages are temporarily unavailable. Try again."
+        }
+    }
+}
+
 enum TimelineLoadOutcome: Equatable {
     case loaded([TimelineItem])
+    /// The owning timeline opened successfully and backward pagination proved
+    /// there are no displayable events before the start of the room history.
     case empty
-    case failed(String)
+    case failed(TimelineLoadFailure)
+}
+
+struct RoomTimelineAvailabilityState: Equatable {
+    private(set) var failure: TimelineLoadFailure?
+
+    mutating func recordSuccess() {
+        failure = nil
+    }
+
+    mutating func recordFailure(_ failure: TimelineLoadFailure, preservingRows: Bool) {
+        self.failure = preservingRows ? failure : nil
+    }
 }
 
 protocol TimelineServicing: AnyObject {
@@ -779,7 +838,7 @@ enum RoomTimelineProviderPresentationPolicy {
 enum RoomTimelineLiveTransition {
     case succeeded(RoomTimelineSessionFeed)
     case empty
-    case failed(String)
+    case failed(TimelineLoadFailure)
     case superseded
 }
 
@@ -795,6 +854,7 @@ actor RoomTimelineSession {
     private var generation: UInt64 = 0
     private var mode: RoomTimelineMode = .live
     private var serverItems: [TimelineItem] = []
+    private var updateFailureOutstanding = false
 
     init(roomID: String, service: TimelineServicing) {
         self.roomID = roomID
@@ -806,6 +866,7 @@ actor RoomTimelineSession {
         let requestedGeneration = generation
         self.mode = mode
         serverItems = []
+        updateFailureOutstanding = false
 
         let outcome = await service.loadInitialTimeline(
             roomID: roomID,
@@ -837,6 +898,7 @@ actor RoomTimelineSession {
             generation &+= 1
             mode = .live
             serverItems = TimelineWindowPolicy.replacingServerWindow(items)
+            updateFailureOutstanding = false
             let nextGeneration = generation
             return .succeeded(
                 RoomTimelineSessionFeed(
@@ -848,9 +910,11 @@ actor RoomTimelineSession {
                 )
             )
         case .loaded, .empty:
+            updateFailureOutstanding = true
             return .empty
-        case let .failed(message):
-            return .failed(message)
+        case let .failed(failure):
+            updateFailureOutstanding = true
+            return .failed(failure)
         }
     }
 
@@ -874,17 +938,21 @@ actor RoomTimelineSession {
             generation &+= 1
             mode = .focused(eventID: eventID)
             serverItems = TimelineWindowPolicy.prependingHistory(olderItems, to: serverItems)
+            updateFailureOutstanding = false
             return .loaded(serverItems)
         case .loaded, .empty:
+            updateFailureOutstanding = false
             return .empty
-        case let .failed(message):
-            return .failed(message)
+        case let .failed(failure):
+            updateFailureOutstanding = true
+            return .failed(failure)
         }
     }
 
     func invalidate() {
         generation &+= 1
         serverItems = []
+        updateFailureOutstanding = false
     }
 
     func currentGeneration() -> UInt64 {
@@ -901,8 +969,8 @@ actor RoomTimelineSession {
             return serverItems.isEmpty ? .empty : .loaded(serverItems)
         case .empty:
             return .empty
-        case let .failed(message):
-            return .failed(message)
+        case let .failed(failure):
+            return .failed(failure)
         }
     }
 
@@ -916,15 +984,21 @@ actor RoomTimelineSession {
         switch outcome {
         case let .loaded(items):
             let nextItems = TimelineWindowPolicy.replacingServerWindow(items)
+            let isRecoveryHeartbeat = updateFailureOutstanding
+            updateFailureOutstanding = false
             guard nextItems != serverItems else {
-                return .unchanged
+                return isRecoveryHeartbeat
+                    ? .accepted(nextItems.isEmpty ? .empty : .loaded(nextItems))
+                    : .unchanged
             }
             serverItems = nextItems
             return .accepted(nextItems.isEmpty ? .empty : .loaded(nextItems))
         case .empty:
+            updateFailureOutstanding = false
             return .accepted(.empty)
-        case let .failed(message):
-            return .accepted(.failed(message))
+        case let .failed(failure):
+            updateFailureOutstanding = true
+            return .accepted(.failed(failure))
         }
     }
 

@@ -1,104 +1,47 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { sendStickerWithNativeOwner } from '../nativeSendStickerOwner';
+const roomInput = readFileSync('src/app/features/room/RoomInput.tsx', 'utf8');
+const emojiBoard = readFileSync('src/app/components/emoji-board/EmojiBoard.tsx', 'utf8');
+const imagePackContent = readFileSync(
+  'src/app/components/image-pack-view/ImagePackContent.tsx',
+  'utf8'
+);
+const imageTile = readFileSync('src/app/components/image-pack-view/ImageTile.tsx', 'utf8');
+const packMeta = readFileSync('src/app/components/image-pack-view/PackMeta.tsx', 'utf8');
+const roomSettings = readFileSync('src/app/features/room-settings/RoomSettings.tsx', 'utf8');
+const spaceSettings = readFileSync('src/app/features/space-settings/SpaceSettings.tsx', 'utf8');
+const nativePresenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
 
-test('native logged-in session is the sole composer sticker send owner', async () => {
-  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
-  const owner = await sendStickerWithNativeOwner(
-    {
-      roomId: '!room:example.org',
-      body: 'cat',
-      mxc: 'mxc://example.org/sticker1',
-      info: {
-        width: 128,
-        height: 128,
-        mimetype: 'image/png',
-        size: 2048,
-      },
-      replyTo: '$event:example.org',
-      threadRoot: '$root:example.org',
-    },
-    true,
-    async (command, args) => {
-      calls.push({ command, args });
-      if (command === 'matrix_session_snapshot') {
-        return { available: true, value: { status: 'logged_in' } };
-      }
-      return {
-        available: true,
-        value: {
-          roomId: '!room:example.org',
-          eventId: '$sent:example.org',
-          status: 'sent',
-        },
-      };
-    }
-  );
-
-  assert.equal(owner, 'native');
-  assert.deepEqual(calls, [
-    { command: 'matrix_session_snapshot', args: undefined },
-    {
-      command: 'matrix_send_sticker',
-      args: {
-        roomId: '!room:example.org',
-        body: 'cat',
-        mxc: 'mxc://example.org/sticker1',
-        width: 128,
-        height: 128,
-        mimetype: 'image/png',
-        size: 2048,
-        replyTo: '$event:example.org',
-        threadRoot: '$root:example.org',
-      },
-    },
-  ]);
+test('desktop composer exposes emoji and reactions without an outgoing sticker path', () => {
+  for (const removedSurface of [
+    'nativeSendSticker',
+    'handleStickerSelect',
+    'onStickerSelect',
+    'EmojiBoardTab.Sticker',
+    "'m.sticker'",
+  ]) {
+    assert.equal(roomInput.includes(removedSurface), false, `found ${removedSurface}`);
+  }
+  assert.equal(emojiBoard.includes('ImageUsage.Sticker'), false);
+  assert.equal(emojiBoard.includes('EmojiType.Sticker'), false);
+  assert.match(roomInput, /onCustomEmojiSelect=\{handleEmoticonSelect\}/);
 });
 
-test('web and native logged-out sessions retain the legacy sticker owner', async () => {
-  assert.equal(
-    await sendStickerWithNativeOwner(
-      {
-        roomId: '!room:example.org',
-        body: 'cat',
-        mxc: 'mxc://example.org/s',
-      },
-      false,
-      async () => {
-        throw new Error('invoke should not be called');
-      }
-    ),
-    'legacy'
-  );
-  assert.equal(
-    await sendStickerWithNativeOwner(
-      {
-        roomId: '!room:example.org',
-        body: 'cat',
-        mxc: 'mxc://example.org/s',
-      },
-      true,
-      async () => ({ available: true, value: { status: 'logged_out' } })
-    ),
-    'legacy'
-  );
+test('image-pack creation is emoji-only while existing Matrix usage metadata is preserved', () => {
+  assert.match(imagePackContent, /usage: \[ImageUsage\.Emoticon\]/);
+  assert.match(imagePackContent, /pack: savedMeta\?\.content \?\? imagePack\.meta\.content/);
+  assert.match(imageTile, /\.\.\.existingContent/);
+  assert.match(packMeta, /\.\.\.meta\.content/);
+  assert.equal(imageTile.includes('usage: [ImageUsage.Emoticon]'), false);
+  assert.equal(roomSettings.includes('Emojis & Stickers'), false);
+  assert.equal(spaceSettings.includes('Emojis & Stickers'), false);
+  assert.match(roomSettings, /Custom Emoji/);
+  assert.match(spaceSettings, /Custom Emoji/);
 });
 
-test('native sticker command failure never falls through to legacy sendEvent', async () => {
-  await assert.rejects(
-    sendStickerWithNativeOwner(
-      {
-        roomId: '!room:example.org',
-        body: 'cat',
-        mxc: 'mxc://example.org/s',
-      },
-      true,
-      async (command) =>
-        command === 'matrix_session_snapshot'
-          ? { available: true, value: { status: 'logged_in' } }
-          : { available: false }
-    ),
-    /Native Matrix sticker send is unavailable/
-  );
+test('incoming Matrix stickers remain renderable after outgoing surfaces are removed', () => {
+  assert.match(nativePresenter, /case 'sticker'/);
+  assert.match(nativePresenter, /<NativeTimelineMedia media=\{row\.media\} sticker/);
 });

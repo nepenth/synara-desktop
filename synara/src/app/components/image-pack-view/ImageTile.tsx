@@ -1,8 +1,7 @@
-import React, { FormEventHandler, ReactNode, useMemo, useState } from 'react';
-import { Badge, Box, Button, Chip, Icon, Icons, Input, Text } from 'folds';
-import { UsageSwitcher, useUsageStr } from './UsageSwitcher';
+import React, { FormEventHandler, ReactNode, useMemo } from 'react';
+import { Box, Button, Chip, Icon, Icons, Input, Text } from 'folds';
 import * as css from './style.css';
-import { ImageUsage, imageUsageEqual, PackImageReader } from '../../plugins/custom-emoji';
+import { PackImageReader } from '../../plugins/custom-emoji';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { SettingTile } from '../setting-tile';
 import { useObjectURL } from '../../hooks/useObjectURL';
@@ -13,7 +12,6 @@ import { resolveOptionalMatrixMediaUrl } from '../../matrix/media';
 type ImageTileProps = {
   defaultShortcode: string;
   useAuthentication: boolean;
-  packUsage: ImageUsage[];
   image: PackImageReader;
   canEdit?: boolean;
   onEdit?: (defaultShortcode: string, image: PackImageReader) => void;
@@ -23,7 +21,6 @@ type ImageTileProps = {
 export function ImageTile({
   defaultShortcode,
   image,
-  packUsage,
   useAuthentication,
   canEdit,
   onEdit,
@@ -31,8 +28,6 @@ export function ImageTile({
   deleted,
 }: ImageTileProps) {
   const mx = useMatrixClient();
-  const getUsageStr = useUsageStr();
-
   return (
     <SettingTile
       before={
@@ -50,18 +45,7 @@ export function ImageTile({
           image.shortcode
         )
       }
-      description={
-        <Box as="span" gap="200">
-          {image.usage && getUsageStr(image.usage) !== getUsageStr(packUsage) && (
-            <Badge as="span" variant="Secondary" size="400" radii="300" outlined>
-              <Text as="span" size="L400">
-                {getUsageStr(image.usage)}
-              </Text>
-            </Badge>
-          )}
-          {image.body}
-        </Box>
-      }
+      description={image.body}
       after={
         canEdit ? (
           <Box shrink="No" alignItems="Center" gap="200">
@@ -107,7 +91,6 @@ export function ImageTileUpload({ file, children }: ImageTileUploadProps) {
 type ImageTileEditProps = {
   defaultShortcode: string;
   useAuthentication: boolean;
-  packUsage: ImageUsage[];
   image: PackImageReader;
   onCancel: (shortcode: string) => void;
   onSave: (shortcode: string, image: PackImageReader) => void;
@@ -115,16 +98,11 @@ type ImageTileEditProps = {
 export function ImageTileEdit({
   defaultShortcode,
   useAuthentication,
-  packUsage,
   image,
   onCancel,
   onSave,
 }: ImageTileEditProps) {
   const mx = useMatrixClient();
-  const defaultUsage = image.usage ?? packUsage;
-
-  const [unsavedUsage, setUnsavedUsages] = useState(defaultUsage);
-
   const handleSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
 
@@ -135,23 +113,18 @@ export function ImageTileEdit({
 
     const shortcode = replaceSpaceWithDash(shortcodeInput.value.trim());
     const body = bodyInput.value.trim() || undefined;
-    const usage = unsavedUsage;
-
     if (!shortcode) return;
 
-    if (
-      shortcode === image.shortcode &&
-      body === image.body &&
-      imageUsageEqual(usage, defaultUsage)
-    ) {
+    if (shortcode === image.shortcode && body === image.body) {
       onCancel(defaultShortcode);
       return;
     }
 
+    const { url: _url, ...existingContent } = image.content;
+    void _url;
     const imageReader = new PackImageReader(shortcode, image.url, {
-      info: image.info,
+      ...existingContent,
       body,
-      usage: imageUsageEqual(usage, packUsage) ? undefined : usage,
     });
 
     onSave(defaultShortcode, imageReader);
@@ -190,9 +163,6 @@ export function ImageTileEdit({
           />
         </Box>
         <Box gap="200">
-          <Box shrink="No" direction="Column">
-            <UsageSwitcher usage={unsavedUsage} onChange={setUnsavedUsages} canEdit />
-          </Box>
           <Box grow="Yes" />
           <Button type="submit" variant="Success" size="300" radii="300">
             <Text size="B300">Save</Text>

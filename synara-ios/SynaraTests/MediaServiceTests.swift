@@ -62,8 +62,19 @@ final class MediaServiceTests: XCTestCase {
             source: .file,
             displayName: "/private/tmp/photo.png",
             data: Data("image".utf8),
-            mimeType: "image/png"
+            mimeType: "image/png",
+            caption: "A cat",
+            formattedCaption: "<strong>A cat</strong>",
+            replyToEventID: "$reply:matrix.org",
+            threadRootEventID: "$root:matrix.org",
+            transactionID: "stable-media-transaction",
+            mentionUserIDs: ["@alice:matrix.org"],
+            mentionRoom: true
         )
+
+        XCTAssertEqual(request.transactionID, "stable-media-transaction")
+        XCTAssertEqual(request.mentionUserIDs, ["@alice:matrix.org"])
+        XCTAssertEqual(request.mentionRoom, true)
 
         let state = await MockMediaUploadService().upload(request)
 
@@ -73,6 +84,9 @@ final class MediaServiceTests: XCTestCase {
         }
 
         XCTAssertEqual(resource.safeDescription, "photo.png")
+        XCTAssertEqual(resource.caption, "A cat")
+        XCTAssertEqual(resource.formattedCaption, "<strong>A cat</strong>")
+        XCTAssertEqual(item.replyToEventID, "$reply:matrix.org")
         XCTAssertFalse(resource.safeDescription.contains("/private/tmp"))
     }
 

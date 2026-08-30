@@ -33,3 +33,15 @@ test('grouped timestamps are hidden at rest and revealed by horizontal movement'
   assert.match(presenter, /event\.clientX - swipeStartX\.current/);
   assert.doesNotMatch(presenter, /grouped \? \(\s*originServerTs \? \(\s*<Time/);
 });
+
+test('native media rendering keeps Matrix filename and caption fields distinct', () => {
+  const contract = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+
+  assert.match(contract, /mediaFilename\?: string/);
+  assert.match(contract, /mediaCaption\?: string/);
+  assert.match(presenter, /filename=\{row\.mediaFilename\}/);
+  assert.match(presenter, /caption=\{row\.mediaCaption\}/);
+  assert.match(presenter, /formattedCaption=\{row\.formattedBody\}/);
+  assert.doesNotMatch(presenter, /<NativeTimelineMedia[\s\S]{0,240}body=\{row\.body\}/);
+});

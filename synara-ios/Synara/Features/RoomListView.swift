@@ -1227,6 +1227,13 @@ private struct RoomSearchField: View {
 private struct RoomListRow: View {
     let room: RoomSummary
 
+    private var accessibilityChildren: AccessibilityChildBehavior {
+        // Production VoiceOver gets one concise, combined row. UI automation
+        // exposes descendants only so it can assert the rendered title's real
+        // frame instead of passing on the synthesized row label alone.
+        ProcessInfo.processInfo.environment["SYNARA_UI_TESTS"] == "1" ? .contain : .ignore
+    }
+
     private var hasUnreadActivity: Bool {
         room.unreadCount > 0 || room.hasHighlight
     }
@@ -1260,6 +1267,8 @@ private struct RoomListRow: View {
                         .font(SynaraTypography.body.weight(hasUnreadActivity ? .semibold : .regular))
                         .foregroundStyle(SynaraColor.primaryText)
                         .lineLimit(1)
+                        .layoutPriority(1)
+                        .accessibilityIdentifier("RoomRowTitle-\(room.id)")
 
                     if room.isSecureRoom {
                         Image(systemName: "lock.fill")
@@ -1275,36 +1284,74 @@ private struct RoomListRow: View {
                             .accessibilityLabel("Favorite")
                     }
 
-                    if room.hasHighlight {
-                        SynaraStatusChip(title: "Mention", tint: SynaraColor.accent, systemImage: "at")
-                    }
-
-                    if room.requiresAgentApproval {
-                        SynaraStatusChip(title: "Approval", tint: SynaraColor.agent, systemImage: "hand.raised")
-                            .accessibilityIdentifier("RoomRowApprovalChip-\(room.id)")
-                    } else if room.isAgentRoom {
-                        SynaraStatusChip(title: "Agent", tint: SynaraColor.agent, systemImage: "sparkles")
-                    }
-
-                    Spacer(minLength: SynaraSpacing.small)
-
-                    if room.relativeActivity.isEmpty == false {
-                        Text(room.relativeActivity)
-                            .font(SynaraTypography.messageMeta.weight(hasUnreadActivity ? .medium : .regular))
-                            .foregroundStyle(hasUnreadActivity ? SynaraColor.secondaryText : SynaraColor.tertiaryText)
-                            .lineLimit(1)
-                    }
+                    Spacer(minLength: 0)
                 }
 
-                Text(room.lastMessagePreview)
-                    .font(SynaraTypography.roomPreview.weight(hasUnreadActivity ? .medium : .regular))
-                    .foregroundStyle(previewColor)
-                    .lineLimit(1)
-            }
+                HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.xSmall) {
+                    Text(room.lastMessagePreview)
+                        .font(SynaraTypography.roomPreview.weight(hasUnreadActivity ? .medium : .regular))
+                        .foregroundStyle(previewColor)
+                        .lineLimit(1)
+                        .layoutPriority(1)
 
-            SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
+                    Spacer(minLength: SynaraSpacing.xSmall)
+
+                    HStack(spacing: SynaraSpacing.xSmall) {
+                        if room.hasHighlight {
+                            RoomRowCompactStatusIcon(
+                                systemImage: "at",
+                                accessibilityLabel: "Mention",
+                                tint: SynaraColor.accent
+                            )
+                            .accessibilityIdentifier("RoomRowMentionIndicator-\(room.id)")
+                        }
+
+                        if room.requiresAgentApproval {
+                            RoomRowCompactStatusIcon(
+                                systemImage: "hand.raised.fill",
+                                accessibilityLabel: "Approval required",
+                                tint: SynaraColor.agent
+                            )
+                            .accessibilityIdentifier("RoomRowApprovalChip-\(room.id)")
+                        } else if room.isAgentRoom {
+                            RoomRowCompactStatusIcon(
+                                systemImage: "sparkles",
+                                accessibilityLabel: "Agent room",
+                                tint: SynaraColor.agent
+                            )
+                        }
+
+                        if room.relativeActivity.isEmpty == false {
+                            Text(room.relativeActivity)
+                                .font(SynaraTypography.messageMeta.weight(hasUnreadActivity ? .medium : .regular))
+                                .foregroundStyle(hasUnreadActivity ? SynaraColor.secondaryText : SynaraColor.tertiaryText)
+                                .lineLimit(1)
+                        }
+
+                        SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
+                    }
+                    .fixedSize(horizontal: true, vertical: false)
+                }
+            }
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+        .accessibilityElement(children: accessibilityChildren)
+        .accessibilityLabel(room.accessibilitySummary)
+    }
+}
+
+private struct RoomRowCompactStatusIcon: View {
+    let systemImage: String
+    let accessibilityLabel: String
+    let tint: Color
+
+    var body: some View {
+        Image(systemName: systemImage)
+            .font(.system(size: 10, weight: .semibold))
+            .foregroundStyle(tint)
+            .frame(width: 20, height: 20)
+            .background(tint.opacity(0.12), in: Circle())
+            .accessibilityLabel(accessibilityLabel)
     }
 }
 
@@ -1357,10 +1404,21 @@ private extension RoomSummary {
             parts.append("\(unreadCount) unread")
         }
         if hasHighlight {
-            parts.append("highlighted")
+            parts.append("mentioned")
         }
         if isFavorite {
             parts.append("favorite")
+        }
+        if isSecureRoom {
+            parts.append("encrypted")
+        }
+        if requiresAgentApproval {
+            parts.append("approval required")
+        } else if isAgentRoom {
+            parts.append("agent room")
+        }
+        if relativeActivity.isEmpty == false {
+            parts.append(relativeActivity)
         }
         return parts.joined(separator: ", ")
     }

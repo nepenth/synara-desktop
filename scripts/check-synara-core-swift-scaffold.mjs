@@ -210,10 +210,6 @@ const sharedCoreSendText = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSendText.swift"),
   "utf8"
 );
-const sharedCoreSendSticker = readFileSync(
-  resolve(root, "synara-ios/Synara/Services/SharedCoreSendSticker.swift"),
-  "utf8"
-);
 const sharedCoreSendPoll = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreSendPoll.swift"),
   "utf8"
@@ -801,15 +797,6 @@ const assertions = [
   [sharedCoreSendText, "core: SharedCore", "P4-S9-22 helper takes an already-constructed SharedCore"],
   [sharedCoreSendText, "core.sendText", "P4-S9-22 helper writes on the caller-owned instance"],
   [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendText.swift in Sources", "P4-S9-22 helper in Xcode target"],
-  [sharedCoreFfi, "send_sticker", "P4-S9-23 typed send-sticker FFI"],
-  [sharedCoreFfi, "matrix_send_sticker", "P4-S9-23 calls the registered send-sticker command"],
-  [udl, "SendStickerDto send_sticker(", "P4-S9-23 SharedCore send sticker"],
-  [udl, "interface SendStickerError", "P4-S9-23 static send-sticker error"],
-  [swiftBindingsTests, "testSharedCoreSendStickerWithoutSessionFailsClosed", "Swift P4-S9-23 fail-closed send-sticker test"],
-  [sharedCoreSendSticker, "sendSticker", "P4-S9-23 product send-sticker helper"],
-  [sharedCoreSendSticker, "core: SharedCore", "P4-S9-23 helper takes an already-constructed SharedCore"],
-  [sharedCoreSendSticker, "core.sendSticker", "P4-S9-23 helper writes on the caller-owned instance"],
-  [readFileSync(resolve(root, "synara-ios/Synara.xcodeproj/project.pbxproj"), "utf8"), "SharedCoreSendSticker.swift in Sources", "P4-S9-23 helper in Xcode target"],
   [sharedCoreFfi, "send_poll", "P4-S9-24 typed send-poll FFI"],
   [sharedCoreFfi, "matrix_send_poll", "P4-S9-24 calls the registered send-poll command"],
   [udl, "SendPollDto send_poll(", "P4-S9-24 SharedCore send poll"],
@@ -1871,11 +1858,6 @@ for (const required of ["send_text("]) {
     throw new Error(`P4-S9-22 SharedCore must expose ${required}`);
   }
 }
-for (const required of ["send_sticker("]) {
-  if (!sharedCoreBody.includes(required)) {
-    throw new Error(`P4-S9-23 SharedCore must expose ${required}`);
-  }
-}
 for (const required of ["send_poll("]) {
   if (!sharedCoreBody.includes(required)) {
     throw new Error(`P4-S9-24 SharedCore must expose ${required}`);
@@ -2177,17 +2159,6 @@ if (sharedCoreSendText.includes("SharedCore.newWithSecretStore") || sharedCoreSe
 for (const forbidden of ["composerSetReplyDraft", "sendSticker", "sendPoll", "editMessage", "pollRespond", "backupStatus"]) {
   if (sharedCoreSendText.includes(forbidden)) {
     throw new Error(`P4-S9-22 helper must not wrap ${forbidden}`);
-  }
-}
-if (sharedCoreSendSticker.includes("SharedCore(store:")) {
-  throw new Error("P4-S9-23 helper must not construct-and-drop SharedCore");
-}
-if (sharedCoreSendSticker.includes("SharedCore.newWithSecretStore") || sharedCoreSendSticker.includes("newWithSecretStore")) {
-  throw new Error("P4-S9-23 helper must not construct SharedCore");
-}
-for (const forbidden of ["sendText", "sendPoll", "editMessage", "pollRespond", "backupStatus"]) {
-  if (sharedCoreSendSticker.includes(forbidden)) {
-    throw new Error(`P4-S9-23 helper must not wrap ${forbidden}`);
   }
 }
 if (sharedCoreSendPoll.includes("SharedCore(store:")) {

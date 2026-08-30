@@ -263,12 +263,19 @@ fn project_event_row_for_user(
                 let msgtype = message.msgtype();
                 let (message_type, media) =
                     project_message_type_and_media(item_id, msgtype, media_registry.as_deref_mut());
+                let (media_filename, media_caption) = project_media_filename_and_caption(msgtype);
+                let body = media_filename
+                    .as_ref()
+                    .map(|_| media_caption.clone().unwrap_or_default())
+                    .unwrap_or_else(|| message.body().to_owned());
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
-                    body: message.body().to_owned(),
+                    body,
                     formatted_body: project_formatted_body(msgtype),
                     agent_card_json: project_agent_card_json(event, message.body()),
                     message_type,
+                    media_filename,
+                    media_caption,
                     edited: message.is_edited(),
                     reply: project_reply(content),
                     thread: project_thread_summary(content, event),
@@ -411,6 +418,29 @@ pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
         return None;
     }
     Some(html.to_owned())
+}
+
+/// Keep Matrix media filenames and captions distinct. The legacy `body`
+/// field is ambiguous for media because pre-caption events store the filename
+/// there, while captioned events store the caption and move the filename to
+/// `filename`.
+pub fn project_media_filename_and_caption(
+    msgtype: &MessageType,
+) -> (Option<String>, Option<String>) {
+    let fields = match msgtype {
+        MessageType::Image(content) => (content.filename(), content.caption()),
+        MessageType::File(content) => (content.filename(), content.caption()),
+        MessageType::Audio(content) => (content.filename(), content.caption()),
+        MessageType::Video(content) => (content.filename(), content.caption()),
+        _ => return (None, None),
+    };
+    (
+        Some(fields.0.to_owned()),
+        fields
+            .1
+            .map(str::to_owned)
+            .filter(|caption| !caption.is_empty()),
+    )
 }
 
 /// Project only the recognized structured agent-card object from a message.
@@ -792,6 +822,12 @@ pub struct TimelineMessageRow {
     pub agent_card_json: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
+    /// Matrix media filename, never inferred from `body` by presenters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_filename: Option<String>,
+    /// Plain Matrix media caption. Formatted markup stays in `formatted_body`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub media_caption: Option<String>,
     pub edited: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply: Option<TimelineReplyPreview>,
@@ -1073,7 +1109,8 @@ pub fn project_timeline_diffs_with_media(
 mod tests {
     use super::*;
     use matrix_sdk::ruma::events::room::message::{
-        EmoteMessageEventContent, NoticeMessageEventContent, TextMessageEventContent,
+        EmoteMessageEventContent, ImageMessageEventContent, NoticeMessageEventContent,
+        TextMessageEventContent,
     };
 
     #[test]
@@ -1111,6 +1148,39 @@ mod tests {
         assert_eq!(
             project_formatted_body(&emote).as_deref(),
             Some("<em>waves</em>")
+        );
+    }
+
+    #[test]
+    fn media_filename_and_caption_are_projected_without_body_inference() {
+        let mut image = ImageMessageEventContent::plain(
+            "A sunset".to_owned(),
+            matrix_sdk::ruma::OwnedMxcUri::from("mxc://example.org/image"),
+        );
+        image.filename = Some("sunset.jpg".to_owned());
+        image.formatted = Some(
+            matrix_sdk::ruma::events::room::message::FormattedBody::html(
+                "<strong>A sunset</strong>",
+            ),
+        );
+        let message = MessageType::Image(image);
+
+        assert_eq!(
+            project_media_filename_and_caption(&message),
+            (Some("sunset.jpg".to_owned()), Some("A sunset".to_owned()))
+        );
+        assert_eq!(
+            project_formatted_body(&message).as_deref(),
+            Some("<strong>A sunset</strong>")
+        );
+
+        let bare = MessageType::Image(ImageMessageEventContent::plain(
+            "bare.jpg".to_owned(),
+            matrix_sdk::ruma::OwnedMxcUri::from("mxc://example.org/bare"),
+        ));
+        assert_eq!(
+            project_media_filename_and_caption(&bare),
+            (Some("bare.jpg".to_owned()), None)
         );
     }
 
@@ -1319,6 +1389,8 @@ mod tests {
             formatted_body: None,
             agent_card_json: None,
             message_type: Some("text".into()),
+            media_filename: None,
+            media_caption: None,
             edited: false,
             reply: Some(reply),
             thread: Some(thread),

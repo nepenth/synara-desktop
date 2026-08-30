@@ -633,8 +633,13 @@ impl NativeImagePackOwner {
         filename: &str,
         mime_type: &str,
         payload: Vec<u8>,
+        caption: Option<String>,
+        formatted_caption: Option<String>,
         reply_to: Option<String>,
         thread_root: Option<String>,
+        transaction_id: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: bool,
     ) -> Result<crate::app::send::MatrixSendRoomAttachmentResult, &'static str> {
         crate::app::send::send_room_attachment(
             &self.client,
@@ -642,8 +647,13 @@ impl NativeImagePackOwner {
             filename,
             mime_type,
             payload,
+            caption,
+            formatted_caption,
             reply_to,
             thread_root,
+            transaction_id,
+            mention_user_ids,
+            mention_room,
         )
         .await
     }

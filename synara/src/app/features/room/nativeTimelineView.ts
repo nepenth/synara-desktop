@@ -59,6 +59,8 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
   formattedBody?: string;
   agentCardJson?: string;
   messageType?: string;
+  mediaFilename?: string;
+  mediaCaption?: string;
   edited: boolean;
   /** Parent preview when this row is an in-reply message. */
   reply?: NativeTimelineReplyPreview;

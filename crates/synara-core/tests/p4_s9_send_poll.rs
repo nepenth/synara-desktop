@@ -73,7 +73,7 @@ fn send_poll_surface_exposes_only_the_registered_family() {
     assert!(udl.contains("send_poll("));
     assert!(udl.contains("dictionary SendPollDto"));
     assert!(udl.contains("interface SendPollError"));
-    assert!(udl.contains("send_sticker("));
+    assert!(!udl.contains("send_sticker("));
     assert!(udl.contains("send_text("));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!udl.contains("matrix_send_attachment"));
@@ -85,7 +85,7 @@ fn send_poll_surface_exposes_only_the_registered_family() {
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
     assert!(shared_core.contains("send_poll("));
-    assert!(shared_core.contains("send_sticker("));
+    assert!(!shared_core.contains("send_sticker("));
     assert!(shared_core.contains("send_text("));
     assert!(shared_core.contains("composer_set_reply_draft("));
     assert!(!shared_core.contains("command("));

@@ -53,7 +53,7 @@ use crate::app::room_profile::{
 use crate::app::search::MatrixMessageSearchResult;
 use crate::app::send::{
     MatrixPollRespondResult, MatrixSendPollResult, MatrixSendRoomAttachmentResult,
-    MatrixSendStickerResult, MatrixSendTextResult,
+    MatrixSendTextResult,
 };
 use crate::app::spaces::{
     NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
@@ -819,27 +819,6 @@ struct MatrixSendTextRequest {
     thread_root: Option<String>,
     #[serde(default)]
     txn_id: Option<String>,
-}
-
-/// Exact React/Tauri envelope payload for `matrix_send_sticker`.
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-struct MatrixSendStickerRequest {
-    room_id: String,
-    body: String,
-    mxc: String,
-    #[serde(default)]
-    width: Option<u64>,
-    #[serde(default)]
-    height: Option<u64>,
-    #[serde(default)]
-    mimetype: Option<String>,
-    #[serde(default)]
-    size: Option<u64>,
-    #[serde(default)]
-    reply_to: Option<String>,
-    #[serde(default)]
-    thread_root: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_send_poll`.
@@ -1722,15 +1701,32 @@ impl Core {
         filename: &str,
         mime_type: &str,
         payload: Vec<u8>,
+        caption: Option<String>,
+        formatted_caption: Option<String>,
         reply_to: Option<String>,
         thread_root: Option<String>,
+        transaction_id: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: bool,
     ) -> Result<MatrixSendRoomAttachmentResult, MatrixIpcError> {
         let owner = self.state.image_pack_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-send-room-attachment-no-session")
         })?;
         owner
-            .send_room_attachment(room_id, filename, mime_type, payload, reply_to, thread_root)
+            .send_room_attachment(
+                room_id,
+                filename,
+                mime_type,
+                payload,
+                caption,
+                formatted_caption,
+                reply_to,
+                thread_root,
+                transaction_id,
+                mention_user_ids,
+                mention_room,
+            )
             .await
             .map_err(send_room_attachment_owner_error)
     }
@@ -1983,9 +1979,6 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_send_text", matrix_send_text)
         .expect("built-in matrix_send_text must remain in the command census");
-    registry
-        .register("matrix_send_sticker", matrix_send_sticker)
-        .expect("built-in matrix_send_sticker must remain in the command census");
     registry
         .register("matrix_send_poll", matrix_send_poll)
         .expect("built-in matrix_send_poll must remain in the command census");
@@ -2775,33 +2768,6 @@ fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
-}
-
-fn matrix_send_sticker(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
-    Box::pin(async move {
-        let payload: MatrixSendStickerRequest = serde_json::from_value(request.payload)
-            .map_err(|_| core_state_error("p2-send-sticker-invalid-payload"))?;
-        let owner = state.timeline_owner()?.ok_or_else(|| {
-            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
-                .with_diagnostic("p2-send-sticker-no-session")
-        })?;
-        let result: MatrixSendStickerResult = owner
-            .send_sticker(
-                payload.room_id,
-                payload.body,
-                payload.mxc,
-                payload.width,
-                payload.height,
-                payload.mimetype,
-                payload.size,
-                payload.reply_to,
-                payload.thread_root,
-            )
-            .await
-            .map_err(send_text_owner_error)?;
-        serde_json::to_value(result)
-            .map_err(|_| core_state_error("p2-send-sticker-serialization-failed"))
-    })
 }
 
 fn matrix_send_poll(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -6100,7 +6066,6 @@ mod tests {
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
                 "matrix_send_poll",
-                "matrix_send_sticker",
                 "matrix_send_text",
                 "matrix_session_snapshot",
                 "matrix_set_global_image_packs",
@@ -9482,29 +9447,6 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-send-text-no-session")
-        );
-    }
-
-    #[tokio::test]
-    async fn matrix_send_sticker_without_owner_fails_closed() {
-        let core = Core::new(Arc::new(TestPlatform));
-        let error = core
-            .command(CommandEnvelope {
-                command: "matrix_send_sticker".into(),
-                session_generation: 0,
-                request_id: None,
-                payload: serde_json::json!({
-                    "roomId":"!r:example.org",
-                    "body":"sticker",
-                    "mxc":"mxc://example.org/s"
-                }),
-            })
-            .await
-            .expect_err("send sticker without an attached owner must fail closed");
-        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
-        assert_eq!(
-            error.diagnostic_id.as_deref(),
-            Some("p2-send-sticker-no-session")
         );
     }
 

@@ -806,10 +806,71 @@ final class SharedCoreRoomMembershipService: RoomMembershipServicing {
     }
 }
 
+struct SharedCoreTimelinePaginationProgress {
+    static let maximumPageRequests = 8
+    static let maximumConsecutiveNoProgressPages = 2
+
+    private(set) var pageRequestCount = 0
+    private(set) var consecutiveNoProgressPages = 0
+    private var lastRowIDs: Set<String>?
+
+    mutating func observeInitial(rowIDs: Set<String>) {
+        lastRowIDs = rowIDs
+    }
+
+    var canRequestPage: Bool {
+        pageRequestCount < Self.maximumPageRequests
+            && consecutiveNoProgressPages < Self.maximumConsecutiveNoProgressPages
+    }
+
+    mutating func recordPage(rowIDs: Set<String>) {
+        pageRequestCount += 1
+        if let lastRowIDs, lastRowIDs == rowIDs {
+            consecutiveNoProgressPages += 1
+        } else {
+            consecutiveNoProgressPages = 0
+        }
+        lastRowIDs = rowIDs
+    }
+}
+
+actor SharedCoreTimelineRecoveryGate {
+    private struct Entry {
+        let id: UUID
+        let task: Task<TimelineLoadOutcome, Never>
+    }
+
+    private var entries: [String: Entry] = [:]
+
+    func run(
+        roomID: String,
+        operation: @escaping () async -> TimelineLoadOutcome
+    ) async -> TimelineLoadOutcome {
+        if let existing = entries[roomID] {
+            return await existing.task.value
+        }
+
+        let id = UUID()
+        let task = Task { await operation() }
+        entries[roomID] = Entry(id: id, task: task)
+        let outcome = await task.value
+        if entries[roomID]?.id == id {
+            entries.removeValue(forKey: roomID)
+        }
+        return outcome
+    }
+}
+
 final class SharedCoreTimelineService: TimelineServicing {
+    private struct OpenStreamState {
+        let streamID: String
+        var visibleItemIDs: Set<String>
+    }
+
     private let host: SharedCoreProductHost
     private let streamLock = NSLock()
-    private var streams: [String: String] = [:]
+    private let recoveryGate = SharedCoreTimelineRecoveryGate()
+    private var streams: [String: OpenStreamState] = [:]
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -833,28 +894,58 @@ final class SharedCoreTimelineService: TimelineServicing {
                 roomId: roomID,
                 position: position
             )
-            storeStream(opened.streamId, for: roomID)
-            return SharedCoreTimelineRows.outcome(from: opened.snapshot.rows)
+            storeStream(opened.streamId, visibleItemIDs: [], for: roomID)
+            return await resolveInitialSnapshot(
+                opened.snapshot,
+                roomID: roomID,
+                streamID: opened.streamId
+            )
         } catch {
-            return .empty
+            return .failed(Self.failure(from: error))
         }
     }
 
     func loadOlderTimeline(roomID: String, before eventID: String) async -> TimelineLoadOutcome {
         _ = eventID
-        guard let streamId = stream(for: roomID) else {
-            return .empty
+        guard let initialState = stream(for: roomID) else {
+            return .failed(Self.viewUnavailableFailure)
         }
-        do {
-            let snapshot = try await SharedCoreTimeline.timelinePaginate(
-                core: host.core,
-                streamId: streamId,
-                direction: "backwards"
-            )
-            return SharedCoreTimelineRows.outcome(from: snapshot.rows)
-        } catch {
-            return .empty
+        var knownItemIDs = initialState.visibleItemIDs
+        var paginationProgress = SharedCoreTimelinePaginationProgress()
+        while Task.isCancelled == false {
+            guard paginationProgress.canRequestPage else {
+                return .failed(Self.temporarilyUnavailableFailure)
+            }
+            do {
+                let snapshot = try await SharedCoreTimeline.timelinePaginate(
+                    core: host.core,
+                    streamId: initialState.streamID,
+                    direction: "backwards"
+                )
+                paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
+                let items = SharedCoreTimelineRows.items(from: snapshot.rows)
+                let itemIDs = Self.stableItemIDs(items)
+                let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
+                knownItemIDs.formUnion(itemIDs)
+                updateVisibleItemIDs(
+                    knownItemIDs,
+                    roomID: roomID,
+                    streamID: initialState.streamID
+                )
+                if containsNewItems {
+                    return .loaded(items)
+                }
+                if snapshot.paginationBackward == "exhausted" {
+                    return .empty
+                }
+                guard snapshot.paginationBackward == "available" else {
+                    return .failed(Self.temporarilyUnavailableFailure)
+                }
+            } catch {
+                return .failed(Self.failure(from: error))
+            }
         }
+        return .failed(Self.temporarilyUnavailableFailure)
     }
 
     func timelineUpdates(roomID: String, focusedEventID: String?) -> AsyncStream<TimelineLoadOutcome> {
@@ -874,7 +965,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                     guard Task.isCancelled == false else {
                         break
                     }
-                    let watchingStreamId = stream(for: roomID)
+                    let watchingStreamId = stream(for: roomID)?.streamID
                     guard SharedCoreTimelineLiveRefresh.shouldRefresh(
                         watchingRoomID: roomID,
                         watchingStreamId: watchingStreamId,
@@ -931,44 +1022,201 @@ final class SharedCoreTimelineService: TimelineServicing {
     private func refreshOpenTimeline(roomID: String, focusedEventID: String?) async -> TimelineLoadOutcome {
         let traceID = PerformanceTrace.begin("TimelineSnapshotRefresh")
         defer { PerformanceTrace.end("TimelineSnapshotRefresh", id: traceID) }
-        if let streamId = stream(for: roomID) {
+        if let streamId = stream(for: roomID)?.streamID {
             do {
                 let snapshot = try await SharedCoreTimeline.timelineSnapshot(
                     core: host.core,
                     streamId: streamId
                 )
-                return SharedCoreTimelineRows.outcome(from: snapshot.rows)
+                return await resolveInitialSnapshot(
+                    snapshot,
+                    roomID: roomID,
+                    streamID: streamId
+                )
             } catch {
-                return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
+                let failure = Self.failure(from: error)
+                if failure.kind == .viewUnavailable {
+                    return await recoveryGate.run(roomID: roomID) { [weak self] in
+                        guard let self else {
+                            return .failed(Self.temporarilyUnavailableFailure)
+                        }
+                        guard let staleStreamID = self.takeStream(
+                            for: roomID,
+                            ifMatching: streamId
+                        ) else {
+                            return await self.refreshCurrentTimelineAfterRecoveryRace(roomID: roomID)
+                        }
+                        _ = try? await SharedCoreTimeline.timelineClose(
+                            core: self.host.core,
+                            streamId: staleStreamID
+                        )
+                        return await self.loadInitialTimeline(
+                            roomID: roomID,
+                            focusedEventID: focusedEventID
+                        )
+                    }
+                }
+                return .failed(failure)
             }
         }
         return await loadInitialTimeline(roomID: roomID, focusedEventID: focusedEventID)
     }
 
-    private func stream(for roomID: String) -> String? {
+    private func resolveInitialSnapshot(
+        _ initialSnapshot: TimelineSnapshotDto,
+        roomID: String,
+        streamID: String
+    ) async -> TimelineLoadOutcome {
+        var snapshot = initialSnapshot
+        var paginationProgress = SharedCoreTimelinePaginationProgress()
+        paginationProgress.observeInitial(rowIDs: Self.nativeRowIDs(snapshot.rows))
+        while Task.isCancelled == false {
+            let items = SharedCoreTimelineRows.items(from: snapshot.rows)
+            updateVisibleItemIDs(
+                Self.stableItemIDs(items),
+                roomID: roomID,
+                streamID: streamID
+            )
+            if let outcome = SharedCoreTimelineRows.authoritativeOutcome(
+                from: snapshot.rows,
+                paginationBackward: snapshot.paginationBackward
+            ) {
+                return outcome
+            }
+            guard snapshot.paginationBackward == "available" else {
+                return .failed(Self.temporarilyUnavailableFailure)
+            }
+            guard paginationProgress.canRequestPage else {
+                return .failed(Self.temporarilyUnavailableFailure)
+            }
+            do {
+                snapshot = try await SharedCoreTimeline.timelinePaginate(
+                    core: host.core,
+                    streamId: streamID,
+                    direction: "backwards"
+                )
+                paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
+            } catch {
+                return .failed(Self.failure(from: error))
+            }
+        }
+        return .failed(Self.temporarilyUnavailableFailure)
+    }
+
+    private func stream(for roomID: String) -> OpenStreamState? {
         streamLock.lock()
         defer { streamLock.unlock() }
         return streams[roomID]
     }
 
-    private func storeStream(_ streamId: String, for roomID: String) {
+    private func storeStream(
+        _ streamID: String,
+        visibleItemIDs: Set<String>,
+        for roomID: String
+    ) {
         streamLock.lock()
-        streams[roomID] = streamId
+        streams[roomID] = OpenStreamState(
+            streamID: streamID,
+            visibleItemIDs: visibleItemIDs
+        )
         streamLock.unlock()
+    }
+
+    private func updateVisibleItemIDs(
+        _ itemIDs: Set<String>,
+        roomID: String,
+        streamID: String
+    ) {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        guard var state = streams[roomID], state.streamID == streamID else {
+            return
+        }
+        state.visibleItemIDs.formUnion(itemIDs)
+        streams[roomID] = state
     }
 
     private func takeStream(for roomID: String) -> String? {
         streamLock.lock()
         defer { streamLock.unlock() }
-        return streams.removeValue(forKey: roomID)
+        return streams.removeValue(forKey: roomID)?.streamID
+    }
+
+    private func takeStream(for roomID: String, ifMatching expectedStreamID: String) -> String? {
+        streamLock.lock()
+        defer { streamLock.unlock() }
+        guard streams[roomID]?.streamID == expectedStreamID else {
+            return nil
+        }
+        return streams.removeValue(forKey: roomID)?.streamID
+    }
+
+    private func refreshCurrentTimelineAfterRecoveryRace(roomID: String) async -> TimelineLoadOutcome {
+        guard let current = stream(for: roomID) else {
+            return .failed(Self.temporarilyUnavailableFailure)
+        }
+        do {
+            let snapshot = try await SharedCoreTimeline.timelineSnapshot(
+                core: host.core,
+                streamId: current.streamID
+            )
+            return await resolveInitialSnapshot(
+                snapshot,
+                roomID: roomID,
+                streamID: current.streamID
+            )
+        } catch {
+            return .failed(Self.failure(from: error))
+        }
     }
 
     private func takeAllStreams() -> [String] {
         streamLock.lock()
         defer { streamLock.unlock() }
-        let values = Array(streams.values)
+        let values = streams.values.map(\.streamID)
         streams.removeAll()
         return values
+    }
+
+    private static func stableItemIDs(_ items: [TimelineItem]) -> Set<String> {
+        Set(items.map { $0.eventID.isEmpty ? $0.id : $0.eventID })
+    }
+
+    private static func nativeRowIDs(_ rows: [TimelineViewRowDto]) -> Set<String> {
+        Set(rows.map(\.itemId))
+    }
+
+    private static let viewUnavailableFailure = TimelineLoadFailure(
+        kind: .viewUnavailable,
+        diagnosticCode: "timeline-view-unavailable"
+    )
+
+    private static let temporarilyUnavailableFailure = TimelineLoadFailure(
+        kind: .temporarilyUnavailable,
+        diagnosticCode: "timeline-temporarily-unavailable"
+    )
+
+    static func failure(from error: Error) -> TimelineLoadFailure {
+        guard let timelineError = error as? TimelineError else {
+            return temporarilyUnavailableFailure
+        }
+        switch timelineError {
+        case let .Failed(code, _):
+            let kind: TimelineLoadFailure.Kind
+            switch code {
+            case "p2-timeline-open-no-session", "p2-timeline-snapshot-no-session",
+                 "p2-timeline-paginate-no-session":
+                kind = .sessionUnavailable
+            case "v-timeline-normal-room-not-found", "d0.3-timeline-room-not-found",
+                 "d0.3-timeline-invalid-room-id":
+                kind = .roomUnavailable
+            case "v-timeline-view-not-open":
+                kind = .viewUnavailable
+            default:
+                kind = .temporarilyUnavailable
+            }
+            return TimelineLoadFailure(kind: kind, diagnosticCode: code)
+        }
     }
 
     private func typingUsersInRoom(_ roomID: String) async -> [String] {
@@ -1071,40 +1319,6 @@ final class SharedCoreMessageSendService: MessageSending {
                 kind: request.formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
                 replyToEventID: request.replyToEventID,
                 isEdited: request.editEventID != nil,
-                reactions: [:]
-            )
-        } catch {
-            throw MessageSendError.failed
-        }
-    }
-
-    func sendSticker(_ request: StickerSendRequest) async throws -> TimelineItem {
-        let body = request.body.trimmingCharacters(in: .whitespacesAndNewlines)
-        let mxc = request.mxc.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard body.isEmpty == false, mxc.hasPrefix("mxc://") else {
-            throw MessageSendError.failed
-        }
-        do {
-            _ = try await SharedCoreSendSticker.sendSticker(
-                core: host.core,
-                roomId: request.roomID,
-                body: body,
-                mxc: mxc,
-                width: request.width,
-                height: request.height,
-                mimetype: request.mimetype,
-                size: request.size,
-                replyTo: request.replyToEventID,
-                threadRoot: request.threadRoot
-            )
-            return TimelineItem(
-                id: "$local-\(UUID().uuidString)",
-                eventID: "$local-\(UUID().uuidString)",
-                senderID: signedInUserID(),
-                timestamp: Date(),
-                kind: .unknown(type: "sticker"),
-                replyToEventID: request.replyToEventID,
-                isEdited: false,
                 reactions: [:]
             )
         } catch {
@@ -1964,13 +2178,20 @@ final class SharedCoreMediaUploadService: MediaUploading {
                 filename: request.displayName,
                 mimeType: request.mimeType,
                 payload: request.data,
-                replyTo: nil,
-                threadRoot: nil
+                caption: request.caption,
+                formattedCaption: request.formattedCaption,
+                replyTo: request.replyToEventID,
+                threadRoot: request.threadRootEventID,
+                transactionId: request.transactionID,
+                mentionUserIds: request.mentionUserIDs,
+                mentionRoom: request.mentionRoom
             )
             let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
             let resource = MediaResource(
                 id: result.eventId,
                 filename: safeName.isEmpty ? "Attachment" : safeName,
+                caption: request.caption,
+                formattedCaption: request.formattedCaption,
                 authenticatedURL: URL(string: "mxc://local/upload"),
                 requiresAuthentication: true,
                 mimeType: request.mimeType,
@@ -1984,7 +2205,7 @@ final class SharedCoreMediaUploadService: MediaUploading {
                 senderID: senderID,
                 timestamp: Date(),
                 kind: .mediaPlaceholder(resource),
-                replyToEventID: nil,
+                replyToEventID: request.replyToEventID,
                 isEdited: false,
                 reactions: [:]
             )

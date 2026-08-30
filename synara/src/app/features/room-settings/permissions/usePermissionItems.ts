@@ -15,12 +15,6 @@ export const usePermissionGroups = (): PermissionGroup[] => {
         },
         {
           location: {
-            key: MessageEvent.Sticker,
-          },
-          name: 'Send Stickers',
-        },
-        {
-          location: {
             key: MessageEvent.Reaction,
           },
           name: 'Send Reactions',
@@ -182,7 +176,7 @@ export const usePermissionGroups = (): PermissionGroup[] => {
             state: true,
             key: StateEvent.PoniesRoomEmotes,
           },
-          name: 'Manage Emojis & Stickers',
+          name: 'Manage Custom Emoji',
         },
         {
           location: {

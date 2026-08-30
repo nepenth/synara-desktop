@@ -13,6 +13,11 @@ export type NativeSendAttachmentFile = {
 export type NativeSendAttachmentInput = {
   roomId: string;
   file: NativeSendAttachmentFile;
+  transactionId: string;
+  caption?: string;
+  formattedCaption?: string;
+  mentionUserIds?: string[];
+  mentionRoom?: boolean;
   replyTo?: string;
   /** Thread root event id; forces EnforceThread::Threaded on the native owner. */
   threadRoot?: string;
@@ -59,6 +64,11 @@ export async function sendAttachmentWithNativeOwner(
     filename: input.file.filename,
     mimeType: input.file.mimeType,
     bytes: input.file.bytes,
+    transactionId: input.transactionId,
+    caption: input.caption,
+    formattedCaption: input.formattedCaption,
+    mentionUserIds: input.mentionUserIds,
+    mentionRoom: input.mentionRoom,
     replyTo: input.replyTo,
     threadRoot: input.threadRoot,
   });
@@ -72,26 +82,21 @@ export async function sendAttachmentWithNativeOwner(
   return 'native';
 }
 
-export async function sendAttachmentsWithNativeOwner(
-  roomId: string,
-  files: NativeSendAttachmentFile[],
-  replyTo: string | undefined,
-  threadRoot: string | undefined,
+export async function sendAttachmentPlanWithNativeOwner(
+  inputs: NativeSendAttachmentInput[],
   desktopAvailable: boolean,
-  invoke: NativeInvoke
+  invoke: NativeInvoke,
+  onSent: (index: number) => void | Promise<void>
 ): Promise<'native' | 'legacy'> {
   if (!(await isNativeMatrixLoggedIn(desktopAvailable, invoke))) {
     return 'legacy';
   }
-  for (const file of files) {
-    const owner = await sendAttachmentWithNativeOwner(
-      { roomId, file, replyTo, threadRoot },
-      desktopAvailable,
-      invoke
-    );
+  for (const [index, input] of inputs.entries()) {
+    const owner = await sendAttachmentWithNativeOwner(input, desktopAvailable, invoke);
     if (owner !== 'native') {
       throw new Error('Native Matrix attachment send is unavailable.');
     }
+    await onSent(index);
   }
   return 'native';
 }

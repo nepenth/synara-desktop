@@ -70,6 +70,7 @@ const tests = [
   'src/app/features/lobby/__tests__/nativeSpaceHierarchyOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendText.test.ts',
   'src/app/features/room/__tests__/nativeSendAttachmentOwner.test.ts',
+  'src/app/features/room/__tests__/attachmentSendPlan.test.ts',
   'src/app/features/room/__tests__/nativeSendStickerOwner.test.ts',
   'src/app/features/room/__tests__/nativeSendGifOwner.test.ts',
   'src/app/features/room/__tests__/nativeMDirectOwner.test.ts',
