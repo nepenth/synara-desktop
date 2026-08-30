@@ -70,6 +70,7 @@ pub async fn matrix_edit_message(
 /// V-SEND.5 extends the same command with optional `thread_root` so native
 /// sessions can start / continue threads without JS relation ownership.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields remain explicit for compatibility.
 pub async fn matrix_send_attachment(
     state: State<'_, MatrixAuthState>,
     room_id: String,
@@ -133,19 +134,22 @@ pub async fn matrix_send_attachment(
         (room, session_generation, item.local_txn_id.clone())
     };
 
-    let send_result = send_attachment_to_room(
-        &room,
-        &filename,
-        &mime_type,
-        bytes,
-        caption,
-        formatted_caption,
-        reply_to,
-        thread_root,
-        transaction_id,
-        mention_user_ids,
-        mention_room.unwrap_or(false),
-    )
+    let send_result = async {
+        let config = synara_core::app::send::attachment_config(
+            caption,
+            formatted_caption,
+            reply_to,
+            thread_root,
+            transaction_id,
+            mention_user_ids,
+            mention_room.unwrap_or(false),
+        )
+        .map_err(|_| matrix_sdk::Error::InsufficientData)?;
+        let response = room
+            .send_attachment(&filename, &mime_type, bytes, config)
+            .await?;
+        Ok::<_, matrix_sdk::Error>(response.event_id.to_string())
+    }
     .await;
 
     let mut session = state.session.lock().await;
@@ -438,33 +442,4 @@ pub(super) fn attachment_kind_for_mime(mime: &Mime) -> AttachmentKind {
         mime::AUDIO => AttachmentKind::Audio,
         _ => AttachmentKind::File,
     }
-}
-
-pub(super) async fn send_attachment_to_room(
-    room: &Room,
-    filename: &str,
-    mime_type: &Mime,
-    data: Vec<u8>,
-    caption: Option<String>,
-    formatted_caption: Option<String>,
-    reply_to: Option<OwnedEventId>,
-    thread_root: Option<OwnedEventId>,
-    transaction_id: Option<OwnedTransactionId>,
-    mention_user_ids: Option<Vec<String>>,
-    mention_room: bool,
-) -> matrix_sdk::Result<String> {
-    let config = synara_core::app::send::attachment_config(
-        caption,
-        formatted_caption,
-        reply_to,
-        thread_root,
-        transaction_id,
-        mention_user_ids,
-        mention_room,
-    )
-    .map_err(|_| matrix_sdk::Error::InsufficientData)?;
-    let response = room
-        .send_attachment(filename, mime_type, data, config)
-        .await?;
-    Ok(response.event_id.to_string())
 }
