@@ -462,7 +462,7 @@ pub(super) async fn send_attachment_to_room(
         mention_user_ids,
         mention_room,
     )
-        .map_err(|_| matrix_sdk::Error::InsufficientData)?;
+    .map_err(|_| matrix_sdk::Error::InsufficientData)?;
     let response = room
         .send_attachment(filename, mime_type, data, config)
         .await?;

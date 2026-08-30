@@ -185,8 +185,7 @@ pub use synara_core::app::media::{
 };
 pub use synara_core::app::members::NativeRoomMembersSnapshot;
 pub use synara_core::app::send::{
-    MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
-    MatrixSendTextResult,
+    MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult, MatrixSendTextResult,
 };
 pub use synara_core::app::user_profile::MatrixProfileWriteResult;
 
