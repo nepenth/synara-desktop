@@ -22,7 +22,8 @@ mod text;
 
 pub use attachment::{
     attachment_caption, attachment_config, attachment_reply, send_room_attachment,
-    validate_attachment_filename, validate_attachment_mime, MAX_ATTACHMENT_UPLOAD_BYTES,
+    validate_attachment_filename, validate_attachment_mime, SendRoomAttachmentRequest,
+    MAX_ATTACHMENT_UPLOAD_BYTES,
 };
 pub use attachment_queue::{
     AttachmentEnqueue, AttachmentKind, AttachmentSendQueue, OutboundAttachment,

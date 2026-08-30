@@ -4811,6 +4811,7 @@ impl SharedCore {
         Ok(MediaUploadDto { mxc: result.mxc })
     }
 
+    #[allow(clippy::too_many_arguments)] // Stable UniFFI fields remain explicit for compatibility.
     pub async fn send_room_attachment(
         &self,
         room_id: String,
@@ -4850,10 +4851,10 @@ impl SharedCore {
         }
         let result = self
             .core
-            .send_room_attachment(
-                &room_id,
-                &filename,
-                &mime_type,
+            .send_room_attachment(crate::app::send::SendRoomAttachmentRequest {
+                room_id,
+                filename,
+                mime_type,
                 payload,
                 caption,
                 formatted_caption,
@@ -4861,8 +4862,8 @@ impl SharedCore {
                 thread_root,
                 transaction_id,
                 mention_user_ids,
-                mention_room.unwrap_or(false),
-            )
+                mention_room: mention_room.unwrap_or(false),
+            })
             .await
             .map_err(|error| {
                 map_send_room_attachment_core_error(SEND_ROOM_ATTACHMENT_NO_SESSION_CODE, error)

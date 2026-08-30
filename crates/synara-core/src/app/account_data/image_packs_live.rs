@@ -629,33 +629,9 @@ impl NativeImagePackOwner {
 
     pub async fn send_room_attachment(
         &self,
-        room_id: &str,
-        filename: &str,
-        mime_type: &str,
-        payload: Vec<u8>,
-        caption: Option<String>,
-        formatted_caption: Option<String>,
-        reply_to: Option<String>,
-        thread_root: Option<String>,
-        transaction_id: Option<String>,
-        mention_user_ids: Option<Vec<String>>,
-        mention_room: bool,
+        request: crate::app::send::SendRoomAttachmentRequest,
     ) -> Result<crate::app::send::MatrixSendRoomAttachmentResult, &'static str> {
-        crate::app::send::send_room_attachment(
-            &self.client,
-            room_id,
-            filename,
-            mime_type,
-            payload,
-            caption,
-            formatted_caption,
-            reply_to,
-            thread_root,
-            transaction_id,
-            mention_user_ids,
-            mention_room,
-        )
-        .await
+        crate::app::send::send_room_attachment(&self.client, request).await
     }
 
     pub async fn download_plain_media(&self, content_uri: &str) -> Result<Vec<u8>, &'static str> {

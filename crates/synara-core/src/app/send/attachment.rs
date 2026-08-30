@@ -5,7 +5,7 @@ use matrix_sdk::room::reply::{EnforceThread, Reply as AttachmentReply};
 use matrix_sdk::ruma::events::room::message::{
     AddMentions, ReplyWithinThread, TextMessageEventContent,
 };
-use matrix_sdk::{Client, Room};
+use matrix_sdk::Client;
 use mime::Mime;
 
 use super::text::{
@@ -16,6 +16,25 @@ use super::MatrixSendRoomAttachmentResult;
 
 /// Same IPC cap as desktop composer attachments (`MAX_ATTACHMENT_IPC_BYTES`).
 pub const MAX_ATTACHMENT_UPLOAD_BYTES: usize = 32 * 1024 * 1024;
+
+/// Complete native attachment-send intent after crossing a shell ABI boundary.
+///
+/// Keeping the fields together prevents internal forwarding layers from
+/// accidentally reordering caption, relation, transaction, or mention data.
+#[derive(Debug)]
+pub struct SendRoomAttachmentRequest {
+    pub room_id: String,
+    pub filename: String,
+    pub mime_type: String,
+    pub payload: Vec<u8>,
+    pub caption: Option<String>,
+    pub formatted_caption: Option<String>,
+    pub reply_to: Option<String>,
+    pub thread_root: Option<String>,
+    pub transaction_id: Option<String>,
+    pub mention_user_ids: Option<Vec<String>>,
+    pub mention_room: bool,
+}
 
 pub fn validate_attachment_filename(filename: &str) -> Result<&str, &'static str> {
     let filename = filename.trim();
@@ -36,35 +55,6 @@ pub fn validate_attachment_mime(mime_type: &str) -> Result<Mime, &'static str> {
     mime_type
         .parse::<Mime>()
         .map_err(|_| "v-send.1-attachment-invalid-mime")
-}
-
-pub async fn send_attachment_to_room(
-    room: &Room,
-    filename: &str,
-    mime_type: &Mime,
-    data: Vec<u8>,
-    caption: Option<String>,
-    formatted_caption: Option<String>,
-    reply_to: Option<matrix_sdk::ruma::OwnedEventId>,
-    thread_root: Option<matrix_sdk::ruma::OwnedEventId>,
-    transaction_id: Option<matrix_sdk::ruma::OwnedTransactionId>,
-    mention_user_ids: Option<Vec<String>>,
-    mention_room: bool,
-) -> Result<String, &'static str> {
-    let config = attachment_config(
-        caption,
-        formatted_caption,
-        reply_to,
-        thread_root,
-        transaction_id,
-        mention_user_ids,
-        mention_room,
-    )?;
-    let response = room
-        .send_attachment(filename, mime_type, data, config)
-        .await
-        .map_err(|_| "v-send.1-attachment-sdk-failed")?;
-    Ok(response.event_id.to_string())
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -130,51 +120,42 @@ pub fn attachment_reply(
 
 pub async fn send_room_attachment(
     client: &Client,
-    room_id: &str,
-    filename: &str,
-    mime_type: &str,
-    payload: Vec<u8>,
-    caption: Option<String>,
-    formatted_caption: Option<String>,
-    reply_to: Option<String>,
-    thread_root: Option<String>,
-    transaction_id: Option<String>,
-    mention_user_ids: Option<Vec<String>>,
-    mention_room: bool,
+    request: SendRoomAttachmentRequest,
 ) -> Result<MatrixSendRoomAttachmentResult, &'static str> {
     let parsed_room =
-        parse_send_room_id(room_id).map_err(|_| "v-send.1-attachment-invalid-room")?;
+        parse_send_room_id(&request.room_id).map_err(|_| "v-send.1-attachment-invalid-room")?;
     let reply_to =
-        parse_reply_event_id(reply_to).map_err(|_| "v-send.1-attachment-invalid-reply")?;
-    let thread_root = parse_thread_root_event_id(thread_root)
+        parse_reply_event_id(request.reply_to).map_err(|_| "v-send.1-attachment-invalid-reply")?;
+    let thread_root = parse_thread_root_event_id(request.thread_root)
         .map_err(|_| "v-send.1-attachment-invalid-thread-root")?;
-    let transaction_id = parse_transaction_id(transaction_id)
+    let transaction_id = parse_transaction_id(request.transaction_id)
         .map_err(|_| "v-send.1-attachment-invalid-transaction-id")?;
-    let filename = validate_attachment_filename(filename)?;
-    let mime_type = validate_attachment_mime(mime_type)?;
-    if payload.is_empty() {
+    let filename = validate_attachment_filename(&request.filename)?;
+    let mime_type = validate_attachment_mime(&request.mime_type)?;
+    if request.payload.is_empty() {
         return Err("v-send.1-attachment-empty");
     }
-    if payload.len() > MAX_ATTACHMENT_UPLOAD_BYTES {
+    if request.payload.len() > MAX_ATTACHMENT_UPLOAD_BYTES {
         return Err("v-send.1-attachment-too-large");
     }
     let room = client
         .get_room(&parsed_room)
         .ok_or("v-send.1-attachment-room-not-found")?;
-    let event_id = send_attachment_to_room(
-        &room,
-        filename,
-        &mime_type,
-        payload,
-        caption,
-        formatted_caption,
+    let config = attachment_config(
+        request.caption,
+        request.formatted_caption,
         reply_to,
         thread_root,
         transaction_id,
-        mention_user_ids,
-        mention_room,
-    )
-    .await?;
+        request.mention_user_ids,
+        request.mention_room,
+    )?;
+    let event_id = room
+        .send_attachment(filename, &mime_type, request.payload, config)
+        .await
+        .map_err(|_| "v-send.1-attachment-sdk-failed")?
+        .event_id
+        .to_string();
     Ok(MatrixSendRoomAttachmentResult {
         event_id,
         status: "sent",

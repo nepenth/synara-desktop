@@ -53,7 +53,7 @@ use crate::app::room_profile::{
 use crate::app::search::MatrixMessageSearchResult;
 use crate::app::send::{
     MatrixPollRespondResult, MatrixSendPollResult, MatrixSendRoomAttachmentResult,
-    MatrixSendTextResult,
+    MatrixSendTextResult, SendRoomAttachmentRequest,
 };
 use crate::app::spaces::{
     NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
@@ -1697,36 +1697,14 @@ impl Core {
     /// `Core::command` JSON field.
     pub async fn send_room_attachment(
         &self,
-        room_id: &str,
-        filename: &str,
-        mime_type: &str,
-        payload: Vec<u8>,
-        caption: Option<String>,
-        formatted_caption: Option<String>,
-        reply_to: Option<String>,
-        thread_root: Option<String>,
-        transaction_id: Option<String>,
-        mention_user_ids: Option<Vec<String>>,
-        mention_room: bool,
+        request: SendRoomAttachmentRequest,
     ) -> Result<MatrixSendRoomAttachmentResult, MatrixIpcError> {
         let owner = self.state.image_pack_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-send-room-attachment-no-session")
         })?;
         owner
-            .send_room_attachment(
-                room_id,
-                filename,
-                mime_type,
-                payload,
-                caption,
-                formatted_caption,
-                reply_to,
-                thread_root,
-                transaction_id,
-                mention_user_ids,
-                mention_room,
-            )
+            .send_room_attachment(request)
             .await
             .map_err(send_room_attachment_owner_error)
     }
