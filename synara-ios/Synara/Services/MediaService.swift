@@ -7,6 +7,8 @@ import UIKit
 struct MediaResource: Identifiable, Equatable {
     let id: String
     let filename: String
+    let caption: String?
+    let formattedCaption: String?
     let authenticatedURL: URL?
     let requiresAuthentication: Bool
     let isEncrypted: Bool
@@ -16,6 +18,8 @@ struct MediaResource: Identifiable, Equatable {
     init(
         id: String,
         filename: String,
+        caption: String? = nil,
+        formattedCaption: String? = nil,
         authenticatedURL: URL?,
         requiresAuthentication: Bool,
         isEncrypted: Bool = false,
@@ -24,6 +28,8 @@ struct MediaResource: Identifiable, Equatable {
     ) {
         self.id = id
         self.filename = filename
+        self.caption = caption
+        self.formattedCaption = formattedCaption
         self.authenticatedURL = authenticatedURL
         self.requiresAuthentication = requiresAuthentication
         self.isEncrypted = isEncrypted
@@ -81,19 +87,40 @@ struct MediaUploadRequest: Equatable {
     let displayName: String
     let data: Data
     let mimeType: String
+    let caption: String?
+    let formattedCaption: String?
+    let replyToEventID: String?
+    let threadRootEventID: String?
+    let transactionID: String?
+    let mentionUserIDs: [String]?
+    let mentionRoom: Bool?
 
     init(
         roomID: String,
         source: MediaUploadSource,
         displayName: String,
         data: Data = Data("Synara attachment".utf8),
-        mimeType: String = "application/octet-stream"
+        mimeType: String = "application/octet-stream",
+        caption: String? = nil,
+        formattedCaption: String? = nil,
+        replyToEventID: String? = nil,
+        threadRootEventID: String? = nil,
+        transactionID: String? = nil,
+        mentionUserIDs: [String]? = nil,
+        mentionRoom: Bool? = nil
     ) {
         self.roomID = roomID
         self.source = source
         self.displayName = displayName
         self.data = data
         self.mimeType = mimeType
+        self.caption = caption
+        self.formattedCaption = formattedCaption
+        self.replyToEventID = replyToEventID
+        self.threadRootEventID = threadRootEventID
+        self.transactionID = transactionID
+        self.mentionUserIDs = mentionUserIDs
+        self.mentionRoom = mentionRoom
     }
 }
 
@@ -178,6 +205,8 @@ struct MockMediaUploadService: MediaUploading {
         let resource = MediaResource(
             id: "$upload-\(UUID().uuidString)",
             filename: safeName.isEmpty ? "Attachment" : safeName,
+            caption: request.caption,
+            formattedCaption: request.formattedCaption,
             authenticatedURL: URL(string: "mxc://local/upload"),
             requiresAuthentication: true,
             mimeType: request.mimeType,
@@ -189,7 +218,7 @@ struct MockMediaUploadService: MediaUploading {
             senderID: "@local:matrix.org",
             timestamp: Date(),
             kind: .mediaPlaceholder(resource),
-            replyToEventID: nil,
+            replyToEventID: request.replyToEventID,
             isEdited: false,
             reactions: [:]
         )

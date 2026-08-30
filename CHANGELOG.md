@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+## 2.1.21 - 2026-08-30
+
+- Proved cold-restart room restoration from the production encrypted SQLite
+  Matrix SDK stores while the homeserver is offline, and added bounded,
+  privacy-safe timeline recovery that preserves the last readable messages.
+- Corrected attachment filenames, captions, mentions, reply/thread relations,
+  transaction IDs, 32 MiB limits, and partial-retry behavior across Rust,
+  UniFFI, Swift, Tauri, and TypeScript.
+- Made attachment retries assign composer text exactly once, including edits,
+  cleared text, and text introduced after a partial attachment-only send.
+- Removed unsupported outgoing sticker-send controls and APIs while preserving
+  incoming stickers, reactions, custom emoji, and existing image-pack metadata.
+- Kept iOS room titles and compact status readable at Accessibility XL, with a
+  combined VoiceOver description and UI regression coverage.
+- See [`docs/releases/v2.1.21.md`](docs/releases/v2.1.21.md) for details.
+
 ## 2.1.20 - 2026-08-28
 
 - Rebuilt current-device verification around the Matrix SDK OwnIdentity route,

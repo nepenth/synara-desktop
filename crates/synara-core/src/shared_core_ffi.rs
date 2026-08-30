@@ -106,11 +106,8 @@
 //! P4-S9-22 adds a typed `send_text` wrapper for the already-registered
 //! `matrix_send_text` Core command only. No media bytes. Failed errors never
 //! echo body or room id. Sticker, poll, edit, and respond stay off.
-//! P4-S9-23 adds a typed `send_sticker` wrapper for the already-registered
-//! `matrix_send_sticker` Core command only. Metadata / mxc only; no image
-//! bytes or file path. Failed errors never echo mxc or room id. Poll, edit,
-//! and respond stay off. Live `upload_content` / `send_room_attachment` take
-//! bytes as method arguments. Leftover `media_upload` remains.
+//! Live `upload_content` / `send_room_attachment` take bytes as method
+//! arguments. Leftover `media_upload` remains.
 //! P4-S9-24 adds a typed `send_poll` wrapper for the already-registered
 //! `matrix_send_poll` Core command only. No media bytes. Failed errors never
 //! echo question, options, or room id. Edit and respond stay off.
@@ -846,13 +843,6 @@ const SEND_TEXT_NO_SESSION_DESCRIPTION: &str = "No timeline session is available
 const SEND_TEXT_FAILED_CODE: &str = "p4-s9-22-send-text-failed";
 const SEND_TEXT_FAILED_DESCRIPTION: &str = "The send-text request could not be completed.";
 const SEND_TEXT_OWNER_DESCRIPTION: &str = "The send-text request is not available.";
-const SEND_STICKER_GENERATION: u64 = 0;
-const SEND_STICKER_COMMAND: &str = "matrix_send_sticker";
-const SEND_STICKER_NO_SESSION_CODE: &str = "p2-send-sticker-no-session";
-const SEND_STICKER_NO_SESSION_DESCRIPTION: &str = "No timeline session is available.";
-const SEND_STICKER_FAILED_CODE: &str = "p4-s9-23-send-sticker-failed";
-const SEND_STICKER_FAILED_DESCRIPTION: &str = "The send-sticker request could not be completed.";
-const SEND_STICKER_OWNER_DESCRIPTION: &str = "The send-sticker request is not available.";
 const SEND_POLL_GENERATION: u64 = 0;
 const SEND_POLL_COMMAND: &str = "matrix_send_poll";
 const SEND_POLL_NO_SESSION_CODE: &str = "p2-send-poll-no-session";
@@ -1458,6 +1448,8 @@ pub struct TimelineViewRowDto {
     pub message_type: Option<String>,
     pub formatted_body: Option<String>,
     pub agent_card_json: Option<String>,
+    pub media_filename: Option<String>,
+    pub media_caption: Option<String>,
     pub reactions: Vec<TimelineViewReactionDto>,
     pub media_handle_id: Option<String>,
     pub media_mime_type: Option<String>,
@@ -1661,30 +1653,6 @@ impl std::fmt::Display for SendTextError {
 }
 
 impl std::error::Error for SendTextError {}
-
-/// Privacy-safe send-sticker write ack from the registered Core command.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SendStickerDto {
-    pub room_id: String,
-    pub event_id: String,
-    pub status: String,
-}
-
-/// Static fail-closed send-sticker error. Fields are source constants only.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum SendStickerError {
-    Failed { code: String, description: String },
-}
-
-impl std::fmt::Display for SendStickerError {
-    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Failed { description, .. } => formatter.write_str(description),
-        }
-    }
-}
-
-impl std::error::Error for SendStickerError {}
 
 /// Privacy-safe generic content upload result. mxc URI only; never bytes.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -2409,6 +2377,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 message_type: message.message_type,
                 formatted_body: message.formatted_body,
                 agent_card_json: message.agent_card_json,
+                media_filename: message.media_filename,
+                media_caption: message.media_caption,
                 reactions: view_reaction_dtos(message.reactions),
                 media_handle_id,
                 media_mime_type,
@@ -2434,6 +2404,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 message_type: Some("m.sticker".to_owned()),
                 formatted_body: None,
                 agent_card_json: None,
+                media_filename: None,
+                media_caption: None,
                 reactions: Vec::new(),
                 media_handle_id,
                 media_mime_type,
@@ -2456,6 +2428,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2477,6 +2451,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2498,6 +2474,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: Some(state.state_type),
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2519,6 +2497,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2540,6 +2520,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2561,6 +2543,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2582,6 +2566,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: other.event_type,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2606,6 +2592,8 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            media_filename: None,
+            media_caption: None,
             reactions: Vec::new(),
             media_handle_id: None,
             media_mime_type: None,
@@ -2635,6 +2623,8 @@ fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
         message_type: None,
         formatted_body: None,
         agent_card_json: None,
+        media_filename: None,
+        media_caption: None,
         reactions: Vec::new(),
         media_handle_id: None,
         media_mime_type: None,
@@ -4821,34 +4811,59 @@ impl SharedCore {
         Ok(MediaUploadDto { mxc: result.mxc })
     }
 
+    #[allow(clippy::too_many_arguments)] // Stable UniFFI fields remain explicit for compatibility.
     pub async fn send_room_attachment(
         &self,
         room_id: String,
         filename: String,
         mime_type: String,
         payload: Vec<u8>,
+        caption: Option<String>,
+        formatted_caption: Option<String>,
         reply_to: Option<String>,
         thread_root: Option<String>,
+        transaction_id: Option<String>,
+        mention_user_ids: Option<Vec<String>>,
+        mention_room: Option<bool>,
     ) -> Result<SendRoomAttachmentDto, SendRoomAttachmentError> {
         send_room_attachment_reject_oversize(room_id.len())?;
         send_room_attachment_reject_oversize(filename.len())?;
         send_room_attachment_reject_oversize(mime_type.len())?;
+        if let Some(caption) = caption.as_ref() {
+            send_room_attachment_reject_oversize(caption.len())?;
+        }
+        if let Some(formatted_caption) = formatted_caption.as_ref() {
+            send_room_attachment_reject_oversize(formatted_caption.len())?;
+        }
         if let Some(reply_to) = reply_to.as_ref() {
             send_room_attachment_reject_oversize(reply_to.len())?;
         }
         if let Some(thread_root) = thread_root.as_ref() {
             send_room_attachment_reject_oversize(thread_root.len())?;
         }
+        if let Some(transaction_id) = transaction_id.as_ref() {
+            send_room_attachment_reject_oversize(transaction_id.len())?;
+        }
+        if let Some(mention_user_ids) = mention_user_ids.as_ref() {
+            for user_id in mention_user_ids {
+                send_room_attachment_reject_oversize(user_id.len())?;
+            }
+        }
         let result = self
             .core
-            .send_room_attachment(
-                &room_id,
-                &filename,
-                &mime_type,
+            .send_room_attachment(crate::app::send::SendRoomAttachmentRequest {
+                room_id,
+                filename,
+                mime_type,
                 payload,
+                caption,
+                formatted_caption,
                 reply_to,
                 thread_root,
-            )
+                transaction_id,
+                mention_user_ids,
+                mention_room: mention_room.unwrap_or(false),
+            })
             .await
             .map_err(|error| {
                 map_send_room_attachment_core_error(SEND_ROOM_ATTACHMENT_NO_SESSION_CODE, error)
@@ -6081,33 +6096,6 @@ impl SharedCore {
         .await
     }
 
-    #[allow(clippy::too_many_arguments)]
-    pub async fn send_sticker(
-        &self,
-        room_id: String,
-        body: String,
-        mxc: String,
-        width: Option<u64>,
-        height: Option<u64>,
-        mimetype: Option<String>,
-        size: Option<u64>,
-        reply_to: Option<String>,
-        thread_root: Option<String>,
-    ) -> Result<SendStickerDto, SendStickerError> {
-        self.send_sticker_command(serde_json::json!({
-            "roomId": room_id,
-            "body": body,
-            "mxc": mxc,
-            "width": width,
-            "height": height,
-            "mimetype": mimetype,
-            "size": size,
-            "replyTo": reply_to,
-            "threadRoot": thread_root,
-        }))
-        .await
-    }
-
     pub async fn send_poll(
         &self,
         room_id: String,
@@ -7119,28 +7107,6 @@ impl SharedCore {
         let result: SendTextResultWire = serde_json::from_value(response.payload)
             .map_err(|_| send_text_failed(SEND_TEXT_FAILED_CODE, SEND_TEXT_FAILED_DESCRIPTION))?;
         Ok(send_text_dto(result))
-    }
-
-    async fn send_sticker_command(
-        &self,
-        payload: serde_json::Value,
-    ) -> Result<SendStickerDto, SendStickerError> {
-        let payload = send_sticker_envelope_payload(payload)?;
-        let response = self
-            .core
-            .command(CommandEnvelope {
-                command: SEND_STICKER_COMMAND.to_owned(),
-                session_generation: SEND_STICKER_GENERATION,
-                request_id: None,
-                payload,
-            })
-            .await
-            .map_err(|error| map_send_sticker_core_error(SEND_STICKER_NO_SESSION_CODE, error))?;
-        let result: SendStickerResultWire =
-            serde_json::from_value(response.payload).map_err(|_| {
-                send_sticker_failed(SEND_STICKER_FAILED_CODE, SEND_STICKER_FAILED_DESCRIPTION)
-            })?;
-        Ok(send_sticker_dto(result))
     }
 
     async fn send_poll_command(
@@ -11349,64 +11315,6 @@ fn send_text_dto(result: SendTextResultWire) -> SendTextDto {
     }
 }
 
-fn send_sticker_failed(code: &str, description: &'static str) -> SendStickerError {
-    SendStickerError::Failed {
-        code: code.to_owned(),
-        description: description.to_owned(),
-    }
-}
-
-fn map_send_sticker_core_error(
-    no_session: &'static str,
-    error: MatrixIpcError,
-) -> SendStickerError {
-    match error.diagnostic_id.as_deref() {
-        Some(code) if code == no_session => {
-            send_sticker_failed(code, SEND_STICKER_NO_SESSION_DESCRIPTION)
-        }
-        Some(code)
-            if code.starts_with("p2-send-sticker-")
-                || code.starts_with("v-send-sticker-")
-                || code.starts_with("d0.4-send-")
-                || code.starts_with("v-send.5-") =>
-        {
-            send_sticker_failed(code, SEND_STICKER_OWNER_DESCRIPTION)
-        }
-        _ => send_sticker_failed(SEND_STICKER_FAILED_CODE, SEND_STICKER_FAILED_DESCRIPTION),
-    }
-}
-
-fn send_sticker_envelope_payload(
-    payload: serde_json::Value,
-) -> Result<serde_json::Value, SendStickerError> {
-    let size = serde_json::to_vec(&payload)
-        .map(|bytes| bytes.len())
-        .unwrap_or(usize::MAX);
-    if size > MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
-        return Err(send_sticker_failed(
-            SEND_STICKER_FAILED_CODE,
-            SEND_STICKER_FAILED_DESCRIPTION,
-        ));
-    }
-    Ok(payload)
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SendStickerResultWire {
-    room_id: String,
-    event_id: String,
-    status: String,
-}
-
-fn send_sticker_dto(result: SendStickerResultWire) -> SendStickerDto {
-    SendStickerDto {
-        room_id: result.room_id,
-        event_id: result.event_id,
-        status: result.status,
-    }
-}
-
 fn send_poll_failed(code: &str, description: &'static str) -> SendPollError {
     SendPollError::Failed {
         code: code.to_owned(),
@@ -13567,6 +13475,8 @@ mod tests {
             formatted_body: None,
             agent_card_json: Some(r#"{"title":"Approval"}"#.to_owned()),
             message_type: Some("m.text".to_owned()),
+            media_filename: None,
+            media_caption: None,
             edited: false,
             reply: None,
             thread: None,
@@ -13593,5 +13503,58 @@ mod tests {
         assert!(!text.contains("syt_"));
         assert!(!text.contains("password"));
         assert!(text.contains("mxc://example.org/alice"));
+    }
+
+    #[test]
+    fn timeline_view_row_dto_preserves_incoming_sticker_media() {
+        use crate::app::timeline::{
+            TimelineEventRowBase, TimelineMediaHandle, TimelineRowCapabilities,
+        };
+
+        let row = TimelineViewRow::Sticker {
+            event: TimelineEventRowBase {
+                item_id: "sticker-item".to_owned(),
+                event_id: Some("$sticker:example.org".to_owned()),
+                sender_id: "@alice:example.org".to_owned(),
+                sender_name: "Alice".to_owned(),
+                sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
+                origin_server_ts: 1_700_000_000_001,
+                capabilities: TimelineRowCapabilities {
+                    react: true,
+                    reply: true,
+                    edit: false,
+                    redact: true,
+                    report: true,
+                    pin: true,
+                    forward: true,
+                    vote: false,
+                    decline_call: false,
+                },
+            },
+            media: TimelineMediaHandle {
+                handle_id: "incoming-sticker-handle".to_owned(),
+                mime_type: Some("image/webp".to_owned()),
+                width: Some(256),
+                height: Some(128),
+                duration_ms: None,
+            },
+        };
+
+        let dto = timeline_view_row_dto(row);
+        assert_eq!(dto.kind, "sticker");
+        assert_eq!(dto.event_id, "$sticker:example.org");
+        assert_eq!(dto.message_type.as_deref(), Some("m.sticker"));
+        assert_eq!(
+            dto.media_handle_id.as_deref(),
+            Some("incoming-sticker-handle")
+        );
+        assert_eq!(dto.media_mime_type.as_deref(), Some("image/webp"));
+        assert_eq!(dto.media_width, Some(256));
+        assert_eq!(dto.media_height, Some(128));
+        assert_eq!(dto.sender, "@alice:example.org");
+        assert_eq!(
+            dto.sender_avatar_url.as_deref(),
+            Some("mxc://example.org/alice")
+        );
     }
 }

@@ -25,6 +25,10 @@ struct ComposerAttachmentDraft: Identifiable, Equatable {
         mimeType.hasPrefix("image/")
     }
 
+    var transactionID: String {
+        "synara-attachment-\(id.uuidString.lowercased())"
+    }
+
     var isVideo: Bool {
         mimeType.hasPrefix("video/")
     }
@@ -57,7 +61,7 @@ struct ComposerAttachmentDraftAddOutcome: Equatable {
 enum ComposerAttachmentDraftList {
     static let maxCount = 10
     /// Matches synara-core upload/attachment enqueue (`p6.4-file-too-large` / `p7.4-file-too-large`).
-    static let maxBytesPerItem = 100 * 1024 * 1024
+    static let maxBytesPerItem = 32 * 1024 * 1024
 
     static func canSend(text: String, drafts: [ComposerAttachmentDraft]) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -172,15 +176,121 @@ enum ComposerAttachmentDraftList {
     }
 }
 
+enum ComposerAttachmentSendStep: Equatable {
+    case attachment(id: UUID, caption: String?)
+    case text(body: String)
+}
+
+enum ComposerAttachmentSendPlan {
+    static func make(
+        drafts: [ComposerAttachmentDraft],
+        body rawBody: String
+    ) -> [ComposerAttachmentSendStep] {
+        let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if drafts.count == 1, let draft = drafts.first {
+            return [.attachment(id: draft.id, caption: body.isEmpty ? nil : body)]
+        }
+
+        var steps = drafts.map {
+            ComposerAttachmentSendStep.attachment(id: $0.id, caption: nil)
+        }
+        if body.isEmpty == false {
+            steps.append(.text(body: body))
+        }
+        return steps
+    }
+
+    static func trailingText(in steps: [ComposerAttachmentSendStep]) -> String? {
+        steps.compactMap { step in
+            guard case let .text(body) = step else { return nil }
+            let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            return trimmed.isEmpty ? nil : trimmed
+        }.last
+    }
+
+    static func reusableOrNew(
+        existing: [ComposerAttachmentSendStep]?,
+        drafts: [ComposerAttachmentDraft],
+        body rawBody: String
+    ) -> [ComposerAttachmentSendStep] {
+        let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let existing,
+              attachmentIDs(in: existing) == drafts.map(\.id) else {
+            return make(drafts: drafts, body: body)
+        }
+        if composerBody(in: existing) == body {
+            return existing
+        }
+        if existing.contains(where: { step in
+            if case .text = step { return true }
+            return false
+        }) {
+            return existing.map { step in
+                if case .text = step {
+                    return .text(body: body)
+                }
+                return step
+            }
+        }
+        if existing.count == 1,
+           case let .attachment(id, _) = existing[0] {
+            return [.attachment(id: id, caption: body.isEmpty ? nil : body)]
+        }
+        if !body.isEmpty {
+            return existing + [.text(body: body)]
+        }
+        return existing
+    }
+
+    static func removingAttachment(
+        id: UUID,
+        from steps: [ComposerAttachmentSendStep]
+    ) -> [ComposerAttachmentSendStep] {
+        steps.filter { step in
+            guard case let .attachment(stepID, _) = step else { return true }
+            return stepID != id
+        }
+    }
+
+    private static func attachmentIDs(in steps: [ComposerAttachmentSendStep]) -> [UUID] {
+        steps.compactMap { step in
+            guard case let .attachment(id, _) = step else { return nil }
+            return id
+        }
+    }
+
+    private static func composerBody(in steps: [ComposerAttachmentSendStep]) -> String {
+        for step in steps.reversed() {
+            switch step {
+            case let .text(body):
+                return body
+            case let .attachment(_, caption) where caption != nil:
+                return caption ?? ""
+            case .attachment:
+                continue
+            }
+        }
+        return ""
+    }
+}
+
 enum ComposerAttachmentSend {
     static func uploadAll(
         _ drafts: [ComposerAttachmentDraft],
+        steps: [ComposerAttachmentSendStep],
         roomID: String,
+        replyToEventID: String?,
+        threadRootEventID: String?,
         uploader: MediaUploading,
         onState: @escaping @MainActor (MediaUploadState) -> Void,
         onUploaded: @escaping @MainActor (ComposerAttachmentDraft, TimelineItem) -> Void
     ) async -> Bool {
-        for draft in drafts {
+        for step in steps {
+            guard case let .attachment(id, caption) = step,
+                  let draft = drafts.first(where: { $0.id == id }) else {
+                continue
+            }
             await onState(.uploading(progress: 0.25))
             let result = await uploader.upload(
                 MediaUploadRequest(
@@ -188,7 +298,12 @@ enum ComposerAttachmentSend {
                     source: draft.source,
                     displayName: draft.displayName,
                     data: draft.data,
-                    mimeType: draft.mimeType
+                    mimeType: draft.mimeType,
+                    caption: caption,
+                    formattedCaption: caption.flatMap(ComposerMatrixFormatting.formattedBody(for:)),
+                    replyToEventID: replyToEventID,
+                    threadRootEventID: threadRootEventID,
+                    transactionID: draft.transactionID
                 )
             )
             switch result {

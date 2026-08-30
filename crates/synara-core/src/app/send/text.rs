@@ -73,6 +73,21 @@ pub fn message_content(
         ("m.notice", None) => RoomMessageEventContent::notice_plain(body),
         _ => return Err("v-send.4-invalid-message-type"),
     };
+    let mentions = validated_mentions(mention_user_ids, mention_room)?;
+    content.mentions = Some(mentions);
+    content.relates_to = match (thread_root, reply_to) {
+        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
+        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
+        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
+        (None, None) => None,
+    };
+    Ok(content)
+}
+
+pub fn validated_mentions(
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+) -> Result<Mentions, &'static str> {
     let user_ids = mention_user_ids
         .unwrap_or_default()
         .into_iter()
@@ -85,14 +100,7 @@ pub fn message_content(
     let mut mentions = Mentions::new();
     mentions.user_ids = user_ids;
     mentions.room = mention_room;
-    content.mentions = Some(mentions);
-    content.relates_to = match (thread_root, reply_to) {
-        (Some(root), Some(reply)) => Some(Relation::Thread(Thread::reply(root, reply))),
-        (Some(root), None) => Some(Relation::Thread(Thread::without_fallback(root))),
-        (None, Some(reply)) => Some(Relation::Reply(Reply::with_event_id(reply))),
-        (None, None) => None,
-    };
-    Ok(content)
+    Ok(mentions)
 }
 
 pub async fn send_message_to_room(

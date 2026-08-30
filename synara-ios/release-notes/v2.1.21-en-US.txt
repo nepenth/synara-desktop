@@ -1,0 +1,11 @@
+Synara 2.1.21 makes restored conversations reliable offline and improves media sending.
+
+What changed:
+- Rooms restore their cached timeline after a cold restart without requiring the server to be reachable.
+- Timeline failures preserve the last readable messages and provide a clear retry path.
+- Attachment captions, filenames, mentions, replies, threads, and retries now retain their intended Matrix semantics.
+- Partial attachment retries no longer duplicate, lose, or send empty message text.
+- Incoming stickers continue to render, while unsupported outgoing sticker controls have been removed.
+- Room titles and status remain readable at Accessibility XL text sizes.
+
+Validation included a real offline cold-restart proof, focused iOS and shared-core suites, 846 desktop modernization tests, independent delegated review, and Grok 4.6 High review.

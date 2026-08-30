@@ -745,12 +745,16 @@ const NativeTimelineRowActionSurface = ({
 const NativeTimelineMedia = ({
   media,
   messageType,
-  body,
+  filename,
+  caption,
+  formattedCaption,
   sticker,
 }: {
   media?: NativeTimelineMediaHandle;
   messageType?: string;
-  body?: string;
+  filename?: string;
+  caption?: string;
+  formattedCaption?: string;
   sticker?: boolean;
 }) => {
   const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
@@ -760,38 +764,59 @@ const NativeTimelineMedia = ({
   if (sticker) {
     return <img src={mediaSrc} alt="Sticker" style={{ maxWidth: 256, maxHeight: 256 }} />;
   }
+  const captionView = caption ? (
+    formattedCaption ? (
+      <NativeFormattedBody html={formattedCaption} fallbackBody={caption} />
+    ) : (
+      <Text size="T300" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+        {caption}
+      </Text>
+    )
+  ) : null;
   if (messageType === 'image') {
-    return <img src={mediaSrc} alt={body || 'Image'} style={mediaStyle(media)} />;
+    return (
+      <Box direction="Column" gap="100">
+        <img src={mediaSrc} alt={caption || filename || 'Image'} style={mediaStyle(media)} />
+        {captionView}
+      </Box>
+    );
   }
   if (messageType === 'audio') {
     return (
-      // Matrix media metadata does not provide a captions track.
-      // eslint-disable-next-line jsx-a11y/media-has-caption
-      <audio
-        src={mediaSrc}
-        controls
-        {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
-      />
+      <Box direction="Column" gap="100">
+        {/* Matrix media metadata does not provide a captions track. */}
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <audio
+          src={mediaSrc}
+          controls
+          {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
+        />
+        {captionView}
+      </Box>
     );
   }
   if (messageType === 'video') {
     return (
-      // Matrix media metadata does not provide a captions track.
-      // eslint-disable-next-line jsx-a11y/media-has-caption
-      <video
-        src={mediaSrc}
-        controls
-        style={mediaStyle(media)}
-        {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
-      />
+      <Box direction="Column" gap="100">
+        {/* Matrix media metadata does not provide a captions track. */}
+        {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+        <video
+          src={mediaSrc}
+          controls
+          style={mediaStyle(media)}
+          {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
+        />
+        {captionView}
+      </Box>
     );
   }
   if (messageType === 'file') {
     return (
       <Box direction="Column" gap="100">
         <a href={mediaSrc} download>
-          {body || 'Download file'}
+          {filename || 'Download file'}
         </a>
+        {captionView}
         {media?.mimeType ? (
           <Text size="T200" className={htmlCss.Metadata}>
             {media.mimeType}
@@ -1026,7 +1051,7 @@ const NativeTimelineRow = ({
                         <HermesAgentCard payload={agentPayload} />
                       </React.Suspense>
                     </ErrorBoundary>
-                  ) : (
+                  ) : row.media ? null : (
                     <div className={htmlCss.MessageBody}>
                       {row.formattedBody ? (
                         <NativeFormattedBody
@@ -1066,7 +1091,9 @@ const NativeTimelineRow = ({
                   <NativeTimelineMedia
                     media={row.media}
                     messageType={row.messageType}
-                    body={row.body}
+                    filename={row.mediaFilename}
+                    caption={row.mediaCaption}
+                    formattedCaption={row.formattedBody}
                   />
                   {row.reactions?.length ? (
                     <Box gap="100" wrap="Wrap">

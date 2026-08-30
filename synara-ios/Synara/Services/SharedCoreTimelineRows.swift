@@ -11,9 +11,19 @@ enum SharedCoreTimelineRows {
         rows.compactMap(item(from:))
     }
 
-    static func outcome(from rows: [TimelineViewRowDto]) -> TimelineLoadOutcome {
+    /// Returns an authoritative product outcome only when the native owner has
+    /// either projected a displayable row or proved backward pagination is
+    /// exhausted. `nil` means the caller must continue through the owner's
+    /// pagination route; it must never be presented as an empty room.
+    static func authoritativeOutcome(
+        from rows: [TimelineViewRowDto],
+        paginationBackward: String
+    ) -> TimelineLoadOutcome? {
         let items = items(from: rows)
-        return items.isEmpty ? .empty : .loaded(items)
+        if items.isEmpty == false {
+            return .loaded(items)
+        }
+        return paginationBackward == "exhausted" ? .empty : nil
     }
 
     static func item(from row: TimelineViewRowDto) -> TimelineItem? {
@@ -24,7 +34,9 @@ enum SharedCoreTimelineRows {
             agentCardJSON: row.agentCardJson,
             messageType: row.messageType,
             mediaHandleId: row.mediaHandleId,
-            mediaMimeType: row.mediaMimeType
+            mediaMimeType: row.mediaMimeType,
+            mediaFilename: row.mediaFilename,
+            mediaCaption: row.mediaCaption
         ) else {
             return nil
         }
@@ -66,17 +78,21 @@ enum SharedCoreTimelineRows {
         agentCardJSON: String? = nil,
         messageType: String? = nil,
         mediaHandleId: String? = nil,
-        mediaMimeType: String? = nil
+        mediaMimeType: String? = nil,
+        mediaFilename: String? = nil,
+        mediaCaption: String? = nil
     ) -> TimelineItem.Kind? {
         if let agentCard = SynaraAgentCardPayloadParser.parse(payloadJSON: agentCardJSON) {
             return .agentCard(agentCard)
         }
         if let media = mediaPlaceholder(
             rowKind: rowKind,
-            body: body,
             messageType: messageType,
             mediaHandleId: mediaHandleId,
-            mediaMimeType: mediaMimeType
+            mediaMimeType: mediaMimeType,
+            mediaFilename: mediaFilename,
+            mediaCaption: mediaCaption,
+            formattedCaption: formattedBody
         ) {
             return .mediaPlaceholder(media)
         }
@@ -117,20 +133,25 @@ enum SharedCoreTimelineRows {
 
     static func mediaPlaceholder(
         rowKind: String,
-        body: String,
         messageType: String?,
         mediaHandleId: String?,
-        mediaMimeType: String?
+        mediaMimeType: String?,
+        mediaFilename: String?,
+        mediaCaption: String?,
+        formattedCaption: String?
     ) -> MediaResource? {
         guard let handle = mediaHandleId?.trimmingCharacters(in: .whitespacesAndNewlines),
               handle.isEmpty == false,
               let url = URL(string: "synara-timeline-media://\(handle)") else {
             return nil
         }
-        let filename = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        let filename = mediaFilename?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let caption = mediaCaption?.trimmingCharacters(in: .whitespacesAndNewlines)
         return MediaResource(
             id: handle,
             filename: filename.isEmpty ? (messageType ?? rowKind) : filename,
+            caption: caption?.isEmpty == false ? caption : nil,
+            formattedCaption: formattedCaption,
             authenticatedURL: url,
             requiresAuthentication: true,
             isEncrypted: false,

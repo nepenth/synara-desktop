@@ -114,7 +114,6 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_secret_storage_unlock",
     "matrix_send_attachment",
     "matrix_send_poll",
-    "matrix_send_sticker",
     "matrix_send_text",
     "matrix_session_identity",
     "matrix_session_snapshot",

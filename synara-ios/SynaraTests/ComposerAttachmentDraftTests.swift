@@ -17,6 +17,248 @@ final class ComposerAttachmentDraftTests: XCTestCase {
         )
     }
 
+    func testSingleAttachmentUsesComposerTextAsItsCaption() {
+        let draft = makeDraft(name: "one.jpg")
+
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.make(drafts: [draft], body: "  A useful caption.  "),
+            [.attachment(id: draft.id, caption: "A useful caption.")]
+        )
+    }
+
+    func testSingleAttachmentWithoutTextHasNoCaption() {
+        let draft = makeDraft(name: "one.jpg")
+
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.make(drafts: [draft], body: " \n "),
+            [.attachment(id: draft.id, caption: nil)]
+        )
+    }
+
+    func testMultipleAttachmentsCarryTextOnceAsTrailingMessage() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.make(drafts: [first, second], body: "Context"),
+            [
+                .attachment(id: first.id, caption: nil),
+                .attachment(id: second.id, caption: nil),
+                .text(body: "Context"),
+            ]
+        )
+    }
+
+    func testMultipleAttachmentsWithoutTextHaveNoTrailingMessage() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.make(drafts: [first, second], body: ""),
+            [
+                .attachment(id: first.id, caption: nil),
+                .attachment(id: second.id, caption: nil),
+            ]
+        )
+    }
+
+    func testTextOnlyPlanRemainsOneTextStep() {
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.make(drafts: [], body: "  Hello  "),
+            [.text(body: "Hello")]
+        )
+    }
+
+    func testTrailingTextIsPresentOnlyForMultiAttachmentPlan() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+
+        XCTAssertNil(
+            ComposerAttachmentSendPlan.trailingText(
+                in: ComposerAttachmentSendPlan.make(drafts: [first], body: "Caption")
+            )
+        )
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.trailingText(
+                in: ComposerAttachmentSendPlan.make(drafts: [first, second], body: "Context")
+            ),
+            "Context"
+        )
+    }
+
+    func testSingleAttachmentUploadCarriesCaptionAndRelations() async {
+        let draft = makeDraft(name: "one.jpg")
+        let uploader = RecordingMediaUploader()
+        let plan = ComposerAttachmentSendPlan.make(drafts: [draft], body: "**Caption**")
+
+        let uploaded = await ComposerAttachmentSend.uploadAll(
+            [draft],
+            steps: plan,
+            roomID: "!room:example.org",
+            replyToEventID: "$reply:example.org",
+            threadRootEventID: "$root:example.org",
+            uploader: uploader,
+            onState: { _ in },
+            onUploaded: { _, _ in }
+        )
+        let requests = await uploader.recordedRequests()
+
+        XCTAssertTrue(uploaded)
+        XCTAssertEqual(requests.count, 1)
+        XCTAssertEqual(requests.first?.caption, "**Caption**")
+        XCTAssertNotNil(requests.first?.formattedCaption)
+        XCTAssertEqual(requests.first?.replyToEventID, "$reply:example.org")
+        XCTAssertEqual(requests.first?.threadRootEventID, "$root:example.org")
+        XCTAssertEqual(requests.first?.transactionID, draft.transactionID)
+    }
+
+    func testPartialUploadStopsAndDoesNotAttemptLaterDrafts() async {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+        let third = makeDraft(name: "three.jpg")
+        let uploader = RecordingMediaUploader(failingRequestIndex: 1)
+        let plan = ComposerAttachmentSendPlan.make(
+            drafts: [first, second, third],
+            body: "Context"
+        )
+
+        let uploaded = await ComposerAttachmentSend.uploadAll(
+            [first, second, third],
+            steps: plan,
+            roomID: "!room:example.org",
+            replyToEventID: nil,
+            threadRootEventID: nil,
+            uploader: uploader,
+            onState: { _ in },
+            onUploaded: { _, _ in }
+        )
+        let requests = await uploader.recordedRequests()
+
+        XCTAssertFalse(uploaded)
+        XCTAssertEqual(requests.map(\.displayName), ["one.jpg", "two.jpg"])
+        XCTAssertTrue(requests.allSatisfy { $0.caption == nil })
+    }
+
+    func testPartialRetryPreservesOriginalTrailingTextSemantics() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+        let initial = ComposerAttachmentSendPlan.make(
+            drafts: [first, second],
+            body: "Context"
+        )
+        let afterFirstSuccess = ComposerAttachmentSendPlan.removingAttachment(
+            id: first.id,
+            from: initial
+        )
+
+        let retry = ComposerAttachmentSendPlan.reusableOrNew(
+            existing: afterFirstSuccess,
+            drafts: [second],
+            body: "Context"
+        )
+
+        XCTAssertEqual(
+            retry,
+            [
+                .attachment(id: second.id, caption: nil),
+                .text(body: "Context"),
+            ]
+        )
+    }
+
+    func testPartialRetryPreservesTrailingRoleWhenRetainedTextIsEdited() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+        let initial = ComposerAttachmentSendPlan.make(
+            drafts: [first, second],
+            body: "Original context"
+        )
+        let afterFirstSuccess = ComposerAttachmentSendPlan.removingAttachment(
+            id: first.id,
+            from: initial
+        )
+
+        let retry = ComposerAttachmentSendPlan.reusableOrNew(
+            existing: afterFirstSuccess,
+            drafts: [second],
+            body: "Updated context"
+        )
+
+        XCTAssertEqual(
+            retry,
+            [
+                .attachment(id: second.id, caption: nil),
+                .text(body: "Updated context"),
+            ]
+        )
+    }
+
+    func testPartialRetryAssignsNewTextOnceWhenOriginalPlanHadNone() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+        let third = makeDraft(name: "three.jpg")
+        let initial = ComposerAttachmentSendPlan.make(
+            drafts: [first, second, third],
+            body: ""
+        )
+        let afterFirstSuccess = ComposerAttachmentSendPlan.removingAttachment(
+            id: first.id,
+            from: initial
+        )
+
+        let withTrailingText = ComposerAttachmentSendPlan.reusableOrNew(
+            existing: afterFirstSuccess,
+            drafts: [second, third],
+            body: "New context"
+        )
+        XCTAssertEqual(
+            withTrailingText,
+            [
+                .attachment(id: second.id, caption: nil),
+                .attachment(id: third.id, caption: nil),
+                .text(body: "New context"),
+            ]
+        )
+
+        let afterSecondSuccess = ComposerAttachmentSendPlan.removingAttachment(
+            id: second.id,
+            from: withTrailingText
+        )
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.reusableOrNew(
+                existing: afterSecondSuccess,
+                drafts: [third],
+                body: "New context"
+            ),
+            [
+                .attachment(id: third.id, caption: nil),
+                .text(body: "New context"),
+            ]
+        )
+    }
+
+    func testPartialRetryUsesNewTextAsCaptionWithOneAttachmentRemaining() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+        let initial = ComposerAttachmentSendPlan.make(
+            drafts: [first, second],
+            body: ""
+        )
+        let afterFirstSuccess = ComposerAttachmentSendPlan.removingAttachment(
+            id: first.id,
+            from: initial
+        )
+
+        XCTAssertEqual(
+            ComposerAttachmentSendPlan.reusableOrNew(
+                existing: afterFirstSuccess,
+                drafts: [second],
+                body: "New caption"
+            ),
+            [.attachment(id: second.id, caption: "New caption")]
+        )
+    }
+
     func testAppendingStopsAtTenImages() {
         let existing = (0 ..< 8).map { makeDraft(name: "existing-\($0).jpg") }
         let incoming = (0 ..< 4).map { makeDraft(name: "incoming-\($0).jpg") }
@@ -69,7 +311,7 @@ final class ComposerAttachmentDraftTests: XCTestCase {
             ComposerAttachmentDraftList.validate(draft, against: []),
             .tooLarge
         )
-        XCTAssertEqual(ComposerAttachmentDraftList.maxBytesPerItem, 100 * 1024 * 1024)
+        XCTAssertEqual(ComposerAttachmentDraftList.maxBytesPerItem, 32 * 1024 * 1024)
     }
 
     func testAcceptsImageVideoAndFileMimeTypes() {
@@ -152,5 +394,27 @@ final class ComposerAttachmentDraftTests: XCTestCase {
             data: data,
             source: .photoLibrary
         )
+    }
+}
+
+private actor RecordingMediaUploader: MediaUploading {
+    private var requests: [MediaUploadRequest] = []
+    private let failingRequestIndex: Int?
+
+    init(failingRequestIndex: Int? = nil) {
+        self.failingRequestIndex = failingRequestIndex
+    }
+
+    func upload(_ request: MediaUploadRequest) async -> MediaUploadState {
+        let requestIndex = requests.count
+        requests.append(request)
+        if requestIndex == failingRequestIndex {
+            return .failed("Media could not be uploaded.")
+        }
+        return await MockMediaUploadService().upload(request)
+    }
+
+    func recordedRequests() -> [MediaUploadRequest] {
+        requests
     }
 }

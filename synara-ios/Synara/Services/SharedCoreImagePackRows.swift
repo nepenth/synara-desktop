@@ -3,7 +3,7 @@ import Foundation
 /// P4-S37 map of privacy-safe SharedCore image-pack JSON to sticker rows.
 ///
 /// Names, ids, and `mxc://` metadata only. No image bytes. Send stays on
-/// `SharedCoreSendSticker`. This is not iOS-on-engine and not P4 acceptance.
+/// Incoming image-pack projection only. This is not iOS-on-engine and not P4 acceptance.
 struct SharedCoreSticker: Equatable, Identifiable {
     let id: String
     let packId: String

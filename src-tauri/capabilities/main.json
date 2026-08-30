@@ -204,7 +204,6 @@
     "allow-matrix-composer-get-reply-draft",
     "allow-matrix-send-text",
     "allow-matrix-send-attachment",
-    "allow-matrix-send-sticker",
     "allow-matrix-send-poll",
     "allow-matrix-edit-message",
     "allow-matrix-poll-respond",

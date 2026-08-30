@@ -136,28 +136,11 @@ export const EmojiItem = style([
   },
 ]);
 
-export const StickerItem = style([
-  EmojiItem,
-  {
-    width: toRem(112),
-    height: toRem(112),
-  },
-]);
-
 export const CustomEmojiImg = style([
   DefaultReset,
   {
     width: toRem(32),
     height: toRem(32),
-    objectFit: 'contain',
-  },
-]);
-
-export const StickerImg = style([
-  DefaultReset,
-  {
-    width: toRem(96),
-    height: toRem(96),
     objectFit: 'contain',
   },
 ]);

@@ -13,7 +13,6 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { SequenceCard } from '../sequence-card';
 import { ImageTile, ImageTileEdit, ImageTileUpload } from './ImageTile';
 import { SettingTile } from '../setting-tile';
-import { UsageSwitcher } from './UsageSwitcher';
 import { ImagePackProfile, ImagePackProfileEdit } from './PackMeta';
 import * as css from './style.css';
 import { useFilePicker } from '../../hooks/useFilePicker';
@@ -96,20 +95,6 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
 
     const handleMetaCancel = () => setMetaEditing(false);
 
-    const handlePackUsageChange = useCallback(
-      (usg: ImageUsage[]) => {
-        setSavedMeta(
-          (m) =>
-            new PackMetaReader({
-              ...imagePack.meta.content,
-              ...m?.content,
-              usage: usg,
-            })
-        );
-      },
-      [imagePack.meta]
-    );
-
     const handleUploadRemove = useCallback((file: TUploadContent) => {
       setFiles((fs) => fs.filter((f) => f !== file));
     }, []);
@@ -120,6 +105,10 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
         const packImage: PackImage = {
           url: data.mxc,
           info: getImageInfo(imgEl, data.file),
+          // New uploads are custom emoji. Existing images keep their original
+          // Matrix usage metadata when edited below so this UI cannot silently
+          // convert a mixed/sticker pack owned by another client.
+          usage: [ImageUsage.Emoticon],
         };
         const image = PackImageReader.fromPackImage(
           getFileNameWithoutExt(data.file.name),
@@ -186,6 +175,8 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
     const [applyState, applyChanges] = useAsyncCallback(
       useCallback(async () => {
         const pack: PackContent = {
+          // Removing sticker creation must not rewrite existing Matrix pack
+          // semantics. New packs already default to Emoticon at creation time.
           pack: savedMeta?.content ?? imagePack.meta.content,
           images: {},
         };
@@ -228,7 +219,6 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
           <ImageTileEdit
             defaultShortcode={image.shortcode}
             image={savedImages.get(image.shortcode) ?? image}
-            packUsage={currentMeta.usage}
             useAuthentication={useAuthentication}
             onCancel={handleImageEditCancel}
             onSave={handleImageEditSave}
@@ -237,7 +227,6 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
           <ImageTile
             defaultShortcode={image.shortcode}
             image={savedImages.get(image.shortcode) ?? image}
-            packUsage={currentMeta.usage}
             useAuthentication={useAuthentication}
             canEdit={canEdit}
             onEdit={handleImageEdit}
@@ -310,24 +299,6 @@ export const ImagePackContent = as<'div', ImagePackContentProps>(
                 onEdit={() => setMetaEditing(true)}
               />
             )}
-          </SequenceCard>
-          <SequenceCard
-            style={{ padding: config.space.S300 }}
-            variant="SurfaceVariant"
-            direction="Column"
-            gap="400"
-          >
-            <SettingTile
-              title="Images Usage"
-              description="Select how the images are being used: as emojis, as stickers, or as both."
-              after={
-                <UsageSwitcher
-                  usage={currentMeta.usage}
-                  canEdit={canEdit}
-                  onChange={handlePackUsageChange}
-                />
-              }
-            />
           </SequenceCard>
         </Box>
         {images.length === 0 && !canEdit ? null : (

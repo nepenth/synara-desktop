@@ -68,6 +68,9 @@ fn media_send_surface_exposes_live_owners_and_keeps_leftover_upload() {
     let udl = include_str!("../src/synara_core.udl");
     assert!(udl.contains("upload_content("));
     assert!(udl.contains("send_room_attachment("));
+    assert!(udl.contains("string? transaction_id"));
+    assert!(udl.contains("sequence<string>? mention_user_ids"));
+    assert!(udl.contains("boolean? mention_room"));
     assert!(udl.contains("dictionary MediaUploadDto"));
     assert!(udl.contains("dictionary SendRoomAttachmentDto"));
     assert!(udl.contains("interface MediaUploadError"));
@@ -86,6 +89,7 @@ fn media_send_surface_exposes_live_owners_and_keeps_leftover_upload() {
     assert!(shared_core.contains("upload_avatar("));
     assert!(!shared_core.contains("command("));
     assert!(!shared_core.contains("matrix_backup_status"));
+    assert!(!shared_core.contains("send_sticker("));
 }
 
 #[test]
@@ -111,6 +115,11 @@ fn media_send_without_session_fails_closed_without_echo() {
             filename.to_owned(),
             mime.to_owned(),
             payload,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
         ))
@@ -169,6 +178,11 @@ fn media_send_oversize_mime_and_filename_fail_closed_without_echo() {
             payload.clone(),
             None,
             None,
+            None,
+            None,
+            None,
+            None,
+            None,
         ))
         .expect_err("oversize send mime must fail closed");
     let send_name = rt
@@ -177,6 +191,11 @@ fn media_send_oversize_mime_and_filename_fail_closed_without_echo() {
             oversize_name.clone(),
             "application/octet-stream".to_owned(),
             payload,
+            None,
+            None,
+            None,
+            None,
+            None,
             None,
             None,
         ))
@@ -237,12 +256,22 @@ fn media_send_without_started_sync_returns_owner_diagnostic_without_echo() {
         marker.as_bytes().to_vec(),
         None,
         None,
+        None,
+        None,
+        None,
+        None,
+        None,
     ));
     let invalid_room_send = rt.block_on(shared.send_room_attachment(
         invalid_room.to_owned(),
         filename.to_owned(),
         mime.to_owned(),
         marker.as_bytes().to_vec(),
+        None,
+        None,
+        None,
+        None,
+        None,
         None,
         None,
     ));

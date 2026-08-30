@@ -9,6 +9,7 @@ import {
 export type NativeSendGifInput = {
   roomId: string;
   gif: GifResult;
+  transactionId?: string;
   replyTo?: string;
   /** Thread root event id; forces native attachment thread relation. */
   threadRoot?: string;
@@ -35,6 +36,7 @@ export async function sendGifWithNativeOwner(
   const owner = await sendAttachmentWithNativeOwner(
     {
       roomId: input.roomId,
+      transactionId: input.transactionId ?? `synara-gif-${crypto.randomUUID()}`,
       file: {
         filename: fileName || 'gif.gif',
         mimeType: 'image/gif',

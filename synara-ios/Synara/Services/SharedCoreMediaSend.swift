@@ -26,16 +26,26 @@ enum SharedCoreMediaSend {
         filename: String,
         mimeType: String,
         payload: Data,
+        caption: String?,
+        formattedCaption: String?,
         replyTo: String?,
-        threadRoot: String?
+        threadRoot: String?,
+        transactionId: String?,
+        mentionUserIds: [String]?,
+        mentionRoom: Bool?
     ) async throws -> SendRoomAttachmentDto {
         try await core.sendRoomAttachment(
             roomId: roomId,
             filename: filename,
             mimeType: mimeType,
             payload: payload,
+            caption: caption,
+            formattedCaption: formattedCaption,
             replyTo: replyTo,
-            threadRoot: threadRoot
+            threadRoot: threadRoot,
+            transactionId: transactionId,
+            mentionUserIds: mentionUserIds,
+            mentionRoom: mentionRoom
         )
     }
 }

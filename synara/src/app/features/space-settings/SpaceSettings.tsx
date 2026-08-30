@@ -44,7 +44,7 @@ const useSpaceSettingsMenuItems = (): SpaceSettingsMenuItem[] =>
       },
       {
         page: SpaceSettingsPage.EmojisStickersPage,
-        name: 'Emojis & Stickers',
+        name: 'Custom Emoji',
         icon: Icons.Smile,
       },
       {

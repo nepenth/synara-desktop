@@ -383,6 +383,8 @@ dictionary TimelineViewRowDto {
   string? formatted_body;
   // Recognized, size-bounded Synara/Hermes card payload only; never raw event JSON.
   string? agent_card_json;
+  string? media_filename;
+  string? media_caption;
   sequence<TimelineViewReactionDto> reactions;
   string? media_handle_id;
   string? media_mime_type;
@@ -547,20 +549,6 @@ interface AgentApprovalSendError {
 // Static source constants only. Never echo body, room id, token, or password.
 [Error]
 interface SendTextError {
-  Failed(string code, string description);
-};
-
-// Privacy-safe send-sticker write ack from the registered Core command.
-// Metadata / mxc only. No image bytes or file path.
-dictionary SendStickerDto {
-  string room_id;
-  string event_id;
-  string status;
-};
-
-// Static source constants only. Never echo mxc, room id, token, or password.
-[Error]
-interface SendStickerError {
   Failed(string code, string description);
 };
 
@@ -1784,7 +1772,7 @@ interface SharedCore {
   MediaUploadDto upload_content(bytes payload, string mime_type, string? filename);
 
   [Async, Throws=SendRoomAttachmentError]
-  SendRoomAttachmentDto send_room_attachment(string room_id, string filename, string mime_type, bytes payload, string? reply_to, string? thread_root);
+  SendRoomAttachmentDto send_room_attachment(string room_id, string filename, string mime_type, bytes payload, string? caption, string? formatted_caption, string? reply_to, string? thread_root, string? transaction_id, sequence<string>? mention_user_ids, boolean? mention_room);
 
   [Async, Throws=PlainMediaError]
   MediaBytesDto download_plain_media(string content_uri);
@@ -1989,9 +1977,6 @@ interface SharedCore {
 
   [Async, Throws=AgentApprovalSendError]
   AgentApprovalSendDto send_agent_approval(string room_id, string action_id, string action_title, string decision, string? source_event_id, u64 created_at);
-
-  [Async, Throws=SendStickerError]
-  SendStickerDto send_sticker(string room_id, string body, string mxc, u64? width, u64? height, string? mimetype, u64? size, string? reply_to, string? thread_root);
 
   [Async, Throws=SendPollError]
   SendPollDto send_poll(string room_id, string question, sequence<string> answers, u32 max_selections, string? thread_root, string? reply_to);

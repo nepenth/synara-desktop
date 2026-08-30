@@ -2,6 +2,61 @@
 import XCTest
 
 final class TimelineServiceTests: XCTestCase {
+    private actor RecoveryInvocationCounter {
+        private(set) var value = 0
+
+        func increment() {
+            value += 1
+        }
+    }
+
+    func testTimelineRecoveryGateCoalescesConcurrentRecoveryForOneRoom() async {
+        let gate = SharedCoreTimelineRecoveryGate()
+        let counter = RecoveryInvocationCounter()
+
+        async let first = gate.run(roomID: "!room:example.org") {
+            await counter.increment()
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            return TimelineLoadOutcome.empty
+        }
+        async let second = gate.run(roomID: "!room:example.org") {
+            await counter.increment()
+            try? await Task.sleep(nanoseconds: 50_000_000)
+            return TimelineLoadOutcome.empty
+        }
+
+        let outcomes = await (first, second)
+        let recoveryCount = await counter.value
+        XCTAssertEqual(outcomes.0, .empty)
+        XCTAssertEqual(outcomes.1, .empty)
+        XCTAssertEqual(recoveryCount, 1)
+    }
+
+    func testTimelineAvailabilityFailureClearsOnlyAfterSuccessfulRecovery() {
+        let failure = TimelineLoadFailure(
+            kind: .temporarilyUnavailable,
+            diagnosticCode: "timeline-temporarily-unavailable"
+        )
+        var availability = RoomTimelineAvailabilityState()
+
+        availability.recordFailure(failure, preservingRows: true)
+        XCTAssertEqual(availability.failure, failure)
+
+        availability.recordSuccess()
+        XCTAssertNil(availability.failure)
+    }
+
+    func testTimelineAvailabilityDoesNotDuplicateFullScreenFailure() {
+        let failure = TimelineLoadFailure(
+            kind: .viewUnavailable,
+            diagnosticCode: "v-timeline-view-not-open"
+        )
+        var availability = RoomTimelineAvailabilityState()
+
+        availability.recordFailure(failure, preservingRows: false)
+
+        XCTAssertNil(availability.failure)
+    }
     func testRoomTimelineScrollPolicyOnlyFollowsAnEstablishedLiveEnd() {
         XCTAssertTrue(
             RoomTimelineScrollPolicy.shouldFollowLiveAppend(
@@ -115,6 +170,27 @@ final class TimelineServiceTests: XCTestCase {
             RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
                 currentItemCount: 40,
                 incomingItemCount: 1
+            )
+        )
+    }
+
+    func testRoomTimelineFailurePresentationExposesStaticRetryWhilePreservingRows() {
+        let failure = TimelineLoadFailure(
+            kind: .temporarilyUnavailable,
+            diagnosticCode: "p4-s6-open-failed"
+        )
+
+        XCTAssertEqual(
+            RoomTimelineFailurePresentationPolicy.retryMessage(
+                for: failure,
+                preservedItemCount: 40
+            ),
+            "Messages are temporarily unavailable. Try again."
+        )
+        XCTAssertNil(
+            RoomTimelineFailurePresentationPolicy.retryMessage(
+                for: failure,
+                preservedItemCount: 0
             )
         )
     }
@@ -404,6 +480,70 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNil(finishedOutcome)
     }
 
+    func testTimelineSessionPublishesIdenticalSnapshotAfterFailureAsRecoveryHeartbeat() async throws {
+        let initial = TimelineFixtures.largeTimeline(count: 20)
+        let failure = TimelineLoadFailure(
+            kind: .temporarilyUnavailable,
+            diagnosticCode: "timeline-temporarily-unavailable"
+        )
+        let service = MockTimelineService(items: initial)
+        service.updateOutcomes = [.failed(failure), .loaded(initial)]
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+
+        let openedFeed = await session.open(mode: .live)
+        let feed = try XCTUnwrap(openedFeed)
+        var iterator = feed.updates.makeAsyncIterator()
+        let failedUpdate = await iterator.next()
+        let recoveredUpdate = await iterator.next()
+        let finishedUpdate = await iterator.next()
+
+        XCTAssertEqual(failedUpdate, .failed(failure))
+        XCTAssertEqual(recoveredUpdate, .loaded(initial))
+        XCTAssertNil(finishedUpdate)
+    }
+
+    func testTimelineSessionPublishesRecoveryHeartbeatAfterPaginationFailure() async throws {
+        let initial = TimelineFixtures.largeTimeline(count: 20)
+        let failure = TimelineLoadFailure(
+            kind: .temporarilyUnavailable,
+            diagnosticCode: "timeline-pagination-unavailable"
+        )
+        let service = MockTimelineService(items: initial)
+        service.olderOutcome = .failed(failure)
+        let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+        let openedFeed = await session.open(mode: .live)
+        let feed = try XCTUnwrap(openedFeed)
+
+        let paginationOutcome = await session.loadOlder(before: initial[0].eventID)
+        var iterator = feed.updates.makeAsyncIterator()
+        let recoveredUpdate = await iterator.next()
+
+        XCTAssertEqual(paginationOutcome, .failed(failure))
+        XCTAssertEqual(recoveredUpdate, .loaded(initial))
+    }
+
+    func testTimelineSessionPublishesRecoveryHeartbeatAfterFailedOrEmptyLiveTransition() async throws {
+        let initial = TimelineFixtures.largeTimeline(count: 20)
+        let failure = TimelineLoadFailure(
+            kind: .temporarilyUnavailable,
+            diagnosticCode: "timeline-live-unavailable"
+        )
+
+        for latestOutcome in [TimelineLoadOutcome.failed(failure), .empty] {
+            let service = MockTimelineService(items: initial)
+            service.latestOutcome = latestOutcome
+            let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
+            let openedFeed = await session.open(mode: .focused(eventID: initial[5].eventID))
+            let feed = try XCTUnwrap(openedFeed)
+
+            _ = await session.transitionToLive()
+            var iterator = feed.updates.makeAsyncIterator()
+            let recoveredUpdate = await iterator.next()
+
+            XCTAssertEqual(recoveredUpdate, .loaded(initial))
+        }
+    }
+
     func testTimelineSessionRejectsInitialLoadFromInvalidatedGeneration() async {
         let service = MockTimelineService(items: TimelineFixtures.largeTimeline(count: 20))
         service.loadDelayNanoseconds = 100_000_000
@@ -439,7 +579,11 @@ final class TimelineServiceTests: XCTestCase {
 
     func testTimelineSessionPreservesHistoricalGenerationWhenJumpFails() async throws {
         let service = MockTimelineService(items: TimelineFixtures.largeTimeline(count: 30))
-        service.latestOutcome = .failed("Latest unavailable")
+        let failure = TimelineLoadFailure(
+            kind: .temporarilyUnavailable,
+            diagnosticCode: "timeline-test-unavailable"
+        )
+        service.latestOutcome = .failed(failure)
         let session = RoomTimelineSession(roomID: "!room:matrix.org", service: service)
         let openedFeed = await session.open(mode: .focused(eventID: "$synthetic-10:matrix.org"))
         _ = try XCTUnwrap(openedFeed)
@@ -447,11 +591,11 @@ final class TimelineServiceTests: XCTestCase {
 
         let transition = await session.transitionToLive()
 
-        guard case let .failed(message) = transition else {
+        guard case let .failed(receivedFailure) = transition else {
             XCTFail("Expected failed live transition")
             return
         }
-        XCTAssertEqual(message, "Latest unavailable")
+        XCTAssertEqual(receivedFailure, failure)
         let generationAfterFailure = await session.currentGeneration()
         XCTAssertEqual(generationAfterFailure, historicalGeneration)
     }

@@ -32,14 +32,6 @@ pub struct MatrixSendRoomAttachmentResult {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct MatrixSendStickerResult {
-    pub room_id: String,
-    pub event_id: String,
-    pub status: &'static str,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct MatrixSendPollResult {
     pub room_id: String,
     pub event_id: String,

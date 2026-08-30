@@ -15,6 +15,7 @@ import { bytesToSize, getFileTypeIcon } from '../../utils/common';
 import { useMediaConfig } from '../../hooks/useMediaConfig';
 import { isSynaraDesktop } from '../../utils/desktop';
 import { uploadMediaNative } from '../../state/nativeMediaUpload';
+import { effectiveNativeAttachmentLimit } from '../../utils/nativeMediaLimits';
 
 type CompactUploadCardRendererProps = {
   isEncrypted?: boolean;
@@ -30,13 +31,16 @@ export function CompactUploadCardRenderer({
 }: CompactUploadCardRendererProps) {
   const mx = useMatrixClient();
   const mediaConfig = useMediaConfig();
-  const allowSize = mediaConfig['m.upload.size'] || Infinity;
   const desktop = isSynaraDesktop();
+  const serverAllowSize = mediaConfig['m.upload.size'];
+  const allowSize = desktop
+    ? effectiveNativeAttachmentLimit(serverAllowSize)
+    : serverAllowSize || Infinity;
   const [, setUpload] = useAtom(uploadAtom);
 
   const { upload, startUpload, cancelUpload } = useBindUploadAtom(mx, uploadAtom, isEncrypted);
   const { file } = upload;
-  const fileSizeExceeded = file.size >= allowSize;
+  const fileSizeExceeded = file.size > allowSize;
   const nativeStarted = useRef(false);
 
   const startNativeUpload = useCallback(async () => {

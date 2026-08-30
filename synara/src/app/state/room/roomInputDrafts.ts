@@ -11,6 +11,7 @@ export type TUploadMetadata = {
 };
 
 export type TUploadItem = {
+  transactionId: string;
   file: TUploadContent;
   originalFile: TUploadContent;
   metadata: TUploadMetadata;

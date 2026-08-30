@@ -126,6 +126,15 @@ enum RoomTimelineSnapshotPolicy {
     }
 }
 
+enum RoomTimelineFailurePresentationPolicy {
+    static func retryMessage(
+        for failure: TimelineLoadFailure,
+        preservedItemCount: Int
+    ) -> String? {
+        preservedItemCount > 0 ? failure.userMessage : nil
+    }
+}
+
 enum RoomTimelineReadAcknowledgementPolicy {
     static func shouldSchedule(
         isLive: Bool,
@@ -268,11 +277,13 @@ struct RoomTimelineView: View {
     @State private var replyTarget: ComposerRelationTarget?
     @State private var editSession: ComposerEditSession?
     @State private var sendError: String?
+    @State private var timelineAvailability = RoomTimelineAvailabilityState()
     @State private var hasAnchoredEvent = false
     @State private var uploadState: MediaUploadState = .idle
     @State private var viewerResource: MediaResource?
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachmentDrafts: [ComposerAttachmentDraft] = []
+    @State private var attachmentSendSteps: [ComposerAttachmentSendStep]?
     @State private var isSendingMessage = false
     @State private var agentActionMessage: String?
     @State private var roomNotesActionMessage: String?
@@ -280,7 +291,6 @@ struct RoomTimelineView: View {
     @State private var cryptoActionMessage: String?
     @State private var isCryptoBannerDismissed = false
     @State private var isRoomDetailsPresented = false
-    @State private var isStickerPackPresented = false
     @State private var shouldReturnToListAfterDetailsDismiss = false
     @State private var isTimelineSearchPresented = false
     @State private var timelineSearchQuery = ""
@@ -349,6 +359,11 @@ struct RoomTimelineView: View {
                 }
             )
             timelineContent
+            if let failure = timelineAvailability.failure {
+                TimelineAvailabilityBanner(failure: failure) {
+                    Task { await loadTimeline() }
+                }
+            }
             if let typingText = RoomTypingPresentation.text(for: typingUserIDs) {
                 RoomTypingIndicator(text: typingText)
             }
@@ -370,7 +385,6 @@ struct RoomTimelineView: View {
                 onUploadFailed: { message in
                     uploadState = .failed(message)
                 },
-                onOpenStickers: { isStickerPackPresented = true },
                 selectedPhotos: $selectedPhotos,
                 attachmentDrafts: $attachmentDrafts,
                 isSending: isSendingMessage,
@@ -408,9 +422,6 @@ struct RoomTimelineView: View {
                     }
                 }
             )
-        }
-        .sheet(isPresented: $isStickerPackPresented) {
-            StickerPackSheet(roomID: roomID, onSend: sendSticker)
         }
         .sheet(isPresented: $isTimelineSearchPresented) {
             TimelineSearchSheet(
@@ -1215,6 +1226,7 @@ struct RoomTimelineView: View {
         replyTarget = nil
         editSession = nil
         sendError = nil
+        timelineAvailability = RoomTimelineAvailabilityState()
         hasAnchoredEvent = false
         uploadState = .idle
         viewerResource = nil
@@ -1293,6 +1305,7 @@ struct RoomTimelineView: View {
         let shouldRemainPaginating = isPaginating || currentTimelineIsPaginating
         switch outcome {
         case let .loaded(items):
+            timelineAvailability.recordSuccess()
             guard items.isEmpty == false else {
                 if case .loaded = state {
                     state = .loaded(loadedTimelineItems, isPaginating: shouldRemainPaginating)
@@ -1325,6 +1338,7 @@ struct RoomTimelineView: View {
                 ]
             )
         case .empty:
+            timelineAvailability.recordSuccess()
             if case let .loaded(currentItems, _) = state,
                RoomTimelineSnapshotPolicy.shouldPreserveCurrentSnapshot(
                    currentItemCount: currentItems.count,
@@ -1339,14 +1353,21 @@ struct RoomTimelineView: View {
                 state = .empty
                 logTimelineEvent("snapshot-empty", fields: ["source": "empty"])
             }
-        case let .failed(message):
+        case let .failed(failure):
             if case let .loaded(currentItems, _) = state, currentItems.isEmpty == false {
                 state = .loaded(currentItems, isPaginating: shouldRemainPaginating)
-                sendError = message
-                logTimelineEvent("snapshot-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
+                timelineAvailability.recordFailure(failure, preservingRows: true)
+                logTimelineEvent(
+                    "snapshot-failed-preserved",
+                    fields: [
+                        "code": failure.diagnosticCode,
+                        "rendered": "\(currentItems.count)",
+                    ]
+                )
             } else {
-                state = .failed(message)
-                logTimelineEvent("snapshot-failed", fields: [:])
+                timelineAvailability.recordFailure(failure, preservingRows: false)
+                state = .failed(failure.userMessage)
+                logTimelineEvent("snapshot-failed", fields: ["code": failure.diagnosticCode])
             }
         }
     }
@@ -1516,19 +1537,30 @@ struct RoomTimelineView: View {
                     case let .loaded(items):
                         applyTimelineOutcome(.loaded(items))
                     case .empty:
+                        timelineAvailability.recordSuccess()
                         if case .loading = state {
                             state = .empty
                             logTimelineEvent("stream-empty-initial")
                         } else {
                             logTimelineEvent("stream-empty-ignored")
                         }
-                    case let .failed(message):
-                        if case .loaded = state {
-                            logTimelineEvent("stream-failed-preserved")
+                    case let .failed(failure):
+                        if case let .loaded(items, _) = state,
+                           RoomTimelineFailurePresentationPolicy.retryMessage(
+                               for: failure,
+                               preservedItemCount: items.count
+                           ) != nil
+                        {
+                            timelineAvailability.recordFailure(failure, preservingRows: true)
+                            logTimelineEvent(
+                                "stream-failed-preserved",
+                                fields: ["code": failure.diagnosticCode]
+                            )
                             return
                         }
-                        state = .failed(message)
-                        logTimelineEvent("stream-failed")
+                        timelineAvailability.recordFailure(failure, preservingRows: false)
+                        state = .failed(failure.userMessage)
+                        logTimelineEvent("stream-failed", fields: ["code": failure.diagnosticCode])
                     }
                 }
             }
@@ -1675,6 +1707,12 @@ struct RoomTimelineView: View {
 
         sendError = nil
         isSendingMessage = true
+        let plan = ComposerAttachmentSendPlan.reusableOrNew(
+            existing: attachmentSendSteps,
+            drafts: drafts,
+            body: rawBody
+        )
+        attachmentSendSteps = plan
         if drafts.isEmpty {
             sendComposerText(rawBody)
             isSendingMessage = false
@@ -1688,52 +1726,36 @@ struct RoomTimelineView: View {
             }
             let uploaded = await ComposerAttachmentSend.uploadAll(
                 drafts,
+                steps: plan,
                 roomID: roomID,
+                replyToEventID: replyTarget?.eventID,
+                threadRootEventID: nil,
                 uploader: environment.mediaUploader,
                 onState: { state in
                     uploadState = state
                 },
                 onUploaded: { draft, item in
                     attachmentDrafts = ComposerAttachmentDraftList.remove(id: draft.id, from: attachmentDrafts)
+                    attachmentSendSteps = ComposerAttachmentSendPlan.removingAttachment(
+                        id: draft.id,
+                        from: attachmentSendSteps ?? plan
+                    )
                     append(item)
                 }
             )
             await MainActor.run {
                 if uploaded {
-                    if trimmed.isEmpty == false {
-                        sendComposerText(rawBody)
+                    attachmentSendSteps = nil
+                    if let trailingText = ComposerAttachmentSendPlan.trailingText(in: plan) {
+                        sendComposerText(trailingText)
                     } else {
                         uploadState = .idle
+                        draft = ""
+                        environment.drafts.clearDraft(roomID: roomID)
+                        completeComposerRelation()
                     }
                 }
                 isSendingMessage = false
-            }
-        }
-    }
-
-    private func sendSticker(_ sticker: SharedCoreSticker) {
-        let request = StickerSendRequest(
-            roomID: roomID,
-            body: sticker.body,
-            mxc: sticker.mxc,
-            width: sticker.width,
-            height: sticker.height,
-            mimetype: sticker.mimetype,
-            size: sticker.size,
-            replyToEventID: replyTarget?.eventID,
-            threadRoot: nil
-        )
-        Task {
-            do {
-                _ = try await environment.messageSender.sendSticker(request)
-                await MainActor.run {
-                    sendError = nil
-                    completeComposerRelation()
-                }
-            } catch {
-                await MainActor.run {
-                    sendError = MessageSendError.failed.localizedDescription
-                }
             }
         }
     }
@@ -2112,6 +2134,7 @@ struct RoomTimelineView: View {
                 let currentItems = loadedTimelineItems.isEmpty ? items : loadedTimelineItems
                 switch outcome {
                 case let .loaded(boundedItems):
+                    timelineAvailability.recordSuccess()
                     let currentServerIDs = Set(currentItems.filter { $0.isLocalPending == false }.map(\.eventID))
                     let addedCount = boundedItems.reduce(into: 0) { count, item in
                         if currentServerIDs.contains(item.eventID) == false {
@@ -2130,15 +2153,16 @@ struct RoomTimelineView: View {
                         fields: ["added": "\(addedCount)", "rendered": "\(merged.count)"]
                     )
                 case .empty:
+                    timelineAvailability.recordSuccess()
                     hasReachedOldestMessages = true
                     paginationScrollAnchorID = nil
                     state = .loaded(currentItems, isPaginating: false)
                     logTimelineEvent("pagination-reached-start")
-                case let .failed(message):
+                case let .failed(failure):
                     paginationScrollAnchorID = nil
                     state = .loaded(currentItems, isPaginating: false)
-                    sendError = message
-                    logTimelineEvent("pagination-failed")
+                    timelineAvailability.recordFailure(failure, preservingRows: true)
+                    logTimelineEvent("pagination-failed", fields: ["code": failure.diagnosticCode])
                 }
             }
         }
@@ -2306,12 +2330,18 @@ struct RoomTimelineView: View {
                 case .empty:
                     isJumpingToLatest = false
                     showJumpToLatest = true
-                    sendError = "Could not load the latest messages. Try again."
+                    timelineAvailability.recordFailure(
+                        TimelineLoadFailure(
+                            kind: .temporarilyUnavailable,
+                            diagnosticCode: "timeline-jump-latest-empty"
+                        ),
+                        preservingRows: true
+                    )
                     logTimelineEvent("jump-latest-empty-preserved", fields: ["rendered": "\(currentItems.count)"])
-                case let .failed(message):
+                case let .failed(failure):
                     isJumpingToLatest = false
                     showJumpToLatest = true
-                    sendError = message
+                    timelineAvailability.recordFailure(failure, preservingRows: true)
                     logTimelineEvent("jump-latest-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
                 case .superseded:
                     isJumpingToLatest = false
@@ -2356,12 +2386,18 @@ struct RoomTimelineView: View {
                 case .empty:
                     isJumpingToLatest = false
                     showJumpToLatest = true
-                    sendError = "Could not load the latest messages. Try again."
+                    timelineAvailability.recordFailure(
+                        TimelineLoadFailure(
+                            kind: .temporarilyUnavailable,
+                            diagnosticCode: "timeline-jump-latest-empty"
+                        ),
+                        preservingRows: true
+                    )
                     logTimelineEvent("jump-latest-empty-preserved", fields: ["rendered": "\(currentItems.count)"])
-                case let .failed(message):
+                case let .failed(failure):
                     isJumpingToLatest = false
                     showJumpToLatest = true
-                    sendError = message
+                    timelineAvailability.recordFailure(failure, preservingRows: true)
                     logTimelineEvent("jump-latest-failed-preserved", fields: ["rendered": "\(currentItems.count)"])
                 case .superseded:
                     isJumpingToLatest = false
@@ -2501,7 +2537,13 @@ struct RoomTimelineView: View {
             timelinePosition = .focusedEvent
             showJumpToLatest = targetEventID != loadedTimelineItems.last?.eventID
             if success == false {
-                sendError = "That message is not available in this timeline. Showing the latest messages instead."
+                timelineAvailability.recordFailure(
+                    TimelineLoadFailure(
+                        kind: .viewUnavailable,
+                        diagnosticCode: "timeline-focused-event-unavailable"
+                    ),
+                    preservingRows: true
+                )
                 shouldRecoverMissingFocus = true
             }
         }
@@ -2732,6 +2774,30 @@ private enum TimelineViewState: Equatable {
     case empty
     case failed(String)
     case loaded([TimelineItem], isPaginating: Bool)
+}
+
+private struct TimelineAvailabilityBanner: View {
+    let failure: TimelineLoadFailure
+    let onRetry: () -> Void
+
+    var body: some View {
+        HStack(spacing: SynaraSpacing.small) {
+            Image(systemName: "wifi.exclamationmark")
+                .foregroundStyle(SynaraColor.warning)
+            Text(failure.userMessage)
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+            Spacer(minLength: SynaraSpacing.small)
+            Button("Retry", action: onRetry)
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .accessibilityIdentifier("TimelineAvailabilityRetryButton")
+        }
+        .padding(.horizontal, SynaraSpacing.medium)
+        .padding(.vertical, SynaraSpacing.xSmall)
+        .background(SynaraColor.surface)
+        .accessibilityIdentifier("TimelineAvailabilityBanner")
+    }
 }
 
 private struct RoomTypingIndicator: View {
@@ -2966,6 +3032,7 @@ struct ThreadTimelineView: View {
     @State private var uploadState: MediaUploadState = .idle
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachmentDrafts: [ComposerAttachmentDraft] = []
+    @State private var attachmentSendSteps: [ComposerAttachmentSendStep]?
     @State private var isSendingMessage = false
     @State private var isComposerFocused = false
     @State private var threadUpdatesTask: Task<Void, Never>?
@@ -3094,11 +3161,11 @@ struct ThreadTimelineView: View {
                         if case .loading = state {
                             state = .empty
                         }
-                    case let .failed(message):
+                    case let .failed(failure):
                         if case .loaded = state {
                             return
                         }
-                        state = .failed(message)
+                        state = .failed(failure.userMessage)
                     }
                 }
             }
@@ -3111,8 +3178,8 @@ struct ThreadTimelineView: View {
             state = items.isEmpty ? .empty : .loaded(items, isPaginating: false)
         case .empty:
             state = .empty
-        case let .failed(message):
-            state = .failed(message)
+        case let .failed(failure):
+            state = .failed(failure.userMessage)
         }
     }
 
@@ -3157,19 +3224,32 @@ struct ThreadTimelineView: View {
 
         sendError = nil
         isSendingMessage = true
+        let plan = ComposerAttachmentSendPlan.reusableOrNew(
+            existing: attachmentSendSteps,
+            drafts: drafts,
+            body: rawBody
+        )
+        attachmentSendSteps = plan
         Task {
             var uploaded = true
             if drafts.isEmpty == false {
                 let uploadSignpostID = PerformanceTrace.begin("ThreadComposerAttachmentDraftSend")
                 uploaded = await ComposerAttachmentSend.uploadAll(
                     drafts,
+                    steps: plan,
                     roomID: roomID,
+                    replyToEventID: nil,
+                    threadRootEventID: rootEventID,
                     uploader: environment.mediaUploader,
                     onState: { state in
                         uploadState = state
                     },
                     onUploaded: { draft, item in
                         attachmentDrafts = ComposerAttachmentDraftList.remove(id: draft.id, from: attachmentDrafts)
+                        attachmentSendSteps = ComposerAttachmentSendPlan.removingAttachment(
+                            id: draft.id,
+                            from: attachmentSendSteps ?? plan
+                        )
                         append(item)
                     }
                 )
@@ -3183,9 +3263,11 @@ struct ThreadTimelineView: View {
                 return
             }
 
-            guard body.isEmpty == false else {
+            guard let trailingText = ComposerAttachmentSendPlan.trailingText(in: plan) else {
                 await MainActor.run {
+                    attachmentSendSteps = nil
                     uploadState = .idle
+                    draft = ""
                     isSendingMessage = false
                 }
                 return
@@ -3199,13 +3281,14 @@ struct ThreadTimelineView: View {
                 let item = try await environment.messageSender.send(
                     MessageSendRequest(
                         roomID: roomID,
-                        body: body,
-                        formattedBody: ComposerMatrixFormatting.formattedBody(for: body),
+                        body: trailingText,
+                        formattedBody: ComposerMatrixFormatting.formattedBody(for: trailingText),
                         replyToEventID: rootEventID,
                         editEventID: nil
                     )
                 )
                 await MainActor.run {
+                    attachmentSendSteps = nil
                     draft = ""
                     append(item)
                     isSendingMessage = false
@@ -4533,52 +4616,6 @@ private struct RoomMemberPresenceRow: View {
     }
 }
 
-private struct StickerPackSheet: View {
-    let roomID: String
-    let onSend: (SharedCoreSticker) -> Void
-    @Environment(\.appEnvironment) private var environment
-    @Environment(\.dismiss) private var dismiss
-    @State private var stickers: [SharedCoreSticker] = []
-
-    var body: some View {
-        NavigationStack {
-            List {
-                if stickers.isEmpty {
-                    Text("No sticker packs are available.")
-                        .foregroundStyle(SynaraColor.secondaryText)
-                        .accessibilityIdentifier("StickerPackEmpty")
-                } else {
-                    ForEach(stickers) { sticker in
-                        Button {
-                            onSend(sticker)
-                            dismiss()
-                        } label: {
-                            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-                                Text(sticker.body)
-                                    .font(SynaraTypography.body)
-                                Text(sticker.packName)
-                                    .font(SynaraTypography.supporting)
-                                    .foregroundStyle(SynaraColor.secondaryText)
-                            }
-                        }
-                        .accessibilityIdentifier("StickerPackItem")
-                    }
-                }
-            }
-            .navigationTitle("Stickers")
-            .accessibilityIdentifier("StickerPackSheet")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
-                }
-            }
-            .task(id: roomID) {
-                stickers = await environment.roomManagement.stickers(roomID: roomID)
-            }
-        }
-    }
-}
-
 private struct PermissionInfo: View {
     let title: String
     let threshold: Int64
@@ -5040,6 +5077,9 @@ private struct TimelineRow: View {
             if resource.isEncrypted {
                 return "\(senderAndTime) sent encrypted media that cannot be opened until keys are available"
             }
+            if let caption = resource.caption {
+                return "\(senderAndTime) sent \(resource.safeDescription): \(caption)"
+            }
             return "\(senderAndTime) sent \(resource.safeDescription)"
         case .redacted:
             return "\(senderAndTime): message deleted"
@@ -5212,6 +5252,19 @@ private struct MediaAttachmentCard: View {
                     .font(SynaraTypography.emphasis)
                     .foregroundStyle(SynaraColor.primaryText)
                     .lineLimit(1)
+                if let caption = resource.caption {
+                    if let html = resource.formattedCaption, html.isEmpty == false {
+                        MatrixFormattedMessageView(
+                            fallbackBody: caption,
+                            html: html,
+                            font: SynaraTypography.messageBody
+                        )
+                    } else {
+                        Text(caption)
+                            .font(SynaraTypography.messageBody)
+                            .foregroundStyle(SynaraColor.primaryText)
+                    }
+                }
                 if let sizeText = MediaFormatting.formattedFileSize(resource.byteSize) {
                     Text(sizeText)
                         .font(SynaraTypography.messageMeta)
@@ -5806,7 +5859,6 @@ private struct ComposerView: View {
         let onCameraImage: (UIImage) -> Void
     #endif
     let onUploadFailed: (String) -> Void
-    var onOpenStickers: (() -> Void)? = nil
     @Binding var selectedPhotos: [PhotosPickerItem]
     @Binding var attachmentDrafts: [ComposerAttachmentDraft]
     var isSending = false
@@ -5992,7 +6044,6 @@ private struct ComposerView: View {
 
                 HStack(spacing: SynaraSpacing.small) {
                     attachmentButton
-                    stickerButton
                     formattingButton
                     Spacer(minLength: SynaraSpacing.small)
                     sendButton
@@ -6001,7 +6052,6 @@ private struct ComposerView: View {
         } else {
             HStack(alignment: .center, spacing: SynaraSpacing.xSmall) {
                 attachmentButton
-                stickerButton
                 composerInputSurface(showsFormattingToggle: true)
                 sendButton
             }
@@ -6026,26 +6076,6 @@ private struct ComposerView: View {
         .disabled(isSending)
         .accessibilityLabel("Attach")
         .accessibilityIdentifier("AttachmentButton")
-    }
-
-    @ViewBuilder
-    private var stickerButton: some View {
-        if let onOpenStickers {
-            Button(action: onOpenStickers) {
-                Image(systemName: "face.smiling")
-                    .font(.system(size: 16, weight: .semibold))
-                    .frame(width: 34, height: 34)
-                    .background(SynaraColor.secondarySurface)
-                    .foregroundStyle(SynaraColor.secondaryText)
-                    .clipShape(Circle())
-                    .synaraDepth(.raised, shape: Circle())
-                    .frame(width: 44, height: 44)
-            }
-            .buttonStyle(SynaraTactileButtonStyle())
-            .contentShape(Rectangle())
-            .accessibilityLabel("Stickers")
-            .accessibilityIdentifier("StickerPackButton")
-        }
     }
 
     private var formattingButton: some View {

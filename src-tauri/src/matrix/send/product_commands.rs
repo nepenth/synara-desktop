@@ -70,18 +70,32 @@ pub async fn matrix_edit_message(
 /// V-SEND.5 extends the same command with optional `thread_root` so native
 /// sessions can start / continue threads without JS relation ownership.
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields remain explicit for compatibility.
 pub async fn matrix_send_attachment(
     state: State<'_, MatrixAuthState>,
     room_id: String,
     filename: String,
     mime_type: String,
     bytes: Vec<u8>,
+    caption: Option<String>,
+    formatted_caption: Option<String>,
     reply_to: Option<String>,
     thread_root: Option<String>,
+    transaction_id: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: Option<bool>,
 ) -> Result<MatrixSendAttachmentResult, MatrixAuthCommandError> {
     let room_id = parse_send_room_id(&room_id)?;
     let reply_to = parse_reply_event_id(reply_to)?;
     let thread_root = parse_thread_root_event_id(thread_root)?;
+    let transaction_id = parse_transaction_id(transaction_id)?;
+    crate::matrix::send::attachment_caption(caption.clone(), formatted_caption.clone())
+        .map_err(map_attachment_error)?;
+    synara_core::app::send::validated_mentions(
+        mention_user_ids.clone(),
+        mention_room.unwrap_or(false),
+    )
+    .map_err(map_attachment_error)?;
     let filename = validate_attachment_filename(&filename)?;
     let mime_type = validate_attachment_mime(&mime_type)?;
     if bytes.is_empty() {
@@ -112,7 +126,7 @@ pub async fn matrix_send_attachment(
                 kind,
                 media_handle_id,
                 file_name: Some(filename.clone()),
-                caption: None,
+                caption: caption.clone(),
                 mime_type: Some(mime_type.to_string()),
                 size_bytes: Some(size_bytes),
             })
@@ -120,8 +134,23 @@ pub async fn matrix_send_attachment(
         (room, session_generation, item.local_txn_id.clone())
     };
 
-    let send_result =
-        send_attachment_to_room(&room, &filename, &mime_type, bytes, reply_to, thread_root).await;
+    let send_result = async {
+        let config = synara_core::app::send::attachment_config(
+            caption,
+            formatted_caption,
+            reply_to,
+            thread_root,
+            transaction_id,
+            mention_user_ids,
+            mention_room.unwrap_or(false),
+        )
+        .map_err(|_| matrix_sdk::Error::InsufficientData)?;
+        let response = room
+            .send_attachment(&filename, &mime_type, bytes, config)
+            .await?;
+        Ok::<_, matrix_sdk::Error>(response.event_id.to_string())
+    }
+    .await;
 
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_mut() {
@@ -149,39 +178,6 @@ pub async fn matrix_send_attachment(
         local_txn_id,
         status: "sent",
     })
-}
-
-/// V-SEND sticker residual — sole `m.sticker` owner for native sessions.
-/// Media is already on the homeserver as an MXC (image-pack sticker); this
-/// command does not re-upload bytes. Optional info fields preserve dimensions
-/// when the product already knows them; empty info is valid.
-#[tauri::command]
-#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
-pub async fn matrix_send_sticker(
-    core: State<'_, Arc<synara_core::Core>>,
-    room_id: String,
-    body: String,
-    mxc: String,
-    width: Option<u64>,
-    height: Option<u64>,
-    mimetype: Option<String>,
-    size: Option<u64>,
-    reply_to: Option<String>,
-    thread_root: Option<String>,
-) -> Result<MatrixSendStickerResult, MatrixAuthCommandError> {
-    crate::bridge::send_sticker::send_sticker(
-        core.inner().as_ref(),
-        room_id,
-        body,
-        mxc,
-        width,
-        height,
-        mimetype,
-        size,
-        reply_to,
-        thread_root,
-    )
-    .await
 }
 
 /// V-SEND.3 sole poll-start owner (composer board + `/poll` command).
@@ -292,36 +288,6 @@ pub(super) fn normalize_formatted_body(
         return Ok(None);
     }
     Ok(Some(html.to_owned()))
-}
-
-/// Build validated `m.sticker` content for the native sticker owner.
-///
-/// Relation rules match text/attachment (V-SEND.5):
-/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
-/// - `thread_root` only → `m.thread` without in-reply fallback
-/// - `reply_to` only → classic `m.in_reply_to` reply
-#[allow(clippy::too_many_arguments)]
-pub(crate) fn sticker_content(
-    body: String,
-    mxc: String,
-    width: Option<u64>,
-    height: Option<u64>,
-    mimetype: Option<String>,
-    size: Option<u64>,
-    reply_to: Option<OwnedEventId>,
-    thread_root: Option<OwnedEventId>,
-) -> Result<StickerEventContent, MatrixAuthCommandError> {
-    synara_core::app::send::sticker_content(
-        body,
-        mxc,
-        width,
-        height,
-        mimetype,
-        size,
-        reply_to,
-        thread_root,
-    )
-    .map_err(map_send_error)
 }
 
 /// Build validated room-message content for the native composer owner.
@@ -476,34 +442,4 @@ pub(super) fn attachment_kind_for_mime(mime: &Mime) -> AttachmentKind {
         mime::AUDIO => AttachmentKind::Audio,
         _ => AttachmentKind::File,
     }
-}
-
-pub(super) async fn send_attachment_to_room(
-    room: &Room,
-    filename: &str,
-    mime_type: &Mime,
-    data: Vec<u8>,
-    reply_to: Option<OwnedEventId>,
-    thread_root: Option<OwnedEventId>,
-) -> matrix_sdk::Result<String> {
-    let mut config = AttachmentConfig::new();
-    if let Some(event_id) = reply_to {
-        // Explicit thread root from the product draft forces a thread relation
-        // (start thread / reply in thread). Otherwise preserve the prior
-        // MaybeThreaded behavior so existing non-thread replies keep working.
-        let enforce_thread = if thread_root.is_some() {
-            EnforceThread::Threaded(ReplyWithinThread::Yes)
-        } else {
-            EnforceThread::MaybeThreaded
-        };
-        config = config.reply(Some(AttachmentReply {
-            event_id,
-            enforce_thread,
-            add_mentions: AddMentions::Yes,
-        }));
-    }
-    let response = room
-        .send_attachment(filename, mime_type, data, config)
-        .await?;
-    Ok(response.event_id.to_string())
 }

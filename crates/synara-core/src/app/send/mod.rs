@@ -18,11 +18,11 @@ mod error;
 mod ipc;
 mod poll;
 mod queue;
-mod sticker;
 mod text;
 
 pub use attachment::{
-    send_room_attachment, validate_attachment_filename, validate_attachment_mime,
+    attachment_caption, attachment_config, attachment_reply, send_room_attachment,
+    validate_attachment_filename, validate_attachment_mime, SendRoomAttachmentRequest,
     MAX_ATTACHMENT_UPLOAD_BYTES,
 };
 pub use attachment_queue::{
@@ -32,17 +32,17 @@ pub use attachment_queue::{
 pub use error::SendError;
 pub use ipc::{
     MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult,
-    MatrixSendRoomAttachmentResult, MatrixSendStickerResult, MatrixSendTextResult,
+    MatrixSendRoomAttachmentResult, MatrixSendTextResult,
 };
 pub use poll::{
     apply_poll_start_relations, normalize_poll, poll_response_content, poll_start_content,
     NormalizedPoll, PollSendError,
 };
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
-pub use sticker::sticker_content;
 pub use text::{
     edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
     parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,
+    validated_mentions,
 };
 
 /// Static marker for link / schema smoke (text + attachment queues).

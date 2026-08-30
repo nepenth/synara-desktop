@@ -436,8 +436,84 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
-    func testSharedCoreTimelineRowsWithoutItemsAreEmpty() {
-        XCTAssertEqual(SharedCoreTimelineRows.outcome(from: []), .empty)
+    func testSharedCoreTimelineRowsRequireExhaustionBeforeEmpty() {
+        XCTAssertNil(
+            SharedCoreTimelineRows.authoritativeOutcome(
+                from: [],
+                paginationBackward: "available"
+            )
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.authoritativeOutcome(
+                from: [],
+                paginationBackward: "exhausted"
+            ),
+            .empty
+        )
+    }
+
+    func testSharedCoreTimelinePaginationStopsAfterConsecutiveNoProgressPages() {
+        var progress = SharedCoreTimelinePaginationProgress()
+        progress.observeInitial(rowIDs: ["row-1"])
+
+        XCTAssertTrue(progress.canRequestPage)
+        progress.recordPage(rowIDs: ["row-1"])
+        XCTAssertTrue(progress.canRequestPage)
+        progress.recordPage(rowIDs: ["row-1"])
+
+        XCTAssertFalse(progress.canRequestPage)
+        XCTAssertEqual(progress.pageRequestCount, 2)
+        XCTAssertEqual(progress.consecutiveNoProgressPages, 2)
+    }
+
+    func testSharedCoreTimelinePaginationHasAnAbsolutePageBound() {
+        var progress = SharedCoreTimelinePaginationProgress()
+        progress.observeInitial(rowIDs: [])
+
+        for page in 0 ..< SharedCoreTimelinePaginationProgress.maximumPageRequests {
+            XCTAssertTrue(progress.canRequestPage)
+            progress.recordPage(rowIDs: ["row-\(page)"])
+        }
+
+        XCTAssertFalse(progress.canRequestPage)
+        XCTAssertEqual(
+            progress.pageRequestCount,
+            SharedCoreTimelinePaginationProgress.maximumPageRequests
+        )
+    }
+
+    func testSharedCoreTimelineErrorsStayTypedAndPrivacySafe() {
+        let noSession = SharedCoreTimelineService.failure(
+            from: TimelineError.Failed(
+                code: "p2-timeline-open-no-session",
+                description: "ignored owner text"
+            )
+        )
+        XCTAssertEqual(noSession.kind, .sessionUnavailable)
+        XCTAssertEqual(noSession.diagnosticCode, "p2-timeline-open-no-session")
+        XCTAssertEqual(noSession.userMessage, "Sign in again to load this timeline.")
+
+        let unavailable = SharedCoreTimelineService.failure(
+            from: NSError(
+                domain: "https://user:secret@example.org/?access_token=syt_secret",
+                code: 1
+            )
+        )
+        XCTAssertEqual(unavailable.kind, .temporarilyUnavailable)
+        XCTAssertEqual(unavailable.diagnosticCode, "timeline-temporarily-unavailable")
+        for forbidden in ["secret", "example.org", "access_token", "syt_"] {
+            XCTAssertFalse(unavailable.userMessage.contains(forbidden))
+            XCTAssertFalse(unavailable.diagnosticCode.contains(forbidden))
+        }
+
+        let hostileCode = SharedCoreTimelineService.failure(
+            from: TimelineError.Failed(
+                code: "https://example.org/?access_token=syt_secret",
+                description: "ignored owner text"
+            )
+        )
+        XCTAssertEqual(hostileCode.kind, .temporarilyUnavailable)
+        XCTAssertEqual(hostileCode.diagnosticCode, "timeline-invalid-diagnostic-code")
     }
 
     func testSharedCoreTimelineSenderAvatarAcceptsOnlyValidMXCMetadata() {
@@ -492,6 +568,24 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             .unknown(type: "sticker")
         )
+        if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
+            rowKind: "sticker",
+            body: "",
+            formattedBody: nil,
+            messageType: "m.sticker",
+            mediaHandleId: "incoming-sticker-handle",
+            mediaMimeType: "image/webp"
+        ) {
+            XCTAssertEqual(resource.id, "incoming-sticker-handle")
+            XCTAssertEqual(resource.filename, "m.sticker")
+            XCTAssertEqual(resource.mimeType, "image/webp")
+            XCTAssertEqual(
+                SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL),
+                "incoming-sticker-handle"
+            )
+        } else {
+            XCTFail("An incoming Matrix sticker with native media must remain renderable")
+        }
         XCTAssertNil(
             SharedCoreTimelineRows.displayKind(
                 rowKind: "date_separator",
@@ -525,13 +619,17 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         if case let .mediaPlaceholder(resource) = SharedCoreTimelineRows.displayKind(
             rowKind: "message",
-            body: "photo.jpg",
-            formattedBody: nil,
+            body: "A sunset",
+            formattedBody: "<strong>A sunset</strong>",
             messageType: "image",
             mediaHandleId: "timeline-media-s32",
-            mediaMimeType: "image/jpeg"
+            mediaMimeType: "image/jpeg",
+            mediaFilename: "photo.jpg",
+            mediaCaption: "A sunset"
         ) {
             XCTAssertEqual(resource.filename, "photo.jpg")
+            XCTAssertEqual(resource.caption, "A sunset")
+            XCTAssertEqual(resource.formattedCaption, "<strong>A sunset</strong>")
             XCTAssertEqual(SharedCoreTimelineMedia.handleId(from: resource.authenticatedURL), "timeline-media-s32")
         } else {
             XCTFail("Image rows with a handle must map to a media placeholder")
@@ -661,7 +759,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(coalesced.first(where: { $0.streamId == "view-b" })?.revision, 4)
     }
 
-    func testSharedCoreTimelineUpdatesWithoutSessionYieldsEmptyWithoutEcho() async {
+    func testSharedCoreTimelineUpdatesWithoutSessionFailsClosedWithoutEcho() async {
         let host = SharedCoreProductHost(
             core: SharedCore(),
             storeRoot: FileManager.default.temporaryDirectory,
@@ -677,7 +775,17 @@ final class SynaraCoreBindingsTests: XCTestCase {
             }
             break
         }
-        XCTAssertEqual(outcomes, [.empty])
+        XCTAssertEqual(
+            outcomes,
+            [
+                .failed(
+                    TimelineLoadFailure(
+                        kind: .sessionUnavailable,
+                        diagnosticCode: "p2-timeline-open-no-session"
+                    )
+                ),
+            ]
+        )
     }
 
     func testSharedCoreTimelineWithoutSessionFailsClosed() async {
@@ -2609,35 +2717,6 @@ final class SynaraCoreBindingsTests: XCTestCase {
             let publicError = String(reflecting: error)
             XCTAssertTrue(publicError.contains("p2-send-text-no-session"))
             for forbidden in ["syt_", "token", roomId, body] {
-                XCTAssertFalse(publicError.contains(forbidden))
-            }
-        }
-    }
-
-    func testSharedCoreSendStickerWithoutSessionFailsClosed() async {
-        let core = SharedCore()
-        let roomId = "!s923SecretRoom:example.org"
-        let body = "s923SecretBody"
-        let mxc = "mxc://example.org/s923SecretMxc"
-
-        do {
-            _ = try await SharedCoreSendSticker.sendSticker(
-                core: core,
-                roomId: roomId,
-                body: body,
-                mxc: mxc,
-                width: nil,
-                height: nil,
-                mimetype: nil,
-                size: nil,
-                replyTo: nil,
-                threadRoot: nil
-            )
-            XCTFail("Fail-closed SharedCore must not send a sticker without a session")
-        } catch {
-            let publicError = String(reflecting: error)
-            XCTAssertTrue(publicError.contains("p2-send-sticker-no-session"))
-            for forbidden in ["syt_", "token", roomId, body, mxc] {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
