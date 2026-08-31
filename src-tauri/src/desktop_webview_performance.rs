@@ -82,10 +82,10 @@ pub fn inspect<R: tauri::Runtime>(_window: &tauri::WebviewWindow<R>) -> Result<(
 pub fn capabilities() -> DesktopWebviewPerformance {
     #[cfg(target_os = "linux")]
     {
-        return runtime_state()
+        runtime_state()
             .read()
             .map(|state| state.clone())
-            .unwrap_or_else(|poisoned| poisoned.into_inner().clone());
+            .unwrap_or_else(|poisoned| poisoned.into_inner().clone())
     }
 
     #[cfg(target_os = "macos")]

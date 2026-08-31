@@ -9,29 +9,26 @@ pub const MENU_CHECK_FOR_UPDATES: &str = "synara_check_for_updates";
 pub const CHECK_FOR_UPDATES_EVENT: &str = "synara://check-for-updates";
 
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
-    match event.id().as_ref() {
-        MENU_CHECK_FOR_UPDATES => {
-            if let Err(error) = desktop::show_main_window(app) {
-                eprintln!("failed to focus Synara before update check: {error}");
+    if event.id().as_ref() == MENU_CHECK_FOR_UPDATES {
+        if let Err(error) = desktop::show_main_window(app) {
+            eprintln!("failed to focus Synara before update check: {error}");
+            desktop_logging::append_app_log(
+                app,
+                "native",
+                &format!("failed to focus before update check: {error}"),
+            );
+        }
+
+        if let Some(window) = app.get_webview_window(desktop::MAIN_WINDOW_LABEL) {
+            if let Err(error) = window.emit(CHECK_FOR_UPDATES_EVENT, ()) {
+                eprintln!("failed to request update check: {error}");
                 desktop_logging::append_app_log(
                     app,
                     "native",
-                    &format!("failed to focus before update check: {error}"),
+                    &format!("failed to request update check: {error}"),
                 );
             }
-
-            if let Some(window) = app.get_webview_window(desktop::MAIN_WINDOW_LABEL) {
-                if let Err(error) = window.emit(CHECK_FOR_UPDATES_EVENT, ()) {
-                    eprintln!("failed to request update check: {error}");
-                    desktop_logging::append_app_log(
-                        app,
-                        "native",
-                        &format!("failed to request update check: {error}"),
-                    );
-                }
-            }
         }
-        _ => {}
     }
 }
 
