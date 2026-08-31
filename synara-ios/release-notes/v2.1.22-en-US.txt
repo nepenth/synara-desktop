@@ -1,0 +1,9 @@
+Synara 2.1.22 refines the shared release and desktop experience.
+
+What changed:
+- Message-composer actions are optically centered on macOS and Linux.
+- Room lists keep their useful hover and selected depth without permanent separators.
+- Personal Notes and room controls use a more consistent, accessible quiet-depth hierarchy.
+- Mouse text selection no longer reveals timestamps; macOS trackpad gestures retain timestamp access.
+
+This version keeps iOS release metadata aligned with the cross-client release. There are no intentional iOS interaction changes in this build.

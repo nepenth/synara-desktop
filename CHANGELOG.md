@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 2.1.22 - 2026-08-30
+
+- Centered the macOS and Linux message composer controls optically within the
+  input bar, including the add, formatting, emoji, and send actions.
+- Removed persistent room-row separators while preserving the restrained hover
+  and selected-room depth hierarchy.
+- Reworked Personal Notes controls and surfaces so tabs are no longer clipped
+  and the panel follows the shared quiet-dimensional design language.
+- Expanded accessible quiet depth to room-header and Home navigation actions.
+- Made timestamp reveal trackpad/touch-owned on desktop so ordinary mouse text
+  selection cannot drag messages; touch and pen behavior remains available on
+  Linux-capable hardware.
+- See [`docs/releases/v2.1.22.md`](docs/releases/v2.1.22.md) for details.
+
 ## 2.1.21 - 2026-08-30
 
 - Proved cold-restart room restoration from the production encrypted SQLite
