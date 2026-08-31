@@ -60,6 +60,7 @@ export const useEditor = (): Editor => {
 
 export type EditorChangeHandler = (value: Descendant[]) => void;
 type CustomEditorProps = {
+  className?: string;
   editableName?: string;
   top?: ReactNode;
   bottom?: ReactNode;
@@ -77,6 +78,7 @@ type CustomEditorProps = {
 export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
   (
     {
+      className,
       editableName,
       top,
       bottom,
@@ -125,7 +127,7 @@ export const CustomEditor = forwardRef<HTMLDivElement, CustomEditorProps>(
       typeof navigator === 'undefined' || !navigator.language ? undefined : navigator.language;
 
     return (
-      <div className={css.Editor} ref={ref}>
+      <div className={className ? `${css.Editor} ${className}` : css.Editor} ref={ref}>
         <Slate editor={editor} initialValue={initialValue} onChange={onChange}>
           {top}
           <Box alignItems="Start">

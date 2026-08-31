@@ -72,6 +72,7 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 import * as css from './Home.css';
+import * as depthCss from '../../../styles/Depth.css';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -371,7 +372,12 @@ export function Home() {
         <PageNavContent scrollRef={scrollRef}>
           <Box direction="Column" gap="300">
             <NavCategory>
-              <NavItem variant="Surface" radii="400" aria-selected={createRoomSelected}>
+              <NavItem
+                className={depthCss.quietInteractiveSurface}
+                variant="Surface"
+                radii="400"
+                aria-selected={createRoomSelected}
+              >
                 <NavButton onClick={() => navigate(getHomeCreatePath())}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -387,7 +393,12 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
-              <NavItem variant="Surface" radii="400" aria-selected={joinSelected}>
+              <NavItem
+                className={depthCss.quietInteractiveSurface}
+                variant="Surface"
+                radii="400"
+                aria-selected={joinSelected}
+              >
                 <NavButton onClick={() => navigate(getHomeJoinPath())}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">
@@ -403,7 +414,12 @@ export function Home() {
                   </NavItemContent>
                 </NavButton>
               </NavItem>
-              <NavItem variant="Surface" radii="400" aria-selected={searchSelected}>
+              <NavItem
+                className={depthCss.quietInteractiveSurface}
+                variant="Surface"
+                radii="400"
+                aria-selected={searchSelected}
+              >
                 <NavLink to={getHomeSearchPath()}>
                   <NavItemContent>
                     <Box as="span" grow="Yes" alignItems="Center" gap="200">

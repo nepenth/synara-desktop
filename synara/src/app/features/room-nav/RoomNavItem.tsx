@@ -48,6 +48,7 @@ import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import * as css from './styles.css';
+import * as depthCss from '../../styles/Depth.css';
 
 type RoomNavItemMenuProps = {
   room: EventedRoomReading;
@@ -384,6 +385,7 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
             }
           >
             <IconButton
+              className={depthCss.quietInteractiveSurface}
               onClick={handleOpenMenu}
               aria-pressed={!!menuAnchor}
               aria-controls={`menu-${room.roomId}`}

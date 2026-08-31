@@ -126,3 +126,57 @@ export const tactileSurface = style({
     },
   },
 });
+
+/**
+ * Shared hover/selected treatment for compact controls that otherwise read as
+ * flat tint changes. Resting controls stay on the reading plane.
+ */
+export const quietInteractiveSurface = style({
+  transition:
+    'background-color 140ms ease-out, box-shadow 140ms ease-out, transform 140ms ease-out',
+  selectors: {
+    '&:not(:disabled):not([aria-disabled=true]):hover, &:not(:disabled):not([aria-disabled=true]):focus-visible':
+      {
+        boxShadow: raisedShadow,
+        transform: `translateY(-${toRem(1)})`,
+      },
+    '&:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true]':
+      {
+        boxShadow: raisedShadow,
+      },
+    '&:not(:disabled):not([aria-disabled=true]):active': {
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+      transform: 'translateY(0)',
+    },
+    '&:disabled, &[aria-disabled=true]': {
+      boxShadow: 'none',
+      transform: 'none',
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+      transform: 'none',
+      selectors: {
+        '&:hover, &:focus-visible, &[aria-pressed=true], &[aria-selected=true], &:active': {
+          transform: 'none',
+        },
+      },
+    },
+    '(prefers-contrast: more)': {
+      boxShadow: 'none',
+      selectors: {
+        '&:not(:disabled):not([aria-disabled=true]):hover, &:not(:disabled):not([aria-disabled=true]):focus-visible, &:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true], &:not(:disabled):not([aria-disabled=true]):active':
+          {
+            boxShadow: 'none',
+            outline: `${config.borderWidth.B600} solid var(--synara-depth-contrast-strong-edge)`,
+            outlineOffset: `calc(-1 * ${config.borderWidth.B600})`,
+          },
+        '&:disabled, &[aria-disabled=true]': {
+          boxShadow: 'none',
+          outline: 'none',
+        },
+      },
+    },
+  },
+});

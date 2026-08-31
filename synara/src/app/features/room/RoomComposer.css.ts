@@ -1,5 +1,6 @@
-import { style } from '@vanilla-extract/css';
+import { globalStyle, style } from '@vanilla-extract/css';
 import { color, config, DefaultReset, toRem } from 'folds';
+import * as editorCss from '../../components/editor/Editor.css';
 
 export const RoomComposer = style([
   DefaultReset,
@@ -8,6 +9,23 @@ export const RoomComposer = style([
     minWidth: 0,
   },
 ]);
+
+/** Keep every first-line affordance on one optical center without moving it as a draft grows. */
+export const RoomComposerEditor = style({
+  minWidth: 0,
+});
+
+globalStyle(`${RoomComposerEditor} .${editorCss.EditorOptions}`, {
+  boxSizing: 'border-box',
+  height: toRem(50),
+  justifyContent: 'center',
+  paddingBlock: 0,
+  paddingInline: config.space.S200,
+});
+
+globalStyle(`${RoomComposerEditor} .${editorCss.EditorTextareaArea}`, {
+  minHeight: toRem(50),
+});
 
 export const RoomComposerReply = style([
   DefaultReset,
