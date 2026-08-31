@@ -520,15 +520,12 @@ test('rich html paste preserves safe block and inline structure', () => {
 });
 
 test('rich html paste in Markdown mode preserves structure without visible escape characters', () => {
-  const fragment = clipboardDataToEditorInput(
-    {
-      getData: (format) =>
-        format === 'text/html'
-          ? '<p># literal heading marker and *literal stars*</p><ul><li>one</li><li>two</li></ul>'
-          : '',
-    },
-    true
-  );
+  const fragment = clipboardDataToEditorInput({
+    getData: (format) =>
+      format === 'text/html'
+        ? '<p># literal heading marker and *literal stars*</p><ul><li>one</li><li>two</li></ul>'
+        : '',
+  });
 
   assert.deepEqual(fragment, [
     {
@@ -549,15 +546,12 @@ for (const markdown of [false, true]) {
   test(`rich html paste preserves safe formatted links with Markdown ${
     markdown ? 'enabled' : 'disabled'
   }`, () => {
-    const fragment = clipboardDataToEditorInput(
-      {
-        getData: (format) =>
-          format === 'text/html'
-            ? '<p>Read <a href="https://example.org/spec?a=1&amp;b=2"><strong>the spec</strong></a>.</p>'
-            : '',
-      },
-      markdown
-    );
+    const fragment = clipboardDataToEditorInput({
+      getData: (format) =>
+        format === 'text/html'
+          ? '<p>Read <a href="https://example.org/spec?a=1&amp;b=2"><strong>the spec</strong></a>.</p>'
+          : '',
+    });
 
     assert.deepEqual(fragment, [
       {
@@ -586,12 +580,9 @@ for (const markdown of [false, true]) {
 }
 
 test('plain clipboard text is inserted byte-for-byte without synthesized Markdown escapes', () => {
-  const fragment = clipboardDataToEditorInput(
-    {
-      getData: (format) => (format === 'text/plain' ? '# heading\n* item *' : ''),
-    },
-    true
-  );
+  const fragment = clipboardDataToEditorInput({
+    getData: (format) => (format === 'text/plain' ? '# heading\n* item *' : ''),
+  });
 
   assert.deepEqual(fragment, [
     { type: BlockType.Paragraph, children: [{ text: '# heading' }] },

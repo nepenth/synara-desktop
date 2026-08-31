@@ -231,12 +231,12 @@ export const MessageEditor = as<'div', MessageEditorProps>(
 
     const handlePaste: ClipboardEventHandler = useCallback(
       (evt) => {
-        const insertion = insertClipboardData(editor, evt.clipboardData, isMarkdown);
+        const insertion = insertClipboardData(editor, evt.clipboardData);
         if (shouldPreventDefaultForClipboardInsert(insertion)) {
           evt.preventDefault();
         }
       },
-      [editor, isMarkdown]
+      [editor]
     );
 
     const handleCloseAutocomplete = useCallback(() => {

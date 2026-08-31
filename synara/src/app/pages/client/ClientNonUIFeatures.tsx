@@ -39,7 +39,6 @@ import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
 import {
   getPlatformNotificationSummary,
-  isDesktopPlatform,
   registerPlatformAgentActionListener,
   registerPlatformNotificationActionListener,
   setPlatformBadgeCount,

@@ -557,8 +557,7 @@ const boundedPlainClipboardResult = (
 export const MAX_EDITOR_CLIPBOARD_CHARS = 1_000_000;
 
 const readClipboardDataToEditorInput = (
-  clipboardData: ClipboardDataReader,
-  _markdown?: boolean
+  clipboardData: ClipboardDataReader
 ): ClipboardEditorInputResult => {
   const rawHtml = clipboardData.getData('text/html');
   const htmlRecognized = rawHtml.length > 0;
@@ -593,19 +592,17 @@ const readClipboardDataToEditorInput = (
 };
 
 export const clipboardDataToEditorInput = (
-  clipboardData: ClipboardDataReader,
-  markdown?: boolean
+  clipboardData: ClipboardDataReader
 ): Descendant[] | undefined => {
-  const result = readClipboardDataToEditorInput(clipboardData, markdown);
+  const result = readClipboardDataToEditorInput(clipboardData);
   return result.status === ClipboardInsertResult.Inserted ? result.fragment : undefined;
 };
 
 export const insertClipboardData = (
   editor: SlateEditor,
-  clipboardData: ClipboardDataReader,
-  markdown?: boolean
+  clipboardData: ClipboardDataReader
 ): ClipboardInsertResult => {
-  const result = readClipboardDataToEditorInput(clipboardData, markdown);
+  const result = readClipboardDataToEditorInput(clipboardData);
   if (result.status !== ClipboardInsertResult.Inserted) return result.status;
 
   Transforms.insertFragment(editor, result.fragment);

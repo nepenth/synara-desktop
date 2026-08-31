@@ -300,18 +300,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           const { clipboardData } = evt;
           void handleNativeClipboardImage().then((handled) => {
             if (!handled) {
-              insertClipboardData(editor, clipboardData, isMarkdown);
+              insertClipboardData(editor, clipboardData);
             }
           });
           return;
         }
 
-        const insertion = insertClipboardData(editor, evt.clipboardData, isMarkdown);
+        const insertion = insertClipboardData(editor, evt.clipboardData);
         if (shouldPreventDefaultForClipboardInsert(insertion)) {
           evt.preventDefault();
         }
       },
-      [editor, handleFiles, handleNativeClipboardImage, isMarkdown]
+      [editor, handleFiles, handleNativeClipboardImage]
     );
     useEffect(() => {
       const handleWindowPaste = (evt: ClipboardEvent) => {
