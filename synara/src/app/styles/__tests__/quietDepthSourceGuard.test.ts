@@ -76,6 +76,7 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   const home = source('src/app/pages/client/home/Home.tsx');
   const notes = source('src/app/features/room/room-notes/RoomNotesPanel.tsx');
   const notesCss = source('src/app/features/room/room-notes/RoomNotesPanel.css.ts');
+  const sidebar = source('src/app/components/sidebar/SidebarItem.tsx');
 
   assert.match(composer, /height: toRem\(50\)/);
   assert.doesNotMatch(composer, /EditorFloatingOptions/);
@@ -88,4 +89,6 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   assert.match(notesCss, /quietInteractiveSurface/);
   assert.match(notesCss, /boxShadow: raisedShadow/);
   assert.match(notesCss, /prefers-contrast: more/);
+  assert.match(sidebar, /interactive && depthCss\.quietInteractiveSurface/);
+  assert.match(sidebar, /aria-current=\{interactive && active \? 'page' : undefined\}/);
 });

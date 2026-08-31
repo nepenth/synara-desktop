@@ -12,9 +12,8 @@ use eyeball_im::VectorDiff;
 use futures_util::{stream, StreamExt};
 use matrix_sdk::{
     event_cache::PaginationStatus,
-    room::{calls::CallError, edit::EditedContent},
+    room::{calls::CallError, edit::EditedContent, Receipts},
     ruma::{
-        api::client::receipt::create_receipt::v3::ReceiptType,
         events::{
             poll::unstable_response::UnstablePollResponseEventContent,
             reaction::ReactionEventContent,
@@ -78,6 +77,40 @@ const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+
+fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
+    Receipts::new()
+        .fully_read_marker(Some(event_id.clone()))
+        .private_read_receipt(Some(event_id))
+}
+
+/// Advance the private receipt and fully-read marker to the same latest remote
+/// event through the SDK owner. This avoids relying on a local unread-flag
+/// change to hide a server count and never targets a local echo without an id.
+async fn mark_live_timeline_read(timeline: &Timeline) -> Result<bool, &'static str> {
+    // Use the same SDK-owned latest-event resolver as Timeline::mark_as_read;
+    // hand-walking visible items diverges for local echoes, focus, and threads.
+    let latest_event_id = timeline.latest_event_id().await;
+    let Some(event_id) = latest_event_id else {
+        // The SDK's own mark-as-read contract clears an explicit unread flag
+        // when a live timeline has no receipt-capable remote event.
+        timeline
+            .room()
+            .set_unread_flag(false)
+            .await
+            .map_err(|_| "v-timeline-clear-empty-unread-failed")?;
+        return Ok(false);
+    };
+    timeline
+        // Pinned matrix-sdk-ui 0.18 invariant: `Timeline::send_multiple_receipts`
+        // clears the SDK room's unread flag after a submitted marker update and
+        // also when receipt deduplication removes every unchanged marker. Keep
+        // this evidence in the adjacent regression test when upgrading the SDK.
+        .send_multiple_receipts(exact_read_receipts(event_id))
+        .await
+        .map_err(|_| "v-timeline-send-read-markers-failed")?;
+    Ok(true)
+}
 
 fn remember_agent_approval_decision(
     decisions: &mut VecDeque<(String, String)>,
@@ -1506,18 +1539,7 @@ impl NativeTimelineRegistry {
             .timeline
             .clone();
         let receipt_sent = match request.action {
-            NativeTimelineReadAction::MarkRead => {
-                let sent = timeline
-                    .mark_as_read(ReceiptType::ReadPrivate)
-                    .await
-                    .map_err(|_| "v-timeline-view-mark-read-failed")?;
-                timeline
-                    .room()
-                    .set_unread_flag(false)
-                    .await
-                    .map_err(|_| "v-timeline-view-clear-unread-failed")?;
-                Some(sent)
-            }
+            NativeTimelineReadAction::MarkRead => Some(mark_live_timeline_read(&timeline).await?),
             NativeTimelineReadAction::MarkUnread => {
                 timeline
                     .room()
@@ -1558,13 +1580,9 @@ impl NativeTimelineRegistry {
                     .ok_or("d0.3-timeline-open-failed")?
                     .timeline
                     .clone();
-                timeline
-                    .mark_as_read(ReceiptType::ReadPrivate)
+                mark_live_timeline_read(&timeline)
                     .await
                     .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
-                room.set_unread_flag(false)
-                    .await
-                    .map_err(|_| "v-rooms-room-read-state-clear-unread-failed")?;
             }
             NativeTimelineReadAction::MarkUnread => {
                 room.set_unread_flag(true)
@@ -3411,10 +3429,35 @@ mod tests {
         let source = include_str!("live.rs");
         assert!(source.contains("pub async fn set_room_read_state"));
         assert!(source.contains("self.open(client, &room_id_string).await?"));
-        assert!(source.contains("mark_as_read(ReceiptType::ReadPrivate)"));
+        assert!(source.contains("mark_live_timeline_read(&timeline)"));
+        assert!(source.contains("fully_read_marker(Some(event_id.clone()))"));
+        assert!(source.contains("private_read_receipt(Some(event_id))"));
         assert!(source.contains("set_unread_flag(false)"));
         assert!(source.contains("set_unread_flag(true)"));
         assert!(source.contains("v-rooms-room-read-state-room-not-found"));
+    }
+
+    #[test]
+    fn exact_read_receipts_target_one_event_for_server_counts_and_private_receipt() {
+        let event_id = OwnedEventId::try_from("$tail:example.org").unwrap();
+        let receipts = exact_read_receipts(event_id.clone());
+        assert_eq!(receipts.fully_read.as_ref(), Some(&event_id));
+        assert_eq!(receipts.private_read_receipt.as_ref(), Some(&event_id));
+        assert!(receipts.public_read_receipt.is_none());
+
+        let cargo_lock = include_str!("../../../../../Cargo.lock");
+        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.18.0\""));
+        let source = include_str!("live.rs");
+        assert!(source.contains("Pinned matrix-sdk-ui 0.18 invariant"));
+        assert!(source.contains("also when receipt deduplication removes every unchanged marker"));
+        let mark_read_start = source.find("async fn mark_live_timeline_read").unwrap();
+        let mark_read_end = source[mark_read_start..]
+            .find("fn remember_agent_approval_decision")
+            .map(|offset| mark_read_start + offset)
+            .unwrap();
+        let mark_read_source = &source[mark_read_start..mark_read_end];
+        assert!(mark_read_source.contains("let latest_event_id = timeline.latest_event_id().await"));
+        assert!(!mark_read_source.contains("items.iter().rev().find_map"));
     }
 
     #[test]

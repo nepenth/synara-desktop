@@ -195,6 +195,12 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["Reply"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["React"].exists)
         XCTAssertTrue(app.buttons["Pin to Notes"].exists)
+        XCTAssertTrue(app.buttons["Select Text"].exists)
+
+        app.buttons["Select Text"].tap()
+        XCTAssertTrue(app.navigationBars["Select Text"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["Copy All"].exists)
+        XCTAssertTrue(app.buttons["Done"].exists)
     }
 
     func testComposerRetainsEveryCharacterDuringBusyTimelineUpdates() {

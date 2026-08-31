@@ -3491,6 +3491,7 @@ private struct ThreadHeader: View {
 private struct ThreadMessageRow: View {
     let item: TimelineItem
     let onPinToNotes: () -> Void
+    @State private var isSelectingText = false
 
     var body: some View {
         VStack(spacing: SynaraSpacing.medium) {
@@ -3531,11 +3532,15 @@ private struct ThreadMessageRow: View {
                 .padding(.leading, 46)
         }
         .contextMenu {
-            if let copyText = TimelineMessageCopy.payload(for: item) {
-                Button("Copy") {
-                    TimelineMessageCopy.copyToPasteboard(copyText)
+            if let copyPayload = TimelineMessageCopy.payload(for: item) {
+                Button("Copy", systemImage: "doc.on.doc") {
+                    TimelineMessageCopy.copyToPasteboard(copyPayload)
                 }
                 .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+                Button("Select Text", systemImage: "text.cursor") {
+                    isSelectingText = true
+                }
+                .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
             }
             if item.serverEventID != nil {
                 Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
@@ -3544,6 +3549,11 @@ private struct ThreadMessageRow: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("ThreadItem-\(item.eventID)")
+        .sheet(isPresented: $isSelectingText) {
+            if let copyPayload = TimelineMessageCopy.payload(for: item) {
+                MessageTextSelectionSheet(payload: copyPayload)
+            }
+        }
     }
 
     @ViewBuilder
@@ -3575,6 +3585,82 @@ private struct ThreadMessageRow: View {
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
         }
+    }
+}
+
+private struct MessageTextSelectionSheet: View {
+    let payload: TimelineMessageCopy.Payload
+    @Environment(\.dismiss) private var dismiss
+    @State private var revealsSpoilers = false
+
+    var body: some View {
+        let projection = selectionProjection
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: SynaraSpacing.medium) {
+                    if projection.containsSpoilers {
+                        Button(
+                            revealsSpoilers ? "Hide Spoilers" : "Reveal Spoilers",
+                            systemImage: revealsSpoilers ? "eye.slash" : "eye"
+                        ) {
+                            revealsSpoilers.toggle()
+                        }
+                        .buttonStyle(.bordered)
+                        .accessibilityHint(
+                            revealsSpoilers
+                                ? "Conceals spoiler text again"
+                                : "Makes spoiler text available for selection"
+                        )
+                    }
+
+                    Text(attributedRichText(projection.richText, includeLinks: false))
+                        .font(SynaraTypography.messageBody)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .lineSpacing(2.5)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityLabel(projection.richText.plainText)
+                        .accessibilityHint("Select and copy any part of this message")
+                }
+                .padding(SynaraSpacing.large)
+            }
+            .background(SynaraColor.surface)
+            .navigationTitle("Select Text")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Done", action: dismiss.callAsFunction)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Copy All", systemImage: "doc.on.doc") {
+                        TimelineMessageCopy.copyToPasteboard(payload)
+                    }
+                    .disabled(projection.containsSpoilers && revealsSpoilers == false)
+                    .accessibilityHint(
+                        projection.containsSpoilers && revealsSpoilers == false
+                            ? "Reveal spoilers before copying the complete message"
+                            : "Copies the complete message with its formatting"
+                    )
+                }
+            }
+        }
+        .presentationDragIndicator(.visible)
+        .accessibilityIdentifier("MessageTextSelectionSheet")
+    }
+
+    private var selectionProjection: MatrixHTMLRenderer.SelectionProjection {
+        guard let html = payload.html else {
+            return .init(
+                richText: .init(runs: [.init(text: payload.plainText, style: [], link: nil)]),
+                containsSpoilers: false
+            )
+        }
+        return MatrixHTMLRenderer.selectionProjection(
+            body: payload.plainText,
+            html: html,
+            revealingSpoilers: revealsSpoilers
+        )
     }
 }
 
@@ -3941,7 +4027,8 @@ private struct MatrixQuoteBlockView: View {
 
 private func attributedRichText(
     _ richText: MatrixHTMLRenderer.RichText,
-    includeHeadingFonts: Bool = true
+    includeHeadingFonts: Bool = true,
+    includeLinks: Bool = true
 ) -> AttributedString {
     var output = AttributedString()
     for run in richText.runs {
@@ -3989,7 +4076,9 @@ private func attributedRichText(
         if let color = run.backgroundColorHex.flatMap(matrixColor(hex:)) {
             value.backgroundColor = color
         }
-        value.link = run.link
+        if includeLinks {
+            value.link = run.link
+        }
         output.append(value)
     }
     return output
@@ -4746,6 +4835,7 @@ private struct TimelineRow: View {
     let onAgentApprovalReaction: (String) -> Void
     let onRetryFailedSend: () -> Void
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var isSelectingText = false
 
     var body: some View {
         let row = HStack(alignment: .top, spacing: rowHorizontalSpacing) {
@@ -4810,6 +4900,11 @@ private struct TimelineRow: View {
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
         .accessibilityIdentifier("TimelineItem-\(item.eventID)")
+        .sheet(isPresented: $isSelectingText) {
+            if let copyPayload = TimelineMessageCopy.payload(for: item) {
+                MessageTextSelectionSheet(payload: copyPayload)
+            }
+        }
 
         let timestampRevealOffset = isGroupedWithPrevious && isTimestampRevealed ? -timestampRevealWidth : 0
         let timestampRevealProgress = isGroupedWithPrevious && isTimestampRevealed ? 1.0 : 0.0
@@ -4849,30 +4944,34 @@ private struct TimelineRow: View {
 
     @ViewBuilder
     private var messageActions: some View {
-        if let copyText = TimelineMessageCopy.payload(for: item) {
-            Button("Copy") {
-                TimelineMessageCopy.copyToPasteboard(copyText)
+        if let copyPayload = TimelineMessageCopy.payload(for: item) {
+            Button("Copy", systemImage: "doc.on.doc") {
+                TimelineMessageCopy.copyToPasteboard(copyPayload)
             }
             .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+            Button("Select Text", systemImage: "text.cursor") {
+                isSelectingText = true
+            }
+            .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
         }
         if availability.canReply {
-            Button("Reply", action: onReply)
+            Button("Reply", systemImage: "arrowshape.turn.up.left", action: onReply)
         }
         if replyCount > 0 {
-            Button("Open Thread", action: onOpenThread)
+            Button("Open Thread", systemImage: "bubble.left.and.bubble.right", action: onOpenThread)
         }
         if availability.canEdit {
-            Button("Edit", action: onEdit)
+            Button("Edit", systemImage: "pencil", action: onEdit)
         }
         if availability.canReact {
-            Button("React", action: onReact)
+            Button("React", systemImage: "face.smiling", action: onReact)
         }
         if item.serverEventID != nil {
             Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
                 .accessibilityIdentifier("TimelineItemPinToNotes-\(item.eventID)")
         }
         if availability.canRedact {
-            Button("Redact", role: .destructive, action: onRedact)
+            Button("Redact", systemImage: "trash", role: .destructive, action: onRedact)
         }
     }
 

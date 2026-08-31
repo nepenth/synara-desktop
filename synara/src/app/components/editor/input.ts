@@ -18,7 +18,7 @@ import {
   ParagraphElement,
   UnorderedListElement,
 } from './slate';
-import { createEmoticonElement, createMentionElement } from './utils';
+import { createEmoticonElement, createLinkElement, createMentionElement } from './utils';
 import {
   parseMatrixToRoom,
   parseMatrixToRoomEvent,
@@ -152,8 +152,20 @@ const getInlineElement = (node: ChildNode, processText: ProcessTextCallback): In
 
     if (node.name === 'a') {
       const children = node.childNodes.flatMap((child) => getInlineElement(child, processText));
-      children.unshift({ text: '[' });
-      children.push({ text: `](${node.attribs.href})` });
+      // The Matrix sanitizer removes unsafe href values. In that case retain
+      // only the visible label; never synthesize `(undefined)` into the user's
+      // composer from a discarded clipboard URL.
+      if (!node.attribs.href) return children;
+
+      // A normal safe anchor is an editor link, not literal Markdown source.
+      // Retain marked text leaves so an HTML link such as
+      // `<a><strong>label</strong></a>` remains both linked and bold. Slate
+      // does not permit nested inline elements inside a link, so malformed
+      // anchors containing another inline object degrade to their visible
+      // children rather than manufacturing an invalid editor tree.
+      if (children.every(Text.isText)) {
+        return [createLinkElement(node.attribs.href, children)];
+      }
       return children;
     }
 
@@ -505,30 +517,103 @@ type ClipboardDataReader = {
   getData: (format: string) => string;
 };
 
+export enum ClipboardInsertResult {
+  Inserted = 'inserted',
+  Rejected = 'rejected',
+  Unsupported = 'unsupported',
+}
+
+type ClipboardEditorInputResult =
+  | { status: ClipboardInsertResult.Inserted; fragment: Descendant[] }
+  | { status: ClipboardInsertResult.Rejected | ClipboardInsertResult.Unsupported };
+
+const editorFragmentHasPasteableContent = (fragment: Descendant[]): boolean =>
+  fragment.some((node) => {
+    if (Text.isText(node)) return node.text.length > 0;
+    if (
+      node.type === BlockType.Emoticon ||
+      node.type === BlockType.Mention ||
+      node.type === BlockType.Command
+    ) {
+      return true;
+    }
+    return editorFragmentHasPasteableContent(node.children);
+  });
+
+const boundedPlainClipboardResult = (
+  clipboardData: ClipboardDataReader
+): ClipboardEditorInputResult | undefined => {
+  const plain = clipboardData.getData('text/plain');
+  if (!plain) return undefined;
+  return {
+    status: ClipboardInsertResult.Inserted,
+    fragment: plainToEditorInput(plain.slice(0, MAX_EDITOR_CLIPBOARD_CHARS), false),
+  };
+};
+
+// Keep arbitrary Office/browser clipboard payloads from becoming an
+// unbounded parse on the UI thread. Oversized HTML falls back to its plain
+// alternative; plain text is inserted up to the same explicit ceiling.
+export const MAX_EDITOR_CLIPBOARD_CHARS = 1_000_000;
+
+const readClipboardDataToEditorInput = (
+  clipboardData: ClipboardDataReader,
+  _markdown?: boolean
+): ClipboardEditorInputResult => {
+  const rawHtml = clipboardData.getData('text/html');
+  const htmlRecognized = rawHtml.length > 0;
+  // Check the raw size before trim or parse: both traverse the entire input.
+  // A recognized-but-rejected payload remains owned by this handler so the
+  // browser cannot insert the original unbounded HTML as its default action.
+  if (rawHtml.length > MAX_EDITOR_CLIPBOARD_CHARS) {
+    return boundedPlainClipboardResult(clipboardData) ?? { status: ClipboardInsertResult.Rejected };
+  }
+
+  const html = rawHtml.trim();
+  // Clipboard HTML already carries its formatting semantics. Re-escaping its
+  // text as Markdown both exposes synthetic backslashes in the composer and
+  // can flatten structured lists. Parse the sanitized structure directly.
+  if (html) {
+    const fragment = htmlToEditorInput(html, false);
+    if (editorFragmentHasPasteableContent(fragment)) {
+      return { status: ClipboardInsertResult.Inserted, fragment };
+    }
+    return boundedPlainClipboardResult(clipboardData) ?? { status: ClipboardInsertResult.Rejected };
+  }
+
+  // A paste should reproduce clipboard characters, not mutate them to protect
+  // against a later Markdown pass. Markdown remains an explicit send-time
+  // interpretation controlled by the user's composer setting.
+  const plainResult = boundedPlainClipboardResult(clipboardData);
+  if (plainResult) return plainResult;
+
+  return {
+    status: htmlRecognized ? ClipboardInsertResult.Rejected : ClipboardInsertResult.Unsupported,
+  };
+};
+
 export const clipboardDataToEditorInput = (
   clipboardData: ClipboardDataReader,
   markdown?: boolean
 ): Descendant[] | undefined => {
-  const html = clipboardData.getData('text/html').trim();
-  if (html) return htmlToEditorInput(html, markdown);
-
-  const plain = clipboardData.getData('text/plain');
-  if (plain) return plainToEditorInput(plain, markdown);
-
-  return undefined;
+  const result = readClipboardDataToEditorInput(clipboardData, markdown);
+  return result.status === ClipboardInsertResult.Inserted ? result.fragment : undefined;
 };
 
 export const insertClipboardData = (
   editor: SlateEditor,
   clipboardData: ClipboardDataReader,
   markdown?: boolean
-): boolean => {
-  const fragment = clipboardDataToEditorInput(clipboardData, markdown);
-  if (!fragment) return false;
+): ClipboardInsertResult => {
+  const result = readClipboardDataToEditorInput(clipboardData, markdown);
+  if (result.status !== ClipboardInsertResult.Inserted) return result.status;
 
-  Transforms.insertFragment(editor, fragment);
-  return true;
+  Transforms.insertFragment(editor, result.fragment);
+  return ClipboardInsertResult.Inserted;
 };
+
+export const shouldPreventDefaultForClipboardInsert = (result: ClipboardInsertResult): boolean =>
+  result !== ClipboardInsertResult.Unsupported;
 
 export const plainToEditorInput = (text: string, markdown?: boolean): Descendant[] => {
   const editorNodes: Descendant[] = text.split('\n').map((lineText) => {

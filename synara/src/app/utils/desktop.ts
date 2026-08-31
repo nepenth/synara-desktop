@@ -211,6 +211,11 @@ export type DesktopPerformanceCapabilities = {
   buildLabel?: string;
   fps?: number;
   memoryUsageBytes?: number;
+  webviewEngine?: string;
+  hardwareAccelerationPolicy?: string;
+  smoothScrollingEnabled?: boolean;
+  softwareRenderingOverrideDetected?: boolean;
+  dmabufFastPathDisabled?: boolean;
 };
 
 export type DesktopNotificationPermission =

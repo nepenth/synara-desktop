@@ -1,5 +1,4 @@
 import { useAtomValue } from 'jotai';
-import { isKeyHotkey } from 'is-hotkey';
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { MatrixEventReading } from '../../utils/room';
@@ -41,7 +40,6 @@ import { PerformanceDebugOverlay } from '../../components/performance/Performanc
 import {
   getPlatformNotificationSummary,
   isDesktopPlatform,
-  readPlatformClipboardText,
   registerPlatformAgentActionListener,
   registerPlatformNotificationActionListener,
   setPlatformBadgeCount,
@@ -82,87 +80,6 @@ const getDurableApprovalStorage = (): Storage | null => {
     return null;
   }
 };
-
-const NATIVE_PASTE_EVENT = 'synara://native-paste';
-const TEXT_INPUT_TYPES = new Set(['', 'email', 'password', 'search', 'tel', 'text', 'url']);
-
-type NativeTextPasteTarget = HTMLInputElement | HTMLTextAreaElement | HTMLElement;
-
-const inputEvent = (text: string): Event => {
-  if (typeof InputEvent === 'undefined') {
-    return new Event('input', { bubbles: true });
-  }
-
-  return new InputEvent('input', {
-    bubbles: true,
-    inputType: 'insertFromPaste',
-    data: text,
-  });
-};
-
-const nativeTextPasteTarget = (): NativeTextPasteTarget | undefined => {
-  const activeElement = document.activeElement;
-  if (activeElement instanceof HTMLTextAreaElement) {
-    if (activeElement.disabled || activeElement.readOnly) return undefined;
-    return activeElement;
-  }
-  if (activeElement instanceof HTMLInputElement) {
-    if (activeElement.disabled || activeElement.readOnly) return undefined;
-    if (!TEXT_INPUT_TYPES.has(activeElement.type)) return undefined;
-    return activeElement;
-  }
-  if (activeElement instanceof HTMLElement && activeElement.isContentEditable) {
-    if (activeElement.getAttribute('data-editable-name') === 'RoomInput') return undefined;
-    return activeElement;
-  }
-  return undefined;
-};
-
-const pasteTextIntoTarget = (target: NativeTextPasteTarget, text: string): boolean => {
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-    const start = target.selectionStart ?? target.value.length;
-    const end = target.selectionEnd ?? start;
-    target.setRangeText(text, start, end, 'end');
-    target.dispatchEvent(inputEvent(text));
-    return true;
-  }
-
-  target.focus();
-  return document.execCommand('insertText', false, text);
-};
-
-function DesktopNativeTextPasteFeature() {
-  useEffect(() => {
-    if (!isDesktopPlatform()) return undefined;
-
-    const pasteIntoFocusedTextField = async (evt?: Event) => {
-      const target = nativeTextPasteTarget();
-      if (!target) return false;
-
-      evt?.preventDefault();
-      const text = await readPlatformClipboardText();
-      if (!text) return false;
-
-      return pasteTextIntoTarget(target, text);
-    };
-    const handleNativePasteEvent = (evt: Event) => {
-      void pasteIntoFocusedTextField(evt);
-    };
-    const handleNativePasteKey = (evt: KeyboardEvent) => {
-      if (!isKeyHotkey('mod+v', evt)) return;
-      void pasteIntoFocusedTextField(evt);
-    };
-
-    window.addEventListener(NATIVE_PASTE_EVENT, handleNativePasteEvent);
-    window.addEventListener('keydown', handleNativePasteKey, true);
-    return () => {
-      window.removeEventListener(NATIVE_PASTE_EVENT, handleNativePasteEvent);
-      window.removeEventListener('keydown', handleNativePasteKey, true);
-    };
-  }, []);
-
-  return null;
-}
 
 function SystemEmojiFeature() {
   const [twitterEmoji] = useSetting(settingsAtom, 'twitterEmoji');
@@ -872,7 +789,6 @@ export function ClientNonUIFeatures({ children }: ClientNonUIFeaturesProps) {
       <FaviconUpdater />
       <TrayDoNotDisturbSync />
       <PlatformBadgeAndTrayUpdater />
-      <DesktopNativeTextPasteFeature />
       <DesktopShortcutSync />
       <PlatformAgentActionListener />
       <InviteNotifications />

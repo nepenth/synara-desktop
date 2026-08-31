@@ -140,7 +140,7 @@ export const quietInteractiveSurface = style({
         boxShadow: raisedShadow,
         transform: `translateY(-${toRem(1)})`,
       },
-    '&:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true]':
+    '&:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true], &:not(:disabled):not([aria-disabled=true])[aria-current=page]':
       {
         boxShadow: raisedShadow,
       },
@@ -158,15 +158,16 @@ export const quietInteractiveSurface = style({
       transition: 'none',
       transform: 'none',
       selectors: {
-        '&:hover, &:focus-visible, &[aria-pressed=true], &[aria-selected=true], &:active': {
-          transform: 'none',
-        },
+        '&:hover, &:focus-visible, &[aria-pressed=true], &[aria-selected=true], &[aria-current=page], &:active':
+          {
+            transform: 'none',
+          },
       },
     },
     '(prefers-contrast: more)': {
       boxShadow: 'none',
       selectors: {
-        '&:not(:disabled):not([aria-disabled=true]):hover, &:not(:disabled):not([aria-disabled=true]):focus-visible, &:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true], &:not(:disabled):not([aria-disabled=true]):active':
+        '&:not(:disabled):not([aria-disabled=true]):hover, &:not(:disabled):not([aria-disabled=true]):focus-visible, &:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &:not(:disabled):not([aria-disabled=true])[aria-selected=true], &:not(:disabled):not([aria-disabled=true])[aria-current=page], &:not(:disabled):not([aria-disabled=true]):active':
           {
             boxShadow: 'none',
             outline: `${config.borderWidth.B600} solid var(--synara-depth-contrast-strong-edge)`,

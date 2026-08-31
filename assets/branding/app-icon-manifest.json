@@ -20,6 +20,18 @@
       "colorType": 6,
       "sha256": "e196d6f694472b89b965deba2161422beaaa6c99f666408fa108f39185257b3c"
     },
+    "src-tauri/icons/16x16.png": {
+      "width": 16,
+      "height": 16,
+      "colorType": 6,
+      "sha256": "2de12d7e687e0fade387a7d6e5c50c157cf57e332d503611094bbd1a4a6d6a91"
+    },
+    "src-tauri/icons/24x24.png": {
+      "width": 24,
+      "height": 24,
+      "colorType": 6,
+      "sha256": "fe17f74e8075242e705071a9b6e8744cf0adb226e6015694073ee6ee5fbb1e50"
+    },
     "src-tauri/icons/32x32.png": {
       "width": 32,
       "height": 32,
@@ -32,6 +44,12 @@
       "colorType": 6,
       "sha256": "662c9ffab86c08bdbd6274170a8ca8a7d2a0a0479c4c0cb0d8f482be31ff8f2f"
     },
+    "src-tauri/icons/64x64.png": {
+      "width": 64,
+      "height": 64,
+      "colorType": 6,
+      "sha256": "5401c3e87146c88305247d68a6f9f5c32a74c8a383a871c4162e1b2829ac2951"
+    },
     "src-tauri/icons/128x128.png": {
       "width": 128,
       "height": 128,
@@ -43,6 +61,18 @@
       "height": 256,
       "colorType": 6,
       "sha256": "fa9dc4d59d6409568c44d96412ae7a2cdc56c1c4fa37e09ef63392d875269548"
+    },
+    "src-tauri/icons/256x256.png": {
+      "width": 256,
+      "height": 256,
+      "colorType": 6,
+      "sha256": "fa9dc4d59d6409568c44d96412ae7a2cdc56c1c4fa37e09ef63392d875269548"
+    },
+    "src-tauri/icons/512x512.png": {
+      "width": 512,
+      "height": 512,
+      "colorType": 6,
+      "sha256": "ac14fe0d97ba6f2f49a06a48ec5fe3487f54777bba488090576b10610adeeed9"
     },
     "src-tauri/icons/icon.png": {
       "width": 512,

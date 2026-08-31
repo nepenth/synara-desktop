@@ -23,7 +23,7 @@ export type FormattedText = Text & {
 export type LinkElement = {
   type: BlockType.Link;
   href: string;
-  children: Text[];
+  children: FormattedText[];
 };
 
 export type MentionElement = {

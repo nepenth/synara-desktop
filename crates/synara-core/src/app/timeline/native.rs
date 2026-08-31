@@ -117,8 +117,10 @@ pub struct NativeTimelineReadStateRequest {
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReadStateReadback {
     pub action: NativeTimelineReadAction,
-    /// `None` for an account-data unread-flag change; otherwise whether the
-    /// SDK actually sent a private read receipt.
+    /// `None` for MarkUnread. For MarkRead, `Some(true)` means a receipt-capable
+    /// remote target was resolved and the exact private + fully-read SDK
+    /// operation completed (the SDK may deduplicate network I/O); `Some(false)`
+    /// means no remote target existed and only the SDK unread flag was cleared.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_sent: Option<bool>,
     pub snapshot: TimelineViewSnapshot,
