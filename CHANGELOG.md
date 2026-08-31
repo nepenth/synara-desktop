@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 2.1.23 - 2026-08-31
+
+- Displayed the authenticated Matrix homeserver in the desktop Home header and
+  extended quiet dimensionality to the interactive desktop navigation rail.
+- Hardened Inbox response parsing so malformed server responses produce a
+  controlled error instead of an `e.forEach` crash.
+- Repaired automatic read-state submission around the SDK-owned latest event,
+  including hidden state events, focus changes, manual unread state, and exact
+  private/read-marker receipt targeting.
+- Preserved safe rich-text structure when pasting into desktop composers,
+  including lists, links, and emphasis, while bounding and sanitizing HTML.
+- Added accessible iOS message text selection with formatted clipboard output,
+  complete action icons, safe spoiler concealment, and explicit reveal control.
+- Added complete Linux icon sizes and packaging contracts plus diagnostics for
+  WebKitGTK acceleration policy and software-rendering overrides.
+- See [`docs/releases/v2.1.23.md`](docs/releases/v2.1.23.md) for details.
+
 ## 2.1.22 - 2026-08-30
 
 - Centered the macOS and Linux message composer controls optically within the

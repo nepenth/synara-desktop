@@ -1,0 +1,10 @@
+Synara 2.1.23 improves reliability and cross-client consistency.
+
+What changed:
+- Added Select Text to iOS message actions with accessible formatted copying and safe spoiler handling.
+- Fixed desktop Inbox parsing and automatic room read-state updates.
+- Preserved lists, links, and emphasis when pasting formatted text on desktop.
+- Displayed the connected Matrix homeserver in the desktop Home header.
+- Improved Linux icon packaging and added graphics-path diagnostics.
+
+This build also includes complete macOS, Linux, Rust, Node, and iOS validation.
