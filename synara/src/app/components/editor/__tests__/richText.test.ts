@@ -1,8 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createEditor, Descendant, Element } from 'slate';
+import { readFileSync } from 'node:fs';
+import { createEditor, Descendant, Element, Text } from 'slate';
 import { withHistory } from 'slate-history';
-import { clipboardDataToEditorInput, htmlToEditorInput, insertClipboardData } from '../input';
+import {
+  clipboardDataToEditorInput,
+  ClipboardInsertResult,
+  htmlToEditorInput,
+  insertClipboardData,
+  MAX_EDITOR_CLIPBOARD_CHARS,
+  shouldPreventDefaultForClipboardInsert,
+} from '../input';
 import { indentListItem, outdentListItem, toggleKeyboardShortcut } from '../keyboard';
 import {
   stripEditorMetadataFromCustomHtml,
@@ -511,6 +519,177 @@ test('rich html paste preserves safe block and inline structure', () => {
   ]);
 });
 
+test('rich html paste in Markdown mode preserves structure without visible escape characters', () => {
+  const fragment = clipboardDataToEditorInput({
+    getData: (format) =>
+      format === 'text/html'
+        ? '<p># literal heading marker and *literal stars*</p><ul><li>one</li><li>two</li></ul>'
+        : '',
+  });
+
+  assert.deepEqual(fragment, [
+    {
+      type: BlockType.Paragraph,
+      children: [{ text: '# literal heading marker and *literal stars*' }],
+    },
+    {
+      type: BlockType.UnorderedList,
+      children: [
+        { type: BlockType.ListItem, children: [{ text: 'one' }] },
+        { type: BlockType.ListItem, children: [{ text: 'two' }] },
+      ],
+    },
+  ]);
+});
+
+for (const markdown of [false, true]) {
+  test(`rich html paste preserves safe formatted links with Markdown ${
+    markdown ? 'enabled' : 'disabled'
+  }`, () => {
+    const fragment = clipboardDataToEditorInput({
+      getData: (format) =>
+        format === 'text/html'
+          ? '<p>Read <a href="https://example.org/spec?a=1&amp;b=2"><strong>the spec</strong></a>.</p>'
+          : '',
+    });
+
+    assert.deepEqual(fragment, [
+      {
+        type: BlockType.Paragraph,
+        children: [
+          { text: 'Read ' },
+          {
+            type: BlockType.Link,
+            href: 'https://example.org/spec?a=1&b=2',
+            children: [{ text: 'the spec', bold: true }],
+          },
+          { text: '.' },
+        ],
+      },
+    ]);
+
+    const output = trimCustomHtml(
+      toMatrixCustomHTML(fragment ?? [], { allowTextFormatting: true })
+    );
+    assert.equal(
+      output,
+      'Read <a href="https://example.org/spec?a=1&amp;b=2"><strong>the spec</strong></a>.'
+    );
+    assert.deepEqual(htmlToEditorInput(output, markdown), fragment);
+  });
+}
+
+test('plain clipboard text is inserted byte-for-byte without synthesized Markdown escapes', () => {
+  const fragment = clipboardDataToEditorInput({
+    getData: (format) => (format === 'text/plain' ? '# heading\n* item *' : ''),
+  });
+
+  assert.deepEqual(fragment, [
+    { type: BlockType.Paragraph, children: [{ text: '# heading' }] },
+    { type: BlockType.Paragraph, children: [{ text: '* item *' }] },
+  ]);
+});
+
+test('oversized clipboard HTML falls back to bounded plain text', () => {
+  const fragment = clipboardDataToEditorInput({
+    getData: (format) => {
+      if (format === 'text/html') return `<p>${'x'.repeat(MAX_EDITOR_CLIPBOARD_CHARS)}</p>`;
+      if (format === 'text/plain') return `${'a'.repeat(MAX_EDITOR_CLIPBOARD_CHARS)}overflow`;
+      return '';
+    },
+  });
+
+  assert.equal(fragment?.length, 1);
+  const [paragraph] = fragment ?? [];
+  assert.equal(Element.isElement(paragraph), true);
+  if (!Element.isElement(paragraph)) throw new Error('Expected bounded paragraph');
+  const [boundedText] = paragraph.children;
+  assert.equal(Text.isText(boundedText), true);
+  if (!Text.isText(boundedText)) throw new Error('Expected bounded text leaf');
+  assert.equal(boundedText.text.length, MAX_EDITOR_CLIPBOARD_CHARS);
+  assert.equal(boundedText.text.includes('overflow'), false);
+});
+
+for (const [name, html] of [
+  ['style-only HTML', '<style>.message { color: red; }</style>'],
+  ['stripped image HTML', '<p><img /></p>'],
+  [
+    'empty Office wrapper HTML',
+    '<html><head><meta name="Generator" content="Microsoft Word"><style>p{margin:0}</style></head><body><!--StartFragment--><o:p></o:p><!--EndFragment--></body></html>',
+  ],
+] as const) {
+  test(`${name} falls back to its usable plain clipboard flavor`, () => {
+    const fragment = clipboardDataToEditorInput({
+      getData: (format) => {
+        if (format === 'text/html') return html;
+        if (format === 'text/plain') return 'Visible fallback';
+        return '';
+      },
+    });
+
+    assert.deepEqual(fragment, [
+      { type: BlockType.Paragraph, children: [{ text: 'Visible fallback' }] },
+    ]);
+  });
+}
+
+test('oversized clipboard HTML without plain text is rejected and consumed', () => {
+  const editor = withHistory(createEditor());
+  editor.children = [{ type: BlockType.Paragraph, children: [{ text: '' }] }];
+  editor.selection = {
+    anchor: { path: [0, 0], offset: 0 },
+    focus: { path: [0, 0], offset: 0 },
+  };
+  const clipboardData = {
+    getData: (format: string) =>
+      format === 'text/html' ? `<p>${'x'.repeat(MAX_EDITOR_CLIPBOARD_CHARS)}</p>` : '',
+  };
+
+  assert.equal(clipboardDataToEditorInput(clipboardData), undefined);
+  const result = insertClipboardData(editor, clipboardData);
+  assert.equal(result, ClipboardInsertResult.Rejected);
+  assert.equal(shouldPreventDefaultForClipboardInsert(result), true);
+  assert.deepEqual(editor.children, [{ type: BlockType.Paragraph, children: [{ text: '' }] }]);
+});
+
+test('unsupported clipboard data remains available to the platform default handler', () => {
+  const editor = withHistory(createEditor());
+  const result = insertClipboardData(editor, { getData: () => '' });
+
+  assert.equal(result, ClipboardInsertResult.Unsupported);
+  assert.equal(shouldPreventDefaultForClipboardInsert(result), false);
+});
+
+test('room composer and message editor consume recognized rejected clipboard payloads', () => {
+  const sources = [
+    readFileSync('src/app/features/room/RoomInput.tsx', 'utf8'),
+    readFileSync('src/app/features/room/message/MessageEditor.tsx', 'utf8'),
+  ];
+
+  sources.forEach((source) => {
+    assert.match(source, /const insertion = insertClipboardData\(/);
+    assert.match(source, /shouldPreventDefaultForClipboardInsert\(insertion\)/);
+    assert.match(
+      source,
+      /if \(shouldPreventDefaultForClipboardInsert\(insertion\)\) \{\s*evt\.preventDefault\(\)/
+    );
+  });
+});
+
+test('clipboard HTML is reduced through the Matrix allowlist before editor insertion', () => {
+  const fragment = clipboardDataToEditorInput({
+    getData: (format) =>
+      format === 'text/html'
+        ? '<style>body{display:none}</style><p style="position:fixed">safe<script>alert(1)</script></p><a href="javascript:alert(1)">link</a>'
+        : '',
+  });
+
+  assert.deepEqual(fragment, [
+    { type: BlockType.Paragraph, children: [{ text: 'safe' }] },
+    { type: BlockType.Paragraph, children: [{ text: 'link' }] },
+  ]);
+});
+
 test('plain text paste falls back to paragraph lines', () => {
   const editor = withHistory(createEditor());
   editor.children = [
@@ -528,7 +707,7 @@ test('plain text paste falls back to paragraph lines', () => {
     getData: (format) => (format === 'text/plain' ? 'alpha\nbeta' : ''),
   });
 
-  assert.equal(handled, true);
+  assert.equal(handled, ClipboardInsertResult.Inserted);
   assert.deepEqual(editor.children, [
     {
       type: BlockType.Paragraph,
@@ -664,9 +843,11 @@ test('golden rich content contract covers Matrix HTML, fallback text, and edit i
           children: [{ text: '' }],
         },
         { text: ' using ' },
-        { text: '[' },
-        { text: 'the spec' },
-        { text: '](https://example.org/spec)' },
+        {
+          type: BlockType.Link,
+          href: 'https://example.org/spec',
+          children: [{ text: 'the spec' }],
+        },
         { text: ' and keep ' },
         { text: 'classified', spoiler: true },
         { text: '.' },

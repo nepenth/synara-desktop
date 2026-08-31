@@ -105,6 +105,50 @@ test('native live tail marks the open stream read through the native owner', () 
   assert.doesNotMatch(presenter, /setRoomReadMarkers/);
 });
 
+test('native live-tail receipts persist until event-driven painted-bottom proof and cancel cleanly', () => {
+  assert.match(presenter, /requestAnimationFrame\(markPaintedTailRead\)/);
+  assert.match(
+    presenter,
+    /scrollEl\.scrollHeight - scrollEl\.scrollTop - scrollEl\.clientHeight <= 8/
+  );
+  assert.match(presenter, /document\.visibilityState === 'visible'/);
+  assert.match(presenter, /document\.hasFocus\(\)/);
+  assert.match(presenter, /cancelAnimationFrame\(animationFrame\)/);
+  assert.match(presenter, /liveTailMarkGenerationRef\.current !== generation/);
+  assert.match(presenter, /new ResizeObserver\(requestPaintCheck\)/);
+  assert.match(presenter, /new MutationObserver\(\(\) =>/);
+  assert.match(presenter, /scrollEl\.addEventListener\('scroll', requestPaintCheck/);
+  assert.doesNotMatch(presenter, /paintAttempts|paintAttempts < \d/);
+  assert.doesNotMatch(presenter, /attributes: true/);
+});
+
+test('read target comes from the unfiltered native snapshot while paint uses the filtered UI', () => {
+  assert.match(
+    presenter,
+    /latestNativeReadEventId\(readyState\?\.snapshot\.rows\.map\(rowEventId\) \?\? \[\]\)/
+  );
+  assert.match(presenter, /const rows = useMemo\(\(\) => \{/);
+  assert.match(presenter, /hideMembershipEvents && row\.kind === 'membership'/);
+});
+
+test('blur before paint can reattach while blur after submission cannot duplicate the receipt', () => {
+  const effectStart = presenter.indexOf('if (!liveTailMarkReadKey)');
+  const paintProof = presenter.indexOf('if (!paintedAtBottom) return;', effectStart);
+  const submittedKeyWrite = presenter.indexOf(
+    'liveTailSubmittedKeyRef.current = liveTailMarkReadKey',
+    effectStart
+  );
+  assert.ok(effectStart >= 0);
+  assert.ok(paintProof > effectStart);
+  assert.ok(submittedKeyWrite > paintProof);
+  assert.match(presenter, /if \(liveTailSubmittedKeyRef\.current === liveTailMarkReadKey\) return/);
+  assert.match(presenter, /window\.addEventListener\('focus', updateDocumentActive\)/);
+  assert.doesNotMatch(
+    presenter.slice(effectStart, paintProof),
+    /SubmittedKeyRef\.current = liveTailMarkReadKey/
+  );
+});
+
 test('room read state stays a single contextual overflow action', () => {
   const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
 
@@ -116,7 +160,8 @@ test('room read state stays a single contextual overflow action', () => {
 test('native timeline honors hide membership, hide activity receipts, and message spacing', () => {
   assert.match(presenter, /hideMembershipEvents && row\.kind === 'membership'/);
   assert.match(presenter, /hideNickAvatarEvents && row\.kind === 'state'/);
-  assert.match(presenter, /hideActivity \|\| !liveTailMarkReadKey/);
+  assert.match(presenter, /hideActivity,/);
+  assert.match(presenter, /nativeLiveReadTarget/);
   assert.match(presenter, /if \(!hideActivity\) \{/);
   assert.match(presenter, /messageSpacing=\{messageSpacing\}/);
 });

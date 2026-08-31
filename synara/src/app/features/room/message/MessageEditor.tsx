@@ -40,6 +40,7 @@ import {
   getPrevWorldRange,
   htmlToEditorInput,
   insertClipboardData,
+  shouldPreventDefaultForClipboardInsert,
   moveCursor,
   plainToEditorInput,
   toMatrixCustomHTML,
@@ -230,11 +231,12 @@ export const MessageEditor = as<'div', MessageEditorProps>(
 
     const handlePaste: ClipboardEventHandler = useCallback(
       (evt) => {
-        if (insertClipboardData(editor, evt.clipboardData, isMarkdown)) {
+        const insertion = insertClipboardData(editor, evt.clipboardData);
+        if (shouldPreventDefaultForClipboardInsert(insertion)) {
           evt.preventDefault();
         }
       },
-      [editor, isMarkdown]
+      [editor]
     );
 
     const handleCloseAutocomplete = useCallback(() => {

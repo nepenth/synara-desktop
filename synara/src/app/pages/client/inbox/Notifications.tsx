@@ -15,27 +15,11 @@ import {
   toRem,
 } from 'folds';
 import { useSearchParams } from 'react-router-dom';
-/** Structural mirrors of the js-sdk notifications wire types (fields read here). */
-type NotificationEventReading = {
-  event_id: string;
-  type: string;
-  sender: string;
-  origin_server_ts: number;
-  content: Record<string, any>;
-  unsigned?: Record<string, any>;
-  [key: string]: any;
-};
-type NotificationReading = {
-  event: NotificationEventReading;
-  room_id: string;
-  ts?: number;
-  read?: boolean;
-  [key: string]: unknown;
-};
-type NotificationsResponseReading = {
-  notifications: NotificationReading[];
-  next_token?: string;
-};
+import {
+  normalizeNotificationsResponse,
+  type NotificationEventReading,
+  type NotificationReading,
+} from './notificationResponse';
 type NotificationsRoomReading = EventedRoomReading & {
   findEventById(eventId: string): MatrixEventReading | undefined;
 };
@@ -175,11 +159,13 @@ const useNotificationTimeline = (
   const fetchNotifications = useCallback(
     (from?: string, limit?: number, only?: 'highlight') => {
       const queryParams = { from, limit, only };
-      return mx.http.authedRequest<NotificationsResponseReading>(
-        'GET' as unknown as Parameters<typeof mx.http.authedRequest>[0],
-        '/notifications',
-        queryParams
-      );
+      return mx.http
+        .authedRequest<unknown>(
+          'GET' as unknown as Parameters<typeof mx.http.authedRequest>[0],
+          '/notifications',
+          queryParams
+        )
+        .then(normalizeNotificationsResponse);
     },
     [mx]
   );

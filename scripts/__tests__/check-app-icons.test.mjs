@@ -9,7 +9,7 @@ test("reviewed app icons satisfy every platform contract", () => {
   const manifest = JSON.parse(
     readFileSync("assets/branding/app-icon-manifest.json", "utf8")
   );
-  assert.equal(Object.keys(files).length, 35);
+  assert.equal(Object.keys(files).length, 40);
   assert.deepEqual(
     Object.keys(files).sort(),
     Object.keys(manifest.files).sort()

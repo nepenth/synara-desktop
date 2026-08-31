@@ -69,6 +69,7 @@ import {
   getBeginCommand,
   trimCommand,
   getMentions,
+  shouldPreventDefaultForClipboardInsert,
   insertClipboardData,
 } from '../../components/editor';
 import { EmojiBoard } from '../../components/emoji-board';
@@ -123,11 +124,7 @@ import { useRoomCreatorsTag } from '../../hooks/useRoomCreatorsTag';
 import { usePowerLevelTags } from '../../hooks/usePowerLevelTags';
 import { useComposingCheck } from '../../hooks/useComposingCheck';
 import { useClientConfig } from '../../hooks/useClientConfig';
-import {
-  isDesktopPlatform,
-  readPlatformClipboardImage,
-  readPlatformClipboardText,
-} from '../../platform';
+import { isDesktopPlatform, readPlatformClipboardImage } from '../../platform';
 import { gifPickerEnabled, gifSearchAvailable } from '../../utils/gifProvider';
 import type { GifResult } from '../../utils/gifProvider';
 import { GifPicker } from './gif/GifPicker';
@@ -154,8 +151,6 @@ import {
   hasTrailingAttachmentText,
   makeOrReuseAttachmentSendPlan,
 } from './attachmentSendPlan';
-
-const NATIVE_PASTE_EVENT = 'synara://native-paste';
 
 interface RoomInputProps {
   editor: Editor;
@@ -291,52 +286,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
       return false;
     }, [handleFiles]);
-    const roomInputHasFocus = useCallback((): boolean => {
-      const activeElement = document.activeElement;
-      if (
-        activeElement instanceof HTMLElement &&
-        activeElement.getAttribute('data-editable-name') === 'RoomInput'
-      ) {
-        return true;
-      }
-
-      try {
-        return ReactEditor.isFocused(editor);
-      } catch {
-        return false;
-      }
-    }, [editor]);
-    const roomInputPasteAvailable = useCallback((): boolean => {
-      const portalContainer = document.getElementById('portalContainer');
-      if (portalContainer && portalContainer.children.length > 0) return false;
-      if (roomInputHasFocus()) return true;
-      return !editableActiveElement();
-    }, [roomInputHasFocus]);
-    const handleNativeClipboardPaste = useCallback(async () => {
-      if (!roomInputPasteAvailable()) return false;
-
-      const imageHandled = await handleNativeClipboardImage();
-      if (imageHandled) return true;
-
-      if (!roomInputHasFocus()) return false;
-
-      const text = await readPlatformClipboardText();
-      if (!text) return false;
-
-      return insertClipboardData(
-        editor,
-        {
-          getData: (format) => (format === 'text/plain' ? text : ''),
-        },
-        isMarkdown
-      );
-    }, [
-      editor,
-      handleNativeClipboardImage,
-      isMarkdown,
-      roomInputHasFocus,
-      roomInputPasteAvailable,
-    ]);
     const handlePaste: ClipboardEventHandler = useCallback(
       (evt) => {
         const files = getDataTransferFiles(evt.clipboardData);
@@ -351,17 +300,18 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           const { clipboardData } = evt;
           void handleNativeClipboardImage().then((handled) => {
             if (!handled) {
-              insertClipboardData(editor, clipboardData, isMarkdown);
+              insertClipboardData(editor, clipboardData);
             }
           });
           return;
         }
 
-        if (insertClipboardData(editor, evt.clipboardData, isMarkdown)) {
+        const insertion = insertClipboardData(editor, evt.clipboardData);
+        if (shouldPreventDefaultForClipboardInsert(insertion)) {
           evt.preventDefault();
         }
       },
-      [editor, handleFiles, handleNativeClipboardImage, isMarkdown]
+      [editor, handleFiles, handleNativeClipboardImage]
     );
     useEffect(() => {
       const handleWindowPaste = (evt: ClipboardEvent) => {
@@ -387,29 +337,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         window.removeEventListener('paste', handleWindowPaste);
       };
     }, [handleFiles, handleNativeClipboardImage]);
-    useEffect(() => {
-      if (!isDesktopPlatform()) return undefined;
-
-      const runNativePaste = (evt?: Event) => {
-        if (!roomInputPasteAvailable()) return;
-        evt?.preventDefault();
-        void handleNativeClipboardPaste();
-      };
-      const handleNativePasteEvent = (evt: Event) => {
-        runNativePaste(evt);
-      };
-      const handleNativePasteKey = (evt: KeyboardEvent) => {
-        if (!isKeyHotkey('mod+v', evt)) return;
-        runNativePaste(evt);
-      };
-
-      window.addEventListener(NATIVE_PASTE_EVENT, handleNativePasteEvent);
-      window.addEventListener('keydown', handleNativePasteKey, true);
-      return () => {
-        window.removeEventListener(NATIVE_PASTE_EVENT, handleNativePasteEvent);
-        window.removeEventListener('keydown', handleNativePasteKey, true);
-      };
-    }, [handleNativeClipboardPaste, roomInputPasteAvailable]);
     const dropZoneVisible = useFileDropZone(handleFiles);
 
     const isComposing = useComposingCheck();

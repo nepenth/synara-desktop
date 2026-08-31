@@ -7,10 +7,15 @@ const manifestPath = "assets/branding/app-icon-manifest.json";
 
 const desktopPNGs = new Map([
   ["assets/branding/synara-app-icon-desktop.png", 1024],
+  ["src-tauri/icons/16x16.png", 16],
+  ["src-tauri/icons/24x24.png", 24],
   ["src-tauri/icons/32x32.png", 32],
   ["src-tauri/icons/48x48.png", 48],
+  ["src-tauri/icons/64x64.png", 64],
   ["src-tauri/icons/128x128.png", 128],
   ["src-tauri/icons/128x128@2x.png", 256],
+  ["src-tauri/icons/256x256.png", 256],
+  ["src-tauri/icons/512x512.png", 512],
   ["src-tauri/icons/icon.png", 512],
   ["src-tauri/icons/StoreLogo.png", 50],
   ["src-tauri/icons/Square30x30Logo.png", 30],
@@ -212,7 +217,45 @@ const inspectSymbolicIcon = () => {
   return { [path]: { sha256: sha256(buffer), bytes: buffer.length } };
 };
 
+const assertLinuxPackagingContract = () => {
+  const tauri = JSON.parse(readFileSync("src-tauri/tauri.conf.json", "utf8"));
+  const bundledIcons = new Set(tauri.bundle?.icon ?? []);
+  for (const size of [16, 24, 32, 48, 64, 128, 256, 512]) {
+    const expected = size === 128 ? "icons/128x128.png" : `icons/${size}x${size}.png`;
+    if (!bundledIcons.has(expected)) {
+      throw new Error(`Tauri bundle must include the exact ${size}×${size} Linux icon (${expected})`);
+    }
+  }
+  if (tauri.bundle?.linux?.deb?.files?.["/usr/share/icons/hicolor/scalable/apps/synara-symbolic.svg"] !== "../assets/branding/synara-symbolic.svg") {
+    throw new Error("Debian bundle must install Synara's scalable symbolic hicolor icon");
+  }
+
+  const pkgbuild = readFileSync("packaging/arch/PKGBUILD", "utf8");
+  for (const size of [16, 24, 32, 48, 64, 128, 256, 512]) {
+    if (!pkgbuild.includes(`/usr/share/icons/hicolor/${size}x${size}/apps/synara.png`)) {
+      throw new Error(`Arch package must install the exact ${size}×${size} hicolor icon`);
+    }
+  }
+  if (!pkgbuild.includes("/usr/share/icons/hicolor/scalable/apps/synara-symbolic.svg")) {
+    throw new Error("Arch package must install Synara's scalable symbolic hicolor icon");
+  }
+
+  const desktopEntry = readFileSync("packaging/arch/synara.desktop", "utf8");
+  if (!/^Icon=synara$/m.test(desktopEntry)) {
+    throw new Error("Linux desktop entry must resolve the packaged hicolor icon by name");
+  }
+  const startupClass = desktopEntry.match(/^StartupWMClass=(.+)$/m)?.[1];
+  if (tauri.app?.enableGtkAppId === true) {
+    if (startupClass !== tauri.identifier) {
+      throw new Error("Linux StartupWMClass must match Tauri's enabled GTK application id");
+    }
+  } else if (startupClass !== tauri.mainBinaryName) {
+    throw new Error("Linux StartupWMClass must match Tauri's main binary ownership route");
+  }
+};
+
 export const inspectAppIcons = () => {
+  assertLinuxPackagingContract();
   const files = {};
   for (const [path, minimumSize] of sourcePNGs) {
     const png = parsePNG(path);

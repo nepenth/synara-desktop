@@ -6,60 +6,29 @@ use crate::desktop;
 use crate::desktop_logging;
 
 pub const MENU_CHECK_FOR_UPDATES: &str = "synara_check_for_updates";
-pub const MENU_PASTE: &str = "synara_paste";
 pub const CHECK_FOR_UPDATES_EVENT: &str = "synara://check-for-updates";
-pub const PASTE_EVENT: &str = "synara://native-paste";
 
 pub fn handle_menu_event<R: Runtime>(app: &AppHandle<R>, event: MenuEvent) {
-    match event.id().as_ref() {
-        MENU_CHECK_FOR_UPDATES => {
-            if let Err(error) = desktop::show_main_window(app) {
-                eprintln!("failed to focus Synara before update check: {error}");
+    if event.id().as_ref() == MENU_CHECK_FOR_UPDATES {
+        if let Err(error) = desktop::show_main_window(app) {
+            eprintln!("failed to focus Synara before update check: {error}");
+            desktop_logging::append_app_log(
+                app,
+                "native",
+                &format!("failed to focus before update check: {error}"),
+            );
+        }
+
+        if let Some(window) = app.get_webview_window(desktop::MAIN_WINDOW_LABEL) {
+            if let Err(error) = window.emit(CHECK_FOR_UPDATES_EVENT, ()) {
+                eprintln!("failed to request update check: {error}");
                 desktop_logging::append_app_log(
                     app,
                     "native",
-                    &format!("failed to focus before update check: {error}"),
+                    &format!("failed to request update check: {error}"),
                 );
             }
-
-            if let Some(window) = app.get_webview_window(desktop::MAIN_WINDOW_LABEL) {
-                if let Err(error) = window.emit(CHECK_FOR_UPDATES_EVENT, ()) {
-                    eprintln!("failed to request update check: {error}");
-                    desktop_logging::append_app_log(
-                        app,
-                        "native",
-                        &format!("failed to request update check: {error}"),
-                    );
-                }
-            }
         }
-        MENU_PASTE => {
-            if let Some(window) = app.get_webview_window(desktop::MAIN_WINDOW_LABEL) {
-                if let Err(error) = window.emit(PASTE_EVENT, ()) {
-                    eprintln!("failed to request native paste: {error}");
-                    desktop_logging::append_app_log(
-                        app,
-                        "native",
-                        &format!("failed to request native paste: {error}"),
-                    );
-                }
-
-                let script = format!(
-                    "window.dispatchEvent(new CustomEvent({}));",
-                    serde_json::to_string(PASTE_EVENT)
-                        .unwrap_or_else(|_| "\"synara://native-paste\"".to_owned())
-                );
-                if let Err(error) = window.eval(script) {
-                    eprintln!("failed to dispatch native paste event: {error}");
-                    desktop_logging::append_app_log(
-                        app,
-                        "native",
-                        &format!("failed to dispatch native paste event: {error}"),
-                    );
-                }
-            }
-        }
-        _ => {}
     }
 }
 
@@ -71,7 +40,6 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R
         true,
         None::<&str>,
     )?;
-    let paste = MenuItem::with_id(app, MENU_PASTE, "Paste", true, Some("CmdOrCtrl+V"))?;
     let app_menu = SubmenuBuilder::new(app, "Synara")
         .about(Some(AboutMetadata {
             name: Some("Synara".to_owned()),
@@ -94,7 +62,14 @@ pub fn menu<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<tauri::menu::Menu<R
         .separator()
         .cut()
         .copy()
-        .item(&paste)
+        // This module is installed only on macOS. The predefined AppKit Paste
+        // command delivers the original clipboard payload to the focused
+        // WKWebView, including HTML; the old custom command re-read only text
+        // and irreversibly discarded lists and inline formatting before the
+        // composer saw the paste. Linux does not install this application
+        // menu, so keyboard paste remains WebKitGTK-owned and does not depend
+        // on muda's unsupported Wayland synthetic-key path.
+        .paste()
         .select_all()
         .build()?;
 

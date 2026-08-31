@@ -73,6 +73,8 @@ import {
 } from '../../../hooks/useRoomsNotificationPreferences';
 import * as css from './Home.css';
 import * as depthCss from '../../../styles/Depth.css';
+import { getActiveSession } from '../../../state/sessionBootstrap';
+import { homeserverDisplayName } from './homeIdentity';
 
 type HomeMenuProps = {
   requestClose: () => void;
@@ -189,6 +191,8 @@ function RoomListSortIcons({
 
 function HomeHeader() {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  const session = getActiveSession();
+  const serverName = homeserverDisplayName(session?.baseUrl, session?.userId);
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     const cords = evt.currentTarget.getBoundingClientRect();
@@ -211,7 +215,7 @@ function HomeHeader() {
               style={{ borderRadius: 6, display: 'block' }}
             />
             <Text size="H4" truncate>
-              Home
+              {serverName}
             </Text>
           </Box>
           <Box>

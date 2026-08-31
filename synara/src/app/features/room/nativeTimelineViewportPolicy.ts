@@ -67,3 +67,66 @@ export const shouldShowJumpToLatest = (
   if (positionKind && positionKind !== 'live_bottom') return true;
   return scrolledToVisualBottom === false;
 };
+
+export type NativeLiveReadTargetInput = {
+  selectedRoomId: string;
+  snapshotRoomId: string;
+  documentActive: boolean;
+  hideActivity: boolean;
+  atLiveBottom: boolean;
+  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | undefined;
+  canMarkRead: boolean;
+  latestVisibleEventId?: string;
+  ownReadEventId?: string;
+  isMarkedUnread: boolean;
+};
+
+/**
+ * Select the exact remote live-tail event that the native SDK owner may mark.
+ * Snapshot revisions are intentionally absent: non-event rebuilds must not
+ * emit duplicate receipts, and background windows must not claim visibility.
+ */
+export const nativeLiveReadTarget = ({
+  selectedRoomId,
+  snapshotRoomId,
+  documentActive,
+  hideActivity,
+  atLiveBottom,
+  positionKind,
+  canMarkRead,
+  latestVisibleEventId,
+  ownReadEventId,
+  isMarkedUnread,
+}: NativeLiveReadTargetInput): string | undefined => {
+  if (
+    selectedRoomId !== snapshotRoomId ||
+    !documentActive ||
+    hideActivity ||
+    !atLiveBottom ||
+    positionKind !== 'live_bottom' ||
+    !canMarkRead ||
+    !isValidEventIdHint(latestVisibleEventId)
+  ) {
+    return undefined;
+  }
+  if (!isMarkedUnread && ownReadEventId === latestVisibleEventId) return undefined;
+  return latestVisibleEventId;
+};
+
+/** A manual unread transition is a distinct intent even on the same tail. */
+export const nativeLiveReadAttemptKey = (
+  roomId: string,
+  eventId: string,
+  isMarkedUnread: boolean
+): string => `${roomId}:${eventId}:${isMarkedUnread ? 'explicit-unread' : 'read-frontier'}`;
+
+/** Resolve the SDK-projected tail without applying presentation filters. */
+export const latestNativeReadEventId = (
+  eventIds: readonly (string | undefined)[]
+): string | undefined => {
+  for (let index = eventIds.length - 1; index >= 0; index -= 1) {
+    const eventId = eventIds[index];
+    if (isValidEventIdHint(eventId)) return eventId;
+  }
+  return undefined;
+};

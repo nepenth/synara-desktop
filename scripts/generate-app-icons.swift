@@ -142,10 +142,15 @@ let desktopMaster = brandingDirectory.appendingPathComponent("synara-app-icon-de
 try writePNG(desktopMaster, size: 1024, roundedDesktop: true, opaque: false)
 
 let desktopPNGs: [(String, Int)] = [
+    ("16x16.png", 16),
+    ("24x24.png", 24),
     ("32x32.png", 32),
     ("48x48.png", 48),
+    ("64x64.png", 64),
     ("128x128.png", 128),
     ("128x128@2x.png", 256),
+    ("256x256.png", 256),
+    ("512x512.png", 512),
     ("icon.png", 512),
     ("StoreLogo.png", 50),
     ("Square30x30Logo.png", 30),

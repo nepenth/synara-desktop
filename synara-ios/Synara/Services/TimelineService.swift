@@ -1,4 +1,5 @@
 import Foundation
+import UniformTypeIdentifiers
 #if canImport(UIKit)
     import UIKit
 #endif
@@ -191,16 +192,30 @@ struct TimelineItem: Identifiable, Equatable {
 }
 
 enum TimelineMessageCopy {
-    static func payload(for item: TimelineItem) -> String? {
+    struct Payload: Equatable {
+        let plainText: String
+        let html: String?
+    }
+
+    static func payload(for item: TimelineItem) -> Payload? {
         guard let body = TimelinePendingReconciler.messageBody(for: item), body.isEmpty == false else {
             return nil
         }
-        return body
+        let html = TimelinePendingReconciler.formattedBody(for: item).flatMap {
+            MatrixHTMLRenderer.sanitizedHTMLForClipboard(html: $0)
+        }
+        return Payload(plainText: body, html: html)
     }
 
-    static func copyToPasteboard(_ text: String) {
+    static func copyToPasteboard(_ payload: Payload) {
         #if canImport(UIKit)
-            UIPasteboard.general.string = text
+            var pasteboardItem: [String: Any] = [
+                UTType.utf8PlainText.identifier: payload.plainText,
+            ]
+            if let html = payload.html {
+                pasteboardItem[UTType.html.identifier] = html
+            }
+            UIPasteboard.general.setItems([pasteboardItem])
         #endif
     }
 }
@@ -1469,6 +1484,11 @@ enum MatrixHTMLRenderer {
         }
     }
 
+    struct SelectionProjection: Equatable {
+        let richText: RichText
+        let containsSpoilers: Bool
+    }
+
     struct CodeBlock: Equatable {
         let code: String
         let language: String?
@@ -1590,6 +1610,112 @@ enum MatrixHTMLRenderer {
             return text.runs.isEmpty ? [] : [.richText(text)]
         }
         return segments
+    }
+
+    /// Produces a bounded, inert HTML clipboard representation from the same
+    /// strict allowlist used by the native message renderer. The plain Matrix
+    /// body remains the authoritative fallback when rich transfer is not
+    /// supported by the receiving app.
+    static func sanitizedHTMLForClipboard(html: String) -> String? {
+        guard html.utf8.count <= maximumRichHTMLBytes else { return nil }
+        let sanitized = html.sanitizingMatrixHTMLForNativeImport()
+        guard sanitized.isEmpty == false,
+              richText(body: "", html: sanitized).plainText.isEmpty == false
+        else {
+            return nil
+        }
+        return sanitized
+    }
+
+    /// Flattens the renderer's typed semantic segments into one selectable
+    /// attributed sequence. Spoiler contents are omitted—not merely visually
+    /// obscured—until the caller explicitly opts in to revealing them.
+    static func selectionProjection(
+        body: String,
+        html: String,
+        revealingSpoilers: Bool
+    ) -> SelectionProjection {
+        var runs: [RichText.Run] = []
+        var containsSpoilers = false
+
+        func append(_ text: RichText) {
+            runs.append(contentsOf: text.runs)
+        }
+
+        func appendSeparator(_ separator: String = "\n") {
+            guard runs.last?.text.hasSuffix(separator) != true else { return }
+            runs.append(.init(text: separator, style: [], link: nil))
+        }
+
+        func appendSpoiler(_ spoiler: SpoilerBlock) {
+            containsSpoilers = true
+            if revealingSpoilers {
+                append(spoiler.content)
+            } else {
+                let placeholder = spoiler.reason.map { "[Spoiler: \($0) · Reveal to select]" }
+                    ?? "[Spoiler · Reveal to select]"
+                runs.append(.init(text: placeholder, style: [.italic], link: nil))
+            }
+        }
+
+        func appendInlineGroup(_ group: InlineGroup) {
+            for piece in group.pieces {
+                switch piece {
+                case let .richText(text):
+                    append(text)
+                case let .spoiler(spoiler):
+                    appendSpoiler(spoiler)
+                }
+            }
+        }
+
+        func appendSegment(_ segment: Segment) {
+            switch segment {
+            case let .richText(text), let .quote(text):
+                append(text)
+            case let .inline(group):
+                appendInlineGroup(group)
+            case let .heading(heading):
+                append(heading.content)
+            case let .code(code):
+                runs.append(.init(text: code.code, style: [.code], link: nil))
+            case let .spoiler(spoiler):
+                appendSpoiler(spoiler)
+            case let .details(details):
+                append(details.summaryContent)
+                appendSeparator()
+                for (index, child) in details.content.enumerated() {
+                    if index > 0 { appendSeparator() }
+                    appendSegment(child)
+                }
+            case let .table(table):
+                if let caption = table.caption {
+                    append(caption)
+                    appendSeparator()
+                }
+                for (rowIndex, row) in table.rows.enumerated() {
+                    if rowIndex > 0 { appendSeparator() }
+                    for (cellIndex, cell) in row.cells.enumerated() {
+                        if cellIndex > 0 {
+                            runs.append(.init(text: "\t", style: [], link: nil))
+                        }
+                        append(cell.content)
+                    }
+                }
+            }
+        }
+
+        for (index, segment) in segments(body: body, html: html).enumerated() {
+            if index > 0 { appendSeparator() }
+            appendSegment(segment)
+        }
+        if runs.isEmpty {
+            runs = [.init(text: body, style: [], link: nil)]
+        }
+        return SelectionProjection(
+            richText: RichText(runs: runs),
+            containsSpoilers: containsSpoilers
+        )
     }
 
     /// Imports the SDK-sanitized Matrix HTML as HTML, never as Markdown. This

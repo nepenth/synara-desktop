@@ -33,6 +33,11 @@ pub struct DesktopPerformanceCapabilities {
     build_revision: &'static str,
     build_branch: &'static str,
     build_label: String,
+    webview_engine: &'static str,
+    hardware_acceleration_policy: String,
+    smooth_scrolling_enabled: Option<bool>,
+    software_rendering_override_detected: bool,
+    dmabuf_fast_path_disabled: bool,
 }
 
 /// User-clicked external URLs are handed to the OS browser, not fetched by Synara.
@@ -90,12 +95,18 @@ pub fn navigate_main_window<R: Runtime>(app: &AppHandle<R>, route: &str) -> taur
 }
 
 pub fn performance_capabilities() -> DesktopPerformanceCapabilities {
+    let webview = crate::desktop_webview_performance::capabilities();
     DesktopPerformanceCapabilities {
         platform: std::env::consts::OS,
         app_version: build_info::app_version(),
         build_revision: build_info::revision(),
         build_branch: build_info::branch(),
         build_label: build_info::label(),
+        webview_engine: webview.webview_engine,
+        hardware_acceleration_policy: webview.hardware_acceleration_policy,
+        smooth_scrolling_enabled: webview.smooth_scrolling_enabled,
+        software_rendering_override_detected: webview.software_rendering_override_detected,
+        dmabuf_fast_path_disabled: webview.dmabuf_fast_path_disabled,
     }
 }
 
@@ -159,6 +170,8 @@ mod tests {
         assert!(!capabilities.build_revision.is_empty());
         assert!(!capabilities.build_branch.is_empty());
         assert!(capabilities.build_label.contains(capabilities.app_version));
+        assert!(!capabilities.webview_engine.is_empty());
+        assert!(!capabilities.hardware_acceleration_policy.is_empty());
     }
 
     #[test]

@@ -68,7 +68,12 @@ import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
-import { shouldShowJumpToLatest } from './nativeTimelineViewportPolicy';
+import {
+  nativeLiveReadAttemptKey,
+  nativeLiveReadTarget,
+  latestNativeReadEventId,
+  shouldShowJumpToLatest,
+} from './nativeTimelineViewportPolicy';
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
 import * as htmlCss from './nativeTimelineHtml.css';
 
@@ -1344,10 +1349,17 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [focusEventId, openingViewport, roomId]
   );
   const controller = useNativeTimelineView(input);
+  const { setReadState } = controller;
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const [actionError, setActionError] = useState<string>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
+  const [documentActive, setDocumentActive] = useState(
+    () =>
+      typeof document !== 'undefined' &&
+      document.visibilityState === 'visible' &&
+      document.hasFocus()
+  );
   const [replyDraft, setReplyDraft] = useState<NativeComposerReplyDraft | undefined>();
   const roomList = useNativeRoomListSnapshot();
   const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
@@ -1370,6 +1382,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       return true;
     });
   }, [hideMembershipEvents, hideNickAvatarEvents, readyState?.snapshot.rows]);
+  const latestRemoteTailEventId = useMemo(
+    () => latestNativeReadEventId(readyState?.snapshot.rows.map(rowEventId) ?? []),
+    [readyState?.snapshot.rows]
+  );
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: useCallback(() => scrollRef.current, []),
@@ -1420,35 +1436,137 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     });
   }, [roomId, rows, virtualizer]);
 
-  const liveTailMarkedKeyRef = useRef<string | undefined>(undefined);
+  const liveTailSubmittedKeyRef = useRef<string | undefined>(undefined);
+  const liveTailMarkGenerationRef = useRef(0);
   useEffect(() => {
+    const updateDocumentActive = () => {
+      setDocumentActive(document.visibilityState === 'visible' && document.hasFocus());
+    };
+    window.addEventListener('focus', updateDocumentActive);
+    window.addEventListener('blur', updateDocumentActive);
+    document.addEventListener('visibilitychange', updateDocumentActive);
+    updateDocumentActive();
+    return () => {
+      window.removeEventListener('focus', updateDocumentActive);
+      window.removeEventListener('blur', updateDocumentActive);
+      document.removeEventListener('visibilitychange', updateDocumentActive);
+    };
+  }, []);
+
+  useEffect(() => {
+    liveTailMarkGenerationRef.current += 1;
     userInitiatedScrollRef.current = false;
     followingLiveRef.current = false;
     programmaticScrollUntilRef.current = 0;
     initialPlacementRef.current = undefined;
     lastTotalSizeRef.current = 0;
     pendingBackwardGrowRef.current = false;
-    liveTailMarkedKeyRef.current = undefined;
+    liveTailSubmittedKeyRef.current = undefined;
     setAtLiveBottom(false);
   }, [roomId]);
 
+  const liveTailReadTarget = readyState
+    ? nativeLiveReadTarget({
+        selectedRoomId: roomId,
+        snapshotRoomId: readyState.snapshot.roomId,
+        documentActive,
+        hideActivity,
+        atLiveBottom,
+        positionKind: readyState.selectedPosition.kind,
+        canMarkRead: readyState.snapshot.capabilities.markRead,
+        latestVisibleEventId: latestRemoteTailEventId,
+        ownReadEventId: readyState.snapshot.readState.ownReadEventId,
+        isMarkedUnread: readyState.snapshot.readState.isMarkedUnread,
+      })
+    : undefined;
   const liveTailMarkReadKey =
-    readyState &&
-    atLiveBottom &&
-    readyState.selectedPosition.kind === 'live_bottom' &&
-    readyState.snapshot.capabilities.markRead
-      ? `${roomId}:${readyState.snapshot.revision}`
+    liveTailReadTarget && readyState
+      ? nativeLiveReadAttemptKey(
+          roomId,
+          liveTailReadTarget,
+          readyState.snapshot.readState.isMarkedUnread
+        )
       : undefined;
+  const liveTailAlreadyRead = Boolean(
+    readyState &&
+      latestRemoteTailEventId &&
+      readyState.snapshot.readState.ownReadEventId === latestRemoteTailEventId &&
+      !readyState.snapshot.readState.isMarkedUnread
+  );
   useEffect(() => {
-    if (hideActivity || !liveTailMarkReadKey) return;
-    if (liveTailMarkedKeyRef.current === liveTailMarkReadKey) return;
-    liveTailMarkedKeyRef.current = liveTailMarkReadKey;
-    void controller.setReadState('mark_read').catch(() => {
-      if (liveTailMarkedKeyRef.current === liveTailMarkReadKey) {
-        liveTailMarkedKeyRef.current = undefined;
+    if (!liveTailMarkReadKey) {
+      if (liveTailAlreadyRead) liveTailSubmittedKeyRef.current = undefined;
+      return;
+    }
+    if (liveTailSubmittedKeyRef.current === liveTailMarkReadKey) return;
+    const generation = liveTailMarkGenerationRef.current;
+    let cancelled = false;
+    let animationFrame = 0;
+    let submitted = false;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) {
+      return;
+    }
+    const markPaintedTailRead = () => {
+      animationFrame = 0;
+      if (cancelled || submitted || liveTailMarkGenerationRef.current !== generation) {
+        return;
       }
+      const paintedAtBottom = Boolean(
+        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 8 &&
+          document.visibilityState === 'visible' &&
+          document.hasFocus()
+      );
+      if (!paintedAtBottom) return;
+      submitted = true;
+      liveTailSubmittedKeyRef.current = liveTailMarkReadKey;
+      void setReadState('mark_read').catch(() => {
+        if (
+          liveTailMarkGenerationRef.current === generation &&
+          liveTailSubmittedKeyRef.current === liveTailMarkReadKey
+        ) {
+          liveTailSubmittedKeyRef.current = undefined;
+          submitted = false;
+        }
+      });
+    };
+    const requestPaintCheck = () => {
+      if (!cancelled && !submitted && animationFrame === 0) {
+        animationFrame = window.requestAnimationFrame(markPaintedTailRead);
+      }
+    };
+    scrollEl.addEventListener('scroll', requestPaintCheck, { passive: true });
+    window.addEventListener('focus', requestPaintCheck);
+    document.addEventListener('visibilitychange', requestPaintCheck);
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(requestPaintCheck);
+    resizeObserver?.observe(scrollEl);
+    const observeContentSize = () => {
+      Array.from(scrollEl.children).forEach((child) => resizeObserver?.observe(child));
+    };
+    observeContentSize();
+    const mutationObserver =
+      typeof MutationObserver === 'undefined'
+        ? undefined
+        : new MutationObserver(() => {
+            observeContentSize();
+            requestPaintCheck();
+          });
+    mutationObserver?.observe(scrollEl, {
+      childList: true,
+      subtree: true,
     });
-  }, [controller, hideActivity, liveTailMarkReadKey]);
+    requestPaintCheck();
+    return () => {
+      cancelled = true;
+      window.cancelAnimationFrame(animationFrame);
+      scrollEl.removeEventListener('scroll', requestPaintCheck);
+      window.removeEventListener('focus', requestPaintCheck);
+      document.removeEventListener('visibilitychange', requestPaintCheck);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
+    };
+  }, [liveTailAlreadyRead, liveTailMarkReadKey, setReadState]);
 
   useEffect(() => {
     if (!readyState) return undefined;
