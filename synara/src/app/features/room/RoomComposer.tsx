@@ -42,6 +42,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
   ) => (
     <section className={css.RoomComposer} aria-label="Message composer">
       <CustomEditor
+        className={css.RoomComposerEditor}
         ref={ref}
         editableName={editableName}
         editor={editor}

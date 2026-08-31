@@ -860,8 +860,16 @@ const NativeTimelineRow = ({
   onFocusEvent,
 }: NativeTimelineRowProps) => {
   const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
-  const swipeStartX = useRef<number | undefined>(undefined);
   const wheelResetTimer = useRef<number | undefined>(undefined);
+  const nonMousePan = useRef<
+    | {
+        pointerId: number;
+        startX: number;
+        startY: number;
+        active: boolean;
+      }
+    | undefined
+  >(undefined);
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
   const surface = hasMessageSurface(row.kind);
@@ -882,13 +890,19 @@ const NativeTimelineRow = ({
   const groupedTimestampRevealWidth = 72;
   const clampGroupedTimestampOffset = (offset: number) =>
     Math.max(-groupedTimestampRevealWidth, Math.min(0, offset));
-  const updateGroupedTimestampOffset = (offset: number) => {
-    if (!grouped) return;
-    setGroupedTimestampOffset(clampGroupedTimestampOffset(offset));
+  const scheduleGroupedTimestampReset = (delay = 600) => {
+    if (wheelResetTimer.current !== undefined) window.clearTimeout(wheelResetTimer.current);
+    wheelResetTimer.current = window.setTimeout(() => setGroupedTimestampOffset(0), delay);
   };
-  const finishGroupedTimestampGesture = () => {
-    swipeStartX.current = undefined;
-    setGroupedTimestampOffset(0);
+  const finishNonMousePan = (event: React.PointerEvent<HTMLDivElement>, cancelled = false) => {
+    const pan = nonMousePan.current;
+    if (!pan || pan.pointerId !== event.pointerId) return;
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    nonMousePan.current = undefined;
+    if (cancelled || !pan.active) setGroupedTimestampOffset(0);
+    else scheduleGroupedTimestampReset(900);
   };
   useEffect(
     () => () => {
@@ -896,25 +910,49 @@ const NativeTimelineRow = ({
     },
     []
   );
-  const groupedTimestampGestureProps = grouped
+  const groupedTimestampRevealProps = grouped
     ? {
         onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
-          if (event.isPrimary) swipeStartX.current = event.clientX;
+          if (!event.isPrimary || event.pointerType === 'mouse') return;
+          nonMousePan.current = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            active: false,
+          };
         },
         onPointerMove: (event: React.PointerEvent<HTMLDivElement>) => {
-          if (swipeStartX.current === undefined) return;
-          updateGroupedTimestampOffset(event.clientX - swipeStartX.current);
+          const pan = nonMousePan.current;
+          if (!pan || pan.pointerId !== event.pointerId) return;
+          const deltaX = event.clientX - pan.startX;
+          const deltaY = event.clientY - pan.startY;
+          if (!pan.active) {
+            if (Math.abs(deltaX) < 8) return;
+            if (Math.abs(deltaX) <= Math.abs(deltaY) * 1.2) {
+              nonMousePan.current = undefined;
+              return;
+            }
+            pan.active = true;
+            event.currentTarget.setPointerCapture(event.pointerId);
+          }
+          event.preventDefault();
+          setGroupedTimestampOffset(clampGroupedTimestampOffset(deltaX));
         },
-        onPointerUp: finishGroupedTimestampGesture,
-        onPointerCancel: finishGroupedTimestampGesture,
-        onPointerLeave: finishGroupedTimestampGesture,
+        onPointerUp: (event: React.PointerEvent<HTMLDivElement>) => finishNonMousePan(event),
+        onPointerCancel: (event: React.PointerEvent<HTMLDivElement>) =>
+          finishNonMousePan(event, true),
         onWheel: (event: React.WheelEvent<HTMLDivElement>) => {
-          if (Math.abs(event.deltaX) <= Math.abs(event.deltaY)) return;
-          setGroupedTimestampOffset((current) =>
-            clampGroupedTimestampOffset(current - event.deltaX)
-          );
-          if (wheelResetTimer.current !== undefined) window.clearTimeout(wheelResetTimer.current);
-          wheelResetTimer.current = window.setTimeout(() => setGroupedTimestampOffset(0), 600);
+          const deltaScale =
+            event.deltaMode === WheelEvent.DOM_DELTA_LINE
+              ? 16
+              : event.deltaMode === WheelEvent.DOM_DELTA_PAGE
+              ? groupedTimestampRevealWidth
+              : 1;
+          const deltaX = event.deltaX * deltaScale;
+          const deltaY = event.deltaY * deltaScale;
+          if (Math.abs(deltaX) <= Math.abs(deltaY)) return;
+          setGroupedTimestampOffset((current) => clampGroupedTimestampOffset(current - deltaX));
+          scheduleGroupedTimestampReset();
         },
       }
     : {};
@@ -976,7 +1014,7 @@ const NativeTimelineRow = ({
           onReaction={runReaction}
         >
           <div
-            {...groupedTimestampGestureProps}
+            {...groupedTimestampRevealProps}
             className={htmlCss.MessageSwipeSurface}
             title={
               grouped && originServerTs ? new Date(originServerTs).toLocaleString() : undefined

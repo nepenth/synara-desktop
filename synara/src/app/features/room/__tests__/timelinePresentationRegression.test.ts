@@ -24,13 +24,20 @@ test('native timeline owner hydrates unresolved sender profiles without blocking
   assert.match(live, /\(\) = &mut member_hydration, if !members_hydrated/);
 });
 
-test('grouped timestamps are hidden at rest and revealed by horizontal movement', () => {
+test('desktop grouped timestamps use horizontal trackpad movement without stealing selection', () => {
   const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
+  const timelineCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
 
   assert.match(presenter, /GroupedTimestampReveal/);
   assert.match(presenter, /groupedTimestampOffset/);
+  assert.match(presenter, /onWheel/);
+  assert.match(presenter, /event\.deltaMode/);
   assert.match(presenter, /event\.deltaX/);
-  assert.match(presenter, /event\.clientX - swipeStartX\.current/);
+  assert.match(presenter, /wheelResetTimer/);
+  assert.match(presenter, /event\.pointerType === 'mouse'/);
+  assert.match(timelineCss, /touchAction: 'pan-y'/);
+  assert.match(timelineCss, /overscrollBehaviorX: 'contain'/);
+  assert.doesNotMatch(presenter, /swipeStartX/);
   assert.doesNotMatch(presenter, /grouped \? \(\s*originServerTs \? \(\s*<Time/);
 });
 

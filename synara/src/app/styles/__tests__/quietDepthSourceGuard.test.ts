@@ -16,6 +16,9 @@ test('quiet depth system preserves accessibility preferences and keeps text flat
   assert.match(depth, /export const criticalSurface/);
   assert.match(depth, /export const avatarSurface/);
   assert.match(depth, /export const avatarMedia/);
+  assert.match(depth, /export const quietInteractiveSurface/);
+  assert.match(depth, /:not\(:disabled\):not\(\[aria-disabled=true\]\)/);
+  assert.match(depth, /&:disabled, &\[aria-disabled=true\]/);
   assert.doesNotMatch(depth, /textShadow|text-shadow/);
 });
 
@@ -45,7 +48,8 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(legacyMessage, /boxShadow: 'none'/);
   assert.match(legacyMessage, /synara-depth-contrast-edge/);
   assert.match(roomNav, /RoomSurface = style/);
-  assert.match(roomNav, /boxShadow: restingInnerEdge/);
+  assert.match(roomNav, /boxShadow: 'none'/);
+  assert.doesNotMatch(roomNav, /restingInnerEdge/);
   assert.match(roomNav, /boxShadow: raisedShadow/);
 });
 
@@ -63,4 +67,25 @@ test('identity, composer popouts, and critical approvals use their intended dept
   assert.match(roomInput, /depthCss\.floatingSurface/);
   assert.match(gifPicker, /depthCss\.floatingSurface/);
   assert.match(emojiBoard, /floatingSurface/);
+});
+
+test('desktop controls and personal notes share quiet interactive depth', () => {
+  const composer = source('src/app/features/room/RoomComposer.css.ts');
+  const input = source('src/app/features/room/RoomInput.tsx');
+  const header = source('src/app/features/room/RoomViewHeader.tsx');
+  const home = source('src/app/pages/client/home/Home.tsx');
+  const notes = source('src/app/features/room/room-notes/RoomNotesPanel.tsx');
+  const notesCss = source('src/app/features/room/room-notes/RoomNotesPanel.css.ts');
+
+  assert.match(composer, /height: toRem\(50\)/);
+  assert.doesNotMatch(composer, /EditorFloatingOptions/);
+  assert.match(input, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(header, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(home, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(notes, /className=\{css\.KindSwitch\}/);
+  assert.match(notes, /aria-pressed=\{kind === 'note'\}/);
+  assert.match(notes, /aria-pressed=\{kind === 'todo'\}/);
+  assert.match(notesCss, /quietInteractiveSurface/);
+  assert.match(notesCss, /boxShadow: raisedShadow/);
+  assert.match(notesCss, /prefers-contrast: more/);
 });

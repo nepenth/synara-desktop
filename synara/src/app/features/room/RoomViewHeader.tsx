@@ -68,6 +68,7 @@ import { getRoomNotesSummary } from '../../utils/roomNotes';
 import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
+import * as depthCss from '../../styles/Depth.css';
 
 type Room = ReturnType<typeof useRoom>;
 
@@ -343,7 +344,11 @@ export function RoomViewHeader({
           <BackRouteHandler>
             {(onBack) => (
               <Box shrink="No" alignItems="Center">
-                <IconButton fill="None" onClick={onBack}>
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  onClick={onBack}
+                >
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
               </Box>
@@ -412,7 +417,12 @@ export function RoomViewHeader({
               }
             >
               {(triggerRef) => (
-                <IconButton fill="None" ref={triggerRef} onClick={handleSearchClick}>
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={handleSearchClick}
+                >
                   <Icon size="400" src={Icons.Search} />
                 </IconButton>
               )}
@@ -429,6 +439,7 @@ export function RoomViewHeader({
           >
             {(triggerRef) => (
               <IconButton
+                className={depthCss.quietInteractiveSurface}
                 fill="None"
                 style={{ position: 'relative' }}
                 onClick={handleOpenPinMenu}
@@ -492,6 +503,7 @@ export function RoomViewHeader({
           >
             {(triggerRef) => (
               <IconButton
+                className={depthCss.quietInteractiveSurface}
                 fill="None"
                 style={{ position: 'relative' }}
                 ref={triggerRef}
@@ -553,6 +565,7 @@ export function RoomViewHeader({
             >
               {(triggerRef) => (
                 <IconButton
+                  className={depthCss.quietInteractiveSurface}
                   fill="None"
                   ref={triggerRef}
                   aria-label={
@@ -578,6 +591,7 @@ export function RoomViewHeader({
           >
             {(triggerRef) => (
               <IconButton
+                className={depthCss.quietInteractiveSurface}
                 fill="None"
                 onClick={handleOpenMenu}
                 ref={triggerRef}

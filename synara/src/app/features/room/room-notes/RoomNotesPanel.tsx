@@ -35,6 +35,8 @@ import { getMxIdLocalPart } from '../../../utils/matrix';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRoomMembers, type RoomMemberListItem } from '../../../hooks/useRoomMembers';
+import { floatingShadow } from '../../../styles/Depth.css';
+import * as css from './RoomNotesPanel.css';
 
 type RoomIdentity = {
   roomId: string;
@@ -118,15 +120,7 @@ function RoomNoteItem({
   };
 
   return (
-    <Box
-      direction="Column"
-      gap="200"
-      style={{
-        padding: config.space.S300,
-        borderRadius: config.radii.R400,
-        backgroundColor: color.SurfaceVariant.Container,
-      }}
-    >
+    <Box className={css.NoteItem} direction="Column" gap="200">
       <Box alignItems="Center" gap="200">
         {item.kind === 'todo' && (
           <Checkbox
@@ -176,6 +170,7 @@ function RoomNoteItem({
           {(item.kind === 'todo' || item.kind === 'note') && (
             <>
               <IconButton
+                className={css.ItemAction}
                 size="300"
                 radii="300"
                 disabled={!canMoveUp}
@@ -185,6 +180,7 @@ function RoomNoteItem({
                 <Icon src={Icons.ChevronTop} size="200" />
               </IconButton>
               <IconButton
+                className={css.ItemAction}
                 size="300"
                 radii="300"
                 disabled={!canMoveDown}
@@ -198,11 +194,18 @@ function RoomNoteItem({
         </Box>
         <Box gap="200" justifyContent="End">
           {item.eventId && (
-            <Button size="300" radii="300" onClick={handleOpenMessage}>
+            <Button className={css.ItemAction} size="300" radii="300" onClick={handleOpenMessage}>
               <Text size="B300">Open</Text>
             </Button>
           )}
-          <Button size="300" radii="300" variant="Critical" fill="None" onClick={handleDelete}>
+          <Button
+            className={css.ItemAction}
+            size="300"
+            radii="300"
+            variant="Critical"
+            fill="None"
+            onClick={handleDelete}
+          >
             <Text size="B300">Delete</Text>
           </Button>
         </Box>
@@ -266,6 +269,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
 
   return (
     <Box
+      className={css.Panel}
       direction="Column"
       style={{
         boxSizing: 'border-box',
@@ -276,7 +280,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
         maxHeight: embedded ? undefined : `min(${toRem(720)}, calc(100vh - ${config.space.S600}))`,
         borderRadius: embedded ? 0 : config.radii.R500,
         backgroundColor: color.Surface.Container,
-        boxShadow: embedded ? undefined : '0 18px 60px rgba(0, 0, 0, 0.4)',
+        boxShadow: embedded ? undefined : floatingShadow,
       }}
     >
       <Header size="600" style={{ padding: `0 ${config.space.S300}` }}>
@@ -286,37 +290,46 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             {room.name ?? room.roomId}
           </Text>
         </Box>
-        <IconButton size="300" onClick={requestClose} radii="300">
+        <IconButton className={css.HeaderAction} size="300" onClick={requestClose} radii="300">
           <Icon src={Icons.Cross} />
         </IconButton>
       </Header>
       <Line variant="Surface" size="300" />
       <Box
+        className={css.ComposerCard}
         as="form"
         direction="Column"
         gap="300"
         onSubmit={handleSubmit}
-        style={{ minWidth: 0, padding: config.space.S300 }}
       >
-        <Box gap="200">
-          <Chip
+        <Box className={css.KindSwitch} gap="100">
+          <Button
+            className={css.KindButton}
             type="button"
-            radii="Pill"
-            variant={kind === 'note' ? 'Primary' : 'SurfaceVariant'}
+            size="300"
+            radii="300"
+            variant={kind === 'note' ? 'Primary' : 'Secondary'}
+            fill={kind === 'note' ? 'Solid' : 'None'}
             onClick={() => setKind('note')}
+            aria-pressed={kind === 'note'}
           >
             <Text size="B300">Note</Text>
-          </Chip>
-          <Chip
+          </Button>
+          <Button
+            className={css.KindButton}
             type="button"
-            radii="Pill"
-            variant={kind === 'todo' ? 'Primary' : 'SurfaceVariant'}
+            size="300"
+            radii="300"
+            variant={kind === 'todo' ? 'Primary' : 'Secondary'}
+            fill={kind === 'todo' ? 'Solid' : 'None'}
             onClick={() => setKind('todo')}
+            aria-pressed={kind === 'todo'}
           >
             <Text size="B300">ToDo</Text>
-          </Chip>
+          </Button>
         </Box>
         <TextArea
+          className={css.ComposerTextArea}
           required
           value={body}
           onChange={(evt) => setBody(evt.currentTarget.value)}
@@ -341,6 +354,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             )}
           </Box>
           <Button
+            className={css.AddAction}
             type="submit"
             variant="Primary"
             size="300"
@@ -352,8 +366,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
           </Button>
         </Box>
       </Box>
-      <Line variant="Surface" size="300" />
-      <Scroll style={{ flexGrow: 1, minHeight: 0 }}>
+      <Scroll className={css.NotesScroll} style={{ flexGrow: 1, minHeight: 0 }}>
         <Box direction="Column" gap="200" style={{ minWidth: 0, padding: config.space.S300 }}>
           {roomItems.length > 0 ? (
             roomItems.map((item) => {
@@ -372,11 +385,11 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             })
           ) : (
             <Box
+              className={css.EmptyState}
               direction="Column"
               alignItems="Center"
               justifyContent="Center"
               gap="200"
-              style={{ minHeight: toRem(180), padding: config.space.S300, textAlign: 'center' }}
             >
               <Icon size="600" src={Icons.Pencil} />
               <Text size="H5">No personal notes yet</Text>

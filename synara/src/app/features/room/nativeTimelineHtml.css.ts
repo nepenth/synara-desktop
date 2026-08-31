@@ -41,6 +41,8 @@ export const MessageActionSurface = style({
 export const MessageSwipeSurface = style({
   position: 'relative',
   overflow: 'hidden',
+  overscrollBehaviorX: 'contain',
+  touchAction: 'pan-y',
 });
 
 export const MessageSwipeContent = style({

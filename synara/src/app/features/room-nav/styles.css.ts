@@ -1,6 +1,6 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-import { raisedShadow, restingInnerEdge } from '../../styles/Depth.css';
+import { raisedShadow } from '../../styles/Depth.css';
 
 export const CategoryButton = style({
   flexGrow: 1,
@@ -28,7 +28,7 @@ export const RoomName = style({
 export const RoomSurface = style({
   backgroundColor: 'transparent',
   borderColor: 'transparent',
-  boxShadow: restingInnerEdge,
+  boxShadow: 'none',
   selectors: {
     '&:hover, &:focus-within': {
       backgroundColor: color.Surface.ContainerHover,
