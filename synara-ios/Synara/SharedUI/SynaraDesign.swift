@@ -57,6 +57,16 @@ struct SynaraThemeTokens: Equatable {
     let mutedControl: String
     let agentReviewBackground: String
     let agentReviewSurface: String
+    let richTextInlineCodeBackground: String
+    let richTextInlineCodeBorder: String
+    let richTextInlineCodeForeground: String
+    let richTextCodeBlockBackground: String
+    let richTextCodeBlockBorder: String
+    let richTextSpoilerBackground: String
+    let richTextSpoilerBorder: String
+    let richTextTableHeader: String
+    let richTextTableOdd: String
+    let richTextTableEven: String
 }
 
 enum SynaraThemeRamp {
@@ -133,7 +143,57 @@ enum SynaraThemeRamp {
                 separator: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.31), resolved, mixRatio),
                 mutedControl: synaraMix(synaraHex(hue: hue, saturation: saturation * 0.80, lightness: 0.24), resolved, mixRatio),
                 agentReviewBackground: synaraHex(hue: hue, saturation: min(0.22, saturation + 0.06), lightness: 0.08),
-                agentReviewSurface: synaraHex(hue: hue, saturation: min(0.24, saturation + 0.08), lightness: 0.13)
+                agentReviewSurface: synaraHex(hue: hue, saturation: min(0.24, saturation + 0.08), lightness: 0.13),
+                richTextInlineCodeBackground: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.82, lightness: increasedContrast ? 0.22 : 0.17),
+                    resolved,
+                    mixRatio
+                ),
+                richTextInlineCodeBorder: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.76, lightness: increasedContrast ? 0.50 : 0.30),
+                    resolved,
+                    mixRatio
+                ),
+                richTextInlineCodeForeground: synaraHex(
+                    hue: hue,
+                    saturation: saturation * 0.18,
+                    lightness: increasedContrast ? 0.99 : 0.90
+                ),
+                richTextCodeBlockBackground: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.88, lightness: 0.072),
+                    resolved,
+                    mixRatio
+                ),
+                richTextCodeBlockBorder: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.76, lightness: increasedContrast ? 0.50 : 0.30),
+                    resolved,
+                    mixRatio
+                ),
+                richTextSpoilerBackground: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.84, lightness: increasedContrast ? 0.23 : 0.18),
+                    resolved,
+                    mixRatio
+                ),
+                richTextSpoilerBorder: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.72, lightness: increasedContrast ? 0.51 : 0.31),
+                    resolved,
+                    mixRatio
+                ),
+                richTextTableHeader: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.80, lightness: increasedContrast ? 0.21 : 0.18),
+                    resolved,
+                    mixRatio
+                ),
+                richTextTableOdd: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.88, lightness: 0.105),
+                    resolved,
+                    mixRatio
+                ),
+                richTextTableEven: synaraMix(
+                    synaraHex(hue: hue, saturation: saturation * 0.84, lightness: increasedContrast ? 0.17 : 0.145),
+                    resolved,
+                    mixRatio
+                )
             )
         }
 
@@ -155,7 +215,53 @@ enum SynaraThemeRamp {
             separator: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.86),
             mutedControl: synaraHex(hue: hue, saturation: saturation * 0.70, lightness: 0.93),
             agentReviewBackground: synaraHex(hue: 196, saturation: 0.12, lightness: 0.94),
-            agentReviewSurface: synaraHex(hue: 196, saturation: 0.14, lightness: 0.90)
+            agentReviewSurface: synaraHex(hue: 196, saturation: 0.14, lightness: 0.90),
+            richTextInlineCodeBackground: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.85,
+                lightness: increasedContrast ? 0.80 : 0.86
+            ),
+            richTextInlineCodeBorder: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.80,
+                lightness: increasedContrast ? 0.42 : 0.70
+            ),
+            richTextInlineCodeForeground: synaraHex(
+                hue: hue,
+                saturation: min(saturation * 1.4, 0.12),
+                lightness: increasedContrast ? 0.01 : 0.08
+            ),
+            richTextCodeBlockBackground: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.62,
+                lightness: increasedContrast ? 0.90 : 0.93
+            ),
+            richTextCodeBlockBorder: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.74,
+                lightness: increasedContrast ? 0.42 : 0.76
+            ),
+            richTextSpoilerBackground: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.82,
+                lightness: increasedContrast ? 0.79 : 0.87
+            ),
+            richTextSpoilerBorder: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.76,
+                lightness: increasedContrast ? 0.40 : 0.69
+            ),
+            richTextTableHeader: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.78,
+                lightness: increasedContrast ? 0.82 : 0.88
+            ),
+            richTextTableOdd: synaraHex(hue: hue, saturation: saturation * 0.40, lightness: 0.995),
+            richTextTableEven: synaraHex(
+                hue: hue,
+                saturation: saturation * 0.58,
+                lightness: increasedContrast ? 0.91 : 0.95
+            )
         )
     }
 
@@ -181,6 +287,181 @@ enum SynaraThemeRamp {
         dark: Bool
     ) -> String {
         tokens(baseHex: baseHex, dark: dark)[keyPath: keyPath]
+    }
+}
+
+struct SynaraRichTextColorResolution: Equatable {
+    let foreground: String
+    let background: String
+    let preservedAuthoredForeground: Bool
+    let preservedAuthoredBackground: Bool
+}
+
+/// Resolves Matrix-authored colors against the surface that will actually be
+/// painted. Valid author colors are retained when they remain readable. Unsafe
+/// foregrounds are moved the minimum distance toward black or white needed to
+/// meet the requested contrast; an unsafe authored background is discarded if
+/// no readable foreground can be produced without compromising the semantic
+/// fallback surface.
+enum SynaraRichTextColorPolicy {
+    static let standardTextContrast = 4.5
+    static let increasedTextContrast = 7.0
+
+    static func resolve(
+        authoredForeground: String?,
+        authoredBackground: String?,
+        fallbackForeground: String,
+        fallbackBackground: String,
+        increasedContrast: Bool
+    ) -> SynaraRichTextColorResolution {
+        let normalizedForeground = SynaraThemeRamp.normalize(authoredForeground)
+        let normalizedBackground = SynaraThemeRamp.normalize(authoredBackground)
+        let target = increasedContrast ? increasedTextContrast : standardTextContrast
+        let preferredForeground = normalizedForeground ?? fallbackForeground
+        let preferredBackground = normalizedBackground ?? fallbackBackground
+
+        if SynaraThemeRamp.contrastRatio(
+            foreground: preferredForeground,
+            background: preferredBackground
+        ) >= target {
+            return SynaraRichTextColorResolution(
+                foreground: preferredForeground,
+                background: preferredBackground,
+                preservedAuthoredForeground: normalizedForeground != nil,
+                preservedAuthoredBackground: normalizedBackground != nil
+            )
+        }
+
+        if let adjusted = minimallyAdjustedForeground(
+            preferredForeground,
+            background: preferredBackground,
+            targetContrast: target
+        ) {
+            return SynaraRichTextColorResolution(
+                foreground: adjusted,
+                background: preferredBackground,
+                preservedAuthoredForeground: false,
+                preservedAuthoredBackground: normalizedBackground != nil
+            )
+        }
+
+        // Mid-luminance custom fills cannot always reach 7:1 even with pure
+        // black or white. Revert only that fill, then retain or clamp the
+        // authored foreground against the semantic reading surface.
+        let safeForeground = minimallyAdjustedForeground(
+            preferredForeground,
+            background: fallbackBackground,
+            targetContrast: target
+        ) ?? fallbackForeground
+        return SynaraRichTextColorResolution(
+            foreground: safeForeground,
+            background: fallbackBackground,
+            preservedAuthoredForeground: normalizedForeground != nil && safeForeground == normalizedForeground,
+            preservedAuthoredBackground: false
+        )
+    }
+
+    static func standardOwnMessageBackground(
+        tokens: SynaraThemeTokens,
+        dark: Bool,
+        reduceTransparency: Bool
+    ) -> String {
+        if reduceTransparency {
+            return tokens.elevatedSurface
+        }
+        return synaraMix(tokens.surface, dark ? "#0a84ff" : "#007aff", 0.12)
+    }
+
+    /// Ordinary inline code is identified by its native monospaced intent and
+    /// semantic fill. Increased Contrast adds a measurable baseline boundary;
+    /// matching the fill in standard contrast keeps that boundary optically
+    /// absent without replacing the wrap-safe attributed-string renderer.
+    static func inlineCodeBoundary(
+        tokens: SynaraThemeTokens,
+        increasedContrast: Bool
+    ) -> String {
+        increasedContrast
+            ? tokens.richTextInlineCodeBorder
+            : tokens.richTextInlineCodeBackground
+    }
+
+    #if canImport(UIKit)
+    static func adaptiveColors(
+        authoredForeground: String?,
+        authoredBackground: String?,
+        fallbackForeground: KeyPath<SynaraThemeTokens, String>,
+        fallbackBackground: KeyPath<SynaraThemeTokens, String>,
+        appliesStandardOwnMessageTint: Bool = false
+    ) -> (foreground: Color, background: Color) {
+        let resolver: (UITraitCollection) -> SynaraRichTextColorResolution = { traits in
+            let increasedContrast = traits.accessibilityContrast == .high
+            let tokens = SynaraThemeRamp.tokens(
+                // Read at resolution time so existing visible attributed runs
+                // follow an in-app theme change without reconstructing their
+                // Matrix source or clipboard payload.
+                baseHex: SynaraThemePaint.shared.baseHex,
+                dark: traits.userInterfaceStyle == .dark,
+                increasedContrast: increasedContrast
+            )
+            let semanticBackground: String
+            if appliesStandardOwnMessageTint {
+                // `SynaraMessageBubble` paints Color.accentColor at 12%
+                // over the chat canvas. No accent asset is configured, so
+                // these are UIKit's adaptive system-blue endpoints.
+                semanticBackground = standardOwnMessageBackground(
+                    tokens: tokens,
+                    dark: traits.userInterfaceStyle == .dark,
+                    reduceTransparency: UIAccessibility.isReduceTransparencyEnabled
+                )
+            } else {
+                semanticBackground = tokens[keyPath: fallbackBackground]
+            }
+            return resolve(
+                authoredForeground: authoredForeground,
+                authoredBackground: authoredBackground,
+                fallbackForeground: tokens[keyPath: fallbackForeground],
+                fallbackBackground: semanticBackground,
+                increasedContrast: increasedContrast
+            )
+            }
+            return (
+                Color(uiColor: UIColor { traits in
+                    UIColor(synaraHex: resolver(traits).foreground) ?? .label
+                }),
+                Color(uiColor: UIColor { traits in
+                    UIColor(synaraHex: resolver(traits).background) ?? .systemBackground
+                })
+            )
+        }
+    #endif
+
+    private static func minimallyAdjustedForeground(
+        _ foreground: String,
+        background: String,
+        targetContrast: Double
+    ) -> String? {
+        let black = "#000000"
+        let white = "#ffffff"
+        let endpoint = SynaraThemeRamp.contrastRatio(foreground: black, background: background)
+            >= SynaraThemeRamp.contrastRatio(foreground: white, background: background)
+            ? black
+            : white
+        guard SynaraThemeRamp.contrastRatio(foreground: endpoint, background: background) >= targetContrast else {
+            return nil
+        }
+
+        var low = 0.0
+        var high = 1.0
+        for _ in 0 ..< 24 {
+            let midpoint = (low + high) / 2
+            let candidate = synaraMix(foreground, endpoint, midpoint)
+            if SynaraThemeRamp.contrastRatio(foreground: candidate, background: background) >= targetContrast {
+                high = midpoint
+            } else {
+                low = midpoint
+            }
+        }
+        return synaraMix(foreground, endpoint, high)
     }
 }
 
@@ -269,6 +550,17 @@ enum SynaraColor {
     static var mutedControl: Color { synaraAdaptive(\.mutedControl) }
     static var agentReviewBackground: Color { synaraAdaptive(\.agentReviewBackground) }
     static var agentReviewSurface: Color { synaraAdaptive(\.agentReviewSurface) }
+    static var richTextInlineCodeBackground: Color { synaraAdaptive(\.richTextInlineCodeBackground) }
+    static var richTextInlineCodeBorder: Color { synaraAdaptive(\.richTextInlineCodeBorder) }
+    static var richTextInlineCodeBoundary: Color { synaraAdaptiveRichTextInlineCodeBoundary() }
+    static var richTextInlineCodeForeground: Color { synaraAdaptive(\.richTextInlineCodeForeground) }
+    static var richTextCodeBlockBackground: Color { synaraAdaptive(\.richTextCodeBlockBackground) }
+    static var richTextCodeBlockBorder: Color { synaraAdaptive(\.richTextCodeBlockBorder) }
+    static var richTextSpoilerBackground: Color { synaraAdaptive(\.richTextSpoilerBackground) }
+    static var richTextSpoilerBorder: Color { synaraAdaptive(\.richTextSpoilerBorder) }
+    static var richTextTableHeader: Color { synaraAdaptive(\.richTextTableHeader) }
+    static var richTextTableOdd: Color { synaraAdaptive(\.richTextTableOdd) }
+    static var richTextTableEven: Color { synaraAdaptive(\.richTextTableEven) }
 }
 
 #if canImport(UIKit)
@@ -294,6 +586,22 @@ private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>, baseH
             increasedContrast: traits.accessibilityContrast == .high
         )
         return UIColor(synaraHex: tokens[keyPath: keyPath]) ?? .systemBackground
+    })
+}
+
+private func synaraAdaptiveRichTextInlineCodeBoundary() -> Color {
+    Color(uiColor: UIColor { traits in
+        let increasedContrast = traits.accessibilityContrast == .high
+        let tokens = SynaraThemeRamp.tokens(
+            baseHex: SynaraThemePaint.shared.baseHex,
+            dark: traits.userInterfaceStyle == .dark,
+            increasedContrast: increasedContrast
+        )
+        let hex = SynaraRichTextColorPolicy.inlineCodeBoundary(
+            tokens: tokens,
+            increasedContrast: increasedContrast
+        )
+        return UIColor(synaraHex: hex) ?? .clear
     })
 }
 
@@ -341,6 +649,19 @@ private func synaraAdaptive(_ keyPath: KeyPath<SynaraThemeTokens, String>) -> Co
             keyPath,
             baseHex: SynaraThemePaint.shared.baseHex,
             dark: false
+        )
+    )
+}
+
+private func synaraAdaptiveRichTextInlineCodeBoundary() -> Color {
+    let tokens = SynaraThemeRamp.tokens(
+        baseHex: SynaraThemePaint.shared.baseHex,
+        dark: false
+    )
+    return Color(
+        synaraHex: SynaraRichTextColorPolicy.inlineCodeBoundary(
+            tokens: tokens,
+            increasedContrast: false
         )
     )
 }

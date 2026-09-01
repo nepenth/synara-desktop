@@ -47,7 +47,6 @@ import type { EventedRoomReading } from '../../../utils/roomEvents';
 import { GetContentCallback, MessageEvent, StateEvent } from '../../../../types/matrix/room';
 import { unpinWithNativeTimelineAction } from '../nativeTimelineAction';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
-import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import {
   factoryRenderLinkifyWithMention,
   getReactCustomHtmlParser,
@@ -300,7 +299,6 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
     });
 
     const mentionClickHandler = useMentionClickHandler(room.roomId);
-    const spoilerClickHandler = useSpoilerClickHandler();
 
     const linkifyOpts = useMemo<LinkifyOpts>(
       () => ({
@@ -316,10 +314,9 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
         getReactCustomHtmlParser(mx, room.roomId, {
           linkifyOpts,
           useAuthentication,
-          handleSpoilerClick: spoilerClickHandler,
           handleMentionClick: mentionClickHandler,
         }),
-      [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
+      [mx, room, linkifyOpts, mentionClickHandler, useAuthentication]
     );
 
     const renderMatrixEvent = useMatrixEventRenderer<[PinEventReading, string, GetContentCallback]>(

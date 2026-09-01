@@ -86,19 +86,13 @@ const transformCurrentAnchor: Transformer = (_tagName, attribs) => {
 
 const transformCurrentSpan: Transformer = (_tagName, attribs) => {
   const next: Record<string, string> = {};
-  const foreground = attribs['data-mx-color'];
+  const foreground = attribs['data-mx-color'] ?? attribs.color;
   const background = attribs['data-mx-bg-color'];
   if (foreground && MATRIX_COLOR_RE.test(foreground)) next['data-mx-color'] = foreground;
   if (background && MATRIX_COLOR_RE.test(background)) next['data-mx-bg-color'] = background;
   if ('data-mx-spoiler' in attribs) next['data-mx-spoiler'] = attribs['data-mx-spoiler'];
   if ('data-mx-maths' in attribs) next['data-mx-maths'] = attribs['data-mx-maths'];
 
-  const styles: string[] = [];
-  if (background && MATRIX_COLOR_RE.test(background)) {
-    styles.push(`background-color: ${background}`);
-  }
-  if (foreground && MATRIX_COLOR_RE.test(foreground)) styles.push(`color: ${foreground}`);
-  if (styles.length > 0) next.style = styles.join('; ');
   return { tagName: 'span', attribs: next };
 };
 
@@ -112,7 +106,7 @@ const transformCurrentImage: Transformer = (_tagName, attribs) => {
   return { tagName: 'img', attribs: next };
 };
 
-const sanitizeMatrixV119PresentationHtml = (html: string): string =>
+export const sanitizeMatrixV119PresentationHtml = (html: string): string =>
   sanitizeHtml(html, {
     // `font` and `strike` are accepted only long enough to normalize legacy
     // events to their current v1.19 equivalents.
@@ -123,15 +117,10 @@ const sanitizeMatrixV119PresentationHtml = (html: string): string =>
       div: ['data-mx-maths'],
       img: ['width', 'height', 'alt', 'title', 'src'],
       ol: ['start'],
-      span: ['data-mx-bg-color', 'data-mx-color', 'data-mx-spoiler', 'data-mx-maths', 'style'],
+      font: ['color', 'data-mx-bg-color', 'data-mx-color'],
+      span: ['data-mx-bg-color', 'data-mx-color', 'data-mx-spoiler', 'data-mx-maths'],
     },
     allowedClasses: { code: ['language-*'] },
-    allowedStyles: {
-      span: {
-        color: [MATRIX_COLOR_RE],
-        'background-color': [MATRIX_COLOR_RE],
-      },
-    },
     transformTags: {
       a: transformCurrentAnchor,
       font: transformCurrentSpan,

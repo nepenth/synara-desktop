@@ -225,8 +225,8 @@ test('formatted messages use a readable measure, body size, and layered tables',
   assert.match(messageBodyCss, /fontSize: toRem\(16\)/);
   assert.match(messageBodyCss, /lineHeight: 1\.55/);
   assert.match(htmlCss, /borderCollapse: 'separate'/);
-  assert.match(htmlCss, /background: 'var\(--synara-table-even\)'/);
-  assert.match(htmlCss, /background: 'var\(--synara-table-odd\)'/);
-  assert.match(htmlCss, /background: 'var\(--synara-table-header\)'/);
+  assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-even\)'/);
+  assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-odd\)'/);
+  assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-header\)'/);
   assert.match(htmlCss, /tbody tr:nth-child\(even\) td/);
 });

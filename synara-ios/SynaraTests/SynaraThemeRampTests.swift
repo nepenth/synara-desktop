@@ -329,6 +329,215 @@ final class SynaraThemeRampTests: XCTestCase {
         }
     }
 
+    func testEveryPresetHasDistinctReadableRichTextRoles() {
+        for preset in SynaraThemeRamp.presets {
+            for dark in [false, true] {
+                for increasedContrast in [false, true] {
+                    let tokens = SynaraThemeRamp.tokens(
+                        baseHex: preset.hex,
+                        dark: dark,
+                        increasedContrast: increasedContrast
+                    )
+                    XCTAssertNotEqual(
+                        tokens.richTextInlineCodeBackground,
+                        tokens.surface,
+                        "\(preset.label) inline code must not collapse into the message canvas"
+                    )
+                    XCTAssertNotEqual(tokens.richTextCodeBlockBackground, tokens.surface)
+                    XCTAssertNotEqual(tokens.richTextSpoilerBackground, tokens.surface)
+                    XCTAssertNotEqual(tokens.richTextTableHeader, tokens.richTextTableOdd)
+                    XCTAssertNotEqual(tokens.richTextTableOdd, tokens.richTextTableEven)
+                    XCTAssertGreaterThanOrEqual(
+                        SynaraThemeRamp.contrastRatio(
+                            foreground: tokens.richTextInlineCodeForeground,
+                            background: tokens.richTextInlineCodeBackground
+                        ),
+                        increasedContrast ? 7 : 4.5,
+                        "\(preset.label) inline code text contrast"
+                    )
+                    XCTAssertGreaterThanOrEqual(
+                        SynaraThemeRamp.contrastRatio(
+                            foreground: tokens.primaryText,
+                            background: tokens.richTextCodeBlockBackground
+                        ),
+                        increasedContrast ? 7 : 4.5,
+                        "\(preset.label) code block text contrast"
+                    )
+                    XCTAssertGreaterThanOrEqual(
+                        SynaraThemeRamp.contrastRatio(
+                            foreground: tokens.primaryText,
+                            background: tokens.richTextSpoilerBackground
+                        ),
+                        increasedContrast ? 7 : 4.5,
+                        "\(preset.label) spoiler text contrast"
+                    )
+                }
+            }
+        }
+    }
+
+    func testIncreasedContrastStrengthensRichTextBoundaries() {
+        for preset in SynaraThemeRamp.presets {
+            for dark in [false, true] {
+                let standard = SynaraThemeRamp.tokens(baseHex: preset.hex, dark: dark)
+                let increased = SynaraThemeRamp.tokens(
+                    baseHex: preset.hex,
+                    dark: dark,
+                    increasedContrast: true
+                )
+                XCTAssertGreaterThan(
+                    SynaraThemeRamp.contrastRatio(
+                        foreground: increased.richTextInlineCodeBorder,
+                        background: increased.surface
+                    ),
+                    SynaraThemeRamp.contrastRatio(
+                        foreground: standard.richTextInlineCodeBorder,
+                        background: standard.surface
+                    )
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(
+                        foreground: increased.richTextInlineCodeBorder,
+                        background: increased.surface
+                    ),
+                    3
+                )
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(
+                        foreground: increased.richTextSpoilerBorder,
+                        background: increased.surface
+                    ),
+                    3
+                )
+            }
+        }
+    }
+
+    func testInlineCodeBoundaryIsQuietNormallyAndMeasurableInIncreasedContrast() {
+        for preset in SynaraThemeRamp.presets {
+            for dark in [false, true] {
+                let standard = SynaraThemeRamp.tokens(baseHex: preset.hex, dark: dark)
+                XCTAssertEqual(
+                    SynaraRichTextColorPolicy.inlineCodeBoundary(
+                        tokens: standard,
+                        increasedContrast: false
+                    ),
+                    standard.richTextInlineCodeBackground,
+                    "\(preset.label) standard inline-code boundary must be optically absent"
+                )
+
+                let increased = SynaraThemeRamp.tokens(
+                    baseHex: preset.hex,
+                    dark: dark,
+                    increasedContrast: true
+                )
+                let increasedBoundary = SynaraRichTextColorPolicy.inlineCodeBoundary(
+                    tokens: increased,
+                    increasedContrast: true
+                )
+                XCTAssertEqual(increasedBoundary, increased.richTextInlineCodeBorder)
+                XCTAssertGreaterThanOrEqual(
+                    SynaraThemeRamp.contrastRatio(
+                        foreground: increasedBoundary,
+                        background: increased.surface
+                    ),
+                    3,
+                    "\(preset.label) Increased Contrast boundary"
+                )
+            }
+        }
+    }
+
+    func testRichTextColorPolicyPreservesSafeAuthoredColors() {
+        let result = SynaraRichTextColorPolicy.resolve(
+            authoredForeground: "#ffffff",
+            authoredBackground: "#000000",
+            fallbackForeground: "#111111",
+            fallbackBackground: "#ffffff",
+            increasedContrast: false
+        )
+
+        XCTAssertEqual(result.foreground, "#ffffff")
+        XCTAssertEqual(result.background, "#000000")
+        XCTAssertTrue(result.preservedAuthoredForeground)
+        XCTAssertTrue(result.preservedAuthoredBackground)
+    }
+
+    func testRichTextColorPolicyMinimallyClampsUnsafeForeground() {
+        let result = SynaraRichTextColorPolicy.resolve(
+            authoredForeground: "#dddddd",
+            authoredBackground: nil,
+            fallbackForeground: "#111111",
+            fallbackBackground: "#ffffff",
+            increasedContrast: false
+        )
+
+        XCTAssertEqual(result.background, "#ffffff")
+        XCTAssertFalse(result.preservedAuthoredForeground)
+        XCTAssertGreaterThanOrEqual(
+            SynaraThemeRamp.contrastRatio(
+                foreground: result.foreground,
+                background: result.background
+            ),
+            SynaraRichTextColorPolicy.standardTextContrast
+        )
+        XCTAssertNotEqual(result.foreground, "#111111", "The authored color should be clamped, not discarded")
+    }
+
+    func testRichTextColorPolicyDropsBackgroundThatCannotMeetIncreasedContrast() {
+        let result = SynaraRichTextColorPolicy.resolve(
+            authoredForeground: "#777777",
+            authoredBackground: "#777777",
+            fallbackForeground: "#ffffff",
+            fallbackBackground: "#000000",
+            increasedContrast: true
+        )
+
+        XCTAssertEqual(result.background, "#000000")
+        XCTAssertFalse(result.preservedAuthoredBackground)
+        XCTAssertGreaterThanOrEqual(
+            SynaraThemeRamp.contrastRatio(
+                foreground: result.foreground,
+                background: result.background
+            ),
+            SynaraRichTextColorPolicy.increasedTextContrast
+        )
+    }
+
+    func testAuthoredColorsAreResolvedAgainstActualOwnMessageSurface() {
+        for dark in [false, true] {
+            for increasedContrast in [false, true] {
+                let tokens = SynaraThemeRamp.tokens(
+                    baseHex: SynaraThemeRamp.defaultBaseHex,
+                    dark: dark,
+                    increasedContrast: increasedContrast
+                )
+                for reduceTransparency in [false, true] {
+                    let bubbleSurface = SynaraRichTextColorPolicy.standardOwnMessageBackground(
+                        tokens: tokens,
+                        dark: dark,
+                        reduceTransparency: reduceTransparency
+                    )
+                    let resolved = SynaraRichTextColorPolicy.resolve(
+                        authoredForeground: dark ? "#555555" : "#bbbbbb",
+                        authoredBackground: nil,
+                        fallbackForeground: tokens.primaryText,
+                        fallbackBackground: bubbleSurface,
+                        increasedContrast: increasedContrast
+                    )
+                    XCTAssertEqual(resolved.background, bubbleSurface)
+                    XCTAssertGreaterThanOrEqual(
+                        SynaraThemeRamp.contrastRatio(
+                            foreground: resolved.foreground,
+                            background: bubbleSurface
+                        ),
+                        increasedContrast ? 7 : 4.5
+                    )
+                }
+            }
+        }
+    }
+
     func testChromeRolesReadThePassedBaseHexNotTheStoredDefault() {
         let stored = SynaraThemeRamp.colorHex(
             SynaraChrome.chatToken,

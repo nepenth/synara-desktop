@@ -3664,27 +3664,65 @@ private struct MessageTextSelectionSheet: View {
     }
 }
 
+struct MatrixRichTextPresentationContext {
+    let readingSurface: KeyPath<SynaraThemeTokens, String>
+    let appliesStandardOwnMessageTint: Bool
+
+    static let canvas = MatrixRichTextPresentationContext(
+        readingSurface: \SynaraThemeTokens.surface,
+        appliesStandardOwnMessageTint: false
+    )
+    static let otherMessage = MatrixRichTextPresentationContext(
+        readingSurface: \SynaraThemeTokens.secondarySurface,
+        appliesStandardOwnMessageTint: false
+    )
+    static let ownMessage = MatrixRichTextPresentationContext(
+        readingSurface: \SynaraThemeTokens.surface,
+        appliesStandardOwnMessageTint: true
+    )
+
+    static func semantic(_ keyPath: KeyPath<SynaraThemeTokens, String>) -> Self {
+        MatrixRichTextPresentationContext(
+            readingSurface: keyPath,
+            appliesStandardOwnMessageTint: false
+        )
+    }
+}
+
 private struct MatrixFormattedMessageView: View {
     let fallbackBody: String
     let font: Font
+    let presentationContext: MatrixRichTextPresentationContext
     private let segments: [MatrixHTMLRenderer.Segment]
 
-    init(fallbackBody: String, html: String, font: Font) {
+    init(
+        fallbackBody: String,
+        html: String,
+        font: Font,
+        presentationContext: MatrixRichTextPresentationContext = .canvas
+    ) {
         self.fallbackBody = fallbackBody
         self.font = font
+        self.presentationContext = presentationContext
         segments = MatrixHTMLRenderer.segments(body: fallbackBody, html: html)
     }
 
     var body: some View {
         if segments.count == 1, case let .richText(text) = segments[0] {
-            MatrixRichTextView(text: text, fallbackBody: fallbackBody, font: font)
+            MatrixRichTextView(
+                text: text,
+                fallbackBody: fallbackBody,
+                font: font,
+                presentationContext: presentationContext
+            )
         } else {
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 ForEach(identifiedMatrixSegments(segments)) { item in
                     MatrixSemanticSegmentView(
                         segment: item.segment,
                         fallbackBody: fallbackBody,
-                        font: font
+                        font: font,
+                        presentationContext: presentationContext
                     )
                 }
             }
@@ -3697,34 +3735,47 @@ private struct MatrixSemanticSegmentView: View {
     let segment: MatrixHTMLRenderer.Segment
     let fallbackBody: String
     let font: Font
+    let presentationContext: MatrixRichTextPresentationContext
 
     @ViewBuilder var body: some View {
         switch segment {
         case let .richText(text):
-            MatrixRichTextView(text: text, fallbackBody: fallbackBody, font: font)
+            MatrixRichTextView(
+                text: text,
+                fallbackBody: fallbackBody,
+                font: font,
+                presentationContext: presentationContext
+            )
         case let .inline(group):
-            MatrixInlineGroupView(group: group, font: font)
+            MatrixInlineGroupView(group: group, font: font, presentationContext: presentationContext)
         case let .heading(block):
-            MatrixHeadingBlockView(block: block)
+            MatrixHeadingBlockView(block: block, presentationContext: presentationContext)
         case let .code(block):
             MatrixCodeBlockView(block: block)
         case let .quote(text):
-            MatrixQuoteBlockView(text: text, font: font)
+            MatrixQuoteBlockView(text: text, font: font, presentationContext: presentationContext)
         case let .spoiler(block):
             MatrixSpoilerBlockView(block: block, font: font)
         case let .details(block):
-            MatrixDetailsBlockView(block: block, font: font)
+            MatrixDetailsBlockView(block: block, font: font, presentationContext: presentationContext)
         case let .table(block):
-            MatrixTableBlockView(block: block)
+            MatrixTableBlockView(block: block, presentationContext: presentationContext)
         }
     }
 }
 
 private struct MatrixHeadingBlockView: View {
     let block: MatrixHTMLRenderer.HeadingBlock
+    let presentationContext: MatrixRichTextPresentationContext
 
     var body: some View {
-        Text(attributedRichText(block.content, includeHeadingFonts: false))
+        Text(
+            attributedRichText(
+                block.content,
+                includeHeadingFonts: false,
+                presentationContext: presentationContext
+            )
+        )
             .font(headingFont)
             .foregroundStyle(SynaraColor.primaryText)
             .lineSpacing(2.5)
@@ -3795,12 +3846,13 @@ private struct MatrixRichTextView: View {
     let text: MatrixHTMLRenderer.RichText
     let fallbackBody: String
     let font: Font
+    let presentationContext: MatrixRichTextPresentationContext
 
     var body: some View {
         let displayText = text.runs.isEmpty
             ? MatrixHTMLRenderer.RichText(runs: [.init(text: fallbackBody, style: [], link: nil)])
             : text
-        Text(attributedRichText(displayText))
+        Text(attributedRichText(displayText, presentationContext: presentationContext))
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
             .lineSpacing(2.5)
@@ -3828,23 +3880,33 @@ func matrixInlineSpoilerIndex(_ url: URL) -> Int? {
 
 func matrixInlineAttributedText(
     _ group: MatrixHTMLRenderer.InlineGroup,
-    revealedSpoilers: Set<Int>
+    revealedSpoilers: Set<Int>,
+    presentationContext: MatrixRichTextPresentationContext = .canvas
 ) -> AttributedString {
     var output = AttributedString()
     var spoilerIndex = 0
     for piece in group.pieces {
         switch piece {
         case let .richText(text):
-            output.append(attributedRichText(text))
+            output.append(attributedRichText(text, presentationContext: presentationContext))
         case let .spoiler(block):
             if revealedSpoilers.contains(spoilerIndex) {
-                output.append(attributedRichText(block.content))
+                output.append(
+                    attributedRichText(
+                        block.content,
+                        // Inline reveals remain part of the surrounding Text;
+                        // unlike block spoilers, they do not paint a separate
+                        // well. Resolve authored colors against that actual
+                        // parent surface rather than an unpainted spoiler fill.
+                        presentationContext: presentationContext
+                    )
+                )
             } else {
                 let label = block.reason.map { "[Spoiler: \($0) · Reveal]" } ?? "[Spoiler · Reveal]"
                 var placeholder = AttributedString(label)
                 placeholder.link = matrixInlineSpoilerURL(index: spoilerIndex)
                 placeholder.foregroundColor = SynaraColor.secondaryText
-                placeholder.backgroundColor = SynaraColor.secondarySurface
+                placeholder.backgroundColor = SynaraColor.richTextSpoilerBackground
                 output.append(placeholder)
             }
             spoilerIndex += 1
@@ -3856,10 +3918,17 @@ func matrixInlineAttributedText(
 private struct MatrixInlineGroupView: View {
     let group: MatrixHTMLRenderer.InlineGroup
     let font: Font
+    let presentationContext: MatrixRichTextPresentationContext
     @State private var revealedSpoilers: Set<Int> = []
 
     var body: some View {
-        Text(matrixInlineAttributedText(group, revealedSpoilers: revealedSpoilers))
+        Text(
+            matrixInlineAttributedText(
+                group,
+                revealedSpoilers: revealedSpoilers,
+                presentationContext: presentationContext
+            )
+        )
             .font(font)
             .foregroundStyle(SynaraColor.primaryText)
             .lineSpacing(2.5)
@@ -3882,12 +3951,25 @@ private struct MatrixSpoilerBlockView: View {
 
     var body: some View {
         if isRevealed {
-            Text(attributedRichText(block.content))
-                .font(font)
-                .foregroundStyle(SynaraColor.primaryText)
-                .lineSpacing(2.5)
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
+            Text(
+                attributedRichText(
+                    block.content,
+                    presentationContext: .semantic(\SynaraThemeTokens.richTextSpoilerBackground)
+                )
+            )
+            .font(font)
+            .foregroundStyle(SynaraColor.primaryText)
+            .lineSpacing(2.5)
+            .textSelection(.enabled)
+            .fixedSize(horizontal: false, vertical: true)
+            .padding(.horizontal, SynaraSpacing.small)
+            .padding(.vertical, SynaraSpacing.xSmall)
+            .background(SynaraColor.richTextSpoilerBackground)
+            .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.small, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: SynaraRadius.small, style: .continuous)
+                    .stroke(SynaraColor.richTextSpoilerBorder, lineWidth: 1)
+            }
         } else {
             Button {
                 isRevealed = true
@@ -3897,7 +3979,11 @@ private struct MatrixSpoilerBlockView: View {
                     .foregroundStyle(SynaraColor.secondaryText)
                     .padding(.horizontal, SynaraSpacing.small)
                     .padding(.vertical, SynaraSpacing.xSmall)
-                    .background(SynaraColor.secondarySurface, in: Capsule())
+                    .background(SynaraColor.richTextSpoilerBackground, in: Capsule())
+                    .overlay {
+                        Capsule()
+                            .stroke(SynaraColor.richTextSpoilerBorder, lineWidth: 1)
+                    }
             }
             .buttonStyle(.plain)
             .accessibilityLabel(
@@ -3909,11 +3995,12 @@ private struct MatrixSpoilerBlockView: View {
 
 private struct MatrixTableBlockView: View {
     let block: MatrixHTMLRenderer.TableBlock
+    let presentationContext: MatrixRichTextPresentationContext
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
             if let caption = block.caption {
-                Text(attributedRichText(caption))
+                Text(attributedRichText(caption, presentationContext: presentationContext))
                     .font(SynaraTypography.messageBody.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
                     .fixedSize(horizontal: false, vertical: true)
@@ -3925,32 +4012,42 @@ private struct MatrixTableBlockView: View {
                     ForEach(Array(block.rows.enumerated()), id: \.offset) { rowIndex, row in
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(Array(row.cells.enumerated()), id: \.offset) { cellIndex, cell in
-                                Text(attributedRichText(cell.content))
-                                    .font(
-                                        cell.isHeader
-                                            ? SynaraTypography.messageBody.weight(.semibold)
-                                            : SynaraTypography.messageBody
-                                    )
-                                    .foregroundStyle(SynaraColor.primaryText)
-                                    .lineLimit(nil)
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .frame(
-                                        minWidth: cellIndex == 0 ? 128 : 176,
-                                        idealWidth: cellIndex == 0 ? 156 : 220,
-                                        maxWidth: cellIndex == 0 ? 220 : 320,
-                                        alignment: .topLeading
-                                    )
-                                    .padding(.horizontal, SynaraSpacing.medium)
-                                    .padding(.vertical, 10)
-                                    .accessibilityLabel(
-                                        tableCellAccessibilityLabel(
-                                            cell.plainText,
-                                            rowIndex: rowIndex,
-                                            cellIndex: cellIndex,
-                                            isHeader: cell.isHeader
+                                Text(
+                                    attributedRichText(
+                                        cell.content,
+                                        presentationContext: .semantic(
+                                            tableRowToken(
+                                                rowIndex: rowIndex,
+                                                isHeader: row.isHeader
+                                            )
                                         )
                                     )
-                                    .accessibilityAddTraits(cell.isHeader ? .isHeader : [])
+                                )
+                                .font(
+                                    cell.isHeader
+                                        ? SynaraTypography.messageBody.weight(.semibold)
+                                        : SynaraTypography.messageBody
+                                )
+                                .foregroundStyle(SynaraColor.primaryText)
+                                .lineLimit(nil)
+                                .fixedSize(horizontal: false, vertical: true)
+                                .frame(
+                                    minWidth: cellIndex == 0 ? 128 : 176,
+                                    idealWidth: cellIndex == 0 ? 156 : 220,
+                                    maxWidth: cellIndex == 0 ? 220 : 320,
+                                    alignment: .topLeading
+                                )
+                                .padding(.horizontal, SynaraSpacing.medium)
+                                .padding(.vertical, 10)
+                                .accessibilityLabel(
+                                    tableCellAccessibilityLabel(
+                                        cell.plainText,
+                                        rowIndex: rowIndex,
+                                        cellIndex: cellIndex,
+                                        isHeader: cell.isHeader
+                                    )
+                                )
+                                .accessibilityAddTraits(cell.isHeader ? .isHeader : [])
 
                                 if cellIndex < row.cells.count - 1 {
                                     Divider()
@@ -3966,7 +4063,7 @@ private struct MatrixTableBlockView: View {
                     }
                 }
             }
-            .background(SynaraColor.surface)
+            .background(SynaraColor.richTextTableOdd)
             .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
@@ -3980,9 +4077,23 @@ private struct MatrixTableBlockView: View {
 
     private func tableRowSurface(rowIndex: Int, isHeader: Bool) -> Color {
         if isHeader {
-            return SynaraColor.elevatedSurface
+            return SynaraColor.richTextTableHeader
         }
-        return rowIndex.isMultiple(of: 2) ? SynaraColor.surface : SynaraColor.secondarySurface
+        return rowIndex.isMultiple(of: 2)
+            ? SynaraColor.richTextTableOdd
+            : SynaraColor.richTextTableEven
+    }
+
+    private func tableRowToken(
+        rowIndex: Int,
+        isHeader: Bool
+    ) -> KeyPath<SynaraThemeTokens, String> {
+        if isHeader {
+            return \SynaraThemeTokens.richTextTableHeader
+        }
+        return rowIndex.isMultiple(of: 2)
+            ? \SynaraThemeTokens.richTextTableOdd
+            : \SynaraThemeTokens.richTextTableEven
     }
 
     private func tableCellAccessibilityLabel(
@@ -4006,9 +4117,16 @@ private struct MatrixTableBlockView: View {
 private struct MatrixQuoteBlockView: View {
     let text: MatrixHTMLRenderer.RichText
     let font: Font
+    let presentationContext: MatrixRichTextPresentationContext
 
     var body: some View {
-        Text(attributedRichText(text, includeHeadingFonts: false))
+        Text(
+            attributedRichText(
+                text,
+                includeHeadingFonts: false,
+                presentationContext: presentationContext
+            )
+        )
             .font(font)
             .foregroundStyle(SynaraColor.secondaryText)
             .lineLimit(nil)
@@ -4022,13 +4140,13 @@ private struct MatrixQuoteBlockView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
     }
-
 }
 
-private func attributedRichText(
+func attributedRichText(
     _ richText: MatrixHTMLRenderer.RichText,
     includeHeadingFonts: Bool = true,
-    includeLinks: Bool = true
+    includeLinks: Bool = true,
+    presentationContext: MatrixRichTextPresentationContext = .canvas
 ) -> AttributedString {
     var output = AttributedString()
     for run in richText.runs {
@@ -4052,6 +4170,13 @@ private func attributedRichText(
         if run.style.contains(.underline) {
             value.underlineStyle = .single
         }
+        if run.style.contains(.code), run.style.contains(.underline) == false {
+            // Attributed-string backgrounds preserve wrapping and selection.
+            // This boundary matches the fill in standard contrast and becomes
+            // measurable only when Increased Contrast asks for a second cue.
+            value.underlineStyle = .single
+            value.uiKit.underlineColor = UIColor(SynaraColor.richTextInlineCodeBoundary)
+        }
         if run.style.contains(.superscript) {
             value.baselineOffset = 4
         } else if run.style.contains(.subscriptText) {
@@ -4070,11 +4195,25 @@ private func attributedRichText(
         } else if includeHeadingFonts, run.style.contains(.heading6) {
             value.font = .subheadline.weight(.semibold)
         }
-        if let color = run.foregroundColorHex.flatMap(matrixColor(hex:)) {
-            value.foregroundColor = color
-        }
-        if let color = run.backgroundColorHex.flatMap(matrixColor(hex:)) {
-            value.backgroundColor = color
+        let paintsInlineCode = run.style.contains(.code)
+        if paintsInlineCode || run.foregroundColorHex != nil || run.backgroundColorHex != nil {
+            let colors = SynaraRichTextColorPolicy.adaptiveColors(
+                authoredForeground: run.foregroundColorHex,
+                authoredBackground: run.backgroundColorHex,
+                fallbackForeground: paintsInlineCode
+                    ? \SynaraThemeTokens.richTextInlineCodeForeground
+                    : \SynaraThemeTokens.primaryText,
+                fallbackBackground: paintsInlineCode
+                    ? \SynaraThemeTokens.richTextInlineCodeBackground
+                    : presentationContext.readingSurface,
+                appliesStandardOwnMessageTint: paintsInlineCode
+                    ? false
+                    : presentationContext.appliesStandardOwnMessageTint
+            )
+            value.foregroundColor = colors.foreground
+            if paintsInlineCode || run.backgroundColorHex != nil {
+                value.backgroundColor = colors.background
+            }
         }
         if includeLinks {
             value.link = run.link
@@ -4084,22 +4223,10 @@ private func attributedRichText(
     return output
 }
 
-private func matrixColor(hex: String) -> Color? {
-    guard hex.count == 7, hex.first == "#",
-          let value = UInt32(hex.dropFirst(), radix: 16)
-    else { return nil }
-    return Color(
-        .sRGB,
-        red: Double((value >> 16) & 0xFF) / 255,
-        green: Double((value >> 8) & 0xFF) / 255,
-        blue: Double(value & 0xFF) / 255,
-        opacity: 1
-    )
-}
-
 private struct MatrixDetailsBlockView: View {
     let block: MatrixHTMLRenderer.DetailsBlock
     let font: Font
+    let presentationContext: MatrixRichTextPresentationContext
     @State private var isExpanded = false
 
     var body: some View {
@@ -4109,13 +4236,14 @@ private struct MatrixDetailsBlockView: View {
                     MatrixSemanticSegmentView(
                         segment: item.segment,
                         fallbackBody: "",
-                        font: font
+                        font: font,
+                        presentationContext: presentationContext
                     )
                 }
             }
             .padding(.top, SynaraSpacing.xSmall)
         } label: {
-            Text(attributedRichText(block.summaryContent))
+            Text(attributedRichText(block.summaryContent, presentationContext: presentationContext))
                 .font(SynaraTypography.messageBody.weight(.semibold))
                 .foregroundStyle(SynaraColor.primaryText)
                 .lineLimit(nil)
@@ -4156,7 +4284,7 @@ private struct MatrixCodeBlockView: View {
             }
             .padding(.horizontal, SynaraSpacing.medium)
             .padding(.vertical, SynaraSpacing.small)
-            .background(SynaraColor.elevatedSurface)
+            .background(SynaraColor.richTextCodeBlockBackground)
 
             Divider()
 
@@ -4178,12 +4306,12 @@ private struct MatrixCodeBlockView: View {
                 }
                 .padding(SynaraSpacing.medium)
             }
-            .background(SynaraColor.secondarySurface)
+            .background(SynaraColor.richTextCodeBlockBackground)
         }
         .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
-                .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+                .stroke(SynaraColor.richTextCodeBlockBorder, lineWidth: 1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -5078,7 +5206,10 @@ private struct TimelineRow: View {
                     MatrixFormattedMessageView(
                         fallbackBody: body,
                         html: html,
-                        font: SynaraTypography.messageBody
+                        font: SynaraTypography.messageBody,
+                        presentationContext: bubbleAlignment == .own
+                            ? .ownMessage
+                            : .otherMessage
                     )
                 }
             case .encryptedPlaceholder:

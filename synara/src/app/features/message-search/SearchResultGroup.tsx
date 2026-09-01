@@ -39,7 +39,6 @@ import { ResultItem } from './useMessageSearch';
 import { SequenceCard } from '../../components/sequence-card';
 import { UserAvatar } from '../../components/user-avatar';
 import { useMentionClickHandler } from '../../hooks/useMentionClickHandler';
-import { useSpoilerClickHandler } from '../../hooks/useSpoilerClickHandler';
 import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
@@ -120,7 +119,6 @@ export function SearchResultGroup({
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
 
   const mentionClickHandler = useMentionClickHandler(room.roomId);
-  const spoilerClickHandler = useSpoilerClickHandler();
 
   const linkifyOpts = useMemo<LinkifyOpts>(
     () => ({
@@ -137,18 +135,9 @@ export function SearchResultGroup({
         linkifyOpts,
         highlightRegex,
         useAuthentication,
-        handleSpoilerClick: spoilerClickHandler,
         handleMentionClick: mentionClickHandler,
       }),
-    [
-      mx,
-      room,
-      linkifyOpts,
-      highlightRegex,
-      mentionClickHandler,
-      spoilerClickHandler,
-      useAuthentication,
-    ]
+    [mx, room, linkifyOpts, highlightRegex, mentionClickHandler, useAuthentication]
   );
 
   const renderMatrixEvent = useMatrixEventRenderer<[SearchResultEvent, string, GetContentCallback]>(

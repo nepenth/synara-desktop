@@ -40,10 +40,36 @@ export type ThemeSurfaceRamp = {
   surfaceVariant: ThemeSurfaceScale;
   secondaryContainer: ThemeSurfaceScale;
   content: ThemeContentRoles;
+  richText: ThemeRichTextRoles;
   chrome: string;
   overlay: string;
   shadow: string;
   focusRing: string;
+};
+
+/**
+ * Semantic presentation colors for Matrix rich text. These are deliberately
+ * derived from the chat reading surface rather than a generic Folds surface:
+ * a generic token can resolve to the canvas itself and make formatting vanish.
+ */
+export type ThemeRichTextRoles = {
+  readingSurface: string;
+  readingSurfaceHover: string;
+  inlineCodeBackground: string;
+  inlineCodeBorder: string;
+  inlineCodeForeground: string;
+  codeBlockBackground: string;
+  codeBlockBorder: string;
+  spoilerBackground: string;
+  spoilerHover: string;
+  spoilerBorder: string;
+  tableCanvas: string;
+  tableHeader: string;
+  tableOdd: string;
+  tableEven: string;
+  tableHover: string;
+  contrastBorder: string;
+  contrastForeground: string;
 };
 
 export type ThemeContentRoles = {
@@ -124,6 +150,69 @@ const softenToContrast = (
   return resolved;
 };
 
+const surfaceAtContrast = (surface: string, toward: string, targetContrast: number): string => {
+  for (let step = 1; step <= 100; step += 1) {
+    const candidate = chroma.mix(surface, toward, step / 100, 'rgb').hex();
+    if (chroma.contrast(candidate, surface) >= targetContrast) return candidate;
+  }
+  return toward;
+};
+
+const neutralSurfaceAtContrast = (
+  surface: string,
+  kind: ThemeRampKind,
+  targetContrast: number
+): string => {
+  const [rawHue, rawSaturation, rawLightness] = chroma(surface).hsl();
+  const hue = Number.isNaN(rawHue) ? 220 : rawHue;
+  const saturation = Math.min(Number.isNaN(rawSaturation) ? 0 : rawSaturation, 0.025);
+  const lightness = Number.isNaN(rawLightness) ? (kind === 'dark' ? 0.1 : 0.95) : rawLightness;
+  const direction = kind === 'dark' ? 1 : -1;
+  for (let step = 0; step <= 100; step += 1) {
+    const candidateLightness = lightness + direction * ((step / 100) * 0.75);
+    const candidate = hslHex(hue, saturation, candidateLightness);
+    if (chroma.contrast(candidate, surface) >= targetContrast) return candidate;
+  }
+  return kind === 'dark' ? '#ffffff' : '#000000';
+};
+
+export const deriveThemeRichTextRoles = (
+  kind: ThemeRampKind,
+  readingSurface: string,
+  readingSurfaceHover: string
+): ThemeRichTextRoles => {
+  const toward = kind === 'dark' ? '#ffffff' : '#000000';
+  const inlineCodeBackground = surfaceAtContrast(readingSurface, toward, 1.5);
+  // Syntax palettes are verified against a calm neutral well. Retain a small
+  // amount of the selected theme hue without letting saturated presets move
+  // token contrast below its accessibility floor.
+  const codeBlockBackground = chroma
+    .mix(readingSurface, kind === 'dark' ? '#2b2d31' : '#f2f3f5', 0.85, 'rgb')
+    .hex();
+  const spoilerBackground = surfaceAtContrast(readingSurface, toward, 1.42);
+  const contrastForeground = softenToContrast(toward, inlineCodeBackground, 7);
+
+  return {
+    readingSurface,
+    readingSurfaceHover,
+    inlineCodeBackground,
+    inlineCodeBorder: surfaceAtContrast(readingSurface, toward, 2),
+    inlineCodeForeground: contrastForeground,
+    codeBlockBackground,
+    codeBlockBorder: neutralSurfaceAtContrast(readingSurface, kind, 1.7),
+    spoilerBackground,
+    spoilerHover: surfaceAtContrast(readingSurface, toward, 1.62),
+    spoilerBorder: surfaceAtContrast(readingSurface, toward, 2),
+    tableCanvas: surfaceAtContrast(readingSurface, toward, 1.1),
+    tableHeader: surfaceAtContrast(readingSurface, toward, 1.38),
+    tableOdd: readingSurface,
+    tableEven: surfaceAtContrast(readingSurface, toward, 1.16),
+    tableHover: surfaceAtContrast(readingSurface, toward, 1.28),
+    contrastBorder: surfaceAtContrast(readingSurface, toward, 3.1),
+    contrastForeground,
+  };
+};
+
 const contentRoles = (
   kind: ThemeRampKind,
   background: string,
@@ -156,7 +245,7 @@ const contentRoles = (
 };
 
 const withContentRoles = (
-  ramp: Omit<ThemeSurfaceRamp, 'content'>,
+  ramp: Omit<ThemeSurfaceRamp, 'content' | 'richText'>,
   kind: ThemeRampKind
 ): ThemeSurfaceRamp => {
   const content = contentRoles(
@@ -173,6 +262,11 @@ const withContentRoles = (
     surfaceVariant: { ...ramp.surfaceVariant, OnContainer: content.primary },
     secondaryContainer: { ...ramp.secondaryContainer, OnContainer: content.primary },
     content,
+    richText: deriveThemeRichTextRoles(
+      kind,
+      ramp.surfaceVariant.Container,
+      ramp.surfaceVariant.ContainerHover
+    ),
   };
 };
 

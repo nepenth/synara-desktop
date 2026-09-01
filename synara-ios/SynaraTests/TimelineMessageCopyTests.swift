@@ -73,6 +73,40 @@ final class TimelineMessageCopyTests: XCTestCase {
         XCTAssertEqual(payload.plainText, "3. First\n4. Second")
     }
 
+    func testCopyPayloadCanonicalizesSafeLegacyFontColorsAndDropsUnsafeAttributes() throws {
+        let rawHTML = ##"<p><font color="#a1b2c3" onclick="steal()">legacy <font data-mx-color="#DDEEFF" data-mx-bg-color="#010203">nested</font></font> <font color="red" data-mx-bg-color="#12345G" style="color: #FFFFFF">invalid</font></p>"##
+        let item = makeItem(
+            kind: .formattedText(body: "legacy nested invalid", html: rawHTML)
+        )
+        let payload = try XCTUnwrap(TimelineMessageCopy.payload(for: item))
+        let safeHTML = try XCTUnwrap(payload.html)
+
+        XCTAssertTrue(safeHTML.contains(##"<span data-mx-color="#A1B2C3">legacy "##))
+        XCTAssertTrue(
+            safeHTML.contains(
+                ##"<span data-mx-color="#DDEEFF" data-mx-bg-color="#010203">nested</span>"##
+            )
+        )
+        XCTAssertTrue(safeHTML.contains("<span>invalid</span>"))
+        XCTAssertFalse(safeHTML.localizedCaseInsensitiveContains("<font"))
+        XCTAssertFalse(safeHTML.localizedCaseInsensitiveContains(" style="))
+        XCTAssertFalse(safeHTML.localizedCaseInsensitiveContains(" onclick="))
+        XCTAssertFalse(safeHTML.contains(##" color="#"##))
+        XCTAssertFalse(safeHTML.contains("#12345G"))
+
+        let projection = MatrixHTMLRenderer.selectionProjection(
+            body: payload.plainText,
+            html: safeHTML,
+            revealingSpoilers: true
+        )
+        XCTAssertEqual(projection.richText.plainText, "legacy nested invalid")
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "legacy " }?.foregroundColorHex, "#A1B2C3")
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "nested" }?.foregroundColorHex, "#DDEEFF")
+        let invalid = try XCTUnwrap(projection.richText.runs.first { $0.text.contains("invalid") })
+        XCTAssertNil(invalid.foregroundColorHex)
+        XCTAssertNil(invalid.backgroundColorHex)
+    }
+
     func testSelectionProjectionConcealsSpoilersUntilExplicitReveal() {
         let html = #"<p>Public <span data-mx-spoiler="answer">secret <strong>detail</strong></span> ending</p>"#
 

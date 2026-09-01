@@ -17,6 +17,7 @@ import {
 } from './nativeTimelineCodeHighlight';
 import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import * as htmlCss from './nativeTimelineHtml.css';
+import { MatrixColorSpan, MatrixColorSurface } from '../../components/message/MatrixColorSpan';
 
 export function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
   // Chromium does not paint an extra gutter row for a final line terminator,
@@ -82,12 +83,30 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
   );
 }
 
-function NativeSpoiler({ children, reason }: { children: React.ReactNode; reason?: string }) {
+function NativeSpoiler({
+  children,
+  reason,
+  foreground,
+  background,
+}: {
+  children: React.ReactNode;
+  reason?: string;
+  foreground?: string;
+  background?: string;
+}) {
   const [revealed, setRevealed] = useState(false);
   const normalizedReason = reason?.trim().slice(0, 160);
 
   if (revealed) {
-    return <span className={htmlCss.SpoilerContent}>{children}</span>;
+    return (
+      <MatrixColorSurface surface="spoiler">
+        <span className={htmlCss.SpoilerContent}>
+          <MatrixColorSpan foreground={foreground} background={background}>
+            {children}
+          </MatrixColorSpan>
+        </span>
+      </MatrixColorSurface>
+    );
   }
 
   return (
@@ -109,25 +128,44 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
     }
     if (domNode.name === 'table') {
       return (
-        <div
-          className={htmlCss.TableScroll}
-          role="region"
-          aria-label="Scrollable message table"
-          // Horizontal overflow needs an explicit keyboard focus target.
-          // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
-          tabIndex={0}
-        >
-          <table {...attributesToProps(domNode.attribs)}>
-            {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
-          </table>
-        </div>
+        <MatrixColorSurface surface="table">
+          <div
+            className={htmlCss.TableScroll}
+            role="region"
+            aria-label="Scrollable message table"
+            // Horizontal overflow needs an explicit keyboard focus target.
+            // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+            tabIndex={0}
+          >
+            <table {...attributesToProps(domNode.attribs)}>
+              {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+            </table>
+          </div>
+        </MatrixColorSurface>
       );
     }
     if (domNode.name === 'span' && 'data-mx-spoiler' in domNode.attribs) {
       return (
-        <NativeSpoiler reason={domNode.attribs['data-mx-spoiler']}>
+        <NativeSpoiler
+          reason={domNode.attribs['data-mx-spoiler']}
+          foreground={domNode.attribs['data-mx-color']}
+          background={domNode.attribs['data-mx-bg-color']}
+        >
           {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
         </NativeSpoiler>
+      );
+    }
+    if (
+      domNode.name === 'span' &&
+      ('data-mx-color' in domNode.attribs || 'data-mx-bg-color' in domNode.attribs)
+    ) {
+      return (
+        <MatrixColorSpan
+          foreground={domNode.attribs['data-mx-color']}
+          background={domNode.attribs['data-mx-bg-color']}
+        >
+          {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+        </MatrixColorSpan>
       );
     }
     if (domNode.name === 'img') {
@@ -142,9 +180,25 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </span>
       );
     }
+    if (
+      domNode.name === 'code' &&
+      !(domNode.parent instanceof Element && domNode.parent.name === 'pre')
+    ) {
+      return (
+        <MatrixColorSurface surface="inlineCode">
+          <code {...attributesToProps(domNode.attribs)}>
+            {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+          </code>
+        </MatrixColorSurface>
+      );
+    }
     if (domNode.name !== 'pre') return undefined;
     const { code, languageClass } = nativeCodeBlockFromPreChildren(domNode.children);
-    return <NativeCodeBlock code={code} languageClass={languageClass} />;
+    return (
+      <MatrixColorSurface surface="codeBlock">
+        <NativeCodeBlock code={code} languageClass={languageClass} />
+      </MatrixColorSurface>
+    );
   },
 };
 

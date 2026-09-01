@@ -14,11 +14,49 @@ import { normalizeAccentColor } from '../utils/themeAccent';
 import { messageTextForeground } from '../utils/messageTextTone';
 import {
   deriveThemeSurfaceRamp,
+  deriveThemeRichTextRoles,
   resolveThemeBaseColor,
   shouldApplyDerivedThemeRamp,
   type ThemeContentRoles,
+  type ThemeRichTextRoles,
   type ThemeSurfaceScale,
 } from '../utils/themeBase';
+
+const LEGACY_RICH_TEXT_SURFACES: Record<
+  string,
+  { kind: ThemeKind; readingSurface: string; readingSurfaceHover: string }
+> = {
+  'silver-theme': {
+    kind: ThemeKind.Light,
+    readingSurface: '#DEDEDE',
+    readingSurfaceHover: '#D3D3D3',
+  },
+  'butter-theme': {
+    kind: ThemeKind.Dark,
+    readingSurface: '#33322C',
+    readingSurfaceHover: '#403F38',
+  },
+};
+
+const RICH_TEXT_ROLE_VARIABLES: Record<keyof ThemeRichTextRoles, string> = {
+  readingSurface: '--synara-rich-text-reading-surface',
+  readingSurfaceHover: '--synara-rich-text-reading-surface-hover',
+  inlineCodeBackground: '--synara-rich-text-inline-code-background',
+  inlineCodeBorder: '--synara-rich-text-inline-code-border',
+  inlineCodeForeground: '--synara-rich-text-inline-code-foreground',
+  codeBlockBackground: '--synara-rich-text-code-block-background',
+  codeBlockBorder: '--synara-rich-text-code-block-border',
+  spoilerBackground: '--synara-rich-text-spoiler-background',
+  spoilerHover: '--synara-rich-text-spoiler-hover',
+  spoilerBorder: '--synara-rich-text-spoiler-border',
+  tableCanvas: '--synara-rich-text-table-canvas',
+  tableHeader: '--synara-rich-text-table-header',
+  tableOdd: '--synara-rich-text-table-odd',
+  tableEven: '--synara-rich-text-table-even',
+  tableHover: '--synara-rich-text-table-hover',
+  contrastBorder: '--synara-rich-text-contrast-border',
+  contrastForeground: '--synara-rich-text-contrast-foreground',
+};
 
 const CONTENT_ROLE_VARIABLES: Record<keyof ThemeContentRoles, string> = {
   heading: '--synara-content-heading',
@@ -42,6 +80,18 @@ const syncContentRoles = (target: HTMLElement, roles: ThemeContentRoles) => {
 
 const clearContentRoles = (target: HTMLElement) => {
   Object.values(CONTENT_ROLE_VARIABLES).forEach((variable) => {
+    target.style.removeProperty(variable);
+  });
+};
+
+const syncRichTextRoles = (target: HTMLElement, roles: ThemeRichTextRoles) => {
+  (Object.keys(RICH_TEXT_ROLE_VARIABLES) as Array<keyof ThemeRichTextRoles>).forEach((role) => {
+    target.style.setProperty(RICH_TEXT_ROLE_VARIABLES[role], roles[role]);
+  });
+};
+
+const clearRichTextRoles = (target: HTMLElement) => {
+  Object.values(RICH_TEXT_ROLE_VARIABLES).forEach((variable) => {
     target.style.removeProperty(variable);
   });
 };
@@ -104,6 +154,19 @@ const syncThemeBaseColor = (
   const ramp = deriveThemeSurfaceRamp(resolveThemeBaseColor(baseColor), themeKind);
   if (!shouldApplyDerivedThemeRamp(themeId)) {
     clearContentRoles(target);
+    const legacySurface = themeId ? LEGACY_RICH_TEXT_SURFACES[themeId] : undefined;
+    if (legacySurface) {
+      syncRichTextRoles(
+        target,
+        deriveThemeRichTextRoles(
+          legacySurface.kind,
+          legacySurface.readingSurface,
+          legacySurface.readingSurfaceHover
+        )
+      );
+    } else {
+      clearRichTextRoles(target);
+    }
     CONTAINER_TOKENS.forEach((tokens) => clearContainerScale(target, tokens));
     clearColorVar(target, color.Other.FocusRing);
     clearColorVar(target, color.Other.Shadow);
@@ -112,6 +175,7 @@ const syncThemeBaseColor = (
   }
 
   syncContentRoles(target, ramp.content);
+  syncRichTextRoles(target, ramp.richText);
   applyContainerScale(target, color.Background, ramp.background);
   applyContainerScale(target, color.Surface, ramp.surface);
   applyContainerScale(target, color.SurfaceVariant, ramp.surfaceVariant);
