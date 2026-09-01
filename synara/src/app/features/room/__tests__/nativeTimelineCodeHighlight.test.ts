@@ -6,6 +6,7 @@ import { isTag } from 'domhandler';
 import Prism from 'prismjs';
 import { sanitizeCustomHtml } from '../../../utils/sanitize';
 import {
+  deriveThemeRichTextRoles,
   deriveThemeSurfaceRamp,
   THEME_BASE_PRESETS,
   themeContrastRatio,
@@ -34,6 +35,7 @@ const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.ts
 const formattedBody = readFileSync('src/app/features/room/nativeTimelineFormattedBody.tsx', 'utf8');
 const highlight = readFileSync('src/app/features/room/nativeTimelineCodeHighlight.ts', 'utf8');
 const htmlCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
+const compatibilityPrismCss = readFileSync('src/app/plugins/react-prism/ReactPrism.css', 'utf8');
 
 const THEME_BASE_FIXTURES = [
   ...THEME_BASE_PRESETS.map(({ hex }) => hex),
@@ -46,7 +48,12 @@ const THEME_BASE_FIXTURES = [
 
 const codePanelBackgrounds = (kind: 'light' | 'dark'): string[] => [
   ...(kind === 'light' ? ['#F2F3F5', '#EAEAEA'] : ['#2B2D31', '#262621']),
-  ...THEME_BASE_FIXTURES.map((base) => deriveThemeSurfaceRamp(base, kind).surface.Container),
+  ...(kind === 'light'
+    ? [deriveThemeRichTextRoles('light', '#DEDEDE', '#D3D3D3').codeBlockBackground]
+    : [deriveThemeRichTextRoles('dark', '#33322C', '#403F38').codeBlockBackground]),
+  ...THEME_BASE_FIXTURES.map(
+    (base) => deriveThemeSurfaceRamp(base, kind).richText.codeBlockBackground
+  ),
 ];
 
 const assertPaletteContrast = (
@@ -112,7 +119,7 @@ test('native presenter routes formatted HTML through the sanitized Prism code-bl
   assert.match(htmlCss, /ui-monospace/);
   assert.match(htmlCss, /fontSize: '0\.92em'/);
   assert.match(htmlCss, /lineHeight: 1\.5/);
-  assert.match(htmlCss, /color\.Surface\.Container/);
+  assert.match(htmlCss, /--synara-rich-text-code-block-background/);
   assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.light/);
   assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.dark/);
   assert.match(htmlCss, /NATIVE_SYNTAX_PALETTES\.moreLight/);
@@ -139,6 +146,17 @@ test('native syntax palettes meet ordinary and increased text contrast on every 
   assertPaletteContrast('dark', NATIVE_SYNTAX_PALETTES.dark, darkBackgrounds, 4.5);
   assertPaletteContrast('moreLight', NATIVE_SYNTAX_PALETTES.moreLight, lightBackgrounds, 7);
   assertPaletteContrast('moreDark', NATIVE_SYNTAX_PALETTES.moreDark, darkBackgrounds, 7);
+});
+
+test('compatibility Prism uses the same verified standard and increased-contrast palettes', () => {
+  for (const palette of Object.values(NATIVE_SYNTAX_PALETTES)) {
+    Object.values(palette).forEach((value) => {
+      assert.match(compatibilityPrismCss.toLowerCase(), new RegExp(value.toLowerCase()));
+    });
+  }
+  assert.match(compatibilityPrismCss, /@media \(prefers-contrast: more\)/);
+  assert.match(compatibilityPrismCss, /token\.namespace[\s\S]*opacity: 1/);
+  assert.doesNotMatch(compatibilityPrismCss, /#659604|#00829f|#f92672|#8292a2/i);
 });
 
 test('code metadata and line numbers use an opaque semantic syntax role', () => {
@@ -292,10 +310,7 @@ test('native formatted HTML applies the exact Matrix v1.19 presentation profile'
   );
   assert.doesNotMatch(sanitized, /data-mx-color="#abc"/);
   assert.match(sanitized, /data-mx-bg-color="#123456"/);
-  assert.match(
-    sanitized,
-    /<span data-mx-color="#abcdef" style="color:#abcdef">legacy color<\/span>/
-  );
+  assert.match(sanitized, /<span data-mx-color="#abcdef">legacy color<\/span>/);
   assert.match(sanitized, /<s>legacy strike<\/s>/);
   assert.match(sanitized, /<ol start="10">/);
   assert.match(sanitized, /<ol><li>one<\/li><\/ol>/);

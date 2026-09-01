@@ -2122,14 +2122,19 @@ enum MatrixHTMLRenderer {
                 case "summary":
                     render(nodes: children, style: style.union(.bold), link: link, listDepth: listDepth, to: &runs)
                     ensureNewlines(1, in: &runs)
-                case "span":
+                case "span", "font":
                     let boundary = (index: runs.count - 1, characterCount: runs.last?.text.count ?? 0)
                     if children.isEmpty, let math = attributes["data-mx-maths"]?.decodingBasicHTMLEntities() {
                         appendRichTextRun(.init(text: math, style: style.union(.code), link: link), to: &runs)
                     } else {
                         render(nodes: children, style: style, link: link, listDepth: listDepth, to: &runs)
                     }
+                    // Historical Matrix clients emitted `<font color>` before
+                    // `data-mx-color` became the interoperable representation.
+                    // Prefer the modern attribute while retaining the legacy
+                    // fallback after the sanitizer has validated both forms.
                     let foreground = attributes["data-mx-color"]
+                        ?? (name == "font" ? attributes["color"] : nil)
                     let background = attributes["data-mx-bg-color"]
                     if foreground != nil || background != nil {
                         applyMatrixColors(
@@ -2739,10 +2744,17 @@ enum MatrixHTMLRenderer {
         else { return nil }
         let content = richText(nodes: children, style: style, link: link)
         guard content.runs.isEmpty == false else { return nil }
+        var coloredRuns = content.runs
+        applyMatrixColors(
+            foreground: attributes["data-mx-color"],
+            background: attributes["data-mx-bg-color"],
+            after: (index: -1, characterCount: 0),
+            to: &coloredRuns
+        )
         let reason = rawReason.decodingBasicHTMLEntities()
             .trimmingCharacters(in: .whitespacesAndNewlines)
         return SpoilerBlock(
-            content: content,
+            content: RichText(runs: coloredRuns),
             reason: reason.isEmpty ? nil : String(reason.prefix(160))
         )
     }
@@ -3163,6 +3175,7 @@ private extension String {
     func sanitizingMatrixHTMLForNativeImport() -> String {
         struct OpenTag {
             let name: String
+            let outputName: String
             let emitted: Bool
         }
 
@@ -3171,7 +3184,7 @@ private extension String {
             "del", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "p", "a",
             "ul", "ol", "sup", "sub", "li", "b", "i", "u", "strong", "em", "s",
             "code", "hr", "br", "div", "table", "thead", "tbody", "tr", "th", "td",
-            "caption", "pre", "span", "img", "details", "summary",
+            "caption", "pre", "span", "font", "img", "details", "summary",
         ]
         let contentDroppingTags: Set<String> = [
             "script", "style", "iframe", "object", "embed", "svg", "math", "template",
@@ -3259,19 +3272,20 @@ private extension String {
                     continue
                 }
                 for openTag in openTags[matchingIndex...].reversed() where openTag.emitted {
-                    output.append("</\(openTag.name)>")
+                    output.append("</\(openTag.outputName)>")
                 }
                 openTags.removeSubrange(matchingIndex...)
                 continue
             }
 
             let shouldEmit = openTags.last?.emitted != false && openTags.count < maximumTagNesting
+            let outputTagName = tag.name == "font" ? "span" : tag.name
             if voidTags.contains(tag.name) == false, tag.isSelfClosing == false {
-                openTags.append(OpenTag(name: tag.name, emitted: shouldEmit))
+                openTags.append(OpenTag(name: tag.name, outputName: outputTagName, emitted: shouldEmit))
             }
             guard shouldEmit else { continue }
 
-            output.append("<\(tag.name)")
+            output.append("<\(outputTagName)")
             switch tag.name {
             case "a":
                 if let rawHref = tag.attributes["href"]?.decodingBasicHTMLEntities(),
@@ -3312,6 +3326,22 @@ private extension String {
                 {
                     output.append(" data-mx-maths=\"\(maths.escapingHTMLAttributeValue())\"")
                 }
+            case "font":
+                // `<font color>` remains in Matrix's historical HTML
+                // allowlist. Canonicalize it to data-mx attributes so native
+                // rendering and rich clipboard transfer share one strict,
+                // style-free color representation.
+                let foreground = ["data-mx-color", "color"]
+                    .compactMap { tag.attributes[$0]?.decodingBasicHTMLEntities() }
+                    .first(where: \.isSafeMatrixColor)
+                if let foreground {
+                    output.append(" data-mx-color=\"\(foreground.uppercased())\"")
+                }
+                if let background = tag.attributes["data-mx-bg-color"]?.decodingBasicHTMLEntities(),
+                   background.isSafeMatrixColor
+                {
+                    output.append(" data-mx-bg-color=\"\(background.uppercased())\"")
+                }
             case "div":
                 if let maths = tag.attributes["data-mx-maths"]?.decodingBasicHTMLEntities(),
                    maths.isEmpty == false
@@ -3324,12 +3354,12 @@ private extension String {
             output.append(">")
 
             if tag.isSelfClosing, voidTags.contains(tag.name) == false {
-                output.append("</\(tag.name)>")
+                output.append("</\(outputTagName)>")
             }
         }
 
         for openTag in openTags.reversed() where openTag.emitted {
-            output.append("</\(openTag.name)>")
+            output.append("</\(openTag.outputName)>")
         }
 
         return output

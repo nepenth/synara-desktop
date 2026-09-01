@@ -6,6 +6,7 @@ import { roomAvatarTone } from '../common';
 import {
   chromeColorsForRamp,
   DEFAULT_THEME_BASE_COLOR,
+  deriveThemeRichTextRoles,
   deriveThemeSurfaceRamp,
   normalizeThemeBaseColor,
   resolveThemeBaseColor,
@@ -120,6 +121,90 @@ test('semantic content roles keep calm hierarchy and accessible floors across ev
       assert.notEqual(content.tableOdd, content.tableEven);
     }
   }
+});
+
+test('semantic rich-text roles remain distinct and readable on every derived chat surface', () => {
+  for (const preset of THEME_BASE_PRESETS) {
+    for (const kind of ['light', 'dark'] as const) {
+      const ramp = deriveThemeSurfaceRamp(preset.hex, kind);
+      const { richText } = ramp;
+      const surface = ramp.surfaceVariant.Container;
+
+      assert.equal(richText.readingSurface, surface);
+      assert.equal(richText.readingSurfaceHover, ramp.surfaceVariant.ContainerHover);
+      assert.notEqual(richText.inlineCodeBackground, surface);
+      const inlineContrast = themeContrastRatio(richText.inlineCodeBackground, surface);
+      assert.ok(inlineContrast >= 1.48 && inlineContrast <= 1.62);
+      assert.ok(themeContrastRatio(richText.inlineCodeBorder, surface) >= 2);
+      assert.ok(themeContrastRatio(richText.contrastBorder, surface) >= 3);
+      assert.ok(
+        themeContrastRatio(richText.inlineCodeForeground, richText.inlineCodeBackground) >= 7
+      );
+      assert.notEqual(richText.codeBlockBackground, surface);
+      assert.ok(themeContrastRatio(richText.codeBlockBorder, surface) >= 1.65);
+      assert.ok(themeContrastRatio(richText.spoilerBackground, surface) >= 1.4);
+      assert.notEqual(richText.tableHeader, richText.tableOdd);
+      assert.notEqual(richText.tableOdd, richText.tableEven);
+      for (const tableSurface of [
+        richText.tableCanvas,
+        richText.tableHeader,
+        richText.tableOdd,
+        richText.tableEven,
+        richText.tableHover,
+      ]) {
+        assert.ok(themeContrastRatio(ramp.content.primary, tableSurface) >= 4.5);
+      }
+    }
+  }
+});
+
+test('Silver and Butter rich-text roles are measured against their actual legacy canvases', () => {
+  const legacyThemes = [
+    { id: 'silver-theme', kind: 'light', canvas: '#DEDEDE', hover: '#D3D3D3' },
+    { id: 'butter-theme', kind: 'dark', canvas: '#33322C', hover: '#403F38' },
+  ] as const;
+
+  for (const legacy of legacyThemes) {
+    const roles = deriveThemeRichTextRoles(legacy.kind, legacy.canvas, legacy.hover);
+    assert.equal(roles.readingSurface.toLowerCase(), legacy.canvas.toLowerCase());
+    assert.equal(roles.readingSurfaceHover.toLowerCase(), legacy.hover.toLowerCase());
+    assert.notEqual(roles.inlineCodeBackground.toLowerCase(), legacy.canvas.toLowerCase());
+    const inlineContrast = themeContrastRatio(roles.inlineCodeBackground, legacy.canvas);
+    assert.ok(inlineContrast >= 1.48 && inlineContrast <= 1.62);
+    assert.ok(themeContrastRatio(roles.inlineCodeForeground, roles.inlineCodeBackground) >= 7);
+    assert.ok(themeContrastRatio(roles.inlineCodeBorder, legacy.canvas) >= 2);
+    assert.ok(themeContrastRatio(roles.contrastBorder, legacy.canvas) >= 3);
+    assert.notEqual(roles.tableHeader, roles.tableOdd);
+    assert.notEqual(roles.tableOdd, roles.tableEven);
+  }
+
+  const manager = readFileSync(join(srcRoot, 'app/pages/ThemeManager.tsx'), 'utf8');
+  assert.match(manager, /'silver-theme'[\s\S]*readingSurface: '#DEDEDE'/);
+  assert.match(manager, /'butter-theme'[\s\S]*readingSurface: '#33322C'/);
+  assert.match(manager, /deriveThemeRichTextRoles\(/);
+});
+
+test('desktop rich-text renderers consume semantic roles instead of the chat canvas token', () => {
+  const nativeCss = readFileSync(
+    join(srcRoot, 'app/features/room/nativeTimelineHtml.css.ts'),
+    'utf8'
+  );
+  const compatibilityCss = readFileSync(join(srcRoot, 'app/styles/CustomHtml.css.ts'), 'utf8');
+  const manager = readFileSync(join(srcRoot, 'app/pages/ThemeManager.tsx'), 'utf8');
+
+  for (const source of [nativeCss, compatibilityCss]) {
+    assert.match(source, /--synara-rich-text-inline-code-background/);
+    assert.match(source, /--synara-rich-text-inline-code-border/);
+    assert.match(source, /--synara-rich-text-code-block-background/);
+    assert.match(source, /--synara-rich-text-spoiler-background/);
+    assert.match(source, /--synara-rich-text-table-header/);
+    assert.match(source, /Liberation Mono/);
+  }
+  assert.doesNotMatch(
+    nativeCss,
+    /FormattedBody} :not\(pre\) > code[\s\S]{0,300}background: color\.SurfaceVariant\.Container/
+  );
+  assert.match(manager, /syncRichTextRoles\(target, ramp\.richText\)/);
 });
 
 test('desktop chrome source files consume the stacked stops', () => {

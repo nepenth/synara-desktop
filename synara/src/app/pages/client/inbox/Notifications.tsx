@@ -84,7 +84,6 @@ import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
 import { NativeEventContent, type NativeEventSource } from '../../../features/room/message';
 import { useMentionClickHandler } from '../../../hooks/useMentionClickHandler';
-import { useSpoilerClickHandler } from '../../../hooks/useSpoilerClickHandler';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
@@ -253,7 +252,6 @@ function RoomNotificationsGroupComp({
   const accessibleTagColors = useAccessiblePowerTagColors(theme.kind, creatorsTag, powerLevelTags);
 
   const mentionClickHandler = useMentionClickHandler(room.roomId);
-  const spoilerClickHandler = useSpoilerClickHandler();
 
   const linkifyOpts = useMemo<LinkifyOpts>(
     () => ({
@@ -269,10 +267,9 @@ function RoomNotificationsGroupComp({
       getReactCustomHtmlParser(mx, room.roomId, {
         linkifyOpts,
         useAuthentication,
-        handleSpoilerClick: spoilerClickHandler,
         handleMentionClick: mentionClickHandler,
       }),
-    [mx, room, linkifyOpts, mentionClickHandler, spoilerClickHandler, useAuthentication]
+    [mx, room, linkifyOpts, mentionClickHandler, useAuthentication]
   );
 
   const renderMatrixEvent = useMatrixEventRenderer<

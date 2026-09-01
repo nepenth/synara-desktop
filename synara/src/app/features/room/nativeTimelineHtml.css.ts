@@ -176,20 +176,25 @@ export const FormattedBody = style({
 export const SpoilerButton = style({
   display: 'inline',
   padding: `0 ${toRem(5)}`,
-  border: `1px solid var(--synara-content-separator)`,
+  border: `1px solid var(--synara-rich-text-spoiler-border)`,
   borderRadius: config.radii.R300,
-  background: color.SurfaceVariant.Container,
+  background: 'var(--synara-rich-text-spoiler-background)',
   color: 'var(--synara-content-secondary)',
   font: 'inherit',
   lineHeight: 'inherit',
   cursor: 'pointer',
   selectors: {
     '&:hover': {
-      background: color.SurfaceVariant.ContainerHover,
+      background: 'var(--synara-rich-text-spoiler-hover)',
     },
     '&:focus-visible': {
       outline: `2px solid ${color.Primary.Main}`,
       outlineOffset: toRem(2),
+    },
+  },
+  '@media': {
+    '(prefers-contrast: more)': {
+      borderColor: 'var(--synara-rich-text-contrast-border)',
     },
   },
 });
@@ -197,16 +202,28 @@ export const SpoilerButton = style({
 export const SpoilerContent = style({
   padding: `0 ${toRem(4)}`,
   borderRadius: config.radii.R300,
-  background: color.SurfaceVariant.Container,
+  background: 'var(--synara-rich-text-spoiler-background)',
+  border: `1px solid var(--synara-rich-text-spoiler-border)`,
+  '@media': {
+    '(prefers-contrast: more)': {
+      borderColor: 'var(--synara-rich-text-contrast-border)',
+    },
+  },
 });
 
 export const InlineImageFallback = style({
   display: 'inline-block',
   padding: `0 ${toRem(4)}`,
   borderRadius: config.radii.R300,
-  background: color.SurfaceVariant.Container,
+  background: 'var(--synara-rich-text-inline-code-background)',
+  border: `1px solid var(--synara-rich-text-inline-code-border)`,
   color: 'var(--synara-content-secondary)',
   fontStyle: 'italic',
+  '@media': {
+    '(prefers-contrast: more)': {
+      borderColor: 'var(--synara-rich-text-contrast-border)',
+    },
+  },
 });
 
 export const SenderName = style({
@@ -301,7 +318,8 @@ export const CodePanel = style({
 });
 
 const codeMono = {
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
   fontSize: '0.92em',
   lineHeight: 1.5,
 } as const;
@@ -309,9 +327,10 @@ const codeMono = {
 export const CodeLanguage = style({
   flex: 'none',
   padding: `${config.space.S100} ${config.space.S300}`,
-  borderBottom: `1px solid ${color.Surface.ContainerLine}`,
+  borderBottom: `1px solid var(--synara-rich-text-code-block-border)`,
   color: syntaxMeta,
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
   fontSize: '0.78em',
   letterSpacing: '0.02em',
   textTransform: 'lowercase',
@@ -343,9 +362,9 @@ export const CodeLineNumbers = style({
   lineHeight: 1.5,
   paddingRight: config.space.S200,
   marginRight: config.space.S200,
-  borderRight: `1px solid ${color.Surface.ContainerLine}`,
+  borderRight: `1px solid var(--synara-rich-text-code-block-border)`,
   color: syntaxMeta,
-  background: color.Surface.Container,
+  background: 'var(--synara-rich-text-code-block-background)',
   fontVariantNumeric: 'tabular-nums',
   fontFamily: 'inherit',
   fontSize: 'inherit',
@@ -385,6 +404,14 @@ globalStyle(`${FormattedBody} blockquote`, {
   fontStyle: 'italic',
   color: 'var(--synara-content-secondary)',
 });
+globalStyle(`${FormattedBody} strong, ${FormattedBody} b`, {
+  fontWeight: 600,
+  '@media': {
+    '(prefers-contrast: more)': {
+      fontWeight: 700,
+    },
+  },
+});
 globalStyle(`${FormattedBody} ul, ${FormattedBody} ol`, {
   margin: `${config.space.S300} 0`,
   paddingLeft: '1.6em',
@@ -403,22 +430,37 @@ globalStyle(`${FormattedBody} pre`, {
   wordBreak: 'normal',
   whiteSpace: 'normal',
   borderRadius: config.radii.R400,
-  background: color.Surface.Container,
-  color: color.Surface.OnContainer,
-  border: `1px solid ${color.Surface.ContainerLine}`,
+  background: 'var(--synara-rich-text-code-block-background)',
+  color: 'var(--synara-rich-text-inline-code-foreground)',
+  border: `1px solid var(--synara-rich-text-code-block-border)`,
+  '@media': {
+    '(prefers-contrast: more)': {
+      color: 'var(--synara-rich-text-contrast-foreground)',
+      borderColor: 'var(--synara-rich-text-contrast-border)',
+    },
+  },
 });
 globalStyle(`${FormattedBody} pre:last-child`, {
   marginBottom: 0,
 });
 globalStyle(`${FormattedBody} code`, {
-  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
   fontSize: '0.92em',
 });
 globalStyle(`${FormattedBody} :not(pre) > code`, {
   padding: `0 ${toRem(4)}`,
   borderRadius: config.radii.R300,
-  background: color.SurfaceVariant.Container,
+  color: 'var(--synara-rich-text-inline-code-foreground)',
+  background: 'var(--synara-rich-text-inline-code-background)',
+  border: `1px solid var(--synara-rich-text-inline-code-border)`,
   whiteSpace: 'break-spaces',
+  '@media': {
+    '(prefers-contrast: more)': {
+      color: 'var(--synara-rich-text-contrast-foreground)',
+      borderColor: 'var(--synara-rich-text-contrast-border)',
+    },
+  },
 });
 globalStyle(`${FormattedBody} pre code`, {
   display: 'block',
@@ -452,12 +494,20 @@ export const TableScroll = style({
   overflowX: 'auto',
   border: `1px solid var(--synara-content-separator)`,
   borderRadius: config.radii.R400,
-  background: 'var(--synara-table-canvas)',
+  background: 'var(--synara-rich-text-table-canvas)',
   boxShadow: 'inset -14px 0 16px -18px rgba(0, 0, 0, 0.75)',
   selectors: {
     '&:focus-visible': {
       outline: `2px solid ${color.Primary.Main}`,
       outlineOffset: toRem(2),
+    },
+  },
+  '@media': {
+    '(prefers-reduced-transparency: reduce)': {
+      boxShadow: 'none',
+    },
+    '(prefers-contrast: more)': {
+      boxShadow: 'none',
     },
   },
 });
@@ -468,7 +518,7 @@ globalStyle(`${TableScroll} table`, {
   borderCollapse: 'separate',
   borderSpacing: 0,
   margin: 0,
-  background: 'var(--synara-table-canvas)',
+  background: 'var(--synara-rich-text-table-canvas)',
 });
 globalStyle(`${TableScroll} th, ${TableScroll} td`, {
   minWidth: toRem(112),
@@ -488,27 +538,27 @@ globalStyle(`${TableScroll} tr:last-child td`, {
   borderBottom: 'none',
 });
 globalStyle(`${TableScroll} th`, {
-  background: 'var(--synara-table-header)',
+  background: 'var(--synara-rich-text-table-header)',
   color: 'var(--synara-content-heading)',
   fontWeight: 600,
 });
 globalStyle(`${TableScroll} tbody tr:nth-child(odd) td`, {
-  background: 'var(--synara-table-odd)',
+  background: 'var(--synara-rich-text-table-odd)',
 });
 globalStyle(`${TableScroll} tr:nth-child(odd) td`, {
-  background: 'var(--synara-table-odd)',
+  background: 'var(--synara-rich-text-table-odd)',
 });
 globalStyle(`${TableScroll} tbody tr:nth-child(even) td`, {
-  background: 'var(--synara-table-even)',
+  background: 'var(--synara-rich-text-table-even)',
 });
 globalStyle(`${TableScroll} tr:nth-child(even) td`, {
-  background: 'var(--synara-table-even)',
+  background: 'var(--synara-rich-text-table-even)',
 });
 globalStyle(`${TableScroll} tbody tr:hover td`, {
-  background: 'var(--synara-table-hover)',
+  background: 'var(--synara-rich-text-table-hover)',
 });
 globalStyle(`${TableScroll} tr:hover td`, {
-  background: 'var(--synara-table-hover)',
+  background: 'var(--synara-rich-text-table-hover)',
 });
 globalStyle(`${TableScroll} td code`, {
   whiteSpace: 'nowrap',

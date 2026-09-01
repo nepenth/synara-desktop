@@ -1,4 +1,4 @@
-import { style } from '@vanilla-extract/css';
+import { globalStyle, style } from '@vanilla-extract/css';
 import { recipe } from '@vanilla-extract/recipes';
 import { color, config, DefaultReset, toRem } from 'folds';
 import { ContainerColor } from './ContainerColor.css';
@@ -42,13 +42,21 @@ export const BlockQuote = style([
 ]);
 
 const BaseCode = style({
-  color: color.SurfaceVariant.OnContainer,
-  background: color.SurfaceVariant.Container,
-  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  color: 'var(--synara-rich-text-inline-code-foreground)',
+  background: 'var(--synara-rich-text-inline-code-background)',
+  border: `${config.borderWidth.B300} solid var(--synara-rich-text-inline-code-border)`,
   borderRadius: config.radii.R300,
+  '@media': {
+    '(prefers-contrast: more)': {
+      color: 'var(--synara-rich-text-contrast-foreground)',
+      borderColor: 'var(--synara-rich-text-contrast-border)',
+    },
+  },
 });
 const CodeFont = style({
-  fontFamily: 'monospace',
+  fontFamily:
+    'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
+  fontSize: '0.94em',
 });
 
 export const Code = style([
@@ -65,11 +73,20 @@ export const Spoiler = recipe({
     DefaultReset,
     {
       padding: `0 ${config.space.S100}`,
-      backgroundColor: color.SurfaceVariant.ContainerActive,
+      backgroundColor: 'var(--synara-rich-text-spoiler-background)',
+      border: `${config.borderWidth.B300} solid var(--synara-rich-text-spoiler-border)`,
       borderRadius: config.radii.R300,
       selectors: {
+        '&:hover': {
+          backgroundColor: 'var(--synara-rich-text-spoiler-hover)',
+        },
         '&[aria-pressed=true]': {
           color: 'transparent',
+        },
+      },
+      '@media': {
+        '(prefers-contrast: more)': {
+          borderColor: 'var(--synara-rich-text-contrast-border)',
         },
       },
     },
@@ -83,6 +100,11 @@ export const Spoiler = recipe({
   },
 });
 
+globalStyle(`${Spoiler()}[aria-pressed=true] [aria-hidden=true]`, {
+  color: 'transparent !important',
+  backgroundColor: 'transparent !important',
+});
+
 export const CodeBlock = style([
   DefaultReset,
   BaseCode,
@@ -93,6 +115,15 @@ export const CodeBlock = style([
     position: 'relative',
     overflow: 'hidden',
     overflowAnchor: 'none',
+    color: 'var(--synara-rich-text-inline-code-foreground)',
+    background: 'var(--synara-rich-text-code-block-background)',
+    border: `${config.borderWidth.B300} solid var(--synara-rich-text-code-block-border)`,
+    '@media': {
+      '(prefers-contrast: more)': {
+        color: 'var(--synara-rich-text-contrast-foreground)',
+        borderColor: 'var(--synara-rich-text-contrast-border)',
+      },
+    },
   },
 ]);
 export const CodeBlockHeader = style([
@@ -111,6 +142,66 @@ export const CodeBlockInternal = style([
     minWidth: toRem(200),
   },
 ]);
+
+export const Strong = style({
+  fontWeight: 600,
+  '@media': {
+    '(prefers-contrast: more)': {
+      fontWeight: 700,
+    },
+  },
+});
+
+export const TableScroll = style({
+  width: '100%',
+  maxWidth: '100%',
+  margin: `${config.space.S400} 0`,
+  overflowX: 'auto',
+  border: `${config.borderWidth.B300} solid var(--synara-content-separator)`,
+  borderRadius: config.radii.R400,
+  background: 'var(--synara-rich-text-table-canvas)',
+  '@media': {
+    '(prefers-contrast: more)': {
+      borderColor: 'var(--synara-rich-text-contrast-border)',
+    },
+  },
+});
+
+globalStyle(`${TableScroll} table`, {
+  width: 'max-content',
+  minWidth: '100%',
+  borderCollapse: 'separate',
+  borderSpacing: 0,
+  background: 'var(--synara-rich-text-table-canvas)',
+});
+globalStyle(`${TableScroll} th, ${TableScroll} td`, {
+  minWidth: toRem(112),
+  maxWidth: toRem(360),
+  padding: `${toRem(10)} ${toRem(14)}`,
+  borderRight: `${config.borderWidth.B300} solid var(--synara-content-separator)`,
+  borderBottom: `${config.borderWidth.B300} solid var(--synara-content-separator)`,
+  textAlign: 'left',
+  verticalAlign: 'top',
+});
+globalStyle(`${TableScroll} th`, {
+  background: 'var(--synara-rich-text-table-header)',
+  fontWeight: 600,
+});
+globalStyle(`${TableScroll} tbody tr:nth-child(odd) td`, {
+  background: 'var(--synara-rich-text-table-odd)',
+});
+globalStyle(`${TableScroll} tbody tr:nth-child(even) td`, {
+  background: 'var(--synara-rich-text-table-even)',
+});
+globalStyle(`${TableScroll} tbody tr:hover td`, {
+  background: 'var(--synara-rich-text-table-hover)',
+});
+globalStyle(`${TableScroll} th:last-child, ${TableScroll} td:last-child`, {
+  borderRight: 'none',
+});
+globalStyle(`${TableScroll} tr:last-child td`, {
+  borderBottom: 'none',
+});
 
 export const CodeBlockBottomShadow = style({
   position: 'absolute',

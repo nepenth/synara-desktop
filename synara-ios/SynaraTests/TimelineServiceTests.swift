@@ -975,6 +975,81 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertTrue(text.runs.first { $0.text == "exact" }?.style.contains(.code) == true)
     }
 
+    func testAttributedRichTextKeepsNativeBoldAndCodeIntentsWithSemanticCodePaint() throws {
+        let richText = MatrixHTMLRenderer.RichText(runs: [
+            .init(text: "Bold", style: [.bold], link: nil),
+            .init(text: " and ", style: [], link: nil),
+            .init(text: "inlineCode", style: [.code], link: nil),
+        ])
+
+        let attributed = attributedRichText(richText)
+        XCTAssertEqual(String(attributed.characters), "Bold and inlineCode")
+        let runs = Array(attributed.runs)
+        let boldRun = try XCTUnwrap(runs.first { run in
+            String(attributed[run.range].characters) == "Bold"
+        })
+        let codeRun = try XCTUnwrap(runs.first { run in
+            String(attributed[run.range].characters) == "inlineCode"
+        })
+
+        XCTAssertTrue(boldRun.inlinePresentationIntent?.contains(.stronglyEmphasized) == true)
+        XCTAssertTrue(codeRun.inlinePresentationIntent?.contains(.code) == true)
+        XCTAssertNotNil(codeRun.foregroundColor)
+        XCTAssertNotNil(codeRun.backgroundColor)
+        XCTAssertEqual(codeRun.underlineStyle, .single)
+        XCTAssertNotNil(codeRun.underlineColor)
+    }
+
+    func testExplicitlyUnderlinedInlineCodeKeepsAuthoredUnderlineSemantics() throws {
+        let attributed = attributedRichText(
+            .init(runs: [
+                .init(text: "underlinedCode", style: [.code, .underline], link: nil),
+            ])
+        )
+        let run = try XCTUnwrap(attributed.runs.first)
+
+        XCTAssertTrue(run.inlinePresentationIntent?.contains(.code) == true)
+        XCTAssertEqual(run.underlineStyle, .single)
+        XCTAssertNil(
+            run.underlineColor,
+            "Authored underline must use the text foreground instead of the adaptive hidden boundary"
+        )
+        XCTAssertNotNil(run.backgroundColor)
+    }
+
+    func testRichFixtureRetainsStructuralSemanticsAndClipboardText() throws {
+        let html = #"""
+        <h3>Deploy</h3>
+        <p><strong>Important</strong> <code>swift test</code> <a href="https://example.org">proof</a></p>
+        <blockquote><p>Keep this readable.</p></blockquote>
+        <ul><li>First</li><li><em>Second</em></li></ul>
+        <span data-mx-spoiler="private">secret</span>
+        <table><tr><th>State</th><th>Value</th></tr><tr><td>Build</td><td><code>green</code></td></tr></table>
+        """#
+        let segments = MatrixHTMLRenderer.segments(body: "fallback", html: html)
+
+        XCTAssertTrue(segments.contains { if case .heading = $0 { return true }; return false })
+        XCTAssertTrue(segments.contains { if case .quote = $0 { return true }; return false })
+        XCTAssertTrue(segments.contains {
+            if case let .inline(group) = $0 {
+                return group.pieces.contains { if case .spoiler = $0 { return true }; return false }
+            }
+            if case .spoiler = $0 { return true }
+            return false
+        })
+        XCTAssertTrue(segments.contains { if case .table = $0 { return true }; return false })
+
+        let projection = MatrixHTMLRenderer.selectionProjection(
+            body: "fallback",
+            html: html,
+            revealingSpoilers: true
+        )
+        let attributed = attributedRichText(projection.richText, includeLinks: false)
+        XCTAssertEqual(String(attributed.characters), projection.richText.plainText)
+        XCTAssertTrue(attributed.runs.contains { $0.inlinePresentationIntent?.contains(.stronglyEmphasized) == true })
+        XCTAssertTrue(attributed.runs.contains { $0.inlinePresentationIntent?.contains(.code) == true })
+    }
+
     func testMatrixHTMLRendererPreservesOnlyStrictMatrixColorsIncludingNestedOverride() throws {
         let text = MatrixHTMLRenderer.richText(
             body: "fallback",
@@ -990,6 +1065,36 @@ final class TimelineServiceTests: XCTestCase {
         let invalid = try XCTUnwrap(text.runs.first { $0.text.contains("invalid") })
         XCTAssertNil(invalid.foregroundColorHex)
         XCTAssertNil(invalid.backgroundColorHex)
+    }
+
+    func testMatrixHTMLRendererNormalizesLegacyFontColorsWithNestedOverrides() throws {
+        let html = ##"<p><font color="#a1b2c3" data-mx-bg-color="#010203">legacy <span data-mx-color="#DDEEFF">span</span> <font color="#445566" data-mx-color="#102030" data-mx-bg-color="#F0E0D0">nested</font></font> <font color="red" data-mx-color="#12345G" data-mx-bg-color="blue" style="color: #FFFFFF">invalid</font></p>"##
+        let text = MatrixHTMLRenderer.richText(body: "fallback", html: html)
+
+        let legacy = try XCTUnwrap(text.runs.first { $0.text == "legacy " })
+        XCTAssertEqual(legacy.foregroundColorHex, "#A1B2C3")
+        XCTAssertEqual(legacy.backgroundColorHex, "#010203")
+
+        let span = try XCTUnwrap(text.runs.first { $0.text == "span" })
+        XCTAssertEqual(span.foregroundColorHex, "#DDEEFF")
+        XCTAssertEqual(span.backgroundColorHex, "#010203")
+
+        let nested = try XCTUnwrap(text.runs.first { $0.text == "nested" })
+        XCTAssertEqual(nested.foregroundColorHex, "#102030", "data-mx-color must win over legacy color")
+        XCTAssertEqual(nested.backgroundColorHex, "#F0E0D0")
+
+        let invalid = try XCTUnwrap(text.runs.first { $0.text.contains("invalid") })
+        XCTAssertNil(invalid.foregroundColorHex)
+        XCTAssertNil(invalid.backgroundColorHex)
+
+        let projection = MatrixHTMLRenderer.selectionProjection(
+            body: "legacy span nested invalid",
+            html: html,
+            revealingSpoilers: true
+        )
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "legacy " }?.foregroundColorHex, "#A1B2C3")
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "span" }?.foregroundColorHex, "#DDEEFF")
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "nested" }?.foregroundColorHex, "#102030")
     }
 
     func testMatrixHTMLRendererPreservesMathFallbackAndExplicitInlineImageFallback() {
@@ -1022,6 +1127,68 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertEqual(spoiler.content.plainText, "secret")
         XCTAssertTrue(spoiler.content.runs.first?.style.contains(.bold) == true)
         XCTAssertEqual(after.plainText, " after")
+    }
+
+    func testMatrixSpoilerPreservesOuterAndNestedAuthoredColorsWithoutLeakingHiddenText() throws {
+        let html = ##"<p>before <span data-mx-spoiler="private" data-mx-color="#FFFFFF" data-mx-bg-color="#000000">outer <span data-mx-color="#00FF00">inner</span></span> after</p>"##
+        let segments = MatrixHTMLRenderer.segments(body: "before outer inner after", html: html)
+        guard case let .inline(group)? = segments.first,
+              case let .spoiler(spoiler) = group.pieces.first(where: {
+                  if case .spoiler = $0 { return true }
+                  return false
+              })
+        else { return XCTFail("Expected inline spoiler content") }
+
+        let outer = try XCTUnwrap(spoiler.content.runs.first { $0.text == "outer " })
+        let inner = try XCTUnwrap(spoiler.content.runs.first { $0.text == "inner" })
+        XCTAssertEqual(outer.foregroundColorHex, "#FFFFFF")
+        XCTAssertEqual(outer.backgroundColorHex, "#000000")
+        XCTAssertEqual(inner.foregroundColorHex, "#00FF00", "Nested Matrix color must override the spoiler span")
+        XCTAssertEqual(inner.backgroundColorHex, "#000000")
+
+        let hidden = matrixInlineAttributedText(
+            group,
+            revealedSpoilers: [],
+            presentationContext: .otherMessage
+        )
+        XCTAssertFalse(String(hidden.characters).contains("outer"))
+        XCTAssertFalse(String(hidden.characters).contains("inner"))
+        XCTAssertTrue(String(hidden.characters).contains("Spoiler: private"))
+
+        let revealed = matrixInlineAttributedText(
+            group,
+            revealedSpoilers: [0],
+            presentationContext: .otherMessage
+        )
+        XCTAssertEqual(String(revealed.characters), "before outer inner after")
+        let revealedOuter = try XCTUnwrap(revealed.runs.first { run in
+            String(revealed[run.range].characters) == "outer "
+        })
+        let revealedInner = try XCTUnwrap(revealed.runs.first { run in
+            String(revealed[run.range].characters) == "inner"
+        })
+        XCTAssertNotNil(revealedOuter.foregroundColor)
+        XCTAssertNotNil(revealedOuter.backgroundColor)
+        XCTAssertNotNil(revealedInner.foregroundColor)
+        XCTAssertNotNil(revealedInner.backgroundColor)
+
+        let projection = MatrixHTMLRenderer.selectionProjection(
+            body: "before outer inner after",
+            html: html,
+            revealingSpoilers: true
+        )
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "outer " }?.foregroundColorHex, "#FFFFFF")
+        XCTAssertEqual(projection.richText.runs.first { $0.text == "inner" }?.foregroundColorHex, "#00FF00")
+
+        let blockSegments = MatrixHTMLRenderer.segments(
+            body: "block secret",
+            html: ##"<span data-mx-spoiler="block" data-mx-color="#FFFFFF" data-mx-bg-color="#000000">block secret</span>"##
+        )
+        guard case let .spoiler(block)? = blockSegments.first else {
+            return XCTFail("Expected standalone spoiler block")
+        }
+        XCTAssertEqual(block.content.runs.first?.foregroundColorHex, "#FFFFFF")
+        XCTAssertEqual(block.content.runs.first?.backgroundColorHex, "#000000")
     }
 
     func testMatrixInlineSpoilerPresentationNeverExposesHiddenContentToAccessibilityText() throws {

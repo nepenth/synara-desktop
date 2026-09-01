@@ -6,25 +6,25 @@ import {
 } from './matrixHtmlProfile';
 
 const MAX_TAG_NESTING = 100;
+const MATRIX_COLOR_RE = /^#[0-9a-f]{6}$/i;
 const matrixHtmlInboundAttributes = Object.fromEntries(
   Object.entries(MATRIX_HTML_INBOUND_ATTRIBUTES).map(([tag, attributes]) => [tag, [...attributes]])
 );
 
-const transformFontTag: Transformer = (tagName, attribs) => ({
-  tagName,
-  attribs: {
-    ...attribs,
-    style: `background-color: ${attribs['data-mx-bg-color']}; color: ${attribs['data-mx-color']}`,
-  },
-});
-
-const transformSpanTag: Transformer = (tagName, attribs) => ({
-  tagName,
-  attribs: {
-    ...attribs,
-    style: `background-color: ${attribs['data-mx-bg-color']}; color: ${attribs['data-mx-color']}`,
-  },
-});
+const transformColorTag: Transformer = (_tagName, attribs) => {
+  const next = { ...attribs };
+  delete next.style;
+  const legacyForeground = next.color;
+  delete next.color;
+  if (!next['data-mx-color'] && legacyForeground) next['data-mx-color'] = legacyForeground;
+  if (next['data-mx-color'] && !MATRIX_COLOR_RE.test(next['data-mx-color'])) {
+    delete next['data-mx-color'];
+  }
+  if (next['data-mx-bg-color'] && !MATRIX_COLOR_RE.test(next['data-mx-bg-color'])) {
+    delete next['data-mx-bg-color'];
+  }
+  return { tagName: 'span', attribs: next };
+};
 
 const transformATag: Transformer = (tagName, attribs) => ({
   tagName,
@@ -70,15 +70,9 @@ export const sanitizeCustomHtml = (customHtml: string): string =>
     allowedClasses: {
       code: ['language-*'],
     },
-    allowedStyles: {
-      '*': {
-        color: [/^#(?:[0-9a-fA-F]{3}){1,2}$/],
-        'background-color': [/^#(?:[0-9a-fA-F]{3}){1,2}$/],
-      },
-    },
     transformTags: {
-      font: transformFontTag,
-      span: transformSpanTag,
+      font: transformColorTag,
+      span: transformColorTag,
       a: transformATag,
       img: transformImgTag,
     },

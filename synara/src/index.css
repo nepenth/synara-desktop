@@ -34,6 +34,23 @@
   --synara-table-odd: #ffffff;
   --synara-table-even: #f5f6f8;
   --synara-table-hover: #eceef1;
+  --synara-rich-text-reading-surface: #ffffff;
+  --synara-rich-text-reading-surface-hover: #f8f9fa;
+  --synara-rich-text-inline-code-background: #d9dde3;
+  --synara-rich-text-inline-code-border: #adb3bc;
+  --synara-rich-text-inline-code-foreground: #111318;
+  --synara-rich-text-code-block-background: #eceef1;
+  --synara-rich-text-code-block-border: #c2c7ce;
+  --synara-rich-text-spoiler-background: #dde1e6;
+  --synara-rich-text-spoiler-hover: #d1d6dc;
+  --synara-rich-text-spoiler-border: #adb3bc;
+  --synara-rich-text-table-canvas: #f2f3f5;
+  --synara-rich-text-table-header: #dfe3e8;
+  --synara-rich-text-table-odd: #ffffff;
+  --synara-rich-text-table-even: #f0f2f4;
+  --synara-rich-text-table-hover: #e7eaee;
+  --synara-rich-text-contrast-border: #707781;
+  --synara-rich-text-contrast-foreground: #111318;
 
   /* Quiet depth is theme-aware so pale surfaces keep a visible lower edge. */
   --synara-depth-edge-top: rgba(255, 255, 255, 0.76);
@@ -77,6 +94,23 @@
   --synara-table-odd: #202226;
   --synara-table-even: #26292e;
   --synara-table-hover: #2d3036;
+  --synara-rich-text-reading-surface: #1e1f22;
+  --synara-rich-text-reading-surface-hover: #25272b;
+  --synara-rich-text-inline-code-background: #3b3e44;
+  --synara-rich-text-inline-code-border: #555a63;
+  --synara-rich-text-inline-code-foreground: #f3f4f6;
+  --synara-rich-text-code-block-background: #292b30;
+  --synara-rich-text-code-block-border: #464a52;
+  --synara-rich-text-spoiler-background: #373a40;
+  --synara-rich-text-spoiler-hover: #42464d;
+  --synara-rich-text-spoiler-border: #555a63;
+  --synara-rich-text-table-canvas: #24262a;
+  --synara-rich-text-table-header: #34373d;
+  --synara-rich-text-table-odd: #1e1f22;
+  --synara-rich-text-table-even: #282a2f;
+  --synara-rich-text-table-hover: #303339;
+  --synara-rich-text-contrast-border: #787e89;
+  --synara-rich-text-contrast-foreground: #f3f4f6;
 
   /* Dark surfaces need edge light as well as occlusion; black shadow alone disappears. */
   --synara-depth-edge-top: rgba(255, 255, 255, 0.15);
@@ -138,6 +172,12 @@ a:hover {
     --synara-content-secondary: #292929 !important;
     --synara-content-tertiary: #3d3d3d !important;
     --synara-content-separator: #555555 !important;
+    --synara-rich-text-inline-code-border: var(--synara-rich-text-contrast-border) !important;
+    --synara-rich-text-inline-code-foreground: var(
+      --synara-rich-text-contrast-foreground
+    ) !important;
+    --synara-rich-text-code-block-border: var(--synara-rich-text-contrast-border) !important;
+    --synara-rich-text-spoiler-border: var(--synara-rich-text-contrast-border) !important;
   }
 
   .dark-theme,

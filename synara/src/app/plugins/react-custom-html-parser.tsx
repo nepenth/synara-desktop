@@ -43,6 +43,7 @@ import { copyToClipboard, tryDecodeURIComponent } from '../utils/dom';
 import { useTimeoutToggle } from '../hooks/useTimeoutToggle';
 import { useIdleRender } from '../hooks/useIdleRender';
 import { isDesktopPlatform, openPlatformExternalUrl } from '../platform';
+import { MatrixColorSpan, MatrixColorSurface } from '../components/message/MatrixColorSpan';
 
 const ReactPrism = lazy(() => import('./react-prism/ReactPrism'));
 const PRISM_CHAR_LIMIT = 50_000;
@@ -379,13 +380,57 @@ function PrismCode({
   );
 }
 
+function CompatibilitySpoiler({
+  props,
+  foreground,
+  background,
+  children,
+}: {
+  props: ComponentPropsWithoutRef<'span'>;
+  foreground?: string;
+  background?: string;
+  children: React.ReactNode;
+}) {
+  const [revealed, setRevealed] = useState(false);
+  const reveal: ReactEventHandler<HTMLElement> = (event) => {
+    if (revealed) return;
+    event.stopPropagation();
+    setRevealed(true);
+  };
+
+  return (
+    <MatrixColorSurface surface="spoiler">
+      <span
+        {...props}
+        role={revealed ? undefined : 'button'}
+        tabIndex={revealed ? undefined : 0}
+        onKeyDown={revealed ? undefined : onEnterOrSpace(reveal)}
+        onClick={revealed ? undefined : reveal}
+        className={css.Spoiler()}
+        aria-pressed={revealed ? undefined : true}
+        aria-label={revealed ? undefined : 'Reveal spoiler'}
+        style={{ cursor: revealed ? 'initial' : 'pointer' }}
+      >
+        {revealed ? (
+          <MatrixColorSpan foreground={foreground} background={background}>
+            {children}
+          </MatrixColorSpan>
+        ) : (
+          // Do not mount concealed descendants: aria-hidden alone does not
+          // remove nested links or controls from the keyboard tab order.
+          <span aria-hidden>spoiler</span>
+        )}
+      </span>
+    </MatrixColorSurface>
+  );
+}
+
 export const getReactCustomHtmlParser = (
   mx: MatrixClientReading,
   roomId: string | undefined,
   params: {
     linkifyOpts: LinkifyOpts;
     highlightRegex?: RegExp;
-    handleSpoilerClick?: ReactEventHandler<HTMLElement>;
     handleMentionClick?: ReactEventHandler<HTMLElement>;
     useAuthentication?: boolean;
   }
@@ -453,7 +498,28 @@ export const getReactCustomHtmlParser = (
         }
 
         if (name === 'pre') {
-          return <CodeBlock opts={opts}>{children}</CodeBlock>;
+          return (
+            <MatrixColorSurface surface="codeBlock">
+              <CodeBlock opts={opts}>{children}</CodeBlock>
+            </MatrixColorSurface>
+          );
+        }
+
+        if (name === 'table') {
+          return (
+            <MatrixColorSurface surface="table">
+              <div
+                className={css.TableScroll}
+                role="region"
+                aria-label="Scrollable message table"
+                // Horizontal overflow needs an explicit keyboard focus target.
+                // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
+                tabIndex={0}
+              >
+                <table {...props}>{domToReact(children, opts)}</table>
+              </div>
+            </MatrixColorSurface>
+          );
         }
 
         if (name === 'blockquote') {
@@ -495,11 +561,17 @@ export const getReactCustomHtmlParser = (
             }
           } else {
             return (
-              <Text as="code" size="T300" className={css.Code} {...props}>
-                {domToReact(children, opts)}
-              </Text>
+              <MatrixColorSurface surface="inlineCode">
+                <Text as="code" size="T300" className={css.Code} {...props}>
+                  {domToReact(children, opts)}
+                </Text>
+              </MatrixColorSurface>
             );
           }
+        }
+
+        if (name === 'strong' || name === 'b') {
+          return <strong className={css.Strong}>{domToReact(children, opts)}</strong>;
         }
 
         if (name === 'a' && testMatrixTo(tryDecodeURIComponent(props.href))) {
@@ -527,18 +599,24 @@ export const getReactCustomHtmlParser = (
 
         if (name === 'span' && 'data-mx-spoiler' in props) {
           return (
-            <span
-              {...props}
-              role="button"
-              tabIndex={params.handleSpoilerClick ? 0 : -1}
-              onKeyDown={params.handleSpoilerClick}
-              onClick={params.handleSpoilerClick}
-              className={css.Spoiler()}
-              aria-pressed
-              style={{ cursor: 'pointer' }}
+            <CompatibilitySpoiler
+              props={props}
+              foreground={attribs['data-mx-color']}
+              background={attribs['data-mx-bg-color']}
             >
               {domToReact(children, opts)}
-            </span>
+            </CompatibilitySpoiler>
+          );
+        }
+
+        if (name === 'span' && ('data-mx-color' in attribs || 'data-mx-bg-color' in attribs)) {
+          return (
+            <MatrixColorSpan
+              foreground={attribs['data-mx-color']}
+              background={attribs['data-mx-bg-color']}
+            >
+              {domToReact(children, opts)}
+            </MatrixColorSpan>
           );
         }
 

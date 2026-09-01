@@ -55,11 +55,11 @@ export const MATRIX_HTML_ALLOWED_TAGS = [
 export const MATRIX_HTML_EMITTED_ATTRIBUTES = {
   a: ['href'],
   code: ['class', 'data-label'],
-  font: ['color', 'data-mx-bg-color', 'data-mx-color', 'style'],
+  font: ['color', 'data-mx-bg-color', 'data-mx-color'],
   img: ['alt', 'data-mx-emoticon', 'height', 'src', 'title', 'width'],
   ol: ['start'],
   pre: ['class'],
-  span: ['data-mx-bg-color', 'data-mx-color', 'data-mx-maths', 'data-mx-spoiler', 'style'],
+  span: ['data-mx-bg-color', 'data-mx-color', 'data-mx-maths', 'data-mx-spoiler'],
 } as const;
 
 export const SYNARA_INBOUND_EDIT_HINT_ATTRIBUTES = ['data-md'] as const;
