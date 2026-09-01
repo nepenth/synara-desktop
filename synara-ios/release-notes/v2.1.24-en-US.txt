@@ -1,0 +1,10 @@
+Synara 2.1.24 improves formatted-message readability across iOS, macOS, and Linux.
+
+What changed:
+- Made bold text, inline code, code blocks, tables, and spoilers easier to distinguish.
+- Added theme-aware rich-text colors for light, dark, and custom appearances.
+- Improved contrast for Matrix-authored colors, including Increased Contrast support.
+- Preserved Dynamic Type, formatted selection and copying, and safe spoiler concealment.
+- Aligned native and compatibility rendering across clients.
+
+This build passed complete desktop packaging and iOS simulator/device-Release validation.
