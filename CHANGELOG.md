@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+## 2.1.24 - 2026-09-01
+
+- Improved rich-message readability across desktop and iOS with semantic
+  treatments for emphasis, inline code, code blocks, tables, and spoilers.
+- Added theme-aware rich-text roles for light, dark, Silver, Butter, and custom
+  themes without changing the underlying Matrix message content.
+- Enforced accessible authored-color presentation at 4.5:1 contrast normally
+  and 7:1 when Increased Contrast is enabled.
+- Matched native desktop, compatibility HTML, Prism, and iOS attributed-text
+  rendering while preserving safe formatted selection and copying.
+- Kept concealed spoiler descendants out of the interface until an accessible
+  pointer or keyboard reveal, then resolved colors against the painted surface.
+- See [`docs/releases/v2.1.24.md`](docs/releases/v2.1.24.md) for details.
+
 ## 2.1.23 - 2026-08-31
 
 - Displayed the authenticated Matrix homeserver in the desktop Home header and
