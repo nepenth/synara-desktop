@@ -1,16 +1,16 @@
 # P0.7 — Migration UX decision record
 
-| Field | Value |
-| --- | --- |
-| Task | **P0.7** Migration UX decision record |
-| Date | 2026-07-24 |
-| Work branch at generation | `matrix-rust/p0.7-migration-ux` |
-| Base integration tip at generation | `feature/matrix-rust-sdk-full-replacement` @ `9e0cfcae8c377161a73ce8e01f889f485e233e5e` |
-| Tip message | `docs(matrix): merge P0.6 performance baseline` (P0.1–**P0.6 MERGED**; PR #46 for P0.6) |
-| Machine twin | [`migration-ux-decision.json`](migration-ux-decision.json) |
-| Artifact / integration state | `landed` / `merged` |
-| Strict acceptance / Phase 0 gate | `open` / `open` — policy evidence exists, but the phase gate remains open; see [`program-status.md`](program-status.md) |
-| Verdict | `migration_ux_decided` (product policy for Phase 3 implementers) |
+| Field                              | Value                                                                                                                   |
+| ---------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Task                               | **P0.7** Migration UX decision record                                                                                   |
+| Date                               | 2026-07-24                                                                                                              |
+| Work branch at generation          | `matrix-rust/p0.7-migration-ux`                                                                                         |
+| Base integration tip at generation | `feature/matrix-rust-sdk-full-replacement` @ `9e0cfcae8c377161a73ce8e01f889f485e233e5e`                                 |
+| Tip message                        | `docs(matrix): merge P0.6 performance baseline` (P0.1–**P0.6 MERGED**; PR #46 for P0.6)                                 |
+| Machine twin                       | [`migration-ux-decision.json`](migration-ux-decision.json)                                                              |
+| Artifact / integration state       | `landed` / `merged`                                                                                                     |
+| Strict acceptance / Phase 0 gate   | `open` / `open` — policy evidence exists, but the phase gate remains open; see [`program-status.md`](program-status.md) |
+| Verdict                            | `migration_ux_decided` (product policy for Phase 3 implementers)                                                        |
 
 Authoritative program plan: [`../matrix-rust-sdk-full-replacement-plan.md`](../matrix-rust-sdk-full-replacement-plan.md) §3 (full replacement), §8 (session/store transition), Phase 3 (auth/legacy transition), Phase 11–14 cutover/retention notes.
 
@@ -18,7 +18,7 @@ Related:
 
 - Handoff: [`README.md`](README.md)
 - Secure credentials: [`../desktop-secure-secret-storage-plan.md`](../desktop-secure-secret-storage-plan.md)
-- Optional short ADR pointer: [`../adr/0003-matrix-rust-sdk-migration-ux.md`](../adr/0003-matrix-rust-sdk-migration-ux.md)
+- Archived short proposal: [`../adr/archive/2026-07-24-matrix-rust-sdk-migration-ux-proposal.md`](../adr/archive/2026-07-24-matrix-rust-sdk-migration-ux-proposal.md)
 
 **This document is the single source of truth for migration UX policy.** Implementers must not invent dual-backend paths, token/device reuse into a fresh crypto store, or concurrent multi-account promises beyond FR-7.9-011.
 
@@ -32,23 +32,23 @@ migration. Sole owner after cutover is Rust only — never a runtime SDK selecto
 
 ## 1. Executive decision summary
 
-| ID | Status | One-line summary | Owning tasks |
-| --- | --- | --- | --- |
-| `D-LEGACY-DETECT` | `decided` | Detect legacy session via inert signals (IDB names, credential envelope, fallback keys, cutover marker)—never start `matrix-js-sdk` | P3.7 |
-| `D-REAUTH` | `decided` | Reauthentication is **required** on cutover for users with a legacy Matrix session | P3.2, P3.3, P3.7 |
-| `D-NEW-DEVICE` | `decided` | Create a new Matrix device via normal login/SSO with platform name `Synara macOS` / `Synara Linux` | P3.2, P3.3 |
-| `D-TOKEN-CONTINUITY` | `decided` | **Do not** copy access token / device ID into a fresh Rust crypto store by default (§8.1) | P3.5, P3.7, threat review if ever revisited |
-| `D-KEY-RECOVERY` | `decided` | After reauth: guided recovery key / secret storage / key backup restore before promising encrypted history | P3.8, P8.5, P8.7 |
-| `D-TRANSITION-COMPLETE` | `decided` | Complete only when Rust store opens, session secrets are native-persisted, and sync readiness is confirmed | P3.7, P4.1, P2.x store |
-| `D-LEGACY-RETAIN` | `decided-with-open-parameter` | Keep legacy IndexedDB **inert** for a bounded window; never reopen JS client | P3.7, P14.2 |
-| `D-CLEANUP` | `decided` | Explicit, idempotent, scoped cleanup after success (+ optional early confirm); never non-Matrix local data | P3.7, P3.8, P14.2 |
-| `D-ROLLBACK` | `decided` | Rollback = prior product build + preserved inert legacy data; **not** dual-runtime | P11.x packaging, P13.6, P14.2 |
-| `D-PRESERVE-LOCAL` | `decided` | Drafts, platform settings, downloads, unrelated storage survive cutover and cleanup | P3.7, P3.8, P6 drafts |
-| `D-ACCOUNT-SWITCH` | `decided` | Sequential single-active account isolation; separate store dirs/keys/generations; no concurrent multi-account promise | P3.6, P3.7 |
-| `D-LOGOUT-WIPE` | `decided` | Logout and local wipe are distinct actions with distinct confirmations | P3.8, P2.x |
-| `D-USER-COPY` | `decided` | Honest one-time sign-in + recovery messaging; never secrets in copy | P3.7, P3.8, product copy |
-| `D-FAILURE` | `decided` | Failed transition leaves legacy data intact and offers retry | P3.7 |
-| `D-NO-DUAL-BACKEND` | `decided` | Hard constraint: no dual production backend, selector, or dual-client same session | All phases |
+| ID                      | Status                        | One-line summary                                                                                                                    | Owning tasks                                |
+| ----------------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| `D-LEGACY-DETECT`       | `decided`                     | Detect legacy session via inert signals (IDB names, credential envelope, fallback keys, cutover marker)—never start `matrix-js-sdk` | P3.7                                        |
+| `D-REAUTH`              | `decided`                     | Reauthentication is **required** on cutover for users with a legacy Matrix session                                                  | P3.2, P3.3, P3.7                            |
+| `D-NEW-DEVICE`          | `decided`                     | Create a new Matrix device via normal login/SSO with platform name `Synara macOS` / `Synara Linux`                                  | P3.2, P3.3                                  |
+| `D-TOKEN-CONTINUITY`    | `decided`                     | **Do not** copy access token / device ID into a fresh Rust crypto store by default (§8.1)                                           | P3.5, P3.7, threat review if ever revisited |
+| `D-KEY-RECOVERY`        | `decided`                     | After reauth: guided recovery key / secret storage / key backup restore before promising encrypted history                          | P3.8, P8.5, P8.7                            |
+| `D-TRANSITION-COMPLETE` | `decided`                     | Complete only when Rust store opens, session secrets are native-persisted, and sync readiness is confirmed                          | P3.7, P4.1, P2.x store                      |
+| `D-LEGACY-RETAIN`       | `decided-with-open-parameter` | Keep legacy IndexedDB **inert** for a bounded window; never reopen JS client                                                        | P3.7, P14.2                                 |
+| `D-CLEANUP`             | `decided`                     | Explicit, idempotent, scoped cleanup after success (+ optional early confirm); never non-Matrix local data                          | P3.7, P3.8, P14.2                           |
+| `D-ROLLBACK`            | `decided`                     | Rollback = prior product build + preserved inert legacy data; **not** dual-runtime                                                  | P11.x packaging, P13.6, P14.2               |
+| `D-PRESERVE-LOCAL`      | `decided`                     | Drafts, platform settings, downloads, unrelated storage survive cutover and cleanup                                                 | P3.7, P3.8, P6 drafts                       |
+| `D-ACCOUNT-SWITCH`      | `decided`                     | Sequential single-active account isolation; separate store dirs/keys/generations; no concurrent multi-account promise               | P3.6, P3.7                                  |
+| `D-LOGOUT-WIPE`         | `decided`                     | Logout and local wipe are distinct actions with distinct confirmations                                                              | P3.8, P2.x                                  |
+| `D-USER-COPY`           | `decided`                     | Honest one-time sign-in + recovery messaging; never secrets in copy                                                                 | P3.7, P3.8, product copy                    |
+| `D-FAILURE`             | `decided`                     | Failed transition leaves legacy data intact and offers retry                                                                        | P3.7                                        |
+| `D-NO-DUAL-BACKEND`     | `decided`                     | Hard constraint: no dual production backend, selector, or dual-client same session                                                  | All phases                                  |
 
 ---
 
@@ -103,9 +103,9 @@ Numbered steps for a user who upgrades into the first Rust-owned desktop release
 
 ### D-LEGACY-DETECT — Detect legacy session without starting JS SDK
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                   |
+| ------------ | ------------------------------------------------------- |
+| Status       | `decided`                                               |
 | Owning tasks | **P3.7** (primary); P3.6 restore paths must not regress |
 
 **Decision.** Legacy presence is determined only from **inert** signals:
@@ -124,9 +124,9 @@ Numbered steps for a user who upgrades into the first Rust-owned desktop release
 
 ### D-REAUTH — Reauthentication required
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                        |
+| ------------ | ---------------------------- |
+| Status       | `decided`                    |
 | Owning tasks | **P3.2**, **P3.3**, **P3.7** |
 
 **Decision.** If legacy Matrix session signals are present and Rust transition is not complete, the user **must** re-sign-in (password and/or SSO/OAuth as supported). Silent continuation on the old access token is **not** product policy for cutover.
@@ -137,9 +137,9 @@ Numbered steps for a user who upgrades into the first Rust-owned desktop release
 
 ### D-NEW-DEVICE — New device policy and naming
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                     |
+| ------------ | --------------------------------------------------------- |
+| Status       | `decided`                                                 |
 | Owning tasks | **P3.2**, **P3.3**; device list UX P8.x / FR-7.9-003 path |
 
 **Decision.**
@@ -155,9 +155,9 @@ Numbered steps for a user who upgrades into the first Rust-owned desktop release
 
 ### D-TOKEN-CONTINUITY — No default token/device copy into fresh crypto store
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                                                                   |
+| ------------ | ------------------------------------------------------------------------------------------------------- |
+| Status       | `decided`                                                                                               |
 | Owning tasks | **P3.5**, **P3.7**; any exception requires dedicated threat/continuity review before Phase 3 acceptance |
 
 **Decision.** Default and current product policy: **do not** copy access token, refresh token, or device ID from legacy JS session material into a newly created Rust crypto/state store to “skip” reauth.
@@ -170,9 +170,9 @@ Post-cutover, the only legitimate session secrets are those established by the R
 
 ### D-KEY-RECOVERY — Recovery sequence
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                                                                         |
+| ------------ | ------------------------------------------------------------------------------------------------------------- |
+| Status       | `decided`                                                                                                     |
 | Owning tasks | **P3.8** (copy/entry UX), **P8.5** (backup/recovery setup/restore/repair), **P8.7** (UTD / encrypted history) |
 
 **Decision.** After successful reauth and Rust store open:
@@ -193,9 +193,9 @@ Post-cutover, the only legitimate session secrets are those established by the R
 
 ### D-TRANSITION-COMPLETE — Readiness criteria
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                                                           |
+| ------------ | ----------------------------------------------------------------------------------------------- |
+| Status       | `decided`                                                                                       |
 | Owning tasks | **P3.7** coordinator; **P2.x** store open; **P4.1** sync readiness; **P3.5** credential persist |
 
 **Decision.** Mark transition complete only when **all** of the following hold:
@@ -214,9 +214,9 @@ Post-cutover, the only legitimate session secrets are those established by the R
 
 ### D-LEGACY-RETAIN — Inert retention window
 
-| Field | Value |
-| --- | --- |
-| Status | `decided-with-open-parameter` |
+| Field        | Value                                                                                 |
+| ------------ | ------------------------------------------------------------------------------------- |
+| Status       | `decided-with-open-parameter`                                                         |
 | Owning tasks | **P3.7** (retain policy enforcement), **P14.2** (delete compatibility after boundary) |
 
 **Decision.**
@@ -239,9 +239,9 @@ Either bound elapsing enables default cleanup eligibility; user may clean earlie
 
 ### D-CLEANUP — Scoped, idempotent cleanup
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                         |
+| ------------ | ----------------------------- |
+| Status       | `decided`                     |
 | Owning tasks | **P3.7**, **P3.8**, **P14.2** |
 
 **Decision.**
@@ -259,9 +259,9 @@ Either bound elapsing enables default cleanup eligibility; user may clean earlie
 
 ### D-ROLLBACK — Bounded window; meaning of rollback
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                                        |
+| ------------ | ---------------------------------------------------------------------------- |
+| Status       | `decided`                                                                    |
 | Owning tasks | Packaging/release **P13.6**, final docs **P14.x**; product behavior **P3.7** |
 
 **Decision.** Rollback during the retention window means:
@@ -280,9 +280,9 @@ Either bound elapsing enables default cleanup eligibility; user may clean earlie
 
 ### D-PRESERVE-LOCAL — Non-Matrix local data
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                    |
+| ------------ | -------------------------------------------------------- |
+| Status       | `decided`                                                |
 | Owning tasks | **P3.7**, **P3.8**, drafts ownership in messaging phases |
 
 **Decision.** Drafts, platform settings, downloads, and unrelated local configuration **survive** migration, failed attempts, successful transition, and Matrix-scoped cleanup. Plan §7.4: drafts remain local and survive the migration.
@@ -293,9 +293,9 @@ Either bound elapsing enables default cleanup eligibility; user may clean earlie
 
 ### D-ACCOUNT-SWITCH — Store isolation (honest multi-account)
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value              |
+| ------------ | ------------------ |
+| Status       | `decided`          |
 | Owning tasks | **P3.6**, **P3.7** |
 
 **Decision.**
@@ -311,17 +311,17 @@ Either bound elapsing enables default cleanup eligibility; user may clean earlie
 
 ### D-LOGOUT-WIPE — Logout vs local wipe
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                              |
+| ------------ | ---------------------------------- |
+| Status       | `decided`                          |
 | Owning tasks | **P3.8**, store lifecycle **P2.x** |
 
 **Decision.** Two distinct actions:
 
-| Action | Server session | Native credentials | Local Matrix stores (Rust) | Legacy inert IndexedDB |
-| --- | --- | --- | --- | --- |
-| **Logout** | End/invalidate current session (and remote logout flows as product supports) | Remove session envelope | Stop client; default: clear or seal per Phase 2/3 implementation tests—must be explicit and tested | Unchanged by default during retention unless user also chose cleanup |
-| **Local wipe** | May skip remote logout if offline; prefer remote when online | Remove | **Destroy** local Matrix stores for the target account only | Optional separate confirm if wiping “all Matrix data on this device” |
+| Action         | Server session                                                               | Native credentials      | Local Matrix stores (Rust)                                                                         | Legacy inert IndexedDB                                               |
+| -------------- | ---------------------------------------------------------------------------- | ----------------------- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **Logout**     | End/invalidate current session (and remote logout flows as product supports) | Remove session envelope | Stop client; default: clear or seal per Phase 2/3 implementation tests—must be explicit and tested | Unchanged by default during retention unless user also chose cleanup |
+| **Local wipe** | May skip remote logout if offline; prefer remote when online                 | Remove                  | **Destroy** local Matrix stores for the target account only                                        | Optional separate confirm if wiping “all Matrix data on this device” |
 
 Crash recovery **must not** auto-wipe (plan §8.3). UI labels and confirmations must not conflate “Sign out” with “Delete local data.”
 
@@ -331,9 +331,9 @@ Crash recovery **must not** auto-wipe (plan §8.3). UI labels and confirmations 
 
 ### D-USER-COPY — Messaging principles and draft strings
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                                             |
+| ------------ | ----------------------------------------------------------------- |
+| Status       | `decided`                                                         |
 | Owning tasks | **P3.7**, **P3.8**, final product copy polish deferred to release |
 
 **Principles (binding):**
@@ -347,33 +347,33 @@ Crash recovery **must not** auto-wipe (plan §8.3). UI labels and confirmations 
 
 **Draft user strings** (non-final; labeled draft):
 
-| Key | Draft copy |
-| --- | --- |
-| `migration.title` | Update your signed-in session |
-| `migration.body` | Synara now uses a more secure session engine. You’ll sign in once more. Your drafts and settings stay on this computer. Encrypted message history is restored with your recovery key. |
-| `migration.cta_continue` | Continue to sign in |
-| `migration.cta_learn` | What happens to my data? |
-| `migration.learn_body` | We don’t reuse your previous secure store automatically. After you sign in, we’ll help restore encryption keys if you have a recovery key. Older Matrix data on this device stays unused until you clean it up. |
-| `recovery.title` | Restore encryption |
-| `recovery.body` | Enter your recovery key to unlock encrypted message history on this device. We never send your recovery key to Synara servers as app telemetry. |
-| `recovery.defer` | Continue without restoring now |
-| `recovery.defer_warn` | Some older encrypted messages may not be readable until you restore. |
-| `transition.success` | You’re set. Synara is ready on this device. |
-| `transition.failure` | We couldn’t finish the update. Your previous data on this device was not removed. You can try again. |
-| `cleanup.title` | Remove older Matrix data? |
-| `cleanup.body` | This deletes unused data from the previous session engine on this device. Drafts and settings are kept. You can’t use that older data to roll back afterward. |
-| `cleanup.confirm` | Delete older Matrix data |
-| `logout.title` | Sign out? |
-| `wipe.title` | Delete local Matrix data? |
-| `wipe.body` | This removes Synara’s Matrix data for this account on this device. It is different from signing out on the server. |
+| Key                      | Draft copy                                                                                                                                                                                                      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `migration.title`        | Update your signed-in session                                                                                                                                                                                   |
+| `migration.body`         | Synara now uses a more secure session engine. You’ll sign in once more. Your drafts and settings stay on this computer. Encrypted message history is restored with your recovery key.                           |
+| `migration.cta_continue` | Continue to sign in                                                                                                                                                                                             |
+| `migration.cta_learn`    | What happens to my data?                                                                                                                                                                                        |
+| `migration.learn_body`   | We don’t reuse your previous secure store automatically. After you sign in, we’ll help restore encryption keys if you have a recovery key. Older Matrix data on this device stays unused until you clean it up. |
+| `recovery.title`         | Restore encryption                                                                                                                                                                                              |
+| `recovery.body`          | Enter your recovery key to unlock encrypted message history on this device. We never send your recovery key to Synara servers as app telemetry.                                                                 |
+| `recovery.defer`         | Continue without restoring now                                                                                                                                                                                  |
+| `recovery.defer_warn`    | Some older encrypted messages may not be readable until you restore.                                                                                                                                            |
+| `transition.success`     | You’re set. Synara is ready on this device.                                                                                                                                                                     |
+| `transition.failure`     | We couldn’t finish the update. Your previous data on this device was not removed. You can try again.                                                                                                            |
+| `cleanup.title`          | Remove older Matrix data?                                                                                                                                                                                       |
+| `cleanup.body`           | This deletes unused data from the previous session engine on this device. Drafts and settings are kept. You can’t use that older data to roll back afterward.                                                   |
+| `cleanup.confirm`        | Delete older Matrix data                                                                                                                                                                                        |
+| `logout.title`           | Sign out?                                                                                                                                                                                                       |
+| `wipe.title`             | Delete local Matrix data?                                                                                                                                                                                       |
+| `wipe.body`              | This removes Synara’s Matrix data for this account on this device. It is different from signing out on the server.                                                                                              |
 
 ---
 
 ### D-FAILURE — Failed transition preserves legacy data
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                           |
+| ------------ | ------------------------------- |
+| Status       | `decided`                       |
 | Owning tasks | **P3.7**; crash cases **P13.2** |
 
 **Decision.**
@@ -389,9 +389,9 @@ Crash recovery **must not** auto-wipe (plan §8.3). UI labels and confirmations 
 
 ### D-NO-DUAL-BACKEND — Hard constraint restated
 
-| Field | Value |
-| --- | --- |
-| Status | `decided` |
+| Field        | Value                                               |
+| ------------ | --------------------------------------------------- |
+| Status       | `decided`                                           |
 | Owning tasks | All phases; enforced especially P11.4–P11.10, P14.4 |
 
 **Decision.**
@@ -408,17 +408,17 @@ Crash recovery **must not** auto-wipe (plan §8.3). UI labels and confirmations 
 
 ## 5. Failure modes and user-visible outcomes
 
-| Failure mode | User-visible outcome | Data outcome |
-| --- | --- | --- |
-| Legacy detect false positive | Migration UI; user signs in; harmless | No legacy delete |
-| Login/SSO cancelled | Remain on migration/login; not “complete” | Legacy intact |
-| Login success, store open fails | Error + Retry; do not claim ready | Legacy intact; incomplete Rust store isolated |
-| Credential store unavailable | Clear unsupported/migration state (secure-storage plan); do not complete with silent long-lived WebView tokens as permanent design | Legacy intact until resolved |
-| Recovery key wrong | Error; remain recoverable; optional defer with warning | Legacy intact |
-| Sync never reaches ready | Do not mark complete; Retry / reconnect guidance | Legacy intact |
-| Crash mid-transition | On relaunch: detect incomplete; resume migration, not auto-wipe | Legacy intact |
-| Cleanup blocked (open IDB) | Error; retry later; do not half-delete without reporting | Best-effort; idempotent retry |
-| Account switch during incomplete transition | Block or serialize; one active generation | No dual client |
+| Failure mode                                | User-visible outcome                                                                                                               | Data outcome                                  |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------- |
+| Legacy detect false positive                | Migration UI; user signs in; harmless                                                                                              | No legacy delete                              |
+| Login/SSO cancelled                         | Remain on migration/login; not “complete”                                                                                          | Legacy intact                                 |
+| Login success, store open fails             | Error + Retry; do not claim ready                                                                                                  | Legacy intact; incomplete Rust store isolated |
+| Credential store unavailable                | Clear unsupported/migration state (secure-storage plan); do not complete with silent long-lived WebView tokens as permanent design | Legacy intact until resolved                  |
+| Recovery key wrong                          | Error; remain recoverable; optional defer with warning                                                                             | Legacy intact                                 |
+| Sync never reaches ready                    | Do not mark complete; Retry / reconnect guidance                                                                                   | Legacy intact                                 |
+| Crash mid-transition                        | On relaunch: detect incomplete; resume migration, not auto-wipe                                                                    | Legacy intact                                 |
+| Cleanup blocked (open IDB)                  | Error; retry later; do not half-delete without reporting                                                                           | Best-effort; idempotent retry                 |
+| Account switch during incomplete transition | Block or serialize; one active generation                                                                                          | No dual client                                |
 
 ---
 
@@ -471,14 +471,14 @@ Binding principles and draft strings are under `D-USER-COPY`. Additional rules:
 
 ## 10. Open parameters
 
-| Parameter | Status | Recommended default | Owner to finalize |
-| --- | --- | --- | --- |
-| `legacy_retention` | `decided-with-open-parameter` | Later of **30 days** after transition-complete **or** **2 app releases** | Product + P3.7 / P14.2 |
-| `early_cleanup_allowed` | `decided` (boolean true with strong confirm) | **true** | P3.7 |
-| `recovery_required_to_complete` | `decided` | **false** — complete allowed with explicit deferral acknowledgement; do not claim E2EE history ready | P3.7 / P8.5 |
-| Exact cutover marker schema | `deferred-to-phase` | Non-secret JSON: `{ userId, completedAt, appVersion, generation }` | P3.7 |
-| Incomplete Rust store discard vs repair | `deferred-to-phase` | Prefer discard incomplete generation + retry | P2.x / P3.7 |
-| Auto-prompt cleanup vs settings-only | `deferred-to-phase` | Soft prompt once after retention; always available in Settings | P3.7 / P14.2 |
+| Parameter                               | Status                                       | Recommended default                                                                                  | Owner to finalize      |
+| --------------------------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ---------------------- |
+| `legacy_retention`                      | `decided-with-open-parameter`                | Later of **30 days** after transition-complete **or** **2 app releases**                             | Product + P3.7 / P14.2 |
+| `early_cleanup_allowed`                 | `decided` (boolean true with strong confirm) | **true**                                                                                             | P3.7                   |
+| `recovery_required_to_complete`         | `decided`                                    | **false** — complete allowed with explicit deferral acknowledgement; do not claim E2EE history ready | P3.7 / P8.5            |
+| Exact cutover marker schema             | `deferred-to-phase`                          | Non-secret JSON: `{ userId, completedAt, appVersion, generation }`                                   | P3.7                   |
+| Incomplete Rust store discard vs repair | `deferred-to-phase`                          | Prefer discard incomplete generation + retry                                                         | P2.x / P3.7            |
+| Auto-prompt cleanup vs settings-only    | `deferred-to-phase`                          | Soft prompt once after retention; always available in Settings                                       | P3.7 / P14.2           |
 
 No `blocked-on-user` items: plan §8 already answers the product direction; open parameters are numeric/schema details with recommended defaults so Phase 0 can close.
 
@@ -503,17 +503,17 @@ No `blocked-on-user` items: plan §8 already answers the product direction; open
 
 ---
 
-## 12. Relationship to FR-7.9-* (statuses unchanged)
+## 12. Relationship to FR-7.9-\* (statuses unchanged)
 
 This ADR **does not** modify traceability FR statuses. Implementers must preserve honesty:
 
-| FR | Status (handoff) | Migration UX implication |
-| --- | --- | --- |
-| FR-7.9-001 | `implemented` (JS boot order) | Cutover replaces IndexedDB+wasm boot with native SQLite boot under Rust; order semantics (store before sync) still apply |
-| FR-7.9-006 | `implemented` (recovery UX product meaning) | Rehome under P8.5/P3.8; cutover recovery sequence must match product meaning, not compile-only gates |
-| FR-7.9-011 | **`partial`** concurrent multi-account | Cutover **must not** claim concurrent multi-account; sequential single-active isolation only |
-| FR-7.9-012 | `implemented` (continuity / no wipe on restore) | Rust restore must not wipe healthy stores; fresh-login identity change remains explicit |
-| FR-7.9-013 | **`partial`** corruption | Continuity anomaly guidance remains non-destructive; true integrity repair still partial—do not invent silent auto-wipe |
+| FR         | Status (handoff)                                | Migration UX implication                                                                                                 |
+| ---------- | ----------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| FR-7.9-001 | `implemented` (JS boot order)                   | Cutover replaces IndexedDB+wasm boot with native SQLite boot under Rust; order semantics (store before sync) still apply |
+| FR-7.9-006 | `implemented` (recovery UX product meaning)     | Rehome under P8.5/P3.8; cutover recovery sequence must match product meaning, not compile-only gates                     |
+| FR-7.9-011 | **`partial`** concurrent multi-account          | Cutover **must not** claim concurrent multi-account; sequential single-active isolation only                             |
+| FR-7.9-012 | `implemented` (continuity / no wipe on restore) | Rust restore must not wipe healthy stores; fresh-login identity change remains explicit                                  |
+| FR-7.9-013 | **`partial`** corruption                        | Continuity anomaly guidance remains non-destructive; true integrity repair still partial—do not invent silent auto-wipe  |
 
 ---
 

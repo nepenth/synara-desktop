@@ -1,79 +1,83 @@
-# ADR 0003: Shared native core (synara-core) for desktop + iOS
+# ADR 0003: Shared Native Rust Core for Desktop and iOS
 
-Status: accepted and implemented on `main` (consolidated proof 2026-08-17).
-Supersedes the separate Swift service-layer direction implied by ADR-0002 for
-app-logic ownership (ADR-0002's native-SwiftUI UI decision is retained).
+Originally accepted: 2026-08-10.
 
-**End state:** one Rust core (`synara-core`) that both the desktop Tauri
-app (macOS and Linux) and the iOS app consume, so sync, room list,
-timeline, and crypto are not implemented twice. That architecture is now the
-production source shape. Consolidated verification is recorded in
-[the 2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).
-What may be written in Rust, and what must stay put:
-[ADR 0004](0004-rust-language-boundaries.md).
+Last reviewed: 2026-09-01.
 
-The source counts, former Swift package ownership, and phase queue below are
-decision-time context. They are intentionally retained as history rather than
-live inventory.
+Status: accepted; architectural source shape implemented on `main`.
+
+This ADR supersedes ADR 0002 only where ADR 0002 implied an independent Swift
+Matrix/application service layer. ADR 0002's native SwiftUI and Apple-platform
+decisions remain accepted.
 
 ## Context
 
-- Desktop: `src-tauri/src/matrix/` holds ~285 Rust files implementing the entire
-  app-logic layer (sync, room list, timeline, crypto, send, media, notifications,
-  receipts, unread, typing, polls, threads, spaces, search, auth, lifecycle,
-  DTOs, and an `ipc/` transport protocol). Only 21 `#[tauri::command]` fns and
-  27 `tauri/AppHandle` references couple it to Tauri.
-- iOS: `synara-ios` is a native SwiftUI app that currently re-implements client
-  orchestration over the official `MatrixRustSDK` Swift package
-  (matrix-rust-components-swift, pinned 26.06.06). Crypto/sync/timeline logic is
-  duplicated in Swift (MatrixRustSDKService, RoomListService, TimelineService).
-- Consequence: two independent implementations of the same app logic drift; the
-  heavily-tested desktop engine (800+ Rust tests + Synapse proofs) is not reused
-  by iOS.
+The desktop and iOS clients need identical Matrix and Synara product semantics.
+Independent Rust desktop and Swift iOS orchestration had duplicated lifecycle,
+room, timeline, crypto, and policy decisions. That duplication made behavioral
+parity dependent on two implementations converging after every change.
+
+Decision-time source counts and migration phase numbers are preserved in
+`docs/shared-native-core/`; they are historical evidence, not current inventory
+or release acceptance.
 
 ## Decision
 
-Introduce a workspace crate **`synara-core`** that owns the entire
-transport-agnostic app-logic layer currently in `src-tauri/src/matrix/` plus
-`tasks/`, `dto/`, and `ipc/`. It depends only on `matrix-sdk` (pinned 0.18) and
-generic Rust.
+Maintain one workspace crate, `crates/synara-core`, as the shared
+transport-independent Matrix/application authority for all supported clients.
+It depends on `matrix-rust-sdk` and exposes typed operations, models, and event
+streams through thin platform adapters:
 
-Two thin adapters consume it:
+1. **Desktop:** `src-tauri/` calls Core in-process and owns macOS/Linux shell,
+   credential, notification, window, file, and byte-transfer integrations.
+   `synara/` owns React presentation and composer/viewport behavior.
+2. **iOS:** generated project-owned UniFFI bindings expose Core to SwiftUI.
+   Swift owns Apple UI and services. The notification extension receives only
+   its deliberately narrow store/preview surface and never starts full sync.
 
-1. **Desktop (src-tauri)**: the existing `#[tauri::command]` surface calls
-   `synara-core` in-process; `desktop_*` modules implement the `platform`
-   sink trait (keychain/secret store, native notifications, tray/badge,
-   dialogs, spellcheck, shortcuts, updater metadata).
-2. **iOS (synara-ios)**: `synara-core` is exported via **uniffi** to generate
-   Swift bindings (same technique as matrix-rust-components-swift); the SwiftUI
-   app becomes a thin UI + adapter over the shared core. Ship project-owned
-   bindings instead of the prebuilt matrix-rust-components-swift package; the
-   notification service extension uses a narrow read-only store-access surface
-   (never boots the full sync engine).
+There must be no JavaScript or Swift Matrix engine competing with Core for
+session, sync, crypto, room, timeline, account-data, or Matrix-write authority.
 
-Non-goals (kept platform-side): UI/UX (React vs SwiftUI), OS integrations
-(APNs vs native tray/desktop notifications), credential stores, file dialogs,
-app lifecycle, settings/config UI.
+## Durable invariants
+
+- One Core authority and one concurrency owner for shared Matrix behavior.
+- Platform bridges stay thin and typed; presentation projections are not second
+  domain owners.
+- UI, OS integrations, credential stores, file dialogs, and lifecycle
+  observations remain platform-owned.
+- Shared behavior is tested in Rust and through cross-language contract/live
+  proofs; platform behavior is also validated in its native environment.
+- Release, CI, physical-device, APNs, and live-homeserver gates are tracked by
+  current operational documents. The architectural source shape does not by
+  itself claim every release gate complete.
+
+## Current evidence
+
+- `crates/synara-core/` contains shared lifecycle and product domains over
+  matrix-sdk 0.18.
+- `src-tauri/Cargo.toml` depends on the local Core crate.
+- `crates/synara-core-bindgen/` generates the iOS binding package/XCFramework.
+- Product Swift services import `SynaraCore`; direct `MatrixRustSDK` source
+  imports are confined to the historical feasibility spike.
+- The consolidated implementation proof is recorded in the
+  [2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).
 
 ## Consequences
 
-- One logic source for both platforms; parity by construction.
-- One test suite (Rust unit + integration + Synapse proofs) gates both.
-- iOS feature delivery reuses the proven desktop engine; TestFlight gates
-  (crypto completion, physical-device, APNs) target one engine.
-- Costs: FFI design around async/streams (uniffi async proven by matrix-org);
-  version pinning unified inside synara-core; NSE store-access constraints;
-  a phased migration that must never break desktop CI.
+- Shared protocol and product behavior has one implementation and test owner.
+- New iOS functionality must consume or extend Core instead of rebuilding
+  Matrix state machines in Swift.
+- New desktop functionality must not bypass Core with a JavaScript Matrix
+  client.
+- FFI/IPC schema design, cancellation, streaming, versioning, and platform
+  lifecycle adapters remain real costs and must be justified per boundary.
+- [ADR 0004](0004-rust-language-boundaries.md) decides what belongs in Core;
+  [ADR 0005](0005-native-media-handle-channel.md) defines the media byte path.
 
-## Historical Phase Plan
+## Historical implementation phases
 
-- P0 — this ADR + plan doc + module-boundary census (DONE).
-- P1 — crate extraction: move matrix/tasks/dto/ipc into `crates/synara-core`
-  (no behavior change); introduce `platform` trait; desktop CI stays green.
-- P2 — native transport API: formalize commands + event streams (envelope,
-  wire counter) as the core public surface; observer/sink abstraction.
-- P3 — desktop adapter swap: src-tauri becomes a thin shell over synara-core.
-- P4 — uniffi bindings for iOS targets + Swift `SynaraCore` adapter; replace
-  MatrixRustSDKService/RoomListService/TimelineService.
-- P5 — iOS parity + release gates: shared-core full matrix, iOS simulator,
-  physical-device, APNs, TestFlight, production E2EE completion.
+The P0–P5 plan—crate extraction, transport API, desktop adapter cutover,
+UniFFI adoption, and iOS release proof—explains how this decision was pursued.
+It is not an evergreen queue. Current status and stop conditions live in the
+[shared-Core program documentation](../shared-native-core/README.md), not in
+this ADR.
