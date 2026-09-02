@@ -2,6 +2,12 @@
 
 Status: research backlog; not approved for implementation.
 
+Read the [portfolio triage](TRIAGE.md) before opening a workstream. The
+architectural shape below is already the production path on `main`, not a
+future redesign. The triage classifies most workstreams as already owned or
+stay platform-side and records the residual questions that remain worth
+investigating.
+
 ## Intent
 
 Explore whether additional cross-client product semantics should be owned by
@@ -87,7 +93,10 @@ A workstream is ready for an implementation decision only when it has:
 10. adversarial review findings and a clear go/no-go recommendation.
 
 Use the [agent guide](AGENT-GUIDE.md) to investigate a workstream and write the
-result using the [plan template](PLAN-TEMPLATE.md).
+result using the [plan template](PLAN-TEMPLATE.md). Do not write a full
+implementation plan for a workstream whose [triage prior](TRIAGE.md#6-workstream-priors)
+is already owned or stay platform-side unless new source evidence overturns
+that prior.
 
 ## Portfolio-level questions
 

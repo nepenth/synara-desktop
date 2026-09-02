@@ -14,7 +14,7 @@ historical plans and snapshots.
 | Build, validation, and release  | [`build-and-release.md`](build-and-release.md), [`production-smoke-checklist.md`](production-smoke-checklist.md)                                                       |
 | Desktop platform behavior       | [`desktop-modernization.md`](desktop-modernization.md), [`linux.md`](linux.md), [`macos-local-signing.md`](macos-local-signing.md)                                     |
 | Shared Rust core                | [`adr/0003-shared-native-rust-core.md`](adr/0003-shared-native-rust-core.md), [`adr/0004-rust-language-boundaries.md`](adr/0004-rust-language-boundaries.md)           |
-| Future project explorations     | [`future-projects/README.md`](future-projects/README.md)                                                                                                               |
+| Future project explorations     | [`future-projects/README.md`](future-projects/README.md), [`future-projects/rust-ownership-expansion/TRIAGE.md`](future-projects/rust-ownership-expansion/TRIAGE.md)   |
 | Timeline reliability            | [`timeline-room-state-reliability-contract.md`](timeline-room-state-reliability-contract.md), [`timeline-room-state-acceptance.md`](timeline-room-state-acceptance.md) |
 | iOS application                 | [`../synara-ios/README.md`](../synara-ios/README.md), [`../synara-ios/docs/ios-validation-status.md`](../synara-ios/docs/ios-validation-status.md)                     |
 | Shared product contracts        | [`../synara/docs/synara-contracts.md`](../synara/docs/synara-contracts.md), [`../synara/docs/contracts/README.md`](../synara/docs/contracts/README.md)                 |
