@@ -1,6 +1,6 @@
 # Program state
 
-Last updated: 2026-09-01 (ROE-11 in review; ROE-05 in flight).
+Last updated: 2026-09-01 (ROE-05 and ROE-11 in review).
 Integration branch: `feature/rust-ownership-residual-census`.
 Base: `main` at `011cf39a`.
 
@@ -8,15 +8,14 @@ Base: `main` at `011cf39a`.
 
 All census-and-close priors plus the ROE-04/12 fixture cluster are
 closed or stay-platform. ROE-08 remains a human implementation gate
-(D10). ROE-11 is in review. ROE-05 visibility-contract census is in
-flight. No product work. No merge to `main`.
+(D10). ROE-05 and ROE-11 are in review. No product work. No merge to
+`main`.
 
 ## Next actions
 
-1. Merge #1090 only after independent ACCEPT at HEAD.
-2. Review the ROE-05 memo when that PR exists.
-3. Keep ROE-08 implementation stopped.
-4. Optional later: land the ROE-04/12 fixture directory under
+1. Merge #1090 and #1091 only after independent ACCEPT at HEAD.
+2. Keep ROE-08 implementation stopped.
+3. Optional later: land the ROE-04/12 fixture directory under
    `docs/future-projects/**` only. Do not implement a renderer or AST.
 
 ## Active lanes
@@ -33,7 +32,7 @@ flight. No product work. No merge to `main`.
 | ROE-06 | closed | merged `#1087` | stay platform-side; unused Core helpers; nits recorded |
 | ROE-10 | closed | merged `#1088` | already owned split; leftover UniFFI / Jotai are seams |
 | ROE-04/12 | closed | merged `#1089` | stay platform; `formatted_body` comment still misleading; nits recorded |
-| ROE-05 | researcher | `roe/memo-05-visibility` | assigned |
+| ROE-05 | in-review | `roe/memo-05-visibility` | [#1091](https://github.com/nepenth/synara-desktop/pull/1091) `25c1ee02` |
 | ROE-11 | in-review | `roe/memo-11-media-metadata` | [#1090](https://github.com/nepenth/synara-desktop/pull/1090) `41c3d35b` |
 
 ## Blockers
