@@ -686,8 +686,15 @@ private extension AppEnvironment {
         let approvalError: SynaraAgentApprovalError? = processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] == "failed"
             ? .failed
             : nil
+        let approvalDecisionOutcome: SynaraAgentApprovalPromptDecisionOutcome =
+            processEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_DECISION_OUTCOME"] == "already-decided"
+                ? .alreadyDecided
+                : .applied
         let agentApprovals = MockAgentApprovalService(error: approvalError)
-        let agentApprovalDecisions = MockAgentApprovalDecisionService(error: approvalError)
+        let agentApprovalDecisions = MockAgentApprovalDecisionService(
+            error: approvalError,
+            outcome: approvalDecisionOutcome
+        )
         let readMarkers = MockRoomReadMarkerService(eventID: processEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"])
         let crypto = processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
             ? MockCryptoStatusService(

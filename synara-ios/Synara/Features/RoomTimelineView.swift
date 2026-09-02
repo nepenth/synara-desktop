@@ -181,6 +181,14 @@ enum RoomTimelineReadMarkerTaskPolicy {
 enum RoomTimelineTimestampRevealPolicy {
     static let displayDurationNanoseconds: UInt64 = 2_500_000_000
 
+    static func horizontalOffset(
+        isGroupedWithPrevious: Bool,
+        isRevealed: Bool,
+        width: CGFloat
+    ) -> CGFloat {
+        isGroupedWithPrevious && isRevealed ? -width : 0
+    }
+
     static func taskMayDismiss(
         taskGeneration: UInt64,
         currentGeneration: UInt64,
@@ -5117,7 +5125,11 @@ private struct TimelineRow: View {
             }
         }
 
-        let timestampRevealOffset = isGroupedWithPrevious && isTimestampRevealed ? -timestampRevealWidth : 0
+        let timestampRevealOffset = RoomTimelineTimestampRevealPolicy.horizontalOffset(
+            isGroupedWithPrevious: isGroupedWithPrevious,
+            isRevealed: isTimestampRevealed,
+            width: timestampRevealWidth
+        )
         let timestampRevealProgress = isGroupedWithPrevious && isTimestampRevealed ? 1.0 : 0.0
 
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -5130,7 +5142,7 @@ private struct TimelineRow: View {
                         .accessibilityHidden(true)
                 }
                 withFailedRetryAccessibilityAction(row)
-                    .offset(x: isGroupedWithPrevious ? timestampRevealOffset : 0)
+                    .offset(x: timestampRevealOffset)
             }
             .clipped()
             .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)

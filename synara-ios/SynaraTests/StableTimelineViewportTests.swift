@@ -114,6 +114,33 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testTimestampRevealOffsetAppliesOnlyToGroupedRevealedRows() {
+        XCTAssertEqual(
+            RoomTimelineTimestampRevealPolicy.horizontalOffset(
+                isGroupedWithPrevious: true,
+                isRevealed: true,
+                width: 64
+            ),
+            -64
+        )
+        XCTAssertEqual(
+            RoomTimelineTimestampRevealPolicy.horizontalOffset(
+                isGroupedWithPrevious: true,
+                isRevealed: false,
+                width: 64
+            ),
+            0
+        )
+        XCTAssertEqual(
+            RoomTimelineTimestampRevealPolicy.horizontalOffset(
+                isGroupedWithPrevious: false,
+                isRevealed: true,
+                width: 64
+            ),
+            0
+        )
+    }
+
     func testTimestampRevealDismissTaskMustOwnLatestRestartedGeneration() {
         XCTAssertTrue(
             RoomTimelineTimestampRevealPolicy.taskMayDismiss(
