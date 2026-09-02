@@ -1,6 +1,6 @@
 # Program state
 
-Last updated: 2026-09-01 (ROE-10 closed; ROE-04/12 in flight).
+Last updated: 2026-09-01 (ROE-04/12 memo in review).
 Integration branch: `feature/rust-ownership-residual-census`.
 Base: `main` at `011cf39a`.
 
@@ -9,15 +9,15 @@ Base: `main` at `011cf39a`.
 ROE-01, ROE-02, ROE-03, ROE-06, ROE-09, and ROE-10 are closed as
 already owned or stay-platform. ROE-07 is closed as already-owned
 settings / stay-platform delivery. ROE-08 remains a human
-implementation gate (D10). ROE-04/12 fixture-first cluster is
-assigned. No product work. No merge to `main`.
+implementation gate (D10). ROE-04/12 is in review. No product work.
+No merge to `main`.
 
 ## Next actions
 
-1. Review the ROE-04/12 memo when the PR exists. Fixtures before types;
-   do not design a Core AST.
+1. Merge #1089 only after independent ACCEPT at HEAD. Fixtures before
+   types; do not design a Core AST.
 2. Keep ROE-08 implementation stopped.
-3. Do not start ROE-05 or ROE-11 until the fixture cluster is idle.
+3. Do not start ROE-05 or ROE-11 until the fixture cluster is closed.
 
 ## Active lanes
 
@@ -32,7 +32,7 @@ assigned. No product work. No merge to `main`.
 | ROE-07 | closed | merged `#1085` | already owned / stay platform; nits recorded in memo |
 | ROE-06 | closed | merged `#1087` | stay platform-side; unused Core helpers; nits recorded |
 | ROE-10 | closed | merged `#1088` | already owned split; leftover UniFFI / Jotai are seams |
-| ROE-04/12 | researcher | `roe/memo-04-message-format` | assigned; fixtures before types; no AST |
+| ROE-04/12 | in-review | `roe/memo-04-message-format` | [#1089](https://github.com/nepenth/synara-desktop/pull/1089) `91bf0b14` |
 
 ## Blockers
 

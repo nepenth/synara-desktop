@@ -12,8 +12,8 @@ Integration tip: update the SHA after each feature-branch merge.
 | Residual engine census | ROE-03 | Extend rows only | closed | [memo](../memos/ROE-03-timeline-rows-memo.md) | ACCEPT `#1086` | No missing field; shared `thread_root` omission is not an extract |
 | Notifications and agent policy | ROE-08 | Highest residual | human-gate | [memo](../memos/ROE-08-agent-approval-memo.md) | ACCEPT `#1082` | Extract eligibility; no implementation (D10) |
 | Notifications and agent policy | ROE-07 | Policy yes, delivery no | closed | [memo](../memos/ROE-07-notification-policy-memo.md) | ACCEPT_WITH_NITS `#1085` | Settings already Core; delivery stay platform; nits recorded |
-| Message format and safety | ROE-04 | Stay platform-side | researching | — | — | Cluster with ROE-12; fixtures before types; no AST |
-| Message format and safety | ROE-12 | Shared rules/fixtures | researching | — | — | Pair with ROE-04; fix “already-sanitized” claim if still present |
+| Message format and safety | ROE-04 | Stay platform-side | in-review | [#1089](https://github.com/nepenth/synara-desktop/pull/1089) | pending | Researcher: stay platform; `formatted_body` comment still misleading |
+| Message format and safety | ROE-12 | Shared rules/fixtures | in-review | [#1089](https://github.com/nepenth/synara-desktop/pull/1089) | pending | Cluster memo with ROE-04; fixtures described, not landed |
 | Read and list semantics | ROE-05 | Visibility contract | queued | — | — | After fixtures unless a memo proves otherwise |
 | Read and list semantics | ROE-06 | Split; census Core helpers | closed | [memo](../memos/ROE-06-room-sort-memo.md) | ACCEPT_WITH_NITS `#1087` | Stay platform; unused helpers; nits recorded |
 | Account data and drafts | ROE-09 | Already owned | closed | [memo](../memos/ROE-09-notes-memo.md) | ACCEPT `#1084` | No second notes engine |
