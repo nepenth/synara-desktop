@@ -55,9 +55,11 @@ const expand = (fixture: CorpusCase): string => {
 
 const decodeBasicEntities = (value: string): string =>
   value
-    .replace(/&#(\d+);/g, (_match, value: string) => String.fromCodePoint(Number(value)))
-    .replace(/&#x([0-9a-f]+);/gi, (_match, value: string) =>
-      String.fromCodePoint(Number.parseInt(value, 16))
+    .replace(/&#(\d+);/g, (_match, decimalValue: string) =>
+      String.fromCodePoint(Number(decimalValue))
+    )
+    .replace(/&#x([0-9a-f]+);/gi, (_match, hexadecimalValue: string) =>
+      String.fromCodePoint(Number.parseInt(hexadecimalValue, 16))
     )
     .replace(/&lt;/g, '<')
     .replace(/&gt;/g, '>')

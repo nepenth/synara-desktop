@@ -1634,7 +1634,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
     };
-  }, [liveTailAlreadyRead, liveTailMarkReadKey, setReadState]);
+  }, [liveTailAlreadyRead, liveTailMarkReadKey, liveTailReadTarget, setReadState]);
 
   useEffect(() => {
     if (!readyState) return undefined;
