@@ -539,7 +539,7 @@ struct RoomListView: View {
                     .padding(.vertical, SynaraSpacing.small)
                     .background {
                         RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
-                            .fill(room.hasHighlight || room.unreadCount > 0
+                            .fill(room.hasUnreadActivity
                                 ? SynaraColor.elevatedSurface
                                 : SynaraColor.surface)
                     }
@@ -573,7 +573,7 @@ struct RoomListView: View {
                 .tint(SynaraColor.secondaryText)
                 .accessibilityIdentifier("FavoriteRoom-\(room.id)")
 
-                if room.unreadCount > 0 {
+                if room.hasUnreadActivity {
                     Button {
                         markRoomAsRead(room)
                     } label: {
@@ -677,7 +677,7 @@ struct RoomListView: View {
         let pendingApprovals = AgentPendingInbox.pendingApprovals(from: rooms).count
         let agentRooms = rooms.filter(\.isAgentRoom).count
         return [
-            .unread: rooms.filter { $0.unreadCount > 0 }.count,
+            .unread: rooms.filter(\.hasUnreadActivity).count,
             .mentions: rooms.filter(\.hasHighlight).count,
             .agents: pendingApprovals > 0 ? pendingApprovals : (agentRooms > 0 ? agentRooms : 0)
         ]
@@ -1235,7 +1235,7 @@ private struct RoomListRow: View {
     }
 
     private var hasUnreadActivity: Bool {
-        room.unreadCount > 0 || room.hasHighlight
+        room.hasUnreadActivity
     }
 
     private var roomGlyphColor: Color {
@@ -1328,7 +1328,7 @@ private struct RoomListRow: View {
                                 .lineLimit(1)
                         }
 
-                        SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
+                        SynaraUnreadBadge(count: room.unreadBadgeCount, highlighted: room.hasHighlight)
                     }
                     .fixedSize(horizontal: true, vertical: false)
                 }
@@ -1400,8 +1400,8 @@ private struct InviteRoomListRow: View {
 private extension RoomSummary {
     var accessibilitySummary: String {
         var parts = [name, lastMessagePreview]
-        if unreadCount > 0 {
-            parts.append("\(unreadCount) unread")
+        if unreadBadgeCount > 0 {
+            parts.append("\(unreadBadgeCount) unread")
         }
         if hasHighlight {
             parts.append("mentioned")

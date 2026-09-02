@@ -366,6 +366,50 @@ dictionary TimelineViewReactionDto {
   boolean? own;
 };
 
+// Privacy-safe Core-owned reply preview. No raw event content.
+dictionary TimelineViewReplyPreviewDto {
+  string event_id;
+  string? sender_id;
+  string sender_name;
+  string body;
+};
+
+// Privacy-safe Core-owned thread summary.
+dictionary TimelineViewThreadSummaryDto {
+  string root_event_id;
+  u32 reply_count;
+  string? latest_event_id;
+};
+
+// One privacy-safe poll answer. No voter identities.
+dictionary TimelineViewPollAnswerDto {
+  string id;
+  string text;
+  u32 vote_count;
+  boolean own;
+};
+
+// Privacy-safe Core-owned poll presentation.
+dictionary TimelineViewPollDto {
+  string question;
+  boolean closed;
+  u32 max_selections;
+  sequence<TimelineViewPollAnswerDto> answers;
+};
+
+// Core-authoritative affordance gates for one timeline row.
+dictionary TimelineViewRowCapabilitiesDto {
+  boolean react;
+  boolean reply;
+  boolean edit;
+  boolean redact;
+  boolean report;
+  boolean pin;
+  boolean forward;
+  boolean vote;
+  boolean decline_call;
+};
+
 // Privacy-safe timeline view row. Message text, sender-avatar mxc metadata,
 // and opaque media handles only; no media bytes or tokens.
 dictionary TimelineViewRowDto {
@@ -373,16 +417,24 @@ dictionary TimelineViewRowDto {
   string item_id;
   string event_id;
   string sender;
+  string sender_name;
   string? sender_avatar_url;
   string body;
   u64 origin_server_ts;
   boolean edited;
   string? reply_to_event_id;
+  TimelineViewReplyPreviewDto? reply_preview;
+  string? thread_root_event_id;
+  TimelineViewThreadSummaryDto? thread_summary;
+  TimelineViewPollDto? poll;
+  TimelineViewRowCapabilitiesDto? capabilities;
   string? decryption_state;
   string? message_type;
   string? formatted_body;
   // Recognized, size-bounded Synara/Hermes card payload only; never raw event JSON.
   string? agent_card_json;
+  // Core-owned eligibility gate for Hermes approval presentation/actions.
+  boolean is_agent_approval;
   string? media_filename;
   string? media_caption;
   sequence<TimelineViewReactionDto> reactions;
@@ -445,6 +497,7 @@ dictionary TimelineEventReadbackDto {
 dictionary TimelineReadStateDto {
   string action;
   boolean? receipt_sent;
+  string? acknowledged_event_id;
   TimelineSnapshotDto snapshot;
 };
 
@@ -1946,7 +1999,12 @@ interface SharedCore {
   TimelineEventReadbackDto timeline_event_readback(string room_id, string event_id);
 
   [Async, Throws=TimelineReadStateError]
-  TimelineReadStateDto timeline_set_read_state(string stream_id, string action);
+  TimelineReadStateDto timeline_set_read_state(
+    string stream_id,
+    string action,
+    string intent,
+    string? observed_live_tail_event_id
+  );
 
   [Async, Throws=TimelineReadStateError]
   TimelineOpenDto timeline_jump_latest(string stream_id);

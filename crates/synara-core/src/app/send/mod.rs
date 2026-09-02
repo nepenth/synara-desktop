@@ -42,7 +42,8 @@ pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
 pub use text::{
     edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
     parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,
-    validated_mentions,
+    validate_outbound_text_payload, validated_mentions, MAX_MATRIX_IDENTIFIER_BYTES,
+    MAX_OUTBOUND_MENTION_COUNT, MAX_OUTBOUND_TEXT_PAYLOAD_BYTES,
 };
 
 /// Static marker for link / schema smoke (text + attachment queues).

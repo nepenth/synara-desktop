@@ -81,7 +81,6 @@ import {
   TUploadItem,
   TUploadMetadata,
   roomIdToMsgDraftAtomFamily,
-  roomIdToReplyDraftAtomFamily,
   roomIdToUploadItemsAtomFamily,
   roomUploadAtomFamily,
 } from '../../state/room/roomInputDrafts';
@@ -133,6 +132,7 @@ import {
   DEFAULT_POLL_SELECTIONS,
   MAX_POLL_SELECTIONS,
   normalizePollParts,
+  type ParsedPoll,
 } from '../../utils/polls';
 import { RoomComposer } from './RoomComposer';
 import * as css from './RoomComposer.css';
@@ -142,9 +142,16 @@ import {
   sendComposerAttachmentPlanWithNativeOwner,
 } from './nativeSendAttachment';
 import { sendComposerGifWithNativeOwner } from './nativeSendGif';
-import { sendPollWithNativeDesktopOwner } from './nativePoll';
+import {
+  sendPollCommandWithNativeDesktopOwner,
+  sendPollWithNativeDesktopOwner,
+} from './nativePoll';
 import { sendPlainTextWithNativeOwner } from './nativeSendText';
-import { clearNativeComposerReplyDraft } from './nativeComposerDraft';
+import {
+  clearNativeComposerReplyDraft,
+  nativeComposerSendRelation,
+  useNativeComposerReplyDraft,
+} from './nativeComposerDraft';
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
   completeAttachmentSendStep,
@@ -172,7 +179,6 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     );
     const { t } = useTranslation();
     const direct = useIsDirectRoom();
-    const commands = useCommands(mx, room as unknown as Parameters<typeof useCommands>[1]);
     const emojiBtnRef = useRef<HTMLButtonElement>(null);
     const composerToolsBtnRef = useRef<HTMLButtonElement>(null);
     const roomToParents = useAtomValue(roomToParentsAtom);
@@ -180,12 +186,30 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const creators = useRoomCreators(room);
 
     const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
-    const [replyDraft, setReplyDraft] = useAtom(roomIdToReplyDraftAtomFamily(roomId));
-    const clearReplyDraft = useCallback(() => {
-      setReplyDraft(undefined);
-      void clearNativeComposerReplyDraft({ roomId });
-    }, [roomId, setReplyDraft]);
-    const replyUserID = replyDraft?.userId;
+    const replyDraft = useNativeComposerReplyDraft(roomId);
+    const clearReplyDraft = useCallback(
+      async (expectedDraftRevision: number) => {
+        const result = await clearNativeComposerReplyDraft({ roomId, expectedDraftRevision });
+        if (result === 'unavailable') {
+          throw new Error('Native reply draft clear is unavailable.');
+        }
+      },
+      [roomId]
+    );
+    const clearReplyDraftAfterSend = useCallback(
+      async (expectedDraftRevision: number | undefined, onFailure: () => void) => {
+        if (expectedDraftRevision === undefined) return;
+        try {
+          await clearReplyDraft(expectedDraftRevision);
+        } catch {
+          // The send already completed. Preserve the visible Core-backed draft
+          // and report cleanup separately so retry cannot duplicate the message.
+          onFailure();
+        }
+      },
+      [clearReplyDraft]
+    );
+    const replyUserID = replyDraft?.senderId;
 
     const powerLevelTags = usePowerLevelTags(room, powerLevels);
     const creatorsTag = useRoomCreatorsTag();
@@ -247,6 +271,42 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       gifProviderAvailable && !gifSearchEnabled && !gifOnboardingDismissed;
 
     const sendTypingStatus = useTypingStatusUpdater(roomId);
+
+    const sendSlashPoll = useCallback(
+      async (poll: ParsedPoll) => {
+        // Snapshot both fields from the one visible Core draft before the
+        // asynchronous send begins; no Jotai/local relation may diverge.
+        const sendRelation = nativeComposerSendRelation(replyDraft);
+        const owner = await sendPollCommandWithNativeDesktopOwner(
+          {
+            roomId,
+            question: poll.question,
+            answers: poll.answers.map((answer) => answer.text),
+            maxSelections: poll.maxSelections,
+            threadRoot: sendRelation.threadRoot,
+            replyTo: sendRelation.replyTo,
+          },
+          () =>
+            clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
+              setSendError(
+                t(
+                  'composer.reply_clear_after_send_failed',
+                  'Poll sent, but the reply state could not be cleared.'
+                )
+              );
+            })
+        );
+        if (owner === 'legacy') {
+          throw new Error('Native Matrix session is required to send polls on desktop.');
+        }
+      },
+      [clearReplyDraftAfterSend, replyDraft, roomId, t]
+    );
+    const commands = useCommands(
+      mx,
+      room as unknown as Parameters<typeof useCommands>[1],
+      sendSlashPoll
+    );
 
     const handleFiles = useCallback(
       async (files: File[]) => {
@@ -342,15 +402,16 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const isComposing = useComposingCheck();
 
     const getReplyRelation = useCallback(() => {
-      if (!replyDraft) return undefined;
+      const { replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      if (!replyTo) return undefined;
 
       const relation: RelationTypeRelatesTo = {
         'm.in_reply_to': {
-          event_id: replyDraft.eventId,
+          event_id: replyTo,
         },
       };
-      if (replyDraft.relation?.rel_type === RelationType.Thread) {
-        relation.event_id = replyDraft.relation.event_id;
+      if (threadRoot) {
+        relation.event_id = threadRoot;
         relation.rel_type = RelationType.Thread;
         relation.is_falling_back = false;
       }
@@ -426,12 +487,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[], options?: UploadSendOptions) => {
-      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
-      const threadRoot =
-        replyDraft?.relation?.rel_type === RelationType.Thread &&
-        typeof replyDraft.relation.event_id === 'string'
-          ? replyDraft.relation.event_id
-          : undefined;
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
       const nativeInputs = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
@@ -449,7 +505,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             formattedCaption: uploads.length === 1 ? options?.formattedCaption : undefined,
             mentionUserIds: uploads.length === 1 ? options?.mentionUserIds : undefined,
             mentionRoom: uploads.length === 1 ? options?.mentionRoom : undefined,
-            replyTo: threadRoot ? undefined : replyTo,
+            replyTo,
             threadRoot,
           };
         })
@@ -468,7 +524,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         throw new Error('Native Matrix attachment send is unavailable.');
       }
       if (nativeInputs.length > 0) {
-        setReplyDraft(undefined);
+        await clearReplyDraftAfterSend(draftRevision, () => {
+          setSendError(
+            t(
+              'composer.reply_clear_after_send_failed',
+              'Message sent, but the reply state could not be cleared.'
+            )
+          );
+        });
       }
     };
 
@@ -505,6 +568,28 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         customHtml = `${UNFLIP} ${customHtml}`;
       } else if (commandName) {
         const commandContent = commands[commandName as Command];
+        if (commandName === Command.Poll && commandContent) {
+          try {
+            setSendingMessage(true);
+            setSendError(undefined);
+            await commandContent.exe(plainText);
+            resetEditor(editor);
+            resetEditorHistory(editor);
+            sendTypingStatus(false);
+          } catch (err) {
+            const reason =
+              err instanceof Error && err.message ? err.message : 'Could not send poll.';
+            setSendError(
+              t('composer.send_failed_with_reason', {
+                reason,
+                defaultValue: 'Could not send message: {{reason}}',
+              })
+            );
+          } finally {
+            setSendingMessage(false);
+          }
+          return;
+        }
         if (commandContent) {
           commandContent.exe(plainText);
         }
@@ -526,8 +611,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         body,
       };
 
-      if (replyDraft && replyDraft.userId !== mx.getUserId()) {
-        mentionData.users.add(replyDraft.userId);
+      if (replyDraft && replyDraft.senderId !== mx.getUserId()) {
+        mentionData.users.add(replyDraft.senderId);
       }
 
       const mMentions = getMentionContent(Array.from(mentionData.users), mentionData.room);
@@ -543,11 +628,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       if (relation) {
         content['m.relates_to'] = relation;
       }
-      const threadRoot =
-        replyDraft?.relation?.rel_type === RelationType.Thread &&
-        typeof replyDraft.relation.event_id === 'string'
-          ? replyDraft.relation.event_id
-          : undefined;
+      const sendRelation = nativeComposerSendRelation(replyDraft);
       try {
         setSendingMessage(true);
         setSendError(undefined);
@@ -579,7 +660,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             resetEditor(editor);
             resetEditorHistory(editor);
             clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
-            clearReplyDraft();
+            await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
+              setSendError(
+                t(
+                  'composer.reply_clear_after_send_failed',
+                  'Message sent, but the reply state could not be cleared.'
+                )
+              );
+            });
             sendTypingStatus(false);
             return;
           }
@@ -592,8 +680,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           formattedBody: content.formatted_body,
           mentionUserIds: Array.from(mentionData.users),
           mentionRoom: mentionData.room,
-          replyTo: replyDraft?.eventId as string | undefined,
-          threadRoot,
+          replyTo: sendRelation.replyTo,
+          threadRoot: sendRelation.threadRoot,
         });
         if (nativeOwner === 'legacy') {
           await mx.sendMessage(roomId, content as any);
@@ -601,7 +689,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         resetEditor(editor);
         resetEditorHistory(editor);
         clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
-        clearReplyDraft();
+        await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
+          setSendError(
+            t(
+              'composer.reply_clear_after_send_failed',
+              'Message sent, but the reply state could not be cleared.'
+            )
+          );
+        });
         sendTypingStatus(false);
       } catch (err) {
         const reason =
@@ -623,7 +718,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       editor,
       replyDraft,
       sendTypingStatus,
-      clearReplyDraft,
+      clearReplyDraftAfterSend,
       isMarkdown,
       commands,
       getReplyRelation,
@@ -666,18 +761,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return;
       }
       try {
-        const threadRoot =
-          replyDraft?.relation?.rel_type === RelationType.Thread &&
-          typeof replyDraft.relation.event_id === 'string'
-            ? replyDraft.relation.event_id
-            : undefined;
+        const sendRelation = nativeComposerSendRelation(replyDraft);
         const owner = await sendPollWithNativeDesktopOwner({
           roomId,
           question: poll.question,
           answers: poll.answers.map((answer) => answer.text),
           maxSelections: poll.maxSelections,
-          threadRoot,
-          replyTo: replyDraft?.eventId as string | undefined,
+          threadRoot: sendRelation.threadRoot,
+          replyTo: sendRelation.replyTo,
         });
         if (owner === 'legacy') {
           setPollError(
@@ -692,6 +783,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         setPollAnswers(['', '']);
         setPollMaxSelections(DEFAULT_POLL_SELECTIONS);
         setPollAnchor(undefined);
+        await clearReplyDraftAfterSend(sendRelation.draftRevision, () => {
+          setPollError(
+            t(
+              'composer.reply_clear_after_send_failed',
+              'Poll sent, but the reply state could not be cleared.'
+            )
+          );
+        });
       } catch {
         setPollError(t('modernization.poll.send_failed', 'Could not send poll.'));
       }
@@ -712,10 +811,14 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             setAutocompleteQuery(undefined);
             return;
           }
-          clearReplyDraft();
+          if (replyDraft) {
+            void clearReplyDraft(replyDraft.draftRevision).catch(() => {
+              setSendError(t('composer.reply_clear_failed', 'Could not cancel reply.'));
+            });
+          }
         }
       },
-      [submit, clearReplyDraft, enterForNewline, autocompleteQuery, isComposing]
+      [submit, clearReplyDraft, enterForNewline, autocompleteQuery, isComposing, replyDraft, t]
     );
 
     const handleKeyUp: KeyboardEventHandler = useCallback(
@@ -751,15 +854,17 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleGifSelect = async (gif: GifResult) => {
       setGifSending(true);
       setGifSendError(undefined);
-      const replyTo = typeof replyDraft?.eventId === 'string' ? replyDraft.eventId : undefined;
-      const threadRoot =
-        replyDraft?.relation?.rel_type === RelationType.Thread &&
-        typeof replyDraft.relation.event_id === 'string'
-          ? replyDraft.relation.event_id
-          : undefined;
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
       try {
         await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
-        setReplyDraft(undefined);
+        await clearReplyDraftAfterSend(draftRevision, () => {
+          setGifSendError(
+            t(
+              'composer.reply_clear_after_send_failed',
+              'GIF sent, but the reply state could not be cleared.'
+            )
+          );
+        });
         setGifPickerAnchor(undefined);
       } catch (err) {
         setGifSendError(err instanceof Error ? err.message : 'Failed to send GIF.');
@@ -893,7 +998,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   style={{ padding: `${config.space.S200} ${config.space.S300} 0` }}
                 >
                   <IconButton
-                    onClick={() => clearReplyDraft()}
+                    onClick={() => {
+                      void clearReplyDraft(replyDraft.draftRevision).catch(() => {
+                        setSendError(t('composer.reply_clear_failed', 'Could not cancel reply.'));
+                      });
+                    }}
                     variant="SurfaceVariant"
                     size="300"
                     radii="300"
@@ -902,15 +1011,15 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     <Icon src={Icons.Cross} size="50" />
                   </IconButton>
                   <Box direction="Row" gap="200" alignItems="Center">
-                    {replyDraft.relation?.rel_type === RelationType.Thread && <ThreadIndicator />}
+                    {replyDraft.threadRootEventId && <ThreadIndicator />}
                     <ReplyLayout
                       userColor={replyUsernameColor}
                       username={
                         <Text size="T300" truncate>
                           <b>
-                            {getMemberDisplayName(room, replyDraft.userId) ??
-                              getMxIdLocalPart(replyDraft.userId) ??
-                              replyDraft.userId}
+                            {getMemberDisplayName(room, replyDraft.senderId) ??
+                              getMxIdLocalPart(replyDraft.senderId) ??
+                              replyDraft.senderId}
                           </b>
                         </Text>
                       }

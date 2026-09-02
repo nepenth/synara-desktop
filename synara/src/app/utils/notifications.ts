@@ -524,6 +524,27 @@ export function markAsReadInBackground(
 }
 
 /**
+ * Executes an explicit user-facing Mark Read command. This intent remains
+ * available when automatic activity sharing is hidden, but always uses the
+ * private receipt channel (plus Matrix's fully-read marker in native Core).
+ */
+export async function markAsReadFromExplicitUserAction(
+  mx: ReceiptClientReading,
+  roomId: string,
+  mode: MarkAsReadMode = 'latest-room'
+): Promise<void> {
+  await markAsRead(mx, roomId, true, mode);
+}
+
+export function markAsReadFromExplicitUserActionInBackground(
+  mx: ReceiptClientReading,
+  roomId: string,
+  mode: MarkAsReadMode = 'latest-room'
+): void {
+  void markAsReadFromExplicitUserAction(mx, roomId, mode).catch(() => undefined);
+}
+
+/**
  * Commits a caller-confirmed read target without resolving it through the room's
  * loaded live timeline. Use this after an authoritative SDK latest/context
  * operation has returned an event, including detached latest timelines.

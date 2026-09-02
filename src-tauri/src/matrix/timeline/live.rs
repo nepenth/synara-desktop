@@ -13,10 +13,11 @@ pub use synara_core::app::timeline::{
     NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
     NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
     NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRegistry,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
-    NativeUtdPhase, NativeUtdStatus, TimelineViewUpdateEmit, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
+    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineRegistry, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineViewUpdateEmit,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
 };
 
 /// Map a Tauri AppHandle onto the Core timeline view-delta sink.

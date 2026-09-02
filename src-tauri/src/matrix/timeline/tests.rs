@@ -893,17 +893,20 @@ mod composer_pure {
     fn registry_set_get_and_clear_are_room_scoped() {
         let mut registry = ComposerDraftRegistry::new();
         let draft = NativeComposerReplyDraft {
+            draft_revision: 0,
             event_id: "$evt:example.org".into(),
             sender_id: "@alice:example.org".into(),
             body: "hello".into(),
             formatted_body: Some("<p>hello</p>".into()),
             thread_root_event_id: None,
         };
-        registry.set("!room:example.org".into(), draft.clone());
+        let draft = registry.set("!room:example.org".into(), draft);
         assert_eq!(registry.get("!room:example.org"), Some(&draft));
         assert!(registry.get("!other:example.org").is_none());
-        assert!(registry.clear("!room:example.org"));
-        assert!(!registry.clear("!room:example.org"));
+        assert!(registry
+            .compare_and_clear("!room:example.org", draft.draft_revision)
+            .is_none());
+        assert!(registry.get("!room:example.org").is_none());
         assert_eq!(
             reply_draft_readback("!room:example.org".into(), "cleared", None).status,
             "cleared"
@@ -1118,6 +1121,10 @@ mod view_pure {
             closed: false,
             max_selections: 1,
             answers,
+            reply: None,
+            thread_root: None,
+            thread: None,
+            reactions: Vec::new(),
         };
         let json = serde_json::to_string(&row).unwrap();
         assert!(json.contains("\"voteCount\":2"));
@@ -1163,11 +1170,13 @@ mod view_pure {
             },
             body: "Reply body".into(),
             formatted_body: None,
+            is_agent_approval: false,
             message_type: Some("text".into()),
             media_filename: None,
             media_caption: None,
             edited: false,
             reply: Some(reply),
+            thread_root: None,
             thread: Some(thread),
             reactions: Vec::new(),
             media: None,

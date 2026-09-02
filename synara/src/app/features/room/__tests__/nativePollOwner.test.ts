@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { respondPollWithNativeOwner, sendPollWithNativeOwner } from '../nativePollOwner';
+import {
+  respondPollWithNativeOwner,
+  sendPollCommandWithNativeOwner,
+  sendPollWithNativeOwner,
+} from '../nativePollOwner';
 
 test('native logged-in session is the sole poll-start owner', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
@@ -149,4 +153,77 @@ test('native poll command failure never falls through to legacy sendEvent', asyn
     ),
     /Native Matrix poll send is unavailable/
   );
+});
+
+test('slash poll sends one reply/thread snapshot and clears the visible owner only on success', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  let clears = 0;
+  const input = {
+    roomId: '!room:example.org',
+    question: 'Continue?',
+    answers: ['Yes', 'No'],
+    maxSelections: 1,
+    replyTo: '$child:example.org',
+    threadRoot: '$root:example.org',
+  };
+  const owner = await sendPollCommandWithNativeOwner(
+    input,
+    async () => {
+      clears += 1;
+    },
+    true,
+    async (command, args) => {
+      calls.push({ command, args });
+      return command === 'matrix_session_snapshot'
+        ? { available: true, value: { status: 'logged_in' } }
+        : {
+            available: true,
+            value: {
+              roomId: input.roomId,
+              eventId: '$poll:example.org',
+              status: 'sent',
+            },
+          };
+    }
+  );
+
+  assert.equal(owner, 'native');
+  assert.equal(clears, 1);
+  assert.deepEqual(calls[1], {
+    command: 'matrix_send_poll',
+    args: {
+      ...input,
+    },
+  });
+
+  await assert.rejects(
+    sendPollCommandWithNativeOwner(
+      input,
+      async () => {
+        clears += 1;
+      },
+      true,
+      async (command) =>
+        command === 'matrix_session_snapshot'
+          ? { available: true, value: { status: 'logged_in' } }
+          : { available: false }
+    ),
+    /Native Matrix poll send is unavailable/
+  );
+  assert.equal(clears, 1, 'failed send must preserve the visible reply draft');
+
+  assert.equal(
+    await sendPollCommandWithNativeOwner(
+      input,
+      async () => {
+        clears += 1;
+      },
+      false,
+      async () => {
+        throw new Error('desktop invoke must not run');
+      }
+    ),
+    'legacy'
+  );
+  assert.equal(clears, 1, 'legacy owner must preserve the visible reply draft');
 });

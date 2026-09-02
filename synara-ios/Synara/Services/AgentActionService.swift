@@ -73,6 +73,17 @@ enum SynaraAgentApprovalPromptReaction: String, CaseIterable, Equatable, Identif
         }
     }
 
+    var actionIdentifier: String {
+        switch self {
+        case .approveOnce:
+            return SynaraAgentApprovalNotificationActionID.approveOnce.rawValue
+        case .approveAlways:
+            return SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
+        case .deny:
+            return SynaraAgentApprovalNotificationActionID.deny.rawValue
+        }
+    }
+
     var title: String {
         switch self {
         case .approveOnce:
@@ -334,70 +345,6 @@ enum SynaraAgentApprovalPromptDetector {
     }
 }
 
-/// Pure helper for native/push approval action revalidation before reactions are sent.
-enum SynaraAgentApprovalNativeActionValidator {
-    struct Result: Equatable {
-        let eventResolved: Bool
-        let isApprovalPrompt: Bool
-        let eventTimestamp: Date?
-        let shouldSubmitReaction: Bool
-        let reason: String
-    }
-
-    static func findTargetItem(in items: [TimelineItem], eventID: String) -> TimelineItem? {
-        items.first { $0.eventID == eventID || $0.id == eventID }
-    }
-
-    /// Validates a resolved timeline window for a native approval action target.
-    /// Fails closed when the event cannot be resolved or is not an approval prompt.
-    static func validate(
-        items: [TimelineItem],
-        eventID: String,
-        now: Date = Date(),
-        ttl: TimeInterval = SynaraNotificationActionContract.nativeActionTTL
-    ) -> Result {
-        guard let item = findTargetItem(in: items, eventID: eventID) else {
-            return Result(
-                eventResolved: false,
-                isApprovalPrompt: false,
-                eventTimestamp: nil,
-                shouldSubmitReaction: false,
-                reason: "event-unresolved"
-            )
-        }
-
-        let isApprovalPrompt = SynaraAgentApprovalPromptDetector.detect(in: item) != nil
-        guard isApprovalPrompt else {
-            return Result(
-                eventResolved: true,
-                isApprovalPrompt: false,
-                eventTimestamp: item.timestamp,
-                shouldSubmitReaction: false,
-                reason: "not-approval-prompt"
-            )
-        }
-
-        let eventTimestamp = item.timestamp
-        if now.timeIntervalSince(eventTimestamp) > ttl {
-            return Result(
-                eventResolved: true,
-                isApprovalPrompt: true,
-                eventTimestamp: eventTimestamp,
-                shouldSubmitReaction: false,
-                reason: "expired-ttl"
-            )
-        }
-
-        return Result(
-            eventResolved: true,
-            isApprovalPrompt: true,
-            eventTimestamp: eventTimestamp,
-            shouldSubmitReaction: true,
-            reason: "validated"
-        )
-    }
-}
-
 struct SynaraAgentApprovalRequest: Equatable {
     let roomID: String
     let sourceEventID: String?
@@ -405,10 +352,15 @@ struct SynaraAgentApprovalRequest: Equatable {
     let decision: SynaraAgentApprovalDecision
 }
 
-struct SynaraAgentApprovalReactionRequest: Equatable {
+struct SynaraAgentApprovalPromptDecisionRequest: Equatable {
     let roomID: String
     let sourceEventID: String
-    let reactionKey: String
+    let actionIdentifier: String
+}
+
+enum SynaraAgentApprovalPromptDecisionOutcome: Equatable {
+    case applied
+    case alreadyDecided
 }
 
 protocol AgentApprovalServicing {
@@ -417,13 +369,10 @@ protocol AgentApprovalServicing {
     func pendingApprovalCount() async -> Int
 }
 
-protocol AgentApprovalReactionServicing {
-    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws
-    func submitNativeDecision(
-        roomID: String,
-        eventID: String,
-        actionIdentifier: String
-    ) async throws
+protocol AgentApprovalDecisionServicing {
+    func submitDecision(
+        _ request: SynaraAgentApprovalPromptDecisionRequest
+    ) async throws -> SynaraAgentApprovalPromptDecisionOutcome
 }
 
 extension AgentApprovalServicing {
@@ -438,18 +387,6 @@ func encodeAgentApprovalMatrixEvent(
     jsonEncoder: JSONEncoder = JSONEncoder()
 ) throws -> Data {
     try jsonEncoder.encode(makeAgentApprovalMatrixEvent(request, createdAt: createdAt))
-}
-
-func encodeAgentApprovalReactionMatrixEvent(
-    _ request: SynaraAgentApprovalReactionRequest,
-    jsonEncoder: JSONEncoder = JSONEncoder()
-) throws -> Data {
-    try jsonEncoder.encode(SynaraMatrixReactionEvent(
-        relatesTo: SynaraMatrixReactionRelation(
-            eventID: request.sourceEventID,
-            key: request.reactionKey
-        )
-    ))
 }
 
 private func makeAgentApprovalMatrixEvent(
@@ -583,38 +520,27 @@ final class MockAgentApprovalService: AgentApprovalServicing {
     }
 }
 
-final class MockAgentApprovalReactionService: AgentApprovalReactionServicing {
-    private(set) var submitted: [SynaraAgentApprovalReactionRequest] = []
+final class MockAgentApprovalDecisionService: AgentApprovalDecisionServicing {
+    private(set) var submitted: [SynaraAgentApprovalPromptDecisionRequest] = []
     var error: SynaraAgentApprovalError?
+    var outcome: SynaraAgentApprovalPromptDecisionOutcome
 
-    init(error: SynaraAgentApprovalError? = nil) {
+    init(
+        error: SynaraAgentApprovalError? = nil,
+        outcome: SynaraAgentApprovalPromptDecisionOutcome = .applied
+    ) {
         self.error = error
+        self.outcome = outcome
     }
 
-    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws {
+    func submitDecision(
+        _ request: SynaraAgentApprovalPromptDecisionRequest
+    ) async throws -> SynaraAgentApprovalPromptDecisionOutcome {
         if let error {
             throw error
         }
         submitted.append(request)
-    }
-
-    func submitNativeDecision(
-        roomID: String,
-        eventID: String,
-        actionIdentifier: String
-    ) async throws {
-        guard let action = SynaraAgentApprovalNotificationActionID(rawValue: actionIdentifier),
-              action == .approveOnce || action == .deny,
-              let reactionKey = action.reactionKey else {
-            throw SynaraAgentApprovalError.unsupportedAction
-        }
-        try await submitReaction(
-            SynaraAgentApprovalReactionRequest(
-                roomID: roomID,
-                sourceEventID: eventID,
-                reactionKey: reactionKey
-            )
-        )
+        return outcome
     }
 }
 
@@ -645,26 +571,6 @@ private struct SynaraAgentApprovalContent: Encodable {
         case decision
         case sourceEventID = "source_event_id"
         case createdAt = "created_at"
-    }
-}
-
-private struct SynaraMatrixReactionEvent: Encodable {
-    let relatesTo: SynaraMatrixReactionRelation
-
-    enum CodingKeys: String, CodingKey {
-        case relatesTo = "m.relates_to"
-    }
-}
-
-private struct SynaraMatrixReactionRelation: Encodable {
-    let relType = "m.annotation"
-    let eventID: String
-    let key: String
-
-    enum CodingKeys: String, CodingKey {
-        case relType = "rel_type"
-        case eventID = "event_id"
-        case key
     }
 }
 

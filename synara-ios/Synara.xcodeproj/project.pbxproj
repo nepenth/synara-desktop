@@ -33,7 +33,6 @@
 		1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584058D243DE7197CF3096 /* AgentActionService.swift */; };
 		1DF4C901D18BA2FDFE0754D2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7F1719CBFE6CC6BD8166C /* NotificationService.swift */; };
 		1F2AE40317C7704B4ADD16F8 /* StableTimelineViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */; };
-		234379800D455B5D292AB67E /* MatrixRustSDK in Frameworks */ = {isa = PBXBuildFile; productRef = 04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */; };
 		23D51A50A6F59472FB89F9B7 /* RoomNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */; };
 		270F333BF721D93A00E931BC /* SynaraNseCore in Frameworks */ = {isa = PBXBuildFile; productRef = E0C5D48610D432BEC4178F73 /* SynaraNseCore */; };
 		276F320443969E9B55369092 /* SharedCoreDevices.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAFBA65E1252F324C84B028E /* SharedCoreDevices.swift */; };
@@ -397,7 +396,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				3C76DA11CB749760025BAB3F /* SynaraCore in Frameworks */,
-				234379800D455B5D292AB67E /* MatrixRustSDK in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -756,7 +754,6 @@
 			name = Synara;
 			packageProductDependencies = (
 				49B5C4AB6642E35F27BCCB5C /* SynaraCore */,
-				04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */,
 			);
 			productName = Synara;
 			productReference = 8A5CC96CDA94EE562BDBA416 /* Synara.app */;
@@ -829,7 +826,6 @@
 			mainGroup = 1E3176E5C6C0F7405EC9FDD3;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				17EDB652A583F50EF7606E92 /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */,
 				0AF4C1D505336CCBD42D5D4D /* XCLocalSwiftPackageReference "SynaraCore" */,
 				1E2CF036A85FF04FD01D6B02 /* XCLocalSwiftPackageReference "SynaraNseCore" */,
 			);
@@ -1412,23 +1408,7 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
-/* Begin XCRemoteSwiftPackageReference section */
-		17EDB652A583F50EF7606E92 /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/matrix-org/matrix-rust-components-swift.git";
-			requirement = {
-				kind = exactVersion;
-				version = 26.06.06;
-			};
-		};
-/* End XCRemoteSwiftPackageReference section */
-
 /* Begin XCSwiftPackageProductDependency section */
-		04B49FA4F6E9D7346F1EDC97 /* MatrixRustSDK */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 17EDB652A583F50EF7606E92 /* XCRemoteSwiftPackageReference "matrix-rust-components-swift" */;
-			productName = MatrixRustSDK;
-		};
 		49B5C4AB6642E35F27BCCB5C /* SynaraCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = SynaraCore;

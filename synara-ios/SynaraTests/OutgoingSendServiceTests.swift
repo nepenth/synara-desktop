@@ -14,6 +14,7 @@ final class OutgoingSendServiceTests: XCTestCase {
             formattedBody: "<p>Ship it</p>",
             senderID: "@alice:matrix.org",
             replyToEventID: "$parent",
+            threadRootEventID: "$root",
             deliveryStatus: .failed
         )
 
@@ -21,6 +22,9 @@ final class OutgoingSendServiceTests: XCTestCase {
 
         XCTAssertEqual(queued?.body, "Ship it")
         XCTAssertEqual(queued?.deliveryStatus, .sending)
+        XCTAssertEqual(queued?.replyToEventID, "$parent")
+        XCTAssertEqual(queued?.threadRootEventID, "$root")
+        XCTAssertEqual(queued?.asTimelineItem().threadRootEventID, "$root")
         XCTAssertEqual(OutgoingSendPolicy.retryBody(for: failed), "Ship it")
         XCTAssertTrue(OutgoingSendPolicy.canRetry(failed))
 
@@ -30,8 +34,41 @@ final class OutgoingSendServiceTests: XCTestCase {
         XCTAssertEqual(sender.requests.first?.body, "Ship it")
         XCTAssertEqual(sender.requests.first?.roomID, "!room:matrix.org")
         XCTAssertEqual(sender.requests.first?.replyToEventID, "$parent")
+        XCTAssertEqual(sender.requests.first?.threadRootEventID, "$root")
         XCTAssertNil(sender.requests.first?.editEventID)
         XCTAssertEqual(coordinator.queue.item(id: "$pending-retry")?.deliveryStatus, .sent)
+    }
+
+    @MainActor
+    func testQueuedThreadReplyPreservesChildAndRootThroughTransmission() async {
+        let sender = RecordingMessageSendService()
+        let connection = ConnectionStatusStore(reconnectingHold: 0)
+        connection.update(.connected)
+        let coordinator = OutgoingSendCoordinator(messageSender: sender, connectionStatus: connection)
+
+        let queued = coordinator.enqueue(
+            localID: "$pending-thread-reply",
+            roomID: "!room:matrix.org",
+            body: "Reply to a child",
+            formattedBody: nil,
+            replyToEventID: "$child",
+            threadRootEventID: "$root",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate
+        )
+
+        XCTAssertEqual(queued.replyToEventID, "$child")
+        XCTAssertEqual(queued.threadRootEventID, "$root")
+        XCTAssertEqual(queued.asTimelineItem().replyToEventID, "$child")
+        XCTAssertEqual(queued.asTimelineItem().threadRootEventID, "$root")
+        XCTAssertEqual(queued.sendRequest().replyToEventID, "$child")
+        XCTAssertEqual(queued.sendRequest().threadRootEventID, "$root")
+
+        await coordinator.transmitIfNeeded(queued)
+
+        XCTAssertEqual(sender.requests.count, 1)
+        XCTAssertEqual(sender.requests.first?.replyToEventID, "$child")
+        XCTAssertEqual(sender.requests.first?.threadRootEventID, "$root")
     }
 
     @MainActor
@@ -369,6 +406,7 @@ private final class RecordingMessageSendService: MessageSending {
             timestamp: Date(),
             kind: .text(body),
             replyToEventID: request.replyToEventID,
+            threadRootEventID: request.threadRootEventID,
             isEdited: false,
             reactions: [:]
         )

@@ -29,6 +29,11 @@ export type NativeReactionInvoke = (
   args?: Record<string, unknown>
 ) => Promise<DesktopInvokeResult<NativeReactionMutationResult>>;
 
+export type NativeAgentApprovalInvoke = (
+  command: string,
+  args?: Record<string, unknown>
+) => Promise<DesktopInvokeResult<NativeAgentApprovalDecisionResult>>;
+
 type ReactionInput = {
   roomId: string;
   eventId: string;
@@ -37,6 +42,8 @@ type ReactionInput = {
 
 const defaultInvoke: NativeReactionInvoke = (command, args) =>
   invokeDesktopWithAvailability<NativeReactionMutationResult>(command, args);
+const defaultAgentApprovalInvoke: NativeAgentApprovalInvoke = (command, args) =>
+  invokeDesktopWithAvailability<NativeAgentApprovalDecisionResult>(command, args);
 
 async function invokeNativeReaction(
   command: string,
@@ -71,15 +78,15 @@ export function ensureReactionWithNativeOwner(
  * five-minute policy and terminal-decision state, then applies at most one
  * notification reaction under the native timeline lock.
  */
-export async function decideAgentApprovalWithNativeOwner(input: {
-  roomId: string;
-  eventId: string;
-  actionId: string;
-}): Promise<NativeAgentApprovalDecisionResult> {
-  const result = await invokeDesktopWithAvailability<NativeAgentApprovalDecisionResult>(
-    'matrix_agent_approval_decide',
-    input
-  );
+export async function decideAgentApprovalWithNativeOwner(
+  input: {
+    roomId: string;
+    eventId: string;
+    actionId: string;
+  },
+  invoke: NativeAgentApprovalInvoke = defaultAgentApprovalInvoke
+): Promise<NativeAgentApprovalDecisionResult> {
+  const result = await invoke('matrix_agent_approval_decide', input);
   if (!result.available || !result.value) {
     throw new Error('Native agent approval decisions are unavailable.');
   }

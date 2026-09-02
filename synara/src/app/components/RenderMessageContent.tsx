@@ -66,7 +66,7 @@ export function RenderMessageContent({
   const clientConfig = useClientConfig();
   const content = getContent<Record<string, unknown>>();
   const approvalPrompt = detectAgentApprovalPrompt(content);
-  if (approvalPrompt) {
+  if (approvalPrompt && agentApprovalTarget?.coreEligible === true) {
     return <AgentApprovalCard prompt={approvalPrompt} target={agentApprovalTarget} />;
   }
 

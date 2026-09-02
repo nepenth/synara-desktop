@@ -22,12 +22,8 @@ import {
   config,
 } from 'folds';
 import { EmojiBoard } from '../../components/emoji-board';
-import {
-  clearNativeComposerReplyDraft,
-  getNativeComposerReplyDraft,
-  setNativeComposerReplyDraft,
-} from './nativeComposerDraft';
-import type { NativeComposerReplyDraft } from './nativeComposerDraftOwner';
+import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
+import { setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
 import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
 import {
@@ -54,7 +50,10 @@ import {
   parseNativeTimelineAgentCard,
   shouldAttachFormattedBody,
   type NativeTimelineMediaHandle,
+  type NativeTimelineReaction,
+  type NativeTimelineReplyPreview,
   type NativeTimelineRowCapabilities,
+  type NativeTimelineThreadSummary,
   type NativeTimelineViewRow,
   useNativeTimelineView,
 } from './nativeTimelineView';
@@ -67,6 +66,7 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
+import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import {
   nativeLiveReadAttemptKey,
@@ -200,7 +200,6 @@ type NativeTimelineRowProps = {
   pinnedEventIds?: string[];
   sourceEncrypted?: boolean;
   onActionError: (message: string) => void;
-  onReplyDraftChanged: () => void;
   onFocusEvent: (eventId: string) => void;
 };
 
@@ -226,7 +225,6 @@ type NativeTimelineRowActionsProps = {
   pinned?: boolean;
   sourceEncrypted?: boolean;
   onActionError: (message: string) => void;
-  onReplyDraftChanged: () => void;
   /** Close the transient row menu after a completed one-shot action. */
   onRequestClose?: () => void;
 };
@@ -243,7 +241,6 @@ const NativeTimelineRowActions = ({
   pinned,
   sourceEncrypted,
   onActionError,
-  onReplyDraftChanged,
   onRequestClose,
 }: NativeTimelineRowActionsProps) => {
   const roomList = useNativeRoomListSnapshot();
@@ -297,7 +294,6 @@ const NativeTimelineRowActions = ({
               if (result === 'unavailable') {
                 throw new Error('Native reply draft is unavailable.');
               }
-              onReplyDraftChanged();
             },
             onActionError,
             'Native reply draft failed.'
@@ -325,7 +321,6 @@ const NativeTimelineRowActions = ({
               if (result === 'unavailable') {
                 throw new Error('Native thread reply draft is unavailable.');
               }
-              onReplyDraftChanged();
             },
             onActionError,
             'Native thread reply draft failed.'
@@ -852,6 +847,82 @@ const NativeTimelineSenderAvatar = ({ row }: { row: NativeTimelineViewRow }) => 
   );
 };
 
+const NativeTimelineReplySurface = ({
+  reply,
+  onFocusEvent,
+}: {
+  reply?: NativeTimelineReplyPreview;
+  onFocusEvent: (eventId: string) => void;
+}) =>
+  reply ? (
+    <Box
+      as="button"
+      direction="Column"
+      gap="100"
+      onClick={() => onFocusEvent(reply.eventId)}
+      className={htmlCss.ReplySurface}
+      aria-label={`Open message from ${reply.senderName}`}
+    >
+      <Text size="T300" className={htmlCss.SenderName}>
+        Replying to {reply.senderName}
+      </Text>
+      <Text size="T300" style={{ whiteSpace: 'pre-wrap' }}>
+        {reply.body}
+      </Text>
+    </Box>
+  ) : null;
+
+const NativeTimelineThreadSurface = ({
+  threadRoot,
+  thread,
+  onFocusEvent,
+}: {
+  threadRoot?: string;
+  thread?: NativeTimelineThreadSummary;
+  onFocusEvent: (eventId: string) => void;
+}) => {
+  const focusEventId = nativeThreadFocusEventId(thread) ?? threadRoot;
+  if (!focusEventId) return null;
+  return (
+    <Button size="300" fill="Soft" onClick={() => onFocusEvent(focusEventId)}>
+      {thread ? (
+        <>
+          Thread · {thread.replyCount} {thread.replyCount === 1 ? 'reply' : 'replies'}
+          {thread.latestEventId ? ' · open latest' : ' · open root'}
+        </>
+      ) : (
+        'Thread reply · open thread'
+      )}
+    </Button>
+  );
+};
+
+const NativeTimelineReactionPills = ({
+  reactions,
+  enabled,
+  onReaction,
+}: {
+  reactions?: NativeTimelineReaction[];
+  enabled: boolean;
+  onReaction: (key: string) => void;
+}) =>
+  reactions?.length ? (
+    <Box gap="100" wrap="Wrap">
+      {reactions.map((reaction) => (
+        <Button
+          key={reaction.key}
+          size="300"
+          variant={reaction.own ? 'Primary' : 'Secondary'}
+          fill="Soft"
+          disabled={!enabled}
+          onClick={() => onReaction(reaction.key)}
+        >
+          {reaction.key} {reaction.count}
+        </Button>
+      ))}
+    </Box>
+  ) : null;
+
 const NativeTimelineRow = ({
   row,
   grouped,
@@ -861,7 +932,6 @@ const NativeTimelineRow = ({
   pinnedEventIds,
   sourceEncrypted,
   onActionError,
-  onReplyDraftChanged,
   onFocusEvent,
 }: NativeTimelineRowProps) => {
   const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
@@ -889,6 +959,13 @@ const NativeTimelineRow = ({
       : config.space[`S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500'];
   const rowStyle = spacingToken ? { marginBottom: spacingToken } : undefined;
   const capabilities = rowCapabilities(row);
+  // Hermes treats its seeded terminal reaction keys as approval decisions.
+  // For a Core-classified approval prompt those reactions must therefore flow
+  // only through `decideAgentApprovalWithNativeOwner`; the ordinary emoji rail
+  // and aggregate pills would otherwise bypass Core eligibility/expiry checks.
+  const approvalOwnsReactionActions = row.kind === 'message' && Boolean(row.isAgentApproval);
+  const genericReactionCapabilities =
+    approvalOwnsReactionActions && capabilities ? { ...capabilities, react: false } : capabilities;
   const eventId = rowEventId(row);
   const originServerTs = rowOriginServerTs(row);
   const pinned = isNativeTimelineEventPinned(pinnedEventIds, eventId);
@@ -962,7 +1039,7 @@ const NativeTimelineRow = ({
       }
     : {};
   const runReaction = (key: string) => {
-    if (!eventId || !capabilities?.react) return;
+    if (!eventId || !genericReactionCapabilities?.react) return;
     void toggleReactionWithNativeOwner({ roomId, eventId, key }).catch((error) => {
       onActionError(error instanceof Error ? error.message : 'Native reaction failed.');
     });
@@ -998,8 +1075,10 @@ const NativeTimelineRow = ({
   switch (row.kind) {
     case 'message': {
       const isEmote = row.messageType === 'emote';
-      const threadFocus = nativeThreadFocusEventId(row.thread);
       const agentPayload = parseNativeTimelineAgentCard(row.agentCardJson);
+      const approvalPrompt = row.isAgentApproval
+        ? detectAgentApprovalPrompt({ body: row.body, formatted_body: row.formattedBody })
+        : undefined;
       return (
         <NativeTimelineRowActionSurface
           actionProps={{
@@ -1010,11 +1089,10 @@ const NativeTimelineRow = ({
             rowKind: row.kind,
             messageType: row.messageType,
             hasMedia: Boolean(row.media),
-            capabilities,
+            capabilities: genericReactionCapabilities,
             pinned,
             sourceEncrypted,
             onActionError,
-            onReplyDraftChanged,
           }}
           onReaction={runReaction}
         >
@@ -1069,24 +1147,18 @@ const NativeTimelineRow = ({
                       ) : null}
                     </Box>
                   )}
-                  {row.reply && (
-                    <Box
-                      as="button"
-                      direction="Column"
-                      gap="100"
-                      onClick={() => onFocusEvent(row.reply!.eventId)}
-                      className={htmlCss.ReplySurface}
-                      aria-label={`Open message from ${row.reply.senderName}`}
-                    >
-                      <Text size="T300" className={htmlCss.SenderName}>
-                        Replying to {row.reply.senderName}
-                      </Text>
-                      <Text size="T300" style={{ whiteSpace: 'pre-wrap' }}>
-                        {row.reply.body}
-                      </Text>
-                    </Box>
-                  )}
-                  {agentPayload ? (
+                  <NativeTimelineReplySurface reply={row.reply} onFocusEvent={onFocusEvent} />
+                  {approvalPrompt && eventId ? (
+                    <AgentApprovalCard
+                      prompt={approvalPrompt}
+                      target={{
+                        roomId,
+                        eventId,
+                        canSendReaction: capabilities?.react,
+                        coreEligible: true,
+                      }}
+                    />
+                  ) : agentPayload ? (
                     <ErrorBoundary fallback={<Text size="T300">Agent output unavailable</Text>}>
                       <React.Suspense
                         fallback={<Spinner size="200" aria-label="Loading agent output" />}
@@ -1124,13 +1196,11 @@ const NativeTimelineRow = ({
                       ) : null}
                     </div>
                   )}
-                  {row.thread && threadFocus ? (
-                    <Button size="300" fill="Soft" onClick={() => onFocusEvent(threadFocus)}>
-                      Thread · {row.thread.replyCount}{' '}
-                      {row.thread.replyCount === 1 ? 'reply' : 'replies'}
-                      {row.thread.latestEventId ? ' · open latest' : ' · open root'}
-                    </Button>
-                  ) : null}
+                  <NativeTimelineThreadSurface
+                    threadRoot={row.threadRoot}
+                    thread={row.thread}
+                    onFocusEvent={onFocusEvent}
+                  />
                   <NativeTimelineMedia
                     media={row.media}
                     messageType={row.messageType}
@@ -1138,22 +1208,11 @@ const NativeTimelineRow = ({
                     caption={row.mediaCaption}
                     formattedCaption={row.formattedBody}
                   />
-                  {row.reactions?.length ? (
-                    <Box gap="100" wrap="Wrap">
-                      {row.reactions.map((reaction) => (
-                        <Button
-                          key={reaction.key}
-                          size="300"
-                          variant={reaction.own ? 'Primary' : 'Secondary'}
-                          fill="Soft"
-                          disabled={!capabilities?.react}
-                          onClick={() => runReaction(reaction.key)}
-                        >
-                          {reaction.key} {reaction.count}
-                        </Button>
-                      ))}
-                    </Box>
-                  ) : null}
+                  <NativeTimelineReactionPills
+                    reactions={row.reactions}
+                    enabled={Boolean(genericReactionCapabilities?.react)}
+                    onReaction={runReaction}
+                  />
                 </Box>
               </Box>
             </Box>
@@ -1179,7 +1238,6 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncrypted,
             onActionError,
-            onReplyDraftChanged,
           }}
           onReaction={runReaction}
         >
@@ -1191,6 +1249,7 @@ const NativeTimelineRow = ({
                 dateFormatString={dateFormatString}
               />
             ) : null}
+            <NativeTimelineReplySurface reply={row.reply} onFocusEvent={onFocusEvent} />
             <Text size="L400">{row.question}</Text>
             <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
             {(row.answers ?? []).map((answer) => (
@@ -1205,6 +1264,16 @@ const NativeTimelineRow = ({
                 {answer.text} ({answer.voteCount})
               </Button>
             ))}
+            <NativeTimelineThreadSurface
+              threadRoot={row.threadRoot}
+              thread={row.thread}
+              onFocusEvent={onFocusEvent}
+            />
+            <NativeTimelineReactionPills
+              reactions={row.reactions}
+              enabled={Boolean(genericReactionCapabilities?.react)}
+              onReaction={runReaction}
+            />
           </Box>
         </NativeTimelineRowActionSurface>
       );
@@ -1279,7 +1348,6 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncrypted,
             onActionError,
-            onReplyDraftChanged,
           }}
           onReaction={runReaction}
         >
@@ -1301,7 +1369,18 @@ const NativeTimelineRow = ({
                 </Text>
               ) : null}
             </Box>
+            <NativeTimelineReplySurface reply={row.reply} onFocusEvent={onFocusEvent} />
             <NativeTimelineMedia media={row.media} sticker />
+            <NativeTimelineThreadSurface
+              threadRoot={row.threadRoot}
+              thread={row.thread}
+              onFocusEvent={onFocusEvent}
+            />
+            <NativeTimelineReactionPills
+              reactions={row.reactions}
+              enabled={Boolean(genericReactionCapabilities?.react)}
+              onReaction={runReaction}
+            />
           </Box>
         </NativeTimelineRowActionSurface>
       );
@@ -1360,7 +1439,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       document.visibilityState === 'visible' &&
       document.hasFocus()
   );
-  const [replyDraft, setReplyDraft] = useState<NativeComposerReplyDraft | undefined>();
   const roomList = useNativeRoomListSnapshot();
   const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -1399,20 +1477,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     estimateSize: useCallback(() => 64, []),
     overscan: 8,
   });
-
-  const refreshReplyDraft = useCallback(() => {
-    void getNativeComposerReplyDraft({ roomId }).then((result) => {
-      if (result === 'unavailable') {
-        setReplyDraft(undefined);
-        return;
-      }
-      setReplyDraft(result.status === 'set' ? result.draft : undefined);
-    });
-  }, [roomId]);
-
-  useEffect(() => {
-    refreshReplyDraft();
-  }, [refreshReplyDraft]);
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
@@ -1520,7 +1584,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       if (!paintedAtBottom) return;
       submitted = true;
       liveTailSubmittedKeyRef.current = liveTailMarkReadKey;
-      void setReadState('mark_read').catch(() => {
+      void setReadState({
+        action: 'mark_read',
+        intent: 'automatic_visibility',
+        observedLiveTailEventId: liveTailReadTarget,
+      }).catch(() => {
         if (
           liveTailMarkGenerationRef.current === generation &&
           liveTailSubmittedKeyRef.current === liveTailMarkReadKey
@@ -1566,7 +1634,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       resizeObserver?.disconnect();
       mutationObserver?.disconnect();
     };
-  }, [liveTailAlreadyRead, liveTailMarkReadKey, setReadState]);
+  }, [liveTailAlreadyRead, liveTailMarkReadKey, liveTailReadTarget, setReadState]);
 
   useEffect(() => {
     if (!readyState) return undefined;
@@ -1755,49 +1823,14 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       if (rows.length > 0) {
         virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
       }
-      if (!hideActivity) {
-        await controller.setReadState('mark_read');
-      }
+      // The painted-tail effect performs the conditional acknowledgement once
+      // the newly returned live tail is actually visible. Do not resolve a
+      // newer SDK tail from this navigation callback.
     });
   };
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
-      {replyDraft && (
-        <Box
-          direction="Column"
-          gap="100"
-          style={{
-            padding: config.space.S200,
-            borderBottom: '1px solid var(--synara-content-separator)',
-            background: 'var(--synara-table-even)',
-            color: 'var(--synara-message-foreground)',
-          }}
-        >
-          <Text size="T200" style={{ color: 'var(--synara-content-secondary)' }}>
-            Replying to {replyDraft.senderId}
-            {replyDraft.threadRootEventId ? ' · in thread' : ''}
-          </Text>
-          <Text size="T200" style={{ whiteSpace: 'pre-wrap' }}>
-            {replyDraft.body}
-          </Text>
-          <Button
-            size="300"
-            fill="Soft"
-            onClick={() =>
-              runAction(async () => {
-                const result = await clearNativeComposerReplyDraft({ roomId });
-                if (result === 'unavailable') {
-                  throw new Error('Native reply draft clear is unavailable.');
-                }
-                refreshReplyDraft();
-              })
-            }
-          >
-            Cancel reply
-          </Button>
-        </Box>
-      )}
       {actionError && <Text size="T300">{actionError}</Text>}
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
         <Scroll ref={scrollRef} visibility="Hover" style={{ height: '100%' }}>
@@ -1849,7 +1882,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                     pinnedEventIds={snapshot.pinnedEventIds}
                     sourceEncrypted={sourceEncrypted}
                     onActionError={setActionError}
-                    onReplyDraftChanged={refreshReplyDraft}
                     onFocusEvent={onFocusEvent}
                   />
                 </div>

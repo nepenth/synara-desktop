@@ -219,6 +219,7 @@ struct MockMediaUploadService: MediaUploading {
             timestamp: Date(),
             kind: .mediaPlaceholder(resource),
             replyToEventID: request.replyToEventID,
+            threadRootEventID: request.threadRootEventID,
             isEdited: false,
             reactions: [:]
         )

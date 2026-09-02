@@ -22,8 +22,6 @@ UNSIGNED_BUILD_ARGS=(
 )
 PACKAGE_ARGS=(
   -packageCachePath "$PACKAGE_CACHE_PATH"
-  -onlyUsePackageVersionsFromResolvedFile
-  -skipPackageUpdates
   -scmProvider system
   -skipPackagePluginValidation
   -skipMacroValidation
@@ -38,6 +36,12 @@ cd "$(dirname "$0")/.."
 
 cleanup() {
   if [[ -n "$PACKAGE_RESOLVED_BACKUP" ]]; then
+    # Never leave a reviewed lock deleted if XcodeGen or a graph check exits
+    # before the normal restore below.
+    if [[ ! -f "$PACKAGE_RESOLVED_PATH" ]]; then
+      mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
+      cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
+    fi
     rm -f "$PACKAGE_RESOLVED_BACKUP"
   fi
 }
@@ -146,18 +150,54 @@ if ! command -v xcodegen >/dev/null 2>&1; then
   exit 127
 fi
 
-# XcodeGen replaces the generated project directory, including the committed
-# Swift package lock. Preserve the lock so -onlyUsePackageVersionsFromResolvedFile
-# actually operates on the reviewed package revision and checksum.
-if [[ ! -f "$PACKAGE_RESOLVED_PATH" ]]; then
-  echo "Committed Swift package lock is required: $PACKAGE_RESOLVED_PATH" >&2
+# XcodeGen replaces the generated project directory, including Package.resolved.
+# Preserve a reviewed lock when the generated graph contains remote packages.
+# An all-local graph has no remote revisions to pin and must not require or carry
+# a stale lock from a retired dependency.
+if [[ -f "$PACKAGE_RESOLVED_PATH" ]]; then
+  PACKAGE_RESOLVED_BACKUP="$(mktemp "${TMPDIR:-/tmp}/synara-package-resolved.XXXXXX")"
+  cp "$PACKAGE_RESOLVED_PATH" "$PACKAGE_RESOLVED_BACKUP"
+fi
+xcodegen generate --spec project.yml
+
+package_graph_checker="$repo_root/scripts/check-xcode-local-package-graph.mjs"
+if [[ ! -f "$package_graph_checker" ]]; then
+  echo "Swift package graph checker is required at $package_graph_checker" >&2
+  exit 127
+fi
+package_graph_kind="$(
+  node "$package_graph_checker" Synara.xcodeproj/project.pbxproj .
+)"
+case "$package_graph_kind" in
+  local)
+    has_remote_package_reference=0
+    ;;
+  remote)
+    has_remote_package_reference=1
+    ;;
+  *)
+    echo "Swift package graph checker returned an invalid result: $package_graph_kind" >&2
+    exit 1
+    ;;
+esac
+
+if [[ "$has_remote_package_reference" == "1" ]]; then
+  if [[ -z "$PACKAGE_RESOLVED_BACKUP" ]]; then
+    echo "A committed Swift package lock is required when remote packages are present: $PACKAGE_RESOLVED_PATH" >&2
+    exit 1
+  fi
+  mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
+  cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
+  PACKAGE_ARGS+=(
+    -onlyUsePackageVersionsFromResolvedFile
+    -skipPackageUpdates
+  )
+elif [[ -n "$PACKAGE_RESOLVED_BACKUP" ]]; then
+  mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
+  cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
+  echo "Remove the stale Swift package lock; the generated project has only local packages: $PACKAGE_RESOLVED_PATH" >&2
   exit 1
 fi
-PACKAGE_RESOLVED_BACKUP="$(mktemp "${TMPDIR:-/tmp}/synara-package-resolved.XXXXXX")"
-cp "$PACKAGE_RESOLVED_PATH" "$PACKAGE_RESOLVED_BACKUP"
-xcodegen generate --spec project.yml
-mkdir -p "$(dirname "$PACKAGE_RESOLVED_PATH")"
-cp "$PACKAGE_RESOLVED_BACKUP" "$PACKAGE_RESOLVED_PATH"
 
 xcodebuild \
   -project Synara.xcodeproj \

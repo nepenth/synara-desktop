@@ -670,6 +670,204 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreTimelineRowsPreservesRelationsPollsCapabilitiesAndReactionOwnership() {
+        let mappedRow = SharedCoreTimelineRows.item(
+            from: TimelineViewRowDto(
+                kind: "message",
+                itemId: "item-1",
+                eventId: "$message:example.org",
+                sender: "@alice:example.org",
+                senderName: "Alice Example",
+                senderAvatarUrl: nil,
+                body: "Hello",
+                originServerTs: 1_700_000_000_000,
+                edited: false,
+                replyToEventId: nil,
+                replyPreview: nil,
+                threadRootEventId: "$thread-root:example.org",
+                threadSummary: nil,
+                poll: nil,
+                capabilities: nil,
+                decryptionState: nil,
+                messageType: "m.text",
+                formattedBody: nil,
+                agentCardJson: nil,
+                isAgentApproval: false,
+                mediaFilename: nil,
+                mediaCaption: nil,
+                reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true)],
+                mediaHandleId: nil,
+                mediaMimeType: nil,
+                mediaWidth: nil,
+                mediaHeight: nil,
+                mediaDurationMs: nil
+            )
+        )
+        XCTAssertEqual(mappedRow?.senderProfileDisplayName, "Alice Example")
+        XCTAssertEqual(mappedRow?.senderDisplayName, "Alice Example")
+        XCTAssertEqual(mappedRow?.threadRootEventID, "$thread-root:example.org")
+        XCTAssertEqual(mappedRow?.reactions, ["👍": 2])
+        XCTAssertEqual(mappedRow?.reactionOwnership, .known(["👍"]))
+
+        let reply = SharedCoreTimelineRows.replyPreview(
+            from: TimelineViewReplyPreviewDto(
+                eventId: "$root:example.org",
+                senderId: "@alice:example.org",
+                senderName: "Alice",
+                body: String(repeating: "reply ", count: 30)
+            )
+        )
+        XCTAssertEqual(reply?.eventID, "$root:example.org")
+        XCTAssertEqual(reply?.senderID, "@alice:example.org")
+        XCTAssertEqual(reply?.senderName, "Alice")
+        XCTAssertEqual(reply?.snippet.count, TimelineReplyPreview.maxSnippetLength)
+        XCTAssertTrue(reply?.snippet.hasSuffix("…") == true)
+        XCTAssertNil(SharedCoreTimelineRows.replyPreview(from: nil))
+
+        let thread = SharedCoreTimelineRows.threadSummary(
+            from: TimelineViewThreadSummaryDto(
+                rootEventId: "$root:example.org",
+                replyCount: 7,
+                latestEventId: "$latest:example.org"
+            )
+        )
+        XCTAssertEqual(
+            thread,
+            TimelineThreadSummary(
+                rootEventID: "$root:example.org",
+                replyCount: 7,
+                latestEventID: "$latest:example.org"
+            )
+        )
+
+        let openPoll = SharedCoreTimelineRows.poll(
+            from: TimelineViewPollDto(
+                question: "Choose two",
+                closed: false,
+                maxSelections: 2,
+                answers: [
+                    TimelineViewPollAnswerDto(id: "a", text: "Alpha", voteCount: 3, own: true),
+                    TimelineViewPollAnswerDto(id: "b", text: "Beta", voteCount: 1, own: false),
+                ]
+            )
+        )
+        XCTAssertEqual(openPoll?.question, "Choose two")
+        XCTAssertEqual(openPoll?.maximumSelections, 2)
+        XCTAssertEqual(openPoll?.isClosed, false)
+        XCTAssertEqual(openPoll?.answers.map(\.voteCount), [3, 1])
+        XCTAssertEqual(openPoll?.answers.map(\.isOwn), [true, false])
+
+        let closedPoll = SharedCoreTimelineRows.poll(
+            from: TimelineViewPollDto(
+                question: "Finished",
+                closed: true,
+                maxSelections: 0,
+                answers: []
+            )
+        )
+        XCTAssertEqual(closedPoll?.isClosed, true)
+        XCTAssertEqual(closedPoll?.maximumSelections, 0)
+
+        let capabilities = SharedCoreTimelineRows.actionCapabilities(
+            from: TimelineViewRowCapabilitiesDto(
+                react: true,
+                reply: true,
+                edit: false,
+                redact: true,
+                report: true,
+                pin: true,
+                forward: true,
+                vote: false,
+                declineCall: false
+            )
+        )
+        XCTAssertEqual(capabilities?.canReply, true)
+        XCTAssertEqual(capabilities?.canReact, true)
+        XCTAssertEqual(capabilities?.canEdit, false)
+        XCTAssertEqual(capabilities?.canRedact, true)
+        XCTAssertEqual(capabilities?.canReport, true)
+        XCTAssertEqual(capabilities?.canPin, true)
+        XCTAssertEqual(capabilities?.canForward, true)
+        XCTAssertEqual(capabilities?.canVote, false)
+        XCTAssertEqual(capabilities?.canDeclineCall, false)
+
+        XCTAssertEqual(
+            SharedCoreTimelineRows.reactionOwnership(from: [
+                TimelineViewReactionDto(key: "👍", count: 2, own: true),
+                TimelineViewReactionDto(key: "🎉", count: 1, own: false),
+            ]),
+            .known(["👍"])
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.reactionOwnership(from: [
+                TimelineViewReactionDto(key: "👍", count: 2, own: nil),
+            ]),
+            .unknown
+        )
+    }
+
+    func testSharedCoreTimelineRowsMapsNonMessageEventMetadata() throws {
+        let capabilities = TimelineViewRowCapabilitiesDto(
+            react: false,
+            reply: false,
+            edit: false,
+            redact: true,
+            report: true,
+            pin: true,
+            forward: false,
+            vote: false,
+            declineCall: false
+        )
+        let row = { (kind: String) in
+            TimelineViewRowDto(
+                kind: kind,
+                itemId: "\(kind)-item",
+                eventId: "$\(kind):example.org",
+                sender: "@alice:example.org",
+                senderName: "Alice Example",
+                senderAvatarUrl: "mxc://example.org/alice",
+                body: "\(kind) event",
+                originServerTs: 1_700_000_000_123,
+                edited: false,
+                replyToEventId: nil,
+                replyPreview: nil,
+                threadRootEventId: nil,
+                threadSummary: nil,
+                poll: nil,
+                capabilities: capabilities,
+                decryptionState: nil,
+                messageType: nil,
+                formattedBody: nil,
+                agentCardJson: nil,
+                isAgentApproval: false,
+                mediaFilename: nil,
+                mediaCaption: nil,
+                reactions: [],
+                mediaHandleId: nil,
+                mediaMimeType: nil,
+                mediaWidth: nil,
+                mediaHeight: nil,
+                mediaDurationMs: nil
+            )
+        }
+
+        for kind in ["membership", "state", "call"] {
+            let item = try XCTUnwrap(SharedCoreTimelineRows.item(from: row(kind)))
+            XCTAssertEqual(item.eventID, "$\(kind):example.org")
+            XCTAssertEqual(item.senderID, "@alice:example.org")
+            XCTAssertEqual(item.senderProfileDisplayName, "Alice Example")
+            XCTAssertEqual(item.senderAvatarURL?.absoluteString, "mxc://example.org/alice")
+            XCTAssertEqual(
+                item.timestamp.timeIntervalSince1970,
+                1_700_000_000.123,
+                accuracy: 0.001
+            )
+            XCTAssertEqual(item.actionCapabilities?.canRedact, true)
+            XCTAssertEqual(item.actionCapabilities?.canReport, true)
+            XCTAssertEqual(item.actionCapabilities?.canPin, true)
+        }
+    }
+
     func testSharedCoreTimelineLiveRefreshMatchesRoomAndStream() {
         XCTAssertTrue(
             SharedCoreTimelineLiveRefresh.shouldRefresh(
@@ -1018,7 +1216,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     isDirect: false,
                     unreadCount: 0,
                     highlightCount: 0,
-                    markedUnread: false,
+                    markedUnread: true,
                     lastActivityTs: 1_700_000_000_000,
                     lastMessagePreview: nil,
                     isFavorite: false
@@ -1059,6 +1257,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.first?.membership, .invited)
         XCTAssertEqual(rooms.first?.isFavorite, false)
         XCTAssertEqual(rooms.last?.isFavorite, true)
+        XCTAssertEqual(rooms.first?.hasHighlight, false)
+        XCTAssertEqual(rooms.first?.isMarkedUnread, true)
         XCTAssertEqual(rooms.last?.lastActivityAt, .distantPast)
         let publicError = String(describing: rooms)
         for forbidden in ["password", "syt_", "token"] {
@@ -1084,6 +1284,11 @@ final class SynaraCoreBindingsTests: XCTestCase {
     func testSharedCoreRoomListUnreadLookupUsesSnapshotWithoutEcho() {
         XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 2, hasHighlight: false))
         XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 0, hasHighlight: true))
+        XCTAssertTrue(SharedCoreRoomListRows.hasUnreadMessages(
+            unreadCount: 0,
+            hasHighlight: false,
+            isMarkedUnread: true
+        ))
         XCTAssertFalse(SharedCoreRoomListRows.hasUnreadMessages(unreadCount: 0, hasHighlight: false))
         let host = SharedCoreProductHost(
             core: SharedCore(),
@@ -2561,7 +2766,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
             _ = try await SharedCoreTimelineReadState.timelineSetReadState(
                 core: core,
                 streamId: streamId,
-                action: "mark_read"
+                action: "mark_read",
+                intent: "explicit_user"
             )
             XCTFail("Fail-closed SharedCore must not set timeline read-state without a session")
         } catch {

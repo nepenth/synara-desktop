@@ -30,7 +30,10 @@ cargo test -p synara-core --lib \
 
 It persists one responder crypto store under
 `target/live-own-device-verification/<opaque-account-tag>` (override the parent
-directory with `SYNARA_LIVE_VERIFICATION_STORE_ROOT`). On its first run, and
+directory with `SYNARA_LIVE_VERIFICATION_STORE_ROOT`). The durable authority
+and disposable initiator stores are encrypted with the separately supplied
+`SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE`; proof directories are mode `0700`
+and the non-secret responder device metadata is mode `0600` on Unix. On its first run, and
 only when the account has no published cross-signing identity, it completes the
 SDK password-UIA bootstrap using `SYNARA_LIVE_PASSWORD`. Later runs log the same
 device back into that store and reuse its private cross-signing identity. The
@@ -59,14 +62,34 @@ Provide the three test-account variables without committing or printing them:
 export SYNARA_LIVE_HOMESERVER='https://matrix.example.test'
 export SYNARA_LIVE_USERNAME='test-user'
 export SYNARA_LIVE_PASSWORD='...'
+export SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE='a separate high-entropy proof-store secret'
 scripts/run-device-verification-proof.sh
 ```
 
-The command deliberately uses `cargo test --lib`. It creates two fresh sessions
-and therefore exercises the explicit direct-peer route only. Fresh sessions are
-not eligible own-identity authorities. This diagnostic must not be cited as the
-current-device proof. Omitting `--lib` compiles all integration-test binaries
-and adds unrelated disk/time failure modes.
+The command deliberately uses `cargo test --lib` and defaults to the
+current-device authority proof described above. To diagnose only explicit
+direct-peer SAS transport, run
+`scripts/run-device-verification-proof.sh --direct-peer`. That narrower mode
+creates two fresh sessions, which are not eligible own-identity authorities,
+and must not be cited as current-device proof. Omitting `--lib` compiles all
+integration-test binaries and adds unrelated disk/time failure modes.
+
+The persisted authority store contains private cross-signing material. Treat
+its passphrase and directory as sensitive test credentials: never commit or
+print them, keep the directory on an encrypted local disk, and remove the
+account's persisted proof device from Matrix before deleting the directory
+when retiring the fixture. Deleting only the directory loses the local private
+authority but does not revoke the corresponding server-side device.
+
+Proof stores created before encrypted storage was introduced do not carry the
+`.synara-encrypted-proof-store-v1` marker. The harness detects an existing
+Matrix SQLite store without that marker and stops before opening or modifying
+it. Do not delete that legacy authority store: preserve it, use a build that can
+open it to recover or rotate the test account's cross-signing authority, revoke
+the old proof device, and only then create a fresh encrypted proof fixture.
+There is intentionally no automatic in-place migration because an interrupted
+or incorrect migration could destroy the only private authority for the test
+account.
 
 Set `SYNARA_VERIFICATION_DIAGNOSTICS=1` on an iOS UI-test launch to record the
 same privacy-safe transition trace. Each line includes only an event name, a

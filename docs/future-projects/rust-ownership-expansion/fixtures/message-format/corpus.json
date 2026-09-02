@@ -1,0 +1,200 @@
+{
+  "schemaVersion": 1,
+  "outboundTextPayloadMaxBytes": 65536,
+  "presentationFormattedBodyMaxBytes": 262144,
+  "cases": [
+    {
+      "id": "golden-rich-structure",
+      "class": "golden",
+      "body": "Release plan\n1. Build\n2. Verify\ncargo test",
+      "formattedBody": "<h2>Release <strong>plan</strong></h2><ol start=\"1\"><li>Build</li><li>Verify</li></ol><p><code>cargo test</code></p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Release", "plan", "Build", "Verify", "cargo test"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+      },
+      "notCompared": ["typography", "listMarkers", "prismTokens", "dynamicType"]
+    },
+    {
+      "id": "golden-hermes-approval",
+      "class": "golden",
+      "body": "Dangerous command requires approval. Reply !approve, !approve session, !approve always, or !deny.",
+      "formattedBody": "<p>⚠️ <strong>Dangerous command requires approval</strong></p><pre><code class=\"language-shell\">rm -rf /tmp/example\n</code></pre><p>Reply <code>!approve</code>, <code>!approve session</code>, <code>!approve always</code>, or <code>!deny</code>.</p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Dangerous command requires approval", "rm -rf /tmp/example", "!approve session", "!approve always", "!deny"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+      },
+      "notCompared": ["approvalCardChrome", "syntaxHighlighting", "typography"]
+    },
+    {
+      "id": "golden-mentions-and-links",
+      "class": "golden",
+      "body": "Alice docs mail mirror magnet",
+      "formattedBody": "<p><a href=\"https://matrix.to/#/@alice:example.org\">Alice</a> <a href=\"http://example.org/docs\">docs</a> <a href=\"mailto:ops@example.org\">mail</a> <a href=\"ftp://example.org/file\">mirror</a> <a href=\"magnet:?xt=urn:btih:abc\">magnet</a></p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Alice", "docs", "mail", "mirror", "magnet"],
+        "textExcludes": [],
+        "linkSchemes": ["https", "http", "mailto", "ftp", "magnet"],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["javascript:", "data:text/html"]
+      },
+      "notCompared": ["linkColor", "target", "rel"]
+    },
+    {
+      "id": "golden-spoiler-table",
+      "class": "golden",
+      "body": "Status Value secret Ready yes",
+      "formattedBody": "<table><caption>Status</caption><tr><th>Value</th></tr><tr><td><span data-mx-spoiler=\"deployment\">secret</span></td></tr><tr><td>Ready</td><td>yes</td></tr></table>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Status", "Value", "Ready", "yes"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": true,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+      },
+      "notCompared": ["tableChrome", "columnWidths", "spoilerChrome"]
+    },
+    {
+      "id": "golden-spoiler-table-caption",
+      "class": "golden",
+      "body": "Deployment details Ready",
+      "formattedBody": "<table><caption>Deployment <span data-mx-spoiler=\"environment\">production</span></caption><tr><td>Ready</td></tr></table>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Deployment", "production", "Ready"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": true,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+      },
+      "notCompared": ["tableChrome", "spoilerChrome"]
+    },
+    {
+      "id": "adversarial-executable-content",
+      "class": "adversarial",
+      "body": "tap safe",
+      "formattedBody": "<p><a href=\"javascript:alert(1)\" onclick=\"alert(2)\">tap</a><script>stolen-secret</script><img src=\"https://tracker.example/pixel\" alt=\"safe\"></p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["tap", "safe"],
+        "textExcludes": ["stolen-secret"],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["javascript:", "onclick=", "stolen-secret", "https://tracker.example", "<script"]
+      },
+      "notCompared": ["inlineImageFallbackGlyph"]
+    },
+    {
+      "id": "adversarial-nonallowlisted-links",
+      "class": "adversarial",
+      "body": "matrix relative control",
+      "formattedBody": "<p><a href=\"matrix:roomid/abc\">matrix</a> <a href=\"/relative\">relative</a> <a href=\"https://example.org/&#10;javascript:alert(1)\">control</a></p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["matrix", "relative", "control"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["href=", "javascript:", "matrix:", "/relative"]
+      },
+      "notCompared": ["linkColor"]
+    },
+    {
+      "id": "adversarial-reply-fallback",
+      "class": "adversarial",
+      "body": "Current message",
+      "formattedBody": "<mx-reply><blockquote>Old secret fallback</blockquote></mx-reply><p>Current message</p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Current message"],
+        "textExcludes": ["Old secret fallback"],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["<mx-reply", "Old secret fallback"]
+      },
+      "notCompared": ["replyPreviewChrome"]
+    },
+    {
+      "id": "adversarial-deep-nesting",
+      "class": "adversarial",
+      "body": "deep readable text",
+      "formattedBody": "",
+      "generator": {
+        "kind": "nestedTag",
+        "tag": "strong",
+        "count": 101,
+        "text": "deep readable text"
+      },
+      "expect": {
+        "accepted": true,
+        "textContains": ["deep readable text"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+      },
+      "notCompared": ["stylePastNestingLimit"]
+    },
+    {
+      "id": "adversarial-oversize-presentation",
+      "class": "adversarial",
+      "body": "bounded plaintext fallback",
+      "formattedBody": "",
+      "generator": {
+        "kind": "repeatedText",
+        "prefix": "<p>",
+        "unit": "x",
+        "count": 262145,
+        "suffix": "</p>"
+      },
+      "expect": {
+        "accepted": false,
+        "textContains": ["bounded plaintext fallback"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["<script", "javascript:"]
+      },
+      "notCompared": ["allocationStrategy"]
+    },
+    {
+      "id": "adversarial-mxc-inline-image",
+      "class": "adversarial",
+      "body": "diagram",
+      "formattedBody": "<p>Before <img src=\"mxc://example.org/media\" alt=\"diagram\" title=\"ignored title\"> after</p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Before", "diagram", "after"],
+        "textExcludes": ["ignored title"],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["https://", "javascript:"]
+      },
+      "notCompared": ["inlineImageFallbackGlyph"]
+    },
+    {
+      "id": "adversarial-legacy-and-malformed",
+      "class": "adversarial",
+      "body": "old red overlap tail",
+      "formattedBody": "<p><strike>old</strike> <font color=\"#ff0000\">red</font> <strong>overlap<em></strong> tail</em></p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["old", "red", "overlap", "tail"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["<strike", "<font", "onclick=", "javascript:"]
+      },
+      "notCompared": ["hexCase", "malformedTagBalancing"]
+    }
+  ]
+}

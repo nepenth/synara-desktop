@@ -56,9 +56,11 @@ pub use mdirect::{
 pub use mdirect_live::{add_room_to_mdirect, remove_room_from_mdirect, snapshot_mdirect};
 pub use room_notes::{
     complete_room_todo_item, limit_text, move_room_todo_item, normalize_room_note_item,
-    normalize_room_notes_content, put_room_note_item, remove_room_note_item,
+    normalize_room_notes_content, normalize_room_notes_content_checked, put_room_note_item,
+    remove_room_note_item, validate_room_note_mutation_target, validate_room_notes_content_size,
     NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraRoomNoteItem, SynaraRoomNoteItemKind,
     SynaraRoomNotesContent, SynaraRoomNotesRoom, MAX_MESSAGE_BODY_LENGTH, MAX_NOTE_BODY_LENGTH,
+    MAX_NOTE_ID_LENGTH, MAX_ROOM_ID_BYTES, MAX_ROOM_NOTES_CONTENT_BYTES, MAX_SENDER_LENGTH,
     ROOM_NOTES_ACCOUNT_DATA_VERSION, ROOM_NOTES_EVENT_TYPE,
 };
 pub use room_notes_live::{

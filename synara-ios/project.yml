@@ -16,9 +16,6 @@ packages:
     path: SynaraCore
   SynaraNseCore:
     path: SynaraNseCore
-  MatrixRustComponentsSwift:
-    url: https://github.com/matrix-org/matrix-rust-components-swift.git
-    exactVersion: 26.06.06
 targets:
   Synara:
     type: application
@@ -29,8 +26,6 @@ targets:
     dependencies:
       - package: SynaraCore
         product: SynaraCore
-      - package: MatrixRustComponentsSwift
-        product: MatrixRustSDK
       - target: SynaraNotificationService
         embed: true
     info:

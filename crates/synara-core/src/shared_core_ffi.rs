@@ -212,10 +212,11 @@ use crate::app::timeline::{
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineDirection,
     NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineOpenPosition,
     NativeTimelineOpenReadback, NativeTimelineOwner, NativeTimelineReaction,
-    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadStateReadback,
-    NativeTimelineViewportHint, TimelineMediaHandle, TimelinePageState, TimelineReaction,
-    TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
-    TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
+    NativeTimelineReadStateReadback, NativeTimelineViewportHint, TimelineMediaHandle,
+    TimelinePageState, TimelinePollAnswer, TimelinePollRow, TimelineReaction, TimelineReplyPreview,
+    TimelineRowCapabilities, TimelineThreadSummary, TimelineViewDeltaBatch, TimelineViewPosition,
+    TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::verification::{
@@ -1437,6 +1438,8 @@ pub struct TimelineViewRowDto {
     pub item_id: String,
     pub event_id: String,
     pub sender: String,
+    /// Core-resolved display name with the Matrix user localpart as fallback.
+    pub sender_name: String,
     /// Optional SDK-projected sender avatar. Metadata only and restricted to
     /// the Matrix `mxc://` content URI carried by the timeline profile.
     pub sender_avatar_url: Option<String>,
@@ -1444,10 +1447,16 @@ pub struct TimelineViewRowDto {
     pub origin_server_ts: u64,
     pub edited: bool,
     pub reply_to_event_id: Option<String>,
+    pub reply_preview: Option<TimelineViewReplyPreviewDto>,
+    pub thread_root_event_id: Option<String>,
+    pub thread_summary: Option<TimelineViewThreadSummaryDto>,
+    pub poll: Option<TimelineViewPollDto>,
+    pub capabilities: Option<TimelineViewRowCapabilitiesDto>,
     pub decryption_state: Option<String>,
     pub message_type: Option<String>,
     pub formatted_body: Option<String>,
     pub agent_card_json: Option<String>,
+    pub is_agent_approval: bool,
     pub media_filename: Option<String>,
     pub media_caption: Option<String>,
     pub reactions: Vec<TimelineViewReactionDto>,
@@ -1464,6 +1473,55 @@ pub struct TimelineViewReactionDto {
     pub key: String,
     pub count: u32,
     pub own: Option<bool>,
+}
+
+/// Privacy-safe reply preview projected by Core. No raw event content.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewReplyPreviewDto {
+    pub event_id: String,
+    pub sender_id: Option<String>,
+    pub sender_name: String,
+    pub body: String,
+}
+
+/// Privacy-safe thread summary projected by Core.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewThreadSummaryDto {
+    pub root_event_id: String,
+    pub reply_count: u32,
+    pub latest_event_id: Option<String>,
+}
+
+/// One privacy-safe poll answer. Vote ownership is for the active account only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewPollAnswerDto {
+    pub id: String,
+    pub text: String,
+    pub vote_count: u32,
+    pub own: bool,
+}
+
+/// Privacy-safe poll presentation projected by Core. No voter identities.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewPollDto {
+    pub question: String,
+    pub closed: bool,
+    pub max_selections: u32,
+    pub answers: Vec<TimelineViewPollAnswerDto>,
+}
+
+/// Core-authoritative affordance gates for one timeline row.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TimelineViewRowCapabilitiesDto {
+    pub react: bool,
+    pub reply: bool,
+    pub edit: bool,
+    pub redact: bool,
+    pub report: bool,
+    pub pin: bool,
+    pub forward: bool,
+    pub vote: bool,
+    pub decline_call: bool,
 }
 
 /// Privacy-safe timeline open readback. No tokens or password.
@@ -1501,6 +1559,7 @@ pub struct TimelineEventReadbackDto {
 pub struct TimelineReadStateDto {
     pub action: String,
     pub receipt_sent: Option<bool>,
+    pub acknowledged_event_id: Option<String>,
     pub snapshot: TimelineSnapshotDto,
 }
 
@@ -2358,25 +2417,94 @@ fn view_media_fields(media: Option<TimelineMediaHandle>) -> ViewMediaFields {
     }
 }
 
+fn view_reply_preview_dto(preview: TimelineReplyPreview) -> TimelineViewReplyPreviewDto {
+    TimelineViewReplyPreviewDto {
+        event_id: preview.event_id,
+        sender_id: preview.sender_id,
+        sender_name: preview.sender_name,
+        body: preview.body,
+    }
+}
+
+fn view_thread_summary_dto(summary: TimelineThreadSummary) -> TimelineViewThreadSummaryDto {
+    TimelineViewThreadSummaryDto {
+        root_event_id: summary.root_event_id,
+        reply_count: summary.reply_count,
+        latest_event_id: summary.latest_event_id,
+    }
+}
+
+fn view_poll_answer_dto(answer: TimelinePollAnswer) -> TimelineViewPollAnswerDto {
+    TimelineViewPollAnswerDto {
+        id: answer.id,
+        text: answer.text,
+        vote_count: answer.vote_count,
+        own: answer.own,
+    }
+}
+
+fn view_poll_dto(poll: &TimelinePollRow) -> TimelineViewPollDto {
+    TimelineViewPollDto {
+        question: poll.question.clone(),
+        closed: poll.closed,
+        max_selections: poll.max_selections,
+        answers: poll
+            .answers
+            .iter()
+            .cloned()
+            .map(view_poll_answer_dto)
+            .collect(),
+    }
+}
+
+fn view_row_capabilities_dto(
+    capabilities: TimelineRowCapabilities,
+) -> TimelineViewRowCapabilitiesDto {
+    TimelineViewRowCapabilitiesDto {
+        react: capabilities.react,
+        reply: capabilities.reply,
+        edit: capabilities.edit,
+        redact: capabilities.redact,
+        report: capabilities.report,
+        pin: capabilities.pin,
+        forward: capabilities.forward,
+        vote: capabilities.vote,
+        decline_call: capabilities.decline_call,
+    }
+}
+
 fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
     match row {
         TimelineViewRow::Message(message) => {
             let (media_handle_id, media_mime_type, media_width, media_height, media_duration_ms) =
                 view_media_fields(message.media);
+            let reply_preview = message.reply.map(view_reply_preview_dto);
+            let reply_to_event_id = reply_preview
+                .as_ref()
+                .map(|preview| preview.event_id.clone());
+            let thread_summary = message.thread.map(view_thread_summary_dto);
+            let capabilities = Some(view_row_capabilities_dto(message.event.capabilities));
             TimelineViewRowDto {
                 kind: "message".to_owned(),
                 item_id: message.event.item_id,
                 event_id: message.event.event_id.unwrap_or_default(),
                 sender: message.event.sender_id,
+                sender_name: message.event.sender_name,
                 sender_avatar_url: message.event.sender_avatar_url,
                 body: message.body,
                 origin_server_ts: message.event.origin_server_ts,
                 edited: message.edited,
-                reply_to_event_id: message.reply.map(|preview| preview.event_id),
+                reply_to_event_id,
+                reply_preview,
+                thread_root_event_id: message.thread_root,
+                thread_summary,
+                poll: None,
+                capabilities,
                 decryption_state: None,
                 message_type: message.message_type,
                 formatted_body: message.formatted_body,
                 agent_card_json: message.agent_card_json,
+                is_agent_approval: message.is_agent_approval,
                 media_filename: message.media_filename,
                 media_caption: message.media_caption,
                 reactions: view_reaction_dtos(message.reactions),
@@ -2387,26 +2515,45 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 media_duration_ms,
             }
         }
-        TimelineViewRow::Sticker { event, media } => {
+        TimelineViewRow::Sticker {
+            event,
+            media,
+            reply,
+            thread_root,
+            thread,
+            reactions,
+        } => {
             let (media_handle_id, media_mime_type, media_width, media_height, media_duration_ms) =
                 view_media_fields(Some(media));
+            let capabilities = Some(view_row_capabilities_dto(event.capabilities));
+            let reply_preview = reply.map(view_reply_preview_dto);
+            let reply_to_event_id = reply_preview
+                .as_ref()
+                .map(|preview| preview.event_id.clone());
             TimelineViewRowDto {
                 kind: "sticker".to_owned(),
                 item_id: event.item_id,
                 event_id: event.event_id.unwrap_or_default(),
                 sender: event.sender_id,
+                sender_name: event.sender_name,
                 sender_avatar_url: event.sender_avatar_url,
                 body: String::new(),
                 origin_server_ts: event.origin_server_ts,
                 edited: false,
-                reply_to_event_id: None,
+                reply_to_event_id,
+                reply_preview,
+                thread_root_event_id: thread_root,
+                thread_summary: thread.map(view_thread_summary_dto),
+                poll: None,
+                capabilities,
                 decryption_state: None,
                 message_type: Some("m.sticker".to_owned()),
                 formatted_body: None,
                 agent_card_json: None,
+                is_agent_approval: false,
                 media_filename: None,
                 media_caption: None,
-                reactions: Vec::new(),
+                reactions: view_reaction_dtos(reactions),
                 media_handle_id,
                 media_mime_type,
                 media_width,
@@ -2414,43 +2561,65 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 media_duration_ms,
             }
         }
-        TimelineViewRow::Poll(poll) => TimelineViewRowDto {
-            kind: "poll".to_owned(),
-            item_id: poll.event.item_id,
-            event_id: poll.event.event_id.unwrap_or_default(),
-            sender: poll.event.sender_id,
-            sender_avatar_url: poll.event.sender_avatar_url,
-            body: poll.question,
-            origin_server_ts: poll.event.origin_server_ts,
-            edited: false,
-            reply_to_event_id: None,
-            decryption_state: None,
-            message_type: None,
-            formatted_body: None,
-            agent_card_json: None,
-            media_filename: None,
-            media_caption: None,
-            reactions: Vec::new(),
-            media_handle_id: None,
-            media_mime_type: None,
-            media_width: None,
-            media_height: None,
-            media_duration_ms: None,
-        },
+        TimelineViewRow::Poll(poll) => {
+            let poll_dto = view_poll_dto(&poll);
+            let capabilities = view_row_capabilities_dto(poll.event.capabilities);
+            let reply_preview = poll.reply.map(view_reply_preview_dto);
+            let reply_to_event_id = reply_preview
+                .as_ref()
+                .map(|preview| preview.event_id.clone());
+            TimelineViewRowDto {
+                kind: "poll".to_owned(),
+                item_id: poll.event.item_id,
+                event_id: poll.event.event_id.unwrap_or_default(),
+                sender: poll.event.sender_id,
+                sender_name: poll.event.sender_name,
+                sender_avatar_url: poll.event.sender_avatar_url,
+                body: poll.question,
+                origin_server_ts: poll.event.origin_server_ts,
+                edited: false,
+                reply_to_event_id,
+                reply_preview,
+                thread_root_event_id: poll.thread_root,
+                thread_summary: poll.thread.map(view_thread_summary_dto),
+                poll: Some(poll_dto),
+                capabilities: Some(capabilities),
+                decryption_state: None,
+                message_type: None,
+                formatted_body: None,
+                agent_card_json: None,
+                is_agent_approval: false,
+                media_filename: None,
+                media_caption: None,
+                reactions: view_reaction_dtos(poll.reactions),
+                media_handle_id: None,
+                media_mime_type: None,
+                media_width: None,
+                media_height: None,
+                media_duration_ms: None,
+            }
+        }
         TimelineViewRow::Membership(membership) => TimelineViewRowDto {
             kind: "membership".to_owned(),
             item_id: membership.event.item_id,
             event_id: membership.event.event_id.unwrap_or_default(),
             sender: membership.event.sender_id,
+            sender_name: membership.event.sender_name,
             sender_avatar_url: membership.event.sender_avatar_url,
             body: membership.summary,
             origin_server_ts: membership.event.origin_server_ts,
             edited: false,
             reply_to_event_id: None,
+            reply_preview: None,
+            thread_root_event_id: None,
+            thread_summary: None,
+            poll: None,
+            capabilities: Some(view_row_capabilities_dto(membership.event.capabilities)),
             decryption_state: None,
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -2465,15 +2634,22 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: state.event.item_id,
             event_id: state.event.event_id.unwrap_or_default(),
             sender: state.event.sender_id,
+            sender_name: state.event.sender_name,
             sender_avatar_url: state.event.sender_avatar_url,
             body: state.summary,
             origin_server_ts: state.event.origin_server_ts,
             edited: false,
             reply_to_event_id: None,
+            reply_preview: None,
+            thread_root_event_id: None,
+            thread_summary: None,
+            poll: None,
+            capabilities: Some(view_row_capabilities_dto(state.event.capabilities)),
             decryption_state: None,
             message_type: Some(state.state_type),
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -2488,15 +2664,22 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id: call.event.item_id,
             event_id: call.event.event_id.unwrap_or_default(),
             sender: call.event.sender_id,
+            sender_name: call.event.sender_name,
             sender_avatar_url: call.event.sender_avatar_url,
             body: call.call_kind,
             origin_server_ts: call.event.origin_server_ts,
             edited: false,
             reply_to_event_id: None,
+            reply_preview: None,
+            thread_root_event_id: None,
+            thread_summary: None,
+            poll: None,
+            capabilities: Some(view_row_capabilities_dto(call.event.capabilities)),
             decryption_state: None,
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -2508,18 +2691,25 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
         },
         TimelineViewRow::Redacted(redacted) => TimelineViewRowDto {
             kind: "redacted".to_owned(),
-            item_id: redacted.item_id,
-            event_id: redacted.event_id,
-            sender: String::new(),
-            sender_avatar_url: None,
+            item_id: redacted.event.item_id,
+            event_id: redacted.event.event_id.unwrap_or_default(),
+            sender: redacted.event.sender_id,
+            sender_name: redacted.event.sender_name,
+            sender_avatar_url: redacted.event.sender_avatar_url,
             body: redacted.summary,
-            origin_server_ts: 0,
+            origin_server_ts: redacted.event.origin_server_ts,
             edited: false,
             reply_to_event_id: None,
+            reply_preview: None,
+            thread_root_event_id: None,
+            thread_summary: None,
+            poll: None,
+            capabilities: Some(view_row_capabilities_dto(redacted.event.capabilities)),
             decryption_state: None,
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -2531,18 +2721,25 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
         },
         TimelineViewRow::EncryptedUnavailable(encrypted) => TimelineViewRowDto {
             kind: "encrypted".to_owned(),
-            item_id: encrypted.item_id,
-            event_id: encrypted.event_id,
-            sender: String::new(),
-            sender_avatar_url: None,
+            item_id: encrypted.event.item_id,
+            event_id: encrypted.event.event_id.unwrap_or_default(),
+            sender: encrypted.event.sender_id,
+            sender_name: encrypted.event.sender_name,
+            sender_avatar_url: encrypted.event.sender_avatar_url,
             body: encrypted.reason_code.clone(),
-            origin_server_ts: 0,
+            origin_server_ts: encrypted.event.origin_server_ts,
             edited: false,
             reply_to_event_id: None,
+            reply_preview: None,
+            thread_root_event_id: None,
+            thread_summary: None,
+            poll: None,
+            capabilities: Some(view_row_capabilities_dto(encrypted.event.capabilities)),
             decryption_state: Some(encrypted.reason_code),
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -2552,29 +2749,50 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             media_height: None,
             media_duration_ms: None,
         },
-        TimelineViewRow::Other(other) => TimelineViewRowDto {
-            kind: "other".to_owned(),
-            item_id: other.item_id,
-            event_id: other.event_id.unwrap_or_default(),
-            sender: String::new(),
-            sender_avatar_url: None,
-            body: other.summary,
-            origin_server_ts: 0,
-            edited: false,
-            reply_to_event_id: None,
-            decryption_state: None,
-            message_type: other.event_type,
-            formatted_body: None,
-            agent_card_json: None,
-            media_filename: None,
-            media_caption: None,
-            reactions: Vec::new(),
-            media_handle_id: None,
-            media_mime_type: None,
-            media_width: None,
-            media_height: None,
-            media_duration_ms: None,
-        },
+        TimelineViewRow::Other(other) => {
+            let (sender, sender_name, sender_avatar_url, origin_server_ts, capabilities) = other
+                .event
+                .map(|event| {
+                    (
+                        event.sender_id,
+                        event.sender_name,
+                        event.sender_avatar_url,
+                        event.origin_server_ts,
+                        Some(view_row_capabilities_dto(event.capabilities)),
+                    )
+                })
+                .unwrap_or_else(|| (String::new(), String::new(), None, 0, None));
+            TimelineViewRowDto {
+                kind: "other".to_owned(),
+                item_id: other.item_id,
+                event_id: other.event_id.unwrap_or_default(),
+                sender,
+                sender_name,
+                sender_avatar_url,
+                body: other.summary,
+                origin_server_ts,
+                edited: false,
+                reply_to_event_id: None,
+                reply_preview: None,
+                thread_root_event_id: None,
+                thread_summary: None,
+                poll: None,
+                capabilities,
+                decryption_state: None,
+                message_type: other.event_type,
+                formatted_body: None,
+                agent_card_json: None,
+                is_agent_approval: false,
+                media_filename: None,
+                media_caption: None,
+                reactions: Vec::new(),
+                media_handle_id: None,
+                media_mime_type: None,
+                media_width: None,
+                media_height: None,
+                media_duration_ms: None,
+            }
+        }
         TimelineViewRow::DateSeparator {
             item_id,
             timestamp_ms,
@@ -2583,15 +2801,22 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             item_id,
             event_id: String::new(),
             sender: String::new(),
+            sender_name: String::new(),
             sender_avatar_url: None,
             body: String::new(),
             origin_server_ts: timestamp_ms,
             edited: false,
             reply_to_event_id: None,
+            reply_preview: None,
+            thread_root_event_id: None,
+            thread_summary: None,
+            poll: None,
+            capabilities: None,
             decryption_state: None,
             message_type: None,
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             media_filename: None,
             media_caption: None,
             reactions: Vec::new(),
@@ -2614,15 +2839,22 @@ fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
         item_id,
         event_id: String::new(),
         sender: String::new(),
+        sender_name: String::new(),
         sender_avatar_url: None,
         body: String::new(),
         origin_server_ts: 0,
         edited: false,
         reply_to_event_id: None,
+        reply_preview: None,
+        thread_root_event_id: None,
+        thread_summary: None,
+        poll: None,
+        capabilities: None,
         decryption_state: None,
         message_type: None,
         formatted_body: None,
         agent_card_json: None,
+        is_agent_approval: false,
         media_filename: None,
         media_caption: None,
         reactions: Vec::new(),
@@ -5867,11 +6099,16 @@ impl SharedCore {
         &self,
         stream_id: String,
         action: String,
+        intent: String,
+        observed_live_tail_event_id: Option<String>,
     ) -> Result<TimelineReadStateDto, TimelineReadStateError> {
         let action = read_action_from_str(&action)?;
+        let intent = read_intent_from_str(&intent)?;
         let payload = timeline_read_state_envelope_payload(serde_json::json!({
             "streamId": stream_id,
             "action": read_action_as_str(action),
+            "intent": read_intent_as_str(intent),
+            "observedLiveTailEventId": observed_live_tail_event_id,
         }))?;
         let response = self
             .timeline_read_state_command(
@@ -5890,6 +6127,7 @@ impl SharedCore {
         Ok(TimelineReadStateDto {
             action: read_action_as_str(readback.action).to_owned(),
             receipt_sent: readback.receipt_sent,
+            acknowledged_event_id: readback.acknowledged_event_id,
             snapshot: timeline_snapshot_dto(readback.snapshot),
         })
     }
@@ -6059,11 +6297,29 @@ impl SharedCore {
         &self,
         room_id: String,
     ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        // This compatibility wrapper predates Core-issued draft revisions.
+        // Snapshot the current revision, then let the Core owner perform the
+        // atomic comparison. A selection made between these commands is
+        // intentionally preserved rather than cleared by the older caller.
+        let current = self
+            .composer_reply_draft_command_wire(
+                COMPOSER_GET_REPLY_DRAFT_COMMAND,
+                COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE,
+                serde_json::json!({
+                    "roomId": room_id,
+                }),
+            )
+            .await?;
+        let expected_draft_revision = current
+            .draft
+            .as_ref()
+            .map_or(0, |draft| draft.draft_revision);
         self.composer_reply_draft_command(
             COMPOSER_CLEAR_REPLY_DRAFT_COMMAND,
             COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE,
             serde_json::json!({
                 "roomId": room_id,
+                "expectedDraftRevision": expected_draft_revision,
             }),
         )
         .await
@@ -7068,6 +7324,18 @@ impl SharedCore {
         no_session: &'static str,
         payload: serde_json::Value,
     ) -> Result<ComposerReplyDraftDto, ComposerReplyDraftError> {
+        let readback = self
+            .composer_reply_draft_command_wire(command, no_session, payload)
+            .await?;
+        Ok(composer_reply_draft_dto(readback))
+    }
+
+    async fn composer_reply_draft_command_wire(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+        payload: serde_json::Value,
+    ) -> Result<ComposerReplyDraftReadbackWire, ComposerReplyDraftError> {
         let payload = composer_reply_draft_envelope_payload(payload)?;
         let response = self
             .core
@@ -7079,14 +7347,12 @@ impl SharedCore {
             })
             .await
             .map_err(|error| map_composer_reply_draft_core_error(no_session, error))?;
-        let readback: ComposerReplyDraftReadbackWire = serde_json::from_value(response.payload)
-            .map_err(|_| {
-                composer_reply_draft_failed(
-                    COMPOSER_REPLY_DRAFT_FAILED_CODE,
-                    COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
-                )
-            })?;
-        Ok(composer_reply_draft_dto(readback))
+        serde_json::from_value(response.payload).map_err(|_| {
+            composer_reply_draft_failed(
+                COMPOSER_REPLY_DRAFT_FAILED_CODE,
+                COMPOSER_REPLY_DRAFT_FAILED_DESCRIPTION,
+            )
+        })
     }
 
     async fn send_text_command(
@@ -11084,6 +11350,24 @@ fn read_action_as_str(action: NativeTimelineReadAction) -> &'static str {
     }
 }
 
+fn read_intent_from_str(intent: &str) -> Result<NativeTimelineReadIntent, TimelineReadStateError> {
+    match intent {
+        "automatic_visibility" => Ok(NativeTimelineReadIntent::AutomaticVisibility),
+        "explicit_user" => Ok(NativeTimelineReadIntent::ExplicitUser),
+        _ => Err(timeline_read_state_failed(
+            TIMELINE_READ_STATE_FAILED_CODE,
+            TIMELINE_READ_STATE_FAILED_DESCRIPTION,
+        )),
+    }
+}
+
+fn read_intent_as_str(intent: NativeTimelineReadIntent) -> &'static str {
+    match intent {
+        NativeTimelineReadIntent::AutomaticVisibility => "automatic_visibility",
+        NativeTimelineReadIntent::ExplicitUser => "explicit_user",
+    }
+}
+
 fn timeline_reaction_failed(code: &str, description: &'static str) -> TimelineReactionError {
     TimelineReactionError::Failed {
         code: code.to_owned(),
@@ -11185,8 +11469,16 @@ fn map_composer_reply_draft_core_error(
     error: MatrixIpcError,
 ) -> ComposerReplyDraftError {
     match error.diagnostic_id.as_deref() {
-        Some(code) if code == no_session => {
-            composer_reply_draft_failed(code, COMPOSER_REPLY_DRAFT_NO_SESSION_DESCRIPTION)
+        Some(code)
+            if code == COMPOSER_SET_REPLY_DRAFT_NO_SESSION_CODE
+                || code == COMPOSER_GET_REPLY_DRAFT_NO_SESSION_CODE
+                || code == COMPOSER_CLEAR_REPLY_DRAFT_NO_SESSION_CODE =>
+        {
+            // The revision-less clear compatibility route snapshots through
+            // the get command before it performs the atomic clear. Preserve
+            // the public operation's diagnostic rather than leaking that
+            // internal owner hop to callers.
+            composer_reply_draft_failed(no_session, COMPOSER_REPLY_DRAFT_NO_SESSION_DESCRIPTION)
         }
         Some(code)
             if code.starts_with("p2-composer-set-reply-draft-")
@@ -13449,14 +13741,15 @@ mod tests {
     #[test]
     fn timeline_view_row_dto_maps_message_without_token_echo() {
         use crate::app::timeline::{
-            TimelineEventRowBase, TimelineMessageRow, TimelineRowCapabilities,
+            TimelineEventRowBase, TimelineMessageRow, TimelineReaction, TimelineReplyPreview,
+            TimelineRowCapabilities, TimelineThreadSummary,
         };
         let row = TimelineViewRow::Message(Box::new(TimelineMessageRow {
             event: TimelineEventRowBase {
                 item_id: "item-1".to_owned(),
                 event_id: Some("$evt:example.org".to_owned()),
                 sender_id: "@alice:example.org".to_owned(),
-                sender_name: "@alice:example.org".to_owned(),
+                sender_name: "Alice Example".to_owned(),
                 sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
                 origin_server_ts: 1_700_000_000_000,
                 capabilities: TimelineRowCapabilities {
@@ -13474,19 +13767,42 @@ mod tests {
             body: "hello".to_owned(),
             formatted_body: None,
             agent_card_json: Some(r#"{"title":"Approval"}"#.to_owned()),
+            is_agent_approval: true,
             message_type: Some("m.text".to_owned()),
             media_filename: None,
             media_caption: None,
             edited: false,
-            reply: None,
-            thread: None,
-            reactions: Vec::new(),
+            reply: Some(TimelineReplyPreview {
+                event_id: "$reply:example.org".to_owned(),
+                sender_id: Some("@bob:example.org".to_owned()),
+                sender_name: "Bob".to_owned(),
+                body: "earlier body".to_owned(),
+            }),
+            thread_root: Some("$root:example.org".to_owned()),
+            thread: Some(TimelineThreadSummary {
+                root_event_id: "$evt:example.org".to_owned(),
+                reply_count: 3,
+                latest_event_id: Some("$latest:example.org".to_owned()),
+            }),
+            reactions: vec![
+                TimelineReaction {
+                    key: "👍".to_owned(),
+                    count: 2,
+                    own: Some(true),
+                },
+                TimelineReaction {
+                    key: "🎉".to_owned(),
+                    count: 1,
+                    own: None,
+                },
+            ],
             media: None,
         }));
         let dto = timeline_view_row_dto(row);
         assert_eq!(dto.kind, "message");
         assert_eq!(dto.item_id, "item-1");
         assert_eq!(dto.event_id, "$evt:example.org");
+        assert_eq!(dto.sender_name, "Alice Example");
         assert_eq!(
             dto.sender_avatar_url.as_deref(),
             Some("mxc://example.org/alice")
@@ -13497,12 +13813,125 @@ mod tests {
             dto.agent_card_json.as_deref(),
             Some(r#"{"title":"Approval"}"#)
         );
-        assert!(dto.reactions.is_empty());
+        assert!(dto.is_agent_approval);
+        assert_eq!(dto.reply_to_event_id.as_deref(), Some("$reply:example.org"));
+        assert_eq!(
+            dto.thread_root_event_id.as_deref(),
+            Some("$root:example.org")
+        );
+        assert_eq!(
+            dto.reply_preview.as_ref().map(|reply| (
+                reply.sender_id.as_deref(),
+                reply.sender_name.as_str(),
+                reply.body.as_str()
+            )),
+            Some((Some("@bob:example.org"), "Bob", "earlier body"))
+        );
+        assert_eq!(
+            dto.thread_summary.as_ref().map(|thread| (
+                thread.root_event_id.as_str(),
+                thread.reply_count,
+                thread.latest_event_id.as_deref()
+            )),
+            Some(("$evt:example.org", 3, Some("$latest:example.org")))
+        );
+        assert_eq!(dto.reactions[0].own, Some(true));
+        assert_eq!(dto.reactions[1].own, None);
+        let capabilities = dto.capabilities.as_ref().expect("event capabilities");
+        assert!(capabilities.reply);
+        assert!(capabilities.react);
+        assert!(!capabilities.vote);
+        assert!(dto.poll.is_none());
         assert!(dto.media_handle_id.is_none());
         let text = format!("{dto:?}");
         assert!(!text.contains("syt_"));
         assert!(!text.contains("password"));
         assert!(text.contains("mxc://example.org/alice"));
+    }
+
+    #[test]
+    fn timeline_view_row_dto_preserves_open_and_closed_poll_semantics() {
+        use crate::app::timeline::{
+            TimelineEventRowBase, TimelinePollAnswer, TimelinePollRow, TimelineRowCapabilities,
+        };
+
+        let make_poll = |closed: bool| {
+            TimelineViewRow::Poll(TimelinePollRow {
+                event: TimelineEventRowBase {
+                    item_id: if closed { "closed-poll" } else { "open-poll" }.to_owned(),
+                    event_id: Some("$poll:example.org".to_owned()),
+                    sender_id: "@alice:example.org".to_owned(),
+                    sender_name: "Alice".to_owned(),
+                    sender_avatar_url: None,
+                    origin_server_ts: 1_700_000_000_002,
+                    capabilities: TimelineRowCapabilities {
+                        react: true,
+                        reply: false,
+                        edit: false,
+                        redact: true,
+                        report: true,
+                        pin: true,
+                        forward: false,
+                        vote: !closed,
+                        decline_call: false,
+                    },
+                },
+                question: "Choose two".to_owned(),
+                closed,
+                max_selections: 2,
+                answers: vec![
+                    TimelinePollAnswer {
+                        id: "a".to_owned(),
+                        text: "Alpha".to_owned(),
+                        vote_count: 4,
+                        own: true,
+                    },
+                    TimelinePollAnswer {
+                        id: "b".to_owned(),
+                        text: "Beta".to_owned(),
+                        vote_count: 1,
+                        own: false,
+                    },
+                ],
+                reply: Some(TimelineReplyPreview {
+                    event_id: "$poll-reply:example.org".to_owned(),
+                    sender_id: None,
+                    sender_name: "Message".to_owned(),
+                    body: "Jump to original".to_owned(),
+                }),
+                thread_root: Some("$poll-root:example.org".to_owned()),
+                thread: None,
+                reactions: vec![TimelineReaction {
+                    key: "👍".to_owned(),
+                    count: 2,
+                    own: Some(true),
+                }],
+            })
+        };
+
+        let open = timeline_view_row_dto(make_poll(false));
+        let open_poll = open.poll.expect("open poll presentation");
+        assert_eq!(open.body, "Choose two");
+        assert!(!open_poll.closed);
+        assert_eq!(open_poll.max_selections, 2);
+        assert_eq!(open_poll.answers.len(), 2);
+        assert!(open_poll.answers[0].own);
+        assert_eq!(open_poll.answers[0].vote_count, 4);
+        assert!(open.capabilities.expect("open capabilities").vote);
+        assert_eq!(
+            open.reply_to_event_id.as_deref(),
+            Some("$poll-reply:example.org")
+        );
+        assert_eq!(
+            open.thread_root_event_id.as_deref(),
+            Some("$poll-root:example.org")
+        );
+        assert_eq!(open.reactions[0].own, Some(true));
+        assert!(open.thread_summary.is_none());
+
+        let closed = timeline_view_row_dto(make_poll(true));
+        assert!(closed.poll.expect("closed poll presentation").closed);
+        assert!(!closed.capabilities.expect("closed capabilities").vote);
     }
 
     #[test]
@@ -13538,12 +13967,26 @@ mod tests {
                 height: Some(128),
                 duration_ms: None,
             },
+            reply: None,
+            thread_root: Some("$sticker-root:example.org".to_owned()),
+            thread: None,
+            reactions: vec![TimelineReaction {
+                key: "🎉".to_owned(),
+                count: 3,
+                own: Some(false),
+            }],
         };
 
         let dto = timeline_view_row_dto(row);
         assert_eq!(dto.kind, "sticker");
         assert_eq!(dto.event_id, "$sticker:example.org");
         assert_eq!(dto.message_type.as_deref(), Some("m.sticker"));
+        assert_eq!(
+            dto.thread_root_event_id.as_deref(),
+            Some("$sticker-root:example.org")
+        );
+        assert_eq!(dto.reactions[0].key, "🎉");
+        assert_eq!(dto.reactions[0].own, Some(false));
         assert_eq!(
             dto.media_handle_id.as_deref(),
             Some("incoming-sticker-handle")
@@ -13556,5 +13999,74 @@ mod tests {
             dto.sender_avatar_url.as_deref(),
             Some("mxc://example.org/alice")
         );
+    }
+
+    #[test]
+    fn timeline_view_row_dto_preserves_base_metadata_for_non_message_events() {
+        use crate::app::timeline::{
+            TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineOtherRow,
+            TimelineRedactedRow, TimelineRowCapabilities,
+        };
+
+        let base = |item_id: &str, event_id: &str| TimelineEventRowBase {
+            item_id: item_id.to_owned(),
+            event_id: Some(event_id.to_owned()),
+            sender_id: "@alice:example.org".to_owned(),
+            sender_name: "Alice".to_owned(),
+            sender_avatar_url: Some("mxc://example.org/alice".to_owned()),
+            origin_server_ts: 1_700_000_000_003,
+            capabilities: TimelineRowCapabilities {
+                react: false,
+                reply: false,
+                edit: false,
+                redact: true,
+                report: true,
+                pin: true,
+                forward: false,
+                vote: false,
+                decline_call: false,
+            },
+        };
+        let assert_base = |dto: &TimelineViewRowDto, event_id: &str| {
+            assert_eq!(dto.event_id, event_id);
+            assert_eq!(dto.sender, "@alice:example.org");
+            assert_eq!(dto.sender_name, "Alice");
+            assert_eq!(
+                dto.sender_avatar_url.as_deref(),
+                Some("mxc://example.org/alice")
+            );
+            assert_eq!(dto.origin_server_ts, 1_700_000_000_003);
+            let capabilities = dto.capabilities.as_ref().expect("event capabilities");
+            assert!(capabilities.redact);
+            assert!(capabilities.report);
+        };
+
+        let redacted = timeline_view_row_dto(TimelineViewRow::Redacted(TimelineRedactedRow {
+            event: base("redacted-item", "$redacted:example.org"),
+            summary: "Message removed".to_owned(),
+        }));
+        assert_eq!(redacted.kind, "redacted");
+        assert_base(&redacted, "$redacted:example.org");
+
+        let encrypted = timeline_view_row_dto(TimelineViewRow::EncryptedUnavailable(
+            TimelineEncryptedUnavailableRow {
+                event: base("encrypted-item", "$encrypted:example.org"),
+                reason_code: "unable_to_decrypt".to_owned(),
+            },
+        ));
+        assert_eq!(encrypted.kind, "encrypted");
+        assert_base(&encrypted, "$encrypted:example.org");
+
+        let other_base = base("other-item", "$other:example.org");
+        let other = timeline_view_row_dto(TimelineViewRow::Other(TimelineOtherRow {
+            item_id: other_base.item_id.clone(),
+            event_id: other_base.event_id.clone(),
+            event: Some(other_base),
+            event_type: Some("org.example.unknown".to_owned()),
+            summary: "Unsupported timeline event".to_owned(),
+        }));
+        assert_eq!(other.kind, "other");
+        assert_base(&other, "$other:example.org");
+        assert_eq!(other.message_type.as_deref(), Some("org.example.unknown"));
     }
 }

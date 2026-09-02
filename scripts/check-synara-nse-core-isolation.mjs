@@ -2,6 +2,7 @@
 
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -12,6 +13,17 @@ const nseManifest = read("crates/synara-nse-core/Cargo.toml");
 const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
+const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
+const generatorSyntax = spawnSync(
+  "bash",
+  ["-n", resolve(root, "scripts/generate-synara-nse-core-swift.sh")],
+  { encoding: "utf8" },
+);
+if (generatorSyntax.status !== 0) {
+  throw new Error(
+    `SynaraNseCore generator shell syntax failed: ${generatorSyntax.stderr || generatorSyntax.stdout}`,
+  );
+}
 const notificationService = read(
   "synara-ios/SynaraNotificationService/NotificationService.swift",
 );
@@ -44,6 +56,12 @@ forbidText(nseRust, "synara_core::SharedCore", "full application owner in NSE Ru
 requireText(generator, '--profile "$rust_profile"', "NSE-specific Cargo profile");
 requireText(generator, 'headers_tmp="$headers_root/synara_nse_coreFFI"', "namespaced C module");
 requireText(generator, "simulator-arm64", "bounded local simulator generation mode");
+requireText(generator, "SYNARA_NSE_CORE_APPLE_SPACE_BOUNDED", "space-bounded build mode");
+requireText(generator, 'target_build_dir="$work_dir/cargo-target-$target"', "isolated target build");
+requireText(generator, 'remove_bounded_target_dir "$target_build_dir"', "bounded target cleanup");
+requireText(generator, '"$publication_helper"', "shared artifact publication");
+requireText(publicationHelper, 'publication_state="publishing"', "transactional publication state");
+requireText(publicationHelper, 'publication_state="committed"', "coherent pair commit point");
 requireText(notificationService, "import SynaraNseCore", "NSE-only Swift module import");
 requireText(notificationService, "request.cancel()", "NSE deadline cancellation");
 forbidText(notificationService, "import SynaraCore", "full Core import in extension");

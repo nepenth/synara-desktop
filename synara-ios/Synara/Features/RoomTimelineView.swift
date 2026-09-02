@@ -137,6 +137,8 @@ enum RoomTimelineFailurePresentationPolicy {
 
 enum RoomTimelineReadAcknowledgementPolicy {
     static func shouldSchedule(
+        isApplicationActive: Bool,
+        allowsReadReceipts: Bool,
         isLive: Bool,
         isConfirmedPinned: Bool,
         isJumpingToLatest: Bool,
@@ -144,7 +146,9 @@ enum RoomTimelineReadAcknowledgementPolicy {
         eventID: String,
         lastMarkedEventID: String?
     ) -> Bool {
-        isLive
+        isApplicationActive
+            && allowsReadReceipts
+            && isLive
             && isConfirmedPinned
             && isJumpingToLatest == false
             && isUserInteracting == false
@@ -166,21 +170,6 @@ enum RoomTimelineReadMarkerQueuePolicy {
             : 0
         return min(debounceNanoseconds, remainingMaximum)
     }
-
-    static func flushCandidate(
-        pendingEventID: String?,
-        lastCandidateEventID: String?,
-        lastMarkedEventID: String?
-    ) -> String? {
-        let candidate = pendingEventID ?? lastCandidateEventID
-        guard let candidate,
-              candidate != lastMarkedEventID,
-              MatrixServerEventIDPolicy.canAcknowledge(candidate)
-        else {
-            return nil
-        }
-        return candidate
-    }
 }
 
 enum RoomTimelineReadMarkerTaskPolicy {
@@ -191,6 +180,14 @@ enum RoomTimelineReadMarkerTaskPolicy {
 
 enum RoomTimelineTimestampRevealPolicy {
     static let displayDurationNanoseconds: UInt64 = 2_500_000_000
+
+    static func horizontalOffset(
+        isGroupedWithPrevious: Bool,
+        isRevealed: Bool,
+        width: CGFloat
+    ) -> CGFloat {
+        isGroupedWithPrevious && isRevealed ? -width : 0
+    }
 
     static func taskMayDismiss(
         taskGeneration: UInt64,
@@ -272,6 +269,7 @@ struct RoomTimelineView: View {
     @Environment(\.appEnvironment) private var environment
     @Environment(\.synaraThemeBaseHex) private var themeBaseHex
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.scenePhase) private var scenePhase
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
     @State private var replyTarget: ComposerRelationTarget?
@@ -283,7 +281,7 @@ struct RoomTimelineView: View {
     @State private var viewerResource: MediaResource?
     @State private var selectedPhotos: [PhotosPickerItem] = []
     @State private var attachmentDrafts: [ComposerAttachmentDraft] = []
-    @State private var attachmentSendSteps: [ComposerAttachmentSendStep]?
+    @State private var attachmentSendTransaction: ComposerAttachmentSendTransaction?
     @State private var isSendingMessage = false
     @State private var agentActionMessage: String?
     @State private var roomNotesActionMessage: String?
@@ -312,7 +310,6 @@ struct RoomTimelineView: View {
     @State private var markFullyReadTaskGeneration: UInt64 = 0
     @State private var pendingMarkFullyReadEventID: String?
     @State private var firstPendingMarkFullyReadAt: Date?
-    @State private var lastAcknowledgementCandidateEventID: String?
     @State private var timelineUpdatesTask: Task<Void, Never>?
     @State private var timelineSession: RoomTimelineSession?
     @State private var activeTimelineMode: RoomTimelineMode = .live
@@ -488,8 +485,16 @@ struct RoomTimelineView: View {
             stopTimelineUpdates(reason: "view-disappeared")
             stopTypingUpdates()
             cancelTimelineScroll()
-            flushMarkFullyRead()
+            // A disappearing view no longer proves that its previously painted
+            // tail is visible. Cancel the tracked automatic acknowledgement;
+            // never launch an untracked read write from teardown.
+            cancelMarkFullyRead()
             cancelTimestampReveal()
+        }
+        .onChange(of: scenePhase) { phase in
+            if phase != .active {
+                cancelMarkFullyRead()
+            }
         }
         .onReceive(environment.outgoingSends.queue.$items) { _ in
             applyOutgoingQueueToTimeline()
@@ -581,8 +586,14 @@ struct RoomTimelineView: View {
                                     isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
                                     isTimestampRevealed: false,
                                     animateSend: sendAnimationItemIDs.contains(item.id),
-                                    replyPreview: item.replyToEventID.flatMap { replyPreviewsByEventID[$0] },
-                                    replyCount: threadReplyCounts[item.eventID] ?? 0,
+                                    replyPreview: TimelineRelationPresentation.replyPreview(
+                                        for: item,
+                                        locallyResolvedByEventID: replyPreviewsByEventID
+                                    ),
+                                    replyCount: TimelineRelationPresentation.replyCount(
+                                        for: item,
+                                        locallyCountedByRootID: threadReplyCounts
+                                    ),
                                     availability: environment.eventActions.availability(for: item, currentUserID: currentUserID),
                                     onReply: { beginReply(item) },
                                     onOpenThread: { openThread(root: item) },
@@ -594,8 +605,8 @@ struct RoomTimelineView: View {
                                     onAgentAction: { action in
                                         executeAgentAction(action, sourceEventID: item.eventID)
                                     },
-                                    onAgentApprovalReaction: { reactionKey in
-                                        submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: item.eventID)
+                                    onAgentApprovalReaction: { actionIdentifier in
+                                        submitAgentApprovalDecision(actionIdentifier: actionIdentifier, sourceEventID: item.eventID)
                                     },
                                     onRetryFailedSend: {
                                         retryFailedMessage(item)
@@ -854,8 +865,8 @@ struct RoomTimelineView: View {
                 onAgentAction: { action in
                     executeAgentAction(action, sourceEventID: eventRow.item.eventID)
                 },
-                onAgentApprovalReaction: { reactionKey in
-                    submitAgentApprovalReaction(reactionKey: reactionKey, sourceEventID: eventRow.item.eventID)
+                onAgentApprovalReaction: { actionIdentifier in
+                    submitAgentApprovalDecision(actionIdentifier: actionIdentifier, sourceEventID: eventRow.item.eventID)
                 },
                 onRetryFailedSend: { retryFailedMessage(eventRow.item) }
             )
@@ -891,8 +902,14 @@ struct RoomTimelineView: View {
                             isGroupedWithPrevious: isGroupedWithPrevious(index: index, items: items),
                             isTimestampRevealed: revealedTimestampEventID == stableEventID,
                             animateSend: sendAnimationItemIDs.contains(item.id),
-                            replyPreview: item.replyToEventID.flatMap { previews[$0] },
-                            replyCount: replyCounts[item.eventID] ?? 0,
+                            replyPreview: TimelineRelationPresentation.replyPreview(
+                                for: item,
+                                locallyResolvedByEventID: previews
+                            ),
+                            replyCount: TimelineRelationPresentation.replyCount(
+                                for: item,
+                                locallyCountedByRootID: replyCounts
+                            ),
                             availability: environment.eventActions.availability(
                                 for: item,
                                 currentUserID: currentUserID
@@ -1232,6 +1249,7 @@ struct RoomTimelineView: View {
         viewerResource = nil
         selectedPhotos = []
         attachmentDrafts = []
+        attachmentSendTransaction = nil
         isSendingMessage = false
         agentActionMessage = nil
         cryptoStatus = .unknown
@@ -1251,7 +1269,6 @@ struct RoomTimelineView: View {
         isTimelineBottomVisible = false
         timelineBottomAnchorGeneration = 0
         lastMarkedFullyReadEventID = nil
-        lastAcknowledgementCandidateEventID = nil
         hasUserInteractedWithTimeline = false
         isUserDraggingTimeline = false
         typingUserIDs = []
@@ -1705,19 +1722,44 @@ struct RoomTimelineView: View {
             return
         }
 
-        sendError = nil
-        isSendingMessage = true
-        let plan = ComposerAttachmentSendPlan.reusableOrNew(
-            existing: attachmentSendSteps,
-            drafts: drafts,
-            body: rawBody
+        let proposedIntent = ComposerEditFlow.sendIntent(
+            body: rawBody,
+            replyToEventID: replyTarget?.eventID,
+            threadRootEventID: replyTarget?.threadRootEventID,
+            session: editSession
         )
-        attachmentSendSteps = plan
-        if drafts.isEmpty {
-            sendComposerText(rawBody)
-            isSendingMessage = false
+        let transaction = ComposerAttachmentSendTransaction.reusableOrNew(
+            existing: attachmentSendTransaction,
+            drafts: drafts,
+            body: rawBody,
+            proposedIntent: proposedIntent
+        )
+        let composerIntent = transaction.intent
+        guard composerIntent.requiresStandaloneTextSend == false
+            || trimmed.isEmpty == false
+        else {
+            sendError = MessageSendError.emptyMessage.localizedDescription
             return
         }
+
+        sendError = nil
+        isSendingMessage = true
+        // Reply/edit intent belongs to the send gesture, not to mutable composer
+        // state after an asynchronous upload has started. A partial retry also
+        // retains this identity unless the user explicitly changes/cancels the
+        // relation, which starts a new transaction.
+        let plan = transaction.steps
+        if drafts.isEmpty {
+            attachmentSendTransaction = nil
+            Task {
+                await performSend(composerIntent)
+                await MainActor.run {
+                    isSendingMessage = false
+                }
+            }
+            return
+        }
+        attachmentSendTransaction = transaction
 
         Task {
             let signpostID = PerformanceTrace.begin("ComposerAttachmentDraftSend")
@@ -1728,33 +1770,36 @@ struct RoomTimelineView: View {
                 drafts,
                 steps: plan,
                 roomID: roomID,
-                replyToEventID: replyTarget?.eventID,
-                threadRootEventID: nil,
+                replyToEventID: composerIntent.replyToEventID,
+                threadRootEventID: composerIntent.threadRootEventID,
                 uploader: environment.mediaUploader,
                 onState: { state in
                     uploadState = state
                 },
                 onUploaded: { draft, item in
                     attachmentDrafts = ComposerAttachmentDraftList.remove(id: draft.id, from: attachmentDrafts)
-                    attachmentSendSteps = ComposerAttachmentSendPlan.removingAttachment(
-                        id: draft.id,
-                        from: attachmentSendSteps ?? plan
-                    )
+                    if let activeTransaction = attachmentSendTransaction {
+                        attachmentSendTransaction = activeTransaction.removingAttachment(id: draft.id)
+                    }
                     append(item)
                 }
             )
-            await MainActor.run {
-                if uploaded {
-                    attachmentSendSteps = nil
-                    if let trailingText = ComposerAttachmentSendPlan.trailingText(in: plan) {
-                        sendComposerText(trailingText)
-                    } else {
+            if uploaded {
+                await MainActor.run {
+                    attachmentSendTransaction = nil
+                }
+                if let trailingText = ComposerAttachmentSendPlan.trailingText(in: plan) {
+                    await performSend(composerIntent.replacingBody(with: trailingText))
+                } else {
+                    await MainActor.run {
                         uploadState = .idle
                         draft = ""
                         environment.drafts.clearDraft(roomID: roomID)
                         completeComposerRelation()
                     }
                 }
+            }
+            await MainActor.run {
                 isSendingMessage = false
             }
         }
@@ -1777,12 +1822,14 @@ struct RoomTimelineView: View {
         }
     }
 
+    @MainActor
     private func performSend(
         body rawBody: String,
         replyToEventID: String?,
+        threadRootEventID: String?,
         editEventID: String?,
         retrying failedItem: TimelineItem? = nil
-    ) {
+    ) async {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard body.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
@@ -1794,31 +1841,26 @@ struct RoomTimelineView: View {
             body: body,
             formattedBody: ComposerMatrixFormatting.formattedBody(for: body),
             replyToEventID: replyToEventID,
-            editEventID: editEventID
+            editEventID: editEventID,
+            threadRootEventID: threadRootEventID
         )
         let isEditing = request.editEventID != nil
 
         if isEditing {
-            Task {
-                do {
-                    let signpostID = PerformanceTrace.begin("MessageSend")
-                    defer {
-                        PerformanceTrace.end("MessageSend", id: signpostID)
-                    }
-                    let item = try await environment.messageSender.send(request)
-                    await MainActor.run {
-                        replace(item)
-                        draft = ""
-                        environment.drafts.clearDraft(roomID: roomID)
-                        completeComposerRelation()
-                        sendError = nil
-                    }
-                } catch {
-                    await MainActor.run {
-                        sendError = MessageSendError.failed.localizedDescription
-                        SynaraHaptics.trigger(.warning)
-                    }
+            do {
+                let signpostID = PerformanceTrace.begin("MessageSend")
+                defer {
+                    PerformanceTrace.end("MessageSend", id: signpostID)
                 }
+                let item = try await environment.messageSender.send(request)
+                replace(item)
+                draft = ""
+                environment.drafts.clearDraft(roomID: roomID)
+                completeComposerRelation()
+                sendError = nil
+            } catch {
+                sendError = MessageSendError.failed.localizedDescription
+                SynaraHaptics.trigger(.warning)
             }
             return
         }
@@ -1829,6 +1871,7 @@ struct RoomTimelineView: View {
             body: body,
             formattedBody: request.formattedBody,
             replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
             senderID: currentUserID,
             senderAvatarURL: ownAvatarURL,
             timestamp: failedItem?.timestamp ?? Date()
@@ -2171,6 +2214,11 @@ struct RoomTimelineView: View {
 
     private func scheduleMarkFullyRead(eventID: String) {
         guard RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+            isApplicationActive: scenePhase == .active
+                && UIApplication.shared.applicationState == .active,
+            allowsReadReceipts: SynaraSharedConstants.boolSetting(
+                SynaraSharedConstants.hideActivityKey
+            ) == false,
             isLive: timelineProviderIsLive,
             isConfirmedPinned: isTimelineBottomVisible,
             isJumpingToLatest: isJumpingToLatest,
@@ -2186,7 +2234,6 @@ struct RoomTimelineView: View {
         }
 
         pendingMarkFullyReadEventID = eventID
-        lastAcknowledgementCandidateEventID = eventID
         if firstPendingMarkFullyReadAt == nil {
             firstPendingMarkFullyReadAt = Date()
         }
@@ -2207,6 +2254,11 @@ struct RoomTimelineView: View {
         markFullyReadTask = Task {
             try? await Task.sleep(nanoseconds: delay)
             guard Task.isCancelled == false,
+                  scenePhase == .active,
+                  UIApplication.shared.applicationState == .active,
+                  SynaraSharedConstants.boolSetting(
+                      SynaraSharedConstants.hideActivityKey
+                  ) == false,
                   timelineProviderIsLive,
                   isTimelineBottomVisible,
                   isJumpingToLatest == false,
@@ -2219,11 +2271,18 @@ struct RoomTimelineView: View {
                 return
             }
 
+            guard let observedEventID = pendingMarkFullyReadEventID else {
+                await MainActor.run {
+                    clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
+                }
+                return
+            }
             pendingMarkFullyReadEventID = nil
             firstPendingMarkFullyReadAt = nil
-            // Resolve the SDK-authoritative live tail when this task executes.
-            // A delayed candidate must never move the shared marker backwards.
-            let acknowledgedEventID = await environment.readMarkers.markRoomAsRead(roomID: roomID)
+            let didAcknowledge = await environment.readMarkers.markFullyRead(
+                roomID: roomID,
+                eventID: observedEventID
+            )
             guard Task.isCancelled == false else {
                 return
             }
@@ -2236,9 +2295,9 @@ struct RoomTimelineView: View {
                     return
                 }
                 markFullyReadTask = nil
-                if let acknowledgedEventID {
-                    lastMarkedFullyReadEventID = acknowledgedEventID
-                    initialReadMarkerEventID = acknowledgedEventID
+                if didAcknowledge {
+                    lastMarkedFullyReadEventID = observedEventID
+                    initialReadMarkerEventID = observedEventID
                     showJumpToLatest = false
                 }
                 if pendingMarkFullyReadEventID != nil,
@@ -2266,23 +2325,6 @@ struct RoomTimelineView: View {
             return
         }
         markFullyReadTask = nil
-    }
-
-    private func flushMarkFullyRead() {
-        let eventID = RoomTimelineReadMarkerQueuePolicy.flushCandidate(
-            pendingEventID: pendingMarkFullyReadEventID,
-            lastCandidateEventID: lastAcknowledgementCandidateEventID,
-            lastMarkedEventID: lastMarkedFullyReadEventID
-        )
-        cancelMarkFullyRead()
-        guard eventID != nil else {
-            return
-        }
-        let readMarkers = environment.readMarkers
-        let disappearingRoomID = roomID
-        Task {
-            _ = await readMarkers.markRoomAsRead(roomID: disappearingRoomID)
-        }
     }
 
     private func jumpToLatest(proxy: ScrollViewProxy, currentItems: [TimelineItem]) {
@@ -2566,6 +2608,10 @@ struct RoomTimelineView: View {
     }
 
     private func beginReply(_ item: TimelineItem) {
+        guard isSendingMessage == false else {
+            return
+        }
+        attachmentSendTransaction = nil
         if editSession != nil {
             cancelEdit(restoreDraft: true)
         }
@@ -2577,6 +2623,10 @@ struct RoomTimelineView: View {
     }
 
     private func beginEdit(_ item: TimelineItem) {
+        guard isSendingMessage == false else {
+            return
+        }
+        attachmentSendTransaction = nil
         let currentDraft = editSession?.previousDraft ?? draft
         let session = ComposerEditFlow.begin(
             item: item,
@@ -2593,14 +2643,15 @@ struct RoomTimelineView: View {
     }
 
     private func sendComposerText(_ rawBody: String) {
-        let intent = ComposerEditFlow.sendIntent(
-            body: rawBody,
-            replyToEventID: replyTarget?.eventID,
-            session: editSession
-        )
-        performSend(
+        sendMessage(body: rawBody)
+    }
+
+    @MainActor
+    private func performSend(_ intent: ComposerSendIntent) async {
+        await performSend(
             body: intent.body,
             replyToEventID: intent.replyToEventID,
+            threadRootEventID: intent.threadRootEventID,
             editEventID: intent.editEventID,
             retrying: intent.retrying
         )
@@ -2622,6 +2673,7 @@ struct RoomTimelineView: View {
     }
 
     private func clearComposerRelation() {
+        attachmentSendTransaction = nil
         if editSession != nil {
             cancelEdit(restoreDraft: true)
         }
@@ -2629,6 +2681,7 @@ struct RoomTimelineView: View {
     }
 
     private func completeComposerRelation() {
+        attachmentSendTransaction = nil
         replyTarget = nil
         editSession = nil
     }
@@ -2730,31 +2783,33 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func submitAgentApprovalReaction(reactionKey: String, sourceEventID: String) {
+    private func submitAgentApprovalDecision(actionIdentifier: String, sourceEventID: String) {
         Task {
             do {
-                try await environment.agentApprovalReactions.submitReaction(
-                    SynaraAgentApprovalReactionRequest(
+                let outcome = try await environment.agentApprovalDecisions.submitDecision(
+                    SynaraAgentApprovalPromptDecisionRequest(
                         roomID: roomID,
                         sourceEventID: sourceEventID,
-                        reactionKey: reactionKey
+                        actionIdentifier: actionIdentifier
                     )
                 )
                 await MainActor.run {
-                    if reactionKey == SynaraAgentApprovalPromptReaction.deny.reactionKey {
+                    if actionIdentifier == SynaraAgentApprovalPromptReaction.deny.actionIdentifier {
                         SynaraHaptics.trigger(.lightImpact)
                     } else {
                         SynaraHaptics.trigger(.success)
                     }
-                    agentActionMessage = "Approval reaction sent."
+                    agentActionMessage = outcome == .alreadyDecided
+                        ? "This approval was already decided on this account."
+                        : "Approval decision sent."
                 }
             } catch let error as SynaraAgentApprovalError {
                 await MainActor.run {
-                    agentActionMessage = error.errorDescription ?? "Approval reaction could not be submitted."
+                    agentActionMessage = error.errorDescription ?? "Approval decision could not be submitted."
                 }
             } catch {
                 await MainActor.run {
-                    agentActionMessage = "Approval reaction could not be submitted."
+                    agentActionMessage = "Approval decision could not be submitted."
                 }
             }
         }
@@ -3184,7 +3239,7 @@ struct ThreadTimelineView: View {
     }
 
     private func threadItems(from items: [TimelineItem]) -> [TimelineItem] {
-        items
+        items.filter { TimelineThreadMembership.contains($0, rootEventID: rootEventID) }
     }
 
     private var notesActionMessageBinding: Binding<Bool> {
@@ -3283,8 +3338,9 @@ struct ThreadTimelineView: View {
                         roomID: roomID,
                         body: trailingText,
                         formattedBody: ComposerMatrixFormatting.formattedBody(for: trailingText),
-                        replyToEventID: rootEventID,
-                        editEventID: nil
+                        replyToEventID: nil,
+                        editEventID: nil,
+                        threadRootEventID: rootEventID
                     )
                 )
                 await MainActor.run {
@@ -3513,7 +3569,12 @@ private struct ThreadMessageRow: View {
                     if item.reactions.isEmpty == false {
                         HStack(spacing: SynaraSpacing.xSmall) {
                             ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
-                                ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0, animationIndex: index)
+                                ReactionPill(
+                                    title: reaction,
+                                    count: item.reactions[reaction] ?? 0,
+                                    isSelected: item.reactionOwnership.contains(reaction),
+                                    animationIndex: index
+                                )
                             }
                             ReactionPill(
                                 title: "face.smiling",
@@ -3542,7 +3603,7 @@ private struct ThreadMessageRow: View {
                 }
                 .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
             }
-            if item.serverEventID != nil {
+            if item.actionCapabilities?.canPin ?? (item.serverEventID != nil) {
                 Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
                     .accessibilityIdentifier("ThreadItemPinToNotes-\(item.eventID)")
             }
@@ -3558,7 +3619,10 @@ private struct ThreadMessageRow: View {
 
     @ViewBuilder
     private var threadBody: some View {
-        switch item.kind {
+        if let poll = item.poll {
+            TimelinePollCard(poll: poll)
+        } else {
+            switch item.kind {
         case let .text(body):
             Text(body)
                 .font(SynaraTypography.messageBody)
@@ -3584,6 +3648,7 @@ private struct ThreadMessageRow: View {
             Text("Unsupported event: \(type)")
                 .font(SynaraTypography.messageBody)
                 .foregroundStyle(SynaraColor.secondaryText)
+            }
         }
     }
 }
@@ -3999,7 +4064,16 @@ private struct MatrixTableBlockView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-            if let caption = block.caption {
+            if let captionInlineContent = block.captionInlineContent {
+                MatrixInlineGroupView(
+                    group: captionInlineContent,
+                    font: SynaraTypography.messageBody.weight(.semibold),
+                    presentationContext: presentationContext
+                )
+                    .foregroundStyle(SynaraColor.primaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .accessibilityAddTraits(.isHeader)
+            } else if let caption = block.caption {
                 Text(attributedRichText(caption, presentationContext: presentationContext))
                     .font(SynaraTypography.messageBody.weight(.semibold))
                     .foregroundStyle(SynaraColor.primaryText)
@@ -4012,17 +4086,34 @@ private struct MatrixTableBlockView: View {
                     ForEach(Array(block.rows.enumerated()), id: \.offset) { rowIndex, row in
                         HStack(alignment: .top, spacing: 0) {
                             ForEach(Array(row.cells.enumerated()), id: \.offset) { cellIndex, cell in
-                                Text(
-                                    attributedRichText(
-                                        cell.content,
-                                        presentationContext: .semantic(
-                                            tableRowToken(
-                                                rowIndex: rowIndex,
-                                                isHeader: row.isHeader
+                                Group {
+                                    if let inlineContent = cell.inlineContent {
+                                        MatrixInlineGroupView(
+                                            group: inlineContent,
+                                            font: cell.isHeader
+                                                ? SynaraTypography.messageBody.weight(.semibold)
+                                                : SynaraTypography.messageBody,
+                                            presentationContext: .semantic(
+                                                tableRowToken(
+                                                    rowIndex: rowIndex,
+                                                    isHeader: row.isHeader
+                                                )
                                             )
                                         )
-                                    )
-                                )
+                                    } else {
+                                        Text(
+                                            attributedRichText(
+                                                cell.content,
+                                                presentationContext: .semantic(
+                                                    tableRowToken(
+                                                        rowIndex: rowIndex,
+                                                        isHeader: row.isHeader
+                                                    )
+                                                )
+                                            )
+                                        )
+                                    }
+                                }
                                 .font(
                                     cell.isHeader
                                         ? SynaraTypography.messageBody.weight(.semibold)
@@ -5034,7 +5125,11 @@ private struct TimelineRow: View {
             }
         }
 
-        let timestampRevealOffset = isGroupedWithPrevious && isTimestampRevealed ? -timestampRevealWidth : 0
+        let timestampRevealOffset = RoomTimelineTimestampRevealPolicy.horizontalOffset(
+            isGroupedWithPrevious: isGroupedWithPrevious,
+            isRevealed: isTimestampRevealed,
+            width: timestampRevealWidth
+        )
         let timestampRevealProgress = isGroupedWithPrevious && isTimestampRevealed ? 1.0 : 0.0
 
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
@@ -5047,7 +5142,7 @@ private struct TimelineRow: View {
                         .accessibilityHidden(true)
                 }
                 withFailedRetryAccessibilityAction(row)
-                    .offset(x: isGroupedWithPrevious ? timestampRevealOffset : 0)
+                    .offset(x: timestampRevealOffset)
             }
             .clipped()
             .synaraSendSlideIn(isEnabled: animateSend, fromTrailing: isOutgoing)
@@ -5094,7 +5189,7 @@ private struct TimelineRow: View {
         if availability.canReact {
             Button("React", systemImage: "face.smiling", action: onReact)
         }
-        if item.serverEventID != nil {
+        if item.actionCapabilities?.canPin ?? (item.serverEventID != nil) {
             Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
                 .accessibilityIdentifier("TimelineItemPinToNotes-\(item.eventID)")
         }
@@ -5135,7 +5230,12 @@ private struct TimelineRow: View {
             if item.reactions.isEmpty == false {
                 HStack(spacing: SynaraSpacing.xSmall) {
                     ForEach(Array(item.reactions.keys.sorted().enumerated()), id: \.element) { index, reaction in
-                        ReactionPill(title: reaction, count: item.reactions[reaction] ?? 0, animationIndex: index)
+                        ReactionPill(
+                            title: reaction,
+                            count: item.reactions[reaction] ?? 0,
+                            isSelected: item.reactionOwnership.contains(reaction),
+                            animationIndex: index
+                        )
                     }
                     ReactionPill(
                         title: "face.smiling",
@@ -5166,7 +5266,18 @@ private struct TimelineRow: View {
 
     @ViewBuilder
     private var bubbleWrappedBodyContent: some View {
-        if let approvalPrompt {
+        if let poll = item.poll {
+            SynaraMessageBubble(
+                alignment: bubbleAlignment,
+                variant: .standard,
+                depth: SynaraSurfaceDepthRole.emphasizedMessage,
+                isGrouped: isGroupedWithPrevious,
+                showsBackground: true,
+                deliveryStatus: nil
+            ) {
+                TimelinePollCard(poll: poll)
+            }
+        } else if let approvalPrompt {
             SynaraMessageBubble(
                 alignment: bubbleAlignment,
                 variant: .agent,
@@ -5364,7 +5475,10 @@ private struct TimelineRow: View {
     }
 
     private var approvalPrompt: SynaraAgentApprovalPrompt? {
-        SynaraAgentApprovalPromptDetector.detect(in: item)
+        guard item.isAgentApproval else {
+            return nil
+        }
+        return SynaraAgentApprovalPromptDetector.detect(in: item)
     }
 
     private var isCompactWidth: Bool {
@@ -5599,10 +5713,66 @@ private struct UnreadMessagesDivider: View {
     }
 }
 
+private struct TimelinePollCard: View {
+    let poll: TimelinePollPresentation
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            HStack(alignment: .firstTextBaseline, spacing: SynaraSpacing.small) {
+                Image(systemName: "chart.bar.xaxis")
+                    .foregroundStyle(SynaraColor.accent)
+                Text(poll.question)
+                    .font(SynaraTypography.emphasis)
+                    .foregroundStyle(SynaraColor.headingText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            ForEach(poll.answers) { answer in
+                HStack(spacing: SynaraSpacing.small) {
+                    Image(systemName: answer.isOwn ? "checkmark.circle.fill" : "circle")
+                        .foregroundStyle(answer.isOwn ? SynaraColor.accent : SynaraColor.secondaryText)
+                    Text(answer.text)
+                        .font(SynaraTypography.messageBody)
+                        .foregroundStyle(SynaraColor.primaryText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    Text("\(answer.voteCount)")
+                        .font(SynaraTypography.messageMeta)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .monospacedDigit()
+                }
+                .padding(.horizontal, SynaraSpacing.small)
+                .padding(.vertical, SynaraSpacing.xSmall)
+                .background(answer.isOwn ? SynaraColor.accent.opacity(0.12) : SynaraColor.elevatedSurface)
+                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .accessibilityElement(children: .combine)
+                .accessibilityAddTraits(answer.isOwn ? .isSelected : [])
+                .accessibilityLabel("\(answer.text), \(answer.voteCount) votes")
+            }
+
+            Text(pollFooter)
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Poll: \(poll.question)")
+    }
+
+    private var pollFooter: String {
+        if poll.isClosed {
+            return "Poll closed"
+        }
+        if poll.maximumSelections == 1 {
+            return "Choose one answer"
+        }
+        return "Choose up to \(poll.maximumSelections) answers"
+    }
+}
+
 private struct ReactionPill: View {
     let title: String
     let count: Int?
     var isSystemImage = false
+    var isSelected = false
     var animationIndex = 0
 
     private var reactionAnimationKey: String {
@@ -5629,9 +5799,11 @@ private struct ReactionPill: View {
         }
         .padding(.horizontal, 7)
         .padding(.vertical, 3)
-        .background(SynaraColor.elevatedSurface)
+        .foregroundStyle(isSelected ? SynaraColor.accent : SynaraColor.primaryText)
+        .background(isSelected ? SynaraColor.accent.opacity(0.14) : SynaraColor.elevatedSurface)
         .clipShape(Capsule())
         .synaraDepth(.raised, shape: Capsule())
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
         .synaraReactionPop(animationIndex: animationIndex, animationKey: reactionAnimationKey)
     }
 }
@@ -5745,7 +5917,7 @@ private struct AgentApprovalPromptTimelineCard: View {
                     HStack(spacing: SynaraSpacing.small) {
                         Button("Confirm approve always") {
                             confirmApproveAlways = false
-                            onReaction(SynaraAgentApprovalPromptReaction.approveAlways.reactionKey)
+                            onReaction(SynaraAgentApprovalPromptReaction.approveAlways.actionIdentifier)
                         }
                         .buttonStyle(.borderedProminent)
                         .tint(SynaraColor.critical)
@@ -5780,7 +5952,7 @@ private struct AgentApprovalPromptTimelineCard: View {
                                 confirmApproveAlways = true
                             } else {
                                 confirmApproveAlways = false
-                                onReaction(action.reactionKey)
+                                onReaction(action.actionIdentifier)
                             }
                         } label: {
                             VStack(spacing: SynaraSpacing.xSmall) {
@@ -5811,6 +5983,11 @@ private struct AgentApprovalPromptTimelineCard: View {
                     }
                 }
             }
+
+            Text("Session approval is available only by replying !approve session; Hermes does not define a session-approval reaction.")
+                .font(SynaraTypography.messageMeta)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
@@ -6122,11 +6299,19 @@ private struct ComposerView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
             if let replyTarget {
-                ComposerRelationBanner(target: replyTarget, onCancel: onCancelRelation)
+                ComposerRelationBanner(
+                    target: replyTarget,
+                    isCancelDisabled: isSending,
+                    onCancel: onCancelRelation
+                )
             }
 
             if let editTarget {
-                ComposerRelationBanner(target: editTarget, onCancel: onCancelRelation)
+                ComposerRelationBanner(
+                    target: editTarget,
+                    isCancelDisabled: isSending,
+                    onCancel: onCancelRelation
+                )
             }
 
             if let sendError {
@@ -6372,7 +6557,10 @@ private struct ComposerView: View {
     }
 
     private var canSubmit: Bool {
-        ComposerAttachmentDraftList.canSend(text: currentText, drafts: attachmentDrafts)
+        if editTarget != nil {
+            return currentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        }
+        return ComposerAttachmentDraftList.canSend(text: currentText, drafts: attachmentDrafts)
     }
 
     private var resolvedPlaceholder: String {
@@ -6849,6 +7037,7 @@ private struct ComposerToolIcon: View {
 
 private struct ComposerRelationBanner: View {
     let target: ComposerRelationTarget
+    let isCancelDisabled: Bool
     let onCancel: () -> Void
 
     var body: some View {
@@ -6866,6 +7055,7 @@ private struct ComposerRelationBanner: View {
             }
             Spacer(minLength: SynaraSpacing.small)
             Button("Cancel", action: onCancel)
+                .disabled(isCancelDisabled)
                 .accessibilityLabel("Cancel \(target.kind == .edit ? "editing" : "reply")")
         }
         .padding(SynaraSpacing.small)

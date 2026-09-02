@@ -206,6 +206,24 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(filtered.map(\.id), ["!project:matrix.org"])
     }
 
+    func testMarkedUnreadRoomIsUnreadButNotAMention() {
+        let marked = RoomSummary(
+            id: "!marked:matrix.org",
+            name: "Marked",
+            lastMessagePreview: "Saved for later",
+            unreadCount: 0,
+            hasHighlight: false,
+            isMarkedUnread: true,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+
+        XCTAssertEqual(RoomListScopeFilter.apply(.unread, to: [marked]).map(\.id), [marked.id])
+        XCTAssertTrue(RoomListScopeFilter.apply(.mentions, to: [marked]).isEmpty)
+        XCTAssertEqual(NotificationsInboxSections.make(from: [marked]).unreadRooms.map(\.id), [marked.id])
+    }
+
     func testScopeFilterRespectsSelectedSpace() {
         let rooms = RoomListFixtures.small()
 
@@ -1147,6 +1165,7 @@ private extension RoomSummary {
             lastMessagePreview: lastMessagePreview,
             unreadCount: unreadCount,
             hasHighlight: hasHighlight,
+            isMarkedUnread: isMarkedUnread,
             kind: kind,
             membership: membership,
             lastActivityAt: lastActivityAt,

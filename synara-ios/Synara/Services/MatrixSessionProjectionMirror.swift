@@ -10,14 +10,14 @@ struct CoreSessionIdentity: Equatable, Sendable {
     let homeserverURL: String
 }
 
-/// A one-way, in-memory mirror of the safe state of an installed Matrix SDK
-/// client. It is intentionally private to the app's SDK owner: this type has
+/// A one-way, in-memory mirror of the shared Core's safe session projection.
+/// It is intentionally private to the app's projection adapter: this type has
 /// no `AuthenticatedSession`, Matrix client, Keychain/store, token, callback,
 /// network, room, timeline, or crypto API.
 ///
 /// The generated Rust object only receives the six values in `SessionProjection`.
 /// Failures are deliberately ignored here because this optional mirror must
-/// never alter leftover MatrixRustSDK service/lifecycle selection (retired).
+/// never alter shared-Core service/lifecycle selection.
 actor MatrixSessionProjectionMirror {
     private let core: SessionProjectionCore
     private var generation: UInt64 = 0
@@ -27,7 +27,7 @@ actor MatrixSessionProjectionMirror {
         self.core = core
     }
 
-    /// Call only after a leftover MatrixRustSDK client would have been installed.
+    /// Call only after the shared Core has installed the authenticated client.
     /// Individual safe values are accepted instead of `AuthenticatedSession` so
     /// credentials cannot be handed to the UniFFI facade by construction.
     func openAfterInstalledClient(

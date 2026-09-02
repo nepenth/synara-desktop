@@ -204,7 +204,7 @@ private struct NotificationsInboxRow: View {
 
             VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
                 Text(room.name)
-                    .font(SynaraTypography.body.weight(room.hasHighlight ? .semibold : .regular))
+                    .font(SynaraTypography.body.weight(room.hasUnreadActivity ? .semibold : .regular))
                     .foregroundStyle(SynaraColor.headingText)
                     .lineLimit(1)
 
@@ -229,7 +229,7 @@ private struct NotificationsInboxRow: View {
 
             Spacer(minLength: SynaraSpacing.small)
 
-            SynaraUnreadBadge(count: room.unreadCount, highlighted: room.hasHighlight)
+            SynaraUnreadBadge(count: room.unreadBadgeCount, highlighted: room.hasHighlight)
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .padding(.vertical, SynaraSpacing.xSmall)

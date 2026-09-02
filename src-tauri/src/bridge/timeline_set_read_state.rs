@@ -1,6 +1,8 @@
 //! Desktop bridge for `matrix_timeline_set_read_state` through `Core::command`.
 
-use synara_core::app::timeline::{NativeTimelineReadAction, NativeTimelineReadStateReadback};
+use synara_core::app::timeline::{
+    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
+};
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -13,6 +15,8 @@ pub(crate) async fn timeline_set_read_state(
     core: &Core,
     stream_id: String,
     action: NativeTimelineReadAction,
+    intent: NativeTimelineReadIntent,
+    observed_live_tail_event_id: Option<String>,
 ) -> Result<NativeTimelineReadStateReadback, MatrixAuthCommandError> {
     let response = core
         .command(CommandEnvelope {
@@ -22,6 +26,8 @@ pub(crate) async fn timeline_set_read_state(
             payload: serde_json::json!({
                 "streamId": stream_id,
                 "action": action,
+                "intent": intent,
+                "observedLiveTailEventId": observed_live_tail_event_id,
             }),
         })
         .await

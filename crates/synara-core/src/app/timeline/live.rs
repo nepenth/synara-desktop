@@ -61,9 +61,9 @@ use super::{
     NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
     NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
     NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
+    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
+    NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
     TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
     TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
     UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
@@ -77,6 +77,7 @@ const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+const AGENT_APPROVAL_SIDE_EFFECT_TIMEOUT: Duration = Duration::from_secs(5);
 
 fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
     Receipts::new()
@@ -84,32 +85,87 @@ fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
         .private_read_receipt(Some(event_id))
 }
 
-/// Advance the private receipt and fully-read marker to the same latest remote
-/// event through the SDK owner. This avoids relying on a local unread-flag
-/// change to hide a server count and never targets a local echo without an id.
-async fn mark_live_timeline_read(timeline: &Timeline) -> Result<bool, &'static str> {
+#[derive(Debug, Clone, PartialEq, Eq)]
+enum LiveReadTargetPlan {
+    Send(OwnedEventId),
+    ClearUnreadFlag,
+    NoOp,
+}
+
+fn plan_live_read_target(
+    latest_event_id: Option<OwnedEventId>,
+    intent: NativeTimelineReadIntent,
+    observed_live_tail_event_id: Option<&str>,
+) -> Result<LiveReadTargetPlan, &'static str> {
+    match intent {
+        NativeTimelineReadIntent::AutomaticVisibility => {
+            let observed_event_id = parse_action_event_id(
+                observed_live_tail_event_id
+                    .filter(|event_id| !event_id.trim().is_empty())
+                    .ok_or("v-timeline-read-observed-tail-required")?,
+                "v-timeline-read-observed-tail-invalid",
+            )?;
+            match latest_event_id {
+                Some(latest_event_id) if latest_event_id == observed_event_id => {
+                    Ok(LiveReadTargetPlan::Send(latest_event_id))
+                }
+                _ => Ok(LiveReadTargetPlan::NoOp),
+            }
+        }
+        NativeTimelineReadIntent::ExplicitUser => {
+            if observed_live_tail_event_id.is_some() {
+                return Err("v-timeline-read-observed-tail-unexpected");
+            }
+            Ok(match latest_event_id {
+                Some(latest_event_id) => LiveReadTargetPlan::Send(latest_event_id),
+                None => LiveReadTargetPlan::ClearUnreadFlag,
+            })
+        }
+    }
+}
+
+/// Advance the private receipt and fully-read marker through the SDK owner.
+///
+/// Automatic visibility requests are compare-and-target operations: the exact
+/// event painted by the client must still be the SDK-authoritative live tail.
+/// A newer arrival therefore produces a no-op, and the write can never jump to
+/// an event the client did not observe. Explicit user actions intentionally
+/// resolve the current tail at execution time.
+async fn mark_live_timeline_read(
+    timeline: &Timeline,
+    intent: NativeTimelineReadIntent,
+    observed_live_tail_event_id: Option<&str>,
+) -> Result<Option<OwnedEventId>, &'static str> {
     // Use the same SDK-owned latest-event resolver as Timeline::mark_as_read;
     // hand-walking visible items diverges for local echoes, focus, and threads.
-    let latest_event_id = timeline.latest_event_id().await;
-    let Some(event_id) = latest_event_id else {
-        // The SDK's own mark-as-read contract clears an explicit unread flag
-        // when a live timeline has no receipt-capable remote event.
-        timeline
-            .room()
-            .set_unread_flag(false)
-            .await
-            .map_err(|_| "v-timeline-clear-empty-unread-failed")?;
-        return Ok(false);
-    };
-    timeline
-        // Pinned matrix-sdk-ui 0.18 invariant: `Timeline::send_multiple_receipts`
-        // clears the SDK room's unread flag after a submitted marker update and
-        // also when receipt deduplication removes every unchanged marker. Keep
-        // this evidence in the adjacent regression test when upgrading the SDK.
-        .send_multiple_receipts(exact_read_receipts(event_id))
-        .await
-        .map_err(|_| "v-timeline-send-read-markers-failed")?;
-    Ok(true)
+    match plan_live_read_target(
+        timeline.latest_event_id().await,
+        intent,
+        observed_live_tail_event_id,
+    )? {
+        LiveReadTargetPlan::NoOp => Ok(None),
+        LiveReadTargetPlan::ClearUnreadFlag => {
+            // Explicit Mark Read must still clear a manually marked-unread room
+            // when the room has no receipt-capable remote event.
+            timeline
+                .room()
+                .set_unread_flag(false)
+                .await
+                .map_err(|_| "v-timeline-clear-empty-unread-failed")?;
+            Ok(None)
+        }
+        LiveReadTargetPlan::Send(event_id) => {
+            timeline
+                // Pinned matrix-sdk-ui 0.18 invariant: `Timeline::send_multiple_receipts`
+                // clears the SDK room's unread flag after a submitted marker update and
+                // also when receipt deduplication removes every unchanged marker. Keep
+                // this evidence in the adjacent regression test when upgrading the SDK.
+                .send_multiple_receipts(exact_read_receipts(event_id.clone()))
+                .await
+                .map_err(|_| "v-timeline-send-read-markers-failed")?;
+            Ok(Some(event_id))
+        }
+    }
 }
 
 fn remember_agent_approval_decision(
@@ -372,7 +428,12 @@ impl NativeTimelineOwner {
         };
         // Cancellation before a Matrix side effect releases this guard. Once
         // send begins, the guard moves into a detached task below.
-        let decision_guard = Arc::clone(&decision_lock).lock_owned().await;
+        let decision_guard = timeout(
+            AGENT_APPROVAL_SIDE_EFFECT_TIMEOUT,
+            Arc::clone(&decision_lock).lock_owned(),
+        )
+        .await
+        .map_err(|_| "agent-approval-decision-in-flight-timeout")?;
         if self
             .approval_decisions
             .lock()
@@ -391,6 +452,11 @@ impl NativeTimelineOwner {
             .client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-crypto.6-event-room-not-found")?;
+        let current_user_id = self
+            .client
+            .user_id()
+            .ok_or("agent-approval-current-user-missing")?
+            .to_string();
         // A focused encrypted event can arrive first as an undecrypted item
         // and become projectable on a later SDK update. Re-evaluate the exact
         // event for a short bounded window; never fall back to a room scan or
@@ -418,6 +484,8 @@ impl NativeTimelineOwner {
                     match plan_agent_approval(
                         &request.action_id,
                         &item.body,
+                        &item.sender,
+                        &current_user_id,
                         item.origin_server_ts,
                         agent_approval_now_ms()?,
                         item.reactions
@@ -461,11 +529,7 @@ impl NativeTimelineOwner {
         // Capture all fallible local state before the network side effect. Once
         // Matrix accepts the reaction, completed memory is recorded
         // synchronously before any further cancellation point.
-        let own_user_id = self
-            .client
-            .user_id()
-            .ok_or("agent-approval-current-user-missing")?
-            .to_string();
+        let own_user_id = current_user_id;
         let send_event_id = event_id.clone();
         let send_reaction_key = reaction_key.clone();
         let completed_decisions = Arc::clone(&self.approval_decisions);
@@ -489,7 +553,7 @@ impl NativeTimelineOwner {
                 .remember(decision_key);
             Ok::<String, &'static str>(sent.response.event_id.to_string())
         });
-        let sent_event_id = timeout(Duration::from_secs(5), send_task)
+        let sent_event_id = timeout(AGENT_APPROVAL_SIDE_EFFECT_TIMEOUT, send_task)
             .await
             .map_err(|_| "v-send.2-reaction-ensure-timeout")?
             .map_err(|_| "v-send.2-reaction-ensure-failed")??;
@@ -1043,21 +1107,26 @@ impl NativeTimelineOwner {
             .ok_or("v-timeline-reply-draft-room-not-found")?;
         let draft = load_reply_draft_preview(&room, &event_id, start_thread).await?;
         let room_id_string = room_id.to_string();
-        self.drafts
-            .lock()
-            .await
-            .set(room_id_string.clone(), draft.clone());
+        let draft = self.drafts.lock().await.set(room_id_string.clone(), draft);
         Ok(reply_draft_readback(room_id_string, "set", Some(draft)))
     }
 
     pub async fn clear_reply_draft(
         &self,
         room_id: &str,
+        expected_draft_revision: u64,
     ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
         let room_id_string = room_id.to_string();
-        self.drafts.lock().await.clear(&room_id_string);
-        Ok(reply_draft_readback(room_id_string, "cleared", None))
+        let superseding_draft = self
+            .drafts
+            .lock()
+            .await
+            .compare_and_clear(&room_id_string, expected_draft_revision);
+        Ok(match superseding_draft {
+            Some(draft) => reply_draft_readback(room_id_string, "set", Some(draft)),
+            None => reply_draft_readback(room_id_string, "cleared", None),
+        })
     }
 
     pub async fn get_reply_draft(
@@ -1532,21 +1601,38 @@ impl NativeTimelineRegistry {
         client: &Client,
         request: NativeTimelineReadStateRequest,
     ) -> Result<NativeTimelineReadStateReadback, &'static str> {
-        let timeline = self
+        let stream = self
             .view_streams
             .get(&request.stream_id)
-            .ok_or("v-timeline-view-not-open")?
-            .timeline
-            .clone();
-        let receipt_sent = match request.action {
-            NativeTimelineReadAction::MarkRead => Some(mark_live_timeline_read(&timeline).await?),
+            .ok_or("v-timeline-view-not-open")?;
+        if request.action == NativeTimelineReadAction::MarkRead
+            && stream.position != TimelineViewPosition::LiveBottom
+        {
+            return Err("v-timeline-read-requires-live-view");
+        }
+        let timeline = stream.timeline.clone();
+        let (receipt_sent, acknowledged_event_id) = match request.action {
+            NativeTimelineReadAction::MarkRead => {
+                let acknowledged_event_id = mark_live_timeline_read(
+                    &timeline,
+                    request.intent,
+                    request.observed_live_tail_event_id.as_deref(),
+                )
+                .await?;
+                (Some(acknowledged_event_id.is_some()), acknowledged_event_id)
+            }
             NativeTimelineReadAction::MarkUnread => {
+                if request.intent != NativeTimelineReadIntent::ExplicitUser
+                    || request.observed_live_tail_event_id.is_some()
+                {
+                    return Err("v-timeline-read-mark-unread-requires-explicit-intent");
+                }
                 timeline
                     .room()
                     .set_unread_flag(true)
                     .await
                     .map_err(|_| "v-timeline-view-mark-unread-failed")?;
-                None
+                (None, None)
             }
         };
         let snapshot = self
@@ -1555,6 +1641,7 @@ impl NativeTimelineRegistry {
         Ok(NativeTimelineReadStateReadback {
             action: request.action,
             receipt_sent,
+            acknowledged_event_id: acknowledged_event_id.map(|event_id| event_id.to_string()),
             snapshot,
         })
     }
@@ -1580,7 +1667,7 @@ impl NativeTimelineRegistry {
                     .ok_or("d0.3-timeline-open-failed")?
                     .timeline
                     .clone();
-                mark_live_timeline_read(&timeline)
+                mark_live_timeline_read(&timeline, NativeTimelineReadIntent::ExplicitUser, None)
                     .await
                     .map_err(|_| "v-rooms-room-read-state-mark-read-failed")?;
             }
@@ -2741,19 +2828,12 @@ fn normalize_edit_formatted_body(
     body: &str,
     formatted_body: Option<&str>,
 ) -> Result<Option<String>, &'static str> {
-    let Some(html) = formatted_body
+    let formatted_body = formatted_body
         .map(str::trim)
         .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-    if html.len() > 65_536 {
-        return Err("d0.4-send-formatted-body-too-large");
-    }
-    if !should_attach_formatted_body(body, Some(html)) {
-        return Ok(None);
-    }
-    Ok(Some(html.to_owned()))
+        .filter(|html| should_attach_formatted_body(body, Some(html)));
+    crate::app::send::validate_outbound_text_payload(body, formatted_body)?;
+    Ok(formatted_body.map(str::to_owned))
 }
 
 async fn load_forwardable_text(
@@ -2869,21 +2949,73 @@ async fn load_reply_draft_preview(
                 Some(Relation::Thread(thread)) => Some(thread.event_id.to_string()),
                 _ => None,
             };
-            let thread_root_event_id = if start_thread {
-                Some(event_id.to_string())
-            } else {
-                existing_thread_root
-            };
-            Ok(NativeComposerReplyDraft {
-                event_id: event_id.to_string(),
-                sender_id: original.sender.to_string(),
+            Ok(reply_draft_from_parts(
+                event_id,
+                original.sender.as_str(),
                 body,
                 formatted_body,
-                thread_root_event_id,
-            })
+                existing_thread_root,
+                start_thread,
+            ))
+        }
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::Sticker(sticker)) => {
+            let original = sticker
+                .as_original()
+                .ok_or("v-timeline-reply-draft-event-redacted")?;
+            Ok(sticker_reply_draft(
+                event_id,
+                original.sender.as_str(),
+                &original.content,
+                start_thread,
+            ))
         }
         _ => Err("v-timeline-reply-draft-unsupported-event"),
     }
+}
+
+fn reply_draft_from_parts(
+    event_id: &OwnedEventId,
+    sender_id: &str,
+    body: String,
+    formatted_body: Option<String>,
+    existing_thread_root: Option<String>,
+    start_thread: bool,
+) -> NativeComposerReplyDraft {
+    // "Reply in thread" on a child stays in that child's existing thread.
+    // Only a non-thread event can become a new thread root.
+    let thread_root_event_id = if start_thread {
+        existing_thread_root.or_else(|| Some(event_id.to_string()))
+    } else {
+        existing_thread_root
+    };
+    NativeComposerReplyDraft {
+        draft_revision: 0,
+        event_id: event_id.to_string(),
+        sender_id: sender_id.to_owned(),
+        body,
+        formatted_body,
+        thread_root_event_id,
+    }
+}
+
+fn sticker_reply_draft(
+    event_id: &OwnedEventId,
+    sender_id: &str,
+    content: &StickerEventContent,
+    start_thread: bool,
+) -> NativeComposerReplyDraft {
+    let existing_thread_root = match &content.relates_to {
+        Some(Relation::Thread(thread)) => Some(thread.event_id.to_string()),
+        _ => None,
+    };
+    reply_draft_from_parts(
+        event_id,
+        sender_id,
+        content.body.clone(),
+        None,
+        existing_thread_root,
+        start_thread,
+    )
 }
 
 fn validate_reaction_key(key: &str) -> Result<(), &'static str> {
@@ -3020,6 +3152,163 @@ fn safe_body_from_parts(redacted: bool, unable_to_decrypt: bool, body: Option<&s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn assert_thread_reply(
+        thread: &matrix_sdk::ruma::events::relation::Thread,
+        root: &str,
+        reply_to: &str,
+    ) {
+        assert_eq!(thread.event_id.as_str(), root);
+        assert_eq!(
+            thread
+                .in_reply_to
+                .as_ref()
+                .map(|reply| reply.event_id.as_str()),
+            Some(reply_to)
+        );
+        assert!(!thread.is_falling_back);
+    }
+
+    #[test]
+    fn reply_in_thread_on_a_child_preserves_root_across_text_and_poll_builders() {
+        let child = OwnedEventId::try_from("$child:example.org").unwrap();
+        let draft = reply_draft_from_parts(
+            &child,
+            "@alice:example.org",
+            "child message".to_owned(),
+            None,
+            Some("$root:example.org".to_owned()),
+            true,
+        );
+        assert_eq!(draft.event_id, "$child:example.org");
+        assert_eq!(
+            draft.thread_root_event_id.as_deref(),
+            Some("$root:example.org")
+        );
+
+        let reply_to = draft.event_id.parse().unwrap();
+        let thread_root = draft.thread_root_event_id.clone().unwrap().parse().unwrap();
+        let text = message_content(
+            "reply".to_owned(),
+            None,
+            None,
+            None,
+            false,
+            Some(reply_to),
+            Some(thread_root),
+        )
+        .unwrap();
+        match text.relates_to.as_ref() {
+            Some(Relation::Thread(thread)) => {
+                assert_thread_reply(thread, "$root:example.org", "$child:example.org")
+            }
+            relation => panic!("expected text thread reply, got {relation:?}"),
+        }
+
+        let normalized = normalize_poll("Continue?", &["Yes".into(), "No".into()], 1).unwrap();
+        let mut poll = poll_start_content(&normalized).unwrap();
+        apply_poll_start_relations(
+            &mut poll,
+            Some(draft.event_id.parse().unwrap()),
+            Some(draft.thread_root_event_id.unwrap().parse().unwrap()),
+        );
+        match poll.relates_to.as_ref() {
+            Some(matrix_sdk::ruma::events::room::message::RelationWithoutReplacement::Thread(
+                thread,
+            )) => assert_thread_reply(thread, "$root:example.org", "$child:example.org"),
+            relation => panic!("expected poll thread reply, got {relation:?}"),
+        }
+    }
+
+    #[test]
+    fn reply_draft_thread_root_resolution_distinguishes_new_and_existing_threads() {
+        let selected = OwnedEventId::try_from("$selected:example.org").unwrap();
+        assert_eq!(
+            reply_draft_from_parts(
+                &selected,
+                "@alice:example.org",
+                "message".into(),
+                None,
+                None,
+                true,
+            )
+            .thread_root_event_id
+            .as_deref(),
+            Some("$selected:example.org")
+        );
+        assert_eq!(
+            reply_draft_from_parts(
+                &selected,
+                "@alice:example.org",
+                "message".into(),
+                None,
+                Some("$root:example.org".into()),
+                false,
+            )
+            .thread_root_event_id
+            .as_deref(),
+            Some("$root:example.org")
+        );
+        assert!(reply_draft_from_parts(
+            &selected,
+            "@alice:example.org",
+            "message".into(),
+            None,
+            None,
+            false,
+        )
+        .thread_root_event_id
+        .is_none());
+    }
+
+    #[test]
+    fn sticker_reply_draft_has_an_accurate_preview_and_preserves_its_thread() {
+        let content: StickerEventContent = serde_json::from_value(serde_json::json!({
+            "body": "Waving fox",
+            "info": {},
+            "url": "mxc://example.org/sticker",
+            "m.relates_to": {
+                "rel_type": "m.thread",
+                "event_id": "$root:example.org",
+                "m.in_reply_to": { "event_id": "$parent:example.org" }
+            }
+        }))
+        .unwrap();
+        let event_id = OwnedEventId::try_from("$sticker:example.org").unwrap();
+        let draft = sticker_reply_draft(&event_id, "@alice:example.org", &content, true);
+        assert_eq!(draft.event_id, "$sticker:example.org");
+        assert_eq!(draft.sender_id, "@alice:example.org");
+        assert_eq!(draft.body, "Waving fox");
+        assert!(draft.formatted_body.is_none());
+        assert_eq!(
+            draft.thread_root_event_id.as_deref(),
+            Some("$root:example.org")
+        );
+    }
+
+    #[test]
+    fn timeline_edit_uses_the_shared_combined_outbound_byte_cap() {
+        let at_limit = "x".repeat(crate::app::send::MAX_OUTBOUND_TEXT_PAYLOAD_BYTES);
+        assert_eq!(normalize_edit_formatted_body(&at_limit, None), Ok(None));
+
+        let over_limit = "x".repeat(crate::app::send::MAX_OUTBOUND_TEXT_PAYLOAD_BYTES + 1);
+        assert_eq!(
+            normalize_edit_formatted_body(&over_limit, None),
+            Err("d0.4-send-text-payload-too-large")
+        );
+
+        let body = "fallback";
+        let html = "x".repeat(crate::app::send::MAX_OUTBOUND_TEXT_PAYLOAD_BYTES - body.len());
+        assert_eq!(
+            normalize_edit_formatted_body(body, Some(&html)),
+            Ok(Some(html))
+        );
+        let html = "x".repeat(crate::app::send::MAX_OUTBOUND_TEXT_PAYLOAD_BYTES - body.len() + 1);
+        assert_eq!(
+            normalize_edit_formatted_body(body, Some(&html)),
+            Err("d0.4-send-text-payload-too-large")
+        );
+    }
 
     #[test]
     fn reaction_redaction_requires_the_selected_annotation_event_id() {
@@ -3417,11 +3706,74 @@ mod tests {
     fn read_state_request_targets_the_opened_stream_and_action() {
         let request: NativeTimelineReadStateRequest = serde_json::from_value(serde_json::json!({
             "streamId": "live:!room:example.org",
-            "action": "mark_unread"
+            "action": "mark_unread",
+            "intent": "explicit_user"
         }))
         .unwrap();
         assert_eq!(request.stream_id, "live:!room:example.org");
         assert_eq!(request.action, NativeTimelineReadAction::MarkUnread);
+        assert_eq!(request.intent, NativeTimelineReadIntent::ExplicitUser);
+    }
+
+    #[test]
+    fn automatic_read_only_acknowledges_the_exact_current_live_tail() {
+        let observed = "$observed:example.org";
+        let observed_id = OwnedEventId::try_from(observed).unwrap();
+        assert_eq!(
+            plan_live_read_target(
+                Some(observed_id.clone()),
+                NativeTimelineReadIntent::AutomaticVisibility,
+                Some(observed)
+            ),
+            Ok(LiveReadTargetPlan::Send(observed_id))
+        );
+
+        let newer = OwnedEventId::try_from("$newer:example.org").unwrap();
+        assert_eq!(
+            plan_live_read_target(
+                Some(newer),
+                NativeTimelineReadIntent::AutomaticVisibility,
+                Some(observed)
+            ),
+            Ok(LiveReadTargetPlan::NoOp),
+            "a newer SDK tail must never be acknowledged by an older visibility observation"
+        );
+        assert_eq!(
+            plan_live_read_target(
+                None,
+                NativeTimelineReadIntent::AutomaticVisibility,
+                Some(observed)
+            ),
+            Ok(LiveReadTargetPlan::NoOp)
+        );
+    }
+
+    #[test]
+    fn read_intent_contract_rejects_ambiguous_targets() {
+        assert_eq!(
+            plan_live_read_target(None, NativeTimelineReadIntent::AutomaticVisibility, None),
+            Err("v-timeline-read-observed-tail-required")
+        );
+        assert_eq!(
+            plan_live_read_target(
+                None,
+                NativeTimelineReadIntent::AutomaticVisibility,
+                Some("not-an-event")
+            ),
+            Err("v-timeline-read-observed-tail-invalid")
+        );
+        assert_eq!(
+            plan_live_read_target(
+                None,
+                NativeTimelineReadIntent::ExplicitUser,
+                Some("$unexpected:example.org")
+            ),
+            Err("v-timeline-read-observed-tail-unexpected")
+        );
+        assert_eq!(
+            plan_live_read_target(None, NativeTimelineReadIntent::ExplicitUser, None),
+            Ok(LiveReadTargetPlan::ClearUnreadFlag)
+        );
     }
 
     #[test]
@@ -3429,7 +3781,9 @@ mod tests {
         let source = include_str!("live.rs");
         assert!(source.contains("pub async fn set_room_read_state"));
         assert!(source.contains("self.open(client, &room_id_string).await?"));
-        assert!(source.contains("mark_live_timeline_read(&timeline)"));
+        assert!(source.contains(
+            "mark_live_timeline_read(&timeline, NativeTimelineReadIntent::ExplicitUser, None)"
+        ));
         assert!(source.contains("fully_read_marker(Some(event_id.clone()))"));
         assert!(source.contains("private_read_receipt(Some(event_id))"));
         assert!(source.contains("set_unread_flag(false)"));
@@ -3456,7 +3810,7 @@ mod tests {
             .map(|offset| mark_read_start + offset)
             .unwrap();
         let mark_read_source = &source[mark_read_start..mark_read_end];
-        assert!(mark_read_source.contains("let latest_event_id = timeline.latest_event_id().await"));
+        assert!(mark_read_source.contains("timeline.latest_event_id().await"));
         assert!(!mark_read_source.contains("items.iter().rev().find_map"));
     }
 
@@ -3705,16 +4059,20 @@ mod tests {
         let mut registry = ApprovalDecisionRegistry::default();
         let first_key = ("!room:example.org".into(), "$first".into());
         let second_key = ("!room:example.org".into(), "$second".into());
+        let other_room_key = ("!other:example.org".into(), "$first".into());
 
         let first = registry.lock_for(&first_key);
         let duplicate = registry.lock_for(&first_key);
         let unrelated = registry.lock_for(&second_key);
+        let other_room = registry.lock_for(&other_room_key);
 
         assert!(Arc::ptr_eq(&first, &duplicate));
         assert!(!Arc::ptr_eq(&first, &unrelated));
+        assert!(!Arc::ptr_eq(&first, &other_room));
         registry.remember(first_key.clone());
         assert!(registry.is_completed(&first_key));
         assert!(!registry.is_completed(&second_key));
+        assert!(!registry.is_completed(&other_room_key));
     }
 
     #[test]

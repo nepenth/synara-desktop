@@ -2,9 +2,13 @@
 //!
 //! Shells supply the emit sink (desktop Tauri event / later iOS UniFFI).
 
-use std::sync::{Arc, Mutex};
+use std::{
+    future::Future,
+    sync::{Arc, Mutex, MutexGuard},
+    time::{Duration, Instant},
+};
 
-use matrix_sdk::event_handler::EventHandlerDropGuard;
+use matrix_sdk::event_handler::{EventHandlerDropGuard, RawEvent};
 use matrix_sdk::ruma::events::{AnyGlobalAccountDataEvent, AnySyncStateEvent};
 use matrix_sdk::{
     deserialized_responses::RawAnySyncOrStrippedState,
@@ -18,6 +22,7 @@ use matrix_sdk::{
 use serde::Serialize;
 use serde_json::value::to_raw_value;
 use serde_json::Value as JsonValue;
+use tokio::sync::Mutex as AsyncMutex;
 
 use super::{
     is_image_pack_account_data_type, is_image_pack_room_state_type, pack_from_account_data,
@@ -25,9 +30,138 @@ use super::{
     set_user_image_pack_content_guard, EmoteRoomsContent, NativeGlobalImagePacksSnapshot,
     NativeImagePack, NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
     NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
-    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem, EMOTE_ROOMS_EVENT_TYPE,
-    ROOM_EMOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem, SynaraRoomNotesContent,
+    EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE, ROOM_NOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
 };
+
+const ROOM_NOTES_PENDING_PROJECTION_TTL: Duration = Duration::from_secs(30);
+
+#[derive(Default)]
+struct RoomNotesProjectionState {
+    mutation_in_flight: bool,
+    pending: Option<PendingRoomNotesProjection>,
+    synchronized: Option<SynchronizedRoomNotesProjection>,
+}
+
+struct PendingRoomNotesProjection {
+    content: SynaraRoomNotesContent,
+    stored_at: Instant,
+}
+
+struct SynchronizedRoomNotesProjection {
+    content: Result<SynaraRoomNotesContent, &'static str>,
+    observed_at: Instant,
+}
+
+impl RoomNotesProjectionState {
+    fn begin_mutation(&mut self) {
+        self.mutation_in_flight = true;
+    }
+
+    fn finish_mutation(&mut self, content: Option<SynaraRoomNotesContent>, now: Instant) {
+        self.mutation_in_flight = false;
+        if let Some(content) = content {
+            self.pending = Some(PendingRoomNotesProjection {
+                content,
+                stored_at: now,
+            });
+        }
+    }
+
+    fn observe_synchronized_event(
+        &mut self,
+        content: Result<SynaraRoomNotesContent, &'static str>,
+        now: Instant,
+    ) {
+        // A sync delivered while the serialized RMW is still running may
+        // describe server state from before the successful PUT. The local
+        // write completes later and therefore remains the visible projection.
+        if self.mutation_in_flight {
+            return;
+        }
+
+        // While a successful local write is pending acknowledgement, a
+        // non-matching account-data event is ambiguous: it may be a legitimate
+        // later writer, or a delayed pre-PUT /sync response. Do not cache that
+        // event beyond the local overlay. Once the bounded pending window
+        // expires, `project` returns the SDK's current synchronized snapshot,
+        // which is the only source that can disambiguate the winner.
+        if let Some(pending) = self.pending.as_ref() {
+            let acknowledges_pending = content.as_ref().is_ok_and(|next| next == &pending.content);
+            if !acknowledges_pending {
+                return;
+            }
+        }
+
+        self.synchronized = Some(SynchronizedRoomNotesProjection {
+            content,
+            observed_at: now,
+        });
+        if self.pending.is_some() {
+            self.pending = None;
+        }
+    }
+
+    fn project(
+        &mut self,
+        synchronized: Result<SynaraRoomNotesContent, &'static str>,
+        now: Instant,
+    ) -> Result<SynaraRoomNotesContent, &'static str> {
+        if let Some(pending) = self.pending.as_ref() {
+            if now.saturating_duration_since(pending.stored_at) < ROOM_NOTES_PENDING_PROJECTION_TTL
+            {
+                return Ok(pending.content.clone());
+            }
+            self.pending = None;
+        }
+
+        if let Some(observed) = self.synchronized.as_ref() {
+            if now.saturating_duration_since(observed.observed_at)
+                < ROOM_NOTES_PENDING_PROJECTION_TTL
+            {
+                return observed.content.clone();
+            }
+            self.synchronized = None;
+        }
+        synchronized
+    }
+}
+
+fn lock_room_notes_projection(
+    state: &Mutex<RoomNotesProjectionState>,
+) -> MutexGuard<'_, RoomNotesProjectionState> {
+    state
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+struct RoomNotesMutationProjectionGuard {
+    state: Arc<Mutex<RoomNotesProjectionState>>,
+    finished: bool,
+}
+
+impl RoomNotesMutationProjectionGuard {
+    fn begin(state: Arc<Mutex<RoomNotesProjectionState>>) -> Self {
+        lock_room_notes_projection(&state).begin_mutation();
+        Self {
+            state,
+            finished: false,
+        }
+    }
+
+    fn finish(mut self, content: Option<SynaraRoomNotesContent>) {
+        lock_room_notes_projection(&self.state).finish_mutation(content, Instant::now());
+        self.finished = true;
+    }
+}
+
+impl Drop for RoomNotesMutationProjectionGuard {
+    fn drop(&mut self) {
+        if !self.finished {
+            lock_room_notes_projection(&self.state).mutation_in_flight = false;
+        }
+    }
+}
 
 /// Shell-supplied sink for image-pack wakeups.
 pub type ImagePackUpdateEmit = Arc<dyn Fn(NativeImagePackUpdateSignal) + Send + Sync>;
@@ -247,6 +381,13 @@ pub struct NativeImagePackOwner {
     client: Client,
     session_generation: u64,
     pending_threepid: Mutex<Option<crate::app::user_profile::PendingThreepid>>,
+    // Matrix global account data has no conditional-write primitive. Keep the
+    // v1 notes RMW route single-writer within this live Core owner.
+    room_notes_mutation: AsyncMutex<()>,
+    // A successful PUT is not inserted into matrix-sdk's synchronized store.
+    // Keep its result visible until a subsequent notes /sync event supersedes
+    // it (or a short fail-safe expiry prevents an unbounded local overlay).
+    room_notes_projection: Arc<Mutex<RoomNotesProjectionState>>,
     _account_data: EventHandlerDropGuard,
     _state: EventHandlerDropGuard,
 }
@@ -261,16 +402,25 @@ impl NativeImagePackOwner {
             .user_id()
             .ok_or("v-send.r-pack-read-subscribe-no-user")?;
 
+        let room_notes_projection = Arc::new(Mutex::new(RoomNotesProjectionState::default()));
+        let account_projection = Arc::clone(&room_notes_projection);
         let emit_account = emit.clone();
-        let account_handle = client.add_event_handler(move |event: AnyGlobalAccountDataEvent| {
-            let emit = emit_account.clone();
-            async move {
-                let event_type = event.event_type().to_string();
-                if is_image_pack_account_data_type(&event_type) {
-                    emit(NativeImagePackUpdateSignal { session_generation });
+        let account_handle =
+            client.add_event_handler(move |event: AnyGlobalAccountDataEvent, raw: RawEvent| {
+                let emit = emit_account.clone();
+                let projection = Arc::clone(&account_projection);
+                async move {
+                    let event_type = event.event_type().to_string();
+                    if event_type == ROOM_NOTES_EVENT_TYPE {
+                        let content = super::room_notes_live::parse_room_notes_sync_event(&raw);
+                        lock_room_notes_projection(&projection)
+                            .observe_synchronized_event(content, Instant::now());
+                    }
+                    if is_image_pack_account_data_type(&event_type) {
+                        emit(NativeImagePackUpdateSignal { session_generation });
+                    }
                 }
-            }
-        });
+            });
 
         let emit_state = emit;
         let state_handle = client.add_event_handler(move |event: AnySyncStateEvent| {
@@ -287,6 +437,8 @@ impl NativeImagePackOwner {
             client: client.clone(),
             session_generation,
             pending_threepid: Mutex::new(None),
+            room_notes_mutation: AsyncMutex::new(()),
+            room_notes_projection,
             _account_data: client.event_handler_drop_guard(account_handle),
             _state: client.event_handler_drop_guard(state_handle),
         })
@@ -386,14 +538,47 @@ impl NativeImagePackOwner {
     }
 
     pub async fn room_notes_snapshot(&self) -> Result<NativeRoomNotesSnapshot, &'static str> {
-        super::snapshot_room_notes(&self.client, self.session_generation).await
+        let synchronized = super::snapshot_room_notes(&self.client, self.session_generation)
+            .await
+            .map(|snapshot| snapshot.content);
+        let content = lock_room_notes_projection(&self.room_notes_projection)
+            .project(synchronized, Instant::now())?;
+        Ok(NativeRoomNotesSnapshot {
+            session_generation: self.session_generation,
+            content,
+        })
+    }
+
+    async fn project_room_notes_mutation<F>(
+        &self,
+        mutation: F,
+    ) -> Result<NativeRoomNotesSnapshot, &'static str>
+    where
+        F: Future<Output = Result<NativeRoomNotesSnapshot, &'static str>>,
+    {
+        let _mutation_guard = self.room_notes_mutation.lock().await;
+        let projection_guard =
+            RoomNotesMutationProjectionGuard::begin(Arc::clone(&self.room_notes_projection));
+        let result = mutation.await;
+        projection_guard.finish(
+            result
+                .as_ref()
+                .ok()
+                .map(|snapshot| snapshot.content.clone()),
+        );
+        result
     }
 
     pub async fn room_notes_upsert(
         &self,
         item: SynaraRoomNoteItem,
     ) -> Result<NativeRoomNotesSnapshot, &'static str> {
-        super::upsert_room_note_item(&self.client, self.session_generation, item).await
+        self.project_room_notes_mutation(super::upsert_room_note_item(
+            &self.client,
+            self.session_generation,
+            item,
+        ))
+        .await
     }
 
     pub async fn room_notes_delete(
@@ -401,8 +586,13 @@ impl NativeImagePackOwner {
         room_id: String,
         item_id: String,
     ) -> Result<NativeRoomNotesSnapshot, &'static str> {
-        super::delete_room_note_item_live(&self.client, self.session_generation, room_id, item_id)
-            .await
+        self.project_room_notes_mutation(super::delete_room_note_item_live(
+            &self.client,
+            self.session_generation,
+            room_id,
+            item_id,
+        ))
+        .await
     }
 
     pub async fn room_notes_complete_todo(
@@ -411,14 +601,14 @@ impl NativeImagePackOwner {
         item_id: String,
         completed: bool,
     ) -> Result<NativeRoomNotesSnapshot, &'static str> {
-        super::complete_room_todo_item_live(
+        self.project_room_notes_mutation(super::complete_room_todo_item_live(
             &self.client,
             self.session_generation,
             room_id,
             item_id,
             completed,
             super::room_notes_now_ms(),
-        )
+        ))
         .await
     }
 
@@ -428,14 +618,14 @@ impl NativeImagePackOwner {
         item_id: String,
         direction: RoomNoteMoveDirection,
     ) -> Result<NativeRoomNotesSnapshot, &'static str> {
-        super::move_room_todo_item_live(
+        self.project_room_notes_mutation(super::move_room_todo_item_live(
             &self.client,
             self.session_generation,
             room_id,
             item_id,
             direction,
             super::room_notes_now_ms(),
-        )
+        ))
         .await
     }
 
@@ -681,11 +871,182 @@ impl NativeImagePackOwner {
 mod tests {
     use super::*;
 
+    fn notes_content(marker: &str) -> SynaraRoomNotesContent {
+        let mut content = SynaraRoomNotesContent::default();
+        content.rooms.insert(
+            format!("!{marker}:example.org"),
+            super::super::SynaraRoomNotesRoom::default(),
+        );
+        content
+    }
+
     #[test]
     fn invalid_room_id_is_privacy_safe_diagnostic() {
         let err = parse_room_id("not-a-room").unwrap_err();
         assert_eq!(err, "v-send.r-pack-read-invalid-room");
         assert!(!err.contains('@'));
         assert!(!err.contains('!'));
+    }
+
+    #[test]
+    fn pending_notes_write_masks_the_pre_sync_cached_snapshot() {
+        let now = Instant::now();
+        let local = notes_content("local");
+        let stale = notes_content("stale");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.finish_mutation(Some(local.clone()), now);
+
+        assert_eq!(
+            state.project(Ok(stale), now + Duration::from_secs(1)),
+            Ok(local)
+        );
+    }
+
+    #[test]
+    fn matching_post_write_sync_acknowledges_the_pending_projection() {
+        let now = Instant::now();
+        let local = notes_content("local");
+        let stale_cache = notes_content("stale-cache");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.finish_mutation(Some(local.clone()), now);
+        state.observe_synchronized_event(Ok(local.clone()), now);
+
+        assert_eq!(
+            state.project(Ok(stale_cache), now + Duration::from_secs(1)),
+            Ok(local)
+        );
+        assert!(state.pending.is_none());
+    }
+
+    #[test]
+    fn differing_external_sync_is_bounded_before_the_lww_winner_surfaces() {
+        let now = Instant::now();
+        let local = notes_content("local");
+        let external = notes_content("external");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.finish_mutation(Some(local.clone()), now);
+        state.observe_synchronized_event(Ok(external.clone()), now);
+
+        assert_eq!(
+            state.project(Ok(external.clone()), now + Duration::from_secs(1)),
+            Ok(local)
+        );
+        assert_eq!(
+            state.project(
+                Ok(external.clone()),
+                now + ROOM_NOTES_PENDING_PROJECTION_TTL
+            ),
+            Ok(external)
+        );
+    }
+
+    #[test]
+    fn sync_during_mutation_cannot_reinstate_pre_write_content() {
+        let now = Instant::now();
+        let local = notes_content("local");
+        let stale = notes_content("stale");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.observe_synchronized_event(Ok(stale.clone()), now);
+        state.finish_mutation(Some(local.clone()), now);
+
+        assert_eq!(
+            state.project(Ok(stale), now + Duration::from_secs(1)),
+            Ok(local)
+        );
+    }
+
+    #[test]
+    fn late_pre_put_sync_cannot_erase_a_successful_local_write() {
+        let now = Instant::now();
+        let local = notes_content("local");
+        let stale = notes_content("pre-put");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.finish_mutation(Some(local.clone()), now);
+        // This callback can be delivered after the PUT even though its /sync
+        // response was already in flight and still carries pre-write state.
+        state.observe_synchronized_event(Ok(stale.clone()), now);
+
+        assert_eq!(
+            state.project(Ok(stale), now + Duration::from_secs(1)),
+            Ok(local)
+        );
+        assert!(state.pending.is_some());
+    }
+
+    #[test]
+    fn delayed_pre_put_sync_cannot_outlive_the_pending_write_overlay() {
+        let now = Instant::now();
+        let local = notes_content("local");
+        let stale = notes_content("pre-put");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.finish_mutation(Some(local.clone()), now);
+        state.observe_synchronized_event(Ok(stale), now + Duration::from_secs(25));
+
+        // At the pending TTL the SDK store has caught up to the successful
+        // PUT. A delayed pre-PUT callback must not receive a fresh 30-second
+        // lifetime of its own and hide that authoritative snapshot.
+        assert_eq!(
+            state.project(Ok(local.clone()), now + ROOM_NOTES_PENDING_PROJECTION_TTL),
+            Ok(local)
+        );
+        assert!(state.pending.is_none());
+        assert!(state.synchronized.is_none());
+    }
+
+    #[test]
+    fn pending_notes_projection_is_bounded_and_restores_fail_closed_reads() {
+        let now = Instant::now();
+        let mut state = RoomNotesProjectionState::default();
+
+        state.begin_mutation();
+        state.finish_mutation(Some(notes_content("local")), now);
+
+        assert_eq!(
+            state.project(
+                Err("v-timeline-room-notes-unsupported-version"),
+                now + ROOM_NOTES_PENDING_PROJECTION_TTL
+            ),
+            Err("v-timeline-room-notes-unsupported-version")
+        );
+        assert!(state.pending.is_none());
+    }
+
+    #[test]
+    fn preexisting_projection_cannot_hide_a_sync_delivered_during_mutation_after_ttl() {
+        let now = Instant::now();
+        let old = notes_content("old");
+        let local = notes_content("local");
+        let external = notes_content("external");
+        let mut state = RoomNotesProjectionState::default();
+
+        state.observe_synchronized_event(Ok(old), now);
+        state.begin_mutation();
+        state.observe_synchronized_event(Ok(external.clone()), now + Duration::from_secs(1));
+        state.finish_mutation(Some(local.clone()), now + Duration::from_secs(2));
+
+        assert_eq!(
+            state.project(Ok(external.clone()), now + Duration::from_secs(3)),
+            Ok(local)
+        );
+        assert_eq!(
+            state.project(Ok(external.clone()), now + Duration::from_secs(32)),
+            Ok(external.clone())
+        );
+        assert_eq!(
+            state.project(Ok(external.clone()), now + Duration::from_secs(33)),
+            Ok(external)
+        );
     }
 }

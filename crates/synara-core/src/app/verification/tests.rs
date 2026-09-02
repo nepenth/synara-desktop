@@ -246,9 +246,13 @@ async fn live_direct_peer_sas_transport_completes_through_product_owner_and_sync
         std::env::var("SYNARA_LIVE_HOMESERVER").expect("SYNARA_LIVE_HOMESERVER is required");
     let username = std::env::var("SYNARA_LIVE_USERNAME").expect("SYNARA_LIVE_USERNAME is required");
     let password = std::env::var("SYNARA_LIVE_PASSWORD").expect("SYNARA_LIVE_PASSWORD is required");
+    let store_passphrase = std::env::var("SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE")
+        .expect("SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE is required");
     let proof_root = live_proof_root();
-    let initiator = live_proof_client(&homeserver, proof_root.join("initiator")).await;
-    let responder = live_proof_client(&homeserver, proof_root.join("responder")).await;
+    let initiator =
+        live_proof_client(&homeserver, proof_root.join("initiator"), &store_passphrase).await;
+    let responder =
+        live_proof_client(&homeserver, proof_root.join("responder"), &store_passphrase).await;
 
     initiator
         .matrix_auth()
@@ -401,6 +405,8 @@ async fn live_own_device_verification_is_authoritative_and_durable() {
         std::env::var("SYNARA_LIVE_HOMESERVER").expect("SYNARA_LIVE_HOMESERVER is required");
     let username = std::env::var("SYNARA_LIVE_USERNAME").expect("SYNARA_LIVE_USERNAME is required");
     let password = std::env::var("SYNARA_LIVE_PASSWORD").expect("SYNARA_LIVE_PASSWORD is required");
+    let store_passphrase = std::env::var("SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE")
+        .expect("SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE is required");
     let authority_root = live_authority_root(&homeserver, &username);
     let authority_store = authority_root.join("responder-store");
     let authority_device_file = authority_root.join("responder-device-id");
@@ -413,9 +419,9 @@ async fn live_own_device_verification_is_authoritative_and_durable() {
         !authority_store_preexisted || persisted_device_id.is_some(),
         "persisted authority store is missing its non-secret device metadata"
     );
-    std::fs::create_dir_all(&authority_root).expect("create durable authority proof root");
+    create_private_proof_directory(&authority_root);
 
-    let responder = live_proof_client(&homeserver, authority_store).await;
+    let responder = live_proof_client(&homeserver, authority_store, &store_passphrase).await;
     let responder_login = responder
         .matrix_auth()
         .login_username(&username, &password)
@@ -434,6 +440,7 @@ async fn live_own_device_verification_is_authoritative_and_durable() {
         .to_string();
     std::fs::write(&authority_device_file, &responder_device_id)
         .expect("persist responder device metadata");
+    set_private_file_permissions(&authority_device_file);
 
     let responder_owner = NativeVerificationOwner::new(&responder, 1);
     let responder_sync = build_sync_service(&responder, 1, SyncServiceConfig::default())
@@ -445,7 +452,8 @@ async fn live_own_device_verification_is_authoritative_and_durable() {
 
     let initiator_root = live_proof_root();
     let initiator_store = initiator_root.join("initiator-store");
-    let initiator = live_proof_client(&homeserver, initiator_store.clone()).await;
+    let initiator =
+        live_proof_client(&homeserver, initiator_store.clone(), &store_passphrase).await;
     initiator
         .matrix_auth()
         .login_username(&username, &password)
@@ -540,7 +548,7 @@ async fn live_own_device_verification_is_authoritative_and_durable() {
 
     // Rebuild the same product crypto store and restore the exact Matrix
     // session. This is the durable owner readback, independent of the flow.
-    let rebuilt = live_proof_client(&homeserver, initiator_store).await;
+    let rebuilt = live_proof_client(&homeserver, initiator_store, &store_passphrase).await;
     rebuilt
         .matrix_auth()
         .restore_session(initiator_session, RoomLoadSettings::default())
@@ -718,13 +726,106 @@ async fn wait_for_live_device(client: &Client, device_id: &str) {
     }
 }
 
-async fn live_proof_client(homeserver: &str, store_path: PathBuf) -> Client {
-    Client::builder()
+async fn live_proof_client(
+    homeserver: &str,
+    store_path: PathBuf,
+    store_passphrase: &str,
+) -> Client {
+    assert!(
+        is_nonblank_proof_store_passphrase(store_passphrase),
+        "SYNARA_LIVE_VERIFICATION_STORE_PASSPHRASE must not be empty or whitespace"
+    );
+    assert!(
+        !is_legacy_unencrypted_proof_store(&store_path),
+        "legacy unencrypted verification proof store detected; refusing to open or modify it. Preserve the store and use the documented authority-recovery/rotation procedure before opting into encrypted proof storage"
+    );
+    create_private_proof_directory(&store_path);
+    // Declare the encryption route before the SDK can create any SQLite
+    // files. If the process stops during `build`, the next run must retry the
+    // encrypted open instead of misclassifying that partially-created store
+    // as legacy plaintext. The marker is not trusted as proof that opening
+    // succeeded: the SDK still opens every store with this passphrase and is
+    // the authority for wrong-passphrase/plaintext failures.
+    write_encrypted_proof_store_marker(&store_path);
+    let client = Client::builder()
         .homeserver_url(homeserver)
-        .sqlite_store(store_path, None)
+        .sqlite_store(&store_path, Some(store_passphrase))
         .build()
         .await
-        .expect("build live proof client")
+        .expect("build encrypted live proof client");
+    client
+}
+
+const ENCRYPTED_PROOF_STORE_MARKER: &str = ".synara-encrypted-proof-store-v1";
+const MATRIX_SQLITE_STORE_FILES: [&str; 4] = [
+    "matrix-sdk-state.sqlite3",
+    "matrix-sdk-crypto.sqlite3",
+    "matrix-sdk-event-cache.sqlite3",
+    "matrix-sdk-media.sqlite3",
+];
+
+fn is_nonblank_proof_store_passphrase(passphrase: &str) -> bool {
+    passphrase
+        .chars()
+        .any(|character| !character.is_whitespace())
+}
+
+fn is_legacy_unencrypted_proof_store(path: &std::path::Path) -> bool {
+    is_legacy_unencrypted_proof_store_state(
+        path.join(ENCRYPTED_PROOF_STORE_MARKER).is_file(),
+        MATRIX_SQLITE_STORE_FILES
+            .iter()
+            .any(|filename| path.join(filename).exists()),
+    )
+}
+
+fn is_legacy_unencrypted_proof_store_state(
+    encrypted_marker_exists: bool,
+    sqlite_store_exists: bool,
+) -> bool {
+    sqlite_store_exists && !encrypted_marker_exists
+}
+
+fn write_encrypted_proof_store_marker(path: &std::path::Path) {
+    let marker = path.join(ENCRYPTED_PROOF_STORE_MARKER);
+    std::fs::write(&marker, b"encrypted-proof-store-v1\n")
+        .expect("write encrypted proof-store marker");
+    set_private_file_permissions(&marker);
+}
+
+#[test]
+fn legacy_verification_store_detection_is_non_destructive_and_fail_closed() {
+    assert!(is_legacy_unencrypted_proof_store_state(false, true));
+    assert!(!is_legacy_unencrypted_proof_store_state(true, true));
+    assert!(!is_legacy_unencrypted_proof_store_state(false, false));
+}
+
+#[test]
+fn verification_store_passphrase_rejects_blank_values() {
+    assert!(!is_nonblank_proof_store_passphrase(""));
+    assert!(!is_nonblank_proof_store_passphrase(" \t\n"));
+    assert!(is_nonblank_proof_store_passphrase(
+        "operator-supplied secret"
+    ));
+}
+
+fn create_private_proof_directory(path: &std::path::Path) {
+    std::fs::create_dir_all(path).expect("create private verification proof directory");
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700))
+            .expect("restrict verification proof directory permissions");
+    }
+}
+
+fn set_private_file_permissions(path: &std::path::Path) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600))
+            .expect("restrict verification proof metadata permissions");
+    }
 }
 
 fn live_proof_root() -> PathBuf {

@@ -17,6 +17,7 @@ struct RoomSummary: Identifiable, Equatable {
     let lastMessagePreview: String
     let unreadCount: Int
     let hasHighlight: Bool
+    let isMarkedUnread: Bool
     let kind: RoomKind
     let membership: Membership
     let lastActivityAt: Date
@@ -34,6 +35,7 @@ struct RoomSummary: Identifiable, Equatable {
         lastMessagePreview: String,
         unreadCount: Int,
         hasHighlight: Bool,
+        isMarkedUnread: Bool = false,
         kind: RoomKind,
         membership: Membership,
         lastActivityAt: Date,
@@ -50,6 +52,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.lastMessagePreview = lastMessagePreview
         self.unreadCount = unreadCount
         self.hasHighlight = hasHighlight
+        self.isMarkedUnread = isMarkedUnread
         self.kind = kind
         self.membership = membership
         self.lastActivityAt = lastActivityAt
@@ -64,6 +67,14 @@ struct RoomSummary: Identifiable, Equatable {
 
     var isAgentRoom: Bool {
         hasAgentActivity || pendingAgentApprovals.isEmpty == false || latestAgentCard != nil
+    }
+
+    var hasUnreadActivity: Bool {
+        unreadCount > 0 || hasHighlight || isMarkedUnread
+    }
+
+    var unreadBadgeCount: Int {
+        isMarkedUnread ? max(1, unreadCount) : unreadCount
     }
 
     var requiresAgentApproval: Bool {
@@ -510,6 +521,9 @@ enum RoomListFixtures {
             if lhs.hasHighlight != rhs.hasHighlight {
                 return lhs.hasHighlight
             }
+            if lhs.hasUnreadActivity != rhs.hasUnreadActivity {
+                return lhs.hasUnreadActivity
+            }
             if lhs.unreadCount != rhs.unreadCount {
                 return lhs.unreadCount > rhs.unreadCount
             }
@@ -583,7 +597,9 @@ enum NotificationBadgeSummary {
             if room.hasHighlight {
                 return BadgeUnreadSource(total: room.unreadCount, highlight: 1)
             }
-            return BadgeUnreadSource(total: room.unreadCount)
+            return BadgeUnreadSource(
+                total: room.unreadBadgeCount
+            )
         }
     }
 
@@ -693,7 +709,7 @@ struct NotificationsInboxSections: Equatable {
     }
 
     static func notificationRooms(from rooms: [RoomSummary]) -> [RoomSummary] {
-        rooms.filter { $0.unreadCount > 0 || $0.hasHighlight || $0.membership == .invited }
+        rooms.filter { $0.hasUnreadActivity || $0.membership == .invited }
     }
 
     static func make(from rooms: [RoomSummary]) -> NotificationsInboxSections {
@@ -705,7 +721,7 @@ struct NotificationsInboxSections: Equatable {
             guard inviteIDs.contains(room.id) == false, mentionIDs.contains(room.id) == false else {
                 return false
             }
-            return room.unreadCount > 0
+            return room.unreadCount > 0 || room.isMarkedUnread
         }
 
         return NotificationsInboxSections(
@@ -741,7 +757,7 @@ enum RoomListSpaceGrouping {
 
         for room in rooms where room.membership != .invited {
             for space in room.parentSpaces {
-                counts[space.id, default: 0] += room.unreadCount
+                counts[space.id, default: 0] += room.unreadBadgeCount
             }
         }
 
@@ -801,7 +817,7 @@ enum RoomListScopeFilter {
         case .all:
             return rooms
         case .unread:
-            return rooms.filter { $0.unreadCount > 0 }
+            return rooms.filter(\.hasUnreadActivity)
         case .mentions:
             return rooms.filter(\.hasHighlight)
         case .agents:
@@ -889,7 +905,7 @@ final class PlaceholderRoomListService: RoomListServicing {
     }
 
     func hasUnreadMessages(roomID: String) -> Bool {
-        cachedRooms.first { $0.id == roomID }?.unreadCount ?? 0 > 0
+        cachedRooms.first { $0.id == roomID }?.hasUnreadActivity ?? false
     }
 
     func clearCache() {
@@ -948,7 +964,7 @@ final class MockRoomListService: RoomListServicing {
         guard case .loaded(let rooms) = state else {
             return false
         }
-        return rooms.first { $0.id == roomID }?.unreadCount ?? 0 > 0
+        return rooms.first { $0.id == roomID }?.hasUnreadActivity ?? false
     }
 
     func roomUpdates() -> AsyncStream<RoomListState> {
@@ -1024,6 +1040,7 @@ final class MockInviteTransitionService: RoomListServicing, RoomMembershipServic
                 lastMessagePreview: "Joined room",
                 unreadCount: room.unreadCount,
                 hasHighlight: room.hasHighlight,
+                isMarkedUnread: room.isMarkedUnread,
                 kind: room.kind,
                 membership: .joined,
                 lastActivityAt: Date(),

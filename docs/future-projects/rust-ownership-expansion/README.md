@@ -103,10 +103,11 @@ memo may overturn one only with current source and test evidence.
 | ROE-11 | Metadata only                                | Is shared cache eligibility or integrity metadata missing from the native handle owner? Paths and bytes remain on ADR 0005 channels.                                                              |
 | ROE-12 | Shared rules and fixtures, not one sanitizer | Which protocol bounds are truly identical? DOM/React and Swift attributed-text output sanitization remains platform-specific.                                                                     |
 
-When the current shared-Core goal graph permits new residual work, the likely
-investigation order is ROE-08, then the ROE-04/12 fixture corpus, then the
-ROE-05 visibility contract. This is a research priority, not a new phase queue.
-All other workstreams should begin as census-and-close exercises.
+The 2026-09-01 census completed the initial ownership research. Its promotion
+review separated closed ownership conclusions from unresolved defects and
+proof. The current risk order and acceptance evidence are maintained in
+[program/ACTIONS.md](program/ACTIONS.md); that register is not a new phase
+queue or implementation authorization.
 
 ## Memo-first workflow
 
@@ -125,6 +126,15 @@ All other workstreams should begin as census-and-close exercises.
 
 Research PRs are docs-only under `docs/future-projects/**`. They must not add
 Core commands, DTOs, UniFFI APIs, feature flags, or product code.
+
+## Completed research run
+
+The docs-only census ran on `feature/rust-ownership-residual-census` on
+2026-09-01. Its durable outcome, review provenance, and unresolved action
+register are recorded under [`program/`](program/README.md). The time-bound
+operating protocol is historical and does not authorize new work. The branch,
+these documents, and accepted memo verdicts do not override ADRs or the goal
+graph and must not be treated as authorization to change product code.
 
 ## Message-format decision ladder
 

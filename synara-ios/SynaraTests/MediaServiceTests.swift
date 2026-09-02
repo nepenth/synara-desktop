@@ -87,6 +87,7 @@ final class MediaServiceTests: XCTestCase {
         XCTAssertEqual(resource.caption, "A cat")
         XCTAssertEqual(resource.formattedCaption, "<strong>A cat</strong>")
         XCTAssertEqual(item.replyToEventID, "$reply:matrix.org")
+        XCTAssertEqual(item.threadRootEventID, "$root:matrix.org")
         XCTAssertFalse(resource.safeDescription.contains("/private/tmp"))
     }
 

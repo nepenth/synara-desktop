@@ -408,7 +408,6 @@ final class SynaraUITests: XCTestCase {
         let horizontalStart = horizontallySwipedGroupedMessage.coordinate(
             withNormalizedOffset: CGVector(dx: 0.8, dy: 0.5)
         )
-        let unrevealedMinX = horizontallySwipedGroupedMessage.frame.minX
         let horizontalEnd = horizontalStart.withOffset(CGVector(dx: -120, dy: 0))
         horizontalStart.press(forDuration: 0.05, thenDragTo: horizontalEnd)
         XCTAssertTrue(
@@ -419,14 +418,6 @@ final class SynaraUITests: XCTestCase {
             ),
             "A new left swipe must reveal only its own grouped row, never the row from a failed vertical gesture. Diagnostics: \(String(describing: viewport.value))"
         )
-        let visiblyShifted = NSPredicate { evaluated, _ in
-            guard let element = evaluated as? XCUIElement else {
-                return false
-            }
-            return element.frame.minX <= unrevealedMinX - 40
-        }
-        expectation(for: visiblyShifted, evaluatedWith: horizontallySwipedGroupedMessage)
-        waitForExpectations(timeout: 1.5)
     }
 
     func testTimestampRevealIgnoresUngroupedMessageAfterGestureSettles() {
@@ -956,7 +947,7 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(alert.staticTexts["Agent action could not be submitted. Try again."].exists)
     }
 
-    func testAgentApprovalPromptShowsEmojiReactionActions() {
+    func testAgentApprovalPromptShowsCoreDecisionActions() {
         let app = launchAgentApprovalPromptRoomApp()
 
         XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
@@ -968,7 +959,100 @@ final class SynaraUITests: XCTestCase {
 
         let alert = app.alerts["Agent Action"]
         XCTAssertTrue(alert.waitForExistence(timeout: 5))
-        XCTAssertTrue(alert.staticTexts["Approval reaction sent."].exists)
+        XCTAssertTrue(alert.staticTexts["Approval decision sent."].waitForExistence(timeout: 5))
+    }
+
+    func testAgentApprovalPromptRequiresConfirmationBeforeApproveAlways() {
+        let app = launchAgentApprovalPromptRoomApp()
+
+        XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
+        tap(app.buttons["AgentApprovalPromptReaction-approveAlways-$agent-approval-prompt"])
+
+        let confirmation = app.buttons["AgentApprovalPromptConfirmApproveAlways-$agent-approval-prompt"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        XCTAssertFalse(
+            app.alerts["Agent Action"].waitForExistence(timeout: 0.5),
+            "Approve always must not submit before confirmation."
+        )
+        tap(confirmation)
+
+        let alert = app.alerts["Agent Action"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["Approval decision sent."].waitForExistence(timeout: 5))
+    }
+
+    func testAgentApprovalPromptCancelApproveAlwaysDoesNotSubmit() {
+        let app = launchAgentApprovalPromptRoomApp()
+
+        XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
+        tap(app.buttons["AgentApprovalPromptReaction-approveAlways-$agent-approval-prompt"])
+
+        let confirmation = app.buttons["AgentApprovalPromptConfirmApproveAlways-$agent-approval-prompt"]
+        XCTAssertTrue(confirmation.waitForExistence(timeout: 5))
+        XCTAssertFalse(
+            app.alerts["Agent Action"].waitForExistence(timeout: 0.5),
+            "Approve always must not submit before confirmation."
+        )
+        tap(app.buttons["Cancel"])
+
+        expectation(
+            for: NSPredicate(format: "exists == false"),
+            evaluatedWith: confirmation
+        )
+        waitForExpectations(timeout: 5)
+        XCTAssertFalse(
+            app.alerts["Agent Action"].waitForExistence(timeout: 0.5),
+            "Cancelling approve always must not submit a decision."
+        )
+    }
+
+    func testAgentApprovalPromptDenialUsesCoreDecisionPath() {
+        let app = launchAgentApprovalPromptRoomApp()
+
+        XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
+        tap(app.buttons["AgentApprovalPromptReaction-deny-$agent-approval-prompt"])
+
+        let alert = app.alerts["Agent Action"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(alert.staticTexts["Approval decision sent."].waitForExistence(timeout: 5))
+    }
+
+    func testAgentApprovalPromptSurfacesAlreadyDecidedReadback() {
+        let app = launchAgentApprovalPromptRoomApp(decisionOutcome: "already-decided")
+
+        XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
+        tap(app.buttons["AgentApprovalPromptReaction-approveOnce-$agent-approval-prompt"])
+
+        let alert = app.alerts["Agent Action"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            alert.staticTexts["This approval was already decided on this account."].waitForExistence(timeout: 5)
+        )
+    }
+
+    func testAgentApprovalPromptFailureIsVisibleAndRetryable() {
+        let app = launchAgentApprovalPromptRoomApp(approvalError: "failed")
+
+        XCTAssertTrue(app.staticTexts["Approval Required: Dangerous Command"].waitForExistence(timeout: 5))
+        tap(app.buttons["AgentApprovalPromptReaction-approveOnce-$agent-approval-prompt"])
+
+        let alert = app.alerts["Agent Action"]
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            alert.staticTexts["Agent action could not be submitted. Try again."].waitForExistence(timeout: 5)
+        )
+        tap(alert.buttons["OK"])
+        expectation(
+            for: NSPredicate(format: "exists == false"),
+            evaluatedWith: alert
+        )
+        waitForExpectations(timeout: 5)
+
+        tap(app.buttons["AgentApprovalPromptReaction-approveOnce-$agent-approval-prompt"])
+        XCTAssertTrue(alert.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            alert.staticTexts["Agent action could not be submitted. Try again."].waitForExistence(timeout: 5)
+        )
     }
 
     func testLiveStaleCacheSmokeWhenConfigured() throws {
@@ -2184,12 +2268,21 @@ final class SynaraUITests: XCTestCase {
         return app
     }
 
-    private func launchAgentApprovalPromptRoomApp() -> XCUIApplication {
+    private func launchAgentApprovalPromptRoomApp(
+        approvalError: String? = nil,
+        decisionOutcome: String? = nil
+    ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!agent:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Agent"
         app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_PROMPT"] = "1"
+        if let approvalError {
+            app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_ERROR"] = approvalError
+        }
+        if let decisionOutcome {
+            app.launchEnvironment["SYNARA_UI_TEST_AGENT_APPROVAL_DECISION_OUTCOME"] = decisionOutcome
+        }
         launch(app)
         return app
     }

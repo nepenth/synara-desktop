@@ -7,11 +7,11 @@
  */
 
 import type { DesktopInvokeResult } from '../../utils/desktop';
-import type { IReplyDraft } from '../../state/room/roomInputDrafts';
-
-export const NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION = 1;
+export const NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION = 2;
 
 export type NativeComposerReplyDraft = {
+  /** Core-issued opaque identity; pass back unchanged when clearing. */
+  draftRevision: number;
   eventId: string;
   senderId: string;
   body: string;
@@ -28,6 +28,12 @@ export type NativeComposerReplyDraftReadback = {
   draft?: NativeComposerReplyDraft;
 };
 
+export type NativeComposerSendRelation = {
+  draftRevision?: number;
+  replyTo?: string;
+  threadRoot?: string;
+};
+
 export type NativeComposerSetReplyDraftInput = {
   roomId: string;
   eventId: string;
@@ -38,6 +44,11 @@ export type NativeComposerReplyDraftRoomInput = {
   roomId: string;
 };
 
+export type NativeComposerClearReplyDraftInput = NativeComposerReplyDraftRoomInput & {
+  /** Clear only the exact Core draft consumed by the actor. */
+  expectedDraftRevision: number;
+};
+
 export type NativeInvoke = (
   command: string,
   args?: Record<string, unknown>
@@ -45,12 +56,16 @@ export type NativeInvoke = (
 
 const DRAFT_STATUSES = new Set<NativeComposerReplyDraftStatus>(['set', 'cleared', 'empty']);
 
-const acceptReplyDraftReadback = (value: unknown): NativeComposerReplyDraftReadback | undefined => {
+const acceptReplyDraftReadback = (
+  value: unknown,
+  expectedRoomId: string
+): NativeComposerReplyDraftReadback | undefined => {
   if (!value || typeof value !== 'object') return undefined;
   const readback = value as NativeComposerReplyDraftReadback;
   if (
     readback.schemaVersion !== NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION ||
     typeof readback.roomId !== 'string' ||
+    readback.roomId !== expectedRoomId ||
     !DRAFT_STATUSES.has(readback.status)
   ) {
     return undefined;
@@ -58,27 +73,76 @@ const acceptReplyDraftReadback = (value: unknown): NativeComposerReplyDraftReadb
   if (readback.draft) {
     const draft = readback.draft;
     if (
+      !Number.isSafeInteger(draft.draftRevision) ||
+      draft.draftRevision <= 0 ||
       typeof draft.eventId !== 'string' ||
       typeof draft.senderId !== 'string' ||
       typeof draft.body !== 'string'
     ) {
       return undefined;
     }
+    if (readback.status !== 'set') return undefined;
   } else if (readback.status === 'set') {
     return undefined;
   }
   return readback;
 };
 
-export const mapNativeReplyDraftToJs = (draft: NativeComposerReplyDraft): IReplyDraft => ({
-  userId: draft.senderId,
-  eventId: draft.eventId,
-  body: draft.body,
-  formattedBody: draft.formattedBody,
-  relation: draft.threadRootEventId
-    ? { rel_type: 'm.thread', event_id: draft.threadRootEventId }
-    : undefined,
+/**
+ * Derive every composer transport relation from the same Core-owned draft.
+ *
+ * A threaded reply carries both the thread root and the selected event. Core
+ * needs both identifiers to emit `m.thread` plus `m.in_reply_to`; dropping the
+ * selected event silently degrades a reply into a plain thread message.
+ */
+export const nativeComposerSendRelation = (
+  draft: NativeComposerReplyDraft | undefined
+): NativeComposerSendRelation => ({
+  draftRevision: draft?.draftRevision,
+  replyTo: draft?.eventId,
+  threadRoot: draft?.threadRootEventId,
 });
+
+type ReplyDraftListener = () => void;
+
+/**
+ * Readback-only UI projection of the authoritative Core composer registry.
+ * It cannot invent or mutate a draft: callers may only apply a typed Core
+ * readback produced by set/get/clear.
+ */
+export class NativeComposerReplyDraftProjection {
+  private readonly drafts = new Map<string, NativeComposerReplyDraft>();
+
+  private readonly listeners = new Map<string, Set<ReplyDraftListener>>();
+
+  get(roomId: string): NativeComposerReplyDraft | undefined {
+    return this.drafts.get(roomId);
+  }
+
+  apply(readback: NativeComposerReplyDraftReadback): void {
+    if (readback.status === 'set' && readback.draft) {
+      this.drafts.set(readback.roomId, readback.draft);
+    } else {
+      this.drafts.delete(readback.roomId);
+    }
+    this.listeners.get(readback.roomId)?.forEach((listener) => listener());
+  }
+
+  clearLocal(roomId: string): void {
+    if (!this.drafts.delete(roomId)) return;
+    this.listeners.get(roomId)?.forEach((listener) => listener());
+  }
+
+  subscribe(roomId: string, listener: ReplyDraftListener): () => void {
+    const roomListeners = this.listeners.get(roomId) ?? new Set<ReplyDraftListener>();
+    roomListeners.add(listener);
+    this.listeners.set(roomId, roomListeners);
+    return () => {
+      roomListeners.delete(listener);
+      if (roomListeners.size === 0) this.listeners.delete(roomId);
+    };
+  }
+}
 
 export async function setReplyDraftWithNativeComposerOwner(
   input: NativeComposerSetReplyDraftInput,
@@ -88,18 +152,27 @@ export async function setReplyDraftWithNativeComposerOwner(
   if (!desktopAvailable) return 'unavailable';
   const result = await invoke('matrix_composer_set_reply_draft', { request: input });
   if (!result.available) return 'unavailable';
-  return acceptReplyDraftReadback(result.value) ?? 'unavailable';
+  const readback = acceptReplyDraftReadback(result.value, input.roomId);
+  if (readback?.status !== 'set' || readback.draft?.eventId !== input.eventId) {
+    return 'unavailable';
+  }
+  return readback ?? 'unavailable';
 }
 
 export async function clearReplyDraftWithNativeComposerOwner(
-  input: NativeComposerReplyDraftRoomInput,
+  input: NativeComposerClearReplyDraftInput,
   desktopAvailable: boolean,
   invoke: NativeInvoke
 ): Promise<NativeComposerReplyDraftReadback | 'unavailable'> {
   if (!desktopAvailable) return 'unavailable';
   const result = await invoke('matrix_composer_clear_reply_draft', { request: input });
   if (!result.available) return 'unavailable';
-  return acceptReplyDraftReadback(result.value) ?? 'unavailable';
+  const readback = acceptReplyDraftReadback(result.value, input.roomId);
+  if (readback?.status === 'cleared') return readback;
+  if (readback?.status === 'set' && readback.draft?.draftRevision !== input.expectedDraftRevision) {
+    return readback;
+  }
+  return 'unavailable';
 }
 
 export async function getReplyDraftWithNativeComposerOwner(
@@ -110,5 +183,6 @@ export async function getReplyDraftWithNativeComposerOwner(
   if (!desktopAvailable) return 'unavailable';
   const result = await invoke('matrix_composer_get_reply_draft', { request: input });
   if (!result.available) return 'unavailable';
-  return acceptReplyDraftReadback(result.value) ?? 'unavailable';
+  const readback = acceptReplyDraftReadback(result.value, input.roomId);
+  return readback?.status === 'set' || readback?.status === 'empty' ? readback : 'unavailable';
 }

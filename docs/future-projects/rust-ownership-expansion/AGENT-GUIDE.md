@@ -9,18 +9,21 @@ implementation plan.
 Read these completely before drawing a boundary:
 
 1. [project charter and portfolio priors](README.md);
-2. the assigned files under [`workstreams/`](workstreams/);
-3. the [ADR index and lifecycle rules](../../adr/README.md);
-4. [ADR 0001](../../adr/0001-ios-repository-layout.md) for repository ownership;
-5. [ADR 0002](../../adr/0002-ios-architecture.md) for the native iOS boundary;
-6. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
-7. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
-8. [ADR 0005](../../adr/0005-native-media-handle-channel.md) for any media or
+2. the completed census [program state](program/STATE.md) and unresolved
+   [action register](program/ACTIONS.md); treat
+   [program/OPERATING.md](program/OPERATING.md) as historical only;
+3. the assigned files under [`workstreams/`](workstreams/);
+4. the [ADR index and lifecycle rules](../../adr/README.md);
+5. [ADR 0001](../../adr/0001-ios-repository-layout.md) for repository ownership;
+6. [ADR 0002](../../adr/0002-ios-architecture.md) for the native iOS boundary;
+7. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
+8. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
+9. [ADR 0005](../../adr/0005-native-media-handle-channel.md) for any media or
    byte/path question;
-9. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md)
-   and the current [goal graph](../../shared-native-core/13-language-boundary-goal-graph.md)
-   for sequencing and stop conditions;
-10. current source and tests for Rust, desktop, and iOS in the assigned domain.
+10. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md)
+    and the current [goal graph](../../shared-native-core/13-language-boundary-goal-graph.md)
+    for sequencing and stop conditions;
+11. current source and tests for Rust, desktop, and iOS in the assigned domain.
 
 Accepted decisions and current source supersede historical plans. Do not infer
 unfinished work from old command counts, migration prose, or a platform
@@ -62,7 +65,10 @@ adapter.
 8. **Define proof for the recommendation.** For a close/stay decision, specify
    enough regression evidence to keep the boundary stable. For proceed,
    identify the evidence needed before planning.
-9. **Stop after the memo.** Do not sketch commands, DTOs, slices, or rollout
+9. **Classify residual work separately.** A correct ownership boundary does
+   not close a product defect, security/evidence gap, adapter-parity gap, or
+   product decision. Record those outcomes independently.
+10. **Stop after the memo.** Do not sketch commands, DTOs, slices, or rollout
    unless the proceed recommendation is explicitly accepted.
 
 ## Required first deliverable
@@ -73,7 +79,9 @@ memo and use the lowest ID in the filename. Record the source census commit and
 date. Unknowns must be explicit rather than filled with assumptions.
 
 A memo that confirms **already correctly owned** or **stay platform-side** is a
-complete and valuable result. Do not inflate it into an implementation plan.
+complete ownership result. It must still preserve any evidenced product
+defect, missing proof, parity gap, or product decision instead of implying the
+feature is complete. Do not inflate it into an implementation plan.
 
 ## Review protocol
 

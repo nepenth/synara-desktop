@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 pub const AGENT_APPROVAL_TTL_MS: u64 = 5 * 60 * 1000;
 pub const AGENT_APPROVAL_MAX_BODY_CHARS: usize = 100_000;
 pub const AGENT_APPROVAL_ACTION_APPROVE_ONCE: &str = "agent-approval.approve-once";
+pub const AGENT_APPROVAL_ACTION_APPROVE_ALWAYS: &str = "agent-approval.approve-always";
 pub const AGENT_APPROVAL_ACTION_DENY: &str = "agent-approval.deny";
 pub const AGENT_APPROVAL_REACTION_APPROVE_ONCE: &str = "✅";
 pub const AGENT_APPROVAL_REACTION_APPROVE_ALWAYS: &str = "♾️";
@@ -47,6 +48,26 @@ pub fn is_agent_approval_prompt(body: &str) -> bool {
     APPROVAL_HEADINGS.contains(&normalized)
 }
 
+/// Classify a prompt only when it came from another Matrix account.
+///
+/// Hermes does not currently attach a signed, machine-readable approval marker
+/// or bot identity to the event. This is therefore the strongest client-side
+/// eligibility rule available from the Matrix event itself: exact prompt
+/// structure, a remote event resolved by the Core owner, and a sender distinct
+/// from the account that will make the decision. Hermes remains the authority
+/// that binds a reaction to a live pending command and rejects unauthorized or
+/// spoofed events.
+pub fn is_eligible_agent_approval_prompt(
+    body: &str,
+    prompt_sender_id: &str,
+    current_user_id: &str,
+) -> bool {
+    !prompt_sender_id.is_empty()
+        && !current_user_id.is_empty()
+        && prompt_sender_id != current_user_id
+        && is_agent_approval_prompt(body)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AgentApprovalDecisionStatus {
@@ -60,27 +81,30 @@ pub struct AgentApprovalPlan<'a> {
     pub reaction: Option<&'a str>,
 }
 
-/// Validate a background approval action against authoritative event state.
+/// Validate an approval action against authoritative event state.
 ///
 /// `existing_reactions` identifies whether each aggregate belongs to the
 /// current account. Hermes seeds all three choices as bot-owned reactions, so
 /// counts from other senders are not decisions. Once this account has decided on any
 /// client, another notification action must not add a contradictory decision.
-/// Approve-always is intentionally not accepted from an OS notification; it
-/// requires the in-app confirmation route.
+/// Platforms must keep approve-always off OS notification surfaces; Core accepts
+/// it here only because confirmed in-app decisions use this same owner route.
 pub fn plan_agent_approval<'a, 'b>(
     action_id: &'a str,
     body: &str,
+    prompt_sender_id: &str,
+    current_user_id: &str,
     origin_server_ts: u64,
     now_ms: u64,
     existing_reactions: impl IntoIterator<Item = (&'b str, bool)>,
 ) -> Result<AgentApprovalPlan<'a>, &'static str> {
     let reaction = match action_id {
         AGENT_APPROVAL_ACTION_APPROVE_ONCE => AGENT_APPROVAL_REACTION_APPROVE_ONCE,
+        AGENT_APPROVAL_ACTION_APPROVE_ALWAYS => AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
         AGENT_APPROVAL_ACTION_DENY => AGENT_APPROVAL_REACTION_DENY,
         _ => return Err("agent-approval-action-unsupported"),
     };
-    if !is_agent_approval_prompt(body) {
+    if !is_eligible_agent_approval_prompt(body, prompt_sender_id, current_user_id) {
         return Err("agent-approval-prompt-invalid");
     }
     if origin_server_ts == 0 || origin_server_ts > now_ms.saturating_add(60_000) {
@@ -112,6 +136,8 @@ mod tests {
 
     const PROMPT: &str = "Approval Required: Dangerous Command\nCode\nrm file\nReason: test";
     const HERMES_MATRIX_PROMPT: &str = "⚠️ **Dangerous command requires approval**\n```\nrm -rf /tmp/test\n```\nReason: dangerous\n\nReply `!approve` to execute, `!approve session` to approve this pattern for the session, `!approve always` to approve permanently, or `!deny` to cancel.\n\nYou can also react to this prompt:\n✅ = approve once\n♾️ = approve always\n❌ = deny";
+    const HERMES: &str = "@hermes:example.org";
+    const CURRENT_USER: &str = "@alice:example.org";
 
     #[test]
     fn classifier_accepts_both_contract_headings() {
@@ -129,18 +155,78 @@ mod tests {
         assert!(!is_agent_approval_prompt(
             "Please approve this ordinary request"
         ));
+        assert!(!is_agent_approval_prompt(
+            "> ⚠️ **Dangerous command requires approval**\n> quoted prompt"
+        ));
     }
 
     #[test]
-    fn planner_allows_only_bounded_once_or_deny_actions() {
-        let plan =
-            plan_agent_approval(AGENT_APPROVAL_ACTION_APPROVE_ONCE, PROMPT, 1_000, 1_001, [])
-                .unwrap();
+    fn planner_allows_only_contract_reaction_actions() {
+        let plan = plan_agent_approval(
+            AGENT_APPROVAL_ACTION_APPROVE_ONCE,
+            PROMPT,
+            HERMES,
+            CURRENT_USER,
+            1_000,
+            1_001,
+            [],
+        )
+        .unwrap();
         assert_eq!(plan.status, AgentApprovalDecisionStatus::Applied);
         assert_eq!(plan.reaction, Some(AGENT_APPROVAL_REACTION_APPROVE_ONCE));
         assert_eq!(
-            plan_agent_approval("agent-approval.approve-always", PROMPT, 1_000, 1_001, []),
+            plan_agent_approval(
+                AGENT_APPROVAL_ACTION_APPROVE_ALWAYS,
+                PROMPT,
+                HERMES,
+                CURRENT_USER,
+                1_000,
+                1_001,
+                [],
+            )
+            .unwrap()
+            .reaction,
+            Some(AGENT_APPROVAL_REACTION_APPROVE_ALWAYS)
+        );
+        assert_eq!(
+            plan_agent_approval(
+                "agent-approval.approve-session",
+                PROMPT,
+                HERMES,
+                CURRENT_USER,
+                1_000,
+                1_001,
+                [],
+            ),
             Err("agent-approval-action-unsupported")
+        );
+    }
+
+    #[test]
+    fn planner_rejects_own_account_and_non_prompt_senders() {
+        assert_eq!(
+            plan_agent_approval(
+                AGENT_APPROVAL_ACTION_DENY,
+                PROMPT,
+                CURRENT_USER,
+                CURRENT_USER,
+                1_000,
+                1_001,
+                [],
+            ),
+            Err("agent-approval-prompt-invalid")
+        );
+        assert_eq!(
+            plan_agent_approval(
+                AGENT_APPROVAL_ACTION_DENY,
+                "ordinary message",
+                HERMES,
+                CURRENT_USER,
+                1_000,
+                1_001,
+                [],
+            ),
+            Err("agent-approval-prompt-invalid")
         );
     }
 
@@ -150,6 +236,8 @@ mod tests {
             plan_agent_approval(
                 AGENT_APPROVAL_ACTION_DENY,
                 PROMPT,
+                HERMES,
+                CURRENT_USER,
                 1_000,
                 1_000 + AGENT_APPROVAL_TTL_MS,
                 [],
@@ -157,7 +245,15 @@ mod tests {
             Err("agent-approval-expired")
         );
         assert_eq!(
-            plan_agent_approval(AGENT_APPROVAL_ACTION_DENY, PROMPT, 70_001, 10_000, []),
+            plan_agent_approval(
+                AGENT_APPROVAL_ACTION_DENY,
+                PROMPT,
+                HERMES,
+                CURRENT_USER,
+                70_001,
+                10_000,
+                [],
+            ),
             Err("agent-approval-timestamp-invalid")
         );
     }
@@ -168,6 +264,8 @@ mod tests {
             let plan = plan_agent_approval(
                 AGENT_APPROVAL_ACTION_DENY,
                 PROMPT,
+                HERMES,
+                CURRENT_USER,
                 1_000,
                 1_001,
                 [(existing, true)],
@@ -183,6 +281,8 @@ mod tests {
         let plan = plan_agent_approval(
             AGENT_APPROVAL_ACTION_APPROVE_ONCE,
             PROMPT,
+            HERMES,
+            CURRENT_USER,
             1_000,
             1_001,
             AGENT_APPROVAL_TERMINAL_REACTIONS.map(|key| (key, false)),
@@ -200,6 +300,8 @@ mod tests {
             let plan = plan_agent_approval(
                 AGENT_APPROVAL_ACTION_APPROVE_ONCE,
                 PROMPT,
+                HERMES,
+                CURRENT_USER,
                 1_000,
                 1_001,
                 [(key, true)],

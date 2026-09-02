@@ -40,22 +40,3 @@ export type TMsgDraftAtom = ReturnType<typeof createMsgDraftAtom>;
 export const roomIdToMsgDraftAtomFamily = atomFamily<string, TMsgDraftAtom>(() =>
   createMsgDraftAtom()
 );
-
-/** Minimal Matrix relation wire shape consumed by the retained JS composer. */
-type ReplyRelation = {
-  rel_type: string;
-  event_id: string;
-};
-
-export type IReplyDraft = {
-  userId: string;
-  eventId: string;
-  body: string;
-  formattedBody?: string | undefined;
-  relation?: ReplyRelation | undefined;
-};
-const createReplyDraftAtom = () => atom<IReplyDraft | undefined>(undefined);
-export type TReplyDraftAtom = ReturnType<typeof createReplyDraftAtom>;
-export const roomIdToReplyDraftAtomFamily = atomFamily<string, TReplyDraftAtom>(() =>
-  createReplyDraftAtom()
-);

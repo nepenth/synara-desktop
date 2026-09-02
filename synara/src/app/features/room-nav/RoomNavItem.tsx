@@ -24,6 +24,7 @@ import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { copyToClipboard } from '../../utils/dom';
 import { unreadFromNativeRoom } from '../../state/room/roomToUnread';
 import { setRoomReadStateWithNativeOwner } from '../../utils/nativeRoomReadStateOwner';
+import { markAsReadFromExplicitUserActionInBackground } from '../../utils/notifications';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { LeaveRoomPrompt } from '../../components/leave-room-prompt';
 import { useRoomTypingMember } from '../../hooks/useRoomTypingMembers';
@@ -75,12 +76,7 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
     const [invitePrompt, setInvitePrompt] = useState(false);
 
     const handleMarkAsRead = () => {
-      void setRoomReadStateWithNativeOwner(
-        room.roomId,
-        'mark_read',
-        isSynaraDesktop(),
-        invokeDesktopWithAvailability
-      ).catch(() => undefined);
+      markAsReadFromExplicitUserActionInBackground(mx, room.roomId);
       requestClose();
     };
 

@@ -16,6 +16,15 @@ CI should run:
 scripts/ci-build.sh
 ```
 
+On a space-constrained local runner, use the shared bounded mode for both Core
+generators. Each Apple target is compiled in an isolated temporary Cargo target
+directory, its final static archive is staged, and the intermediate target is
+removed before the next architecture starts:
+
+```sh
+SYNARA_APPLE_SPACE_BOUNDED=1 scripts/ci-build.sh
+```
+
 That script regenerates the Xcode project with XcodeGen, performs an unsigned
 generic iOS Simulator app build, and compiles the test bundles with
 `build-for-testing`. It keeps Xcode derived data, SwiftPM package cache, Clang
@@ -62,10 +71,17 @@ If the DerivedData hash changes, locate the active checkout with:
 find "$HOME/Library/Developer/Xcode/DerivedData" -path '*Synara*/SourcePackages' -type d
 ```
 
-The script preserves the committed `Package.resolved` across XcodeGen project
-replacement, pins package resolution to that lock, skips package updates, uses
-the system SCM provider, and writes timestamped `.xcresult` bundles under
-`IOS_RESULT_BUNDLE_DIR`.
+The script regenerates the project from `project.yml` and verifies the generated
+Swift package graph. The current app graph contains only the local `SynaraCore`
+and `SynaraNseCore` packages, so it intentionally has no `Package.resolved`.
+If a remote package is introduced later, the script requires and preserves a
+committed lock, pins resolution to it, and skips package updates. This check
+covers both top-level Xcode package references and remote dependencies declared
+by any reachable local package. It asks SwiftPM to parse each manifest and
+walks only path dependencies in the generated app graph, so comments,
+multiline declarations, and unrelated package experiments cannot change the
+result. It uses the system SCM provider and writes timestamped `.xcresult`
+bundles under `IOS_RESULT_BUNDLE_DIR`.
 
 ## Local Automation Requirements
 

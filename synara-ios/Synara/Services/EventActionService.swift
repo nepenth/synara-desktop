@@ -44,6 +44,15 @@ struct MockEventActionService: EventActionServicing {
             )
         }
 
+        if let capabilities = item.actionCapabilities {
+            return EventActionAvailability(
+                canReply: capabilities.canReply,
+                canEdit: capabilities.canEdit,
+                canRedact: capabilities.canRedact,
+                canReact: capabilities.canReact
+            )
+        }
+
         switch item.kind {
         case .mediaPlaceholder(let resource) where resource.isEncrypted:
             return EventActionAvailability(canReply: false, canEdit: false, canRedact: false, canReact: false)
@@ -77,12 +86,22 @@ struct MockEventActionService: EventActionServicing {
             return TimelineItem(
                 id: item.id,
                 eventID: item.eventID,
+                serverEventID: item.serverEventID,
                 senderID: item.senderID,
+                senderProfileDisplayName: item.senderProfileDisplayName,
+                senderAvatarURL: item.senderAvatarURL,
                 timestamp: item.timestamp,
                 kind: item.kind,
                 replyToEventID: item.replyToEventID,
+                threadRootEventID: item.threadRootEventID,
+                replyPreview: item.replyPreview,
+                threadSummary: item.threadSummary,
+                poll: item.poll,
+                actionCapabilities: item.actionCapabilities,
                 isEdited: true,
+                isAgentApproval: item.isAgentApproval,
                 reactions: item.reactions,
+                reactionOwnership: item.reactionOwnership,
                 isEncrypted: item.isEncrypted,
                 deliveryStatus: item.deliveryStatus,
                 hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
@@ -91,12 +110,21 @@ struct MockEventActionService: EventActionServicing {
             return TimelineItem(
                 id: item.id,
                 eventID: item.eventID,
+                serverEventID: item.serverEventID,
                 senderID: item.senderID,
+                senderProfileDisplayName: item.senderProfileDisplayName,
+                senderAvatarURL: item.senderAvatarURL,
                 timestamp: item.timestamp,
                 kind: .redacted,
                 replyToEventID: item.replyToEventID,
+                threadRootEventID: item.threadRootEventID,
+                replyPreview: item.replyPreview,
+                threadSummary: item.threadSummary,
+                actionCapabilities: item.actionCapabilities,
                 isEdited: item.isEdited,
+                isAgentApproval: false,
                 reactions: [:],
+                reactionOwnership: .known([]),
                 isEncrypted: item.isEncrypted,
                 deliveryStatus: item.deliveryStatus,
                 hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
@@ -104,15 +132,33 @@ struct MockEventActionService: EventActionServicing {
         case .react(let reaction):
             var reactions = item.reactions
             reactions[reaction, default: 0] += 1
+            let reactionOwnership: TimelineReactionOwnership
+            switch item.reactionOwnership {
+            case .unknown:
+                reactionOwnership = .unknown
+            case .known(var ownKeys):
+                ownKeys.insert(reaction)
+                reactionOwnership = .known(ownKeys)
+            }
             return TimelineItem(
                 id: item.id,
                 eventID: item.eventID,
+                serverEventID: item.serverEventID,
                 senderID: item.senderID,
+                senderProfileDisplayName: item.senderProfileDisplayName,
+                senderAvatarURL: item.senderAvatarURL,
                 timestamp: item.timestamp,
                 kind: item.kind,
                 replyToEventID: item.replyToEventID,
+                threadRootEventID: item.threadRootEventID,
+                replyPreview: item.replyPreview,
+                threadSummary: item.threadSummary,
+                poll: item.poll,
+                actionCapabilities: item.actionCapabilities,
                 isEdited: item.isEdited,
+                isAgentApproval: item.isAgentApproval,
                 reactions: reactions,
+                reactionOwnership: reactionOwnership,
                 isEncrypted: item.isEncrypted,
                 deliveryStatus: item.deliveryStatus,
                 hasCurrentUserReadReceipt: item.hasCurrentUserReadReceipt
@@ -120,4 +166,3 @@ struct MockEventActionService: EventActionServicing {
         }
     }
 }
-

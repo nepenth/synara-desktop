@@ -1,5 +1,4 @@
 import sanitizeHtml, { type Transformer } from 'sanitize-html';
-import { sanitizeCustomHtml } from '../../utils/sanitize';
 
 /**
  * Keep untrusted event HTML below the same bounded presentation budget used by
@@ -163,10 +162,10 @@ export const prepareNativeFormattedBody = (html: string): string | undefined => 
   if (utf8ByteLength(html) > MAX_NATIVE_FORMATTED_BODY_BYTES) return undefined;
 
   try {
-    // The editor sanitizer intentionally tolerates legacy Synara metadata.
-    // Apply the exact current Matrix presentation profile afterwards so those
-    // editing hints and non-spec attributes never reach the timeline DOM.
-    const sanitized = sanitizeMatrixV119PresentationHtml(sanitizeCustomHtml(html));
+    // Apply the presentation profile directly to protocol HTML. Passing first
+    // through the editor sanitizer can change a disallowed remote `<img>` into
+    // an allowed clickable tracker URL, losing the context needed to reject it.
+    const sanitized = sanitizeMatrixV119PresentationHtml(html);
     return sanitized.trim() ? sanitized : undefined;
   } catch {
     return undefined;
