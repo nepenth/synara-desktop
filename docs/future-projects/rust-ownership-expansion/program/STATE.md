@@ -1,21 +1,21 @@
 # Program state
 
-Last updated: 2026-09-01 (ROE-09 closed; ROE-06 started).
+Last updated: 2026-09-01 (ROE-07 memo in review).
 Integration branch: `feature/rust-ownership-residual-census`.
 Base: `main` at `011cf39a`.
 
 ## Headline
 
 ROE-01 and ROE-02 are closed as already owned. ROE-08 remains a human
-implementation gate (D10). ROE-09 is closed as already owned. ROE-07
-and ROE-03 are still researching. ROE-06 census of existing Core sort
-helpers is started. No product work. No merge to `main`.
+implementation gate (D10). ROE-09 is closed as already owned. ROE-07 is in review. ROE-03 and
+ROE-06 are still researching. No product work. No merge to `main`.
 
 ## Next actions
 
-1. Review the ROE-07 and ROE-03 PRs when they exist.
-2. Keep ROE-08 implementation stopped.
-3. Do not start ROE-04/12 until the agent-policy cluster is idle.
+1. Merge #1085 only after an independent ACCEPT.
+2. Review the ROE-03 and ROE-06 PRs when they exist.
+3. Keep ROE-08 implementation stopped. Do not start ROE-04/12 until
+   #1085 is closed.
 
 ## Active lanes
 
@@ -26,7 +26,7 @@ helpers is started. No product work. No merge to `main`.
 | ROE-01 | closed | merged `#1081` | already owned; nits recorded in memo |
 | ROE-02 | closed | merged `#1083` | already owned |
 | ROE-09 | closed | merged `#1084` | already owned; no second notes engine |
-| ROE-07 | researcher | `roe/memo-07-notification-policy` | researching |
+| ROE-07 | in-review | `roe/memo-07-notification-policy` | [#1085](https://github.com/nepenth/synara-desktop/pull/1085) `651e36b2` |
 | ROE-03 | researcher | `roe/memo-03-timeline-rows` | researching |
 | ROE-06 | researcher | `roe/memo-06-room-sort` | assigned |
 

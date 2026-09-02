@@ -11,7 +11,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | Residual engine census | ROE-02 | Already owned | closed | [memo](../memos/ROE-02-verification-memo.md) | ACCEPT `#1083` | No missing Core input |
 | Residual engine census | ROE-03 | Extend rows only | researching | — | — | No second row model |
 | Notifications and agent policy | ROE-08 | Highest residual | human-gate | [memo](../memos/ROE-08-agent-approval-memo.md) | ACCEPT `#1082` | Extract eligibility; no implementation (D10) |
-| Notifications and agent policy | ROE-07 | Policy yes, delivery no | researching | — | — | Policy only; do not reopen ROE-08 |
+| Notifications and agent policy | ROE-07 | Policy yes, delivery no | in-review | [#1085](https://github.com/nepenth/synara-desktop/pull/1085) | pending | Researcher: close/stay; no live dual engine |
 | Message format and safety | ROE-04 | Stay platform-side | queued | — | — | Fixtures before types; no AST |
 | Message format and safety | ROE-12 | Shared rules/fixtures | queued | — | — | Pair with ROE-04; fix “already-sanitized” claim if still present |
 | Read and list semantics | ROE-05 | Visibility contract | queued | — | — | After fixtures unless ROE-08 is gated |
@@ -35,6 +35,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | 2026-09-01 | `53d7b2c4` | ROE-01 memo merged (`#1081`) |
 | 2026-09-01 | `71e6067f` | ROE-01 nits recorded; ROE-03 started |
 | 2026-09-01 | `a046e871` | ROE-09 memo merged (`#1084`) |
+| 2026-09-01 | `ed69be18` | ROE-09 closed; ROE-06 started |
 
 ## Human implementation gate
 
