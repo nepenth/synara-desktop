@@ -273,3 +273,16 @@ overnight Core extract. The current goal graph does not permit a new
 residual implementation slice: P4 engine-ready is pending/blocked; do
 not invent S38; do not start P5. D10 (ROE-08) remains the only open
 human implementation question in this program.
+
+## Reviewer nits (`ACCEPT_WITH_NITS` on #1091)
+
+Recorded from the independent review at `25c1ee02`. They do not change the
+close:
+
+- iOS flush “write from last-candidate” is an invoke gate; Core still
+  writes `latest_event_id()` on a new live-bottom stream.
+- The documented observation-contract list includes an iOS scene-phase
+  gate that current iOS does not implement — description, not live
+  source.
+- Leftover `markAsReadAtEvent` / `setUnreadAnchor` have no desktop
+  native early-return, but no product callers.
