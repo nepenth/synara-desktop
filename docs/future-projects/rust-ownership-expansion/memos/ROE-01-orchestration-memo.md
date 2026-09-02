@@ -75,3 +75,17 @@ Regression proof to keep the close stable:
 ## Next gate
 
 Close ROE-01. No implementation plan. No ADR amendment. Optional later comment cleanup on the desktop session-bridge module is documentation-only and is not required to accept this census.
+
+## Reviewer nits (`ACCEPT_WITH_NITS` on #1081)
+
+Recorded from the independent review at `afba8efb`. They do not change the
+close:
+
+- The cited `syncLifecycle.test.ts` path is
+  `synara/src/app/utils/__tests__/syncLifecycle.test.ts`.
+- `synara-ios/Synara.xcodeproj/project.pbxproj` still lists MatrixRustSDK
+  under Frameworks. That is a leftover Xcode link, not a live engine.
+- Desktop leftover install is thicker than a “thin adapter” label:
+  `matrix_login_password` / `matrix_restore_session` still construct Core
+  owners and hold `ManagedMatrixSession` before attach. That remains the
+  accepted secret/vault seam, not a second engine.
