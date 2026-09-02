@@ -1,7 +1,7 @@
 # Program state
 
-Last updated: 2026-09-01 (program start).
-Integration branch: `feature/rust-ownership-residual-census`.
+Last updated: 2026-09-01 (lanes spawned).
+Integration branch: `feature/rust-ownership-residual-census` at `5f9c4e71`.
 Base: `main` at `011cf39a`.
 
 ## Headline
@@ -24,9 +24,9 @@ ROE-01 and ROE-02 (census-and-close). No product work. No merge to
 | Lane | Role | Agent/worktree | Branch | Status |
 | --- | --- | --- | --- | --- |
 | Orchestrator | assign/merge | this session + `loop-roe-residual-census` | feature branch | active |
-| ROE-08 | researcher | pending spawn | `roe/memo-08-agent-approvals` | assigned |
-| ROE-01 | researcher | pending spawn | `roe/memo-01-orchestration` | assigned |
-| ROE-02 | researcher | pending spawn | `roe/memo-02-verification` | assigned |
+| ROE-08 | researcher | isolated worktree | `roe/memo-08-agent-approvals` | researching |
+| ROE-01 | researcher | isolated worktree | `roe/memo-01-orchestration` | researching |
+| ROE-02 | researcher | isolated worktree | `roe/memo-02-verification` | researching |
 
 ## Blockers
 
