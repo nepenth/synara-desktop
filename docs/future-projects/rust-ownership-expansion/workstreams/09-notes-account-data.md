@@ -1,18 +1,19 @@
 # ROE-09: Notes and Account-Data Synchronization
 
-Hypothesis: note/ToDo schemas, ordering, conflict handling, and Matrix
-account-data synchronization should be Rust-owned; editors and drag/reorder UI
-remain platform-owned.
+Prior: **already correctly owned; census and close**.
 
-Investigate:
+Core already owns the notes/ToDo account-data schema, normalization, CRUD, and
+Matrix synchronization. React and SwiftUI own editors, interaction, drag and
+reorder affordances, and native presentation.
 
-- current account-data schema, versioning, migration, limits, and ownership;
-- create/edit/delete/reorder/complete operations and stable identifiers;
-- concurrent edits from desktop/iOS, conflict policy, tombstones, offline
-  queues, and clock independence;
-- message anchors when source events are redacted, unavailable, or moved;
-- export, privacy, retention, and malformed remote data.
+## Bounded research question
 
-Minimum proof: schema compatibility/golden tests, operation-sequence property
-tests, two-client concurrent Synapse proof, offline merge tests, migration and
-downgrade fixtures, and native reorder/editor acceptance on both clients.
+Do both shipped clients consume the same Core schema and operations for
+create/edit/delete/reorder/complete, or does either retain a second account-data
+engine? Verify stable IDs, versioning/migration, limits, concurrent/offline
+updates, tombstones, clock independence, message anchors, malformed remote
+data, privacy, export, and downgrade behavior against current source/tests.
+
+The expected deliverable is a close memo plus any missing shared schema or
+two-client Synapse fixture. Do not create a second engine to address a native
+reorder/editor UX defect.

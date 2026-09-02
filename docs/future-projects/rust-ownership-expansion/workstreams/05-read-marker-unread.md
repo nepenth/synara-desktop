@@ -1,18 +1,26 @@
 # ROE-05: Read-Marker and Unread Calculations
 
-Hypothesis: unread truth, receipts, marked-unread state, and read-marker
-advancement should be calculated once in Rust; viewport visibility remains a
-platform observation supplied to that owner.
+Prior: **bounded visibility-contract remainder**.
 
-Investigate:
+Core owns unread/count truth and Matrix receipt/read-marker writes. Desktop and
+iOS necessarily observe viewport visibility, focus, navigation, app lifecycle,
+and explicit user intent.
 
-- public/private receipts, fully-read markers, notification/highlight counts,
-  threads, invites, encrypted/late-decrypted events, and local echoes;
-- the contract by which each UI reports genuine visibility and user intent;
-- races among sync, pagination, room changes, backgrounding, and receipt send;
-- offline persistence, retry/idempotency, and multi-device behavior;
-- separation between authoritative Matrix state and badge presentation.
+## Bounded research question
 
-Minimum proof: ordering/property tests, focus/visibility contract tests,
-two-client receipt Synapse proof, offline/reconnect cases, room-switch stress,
-desktop viewport integration, and iOS foreground/background tests.
+Is the typed contract by which a platform reports genuine visibility to Core
+underspecified or inconsistent across clients? Census public/private receipts,
+fully-read markers, marked-unread state, notification/highlight counts,
+threads, late decryption, local echoes, and races among sync, pagination, room
+changes, backgrounding, retry, and multiple devices.
+
+Propose contract clarification only if the earliest divergence is between a
+platform observation and Core authority. Ordering/property tests, focus and
+visibility fixtures, offline/reconnect cases, two-client Synapse receipts, and
+desktop/iOS lifecycle tests are the required evidence.
+
+## Keep closed
+
+Do not move viewport geometry, scroll position, focus detection, or badge
+presentation into Core. Do not let presenters independently decide receipt
+eligibility once observations cross the contract.

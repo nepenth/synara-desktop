@@ -1,21 +1,26 @@
-# ROE-12: Shared Validation, Sanitization, and Security Rules
+# ROE-12: Validation, Sanitization, and Security Rules
 
-Hypothesis: protocol validation, resource bounds, URL/event safety policy, and
-security-sensitive normalization should be shared where the threat model is
-identical, while renderer-specific DOM and attributed-text sanitization may
-need to remain with each presenter.
+Prior: **share protocol rules and fixtures, not a universal sanitizer crate**.
 
-Investigate:
+Core should own protocol validation, resource bounds, canonical identifiers,
+eligibility, and security-sensitive normalization when the threat model is
+identical. Desktop DOM/React output and Swift attributed-text output require
+different context-specific sanitization and remain platform-owned.
 
-- untrusted Matrix event fields, formatted bodies, links, mentions, filenames,
-  MIME metadata, agent actions, widget data, and account data;
-- canonical protocol validation versus output-context-specific escaping;
-- URL schemes, Unicode/confusables, nesting/depth, size, recursion, regex and
-  parser denial-of-service, and unknown future fields;
-- consistent fail-closed errors and redacted diagnostics;
-- whether a shared safe semantic model can reduce duplicated sanitizer policy
-  without creating unsafe HTML or platform UI instructions in Core.
+## Bounded research question
 
-Minimum proof: threat model, fuzz/property tests, malicious corpus, resource
-limit benchmarks, cross-language contract tests, DOM/SwiftUI output-context
-tests, security review, and regression fixtures for every accepted finding.
+Across untrusted event fields, formatted bodies, URLs, mentions, filenames,
+MIME metadata, agent actions, widget data, and account data, which rules are
+truly protocol authority and which are renderer escaping? Start with a shared
+malicious/golden corpus covering schemes, Unicode/confusables, depth/size,
+recursion, parser/regex denial of service, unknown fields, fail-closed errors,
+and redacted diagnostics.
+
+The `TimelineViewRow.formatted_body` contract must be described accurately:
+Core projects Matrix formatted HTML, while each presenter still validates and
+sanitizes for its output context. Documentation or comments must not imply the
+HTML is universally safe merely because Core transported it.
+
+Only a proven identical rule should move to Core. A safe semantic field may be
+considered through ROE-04's fixture-first ladder; DOM trees, attributed strings,
+or renderer instructions must not cross the boundary.

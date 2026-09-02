@@ -1,91 +1,97 @@
-# Agent Guide: Investigating a Rust Ownership Workstream
+# Agent Guide: Investigating Residual Rust Ownership
 
-Use this guide when assigning one ROE workstream to an agent. The default task
-is **research and planning**, not implementation.
+Use this guide only after a human explicitly charters a docs-only research
+question. The default deliverable is a short decision memo, not code or an
+implementation plan.
 
 ## Required reading
 
 Read these completely before drawing a boundary:
 
-1. [portfolio triage](TRIAGE.md);
-2. [project charter](README.md);
-3. the assigned file under [`workstreams/`](workstreams/);
-4. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
-5. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
-6. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md);
-7. current source and tests for Rust, desktop, and iOS implementations in the
-   assigned domain.
+1. [project charter and portfolio priors](README.md);
+2. the assigned files under [`workstreams/`](workstreams/);
+3. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
+4. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
+5. [ADR 0005](../../adr/0005-native-media-handle-channel.md) for any media or
+   byte/path question;
+6. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md),
+   especially section 5 and the current goal graph;
+7. current source and tests for Rust, desktop, and iOS in the assigned domain.
 
-If the triage prior for the assigned workstream is **already owned** or
-**stay platform-side**, do not produce a full implementation plan unless a
-source-linked census overturns that prior. A short memo that confirms or
-revises the prior is enough.
+Accepted decisions and current source supersede historical plans. Do not infer
+unfinished work from old command counts, migration prose, or a platform
+adapter.
 
-Historical plans are evidence, not current truth. Confirm every ownership and
-completion claim against the current branch.
+## Research constraints
+
+- Work on at most one deep cluster at a time.
+- Research changes are docs-only under `docs/future-projects/**`.
+- Do not create Core routes, commands, DTOs, UniFFI methods, tests, or product
+  code during research.
+- Do not update SCOREBOARD state, invent P4-S38, or start P5.
+- Treat platform observation and rendering as intentional ownership, not
+  duplication.
+- Default to staying platform-side unless current evidence proves harmful
+  duplicated authority.
 
 ## Investigation sequence
 
-1. **Restate the product behavior.** Describe what users observe, not which
-   language currently implements it.
-2. **Census current owners.** Identify sources, adapters, DTOs, event streams,
-   persistence, tests, and platform integrations for all clients.
-3. **Locate the earliest divergence.** Distinguish duplicated policy from
-   necessary platform rendering and OS behavior.
-4. **Challenge the move.** Explain why the behavior should remain where it is,
-   then explain the best case for Rust ownership.
-5. **Model boundaries.** Identify secrets, bytes, file paths, credentials,
-   lifecycle constraints, latency budgets, and compatibility surfaces.
-6. **Develop alternatives.** At minimum compare no change, targeted extraction,
-   and a broader Core model. Reject a wholesale UI rewrite.
-7. **Specify behavior.** Write requirements, invariants, typed models, errors,
-   concurrency ownership, persistence, upgrades, and failure behavior.
-8. **Design proof.** Cover the test pyramid and live end-to-end evidence needed
-   to demonstrate that both clients consume one owner.
-9. **Decompose delivery.** Prefer independently reviewable vertical slices,
-   with an explicit cutover and removal of superseded owners.
-10. **Recommend.** Return one of: already correctly owned, stay platform-side,
-    extract a bounded subset, proceed with the proposed Core ownership, or
-    requires an ADR decision first.
+1. **Restate observable behavior.** Avoid language-first framing.
+2. **Classify it.** Mark each concern as Core authority, platform observation,
+   or platform rendering.
+3. **Census current owners.** Link sources, adapters, DTOs/events, persistence,
+   tests, and platform integrations for all clients.
+4. **Locate the earliest divergence.** Separate competing policy from
+   projection, rendering, and OS behavior.
+5. **Check governing boundaries.** Identify secrets, media bytes, paths,
+   lifecycle constraints, latency budgets, and accepted ADR decisions.
+6. **Compare alternatives.** At minimum: no change, a bounded extraction, and
+   a broader Core model. State the strongest case for no ownership change.
+7. **Recommend before designing delivery.** Choose: already correctly owned;
+   stay platform-side; extract a bounded subset; proceed with Core ownership;
+   or requires a product/ADR decision.
+8. **Define proof for the recommendation.** For a close/stay decision, specify
+   enough regression evidence to keep the boundary stable. For proceed,
+   identify the evidence needed before planning.
+9. **Stop after the memo.** Do not sketch commands, DTOs, slices, or rollout
+   unless the proceed recommendation is explicitly accepted.
 
-## Required deliverable
+## Required first deliverable
 
-Copy [PLAN-TEMPLATE.md](PLAN-TEMPLATE.md) into a new `plans/` subdirectory using
-the workstream ID and a descriptive name. Complete every applicable section.
-Do not erase uncomfortable unknowns. Mark them as decision blockers and state
-the evidence required to resolve them.
+Copy [RESEARCH-MEMO-TEMPLATE.md](RESEARCH-MEMO-TEMPLATE.md) to
+`memos/ROE-XX-short-name-memo.md`. For a cluster, list the relevant IDs in the
+memo and use the lowest ID in the filename. Record the source census commit and
+date. Unknowns must be explicit rather than filled with assumptions.
 
-The plan must include:
-
-- source paths and named current owners;
-- feature and functional requirements;
-- non-functional and security requirements;
-- a typed API/DTO sketch when relevant;
-- backward/forward compatibility and rollout strategy;
-- exhaustive automated and manual validation proposals;
-- failure injection, recovery, rollback, and observability;
-- dependencies, estimates by slice, and explicit stop conditions;
-- review objections and the response to each;
-- a final recommendation with confidence and unresolved risks.
+A memo that confirms **already correctly owned** or **stay platform-side** is a
+complete and valuable result. Do not inflate it into an implementation plan.
 
 ## Review protocol
 
-Use at least two perspectives:
+Use both perspectives:
 
-- an implementer review for feasibility, completeness, and testability;
-- an adversarial boundary review looking for UI leakage, secret/byte transport,
-  dual ownership, latency regressions, stale assumptions, and oversized scope.
+- an ownership reviewer checks source accuracy and whether a second authority
+  actually exists;
+- an adversarial boundary reviewer looks for UI leakage, secret/byte
+  transport, dual ownership, latency or schema churn, stale assumptions, and
+  scope that exceeds the observed product problem.
 
-If the recommendation changes an accepted boundary, draft a new ADR as part of
-the proposal. Do not edit or silently reinterpret an accepted ADR.
+If a recommendation changes an accepted boundary, it must propose—not silently
+edit—a replacement ADR. Any move of composer/UI state, media paths/bytes, OS
+delivery, or a full message AST requires an explicit boundary decision even if
+the exact change is not named in an existing brief.
 
-## Implementation handoff gate
+## Full-plan handoff gate
 
-Implementation may begin only after the plan identifies:
+Use [PLAN-TEMPLATE.md](PLAN-TEMPLATE.md) only when all are true:
 
-- an approved owner and reviewer;
-- accepted requirements and exclusions;
-- the first bounded vertical slice;
-- required CI and live proof;
-- rollback and removal criteria;
-- whether an ADR is required and, if so, its accepted decision.
+- the memo recommends a bounded Core ownership change;
+- the recommendation has human approval;
+- any required replacement ADR is accepted;
+- an implementation owner and reviewers are assigned;
+- required CI/live proof and the first bounded vertical slice are known.
+
+Store accepted planning work as `plans/ROE-XX-short-name-plan.md`. The plan
+must prevent an ambiguous dual-owner interval and define removal and rollback
+criteria. Product implementation occurs in a separate, explicitly authorized
+branch or task.

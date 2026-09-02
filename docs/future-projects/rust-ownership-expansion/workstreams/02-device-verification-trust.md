@@ -1,24 +1,29 @@
 # ROE-02: Device Verification and Trust State Machines
 
-Hypothesis: request discovery, SAS phases, trust transitions, cancellation,
-timeouts, and completion semantics should be one explicit Rust state machine.
+Prior: **already Core-owned; investigate only a bounded iOS continuity
+remainder**.
 
-Preserve platform ownership of verification screens, emoji/decimal display,
-accessibility, user confirmation, navigation, and OS lifecycle reactions.
+Core already owns verification request discovery, SAS phases, allowed actions,
+trust transitions, cancellation, timeout, and completion semantics. React and
+SwiftUI should display those states and report user/lifecycle observations.
 
-Investigate:
+## Bounded research question
 
-- matrix-rust-sdk verification APIs and authoritative transition semantics;
-- incoming and outgoing requests, concurrent sessions, duplicate events,
-  resume/restart, cancellation, timeout, and remote-device disappearance;
-- `KeysExchanged`, presentability, comparison, confirmation, trust propagation,
-  and cross-signing prerequisites;
-- typed states/actions required by React and SwiftUI without exposing SDK
-  internals or allowing impossible actions;
-- diagnostics that explain the earliest failed transition without leaking
-  secrets.
+Does iOS omit or lose a device-key, request identity, or app-lifecycle input
+needed to resume the existing Core state machine, especially around
+`KeysExchanged`, presentability, comparison, confirmation, and trust
+propagation? Distinguish missing state-machine authority from a binding,
+persistence, navigation, or rendering defect.
 
-Minimum proof: exhaustive transition-table tests, model/property tests for
-illegal transitions, two-device encrypted Synapse proof, process-restart
-recovery, desktop+iOS presentation-contract tests, and physical-device
-verification before acceptance.
+## Keep closed
+
+- Emoji/decimal layout, accessibility, confirmation screens, navigation, and
+  OS lifecycle reactions remain platform-owned.
+- Do not create a Swift verification engine or a second Rust state machine.
+- Do not expose SDK internals or permit impossible actions through DTOs.
+
+A memo should map the failing transition from current diagnostics and source.
+Only a proven missing Core input or transition can justify planning. Any later
+implementation requires transition/property tests, two-device encrypted
+Synapse proof, restart recovery, both presenter contracts, and physical-device
+verification.
