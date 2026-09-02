@@ -15,9 +15,9 @@ Integration tip: update the SHA after each feature-branch merge.
 | Message format and safety | ROE-04 | Stay platform-side | queued | — | — | Fixtures before types; no AST |
 | Message format and safety | ROE-12 | Shared rules/fixtures | queued | — | — | Pair with ROE-04; fix “already-sanitized” claim if still present |
 | Read and list semantics | ROE-05 | Visibility contract | queued | — | — | After fixtures unless ROE-08 is gated |
-| Read and list semantics | ROE-06 | Split; census Core helpers | researching | — | — | Census whether Core helpers are consumed |
+| Read and list semantics | ROE-06 | Split; census Core helpers | in-review | [#1087](https://github.com/nepenth/synara-desktop/pull/1087) | pending | Researcher: stay platform-side; helpers unused |
 | Account data and drafts | ROE-09 | Already owned | closed | [memo](../memos/ROE-09-notes-memo.md) | ACCEPT `#1084` | No second notes engine |
-| Account data and drafts | ROE-10 | Split | queued | — | — | Reply metadata vs composer state |
+| Account data and drafts | ROE-10 | Split | researching | — | — | Reply metadata vs composer state |
 | Media metadata | ROE-11 | Metadata only | queued | — | — | Subordinate to ADR 0005 |
 
 ## Merged into the feature branch
@@ -37,6 +37,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | 2026-09-01 | `a046e871` | ROE-09 memo merged (`#1084`) |
 | 2026-09-01 | `ed69be18` | ROE-09 closed; ROE-06 started |
 | 2026-09-01 | `2dc701f6` | ROE-07 memo put into review |
+| 2026-09-01 | `b6797c3a` | ROE-03 memo put into review |
 
 ## Human implementation gate
 
