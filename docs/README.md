@@ -14,6 +14,7 @@ historical plans and snapshots.
 | Build, validation, and release  | [`build-and-release.md`](build-and-release.md), [`production-smoke-checklist.md`](production-smoke-checklist.md)                                                       |
 | Desktop platform behavior       | [`desktop-modernization.md`](desktop-modernization.md), [`linux.md`](linux.md), [`macos-local-signing.md`](macos-local-signing.md)                                     |
 | Shared Rust core                | [`adr/0003-shared-native-rust-core.md`](adr/0003-shared-native-rust-core.md), [`adr/0004-rust-language-boundaries.md`](adr/0004-rust-language-boundaries.md)           |
+| Future project explorations     | [`future-projects/README.md`](future-projects/README.md)                                                                                                               |
 | Timeline reliability            | [`timeline-room-state-reliability-contract.md`](timeline-room-state-reliability-contract.md), [`timeline-room-state-acceptance.md`](timeline-room-state-acceptance.md) |
 | iOS application                 | [`../synara-ios/README.md`](../synara-ios/README.md), [`../synara-ios/docs/ios-validation-status.md`](../synara-ios/docs/ios-validation-status.md)                     |
 | Shared product contracts        | [`../synara/docs/synara-contracts.md`](../synara/docs/synara-contracts.md), [`../synara/docs/contracts/README.md`](../synara/docs/contracts/README.md)                 |
@@ -21,6 +22,11 @@ historical plans and snapshots.
 The source tree and executable validation scripts take precedence if a current
 document and implementation disagree. Update the document in the same change
 that modifies the behavior.
+
+Documents under [`future-projects/`](future-projects/README.md) are proposals
+and research workspaces, not accepted architecture or authorization to change
+product code. An accepted ADR and an approved implementation plan are required
+before a future-project proposal may override a current boundary.
 
 ## Architecture Decisions
 
