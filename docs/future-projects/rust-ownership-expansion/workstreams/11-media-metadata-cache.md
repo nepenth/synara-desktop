@@ -3,8 +3,11 @@
 Prior: **metadata only, subordinate to ADR 0005**.
 
 ADR 0005 already establishes opaque media handles and dedicated native byte
-channels. This workstream cannot reopen the generic Core command envelope for
-paths, `mxc://` sources, attachments, or bytes.
+channels. This workstream cannot put local paths or media/attachment bytes on
+the generic Core command envelope, or replace required timeline handles with
+raw `mxc://` presentation sources. A bounded Matrix content URI may still be a
+legitimate control-plane identifier on a deliberately typed operation; it is
+not a byte channel or a presenter decryption path.
 
 ## Bounded research question
 

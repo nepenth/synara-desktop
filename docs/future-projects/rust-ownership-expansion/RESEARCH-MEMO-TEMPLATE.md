@@ -2,13 +2,13 @@
 
 Status: draft research; docs-only; not approved for implementation.
 
-| Field              | Value                              |
-| ------------------ | ---------------------------------- |
-| Workstream/cluster | `<IDs>`                            |
-| Research owner     | Unassigned                         |
-| Reviewers          | Unassigned                         |
-| Source census      | `<date and commit>`                |
-| Governing ADRs     | `<0003, 0004, 0005 as applicable>` |
+| Field              | Value                                           |
+| ------------------ | ----------------------------------------------- |
+| Workstream/cluster | `<IDs>`                                         |
+| Research owner     | Unassigned                                      |
+| Reviewers          | Unassigned                                      |
+| Source census      | `<date and commit>`                             |
+| ADR baseline       | `<IDs, last-reviewed dates, and source commit>` |
 
 ## Observable problem
 
@@ -22,7 +22,9 @@ Do not begin with a language or proposed API.
 |         |           |         |     |                |
 
 Classify each concern as Core authority, platform observation, or platform
-rendering. Identify the earliest actual divergence.
+rendering. Classify each relevant constraint as a hard invariant, accepted
+platform boundary, or current technology preference. Identify the earliest
+actual divergence.
 
 ## Boundary constraints
 
@@ -52,5 +54,5 @@ questions, and the regression proof needed to keep the decision stable.
 - For **already owned** or **stay platform-side**: record any documentation or
   fixture follow-up, then close the research item.
 - For **bounded extraction** or **proceed**: stop until a human accepts the
-  recommendation and any required replacement ADR is accepted. Only then may
-  an implementation plan be written.
+  recommendation and any required ADR amendment or replacement is accepted.
+  Only then may an implementation plan be written.

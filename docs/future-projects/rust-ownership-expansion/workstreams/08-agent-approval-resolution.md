@@ -1,7 +1,7 @@
 # ROE-08: Agent Approval Detection and Action Resolution
 
-Prior: **highest-value demonstrated residual, sequenced behind the current
-iOS-on-engine gate**.
+Prior: **highest-value demonstrated residual, subject to the current shared-Core
+goal graph**.
 
 Rust already has `app/agent_approvals.rs` classifiers and decision planning,
 while desktop TypeScript and iOS notification code retain parallel

@@ -4,16 +4,17 @@ Status: gated implementation proposal; not approved for implementation.
 
 Do not use this template for initial research. It is available only after an
 accepted [research memo](RESEARCH-MEMO-TEMPLATE.md) recommends proceeding and
-any required replacement ADR has been accepted.
+any required ADR amendment or replacement has been accepted.
 
-| Field               | Value                                                            |
-| ------------------- | ---------------------------------------------------------------- |
-| Accepted memo       | `<path and commit>`                                              |
-| Owner               | Unassigned                                                       |
-| Reviewers           | Unassigned                                                       |
-| Last source census  | `<date and commit>`                                              |
-| Related workstreams | `<IDs or none>`                                                  |
-| ADR impact          | `<none, conforms to accepted ADRs, or accepted replacement ADR>` |
+| Field               | Value                                                 |
+| ------------------- | ----------------------------------------------------- |
+| Accepted memo       | `<path and commit>`                                   |
+| Owner               | Unassigned                                            |
+| Reviewers           | Unassigned                                            |
+| Last source census  | `<date and commit>`                                   |
+| Related workstreams | `<IDs or none>`                                       |
+| ADR baseline        | `<IDs, last-reviewed dates, and source commit>`       |
+| ADR impact          | `<none, conforms, or accepted amendment/replacement>` |
 
 ## 1. Accepted recommendation and evidence
 
@@ -50,7 +51,9 @@ behavior, and behavior that is already shared.
   explicitly says otherwise.
 - ...
 
-List prohibited secrets, paths, and bytes. State how ADRs 0003–0005 apply.
+List prohibited secrets, paths, and bytes. State how ADRs 0001–0005 apply.
+Identify each constraint as a hard invariant, accepted platform boundary, or
+current technology preference.
 
 ## 5. Ownership and invariants
 
@@ -120,6 +123,7 @@ strongest argument for retaining the existing owner.
 - [ ] Accepted memo and source census remain current.
 - [ ] Requirements and exclusions are approved.
 - [ ] Boundary complies with accepted ADRs.
+- [ ] ADR baseline is still current; later amendments have been evaluated.
 - [ ] Both client cutovers remove superseded owners.
 - [ ] Security and performance budgets are measurable.
 - [ ] Automated and live proof demonstrate one authority end to end.

@@ -17,25 +17,30 @@ engines.
 
 ## Governing decisions and stop gate
 
-Read and apply these sources in precedence order:
+Read these sources in order and apply the most specific accepted decision:
 
-1. [ADR 0004](../../adr/0004-rust-language-boundaries.md) defines language
-   boundaries.
-2. [ADR 0003](../../adr/0003-shared-native-rust-core.md) defines the one shared
-   Core architecture.
-3. [ADR 0005](../../adr/0005-native-media-handle-channel.md) closes the media
-   byte/path boundary.
-4. The [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md),
-   especially section 5, and its language-boundary goal graph define the
-   current implementation priority and stop conditions.
-5. These future-project documents may organize research but cannot override an
-   ADR, the playbook, the goal graph, or release evidence.
+1. The [ADR index and lifecycle rules](../../adr/README.md) explain status,
+   amendments, and supersession.
+2. [ADR 0001](../../adr/0001-ios-repository-layout.md) keeps desktop, iOS,
+   shared contracts, Core, CI, and release policy in one monorepo.
+3. [ADR 0002](../../adr/0002-ios-architecture.md) preserves the native SwiftUI
+   and Apple-platform boundary as amended by ADR 0003.
+4. [ADR 0003](../../adr/0003-shared-native-rust-core.md) establishes one shared
+   Matrix/application Core.
+5. [ADR 0004](../../adr/0004-rust-language-boundaries.md) classifies Core
+   authority, platform observation/rendering, hard invariants, and revisable
+   technology preferences.
+6. [ADR 0005](../../adr/0005-native-media-handle-channel.md) is the specific
+   decision for media handles, paths, and byte channels.
+7. The [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md)
+   and current [language-boundary goal graph](../../shared-native-core/13-language-boundary-goal-graph.md)—not
+   an ADR or this portfolio—define current sequencing, stop conditions, and
+   release proof.
 
-The current P4 engine-ready route remains gated by its recorded iOS CI and live
-homeserver proof. This portfolio must not invent P4-S38, start P5, modify
-SCOREBOARD state, or turn a research finding into product work. A human must
-explicitly charter any docs-only investigation; implementation requires a
-separate acceptance gate.
+These future-project documents cannot override an ADR, the current goal graph,
+or release evidence. They must not create or advance shared-Core phase,
+scoreboard, or release state. A human must explicitly charter docs-only
+research; implementation requires a separate acceptance gate.
 
 ## Ownership taxonomy
 
@@ -51,19 +56,32 @@ A platform observation may be an input to Core authority without Core owning
 the observation. A presenter projection of a Core model is not a second source
 of truth.
 
+Also classify every constraint as one of:
+
+- a **hard invariant** protecting correctness, security, or the accepted
+  platform architecture;
+- an **accepted platform boundary** describing observation, rendering, or OS
+  ownership; or
+- a **current technology preference** that may change through an evidence-based
+  product and architecture decision.
+
+Do not present a preference for React, SwiftUI, Slate, Prism, pdf.js, or Node as
+an irreversible security boundary. Do not weaken a hard invariant merely
+because a technology preference can be revisited.
+
 ## Unordered research clusters
 
 The IDs are retained for traceability, not priority. Investigate at most one
 deep cluster at a time.
 
-| Cluster                        | Workstreams                                                                                                                                                                 | Default outcome                                                                                    |
-| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Residual engine census         | [ROE-01](workstreams/01-matrix-sdk-orchestration.md), [ROE-02](workstreams/02-device-verification-trust.md), parts of [ROE-03](workstreams/03-timeline-normalization.md)    | Census and close behavior already owned by Core; record only a concrete remainder                  |
-| Message format and safety      | [ROE-03](workstreams/03-timeline-normalization.md), [ROE-04](workstreams/04-semantic-message-presentation.md), [ROE-12](workstreams/12-validation-sanitization-security.md) | Build shared fixtures first; keep rendering and output-context sanitization platform-side          |
-| Read and list semantics        | [ROE-05](workstreams/05-read-marker-unread.md), [ROE-06](workstreams/06-room-sorting-filtering.md)                                                                          | Formalize visibility inputs if needed; keep viewport math, sections, and locale presentation local |
-| Notifications and agent policy | [ROE-07](workstreams/07-notification-critical-policy.md), [ROE-08](workstreams/08-agent-approval-resolution.md)                                                             | Consolidate shared policy only; keep APNs/NSE/tray delivery and cards platform-owned               |
-| Account data and drafts        | [ROE-09](workstreams/09-notes-account-data.md), [ROE-10](workstreams/10-drafts-replies.md)                                                                                  | Close notes as owned; keep composer state local; examine only typed reply/draft metadata           |
-| Media metadata                 | [ROE-11](workstreams/11-media-metadata-cache.md)                                                                                                                            | Remain subordinate to ADR 0005; never reopen the generic byte/path envelope                        |
+| Cluster                        | Workstreams                                                                                                                                                                 | Default outcome                                                                                                                 |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Residual engine census         | [ROE-01](workstreams/01-matrix-sdk-orchestration.md), [ROE-02](workstreams/02-device-verification-trust.md), parts of [ROE-03](workstreams/03-timeline-normalization.md)    | Census and close behavior already owned by Core; record only a concrete remainder                                               |
+| Message format and safety      | [ROE-03](workstreams/03-timeline-normalization.md), [ROE-04](workstreams/04-semantic-message-presentation.md), [ROE-12](workstreams/12-validation-sanitization-security.md) | Build shared fixtures first; keep rendering and output-context sanitization platform-side                                       |
+| Read and list semantics        | [ROE-05](workstreams/05-read-marker-unread.md), [ROE-06](workstreams/06-room-sorting-filtering.md)                                                                          | Formalize visibility inputs and shared policy if needed; keep viewport math, navigation sections, and locale presentation local |
+| Notifications and agent policy | [ROE-07](workstreams/07-notification-critical-policy.md), [ROE-08](workstreams/08-agent-approval-resolution.md)                                                             | Consolidate shared policy only; keep APNs/NSE/tray delivery and cards platform-owned                                            |
+| Account data and drafts        | [ROE-09](workstreams/09-notes-account-data.md), [ROE-10](workstreams/10-drafts-replies.md)                                                                                  | Close notes as owned; keep composer state local; examine only typed reply/draft metadata                                        |
+| Media metadata                 | [ROE-11](workstreams/11-media-metadata-cache.md)                                                                                                                            | Remain subordinate to ADR 0005; never reopen the generic byte/path envelope                                                     |
 
 ## Portfolio priors
 
@@ -77,17 +95,18 @@ memo may overturn one only with current source and test evidence.
 | ROE-03 | Extend existing rows only                    | Is a protocol-semantic relationship missing from `TimelineViewRow`? Never add a parallel normalization layer or move viewport behavior.                                                           |
 | ROE-04 | Stay platform-side by default                | Can shared Matrix/Hermes fixtures remove observed renderer drift? Consider small row fields only if fixtures prove a security-relevant semantic gap.                                              |
 | ROE-05 | Bounded remainder                            | Does the platform-to-Core visibility contract need formalization? Core owns counts and receipt writes; platforms own visibility measurement.                                                      |
-| ROE-06 | Stay platform-side by default                | Are existing Core predicates/sort helpers needed by both clients? Keep navigation sections and locale/collation presentation local.                                                               |
+| ROE-06 | Split ownership; census existing Core policy | Are existing Core predicates/sort helpers the shared semantic owner, and do both clients consume them? Keep navigation sections and locale/collation presentation local.                          |
 | ROE-07 | Policy yes, delivery no                      | Is shared eligibility/privacy/deduplication policy missing? APNs, NSE, tray, banners, and actions remain platform integrations.                                                                   |
-| ROE-08 | Highest-value real residual                  | Which desktop/iOS approval classifiers or planners still compete with `app/agent_approvals.rs`, and when may they be removed without violating the iOS-on-engine sequence?                        |
+| ROE-08 | Highest-value real residual                  | Which desktop/iOS approval classifiers or planners still compete with `app/agent_approvals.rs`, and when does the current goal graph permit their removal?                                        |
 | ROE-09 | Already owned                                | Do both clients consume the existing Core schema and CRUD path without a second notes engine?                                                                                                     |
 | ROE-10 | Split ownership                              | Core may own reply metadata and a wire-neutral durable draft schema; Slate/Swift editor state and ordinary local composer bodies stay platform-side absent a cross-device rich-draft requirement. |
 | ROE-11 | Metadata only                                | Is shared cache eligibility or integrity metadata missing from the native handle owner? Paths and bytes remain on ADR 0005 channels.                                                              |
 | ROE-12 | Shared rules and fixtures, not one sanitizer | Which protocol bounds are truly identical? DOM/React and Swift attributed-text output sanitization remains platform-specific.                                                                     |
 
-After P4 engine-ready is proven, the likely investigation order is ROE-08,
-then the ROE-04/12 fixture corpus, then the ROE-05 visibility contract. All
-other workstreams should begin as census-and-close exercises.
+When the current shared-Core goal graph permits new residual work, the likely
+investigation order is ROE-08, then the ROE-04/12 fixture corpus, then the
+ROE-05 visibility contract. This is a research priority, not a new phase queue.
+All other workstreams should begin as census-and-close exercises.
 
 ## Memo-first workflow
 
@@ -102,7 +121,7 @@ other workstreams should begin as census-and-close exercises.
    already owned or stay platform-side.
 6. A full [implementation plan](PLAN-TEMPLATE.md) under [`plans/`](plans/README.md)
    is allowed only after a proceed recommendation is accepted by a human and
-   any required replacement ADR is accepted.
+   any required ADR amendment or replacement is accepted.
 
 Research PRs are docs-only under `docs/future-projects/**`. They must not add
 Core commands, DTOs, UniFFI APIs, feature flags, or product code.
@@ -118,8 +137,8 @@ Shared fixtures should precede shared types:
    fields such as validated links, mentions, spoiler reason, or a reply-fallback
    flag.
 3. Consider a full Core message AST only if bounded fields cannot resolve the
-   proven drift. That would replace part of ADR 0004 and requires a replacement
-   ADR before API, DTO, or UniFFI design.
+   proven drift. That would change part of ADR 0004 and requires an accepted ADR
+   amendment or replacement before API, DTO, or UniFFI design.
 
 Matrix inbound rich text is HTML, not Markdown. A Core AST would also incur
 schema churn, serialization and 1 MiB envelope pressure while leaving
@@ -138,11 +157,15 @@ architecture.
 - No DOM or attributed-string sanitizer masquerading as a universal sanitizer.
 - No passwords, recovery material, local paths, or media bytes on the generic
   Core envelope. ADR 0005's dedicated media channel remains authoritative.
-- No S38/P5/SCOREBOARD work may originate from this directory.
+- No shared-Core phase, scoreboard, release-gate, or acceptance-state change may
+  originate from this directory; follow the current goal graph.
 
 ## Non-goals
 
 - Reducing TypeScript or Swift line count for its own sake.
 - Making the clients render identically instead of natively and accessibly.
-- Replacing React, SwiftUI, Slate, WebKit, Prism, or OS integration APIs.
-- Rewriting Node build/governance tooling or adopting a Rust UI framework.
+- Replacing React, SwiftUI, Slate, WebKit, Prism, or OS integration APIs as a
+  shortcut for reducing non-Rust code. Those current technology choices may be
+  reconsidered only through a separately chartered product/architecture case.
+- Rewriting Node build/governance tooling or adopting a Rust UI framework as
+  part of this residual-ownership portfolio.
