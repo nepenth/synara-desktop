@@ -9,7 +9,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | --- | --- | --- | --- | --- | --- | --- |
 | Residual engine census | ROE-01 | Already owned | closed | [memo](../memos/ROE-01-orchestration-memo.md) | ACCEPT_WITH_NITS `#1081` | Nits recorded in memo |
 | Residual engine census | ROE-02 | Already owned | closed | [memo](../memos/ROE-02-verification-memo.md) | ACCEPT `#1083` | No missing Core input |
-| Residual engine census | ROE-03 | Extend rows only | researching | — | — | No second row model |
+| Residual engine census | ROE-03 | Extend rows only | in-review | [#1086](https://github.com/nepenth/synara-desktop/pull/1086) | pending | Researcher: close; no missing field |
 | Notifications and agent policy | ROE-08 | Highest residual | human-gate | [memo](../memos/ROE-08-agent-approval-memo.md) | ACCEPT `#1082` | Extract eligibility; no implementation (D10) |
 | Notifications and agent policy | ROE-07 | Policy yes, delivery no | in-review | [#1085](https://github.com/nepenth/synara-desktop/pull/1085) | pending | Researcher: close/stay; no live dual engine |
 | Message format and safety | ROE-04 | Stay platform-side | queued | — | — | Fixtures before types; no AST |
@@ -36,6 +36,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | 2026-09-01 | `71e6067f` | ROE-01 nits recorded; ROE-03 started |
 | 2026-09-01 | `a046e871` | ROE-09 memo merged (`#1084`) |
 | 2026-09-01 | `ed69be18` | ROE-09 closed; ROE-06 started |
+| 2026-09-01 | `2dc701f6` | ROE-07 memo put into review |
 
 ## Human implementation gate
 
