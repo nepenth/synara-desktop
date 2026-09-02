@@ -72,6 +72,7 @@ final class TimelineReplyPreviewTests: XCTestCase {
             timestamp: Date(),
             kind: .text("Can I take a pass on the reviewer roles?"),
             replyToEventID: nil,
+            threadRootEventID: "$thread-root",
             isEdited: false,
             reactions: [:]
         )
@@ -79,6 +80,7 @@ final class TimelineReplyPreviewTests: XCTestCase {
         let target = ComposerRelationTarget(item: item, kind: .reply, currentUserID: "@local:matrix.org")
 
         XCTAssertEqual(target.eventID, "$event")
+        XCTAssertEqual(target.threadRootEventID, "$thread-root")
         XCTAssertEqual(target.senderName, "Mina")
         XCTAssertEqual(target.snippet, "Can I take a pass on the reviewer roles?")
         XCTAssertEqual(target.bannerTitle, "Replying to Mina")

@@ -1,5 +1,56 @@
 @testable import Synara
+import Foundation
 import XCTest
+
+private struct MessageFormatCorpus: Decodable {
+    let schemaVersion: Int
+    let presentationFormattedBodyMaxBytes: Int
+    let cases: [MessageFormatCorpusCase]
+}
+
+private struct MessageFormatCorpusCase: Decodable {
+    struct Generator: Decodable {
+        let kind: String
+        let tag: String?
+        let count: Int
+        let text: String?
+        let prefix: String?
+        let unit: String?
+        let suffix: String?
+    }
+
+    struct Expectation: Decodable {
+        let accepted: Bool
+        let textContains: [String]
+        let textExcludes: [String]
+        let linkSchemes: [String]
+        let containsSpoiler: Bool
+        let forbiddenFragments: [String]
+    }
+
+    let id: String
+    let body: String
+    let formattedBody: String
+    let generator: Generator?
+    let expect: Expectation
+
+    var expandedFormattedBody: String {
+        guard let generator else { return formattedBody }
+        switch generator.kind {
+        case "nestedTag":
+            let tag = generator.tag ?? "span"
+            return String(repeating: "<\(tag)>", count: generator.count)
+                + (generator.text ?? "")
+                + String(repeating: "</\(tag)>", count: generator.count)
+        case "repeatedText":
+            return (generator.prefix ?? "")
+                + String(repeating: generator.unit ?? "", count: generator.count)
+                + (generator.suffix ?? "")
+        default:
+            return formattedBody
+        }
+    }
+}
 
 final class TimelineServiceTests: XCTestCase {
     private actor RecoveryInvocationCounter {
@@ -7,6 +58,48 @@ final class TimelineServiceTests: XCTestCase {
 
         func increment() {
             value += 1
+        }
+    }
+
+    func testSharedMatrixAndHermesMessageFormatCorpus() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let corpusURL = repositoryRoot
+            .appendingPathComponent("docs/future-projects/rust-ownership-expansion/fixtures/message-format/corpus.json")
+        let corpus = try JSONDecoder().decode(
+            MessageFormatCorpus.self,
+            from: Data(contentsOf: corpusURL)
+        )
+
+        XCTAssertEqual(corpus.schemaVersion, 1)
+        XCTAssertEqual(corpus.presentationFormattedBodyMaxBytes, 256 * 1_024)
+        XCTAssertEqual(Set(corpus.cases.map(\.id)).count, corpus.cases.count)
+
+        for fixture in corpus.cases {
+            let html = fixture.expandedFormattedBody
+            let sanitized = MatrixHTMLRenderer.sanitizedHTMLForClipboard(html: html)
+            XCTAssertEqual(sanitized != nil, fixture.expect.accepted, fixture.id)
+            let projection = MatrixHTMLRenderer.selectionProjection(
+                body: fixture.body,
+                html: html,
+                revealingSpoilers: true
+            )
+            let text = projection.richText.plainText
+
+            for expected in fixture.expect.textContains {
+                XCTAssertTrue(text.contains(expected), "\(fixture.id): missing text \(expected)")
+            }
+            for excluded in fixture.expect.textExcludes {
+                XCTAssertFalse(text.contains(excluded), "\(fixture.id): exposed text \(excluded)")
+            }
+            let schemes = projection.richText.runs.compactMap { $0.link?.scheme?.lowercased() }.sorted()
+            XCTAssertEqual(schemes, fixture.expect.linkSchemes.sorted(), fixture.id)
+            XCTAssertEqual(projection.containsSpoilers, fixture.expect.containsSpoiler, fixture.id)
+            for forbidden in fixture.expect.forbiddenFragments {
+                XCTAssertFalse((sanitized ?? "").contains(forbidden), "\(fixture.id): retained \(forbidden)")
+            }
         }
     }
 
@@ -1997,6 +2090,56 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNil(merged.first?.deliveryStatus)
     }
 
+    func testPendingReconcilerRequiresMatchingThreadRoot() {
+        let pending = TimelineItem.pendingMessage(
+            localID: "$pending-thread-reply",
+            body: "Same text",
+            senderID: "@alice:matrix.org",
+            replyToEventID: "$child",
+            threadRootEventID: "$root-a",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(35)
+        )
+        let differentThread = TimelineItem(
+            id: "$server-other-thread",
+            eventID: "$server-other-thread",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(36),
+            kind: .text("Same text"),
+            replyToEventID: "$child",
+            threadRootEventID: "$root-b",
+            isEdited: false,
+            reactions: [:]
+        )
+        let sameThread = TimelineItem(
+            id: "$server-same-thread",
+            eventID: "$server-same-thread",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate.addingTimeInterval(36),
+            kind: .text("Same text"),
+            replyToEventID: "$child",
+            threadRootEventID: "$root-a",
+            isEdited: false,
+            reactions: [:]
+        )
+
+        XCTAssertFalse(TimelinePendingReconciler.matchesPending(pending, serverItem: differentThread))
+        XCTAssertTrue(TimelinePendingReconciler.matchesPending(pending, serverItem: sameThread))
+
+        let unmatched = TimelinePendingReconciler.merge(
+            streamItems: [differentThread],
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+        XCTAssertEqual(unmatched.map(\.id), ["$pending-thread-reply", "$server-other-thread"])
+
+        let reconciled = TimelinePendingReconciler.merge(
+            streamItems: [sameThread],
+            localItems: [pending],
+            currentUserID: "@alice:matrix.org"
+        )
+        XCTAssertEqual(reconciled.map(\.id), ["$server-same-thread"])
+    }
+
     func testPendingReconcilerKeepsFailedAndUnmatchedPendingItems() {
         let failed = TimelineItem.pendingMessage(
             localID: "$pending-failed",
@@ -2298,6 +2441,160 @@ final class TimelineServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(TimelineReplyCounter.replyCounts(for: [root, firstReply, secondReply]), ["$root": 2])
+    }
+
+    func testCoreRelationPresentationWinsOverLoadedWindowFallback() {
+        let authoritativePreview = TimelineReplyPreview(senderName: "Remote Alice", snippet: "Core preview")
+        let item = TimelineItem(
+            id: "$reply",
+            eventID: "$reply",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Reply"),
+            replyToEventID: "$root",
+            replyPreview: authoritativePreview,
+            threadSummary: TimelineThreadSummary(
+                rootEventID: "$reply",
+                replyCount: 9,
+                latestEventID: "$latest"
+            ),
+            isEdited: false,
+            reactions: [:]
+        )
+        let localPreview = TimelineReplyPreview(senderName: "Stale", snippet: "Local fallback")
+
+        XCTAssertEqual(
+            TimelineRelationPresentation.replyPreview(
+                for: item,
+                locallyResolvedByEventID: ["$root": localPreview]
+            ),
+            authoritativePreview
+        )
+        XCTAssertEqual(
+            TimelineRelationPresentation.replyCount(
+                for: item,
+                locallyCountedByRootID: ["$reply": 1]
+            ),
+            9
+        )
+    }
+
+    func testRelationPresentationFallsBackForLocalAndMockItems() {
+        let item = TimelineItem(
+            id: "$reply",
+            eventID: "$reply",
+            senderID: "@bob:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Reply"),
+            replyToEventID: "$root",
+            isEdited: false,
+            reactions: [:]
+        )
+        let localPreview = TimelineReplyPreview(senderName: "Alice", snippet: "Loaded root")
+
+        XCTAssertEqual(
+            TimelineRelationPresentation.replyPreview(
+                for: item,
+                locallyResolvedByEventID: ["$root": localPreview]
+            ),
+            localPreview
+        )
+        XCTAssertEqual(
+            TimelineRelationPresentation.replyCount(
+                for: item,
+                locallyCountedByRootID: ["$reply": 2]
+            ),
+            2
+        )
+    }
+
+    func testCoreRowWithoutThreadSummaryDoesNotInferThreadFromClassicReplies() {
+        let item = TimelineItem(
+            id: "$root",
+            eventID: "$root",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Classic message"),
+            replyToEventID: nil,
+            actionCapabilities: TimelineRowActionCapabilities(
+                canReact: true,
+                canReply: true,
+                canEdit: false,
+                canRedact: false,
+                canReport: false,
+                canPin: true,
+                canForward: true,
+                canVote: false,
+                canDeclineCall: false
+            ),
+            isEdited: false,
+            reactions: [:]
+        )
+
+        XCTAssertEqual(
+            TimelineRelationPresentation.replyCount(
+                for: item,
+                locallyCountedByRootID: ["$root": 3]
+            ),
+            0
+        )
+    }
+
+    func testThreadMembershipUsesCoreThreadRootInsteadOfNestedReplyTarget() {
+        let capabilities = TimelineRowActionCapabilities(
+            canReact: true,
+            canReply: true,
+            canEdit: false,
+            canRedact: false,
+            canReport: false,
+            canPin: true,
+            canForward: true,
+            canVote: false,
+            canDeclineCall: false
+        )
+        let nestedThreadReply = TimelineItem(
+            id: "$child-two",
+            eventID: "$child-two",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Nested reply"),
+            replyToEventID: "$child-one",
+            threadRootEventID: "$root",
+            actionCapabilities: capabilities,
+            isEdited: false,
+            reactions: [:]
+        )
+        let classicReply = TimelineItem(
+            id: "$classic",
+            eventID: "$classic",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Classic reply"),
+            replyToEventID: "$root",
+            actionCapabilities: capabilities,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        XCTAssertTrue(TimelineThreadMembership.contains(nestedThreadReply, rootEventID: "$root"))
+        XCTAssertFalse(TimelineThreadMembership.contains(nestedThreadReply, rootEventID: "$other"))
+        XCTAssertFalse(TimelineThreadMembership.contains(classicReply, rootEventID: "$root"))
+    }
+
+    func testTimelineItemUsesCoreSenderDisplayNameBeforeLocalpartFallback() {
+        let item = TimelineItem(
+            id: "$message",
+            eventID: "$message",
+            senderID: "@alice:matrix.org",
+            senderProfileDisplayName: "Alice Example",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Hello"),
+            replyToEventID: nil,
+            isEdited: false,
+            reactions: [:]
+        )
+
+        XCTAssertEqual(item.senderDisplayName, "Alice Example")
     }
 
     func testSynaraLaterListSortingPrioritizesActiveItems() {

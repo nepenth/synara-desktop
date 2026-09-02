@@ -57,7 +57,8 @@ enum SharedCoreRoomListRows {
                     lastMessagePreview: room.lastMessagePreview
                 ),
                 unreadCount: room.unreadCount,
-                hasHighlight: room.highlightCount > 0 || room.markedUnread,
+                hasHighlight: room.highlightCount > 0,
+                isMarkedUnread: room.markedUnread,
                 kind: room.isDirect ? .directMessage : .room,
                 membership: isInvited(room.membership) ? .invited : .joined,
                 lastActivityAt: activityDate(millisecondsSince1970: room.lastActivityTs),
@@ -114,7 +115,11 @@ enum SharedCoreRoomListRows {
         }
     }
 
-    static func hasUnreadMessages(unreadCount: Int, hasHighlight: Bool) -> Bool {
-        unreadCount > 0 || hasHighlight
+    static func hasUnreadMessages(
+        unreadCount: Int,
+        hasHighlight: Bool,
+        isMarkedUnread: Bool = false
+    ) -> Bool {
+        unreadCount > 0 || hasHighlight || isMarkedUnread
     }
 }

@@ -1,12 +1,12 @@
 # ROE-05 Research Memo: Visibility-contract residual census
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership boundary accepted; read/privacy remediation reopened; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                                                                                 |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-05 (read and list semantics)                                                                                                                                                                      |
 | Research owner     | Isolated researcher on `roe/memo-05-visibility`                                                                                                                                                       |
-| Reviewers          | Unassigned                                                                                                                                                                                            |
+| Reviewers          | Independent feature-branch review; `ACCEPT_WITH_NITS` on PR `#1091` at `25c1ee02`                                                                                                                    |
 | Source census      | 2026-09-01 against `5f81d9e7d1fccd762e16dad645bea8f07a216675`. [CENSUS.md](../program/CENSUS.md) is a `main` `011cf39a` snapshot only; product paths were re-read on this commit. Source wins.          |
 | ADR baseline       | [ADR 0003](../../../adr/0003-shared-native-rust-core.md), [0004](../../../adr/0004-rust-language-boundaries.md), [0005](../../../adr/0005-native-media-handle-channel.md); index last reviewed 2026-09-01. Goal-graph and playbook §5 read on this census commit. |
 
@@ -237,16 +237,18 @@ still presenter observation / product-preference defects on top of one
 write owner. Wiring a new Core observation would start product work
 while the goal graph is stopped on the P4 engine-ready gate (D3/D9).
 
-Unresolved questions (not blockers for this close):
+Unresolved product defects and decisions:
 
 - Product: does “Hide Typing & Read Receipts” suppress *all* receipt
   writes, including explicit Mark as Read, or only automatic ones?
   Desktop and iOS disagree.
 - Product: Synara never sends public `m.read`. The settings string and
   the leftover js-sdk helper still talk as if public receipts exist.
-- Whether a later presenter task should add an iOS scene-phase gate and
-  stop leave-room flush after the tail is no longer pinned. That is not
-  a Core extract.
+- iOS currently lacks the documented scene/application-active gate, and
+  cancellation does not clear the last candidate. A leave-room flush can
+  therefore invoke Core after the user moved away from the tail. Core still
+  chooses the latest event on a newly opened live stream; that does not make
+  the stale presenter observation correct.
 - Thread-scoped receipts if a later product requires them. That would
   be a new Core write, not a visibility DTO, and is not authorized here.
 
@@ -261,28 +263,13 @@ viewport/focus/lifecycle; NSE never starts sync or writes receipts.
 
 ## Next gate
 
-**Close the research item.** Writes and counts are already correctly
-owned. Visibility measurement stays platform-side. There is no
-extract/proceed recommendation and therefore no implementation plan,
-Core API, UniFFI change, or product edit.
-
-The observation-gate mismatch remains as unused-quality / product-
-preference work on the presenters. Aligning `hideActivity` or adding an
-iOS foreground check is a later human product decision, not an
-overnight Core extract. The current goal graph does not permit a new
-residual implementation slice: P4 engine-ready is pending/blocked; do
-not invent S38; do not start P5. D10 (ROE-08) remains the only open
-human implementation question in this program.
-
-## Reviewer nits (`ACCEPT_WITH_NITS` on #1091)
-
-Recorded from the independent review at `25c1ee02`. They do not change the
-close:
-
-- iOS flush “write from last-candidate” is an invoke gate; Core still
-  writes `latest_event_id()` on a new live-bottom stream.
-- The documented observation-contract list includes an iOS scene-phase
-  gate that current iOS does not implement — description, not live
-  source.
-- Leftover `markAsReadAtEvent` / `setUnreadAnchor` have no desktop
-  native early-return, but no product callers.
+The write/count ownership question is closed and visibility remains platform-
+observed. Product correctness and privacy are reopened as
+[A4](../program/ACTIONS.md#a4--readprivacy-contract): add the missing active-
+scene gate, clear pending and last-candidate state on cancellation/scroll-away,
+prevent stale leave-room flushes, and decide one explicit-versus-automatic
+`hideActivity` contract across clients. Cover transition races and prove the
+actual two-client receipt/unread result on Synapse. Leftover
+`markAsReadAtEvent` / `setUnreadAnchor` have no desktop native early return but
+also no product callers; keep them unwired or remove them through a separate
+hygiene change.

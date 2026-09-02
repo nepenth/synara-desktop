@@ -53,22 +53,36 @@ export type NativeTimelineThreadSummary = {
   latestEventId?: string;
 };
 
-type NativeTimelineMessageRow = NativeTimelineEventRowBase & {
-  kind: 'message';
-  body: string;
-  formattedBody?: string;
-  agentCardJson?: string;
-  messageType?: string;
-  mediaFilename?: string;
-  mediaCaption?: string;
-  edited: boolean;
-  /** Parent preview when this row is an in-reply message. */
-  reply?: NativeTimelineReplyPreview;
-  /** Thread root summary when this row owns a thread. */
-  thread?: NativeTimelineThreadSummary;
-  reactions?: Array<{ key: string; count: number; own?: boolean }>;
-  media?: NativeTimelineMediaHandle;
+export type NativeTimelineReaction = {
+  key: string;
+  count: number;
+  own?: boolean;
 };
+
+export type NativeTimelineRelationPresentation = {
+  /** Parent preview when this row is an in-reply event. */
+  reply?: NativeTimelineReplyPreview;
+  /** Authoritative root of the thread this row belongs to. */
+  threadRoot?: string;
+  /** Summary when this row owns a thread. */
+  thread?: NativeTimelineThreadSummary;
+  reactions?: NativeTimelineReaction[];
+};
+
+type NativeTimelineMessageRow = NativeTimelineEventRowBase &
+  NativeTimelineRelationPresentation & {
+    kind: 'message';
+    body: string;
+    formattedBody?: string;
+    agentCardJson?: string;
+    /** Core-owned approval eligibility; body parsing below is presentation-only. */
+    isAgentApproval?: boolean;
+    messageType?: string;
+    mediaFilename?: string;
+    mediaCaption?: string;
+    edited: boolean;
+    media?: NativeTimelineMediaHandle;
+  };
 
 export const parseNativeTimelineAgentCard = (
   agentCardJson: string | undefined
@@ -93,7 +107,7 @@ type NativeTimelineStickerRow = {
   kind: 'sticker';
   event: NativeTimelineEventRowBase;
   media: NativeTimelineMediaHandle;
-};
+} & NativeTimelineRelationPresentation;
 
 export type NativeTimelinePollAnswer = {
   id: string;
@@ -102,15 +116,16 @@ export type NativeTimelinePollAnswer = {
   own?: boolean;
 };
 
-type NativeTimelinePollRow = NativeTimelineEventRowBase & {
-  kind: 'poll';
-  question: string;
-  closed: boolean;
-  /** Maximum simultaneous selections; absent on older snapshots. */
-  maxSelections?: number;
-  /** Answer options with counts only (no voter IDs). */
-  answers?: NativeTimelinePollAnswer[];
-};
+type NativeTimelinePollRow = NativeTimelineEventRowBase &
+  NativeTimelineRelationPresentation & {
+    kind: 'poll';
+    question: string;
+    closed: boolean;
+    /** Maximum simultaneous selections; absent on older snapshots. */
+    maxSelections?: number;
+    /** Answer options with counts only (no voter IDs). */
+    answers?: NativeTimelinePollAnswer[];
+  };
 
 type NativeTimelineMembershipRow = NativeTimelineEventRowBase & {
   kind: 'membership';
@@ -229,11 +244,17 @@ export type NativeTimelineViewState =
 export type NativeTimelineViewController = {
   state: NativeTimelineViewState;
   paginate: (direction: 'backwards' | 'forwards') => Promise<void>;
-  setReadState: (action: 'mark_read' | 'mark_unread') => Promise<void>;
+  setReadState: (request: {
+    action: 'mark_read' | 'mark_unread';
+    intent: 'automatic_visibility' | 'explicit_user';
+    observedLiveTailEventId?: string;
+  }) => Promise<void>;
   jumpLatest: () => Promise<void>;
 };
 
 type NativeTimelineReadStateReadback = {
+  receiptSent?: boolean;
+  acknowledgedEventId?: string;
   snapshot: NativeTimelineViewSnapshot;
 };
 
@@ -554,11 +575,15 @@ export const useNativeTimelineView = (
   );
 
   const setReadState = useCallback(
-    async (action: 'mark_read' | 'mark_unread') => {
+    async (request: {
+      action: 'mark_read' | 'mark_unread';
+      intent: 'automatic_visibility' | 'explicit_user';
+      observedLiveTailEventId?: string;
+    }) => {
       const streamId = streamIdRef.current;
       const snapshot = snapshotRef.current;
       const permitted =
-        action === 'mark_read'
+        request.action === 'mark_read'
           ? snapshot?.capabilities.markRead
           : snapshot?.capabilities.markUnread;
       if (!streamId || !snapshot || !permitted) {
@@ -566,7 +591,7 @@ export const useNativeTimelineView = (
       }
       const result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
         'matrix_timeline_set_read_state',
-        { request: { streamId, action } }
+        { request: { streamId, ...request } }
       );
       if (!result.available || !result.value) {
         setState({

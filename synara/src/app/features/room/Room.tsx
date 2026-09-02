@@ -1,7 +1,6 @@
 import React, { useCallback, useState } from 'react';
 import { Box, Line } from 'folds';
 import { useParams } from 'react-router-dom';
-import { isKeyHotkey } from 'is-hotkey';
 import { RoomView } from './RoomView';
 import { MembersDrawer } from './MembersDrawer';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
@@ -9,34 +8,17 @@ import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { PowerLevelsContextProvider, usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
-import { useKeyDown } from '../../hooks/useKeyDown';
-import { markAsReadInBackground } from '../../utils/notifications';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { RoomViewHeader } from './RoomViewHeader';
 import { RoomSidePanel, RoomSidePanelType } from './RoomSidePanel';
 
 export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
-  const mx = useMatrixClient();
 
   const [isDrawer, setIsDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const [roomSidePanel, setRoomSidePanel] = useState<RoomSidePanelType>();
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const screenSize = useScreenSizeContext();
   const powerLevels = usePowerLevels(room);
-
-  useKeyDown(
-    window,
-    useCallback(
-      (evt) => {
-        if (isKeyHotkey('escape', evt)) {
-          markAsReadInBackground(mx, room.roomId, hideActivity);
-        }
-      },
-      [mx, room.roomId, hideActivity]
-    )
-  );
 
   const activeSidePanel = isDrawer ? 'members' : roomSidePanel;
   const handleToggleSidePanel = useCallback(

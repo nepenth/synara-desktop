@@ -6,6 +6,8 @@ import {
   clearUnreadAnchor,
   markAsRead,
   markAsReadAtEvent,
+  markAsReadFromExplicitUserAction,
+  markAsReadFromExplicitUserActionInBackground,
   markAsReadInBackground,
 } from '../notifications';
 import { getThreadRootEventId } from '../room';
@@ -150,6 +152,39 @@ test('markAsRead resolves the latest SDK timeline by default', async () => {
 
   assert.equal(latestTimelineCalls, 1);
   assert.deepEqual(markerArgs, [room.roomId, '$latest', latest, undefined]);
+});
+
+test('explicit user Mark Read enters the private receipt channel', async () => {
+  const latest = createTimelineEvent('$latest');
+  let markerArgs: any[] | undefined;
+  const room = {
+    roomId: '!room:example.org',
+    accountData: { get: () => undefined },
+    getEventReadUpTo: () => '$older',
+    getLiveTimeline: () => ({ getEvents: () => [latest] }),
+    getUnfilteredTimelineSet: () => ({}),
+    compareEventOrdering: () => null,
+  } as any;
+  const mx = {
+    getRoom: () => room,
+    getUserId: () => '@alice:example.org',
+    getAccountData: () => undefined,
+    getLatestTimeline: async () => ({ getEvents: () => [latest] }),
+    setRoomReadMarkers: async (...args: any[]) => {
+      markerArgs = args;
+    },
+  } as any;
+
+  await markAsReadFromExplicitUserAction(mx, room.roomId);
+
+  assert.deepEqual(markerArgs, [room.roomId, '$latest', undefined, latest]);
+});
+
+test('explicit user Mark Read background wrapper remains observable as a void launch', async () => {
+  const mx = { getRoom: () => undefined } as any;
+  const result = markAsReadFromExplicitUserActionInBackground(mx, '!room:example.org');
+  await Promise.resolve();
+  assert.equal(result, undefined);
 });
 
 test('markAsRead can explicitly use the loaded live tail for mounted bottom state', async () => {

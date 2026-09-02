@@ -12,7 +12,7 @@ ready proposal without quietly turning a brainstorm into a migration.
 
 | Project                                                              | Question                                                                                         | Status                                  |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover? | Optional docs-only research; memo first. Overnight execution, if chartered, lives on `feature/rust-ownership-residual-census` and is tracked under [program/](rust-ownership-expansion/program/README.md). |
+| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover? | Docs-only research completed on 2026-09-01; ownership conclusions and unresolved product/evidence actions are recorded under [program/](rust-ownership-expansion/program/README.md). |
 
 ## Rules for work in this directory
 
@@ -24,7 +24,7 @@ ready proposal without quietly turning a brainstorm into a migration.
 4. Do not create a second core, parallel Matrix engine, or Rust UI rewrite.
 5. Do not implement product code from a research brief. First produce the
    required short research memo. Write a full plan only after a proceed
-   recommendation and any required replacement ADR are accepted.
+   recommendation and any required ADR amendment or replacement is accepted.
 6. Plans must cover desktop macOS, desktop Linux, and iOS consequences, even
    when a workstream changes only one shared component.
 7. Never place credentials, private homeserver details, private room content,

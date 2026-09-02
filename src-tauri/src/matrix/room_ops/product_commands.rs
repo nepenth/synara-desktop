@@ -63,8 +63,9 @@ pub async fn matrix_room_set_favorite(
         .await
 }
 
-/// Persist receipts and the unread flag through the native Matrix SDK.
-/// Fail-closed: desktop Mark as Read must not use the JS-sdk no-op facade.
+/// Persist an explicit user's private receipt or unread flag through the native
+/// Matrix SDK. Automatic visibility acknowledgements use the timeline command
+/// with an exact observed-tail precondition instead.
 #[tauri::command]
 pub async fn matrix_room_set_read_state(
     core: State<'_, Arc<synara_core::Core>>,

@@ -258,9 +258,15 @@ fn synchronized_room_reopens_from_sqlite_after_cold_restart_with_server_offline(
         );
 
         // The server task owns the listener and has now returned, so this is
-        // the offline boundary. Drop every pre-restart SDK owner before rebuild.
+        // the offline boundary. Use the SDK's authoritative shutdown boundary
+        // to flush in-flight store work and release every database connection
+        // before rebuilding from the same persistent root. `drop` plus a
+        // guessed delay is not a deterministic store-lifecycle contract.
+        first_client
+            .pause()
+            .await
+            .expect("close first client stores before cold restart");
         drop(first_client);
-        tokio::time::sleep(Duration::from_millis(100)).await;
 
         let restored_client = build_unauthenticated_client(&product_config(
             &root,

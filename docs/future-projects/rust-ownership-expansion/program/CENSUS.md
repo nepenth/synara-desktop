@@ -1,4 +1,4 @@
-# Starting source snapshot
+# Historical starting source snapshot
 
 Status: historical starting point for overnight memos. Not live inventory.
 

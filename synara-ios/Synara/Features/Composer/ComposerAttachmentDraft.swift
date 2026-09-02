@@ -184,11 +184,12 @@ enum ComposerAttachmentSendStep: Equatable {
 enum ComposerAttachmentSendPlan {
     static func make(
         drafts: [ComposerAttachmentDraft],
-        body rawBody: String
+        body rawBody: String,
+        requiresStandaloneText: Bool = false
     ) -> [ComposerAttachmentSendStep] {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
 
-        if drafts.count == 1, let draft = drafts.first {
+        if requiresStandaloneText == false, drafts.count == 1, let draft = drafts.first {
             return [.attachment(id: draft.id, caption: body.isEmpty ? nil : body)]
         }
 
@@ -212,12 +213,17 @@ enum ComposerAttachmentSendPlan {
     static func reusableOrNew(
         existing: [ComposerAttachmentSendStep]?,
         drafts: [ComposerAttachmentDraft],
-        body rawBody: String
+        body rawBody: String,
+        requiresStandaloneText: Bool = false
     ) -> [ComposerAttachmentSendStep] {
         let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let existing,
               attachmentIDs(in: existing) == drafts.map(\.id) else {
-            return make(drafts: drafts, body: body)
+            return make(
+                drafts: drafts,
+                body: body,
+                requiresStandaloneText: requiresStandaloneText
+            )
         }
         if composerBody(in: existing) == body {
             return existing
@@ -233,7 +239,8 @@ enum ComposerAttachmentSendPlan {
                 return step
             }
         }
-        if existing.count == 1,
+        if requiresStandaloneText == false,
+           existing.count == 1,
            case let .attachment(id, _) = existing[0] {
             return [.attachment(id: id, caption: body.isEmpty ? nil : body)]
         }
@@ -260,6 +267,13 @@ enum ComposerAttachmentSendPlan {
         }
     }
 
+    static func matchesAttachments(
+        in steps: [ComposerAttachmentSendStep],
+        drafts: [ComposerAttachmentDraft]
+    ) -> Bool {
+        attachmentIDs(in: steps) == drafts.map(\.id)
+    }
+
     private static func composerBody(in steps: [ComposerAttachmentSendStep]) -> String {
         for step in steps.reversed() {
             switch step {
@@ -272,6 +286,46 @@ enum ComposerAttachmentSendPlan {
             }
         }
         return ""
+    }
+}
+
+/// The retryable portion of one composer send gesture.
+///
+/// A partial upload may leave some events on the server. Retrying therefore
+/// keeps the gesture's original reply/edit/retry identity while allowing the
+/// user to revise the unsent text. Explicitly changing or cancelling the
+/// relation starts a new transaction in the owning view.
+struct ComposerAttachmentSendTransaction: Equatable {
+    let steps: [ComposerAttachmentSendStep]
+    let intent: ComposerSendIntent
+
+    static func reusableOrNew(
+        existing: ComposerAttachmentSendTransaction?,
+        drafts: [ComposerAttachmentDraft],
+        body: String,
+        proposedIntent: ComposerSendIntent
+    ) -> ComposerAttachmentSendTransaction {
+        let reusable = existing.flatMap { transaction in
+            ComposerAttachmentSendPlan.matchesAttachments(
+                in: transaction.steps,
+                drafts: drafts
+            ) ? transaction : nil
+        }
+        let retainedIntent = reusable?.intent.replacingBody(with: body) ?? proposedIntent
+        let steps = ComposerAttachmentSendPlan.reusableOrNew(
+            existing: reusable?.steps,
+            drafts: drafts,
+            body: body,
+            requiresStandaloneText: retainedIntent.requiresStandaloneTextSend
+        )
+        return ComposerAttachmentSendTransaction(steps: steps, intent: retainedIntent)
+    }
+
+    func removingAttachment(id: UUID) -> ComposerAttachmentSendTransaction {
+        ComposerAttachmentSendTransaction(
+            steps: ComposerAttachmentSendPlan.removingAttachment(id: id, from: steps),
+            intent: intent
+        )
     }
 }
 

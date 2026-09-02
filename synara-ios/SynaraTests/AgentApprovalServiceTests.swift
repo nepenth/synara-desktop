@@ -52,51 +52,41 @@ final class AgentApprovalServiceTests: XCTestCase {
         }
     }
 
-    func testAgentApprovalReactionMatrixEventUsesMatrixReactionRelation() throws {
-        let data = try encodeAgentApprovalReactionMatrixEvent(
-            SynaraAgentApprovalReactionRequest(
-                roomID: "!room:matrix.org",
-                sourceEventID: "$approval:matrix.org",
-                reactionKey: "✅"
-            )
-        )
-        let payload = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
-        let relation = try XCTUnwrap(payload["m.relates_to"] as? [String: Any])
-
-        XCTAssertEqual(relation["rel_type"] as? String, "m.annotation")
-        XCTAssertEqual(relation["event_id"] as? String, "$approval:matrix.org")
-        XCTAssertEqual(relation["key"] as? String, "✅")
-    }
-
-    func testMockAgentApprovalReactionServiceRecordsReactionRequests() async throws {
-        let service = MockAgentApprovalReactionService()
-        let request = SynaraAgentApprovalReactionRequest(
+    func testMockAgentApprovalServiceRecordsCoreDecisionRequests() async throws {
+        let service = MockAgentApprovalDecisionService()
+        let request = SynaraAgentApprovalPromptDecisionRequest(
             roomID: "!room:matrix.org",
             sourceEventID: "$approval:matrix.org",
-            reactionKey: "❌"
+            actionIdentifier: SynaraAgentApprovalNotificationActionID.deny.rawValue
         )
 
-        try await service.submitReaction(request)
+        let outcome = try await service.submitDecision(request)
 
+        XCTAssertEqual(service.submitted, [request])
+        XCTAssertEqual(outcome, .applied)
+    }
+
+    func testMockDecisionCarriesConfirmedApproveAlwaysToCore() async throws {
+        let service = MockAgentApprovalDecisionService()
+        let request = SynaraAgentApprovalPromptDecisionRequest(
+            roomID: "!room:matrix.org",
+            sourceEventID: "$approval:matrix.org",
+            actionIdentifier: SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
+        )
+        _ = try await service.submitDecision(request)
         XCTAssertEqual(service.submitted, [request])
     }
 
-    func testMockNativeDecisionRejectsApproveAlwaysLikeProductionCore() async {
-        let service = MockAgentApprovalReactionService()
-
-        do {
-            try await service.submitNativeDecision(
+    func testMockDecisionSurfacesCoreAlreadyDecidedReadback() async throws {
+        let service = MockAgentApprovalDecisionService(outcome: .alreadyDecided)
+        let outcome = try await service.submitDecision(
+            SynaraAgentApprovalPromptDecisionRequest(
                 roomID: "!room:matrix.org",
-                eventID: "$approval:matrix.org",
-                actionIdentifier: SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
+                sourceEventID: "$approval:matrix.org",
+                actionIdentifier: SynaraAgentApprovalNotificationActionID.deny.rawValue
             )
-            XCTFail("Approve always must require in-app confirmation")
-        } catch let error as SynaraAgentApprovalError {
-            XCTAssertEqual(error, .unsupportedAction)
-        } catch {
-            XCTFail("Unexpected error: \(error)")
-        }
-        XCTAssertTrue(service.submitted.isEmpty)
+        )
+        XCTAssertEqual(outcome, .alreadyDecided)
     }
 
     func testAgentApprovalPromptDetectorExtractsAutomationPrompt() throws {
@@ -169,79 +159,6 @@ final class AgentApprovalServiceTests: XCTestCase {
         XCTAssertFalse(command.contains("Reason:"))
         XCTAssertTrue(try XCTUnwrap(prompt.replyInstructions).contains("approve always"))
         XCTAssertTrue(try XCTUnwrap(prompt.sourceContext).contains("Code"))
-    }
-
-    func testNativeActionValidatorRequiresResolvedApprovalPrompt() {
-        let approvalBody = """
-        ⚠️ Dangerous command requires approval
-
-        Code
-        Copy
-        echo ship-it
-        Reason: operator approval required.
-
-        Reply !approve to execute or !deny to cancel.
-        """
-        let approvalItem = TimelineItem(
-            id: "$approval",
-            eventID: "$approval",
-            senderID: "@automation:matrix.org",
-            timestamp: Date(),
-            kind: .text(approvalBody),
-            replyToEventID: nil,
-            isEdited: false,
-            reactions: [:]
-        )
-        let ordinaryItem = TimelineItem(
-            id: "$ordinary",
-            eventID: "$ordinary",
-            senderID: "@automation:matrix.org",
-            timestamp: Date(),
-            kind: .text("hello world"),
-            replyToEventID: nil,
-            isEdited: false,
-            reactions: [:]
-        )
-
-        let unresolved = SynaraAgentApprovalNativeActionValidator.validate(
-            items: [ordinaryItem],
-            eventID: "$missing"
-        )
-        XCTAssertFalse(unresolved.shouldSubmitReaction)
-        XCTAssertEqual(unresolved.reason, "event-unresolved")
-
-        let notPrompt = SynaraAgentApprovalNativeActionValidator.validate(
-            items: [ordinaryItem],
-            eventID: "$ordinary"
-        )
-        XCTAssertFalse(notPrompt.shouldSubmitReaction)
-        XCTAssertEqual(notPrompt.reason, "not-approval-prompt")
-
-        let valid = SynaraAgentApprovalNativeActionValidator.validate(
-            items: [approvalItem],
-            eventID: "$approval"
-        )
-        XCTAssertTrue(valid.shouldSubmitReaction)
-        XCTAssertTrue(valid.isApprovalPrompt)
-        XCTAssertEqual(valid.reason, "validated")
-
-        let expired = SynaraAgentApprovalNativeActionValidator.validate(
-            items: [
-                TimelineItem(
-                    id: "$stale",
-                    eventID: "$stale",
-                    senderID: "@automation:matrix.org",
-                    timestamp: Date().addingTimeInterval(-(SynaraNotificationActionContract.nativeActionTTL + 30)),
-                    kind: .text(approvalBody),
-                    replyToEventID: nil,
-                    isEdited: false,
-                    reactions: [:]
-                )
-            ],
-            eventID: "$stale"
-        )
-        XCTAssertFalse(expired.shouldSubmitReaction)
-        XCTAssertEqual(expired.reason, "expired-ttl")
     }
 
     func testAgentApprovalPromptDetectorUsesFormattedHTMLCandidate() throws {

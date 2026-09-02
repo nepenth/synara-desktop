@@ -1,12 +1,12 @@
 # ROE-11 Research Memo: Media Metadata and Cache Policy
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership boundary accepted; performance/cache questions retained; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                      |
 | ------------------ | -------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-11                                                                                                                     |
 | Research owner     | Isolated researcher on `roe/memo-11-media-metadata`                                                                        |
-| Reviewers          | Unassigned                                                                                                                 |
+| Reviewers          | Independent feature-branch review; `ACCEPT_WITH_NITS` on PR `#1090` at `41c3d35b`                                         |
 | Source census      | 2026-09-01 against `5f81d9e7d1fccd762e16dad645bea8f07a216675`                                                              |
 | ADR baseline       | ADR 0003, 0004, 0005 last reviewed 2026-09-01 (index in [`docs/adr/README.md`](../../../adr/README.md)); same census commit |
 
@@ -50,7 +50,7 @@ carry bytes. Filesystem paths, file handoff, and NSE storage stay platform-side.
 | Thumbnails | Authority for *which source* is fetched: timeline handles always request `MediaFormat::File`. Invite avatars use a 96×96 thumbnail of a plain MXC. Plain leftover `thumbnail_plain_media` is a typed method, not `Core::command`. Live rows have no `thumbnail_handle_id`. | Rendering. Protocol serves original-file bytes; leftover avatar/pack hook `useNativeMatrixMediaSrc` may pass leftover `mxc://` into `matrix_media_download` (File format). `ImageContent` / pin / search / inbox leftovers still exist off the native timeline. | Rendering. Handle path: `loadThumbnail` returns the resource; `loadThumbnailData` fetches full handle bytes. Leftover `mxc` uses `SharedCorePlainMedia.thumbnail`. | Core [`plain.rs`](../../../../crates/synara-core/src/app/media/plain.rs); desktop protocol + [`useNativeMatrixMediaSrc.ts`](../../../../synara/src/app/hooks/useNativeMatrixMediaSrc.ts); iOS `SharedCoreMediaLoader`. |
 | MIME, dimensions, duration | Authority projects *declared* protocol claims onto the handle (`mimetype`, width/height, duration). No `size_bytes` on the live handle. Filename/caption are separate row fields. | Rendering uses declared width/height for layout (`mediaStyle` caps 480). Dedicated protocol magic-sniffs bytes and requires them to match the declared MIME (or allowlisted fallback). | Rendering. `mediaMimeType` is copied onto `MediaResource`. Extension MIME is only for local file-picker uploads. | Core `project_message_type_and_media` in [`view.rs`](../../../../crates/synara-core/src/app/timeline/view.rs); UniFFI [`synara_core.udl`](../../../../crates/synara-core/src/synara_core.udl) `TimelineViewRowDto`; desktop [`lib.rs`](../../../../src-tauri/src/lib.rs) `timeline_media_content_type`; iOS `mediaPlaceholder`. |
 | Size / integrity limits | Authority for bounded download/decrypt (`download_media_bounded` rejects Content-Length and streamed oversize). Product caps are per dedicated channel: iOS handle bytes 32 MiB; desktop protocol 64 MiB; leftover original-file download 300 MiB; content upload 32 MiB; invite avatars 1 MiB. `matrix_media_config` is the `m.upload.size` envelope only. | Observation of the homeserver upload size through Core; local composer cap `NATIVE_ATTACHMENT_MAX_BYTES` (32 MiB). File-save names are sanitized in the shell. | Observation. Attachment send uses dedicated UniFFI bytes (`SharedCoreMediaSend`), not leftover `mediaUpload`. | [`bounded.rs`](../../../../crates/synara-core/src/app/media/bounded.rs), [`plain.rs`](../../../../crates/synara-core/src/app/media/plain.rs), [`content.rs`](../../../../crates/synara-core/src/app/media/content.rs), [`live.rs`](../../../../crates/synara-core/src/app/timeline/live.rs) `media_bytes`; desktop [`nativeMediaLimits.ts`](../../../../synara/src/app/utils/nativeMediaLimits.ts), [`desktop_file_transfer.rs`](../../../../src-tauri/src/desktop_file_transfer.rs); iOS [`SharedCoreMediaSend.swift`](../../../../synara-ios/Synara/Services/SharedCoreMediaSend.swift). |
-| Cache eligibility / quota / eviction | Unused harness. `MediaCacheIndex` (P7.3) tracks handle + optional mxc + declared size + last-access, plans LRU, and `retire_generation` on wipe. `#![allow(dead_code)]`; product never upserts. `DownloadQueue` / `UploadQueue` / `media_export` are the same class of metadata harness. Account layout has a `media/` slot that is **not** always bound as the SDK media store. | No product cache-eligibility engine. Protocol responses send `Cache-Control: no-store`. Blob URLs are presenter memory. | No product cache-eligibility engine. `BoundedLRUCache` is viewport/read-marker chrome, not media bytes. | [`media_cache/index.rs`](../../../../crates/synara-core/src/app/media_cache/index.rs), [`media_cache/mod.rs`](../../../../crates/synara-core/src/app/media_cache/mod.rs), [`store/paths.rs`](../../../../crates/synara-core/src/app/store/paths.rs); desktop protocol headers in [`lib.rs`](../../../../src-tauri/src/lib.rs). |
+| Cache eligibility / quota / eviction | Unused harness. `MediaCacheIndex` (P7.3) tracks handle + optional mxc + declared size + last-access, plans LRU, and `retire_generation` on wipe. `#![allow(dead_code)]`; product never upserts. `DownloadQueue` / `UploadQueue` / `media_export` are the same class of metadata harness. Account layout has a `media/` slot that is **not** always bound as the SDK media store. | No product cache-eligibility engine. Protocol responses send `Cache-Control: no-store`. Blob URLs are presenter memory. | No product cache-eligibility engine. `BoundedLRUCache` has no product call sites and is not a media-byte cache. | [`media_cache/index.rs`](../../../../crates/synara-core/src/app/media_cache/index.rs), [`media_cache/mod.rs`](../../../../crates/synara-core/src/app/media_cache/mod.rs), [`store/paths.rs`](../../../../crates/synara-core/src/app/store/paths.rs); desktop protocol headers in [`lib.rs`](../../../../src-tauri/src/lib.rs). |
 | Retry / corruption | Bounded download fail-closes (`TooLarge` / `DecryptionFailed` / `RequestFailed`). UTD retry is event decrypt, not media bytes. No shared media-download retry owner. | Protocol maps failure to 404 / 415 after magic-sniff mismatch. Leftover download maps to static diagnostics. | Handle fetch `try?` → nil / “could not be loaded.” | [`bounded.rs`](../../../../crates/synara-core/src/app/media/bounded.rs); desktop protocol; iOS `SharedCoreMediaLoader`. |
 | Logout / wipe | Authority for *when* stores die. Logout drops the client and handle registries and **retains** the account tree (`D-LOGOUT-WIPE`). Explicit wipe deletes the exact `account_root` (includes the `media/` slot) after the client is dropped. Reports never include absolute paths. | Shell leftover `matrix_logout` is Keyring + app-data cleanup (playbook leftover; not `Core::command`). | Product `resetLocalState` calls leftover `logout` only. Tests assert it does **not** call `wipePersistedStores`. Composer/local caches clear in `AppLocalWipeService`. | [`logout.rs`](../../../../crates/synara-core/src/app/lifecycle/logout.rs), [`wipe.rs`](../../../../crates/synara-core/src/app/lifecycle/wipe.rs); iOS [`SharedCoreProductServices.swift`](../../../../synara-ios/Synara/Services/SharedCoreProductServices.swift) `resetLocalState`, [`LocalWipeService.swift`](../../../../synara-ios/Synara/Services/LocalWipeService.swift), [`LocalWipeServiceTests.swift`](../../../../synara-ios/SynaraTests/LocalWipeServiceTests.swift). |
 | Diagnostics | Authority: static fail-closed codes; no handle / mxc / token echo on `timeline_media_bytes` errors. Export-job `Debug` redacts handle ids. Store layout DTO exposes only relative child names. | Protocol returns empty bodies on failure. JS leftover errors are generic. | Leftover media wrappers must not echo mxc/token. `MediaResource.safeDescription` is the filename basename. | [`p4_s33_timeline_media.rs`](../../../../crates/synara-core/tests/p4_s33_timeline_media.rs); [`media_export/queue.rs`](../../../../crates/synara-core/src/app/media_export/queue.rs); iOS [`SharedCorePlainMedia.swift`](../../../../synara-ios/Synara/Services/SharedCorePlainMedia.swift), `MediaServiceTests`. |
@@ -76,9 +76,10 @@ Classification:
 - React `<img>` versus SwiftUI media cells, and whether a presenter shows a
   thumbnail chrome before fetching original-file bytes, are a **current
   technology preference**.
-- Historical `MediaHandle` DTO / `valid_media_handle.json` (optional `mxcUri`,
-  `thumbnailHandleId`, `sizeBytes`) is a **fixture schema**, not the live
-  timeline row. Treating it as a missing Core field would invent work.
+- Historical `MediaHandle` (optional `mxcUri`, `thumbnailHandleId`,
+  `sizeBytes`) is a compiled Core DTO represented by `valid_media_handle.json`,
+  but it is not the live timeline row. Treating it as a missing live field
+  would invent work.
 
 Earliest actual divergence is **dedicated-channel presentation**, not competing
 MXC or decrypt authority. Desktop native timeline builds `synara-media://`
@@ -238,23 +239,11 @@ Regression proof to keep the boundary stable:
 
 ## Next gate
 
-Already owned. Close ROE-11. Do not write an implementation plan. Do not
-wire `MediaCacheIndex`. Do not register leftover media commands on
-`Core::command`. Do not invent S38 or start P5. Do not put paths or bytes
-on the generic envelope.
-
-A later product owner may project `info.size` onto the existing handle, or
-activate a metadata-only cache index, without changing this ownership
-decision. Those would be additions to the owner already censused here, and
-they still require a human implementation gate.
-
-## Reviewer nits (`ACCEPT_WITH_NITS` on #1090)
-
-Recorded from the independent review at `41c3d35b`. They do not change the
-close:
-
-- iOS `BoundedLRUCache` is slightly over-attributed as live
-  viewport/read-marker chrome; no product call sites were found. It is
-  still not a media-byte cache.
-- Historical `MediaHandle` is a compiled Core DTO plus fixture, not only
-  the JSON fixture. The memo already treats it as non-live.
+The ADR 0005 ownership/channel split is closed. Do not wire
+`MediaCacheIndex`, register leftover media commands on `Core::command`, or put
+paths/bytes on the generic envelope. Performance and cache need remain an
+evidence question in [A10](../program/ACTIONS.md): measure original-byte fetch
+cost, client caps, retry behavior, and memory/disk pressure before projecting
+`info.size`, adding thumbnail handles, or activating metadata-only cache
+policy. Those additions would use the existing owner but still require a
+reviewed product plan.

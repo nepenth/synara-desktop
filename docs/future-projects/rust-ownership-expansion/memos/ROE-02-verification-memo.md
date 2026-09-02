@@ -1,12 +1,12 @@
 # ROE-02 Research Memo: Device verification and iOS continuity
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership accepted; functional proof reopened; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                                                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-02                                                                                                                                                                                                                                                                                                                                |
 | Research owner     | Residual-census researcher (this memo)                                                                                                                                                                                                                                                                                                |
-| Reviewers          | Unassigned                                                                                                                                                                                                                                                                                                                            |
+| Reviewers          | Independent feature-branch review; `ACCEPT` on PR `#1083` at `65d909fb1049707f693e57bf0c1225f9e9705354`                                                                                                                                                                                                                            |
 | Source census      | 2026-09-01 on worktree `roe/memo-02-verification` at `5f9c4e718f858606a0934acb1c9c8fa3fde138ab`. [CENSUS.md](../program/CENSUS.md) is a `main` `011cf39a` snapshot only; source below was re-read on this commit.                                                                                                                      |
 | ADR baseline       | [ADR 0001](../../../adr/0001-ios-repository-layout.md), [0002](../../../adr/0002-ios-architecture.md), [0003](../../../adr/0003-shared-native-rust-core.md), [0004](../../../adr/0004-rust-language-boundaries.md), [0005](../../../adr/0005-native-media-handle-channel.md); last reviewed 2026-09-01; source commit as above. |
 
@@ -83,4 +83,12 @@ Regression proof to keep the boundary stable:
 
 ## Next gate
 
-Already owned: close the research item. No implementation plan, no Core command, no Swift verification engine. Do not treat leftover unused Swift validators as a missing Core input. Do not start P5 or invent S38 from this memo.
+The ownership question is closed: do not add a Swift verification engine or
+invent a device-key input. Functional readiness is **not** closed. Complete
+[A3](../program/ACTIONS.md#a3--current-device-verification) before claiming
+verification works: a fresh nil-target own-identity run must reach
+`KeysExchanged` / `can_be_presented()`, show matching SAS, complete on both
+devices, report `Encryption::verification_state() == Verified`, and preserve
+that state after relaunch. Any failure must capture privacy-safe earliest-
+divergence diagnostics. This is an evidence gate, not authorization to change
+the accepted ownership boundary.

@@ -1,12 +1,12 @@
 # ROE-04 / ROE-12 Research Memo: Message format and output-context safety
 
-Status: draft research; docs-only; not approved for implementation.
+Status: boundary accepted; fixture/security proof reopened; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                                                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-04 / ROE-12                                                                                                                                                                                                                                                                                                                       |
 | Research owner     | Residual-census researcher (message-format / safety lane)                                                                                                                                                                                                                                                                             |
-| Reviewers          | Unassigned                                                                                                                                                                                                                                                                                                                            |
+| Reviewers          | Independent feature-branch review; `ACCEPT_WITH_NITS` on PR `#1089` at `91bf0b14`                                                                                                                                                                                                                                                   |
 | Source census      | 2026-09-01 on worktree `roe/memo-04-message-format` at `1b59d12f28e8bb75e7da1462591e7bb6547299ac`. [CENSUS.md](../program/CENSUS.md) is a `main` `011cf39a` snapshot only; every path below was re-read on this commit. Source wins where the snapshot is thinner.                                                                 |
 | ADR baseline       | [ADR 0001](../../../adr/0001-ios-repository-layout.md), [0002](../../../adr/0002-ios-architecture.md), [0003](../../../adr/0003-shared-native-rust-core.md), [0004](../../../adr/0004-rust-language-boundaries.md), [0005](../../../adr/0005-native-media-handle-channel.md); last reviewed 2026-09-01; source commit as above. |
 
@@ -87,7 +87,7 @@ Presenters still sanitize (desktop `prepareNativeFormattedBody`, iOS
 | Lists / tables / code / headings | Not Core semantics. `TimelineViewRow` is the event/row model, not a paragraph AST. | Rendering. HTML → React; tables get a scroll region; `pre`/`code` → Prism with char limit. | Rendering. Typed heading/quote/table/details/code segments; exact pre/code whitespace tests; no Prism. | `nativeTimelineFormattedBody.tsx`; `TimelineServiceTests.swift` table/code/heading cases |
 | Legacy `<strike>` / `<font>` / colors | Not Core. | Rendering. `strike` → `s`; `font` → `span`; colors must be `#` + 6 hex; case preserved. | Rendering. `font` → `span`; **no `strike` in the allowlist** (text kept, strikethrough lost). Colors uppercased. | `nativeTimelineRichText.ts`; `TimelineService.swift` allowedTags / font case |
 | Size / nesting | Send/edit: Core edit + desktop helper cap outbound HTML at 65_536 **bytes of the string**. Live `send_text` does not apply that cap. Presentation: not a Core inbound cap. | Rendering. 256 KiB UTF-8; nestingLimit 100 (deep `<strong>` dropped, text kept). | Rendering. 256 KiB UTF-8; emit suppressed past 100 open tags; text still kept. | `live.rs` `normalize_edit_formatted_body`; `send/product_commands.rs` `normalize_formatted_body`; `MAX_NATIVE_FORMATTED_BODY_BYTES`; `maximumRichHTMLBytes` |
-| Agent / Hermes card JSON | Authority. `project_agent_card_json` allowlists recognized objects (`org.hermes.agent`, …) and bounds at 200_000 bytes. Unrecognized event JSON (including tokens) does not cross. Formatted approval **HTML** still crosses as `formatted_body`. | Rendering of the HTML body; card JSON is a separate presenter surface. Approval **classifier** leftovers are ROE-08 (D10), not this lane. | Same: `SynaraAgentCardPayloadParser` on DTO JSON; HTML via `MatrixHTMLRenderer`. `AgentActionService` runs `sanitizedMarkdown` before substring detect (ROE-08). | `view.rs` `project_agent_card_json`; `SharedCoreTimelineRows.swift`; `AgentActionService.swift` |
+| Agent / Hermes card JSON | Authority. `project_agent_card_json` allowlists recognized objects (`org.hermes.agent`, …) and bounds at 200_000 bytes. Unrecognized event JSON (including tokens) does not cross. Formatted approval **HTML** still crosses as `formatted_body`. | Rendering of the HTML body; card JSON is a separate presenter surface. Approval classifier/action authority is ROE-08 / A2, not this lane. | Same: `SynaraAgentCardPayloadParser` on DTO JSON; HTML via `MatrixHTMLRenderer`. `AgentActionService` runs `sanitizedMarkdown` before classification (ROE-08). | `view.rs` `project_agent_card_json`; `SharedCoreTimelineRows.swift`; `AgentActionService.swift` |
 | Leftover desktop HTML surfaces | Not an owner. | Rendering only. Inbox / pin menu / message-search still use `RenderBody` → `sanitizeCustomHtml` (editor profile, not the live v1.19 second pass). Not the live `RoomView` timeline. | No equivalent leftover HTML engine. Search/copy use `MatrixHTMLRenderer`. | `RenderBody.tsx`; `Notifications.tsx`; `RoomPinMenu.tsx`; `SearchResultGroup.tsx`; `RoomView.tsx` |
 | Envelope / unknown fields | Authority. Command and stream payloads use `deny_unknown_fields`. Fail-closed deserialize. | Adapter. Tauri JSON must match the typed payload. | Adapter. UniFFI / leftover JSON must match. | `core.rs` request structs; `transport/command.rs`; `transport/stream_body.rs` |
 | Canonical IDs | Authority. Room / event / user / thread / txn parse (`OwnedRoomId`, `OwnedEventId`, `OwnedUserId`; txn length 1..=255). Diagnostics do not echo the bad string. | Adapter forwards strings into Core. | Adapter forwards strings into UniFFI. | `send/text.rs`; `send/tests.rs` |
@@ -231,7 +231,7 @@ Unresolved questions (explicit, not assumed):
   a later Core-internal consistency question, not a renderer extract.
 - The “Already-sanitized rendering markup” comment remains misleading until
   a separately authorized product/docs edit in `crates/**`.
-- Agent-approval *classifiers* remain ROE-08 / D10.
+- Agent-approval classification/action authority remains ROE-08 / A2.
 
 ### Shared corpus design (paths and shape only)
 
@@ -301,26 +301,13 @@ Regression proof to keep the stay-put stable:
 
 ## Next gate
 
-Stay platform-side: close the research item. Optional follow-up after
-reviewer ACCEPT: land the fixture directory described above under
-`docs/future-projects/**` only. Do not implement a renderer, Core field,
-UniFFI type, or sanitizer crate from this memo.
-
-Do not start P5 or invent S38. Do not treat leftover `RenderBody` or
-`MatrixHTMLRenderer` as a second engine. If a later corpus run proves a
-security-relevant semantic gap, that is a human decision to extend the
-**existing** `TimelineViewRow` with a small field — and that decision is a
-stop, not a start. A full AST remains an ADR replacement, not a default.
-
-## Reviewer nits (`ACCEPT_WITH_NITS` on #1089)
-
-Recorded from the independent review at `91bf0b14`. They do not change the
-close:
-
-- Desktop `normalize_formatted_body` (65,536) in
-  `src-tauri/src/matrix/send/product_commands.rs` exists but is unused.
-  Live `matrix_send_text` goes through Core `send_text` without that cap.
-  The only live 65,536 formatted-body gate is Core
-  `normalize_edit_formatted_body`.
-- Leftover inbox/pin/search go through `RenderMessageContent` →
-  `RenderBody` (one extra hop), not a second formatted-body engine.
+The output-context ownership boundary is closed: keep DOM/React and Swift
+attributed-text sanitization and rendering platform-side. The ROE-12 safety
+claim is **not** closed until [A6](../program/ACTIONS.md) lands and runs the
+shared golden/adversarial corpus in both presenter harnesses. Correct the
+misleading `TimelineMessageRow.formatted_body` “already-sanitized” comment as
+part of that bounded work and explicitly test the live send/edit size-policy
+asymmetry. Do not add a renderer, sanitizer crate, or full AST by default. If
+fixtures prove a security-relevant semantic gap, consider the smallest field
+on the existing `TimelineViewRow`; a full AST still requires an ADR amendment
+or replacement.

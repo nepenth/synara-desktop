@@ -705,7 +705,8 @@ final class SharedCoreRoomListService: RoomListServicing {
             }
             return SharedCoreRoomListRows.hasUnreadMessages(
                 unreadCount: room.unreadCount,
-                hasHighlight: room.hasHighlight
+                hasHighlight: room.hasHighlight,
+                isMarkedUnread: room.isMarkedUnread
             )
         }
     }
@@ -1307,7 +1308,7 @@ final class SharedCoreMessageSendService: MessageSending {
                     mentionUserIds: nil,
                     mentionRoom: nil,
                     replyTo: request.replyToEventID,
-                    threadRoot: nil,
+                    threadRoot: request.threadRootEventID,
                     txnId: nil
                 )
             }
@@ -1318,6 +1319,7 @@ final class SharedCoreMessageSendService: MessageSending {
                 timestamp: Date(),
                 kind: request.formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
                 replyToEventID: request.replyToEventID,
+                threadRootEventID: request.threadRootEventID,
                 isEdited: request.editEventID != nil,
                 reactions: [:]
             )
@@ -1415,44 +1417,33 @@ final class SharedCoreAgentApprovalService: AgentApprovalServicing {
     }
 }
 
-final class SharedCoreAgentApprovalReactionService: AgentApprovalReactionServicing {
+final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServicing {
     private let host: SharedCoreProductHost
 
     init(host: SharedCoreProductHost) {
         self.host = host
     }
 
-    func submitReaction(_ request: SynaraAgentApprovalReactionRequest) async throws {
+    func submitDecision(
+        _ request: SynaraAgentApprovalPromptDecisionRequest
+    ) async throws -> SynaraAgentApprovalPromptDecisionOutcome {
         guard case .signedIn = host.sessionStore.currentState else {
             throw SynaraAgentApprovalError.signedOut
         }
         do {
-            _ = try await SharedCoreTimelineReactions.reactionEnsure(
-                core: host.core,
+            let result = try await host.core.agentApprovalDecide(
                 roomId: request.roomID,
                 eventId: request.sourceEventID,
-                key: request.reactionKey
+                actionId: request.actionIdentifier
             )
-        } catch let error as SynaraAgentApprovalError {
-            throw error
-        } catch {
-            throw SynaraAgentApprovalError.failed
-        }
-    }
-    func submitNativeDecision(
-        roomID: String,
-        eventID: String,
-        actionIdentifier: String
-    ) async throws {
-        guard case .signedIn = host.sessionStore.currentState else {
-            throw SynaraAgentApprovalError.signedOut
-        }
-        do {
-            _ = try await host.core.agentApprovalDecide(
-                roomId: roomID,
-                eventId: eventID,
-                actionId: actionIdentifier
-            )
+            switch result.status {
+            case "applied":
+                return .applied
+            case "already_decided":
+                return .alreadyDecided
+            default:
+                throw SynaraAgentApprovalError.failed
+            }
         } catch {
             throw SynaraAgentApprovalError.failed
         }
@@ -2206,6 +2197,7 @@ final class SharedCoreMediaUploadService: MediaUploading {
                 timestamp: Date(),
                 kind: .mediaPlaceholder(resource),
                 replyToEventID: request.replyToEventID,
+                threadRootEventID: request.threadRootEventID,
                 isEdited: false,
                 reactions: [:]
             )
@@ -2302,23 +2294,28 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
         guard MatrixServerEventIDPolicy.canAcknowledge(eventID) else {
             return false
         }
-        return await markRoomAsRead(roomID: roomID) != nil
+        return await withOpenLive(roomID: roomID) { opened in
+            let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
+                core: self.host.core,
+                streamId: opened.streamId,
+                action: "mark_read",
+                intent: "automatic_visibility",
+                observedLiveTailEventId: eventID
+            )
+            return readback?.receiptSent == true
+                && readback?.acknowledgedEventId == eventID
+        } ?? false
     }
 
     func markRoomAsRead(roomID: String) async -> String? {
-        if SynaraSharedConstants.boolSetting(SynaraSharedConstants.hideActivityKey) {
-            return nil
-        }
         return await withOpenLive(roomID: roomID) { opened in
             let readback = try? await SharedCoreTimelineReadState.timelineSetReadState(
                 core: host.core,
                 streamId: opened.streamId,
-                action: "mark_read"
+                action: "mark_read",
+                intent: "explicit_user"
             )
-            return SharedCoreReadMarkers.acknowledgedEventID(
-                ownReadEventID: readback?.snapshot.ownReadEventId ?? opened.snapshot.ownReadEventId,
-                rowEventIDs: (readback?.snapshot.rows ?? opened.snapshot.rows).map(\.eventId)
-            )
+            return readback?.acknowledgedEventId
         }
     }
 

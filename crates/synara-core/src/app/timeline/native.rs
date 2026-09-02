@@ -105,12 +105,29 @@ pub enum NativeTimelineReadAction {
     MarkUnread,
 }
 
+/// Why a read-state transition is being requested.
+///
+/// Automatic visibility acknowledgements are conditional on the exact live
+/// tail the client actually observed. Explicit user actions intentionally
+/// resolve the current SDK-owned tail at execution time.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeTimelineReadIntent {
+    AutomaticVisibility,
+    ExplicitUser,
+}
+
 /// A read-state transition always targets one opened native timeline view.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeTimelineReadStateRequest {
     pub stream_id: String,
     pub action: NativeTimelineReadAction,
+    pub intent: NativeTimelineReadIntent,
+    /// Required only for `AutomaticVisibility`. Core compares this event with
+    /// the SDK-authoritative live tail and no-ops when they differ.
+    #[serde(default)]
+    pub observed_live_tail_event_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -120,9 +137,15 @@ pub struct NativeTimelineReadStateReadback {
     /// `None` for MarkUnread. For MarkRead, `Some(true)` means a receipt-capable
     /// remote target was resolved and the exact private + fully-read SDK
     /// operation completed (the SDK may deduplicate network I/O); `Some(false)`
-    /// means no remote target existed and only the SDK unread flag was cleared.
+    /// means no receipt advanced. For an explicit action that can mean only the
+    /// SDK unread flag was cleared; for an automatic action it can also mean the
+    /// observation was superseded and Core deliberately performed no write.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_sent: Option<bool>,
+    /// Exact remote event acknowledged by this operation. `None` means no
+    /// receipt was advanced (including a superseded automatic observation).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_event_id: Option<String>,
     pub snapshot: TimelineViewSnapshot,
 }
 

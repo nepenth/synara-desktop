@@ -1069,7 +1069,7 @@ private struct AppearanceSettingsView: View {
             } header: {
                 Text("Privacy")
             } footer: {
-                Text("When on, this device does not send read receipts. Matches desktop Editor → Hide Typing & Read Receipts.")
+                Text("When on, this device hides automatic typing status and read receipts. Choosing Mark as Read still sends a private receipt.")
             }
 
             Section {

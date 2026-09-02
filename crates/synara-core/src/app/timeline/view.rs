@@ -25,6 +25,7 @@ use matrix_sdk_ui::timeline::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value as JsonValue;
 
+use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
 use crate::dto::{EventId, RoomId, TimelineItemId, UserId};
 
 use super::TimelineMediaRegistry;
@@ -268,16 +269,25 @@ fn project_event_row_for_user(
                     .as_ref()
                     .map(|_| media_caption.clone().unwrap_or_default())
                     .unwrap_or_else(|| message.body().to_owned());
+                let is_agent_approval = own_user_id.is_some_and(|current_user_id| {
+                    is_eligible_agent_approval_prompt(
+                        &body,
+                        &base.sender_id,
+                        current_user_id.as_str(),
+                    )
+                });
                 TimelineViewRow::Message(Box::new(TimelineMessageRow {
                     event: base,
                     body,
                     formatted_body: project_formatted_body(msgtype),
                     agent_card_json: project_agent_card_json(event, message.body()),
+                    is_agent_approval,
                     message_type,
                     media_filename,
                     media_caption,
                     edited: message.is_edited(),
                     reply: project_reply(content),
+                    thread_root: content.thread_root.as_ref().map(ToString::to_string),
                     thread: project_thread_summary(content, event),
                     reactions: project_reactions(content, own_user_id),
                     media,
@@ -298,38 +308,34 @@ fn project_event_row_for_user(
                         &results.votes,
                         own_user_id.map(RumaUserId::as_str),
                     ),
+                    reply: project_reply(content),
+                    thread_root: content.thread_root.as_ref().map(ToString::to_string),
+                    thread: project_thread_summary(content, event),
+                    reactions: project_reactions(content, own_user_id),
                 })
             }
-            MsgLikeKind::Redacted => match base.event_id.clone() {
-                Some(event_id) => TimelineViewRow::Redacted(TimelineRedactedRow {
-                    item_id: base.item_id,
-                    event_id,
-                    summary: "Message removed".to_owned(),
-                }),
-                None => other_row(item_id, None, "Redacted local event"),
-            },
-            MsgLikeKind::UnableToDecrypt(_) => match base.event_id.clone() {
-                Some(event_id) => {
-                    TimelineViewRow::EncryptedUnavailable(TimelineEncryptedUnavailableRow {
-                        item_id: base.item_id,
-                        event_id,
-                        reason_code: "unable_to_decrypt".to_owned(),
-                    })
-                }
-                None => other_row(item_id, None, "Encrypted local event"),
-            },
+            MsgLikeKind::Redacted => TimelineViewRow::Redacted(TimelineRedactedRow {
+                event: base,
+                summary: "Message removed".to_owned(),
+            }),
+            MsgLikeKind::UnableToDecrypt(_) => {
+                TimelineViewRow::EncryptedUnavailable(TimelineEncryptedUnavailableRow {
+                    event: base,
+                    reason_code: "unable_to_decrypt".to_owned(),
+                })
+            }
             MsgLikeKind::Sticker(sticker) => {
-                let content = sticker.content();
+                let sticker_content = sticker.content();
                 let media = media_registry.and_then(|registry| {
                     registry.register(
                         item_id,
-                        content.source.clone().into(),
-                        content.info.mimetype.clone(),
-                        content
+                        sticker_content.source.clone().into(),
+                        sticker_content.info.mimetype.clone(),
+                        sticker_content
                             .info
                             .width
                             .and_then(|value| u32::try_from(u64::from(value)).ok()),
-                        content
+                        sticker_content
                             .info
                             .height
                             .and_then(|value| u32::try_from(u64::from(value)).ok()),
@@ -337,11 +343,18 @@ fn project_event_row_for_user(
                     )
                 });
                 match media {
-                    Some(media) => TimelineViewRow::Sticker { event: base, media },
-                    None => other_row(item_id, base.event_id, "Sticker unavailable"),
+                    Some(media) => TimelineViewRow::Sticker {
+                        event: base,
+                        media,
+                        reply: project_reply(content),
+                        thread_root: content.thread_root.as_ref().map(ToString::to_string),
+                        thread: project_thread_summary(content, event),
+                        reactions: project_reactions(content, own_user_id),
+                    },
+                    None => other_event_row(base, None, "Sticker unavailable"),
                 }
             }
-            _ => other_row(item_id, base.event_id, "Unsupported timeline event"),
+            _ => other_event_row(base, None, "Unsupported timeline event"),
         },
         TimelineItemContent::MembershipChange(change) => {
             TimelineViewRow::Membership(TimelineMembershipRow {
@@ -370,12 +383,11 @@ fn project_event_row_for_user(
         }),
         TimelineItemContent::FailedToParseMessageLike { .. }
         | TimelineItemContent::FailedToParseState { .. } => {
-            other_row(item_id, base.event_id, "Unsupported timeline event")
+            other_event_row(base, None, "Unsupported timeline event")
         }
     }
 }
 
-/// Project SDK-sanitized Matrix HTML when present and distinct from plain text.
 /// Project poll answer options with counts only (no voter user IDs over IPC).
 pub fn project_poll_answers(
     answers: impl IntoIterator<Item = (String, String)>,
@@ -399,6 +411,10 @@ pub fn project_poll_answers(
         .collect()
 }
 
+/// Preserve distinct Matrix `formatted_body` protocol content for presenters.
+///
+/// The returned HTML remains untrusted. Every platform presenter must apply
+/// its output-context sanitizer and bounded parser before rendering it.
 pub fn project_formatted_body(msgtype: &MessageType) -> Option<String> {
     let formatted = match msgtype {
         MessageType::Text(content) => content.formatted.as_ref(),
@@ -802,7 +818,22 @@ fn other_row(item_id: &str, event_id: Option<EventId>, summary: &str) -> Timelin
     TimelineViewRow::Other(TimelineOtherRow {
         item_id: item_id.to_owned(),
         event_id,
+        event: None,
         event_type: None,
+        summary: summary.to_owned(),
+    })
+}
+
+fn other_event_row(
+    event: TimelineEventRowBase,
+    event_type: Option<String>,
+    summary: &str,
+) -> TimelineViewRow {
+    TimelineViewRow::Other(TimelineOtherRow {
+        item_id: event.item_id.clone(),
+        event_id: event.event_id.clone(),
+        event: Some(event),
+        event_type,
         summary: summary.to_owned(),
     })
 }
@@ -813,13 +844,18 @@ pub struct TimelineMessageRow {
     #[serde(flatten)]
     pub event: TimelineEventRowBase,
     pub body: String,
-    /// Already-sanitized rendering markup; never raw event content.
+    /// Untrusted Matrix `formatted_body` protocol content. Presenters must
+    /// apply an output-context sanitizer before rendering it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub formatted_body: Option<String>,
     /// Recognized, size-bounded Synara/Hermes card payload only. This is never
     /// the complete raw Matrix event or content object.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub agent_card_json: Option<String>,
+    /// Core-owned approval eligibility. Presenters may parse the body for
+    /// display details only after this authoritative gate is true.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub is_agent_approval: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
     /// Matrix media filename, never inferred from `body` by presenters.
@@ -831,6 +867,10 @@ pub struct TimelineMessageRow {
     pub edited: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reply: Option<TimelineReplyPreview>,
+    /// Event ID of the thread this event belongs to. This is independent of
+    /// `reply`, whose target may be another child within the same thread.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_root: Option<EventId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thread: Option<TimelineThreadSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -861,6 +901,14 @@ pub struct TimelinePollRow {
     /// Maximum simultaneous selections the poll allows (MSC3381).
     pub max_selections: u32,
     pub answers: Vec<TimelinePollAnswer>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reply: Option<TimelineReplyPreview>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_root: Option<EventId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread: Option<TimelineThreadSummary>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub reactions: Vec<TimelineReaction>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -892,16 +940,16 @@ pub struct TimelineCallRow {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineRedactedRow {
-    pub item_id: TimelineItemId,
-    pub event_id: EventId,
+    #[serde(flatten)]
+    pub event: TimelineEventRowBase,
     pub summary: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineEncryptedUnavailableRow {
-    pub item_id: TimelineItemId,
-    pub event_id: EventId,
+    #[serde(flatten)]
+    pub event: TimelineEventRowBase,
     pub reason_code: String,
 }
 
@@ -911,6 +959,10 @@ pub struct TimelineOtherRow {
     pub item_id: TimelineItemId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_id: Option<EventId>,
+    /// Present for SDK event rows. Virtual/unsupported placeholders have no
+    /// sender, timestamp, or event capabilities to transport.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<TimelineEventRowBase>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_type: Option<String>,
     pub summary: String,
@@ -927,6 +979,14 @@ pub enum TimelineViewRow {
     Sticker {
         event: TimelineEventRowBase,
         media: TimelineMediaHandle,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        reply: Option<TimelineReplyPreview>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        thread_root: Option<EventId>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        thread: Option<TimelineThreadSummary>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        reactions: Vec<TimelineReaction>,
     },
     Poll(TimelinePollRow),
     Membership(TimelineMembershipRow),
@@ -1342,6 +1402,14 @@ mod tests {
             closed: false,
             max_selections: 1,
             answers,
+            reply: None,
+            thread_root: Some("$root:example.org".into()),
+            thread: None,
+            reactions: vec![TimelineReaction {
+                key: "👍".into(),
+                count: 2,
+                own: Some(true),
+            }],
         };
         let json = serde_json::to_string(&row).unwrap();
         assert!(json.contains("\"voteCount\":2"));
@@ -1388,11 +1456,13 @@ mod tests {
             body: "Reply body".into(),
             formatted_body: None,
             agent_card_json: None,
+            is_agent_approval: false,
             message_type: Some("text".into()),
             media_filename: None,
             media_caption: None,
             edited: false,
             reply: Some(reply),
+            thread_root: Some("$root:example.org".into()),
             thread: Some(thread),
             reactions: Vec::new(),
             media: None,

@@ -23,8 +23,10 @@ async function requireLoggedIn(invoke: NativeInvoke): Promise<void> {
 }
 
 /**
- * Sole desktop owner for room-level receipts and the unread flag. Context-menu
- * Mark as Read uses this so a room does not have to be open.
+ * Sole desktop owner for explicit room-level private receipts and the unread
+ * flag. Context-menu Mark as Read uses this so a room does not have to be open.
+ * Automatic visibility acknowledgements must use the opened timeline stream
+ * with an exact observed-tail precondition instead.
  */
 export async function setRoomReadStateWithNativeOwner(
   roomId: string,

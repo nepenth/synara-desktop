@@ -68,7 +68,7 @@ use crate::app::timeline::{
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelineReadAction,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
+    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
     NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
@@ -769,6 +769,9 @@ struct MatrixTimelinePaginateRequest {
 struct MatrixTimelineSetReadStateRequest {
     stream_id: String,
     action: NativeTimelineReadAction,
+    intent: NativeTimelineReadIntent,
+    #[serde(default)]
+    observed_live_tail_event_id: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for reaction toggle/ensure.
@@ -950,11 +953,19 @@ struct MatrixComposerSetReplyDraftRequest {
     start_thread: bool,
 }
 
-/// Exact React/Tauri envelope payload for composer get/clear reply-draft.
+/// Exact React/Tauri envelope payload for composer get reply-draft.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixComposerReplyDraftRoomRequest {
     room_id: String,
+}
+
+/// Exact React/Tauri envelope payload for composer compare-and-clear.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixComposerClearReplyDraftRequest {
+    room_id: String,
+    expected_draft_revision: u64,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
@@ -2562,15 +2573,22 @@ fn matrix_timeline_paginate(state: Arc<CoreState>, request: CommandEnvelope) -> 
                 direction: payload.direction,
             })
             .await
-            .map_err(timeline_paginate_owner_error)?;
+            .map_err(timeline_view_owner_error)?;
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-timeline-paginate-serialization-failed"))
     })
 }
 
-fn timeline_paginate_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+fn timeline_view_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
-        "v-timeline-view-not-open" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-timeline-view-not-open"
+        | "v-timeline-read-observed-tail-required"
+        | "v-timeline-read-observed-tail-invalid"
+        | "v-timeline-read-observed-tail-unexpected"
+        | "v-timeline-read-requires-live-view"
+        | "v-timeline-read-mark-unread-requires-explicit-intent" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2591,9 +2609,11 @@ fn matrix_timeline_set_read_state(
             .set_read_state(NativeTimelineReadStateRequest {
                 stream_id: payload.stream_id,
                 action: payload.action,
+                intent: payload.intent,
+                observed_live_tail_event_id: payload.observed_live_tail_event_id,
             })
             .await
-            .map_err(timeline_paginate_owner_error)?;
+            .map_err(timeline_view_owner_error)?;
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-timeline-set-read-state-serialization-failed"))
     })
@@ -2725,9 +2745,12 @@ fn send_text_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         "d0.4-send-invalid-room-id"
         | "d0.4-send-invalid-reply-event-id"
         | "d0.4-send-invalid-transaction-id"
+        | "d0.4-send-text-payload-too-large"
         | "d0.4-send-room-not-found"
         | "v-send.4-invalid-message-type"
         | "v-send.4-invalid-mention-user-id"
+        | "v-send.4-mention-user-id-too-long"
+        | "v-send.4-too-many-mentions"
         | "v-send.5-invalid-thread-root-event-id"
         | "v-send.r-edit-invalid-event-id"
         | "v-send.r-edit-room-not-found"
@@ -3016,14 +3039,14 @@ fn matrix_composer_clear_reply_draft(
     request: CommandEnvelope,
 ) -> CommandFuture {
     Box::pin(async move {
-        let payload: MatrixComposerReplyDraftRoomRequest = serde_json::from_value(request.payload)
+        let payload: MatrixComposerClearReplyDraftRequest = serde_json::from_value(request.payload)
             .map_err(|_| core_state_error("p2-composer-clear-reply-draft-invalid-payload"))?;
         let owner = state.timeline_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-composer-clear-reply-draft-no-session")
         })?;
         let readback: NativeComposerReplyDraftReadback = owner
-            .clear_reply_draft(&payload.room_id)
+            .clear_reply_draft(&payload.room_id, payload.expected_draft_revision)
             .await
             .map_err(timeline_action_owner_error)?;
         serde_json::to_value(readback)
@@ -3054,7 +3077,7 @@ fn matrix_composer_get_reply_draft(
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
-        | "d0.4-send-formatted-body-too-large"
+        | "d0.4-send-text-payload-too-large"
         | "v-timeline-edit-invalid-event-id"
         | "v-timeline-edit-empty-body"
         | "v-timeline-edit-room-not-found"
@@ -4694,12 +4717,18 @@ fn content_upload_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
 fn send_room_attachment_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-send.1-attachment-empty"
+        | "v-send.1-attachment-formatted-caption-without-caption"
         | "v-send.1-attachment-invalid-filename"
         | "v-send.1-attachment-invalid-mime"
         | "v-send.1-attachment-invalid-reply"
         | "v-send.1-attachment-invalid-room"
         | "v-send.1-attachment-invalid-thread-root"
-        | "v-send.1-attachment-too-large" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-send.1-attachment-invalid-transaction-id"
+        | "v-send.1-attachment-too-large"
+        | "d0.4-send-text-payload-too-large"
+        | "v-send.4-invalid-mention-user-id"
+        | "v-send.4-mention-user-id-too-long"
+        | "v-send.4-too-many-mentions" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -9286,7 +9315,11 @@ mod tests {
                 command: "matrix_timeline_set_read_state".into(),
                 session_generation: 0,
                 request_id: None,
-                payload: serde_json::json!({"streamId":"view-1","action":"mark_read"}),
+                payload: serde_json::json!({
+                    "streamId":"view-1",
+                    "action":"mark_read",
+                    "intent":"explicit_user"
+                }),
             })
             .await
             .expect_err("timeline set_read_state without an attached owner must fail closed");
@@ -9308,11 +9341,34 @@ mod tests {
                 payload: serde_json::json!({
                     "streamId":"view-1",
                     "action":"mark_read",
+                    "intent":"explicit_user",
                     "token":"no"
                 }),
             })
             .await
             .expect_err("timeline set_read_state must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-set-read-state-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_set_read_state_requires_an_explicit_intent() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_set_read_state".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "streamId":"view-1",
+                    "action":"mark_read"
+                }),
+            })
+            .await
+            .expect_err("timeline set_read_state must distinguish automatic and explicit intent");
         assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
         assert_eq!(
             error.diagnostic_id.as_deref(),
@@ -9426,6 +9482,26 @@ mod tests {
             error.diagnostic_id.as_deref(),
             Some("p2-send-text-no-session")
         );
+    }
+
+    #[test]
+    fn outbound_payload_and_mention_bounds_are_sdk_invariants() {
+        for diagnostic in [
+            "d0.4-send-text-payload-too-large",
+            "v-send.4-mention-user-id-too-long",
+            "v-send.4-too-many-mentions",
+        ] {
+            assert_eq!(
+                send_text_owner_error(diagnostic).category,
+                MatrixIpcErrorCategory::SdkInvariant,
+                "{diagnostic}"
+            );
+            assert_eq!(
+                send_room_attachment_owner_error(diagnostic).category,
+                MatrixIpcErrorCategory::SdkInvariant,
+                "{diagnostic}"
+            );
+        }
     }
 
     #[tokio::test]
@@ -9878,7 +9954,10 @@ mod tests {
                 command: "matrix_composer_clear_reply_draft".into(),
                 session_generation: 0,
                 request_id: None,
-                payload: serde_json::json!({"roomId":"!r:example.org"}),
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "expectedDraftRevision":1
+                }),
             })
             .await
             .expect_err("composer clear reply draft without an attached owner must fail closed");

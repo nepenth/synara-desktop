@@ -15,8 +15,6 @@ enum SynaraNotificationActionContract {
     static let approveOnceIdentifier = SynaraAgentApprovalNotificationActionID.approveOnce.rawValue
     static let approveAlwaysIdentifier = SynaraAgentApprovalNotificationActionID.approveAlways.rawValue
     static let denyIdentifier = SynaraAgentApprovalNotificationActionID.deny.rawValue
-    /// Max age for acting on a native/push approval notification without in-app confirmation.
-    static let nativeActionTTL: TimeInterval = 5 * 60
 
     static func registerCategories(
         center: UNUserNotificationCenter = UNUserNotificationCenter.current()
@@ -58,7 +56,7 @@ enum SynaraNotificationActionContract {
     }
 
     /// Plans how a native/push notification action should be handled.
-    /// Does not send Matrix traffic; reaction callers must use the shared-core
+    /// Does not send Matrix traffic; decision callers must use the shared-core
     /// decision route for authoritative event and expiry validation.
     static func planAgentApprovalNotificationAction(
         actionIdentifier: String,
@@ -97,28 +95,24 @@ enum SynaraNotificationActionContract {
             return .ignore(reason: "already-acted")
         }
 
-        guard let reactionKey = action.reactionKey else {
-            return .ignore(reason: "unsupported-action")
-        }
-
-        return .submitReaction(
-            SynaraAgentApprovalReactionRequest(
+        return .submitDecision(
+            SynaraAgentApprovalPromptDecisionRequest(
                 roomID: roomID,
                 sourceEventID: eventID,
-                reactionKey: reactionKey
+                actionIdentifier: action.rawValue
             )
         )
     }
 
-    /// Backward-compatible parser used by unit tests and callers that only need reaction payloads.
-    /// Returns nil for approve-always and malformed/expired payloads.
-    static func agentApprovalReactionRequest(
+    /// Convenience parser used by unit tests and callers that only need the
+    /// Core-owned decision request. Returns nil for approve-always and malformed payloads.
+    static func agentApprovalDecisionRequest(
         actionIdentifier: String,
         userInfo: [AnyHashable: Any],
         now: Date = Date(),
         alreadyActed: Bool = false
-    ) -> SynaraAgentApprovalReactionRequest? {
-        if case .submitReaction(let request) = planAgentApprovalNotificationAction(
+    ) -> SynaraAgentApprovalPromptDecisionRequest? {
+        if case .submitDecision(let request) = planAgentApprovalNotificationAction(
             actionIdentifier: actionIdentifier,
             userInfo: userInfo,
             now: now,
@@ -143,7 +137,7 @@ enum SynaraNotificationActionContract {
 }
 
 enum SynaraAgentApprovalNotificationActionPlan: Equatable {
-    case submitReaction(SynaraAgentApprovalReactionRequest)
+    case submitDecision(SynaraAgentApprovalPromptDecisionRequest)
     case openRoom(roomID: String, eventID: String, reason: String)
     case ignore(reason: String)
 }

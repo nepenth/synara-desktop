@@ -174,9 +174,9 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(later, .later)
     }
 
-    func testAgentApprovalNotificationActionParsesReactionRequest() throws {
+    func testAgentApprovalNotificationActionParsesCoreDecisionRequest() throws {
         let request = try XCTUnwrap(
-            SynaraNotificationActionContract.agentApprovalReactionRequest(
+            SynaraNotificationActionContract.agentApprovalDecisionRequest(
                 actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier,
                 userInfo: [
                     "synara": [
@@ -189,17 +189,17 @@ final class PushServiceTests: XCTestCase {
 
         XCTAssertEqual(
             request,
-            SynaraAgentApprovalReactionRequest(
+            SynaraAgentApprovalPromptDecisionRequest(
                 roomID: "!room:matrix.org",
                 sourceEventID: "$approval:matrix.org",
-                reactionKey: "✅"
+                actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier
             )
         )
     }
 
     func testAgentApprovalNotificationActionRejectsUnknownOrIncompletePayloads() {
         XCTAssertNil(
-            SynaraNotificationActionContract.agentApprovalReactionRequest(
+            SynaraNotificationActionContract.agentApprovalDecisionRequest(
                 actionIdentifier: "unknown",
                 userInfo: [
                     "room_id": "!room:matrix.org",
@@ -208,7 +208,7 @@ final class PushServiceTests: XCTestCase {
             )
         )
         XCTAssertNil(
-            SynaraNotificationActionContract.agentApprovalReactionRequest(
+            SynaraNotificationActionContract.agentApprovalDecisionRequest(
                 actionIdentifier: SynaraNotificationActionContract.denyIdentifier,
                 userInfo: ["room_id": "!room:matrix.org"]
             )
@@ -233,7 +233,7 @@ final class PushServiceTests: XCTestCase {
             )
         )
         XCTAssertNil(
-            SynaraNotificationActionContract.agentApprovalReactionRequest(
+            SynaraNotificationActionContract.agentApprovalDecisionRequest(
                 actionIdentifier: SynaraNotificationActionContract.approveAlwaysIdentifier,
                 userInfo: [
                     "room_id": "!room:matrix.org",
@@ -243,8 +243,7 @@ final class PushServiceTests: XCTestCase {
         )
     }
 
-    func testAgentApprovalReviewOpensExactPromptAndTTLMatchesHermes() {
-        XCTAssertEqual(SynaraNotificationActionContract.nativeActionTTL, 300)
+    func testAgentApprovalReviewOpensExactPromptWithoutTrustingPayloadClock() {
         let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
             actionIdentifier: SynaraNotificationActionContract.reviewIdentifier,
             userInfo: [
@@ -275,7 +274,7 @@ final class PushServiceTests: XCTestCase {
     }
 
     func testAgentApprovalNotificationActionDefersUntrustedPayloadClockAndRejectsAlreadyActed() {
-        let staleCreatedAt = Date().addingTimeInterval(-(SynaraNotificationActionContract.nativeActionTTL + 60))
+        let staleCreatedAt = Date(timeIntervalSince1970: 1)
         let expiredPlan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
             actionIdentifier: SynaraNotificationActionContract.approveOnceIdentifier,
             userInfo: [
@@ -284,10 +283,10 @@ final class PushServiceTests: XCTestCase {
                 "created_at": staleCreatedAt.timeIntervalSince1970 * 1000
             ]
         )
-        guard case .submitReaction(let request) = expiredPlan else {
+        guard case .submitDecision(let request) = expiredPlan else {
             return XCTFail("Payload clocks must defer to authoritative Matrix event validation")
         }
-        XCTAssertEqual(request.reactionKey, "✅")
+        XCTAssertEqual(request.actionIdentifier, SynaraNotificationActionContract.approveOnceIdentifier)
 
         let alreadyActed = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
             actionIdentifier: SynaraNotificationActionContract.denyIdentifier,
@@ -300,7 +299,7 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(alreadyActed, .ignore(reason: "already-acted"))
     }
 
-    func testAgentApprovalNotificationActionPlansDenyReaction() throws {
+    func testAgentApprovalNotificationActionPlansDenyThroughCore() throws {
         let plan = SynaraNotificationActionContract.planAgentApprovalNotificationAction(
             actionIdentifier: SynaraNotificationActionContract.denyIdentifier,
             userInfo: [
@@ -308,10 +307,10 @@ final class PushServiceTests: XCTestCase {
                 "event_id": "$approval:matrix.org"
             ]
         )
-        guard case .submitReaction(let request) = plan else {
-            return XCTFail("Expected submitReaction plan, got \(plan)")
+        guard case .submitDecision(let request) = plan else {
+            return XCTFail("Expected submitDecision plan, got \(plan)")
         }
-        XCTAssertEqual(request.reactionKey, "❌")
+        XCTAssertEqual(request.actionIdentifier, SynaraNotificationActionContract.denyIdentifier)
         XCTAssertEqual(request.roomID, "!room:matrix.org")
         XCTAssertEqual(request.sourceEventID, "$approval:matrix.org")
     }

@@ -46,12 +46,20 @@ enum SharedCoreTimelineRows {
             id: row.itemId,
             eventID: eventID,
             senderID: row.sender,
+            senderProfileDisplayName: row.senderName,
             senderAvatarURL: senderAvatarURL(row.senderAvatarUrl),
             timestamp: timestamp,
             kind: kind,
             replyToEventID: row.replyToEventId,
+            threadRootEventID: row.threadRootEventId,
+            replyPreview: replyPreview(from: row.replyPreview),
+            threadSummary: threadSummary(from: row.threadSummary),
+            poll: poll(from: row.poll),
+            actionCapabilities: actionCapabilities(from: row.capabilities),
             isEdited: row.edited,
+            isAgentApproval: row.isAgentApproval,
             reactions: reactions(from: row.reactions),
+            reactionOwnership: reactionOwnership(from: row.reactions),
             isEncrypted: row.kind == "encrypted"
         )
     }
@@ -121,6 +129,66 @@ enum SharedCoreTimelineRows {
 
     static func reactions(from rows: [TimelineViewReactionDto]) -> [String: Int] {
         reactionCounts(rows.map { ($0.key, $0.count) })
+    }
+
+    static func reactionOwnership(from rows: [TimelineViewReactionDto]) -> TimelineReactionOwnership {
+        guard rows.allSatisfy({ $0.own != nil }) else {
+            return .unknown
+        }
+        return .known(Set(rows.compactMap { $0.own == true ? $0.key : nil }))
+    }
+
+    static func replyPreview(from dto: TimelineViewReplyPreviewDto?) -> TimelineReplyPreview? {
+        guard let dto else { return nil }
+        return TimelineReplyPreview(
+            eventID: dto.eventId,
+            senderID: dto.senderId,
+            senderName: dto.senderName,
+            snippet: TimelineReplyPreview.truncatedSnippet(dto.body)
+        )
+    }
+
+    static func threadSummary(from dto: TimelineViewThreadSummaryDto?) -> TimelineThreadSummary? {
+        guard let dto else { return nil }
+        return TimelineThreadSummary(
+            rootEventID: dto.rootEventId,
+            replyCount: Int(dto.replyCount),
+            latestEventID: dto.latestEventId
+        )
+    }
+
+    static func poll(from dto: TimelineViewPollDto?) -> TimelinePollPresentation? {
+        guard let dto else { return nil }
+        return TimelinePollPresentation(
+            question: dto.question,
+            isClosed: dto.closed,
+            maximumSelections: Int(dto.maxSelections),
+            answers: dto.answers.map {
+                TimelinePollAnswer(
+                    id: $0.id,
+                    text: $0.text,
+                    voteCount: Int($0.voteCount),
+                    isOwn: $0.own
+                )
+            }
+        )
+    }
+
+    static func actionCapabilities(
+        from dto: TimelineViewRowCapabilitiesDto?
+    ) -> TimelineRowActionCapabilities? {
+        guard let dto else { return nil }
+        return TimelineRowActionCapabilities(
+            canReact: dto.react,
+            canReply: dto.reply,
+            canEdit: dto.edit,
+            canRedact: dto.redact,
+            canReport: dto.report,
+            canPin: dto.pin,
+            canForward: dto.forward,
+            canVote: dto.vote,
+            canDeclineCall: dto.declineCall
+        )
     }
 
     static func reactionCounts(_ rows: [(key: String, count: UInt32)]) -> [String: Int] {

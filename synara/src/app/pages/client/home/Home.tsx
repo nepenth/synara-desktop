@@ -61,11 +61,9 @@ import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavHeader, PageNavContent } from '../../../components/page';
 import { useRoomsUnread } from '../../../state/hooks/unread';
-import { markAsReadInBackground } from '../../../utils/notifications';
+import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { stopPropagation } from '../../../utils/keyboard';
-import { useSetting } from '../../../state/hooks/settings';
-import { settingsAtom } from '../../../state/settings';
 import SynaraPNG from '../../../../../public/res/png/synara.png';
 import {
   getRoomNotificationMode,
@@ -81,13 +79,12 @@ type HomeMenuProps = {
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
   const orphanRooms = useHomeRooms();
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
   const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsReadInBackground(mx, rId, hideActivity));
+    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
     requestClose();
   };
 

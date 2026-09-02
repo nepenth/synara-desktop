@@ -1,7 +1,8 @@
-# Program decisions
+# Historical program decisions
 
-Numbered decisions for the residual-census feature branch. These do not
-amend ADRs. An ADR still wins if a later memo disagrees.
+Status: historical decisions from the 2026-09-01 research run, with promotion-
+review corrections added on 2026-09-02. These do not amend ADRs. An ADR still
+wins if a memo disagrees.
 
 | ID | Date | Decision |
 | --- | --- | --- |
@@ -15,6 +16,8 @@ amend ADRs. An ADR still wins if a later memo disagrees.
 | D8 | 2026-09-01 | [CENSUS.md](CENSUS.md) is a starting snapshot from `main` `011cf39a`. Every memo must re-verify cited paths on the commit it records. |
 | D9 | 2026-09-01 | A memo recommendation of extract or proceed is a **stop**, not a start. Record it and wait for a human implementation decision. |
 | D10 | 2026-09-01 | Accepted memo [ROE-08-agent-approval-memo.md](../memos/ROE-08-agent-approval-memo.md) (`#1082`, ACCEPT at `cd1c655b`) recommends extracting Core `is_agent_approval_prompt` as the sole eligibility owner. **Human implementation gate is now open as a question and closed as a coding path.** Do not delete TypeScript/Swift detectors, add Core routes, or write a plan until a later decision explicitly authorizes implementation. |
+| D11 | 2026-09-02 | Promotion review found that D10 is too narrow: in-app generic reaction paths can bypass Core approval validation, Hermes implements typed session approval and configurable expiry that the original memo did not fully census, and recognition alone is insufficient. D10 remains historical; [A2](ACTIONS.md#a2--hermes-approval-contract-and-authority) supersedes it as the current research gate. |
+| D12 | 2026-09-02 | “Ownership closed” is not equivalent to “feature complete.” Confirmed product defects, transport/parity gaps, product decisions, and missing proof remain open in [ACTIONS.md](ACTIONS.md), even where a memo correctly finds one owner. |
+| D13 | 2026-09-02 | After reviewing the promotion findings, the human explicitly authorized the bounded A1–A8 and A11 remediation subset on this feature branch, with delegated implementation and independent review, and authorized the primary orchestrator to commit and merge accepted work. This supersedes D2 and D3 only for that subset. A9 and A10 remain evidence/future investigations, no unrelated release work is authorized, and missing live evidence cannot be marked complete. |
 
-Add rows; do not rewrite history. If a decision is reversed, add a new
-row that cites the old ID.
+Future corrections add rows rather than rewriting historical decisions.

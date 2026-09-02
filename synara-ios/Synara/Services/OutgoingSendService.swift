@@ -119,6 +119,7 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
     let body: String
     let formattedBody: String?
     let replyToEventID: String?
+    let threadRootEventID: String?
     let senderID: String
     var senderAvatarURL: URL?
     let timestamp: Date
@@ -132,6 +133,7 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
             deliveryStatus: deliveryStatus,
             timestamp: timestamp
         )
@@ -143,7 +145,8 @@ struct OutgoingQueuedMessage: Equatable, Identifiable {
             body: body,
             formattedBody: formattedBody,
             replyToEventID: replyToEventID,
-            editEventID: nil
+            editEventID: nil,
+            threadRootEventID: threadRootEventID
         )
     }
 }
@@ -244,6 +247,7 @@ final class OutgoingSendCoordinator {
         body: String,
         formattedBody: String?,
         replyToEventID: String?,
+        threadRootEventID: String? = nil,
         senderID: String,
         senderAvatarURL: URL? = nil,
         timestamp: Date
@@ -254,6 +258,7 @@ final class OutgoingSendCoordinator {
             body: body,
             formattedBody: formattedBody,
             replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
             senderID: senderID,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
@@ -277,6 +282,7 @@ final class OutgoingSendCoordinator {
             body: body,
             formattedBody: TimelinePendingReconciler.formattedBody(for: item),
             replyToEventID: item.replyToEventID,
+            threadRootEventID: item.threadRootEventID,
             senderID: senderID,
             senderAvatarURL: item.senderAvatarURL,
             timestamp: item.timestamp

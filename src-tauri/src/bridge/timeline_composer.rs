@@ -36,8 +36,21 @@ pub(crate) async fn composer_set_reply_draft(
 pub(crate) async fn composer_clear_reply_draft(
     core: &Core,
     room_id: String,
+    expected_draft_revision: u64,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
-    dispatch_room_draft(core, COMPOSER_CLEAR_COMMAND, room_id).await
+    let response = core
+        .command(CommandEnvelope {
+            command: COMPOSER_CLEAR_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+                "expectedDraftRevision": expected_draft_revision,
+            }),
+        })
+        .await
+        .map_err(map_composer_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| composer_response_error())
 }
 
 pub(crate) async fn composer_get_reply_draft(

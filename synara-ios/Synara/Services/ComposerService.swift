@@ -6,19 +6,22 @@ struct MessageSendRequest: Equatable {
     let formattedBody: String?
     let replyToEventID: String?
     let editEventID: String?
+    let threadRootEventID: String?
 
     init(
         roomID: String,
         body: String,
         formattedBody: String? = nil,
         replyToEventID: String?,
-        editEventID: String?
+        editEventID: String?,
+        threadRootEventID: String? = nil
     ) {
         self.roomID = roomID
         self.body = body
         self.formattedBody = formattedBody
         self.replyToEventID = replyToEventID
         self.editEventID = editEventID
+        self.threadRootEventID = threadRootEventID
     }
 }
 
@@ -75,6 +78,7 @@ struct MockMessageSendService: MessageSending {
             timestamp: Date(),
             kind: request.formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
             replyToEventID: request.replyToEventID,
+            threadRootEventID: request.threadRootEventID,
             isEdited: request.editEventID != nil,
             reactions: [:]
         )
@@ -95,8 +99,39 @@ struct ComposerEditSession: Equatable {
 struct ComposerSendIntent: Equatable {
     let body: String
     let replyToEventID: String?
+    let threadRootEventID: String?
     let editEventID: String?
     let retrying: TimelineItem?
+
+    init(
+        body: String,
+        replyToEventID: String?,
+        threadRootEventID: String? = nil,
+        editEventID: String?,
+        retrying: TimelineItem?
+    ) {
+        self.body = body
+        self.replyToEventID = replyToEventID
+        self.threadRootEventID = threadRootEventID
+        self.editEventID = editEventID
+        self.retrying = retrying
+    }
+
+    /// An edit or failed-local retry must remain a distinct text operation.
+    /// Attachment captions cannot represent either Matrix mutation.
+    var requiresStandaloneTextSend: Bool {
+        editEventID != nil || retrying != nil
+    }
+
+    func replacingBody(with body: String) -> ComposerSendIntent {
+        ComposerSendIntent(
+            body: body,
+            replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
+            editEventID: editEventID,
+            retrying: retrying
+        )
+    }
 }
 
 enum ComposerEditFlow {
@@ -120,12 +155,14 @@ enum ComposerEditFlow {
     static func sendIntent(
         body: String,
         replyToEventID: String?,
+        threadRootEventID: String? = nil,
         session: ComposerEditSession?
     ) -> ComposerSendIntent {
         if let retrying = session?.retryingItem {
             return ComposerSendIntent(
                 body: body,
                 replyToEventID: retrying.replyToEventID,
+                threadRootEventID: retrying.threadRootEventID,
                 editEventID: nil,
                 retrying: retrying
             )
@@ -134,6 +171,7 @@ enum ComposerEditFlow {
         return ComposerSendIntent(
             body: body,
             replyToEventID: replyToEventID,
+            threadRootEventID: session?.editTarget.threadRootEventID ?? threadRootEventID,
             editEventID: session?.remoteEditEventID,
             retrying: nil
         )

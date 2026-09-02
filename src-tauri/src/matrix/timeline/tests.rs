@@ -893,17 +893,20 @@ mod composer_pure {
     fn registry_set_get_and_clear_are_room_scoped() {
         let mut registry = ComposerDraftRegistry::new();
         let draft = NativeComposerReplyDraft {
+            draft_revision: 0,
             event_id: "$evt:example.org".into(),
             sender_id: "@alice:example.org".into(),
             body: "hello".into(),
             formatted_body: Some("<p>hello</p>".into()),
             thread_root_event_id: None,
         };
-        registry.set("!room:example.org".into(), draft.clone());
+        let draft = registry.set("!room:example.org".into(), draft);
         assert_eq!(registry.get("!room:example.org"), Some(&draft));
         assert!(registry.get("!other:example.org").is_none());
-        assert!(registry.clear("!room:example.org"));
-        assert!(!registry.clear("!room:example.org"));
+        assert!(registry
+            .compare_and_clear("!room:example.org", draft.draft_revision)
+            .is_none());
+        assert!(registry.get("!room:example.org").is_none());
         assert_eq!(
             reply_draft_readback("!room:example.org".into(), "cleared", None).status,
             "cleared"

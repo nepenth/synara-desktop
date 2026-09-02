@@ -16,7 +16,7 @@ import { Membership, StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
 import { splitWithSpace } from '../utils/common';
 import { sendPollWithNativeDesktopOwner } from '../features/room/nativePoll';
-import { parsePollCommand } from '../utils/polls';
+import { parsePollCommand, type ParsedPoll } from '../utils/polls';
 import { getRoomCurrentState } from '../utils/timelineLifecycle';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../utils/desktop';
 import { createRoomWithNativeOwner } from '../components/nativeRoomCreateOwner';
@@ -219,7 +219,13 @@ export type CommandContent = {
 
 export type CommandRecord = Record<Command, CommandContent>;
 
-export const useCommands = (mx: MatrixClientReading, room: RoomReading): CommandRecord => {
+export type PollCommandExecutor = (poll: ParsedPoll) => Promise<void>;
+
+export const useCommands = (
+  mx: MatrixClientReading,
+  room: RoomReading,
+  executePoll?: PollCommandExecutor
+): CommandRecord => {
   const c = useMemo(() => mx as unknown as CommandsClientReading, [mx]);
   const { navigateRoom } = useRoomNavigate();
   const { t } = useTranslation();
@@ -636,6 +642,10 @@ export const useCommands = (mx: MatrixClientReading, room: RoomReading): Command
         exe: async (payload) => {
           const poll = parsePollCommand(payload);
           if (!poll) return;
+          if (executePoll) {
+            await executePoll(poll);
+            return;
+          }
           const owner = await sendPollWithNativeDesktopOwner({
             roomId: room.roomId,
             question: poll.question,
@@ -648,7 +658,7 @@ export const useCommands = (mx: MatrixClientReading, room: RoomReading): Command
         },
       },
     }),
-    [c, mx, room, navigateRoom, t]
+    [c, mx, room, navigateRoom, t, executePoll]
   );
 
   return commands;

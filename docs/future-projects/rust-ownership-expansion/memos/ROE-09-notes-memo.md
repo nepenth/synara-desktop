@@ -1,12 +1,12 @@
 # ROE-09 Research Memo: Notes and Account-Data Ownership
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership accepted; concurrency/version remediation reopened; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-09                                                                                                                                |
 | Research owner     | Isolated researcher on `roe/memo-09-notes`                                                                                            |
-| Reviewers          | Unassigned                                                                                                                            |
+| Reviewers          | Independent feature-branch review; `ACCEPT` on PR `#1084` at `8d5e1b6220a4cdd9f5aee76e8f2c5b3c51e17f65`                              |
 | Source census      | 2026-09-01 against `0b6c4297989746a95df21d4a6d286480ee61d570`                                                                         |
 | ADR baseline       | ADR 0003, 0004, 0005 last reviewed 2026-09-01 (index in [`docs/adr/README.md`](../../../adr/README.md)); same census commit            |
 
@@ -35,7 +35,7 @@ already requires.
 | Create / edit / delete / complete | Authority. Registered `matrix_room_notes_{snapshot,upsert,delete,complete_todo,move_todo}`; live RMW on `Client` account data | Thin Tauri invoke → `Core::command`. No `setAccountData(in.synara.room_notes)` | Live `AppEnvironment` uses `SharedCoreRoomNotesService` → UniFFI → same five commands | Core register/handlers in [`core.rs`](../../../../crates/synara-core/src/core.rs); live I/O [`room_notes_live.rs`](../../../../crates/synara-core/src/app/account_data/room_notes_live.rs) via `NativeImagePackOwner`; desktop [`nativeRoomNotesOwner.ts`](../../../../synara/src/app/features/room/nativeRoomNotesOwner.ts), [`bridge/room_notes.rs`](../../../../src-tauri/src/bridge/room_notes.rs); iOS [`SharedCoreRoomNotes.swift`](../../../../synara-ios/Synara/Services/SharedCoreRoomNotes.swift), [`AppEnvironment.swift`](../../../../synara-ios/Synara/Services/AppEnvironment.swift) `live()`; fail-closed [`p4_s9_room_notes.rs`](../../../../crates/synara-core/tests/p4_s9_room_notes.rs), [`SynaraCoreBindingsTests.swift`](../../../../synara-ios/SynaraTests/SynaraCoreBindingsTests.swift) |
 | Reorder persistence | Authority for ToDo adjacent swap (`move_room_todo_item`) and for any item upsert that includes `order` | ToDo chevrons call Core `move_todo`. Note chevrons compute a fractional `order` locally, then Core `upsert` | Drag / chevrons compute fractional `order` locally (`RoomNoteOrdering`), then Core `upsert` via `setItemOrder`. `moveTodo` exists on the service but the shipped notes screen does not call it | Core `move_room_todo_item`; desktop [`RoomNotesPanel.tsx`](../../../../synara/src/app/features/room/room-notes/RoomNotesPanel.tsx); iOS [`RoomNotesView.swift`](../../../../synara-ios/Synara/Features/RoomNotesView.swift) |
 | Stable IDs | Authority stores the id the presenter supplies; empty id fails closed | Mints `kind:<base36-ts>:<rand>` for note/todo before upsert | Mints `kind:<uuid>` for note/todo and `message:<uuid>` for pins | Presenter mint + Core validate; not a second identity store |
-| Versioning / migration / downgrade | Authority. Readers coerce `version` to `1` and drop unknown kinds/fields. No v2 writer exists | Same v1 contract types | Same v1 DTO fields | `ROOM_NOTES_ACCOUNT_DATA_VERSION = 1`; schema `const: 1` |
+| Versioning / migration / downgrade | Authority, with a data-integrity gap. Readers coerce content to version `1` and drop unknown kinds/fields. A future-version payload can therefore be read, mutated, and written back as v1 with unrecognized data removed. No v2 writer or fail-closed future-version policy exists. | Same v1 contract types; writes through Core can trigger the Core downgrade behavior | Same v1 DTO fields; writes through Core can trigger the Core downgrade behavior | `ROOM_NOTES_ACCOUNT_DATA_VERSION = 1`; `normalize_room_notes_content`; schema `const: 1` |
 | Concurrent / offline updates | Authority. Last-write-wins global-event RMW (`load` → mutate → `set_account_data_raw`). No etag / tombstone / CRDT. Missing event → empty default | 1s snapshot poll; preserves last projection on transient failure; no local write queue | Refresh / `.task` reload; optimistic list only for drag, rolled back on Core failure; no local write queue | `mutate_room_notes` in `room_notes_live.rs`; [`roomNotesList.ts`](../../../../synara/src/app/state/roomNotesList.ts) |
 | Tombstones | None. Delete removes the item; empty room buckets drop | Same via Core delete | Same via Core delete | `remove_room_note_item` |
 | Clock independence | Authority requires finite `createdAt` / `updatedAt`; complete/move stamp `room_notes_now_ms()` | Presenter supplies millisecond timestamps on create/upsert | Same | Finite checks in normalize + live validate |
@@ -134,12 +134,17 @@ They do not persist and do not sync. Wiring “Pin to Notes” on
 `NativeTimelinePresenter` would be a presenter change, not a Core extraction,
 and is out of scope for this census.
 
-Unresolved questions that do **not** reopen ownership:
+Unresolved product and data-integrity questions that do **not** create a
+second owner:
 
 - Desktop native timeline still lacks a notes-pin menu item.
 - iOS list reorder uses Core upsert rather than `move_todo`.
-- Last-write-wins RMW can lose a concurrent edit from another device; that is
-  existing Core policy, not a second engine.
+- Last-write-wins global-event read/modify/write can lose a concurrent add,
+  edit, delete, or reorder from another device. No etag, tombstone, CRDT,
+  offline queue, or explicit conflict contract protects that case.
+- Unknown future versions and fields can be silently normalized away on a
+  subsequent write. The reader/writer needs an explicit fail-closed or
+  migration contract before a v2 producer exists.
 - No notes export surface exists on either client.
 
 Regression proof to keep the boundary stable:
@@ -155,8 +160,11 @@ Regression proof to keep the boundary stable:
 
 ## Next gate
 
-Already owned. Close ROE-09. Do not write an implementation plan. Do not move
-editors or drag into Core. Do not add a second notes store. Shared schema and
-fixtures already exist; no new portfolio fixture is required to close.
-A later product owner may add a desktop notes-pin menu without changing this
-ownership decision.
+The single-writer ownership question is closed: do not move editors or drag
+geometry into Core and do not add a second notes store. Data integrity is
+reopened as [A5](../program/ACTIONS.md#a5--notes-integrity). Before declaring
+notes synchronization robust, decide and test two-device concurrent add/edit/
+delete/reorder behavior, deletion/tombstone semantics, retries and offline
+updates, global payload bounds, and unknown-future-version handling that does
+not silently downgrade data. A desktop notes-pin menu remains independent
+presenter work.

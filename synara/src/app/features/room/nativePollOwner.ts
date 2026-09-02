@@ -75,6 +75,24 @@ export async function sendPollWithNativeOwner(
 }
 
 /**
+ * Slash-command route: consume the visible Core reply owner only after the
+ * native poll send is confirmed. A rejected send or legacy owner keeps the
+ * draft visible so the user can retry without losing its relation.
+ */
+export async function sendPollCommandWithNativeOwner(
+  input: NativeSendPollInput,
+  onNativeSent: () => void | Promise<void>,
+  desktopAvailable: boolean,
+  invoke: NativeInvoke
+): Promise<'native' | 'legacy'> {
+  const owner = await sendPollWithNativeOwner(input, desktopAvailable, invoke);
+  if (owner === 'native') {
+    await onNativeSent();
+  }
+  return owner;
+}
+
+/**
  * Sole poll-response (vote) owner when a native session is live.
  * Never falls through to `mx.sendEvent` for poll.response.
  */

@@ -26,6 +26,69 @@ final class ComposerAttachmentDraftTests: XCTestCase {
         )
     }
 
+    func testSingleAttachmentEditKeepsAttachmentAndEditAsDistinctSteps() {
+        let draft = makeDraft(name: "one.jpg")
+        let intent = ComposerSendIntent(
+            body: "Corrected text",
+            replyToEventID: nil,
+            editEventID: "$original:example.org",
+            retrying: nil
+        )
+
+        let transaction = ComposerAttachmentSendTransaction.reusableOrNew(
+            existing: nil,
+            drafts: [draft],
+            body: intent.body,
+            proposedIntent: intent
+        )
+
+        XCTAssertEqual(
+            transaction.steps,
+            [
+                .attachment(id: draft.id, caption: nil),
+                .text(body: "Corrected text"),
+            ]
+        )
+        XCTAssertEqual(transaction.intent.editEventID, "$original:example.org")
+    }
+
+    func testSingleAttachmentFailedMessageRetryKeepsRetryAsDistinctTextStep() {
+        let draft = makeDraft(name: "one.jpg")
+        let failed = TimelineItem.pendingMessage(
+            localID: "$pending-failed",
+            body: "Retry this",
+            senderID: "@alice:example.org",
+            replyToEventID: "$parent:example.org",
+            threadRootEventID: "$root:example.org",
+            deliveryStatus: .failed
+        )
+        let intent = ComposerSendIntent(
+            body: "Retry this",
+            replyToEventID: failed.replyToEventID,
+            threadRootEventID: failed.threadRootEventID,
+            editEventID: nil,
+            retrying: failed
+        )
+
+        let transaction = ComposerAttachmentSendTransaction.reusableOrNew(
+            existing: nil,
+            drafts: [draft],
+            body: intent.body,
+            proposedIntent: intent
+        )
+
+        XCTAssertEqual(
+            transaction.steps,
+            [
+                .attachment(id: draft.id, caption: nil),
+                .text(body: "Retry this"),
+            ]
+        )
+        XCTAssertEqual(transaction.intent.retrying?.id, "$pending-failed")
+        XCTAssertEqual(transaction.intent.replyToEventID, "$parent:example.org")
+        XCTAssertEqual(transaction.intent.threadRootEventID, "$root:example.org")
+    }
+
     func testSingleAttachmentWithoutTextHasNoCaption() {
         let draft = makeDraft(name: "one.jpg")
 
@@ -162,6 +225,50 @@ final class ComposerAttachmentDraftTests: XCTestCase {
             [
                 .attachment(id: second.id, caption: nil),
                 .text(body: "Context"),
+            ]
+        )
+    }
+
+    func testPartialRetryRetainsOriginalRelationSnapshotWhileUpdatingUnsentText() {
+        let first = makeDraft(name: "one.jpg")
+        let second = makeDraft(name: "two.jpg")
+        let originalIntent = ComposerSendIntent(
+            body: "Original context",
+            replyToEventID: "$original-parent:example.org",
+            threadRootEventID: "$original-root:example.org",
+            editEventID: nil,
+            retrying: nil
+        )
+        let initial = ComposerAttachmentSendTransaction.reusableOrNew(
+            existing: nil,
+            drafts: [first, second],
+            body: originalIntent.body,
+            proposedIntent: originalIntent
+        )
+        let afterFirstSuccess = initial.removingAttachment(id: first.id)
+        let changedUIIntent = ComposerSendIntent(
+            body: "Updated context",
+            replyToEventID: "$mutable-ui-parent:example.org",
+            threadRootEventID: "$mutable-ui-root:example.org",
+            editEventID: nil,
+            retrying: nil
+        )
+
+        let retry = ComposerAttachmentSendTransaction.reusableOrNew(
+            existing: afterFirstSuccess,
+            drafts: [second],
+            body: changedUIIntent.body,
+            proposedIntent: changedUIIntent
+        )
+
+        XCTAssertEqual(retry.intent.replyToEventID, "$original-parent:example.org")
+        XCTAssertEqual(retry.intent.threadRootEventID, "$original-root:example.org")
+        XCTAssertEqual(retry.intent.body, "Updated context")
+        XCTAssertEqual(
+            retry.steps,
+            [
+                .attachment(id: second.id, caption: nil),
+                .text(body: "Updated context"),
             ]
         )
     }

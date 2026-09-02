@@ -4,15 +4,20 @@ import {
   AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
   AGENT_APPROVAL_REACTION_DENY,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
+  AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
   type AgentApprovalPrompt,
 } from '../../utils/agentApprovals';
-import { ensureReactionWithNativeOwner } from '../../features/room/nativeReactionOwner';
+import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeReactionOwner';
 import * as css from './AgentApprovalCard.css';
 
 export type AgentApprovalTarget = {
   roomId: string;
   eventId: string;
   canSendReaction?: boolean;
+  /** True only when the Core timeline owner classified this exact event. */
+  coreEligible?: boolean;
 };
 
 type AgentApprovalCardProps = {
@@ -21,6 +26,7 @@ type AgentApprovalCardProps = {
 };
 
 type ApprovalAction = {
+  actionId: string;
   key: string;
   label: string;
   variant: 'Primary' | 'Critical' | 'Secondary';
@@ -28,16 +34,19 @@ type ApprovalAction = {
 
 const APPROVAL_ACTIONS: ApprovalAction[] = [
   {
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ONCE,
     key: AGENT_APPROVAL_REACTION_APPROVE_ONCE,
     label: 'Approve once',
     variant: 'Primary',
   },
   {
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_APPROVE_ALWAYS,
     key: AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
     label: 'Approve always',
     variant: 'Primary',
   },
   {
+    actionId: AGENT_APPROVAL_NOTIFICATION_ACTION_DENY,
     key: AGENT_APPROVAL_REACTION_DENY,
     label: 'Deny',
     variant: 'Critical',
@@ -62,28 +71,30 @@ const monospacedBlockStyle: React.CSSProperties = {
 export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
   const [busyKey, setBusyKey] = useState<string>();
   const [sentKey, setSentKey] = useState<string>();
+  const [decisionStatus, setDecisionStatus] = useState<'applied' | 'already_decided'>();
   const [error, setError] = useState<string>();
   const [confirmApproveAlways, setConfirmApproveAlways] = useState(false);
   const canReact = Boolean(target && target.canSendReaction !== false);
   const disabled = !canReact || Boolean(busyKey || sentKey);
   const isResolved = Boolean(sentKey);
 
-  const sendReaction = useCallback(
-    async (reactionKey: string) => {
+  const submitDecision = useCallback(
+    async (action: ApprovalAction) => {
       if (!target || target.canSendReaction === false || busyKey || sentKey) return;
 
-      setBusyKey(reactionKey);
+      setBusyKey(action.key);
       setError(undefined);
       try {
-        await ensureReactionWithNativeOwner({
+        const result = await decideAgentApprovalWithNativeOwner({
           roomId: target.roomId,
           eventId: target.eventId,
-          key: reactionKey,
+          actionId: action.actionId,
         });
-        setSentKey(reactionKey);
+        setDecisionStatus(result.status);
+        setSentKey(action.key);
         setConfirmApproveAlways(false);
       } catch {
-        setError('Failed to send approval reaction.');
+        setError('Approval could not be submitted. The request may be invalid or expired.');
       } finally {
         setBusyKey(undefined);
       }
@@ -92,23 +103,23 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
   );
 
   const handleReact = useCallback(
-    async (reactionKey: string) => {
+    async (action: ApprovalAction) => {
       if (!target || target.canSendReaction === false || busyKey || sentKey) return;
 
       // Permanent approval requires an explicit second confirmation step.
-      if (reactionKey === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && !confirmApproveAlways) {
+      if (action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && !confirmApproveAlways) {
         setConfirmApproveAlways(true);
         setError(undefined);
         return;
       }
 
-      if (reactionKey !== AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && confirmApproveAlways) {
+      if (action.key !== AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && confirmApproveAlways) {
         setConfirmApproveAlways(false);
       }
 
-      await sendReaction(reactionKey);
+      await submitDecision(action);
     },
-    [target, busyKey, sentKey, confirmApproveAlways, sendReaction]
+    [target, busyKey, sentKey, confirmApproveAlways, submitDecision]
   );
 
   const sourceDetails =
@@ -226,7 +237,13 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
                     <Spinner size="100" variant="Critical" />
                   ) : undefined
                 }
-                onClick={() => handleReact(AGENT_APPROVAL_REACTION_APPROVE_ALWAYS)}
+                onClick={() =>
+                  handleReact(
+                    APPROVAL_ACTIONS.find(
+                      (action) => action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS
+                    )!
+                  )
+                }
               >
                 <Text size="B300">
                   {AGENT_APPROVAL_REACTION_APPROVE_ALWAYS} Confirm approve always
@@ -266,7 +283,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
                       <Spinner size="100" variant={action.variant} />
                     ) : undefined
                   }
-                  onClick={() => handleReact(action.key)}
+                  onClick={() => handleReact(action)}
                 >
                   <Text size="B300">{`${action.key} ${action.label}`}</Text>
                 </Button>
@@ -285,6 +302,12 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             You do not have permission to react in this room.
           </Text>
         )}
+        {!isResolved && (
+          <Text size="T200" priority="300">
+            Session approval is available only by replying <code>!approve session</code>; Hermes
+            does not define a session-approval reaction.
+          </Text>
+        )}
         {isResolved && (
           <Box
             direction="Column"
@@ -297,7 +320,9 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             }}
           >
             <Text size="T300" priority="400">
-              Approved ({sentKey}). Card can be dismissed or will be replaced in a future update.
+              {decisionStatus === 'already_decided'
+                ? 'This approval was already decided on this account.'
+                : `Decision sent (${sentKey}).`}
             </Text>
             {prompt.commandPreview && (
               <Text size="T200" priority="300">

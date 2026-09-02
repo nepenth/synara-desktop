@@ -1,12 +1,12 @@
 # ROE-07 Research Memo: Notification Eligibility and Privacy Policy
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership boundary accepted; delivery reliability remains separate; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                                                                                 |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-07 (notifications and agent policy)                                                                                                                                                               |
 | Research owner     | ROE-07 residual-census researcher                                                                                                                                                                     |
-| Reviewers          | Unassigned                                                                                                                                                                                            |
+| Reviewers          | Independent feature-branch review; `ACCEPT_WITH_NITS` on PR `#1085` at `651e36b2`                                                                                                                    |
 | Source census      | 2026-09-01; worktree `eb994ec4695a7f33282647ab3402941e72f45412` (feature-branch program docs on `main` `011cf39a`). Product paths re-read on this commit. [CENSUS.md](../program/CENSUS.md) is snapshot only. |
 | ADR baseline       | ADR 0003, 0004, 0005 last reviewed 2026-09-01 against `011cf39a` (ADR index same date). Goal-graph and playbook §5 read on this census commit.                                                         |
 
@@ -22,10 +22,9 @@ This memo asks only which muted-room, mention, foreground-suppression,
 preview-privacy, encrypted-content, replacement/dedup, expiry, or clock-skew
 decisions are still competing *authority* rather than OS capability handling.
 
-Critical agent-approval classification and action resolution are already
-decided by accepted [ROE-08](ROE-08-agent-approval-memo.md) and human-gate
-D10. This memo does not reopen those detectors, propose deleting them, or
-design a new approval engine.
+Critical agent-approval classification and action resolution are separately
+censused in [ROE-08](ROE-08-agent-approval-memo.md) and reopened as A2. This
+memo does not duplicate that authority work or design a new approval engine.
 
 This memo does not authorize product work, a new Core surface, or a
 shared-Core phase change.
@@ -59,22 +58,22 @@ Two product contracts must not be collapsed:
    badges, lock-screen preview toggle, focus suppression). Platform
    integrations.
 
-Agent-approval prompt recognition, OS write planning, and in-app once/deny
-remain ROE-08 / D10. They are named below only to keep them out of this
-policy extract.
+Agent-approval prompt recognition, OS write planning, and in-app decisions
+remain ROE-08 / A2. They are named below only to keep them out of this policy
+extract.
 
 | Concern | Rust/Core | Desktop | iOS | Evidence/tests |
 | ------- | --------- | ------- | --- | -------------- |
 | Muted-room *settings* | **Core authority (hard invariant).** `snapshot_room_notification` / `set_room_notification` / `snapshot_room_notifications` map SDK `RoomNotificationMode` to wire `all` / `mentions` / `mute` / `default`. Room-list `notification_mode` is the same mapping (`room_list/live.rs`). Leftover UniFFI `set_notification_mode` returns `p4-s10-leftover-unavailable` and is not the product write. | **Presenter consumption of Core, not a second mute table.** Settings and room switcher write `matrix_room_notification_set`. `useRoomsNotificationPreferences` on a native session loads `nativeRoomNotificationsSnapshot`. Unread projection skips `notificationMode === 'mute'` (`roomToUnread.ts`). | **Presenter consumption of Core.** Room details picker writes `SharedCoreRoomNotification.set` → `roomNotificationSet`. List mute uses the same product owner. Leftover `SharedCoreLeftovers.setNotificationMode` is unused on the live path. | Core `room_notification.rs` tests; desktop `nativeRoomNotification.ts`; iOS `SharedCoreRoomNotification.swift`, `SharedCoreProductServices.swift`. |
 | Muted-room *local OS emission* | **No live per-event mute evaluator.** `NotificationIndex` can drop focused-room candidates but is linked only as a P7.1 marker (`matrix_notifications_markers`). It is not registered on `Core::command` and is not consumed by either presenter. | **Leftover adapter, not competing mute authority.** `MessageNotifications` gates on `getNotificationType(...) === Mute`. Native `getRoomPushRule` always returns `undefined`; native `getAccountData` is a documented GAP and always `undefined`; so `getNotificationType` always returns `Default`. The native facade never emits `Room.timeline` (only `sync` / `session`), so this leftover listener is unwired on the live desktop client. | **OS / homeserver capability, not a second client mute engine.** NSE does not re-score mute. APNs arrives only if the homeserver applied Core-written push rules. | `nativeClientFacade.ts` (`getRoomPushRule`, `getAccountData`, emitter); `ClientNonUIFeatures.tsx`; `NotificationService.swift`. |
-| Mention / keyword *settings* | **Core authority (hard invariant).** `snapshot_push_rules` / `set_default_room_mode` / `set_mention_enabled` / `add_keyword` / `remove_keyword` own DM/group defaults (including encrypted), `.m.rule.is_user_mention` and siblings, and a 64-keyword cap. | **Presenter consumption of Core.** Native settings editor calls `matrix_push_rules_*`. Leftover `useNotificationMode` / `pushRules.ts` action tables remain for the non-native branch that the desktop boot path no longer constructs. | **No second mention-rule editor.** Mention defaults are not re-implemented in Swift. Room mention-only mode is the Core wire mode. | Core `push_rules.rs` tests; desktop `nativePushRules.ts`, `Notifications.tsx`. |
+| Mention / keyword *settings* | **Core authority (hard invariant).** `snapshot_push_rules` / `set_default_room_mode` / `set_mention_enabled` / `add_keyword` / `remove_keyword` own DM/group defaults (including encrypted), `.m.rule.is_user_mention` and siblings, and a 64-keyword cap. | **Presenter consumption of Core.** Native settings editor calls `matrix_push_rules_*`. Leftover `useNotificationMode` / `pushRules.ts` action tables remain for the non-native branch that the desktop boot path no longer constructs. | **Presenter consumption of Core.** Live `SettingsView` uses `SharedCoreAccountSettings` and its `pushRules*` methods. Mention defaults are not re-implemented in Swift; room mention-only mode is the Core wire mode. | Core `push_rules.rs` tests; desktop `nativePushRules.ts`, `Notifications.tsx`; iOS `SettingsView`, `SharedCoreAccountSettings`. |
 | Mention *local OS emission* | No live per-event mention matcher for OS notify. Room-list `highlight_count` already uses SDK mention/unread counts. | Leftover `MessageNotifications` does not distinguish mentions-only from all-messages. Native `getUnreadNotificationCount` returns Core `unreadCount` only (no highlight argument). Because `Room.timeline` is unwired, this is not a live second mention engine. | NSE does not re-evaluate mentions. Homeserver push rules (written by Core) decide whether APNs fires for a mention-only room. | `room.ts` `getNotificationType`; `nativeClientFacade.ts` unread projection; NSE `NotificationService.swift`. |
 | Foreground suppression | Unused harness field `suppress_if_focused_room` + `set_focused_room` on `NotificationIndex`. Not product-wired. | **Platform observation.** `document.hasFocus()` and selected-room / inbox-selected skip (`ClientNonUIFeatures.tsx`). Core cannot know genuine focus. | No local APNs mute when the app is foreground. Banner suppression is OS capability. Notification *actions* use `.foreground` so UIKit, not the extension, owns store writes (ROE-08 routing). | ADR 0004 observation examples; `PushService.swift` category options. |
 | Preview privacy | No live shared privacy-level owner for OS notify. `NotificationCandidate` documents privacy-filtered title/body, but the index is unused. NSE preview text is bounded (240/64) after decrypt. | **Platform rendering / local preference.** Ordinary OS body is the generic string `New inbox notification from ${username}` — never the event body. `SystemNotificationRequest.privacy` exists (`standard` / `private`) but `showPlatformNotification` does not pass it to the shell. Local `showNotifications` is a device setting, not Matrix policy. | **Platform observation / OS lock-screen policy.** `lockScreenMessagePreviews` defaults false. NSE fills title/body only when that pref is on and Core resolved a preview. Diagnostics never store Matrix ids or bodies. | `systemNotification.ts`; `SynaraNotificationPreviewPreference`; `NotificationPreviewSupportTests.swift`. |
 | Encrypted-content availability | **Core store authority; fail closed.** NSE `resolve_event_preview` restores one room, resolves one event, drops SDK owners. Missing session/store/event or non-`m.room.message` → unavailable. No media download (ADR 0005). | Never places ciphertext or decrypted body on the OS notification. Encrypted rooms are not a special emit branch. | `SynaraMatrixEventPreviewComposer` returns nil for `m.room.encrypted`. NSE keeps the generic APNs payload when resolution fails. | `nse_preview.rs`; `SynaraNotificationPreviewSupport.swift`. |
 | Replacement / dedup | Unused harness: `(room_id, event_id)` `seen_events`, cap 128, generation retire. | **Platform observation / OS object coalescing.** `unreadNotificationCache` skips unchanged unread totals; the previous `window.Notification` is closed. `notifiedEventIdsCache` is used for approval emission (ROE-08). | Per-APNs request delivery. `NotificationResolutionGate` serializes one decrypt (NSE memory), not Matrix identity policy. Agent-approval action dedupe is ROE-08 local observation. | `notifications/index.rs` tests; `notificationCaches.ts`; `NotificationDeliveryCoordinator.swift`. |
 | Expiry / clock skew (ordinary notify) | None for ordinary messages. NSE request/resolution timeouts are process bounds. Agent-approval TTL/skew is ROE-08 Core write authority. | None for ordinary messages. Later reminders use `dueTs` (different product). Approval `RECENT_AGENT_APPROVAL_MS` is ROE-08 emission, not this policy. | `serviceExtensionTimeWillExpire` is OS capability. Approval freshness gates time-sensitive category only (ROE-08 presentation). | `nse_preview.rs`; `NotificationService.swift`. |
-| Tray / APNs / NSE / banners / badges / actions | Not Core. HTTP pusher set/delete exists as leftover I/O (push keys stay off `Core::command`). | **Accepted platform boundary.** `desktop_notifications.rs` sanitizes title/body/route/actions and posts tray notifications. Badge formula is desktop-local (`synara-notification-contract.md`). | **Accepted platform boundary.** APNs registration, category chrome, NSE lifecycle, and TestFlight proof stay Apple-owned. | ADR 0004 layer map; playbook leftover pusher/notification I/O. |
+| Tray / APNs / NSE / banners / badges / actions | Core owns the Matrix pusher operation through a dedicated typed path, while push keys stay off `Core::command`; OS delivery remains outside Core. | **Accepted platform boundary.** `desktop_notifications.rs` sanitizes title/body/route/actions and posts tray notifications. Badge formula is desktop-local (`synara-notification-contract.md`). | **Accepted platform boundary.** Live APNs registration uses `SharedCoreHttpPusher.registerHttpPusher`; APNs category chrome, NSE lifecycle, and TestFlight proof stay Apple-owned. Leftover `pusher_set` / `pusher_delete` are not the live registration owner. | ADR 0004 layer map; `SharedCoreHttpPusher`; playbook leftover pusher/notification I/O. |
 
 **Earliest actual divergence.** Not a second mute/mention *settings* engine
 (already Core on both clients). Not a live second per-event eligibility
@@ -215,21 +214,8 @@ recommendation and therefore no implementation plan, Core API, UniFFI
 change, or product edit.
 
 A leftover desktop eligibility adapter remains as unused presentation code.
-Retiring or rewiring it is a later human product decision, not an overnight
-Core extract. The current goal graph does not permit a new residual
-implementation slice: P4 engine-ready is pending/blocked; do not invent S38;
-do not start P5. D10 (ROE-08) remains the only open human implementation
-question in this cluster.
-
-## Reviewer nits (`ACCEPT_WITH_NITS` on #1085)
-
-Recorded from the independent review at `651e36b2`. They do not change the
-close:
-
-- Mention/keyword *settings* on iOS are a live Core presenter
-  (`SettingsView` + `SharedCoreAccountSettings` / `pushRules*`), not “no
-  mention-rule editor.” Cite those files the way desktop
-  `nativePushRules.ts` is cited.
-- Leftover `pusher_set` / `pusher_delete` exist, but live iOS APNs
-  registration already uses `SharedCoreHttpPusher.registerHttpPusher`
-  (Matrix pusher I/O, not OS delivery). Do not read that as leftover-only.
+Retiring or rewiring it is a later human product decision, not a Core extract.
+Notification-preview reliability is tracked separately as
+[A9](../program/ACTIONS.md); ownership evidence alone cannot prove delivery.
+Agent-approval authority is reopened as A2 rather than the narrower historical
+D10 recommendation.

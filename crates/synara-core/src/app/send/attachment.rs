@@ -10,7 +10,7 @@ use mime::Mime;
 
 use super::text::{
     parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
-    validated_mentions,
+    validate_outbound_text_payload, validated_mentions,
 };
 use super::MatrixSendRoomAttachmentResult;
 
@@ -86,10 +86,17 @@ pub fn attachment_caption(
 ) -> Result<Option<TextMessageEventContent>, &'static str> {
     let caption = caption.filter(|value| !value.trim().is_empty());
     let formatted_caption = formatted_caption.filter(|value| !value.trim().is_empty());
+    if caption.is_none() && formatted_caption.is_some() {
+        return Err("v-send.1-attachment-formatted-caption-without-caption");
+    }
+    validate_outbound_text_payload(
+        caption.as_deref().unwrap_or_default(),
+        formatted_caption.as_deref(),
+    )?;
     match (caption, formatted_caption) {
         (Some(body), Some(html)) => Ok(Some(TextMessageEventContent::html(body, html))),
         (Some(body), None) => Ok(Some(TextMessageEventContent::plain(body))),
-        (None, Some(_)) => Err("v-send.1-attachment-formatted-caption-without-caption"),
+        (None, Some(_)) => unreachable!("orphan formatted caption rejected above"),
         (None, None) => Ok(None),
     }
 }
@@ -99,10 +106,13 @@ pub fn attachment_reply(
     thread_root: Option<matrix_sdk::ruma::OwnedEventId>,
 ) -> Option<AttachmentReply> {
     match (thread_root, reply_to) {
-        (Some(root), Some(_reply)) => Some(AttachmentReply {
-            event_id: root,
-            enforce_thread: EnforceThread::Threaded(ReplyWithinThread::No),
-            add_mentions: AddMentions::No,
+        // The SDK derives the authoritative thread root from the selected
+        // event. ReplyWithinThread::Yes preserves that selected event as
+        // m.in_reply_to instead of degrading this into a root-only thread send.
+        (Some(_root), Some(reply)) => Some(AttachmentReply {
+            event_id: reply,
+            enforce_thread: EnforceThread::Threaded(ReplyWithinThread::Yes),
+            add_mentions: AddMentions::Yes,
         }),
         (Some(root), None) => Some(AttachmentReply {
             event_id: root,
@@ -165,9 +175,15 @@ pub async fn send_room_attachment(
 #[cfg(test)]
 mod tests {
     use matrix_sdk::room::reply::EnforceThread;
-    use matrix_sdk::ruma::{event_id, events::room::message::ReplyWithinThread};
+    use matrix_sdk::ruma::{
+        event_id,
+        events::room::message::{AddMentions, ReplyWithinThread},
+    };
 
-    use super::{attachment_caption, attachment_config, attachment_reply};
+    use super::{
+        super::MAX_OUTBOUND_TEXT_PAYLOAD_BYTES, attachment_caption, attachment_config,
+        attachment_reply,
+    };
 
     #[test]
     fn attachment_caption_preserves_plain_and_formatted_content() {
@@ -201,6 +217,35 @@ mod tests {
     }
 
     #[test]
+    fn attachment_caption_uses_shared_combined_utf8_payload_budget() {
+        let plain_at_limit = "🙂".repeat(MAX_OUTBOUND_TEXT_PAYLOAD_BYTES / "🙂".len());
+        assert_eq!(plain_at_limit.len(), MAX_OUTBOUND_TEXT_PAYLOAD_BYTES);
+        assert!(attachment_caption(Some(plain_at_limit), None).is_ok());
+
+        let plain_over_limit = format!(
+            "{}x",
+            "🙂".repeat(MAX_OUTBOUND_TEXT_PAYLOAD_BYTES / "🙂".len())
+        );
+        assert_eq!(plain_over_limit.len(), MAX_OUTBOUND_TEXT_PAYLOAD_BYTES + 1);
+        assert_eq!(
+            attachment_caption(Some(plain_over_limit), None)
+                .expect_err("oversized plain attachment caption must be rejected"),
+            "d0.4-send-text-payload-too-large"
+        );
+
+        let body = "caption";
+        let formatted_at_limit = "x".repeat(MAX_OUTBOUND_TEXT_PAYLOAD_BYTES - body.len());
+        assert!(attachment_caption(Some(body.to_owned()), Some(formatted_at_limit)).is_ok());
+
+        let formatted_over_limit = "x".repeat(MAX_OUTBOUND_TEXT_PAYLOAD_BYTES - body.len() + 1);
+        assert_eq!(
+            attachment_caption(Some(body.to_owned()), Some(formatted_over_limit))
+                .expect_err("oversized combined attachment caption must be rejected"),
+            "d0.4-send-text-payload-too-large"
+        );
+    }
+
+    #[test]
     fn attachment_reply_encodes_reply_and_thread_cases() {
         let root = event_id!("$root:example.org").to_owned();
         let reply = event_id!("$reply:example.org").to_owned();
@@ -217,11 +262,12 @@ mod tests {
             Some(event_id!("$root:example.org").to_owned()),
         )
         .expect("thread reply relation");
-        assert_eq!(thread_reply.event_id, event_id!("$root:example.org"));
+        assert_eq!(thread_reply.event_id, reply);
         assert_eq!(
             thread_reply.enforce_thread,
-            EnforceThread::Threaded(ReplyWithinThread::No)
+            EnforceThread::Threaded(ReplyWithinThread::Yes)
         );
+        assert_eq!(thread_reply.add_mentions, AddMentions::Yes);
 
         let reply = attachment_reply(Some(event_id!("$reply:example.org").to_owned()), None)
             .expect("reply relation");

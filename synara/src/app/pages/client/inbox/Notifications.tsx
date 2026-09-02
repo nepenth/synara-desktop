@@ -78,7 +78,10 @@ import * as customHtmlCss from '../../../styles/CustomHtml.css';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { useRoomUnread } from '../../../state/hooks/unread';
 import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
-import { markAsRead, markAsReadInBackground } from '../../../utils/notifications';
+import {
+  markAsReadFromExplicitUserAction,
+  markAsReadFromExplicitUserActionInBackground,
+} from '../../../utils/notifications';
 import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { VirtualTile } from '../../../components/virtualizer';
 import { UserAvatar } from '../../../components/user-avatar';
@@ -218,7 +221,6 @@ type RoomNotificationsGroupProps = {
   room: NotificationsRoomReading;
   notifications: NotificationReading[];
   mediaAutoLoad?: boolean;
-  hideActivity: boolean;
   onOpen: (roomId: string, eventId: string) => void;
   legacyUsernameColor?: boolean;
   hour24Clock: boolean;
@@ -228,7 +230,6 @@ function RoomNotificationsGroupComp({
   room,
   notifications,
   mediaAutoLoad,
-  hideActivity,
   onOpen,
   legacyUsernameColor,
   hour24Clock,
@@ -430,7 +431,7 @@ function RoomNotificationsGroupComp({
     onOpen(room.roomId, eventId);
   };
   const handleMarkAsRead = () => {
-    markAsReadInBackground(mx, room.roomId, hideActivity);
+    markAsReadFromExplicitUserActionInBackground(mx, room.roomId);
   };
 
   return (
@@ -598,7 +599,6 @@ const DEFAULT_REFRESH_MS = 7000;
 export function Notifications() {
   const mx = useMatrixClient();
   const { t } = useTranslation();
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
@@ -634,10 +634,12 @@ export function Notifications() {
   const [markVisibleState, markVisibleRead] = useAsyncCallback(
     useCallback(async () => {
       await Promise.all(
-        notificationTimeline.groups.map((group) => markAsRead(mx, group.roomId, hideActivity))
+        notificationTimeline.groups.map((group) =>
+          markAsReadFromExplicitUserAction(mx, group.roomId)
+        )
       );
       await silentReloadTimeline();
-    }, [mx, hideActivity, notificationTimeline.groups, silentReloadTimeline])
+    }, [mx, notificationTimeline.groups, silentReloadTimeline])
   );
 
   const virtualizer = useVirtualizer({
@@ -785,7 +787,6 @@ export function Notifications() {
                           room={groupRoom}
                           notifications={group.notifications}
                           mediaAutoLoad={mediaAutoLoad}
-                          hideActivity={hideActivity}
                           onOpen={navigateRoom}
                           legacyUsernameColor={
                             legacyUsernameColor || mDirects.has(groupRoom.roomId)

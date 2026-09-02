@@ -11,6 +11,7 @@ import {
   nativeTimelineCommandError,
   needsNativeForwardEncryptionConfirm,
   shouldAttachFormattedBody,
+  type NativeTimelineViewRow,
   type NativeTimelineViewSnapshot,
 } from '../nativeTimelineView';
 
@@ -50,6 +51,72 @@ test('applies metadata-only read-frontier deltas without row ops', () => {
   assert.equal(next.readState.ownReadEventId, '$frontier:example.org');
   assert.equal(next.readState.isMarkedUnread, false);
   assert.equal(next.pagination.backward, 'available');
+});
+
+test('poll and sticker rows preserve Core relation and reaction presentation fields', () => {
+  const capabilities = {
+    react: true,
+    reply: true,
+    edit: false,
+    redact: true,
+    report: true,
+    pin: true,
+    forward: true,
+    vote: false,
+    declineCall: false,
+  };
+  const relations = {
+    reply: {
+      eventId: '$parent:example.org',
+      senderId: '@alice:example.org',
+      senderName: 'Alice',
+      body: 'Parent body',
+    },
+    threadRoot: '$root:example.org',
+    thread: {
+      rootEventId: '$root:example.org',
+      replyCount: 2,
+      latestEventId: '$latest:example.org',
+    },
+    reactions: [{ key: '✅', count: 2, own: true }],
+  };
+  const rows: NativeTimelineViewRow[] = [
+    {
+      kind: 'poll',
+      itemId: 'poll-item',
+      eventId: '$poll:example.org',
+      senderId: '@alice:example.org',
+      senderName: 'Alice',
+      originServerTs: 1,
+      capabilities,
+      question: 'Continue?',
+      closed: false,
+      maxSelections: 1,
+      answers: [{ id: 'yes', text: 'Yes', voteCount: 1, own: true }],
+      ...relations,
+    },
+    {
+      kind: 'sticker',
+      event: {
+        itemId: 'sticker-item',
+        eventId: '$sticker:example.org',
+        senderId: '@bob:example.org',
+        senderName: 'Bob',
+        originServerTs: 2,
+        capabilities,
+      },
+      media: { handleId: 'timeline-media:sticker' },
+      ...relations,
+    },
+  ];
+
+  for (const row of rows) {
+    if (row.kind !== 'poll' && row.kind !== 'sticker') assert.fail('unexpected row kind');
+    assert.equal(row.reply?.eventId, '$parent:example.org');
+    assert.equal(row.threadRoot, '$root:example.org');
+    assert.equal(row.thread?.latestEventId, '$latest:example.org');
+    assert.deepEqual(row.reactions, [{ key: '✅', count: 2, own: true }]);
+  }
 });
 
 test('applies pagination and pin-list metadata and rejects empty batches', () => {

@@ -7,6 +7,8 @@ struct ComposerRelationTarget: Equatable {
     }
 
     let eventID: String
+    /// Existing Matrix thread root for replies to an in-thread child.
+    let threadRootEventID: String?
     let senderName: String
     let snippet: String
     let kind: Kind
@@ -15,6 +17,7 @@ struct ComposerRelationTarget: Equatable {
     init(item: TimelineItem, kind: Kind, currentUserID: String) {
         let preview = TimelineReplyPreview.from(item: item, currentUserID: currentUserID)
         eventID = item.eventID
+        threadRootEventID = item.threadRootEventID
         senderName = preview.senderName
         snippet = preview.snippet
         self.kind = kind
@@ -34,11 +37,27 @@ struct ComposerRelationTarget: Equatable {
 struct TimelineReplyPreview: Equatable {
     static let maxSnippetLength = 80
 
+    let eventID: String?
+    let senderID: String?
     let senderName: String
     let snippet: String
 
+    init(
+        eventID: String? = nil,
+        senderID: String? = nil,
+        senderName: String,
+        snippet: String
+    ) {
+        self.eventID = eventID
+        self.senderID = senderID
+        self.senderName = senderName
+        self.snippet = snippet
+    }
+
     static func from(item: TimelineItem, currentUserID: String) -> TimelineReplyPreview {
         TimelineReplyPreview(
+            eventID: item.eventID,
+            senderID: item.senderID,
             senderName: item.resolvedSenderDisplayName(currentUserID: currentUserID),
             snippet: snippet(for: item.kind)
         )
@@ -112,6 +131,12 @@ extension TimelineItem {
     private func resolvedSenderDisplayName(currentUserID: String?) -> String {
         if let currentUserID, senderID == currentUserID {
             return "You"
+        }
+
+        if let profileName = senderProfileDisplayName?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           profileName.isEmpty == false {
+            return profileName
         }
 
         switch senderID.lowercased() {

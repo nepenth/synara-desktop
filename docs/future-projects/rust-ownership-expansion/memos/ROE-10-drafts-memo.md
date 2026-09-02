@@ -1,12 +1,12 @@
 # ROE-10 Research Memo: Draft Serialization and Reply Metadata
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership split accepted; desktop reply defect reopened; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-10                                                                                                                                |
 | Research owner     | Isolated researcher on `roe/memo-10-drafts`                                                                                           |
-| Reviewers          | Unassigned                                                                                                                            |
+| Reviewers          | Independent feature-branch review; original `ACCEPT` on PR `#1088` at `11aa9881e8c9d45e8d27cf57b61ae8656fe54ae9`; later promotion review elevated the reply defect |
 | Source census      | 2026-09-01 against `00155b9fab2a29e1b477eafe3f3d7839e968c7bc`                                                                         |
 | ADR baseline       | ADR 0003, 0004, 0005 last reviewed 2026-09-01 (index in [`docs/adr/README.md`](../../../adr/README.md)); same census commit            |
 
@@ -181,12 +181,13 @@ ownership, and desktop `RoomInput` still reads the empty Jotai atom for
 `replyTo`. Those are leftover presenter seams, not a second persistence or
 protocol owner.
 
-Unresolved questions that do **not** reopen ownership:
+Confirmed product defect and unresolved parity questions:
 
-- `RoomInput` does not call `getNativeComposerReplyDraft` before send, so a
-  reply banner set by `NativeTimelinePresenter` may not attach `replyTo`
-  until a presenter hydrates or drops the leftover atom. That is a desktop
-  consumption seam, not a Core extraction.
+- `RoomInput` does not call `getNativeComposerReplyDraft` before send and reads
+  the separate Jotai `roomIdToReplyDraftAtomFamily`, for which no shipped
+  writer was found. A reply banner set by `NativeTimelinePresenter` can
+  therefore be visible while the send path omits `replyTo`. That is a real
+  relation-integrity defect in presenter consumption, not a Core extraction.
 - iOS product UI does not invoke `composer_set_reply_draft`. Wiring it
   would be presenter consumption of the existing owner.
 - iOS drafts do not survive process death; desktop Slate drafts do, locally.
@@ -214,11 +215,11 @@ Regression proof to keep the boundary stable:
 
 ## Next gate
 
-Already owned (split). Close ROE-10. Do not write an implementation plan.
-Do not move Slate or Swift editor state into Rust. Do not add a Core durable
-draft schema. Do not invent S38 or start P5.
-
-A later product owner may hydrate `RoomInput` from Core `get`, or call the
-existing iOS UniFFI reply-draft methods, without changing this ownership
-decision. Those would be presenter consumption of the owner already
-censused here.
+The ownership split is closed: do not move Slate/Swift editor state into Rust
+or invent a durable Core draft schema without a separate product requirement.
+The desktop reply defect is reopened as
+[A1](../program/ACTIONS.md#a1--reply-relation-integrity). Establish one
+authoritative reply target for banner and send, cover text, attachment, poll,
+GIF, cancellation, send-clear, and reply-in-thread paths, and prove the Matrix
+relation rather than only the UI state. iOS consumption of the existing reply-
+draft owner remains parity work and must not create another identity source.

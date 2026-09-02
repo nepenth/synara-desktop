@@ -113,17 +113,17 @@ use crate::matrix::sync::{
 };
 use crate::matrix::timeline::{
     format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
-    NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
-    NativeComposerSetReplyDraftRequest, NativeReactionMutationResult, NativeTimelineActionKind,
-    NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
-    NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
-    NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineRedactRequest, NativeTimelineReportRequest, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, TimelineMediaSource,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NativeComposerClearReplyDraftRequest, NativeComposerReplyDraftReadback,
+    NativeComposerReplyDraftRoomRequest, NativeComposerSetReplyDraftRequest,
+    NativeReactionMutationResult, NativeTimelineActionKind, NativeTimelineActionReadback,
+    NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest, NativeTimelineDirection,
+    NativeTimelineEditTextRequest, NativeTimelineEventReadback, NativeTimelineForwardMediaRequest,
+    NativeTimelineForwardTextRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelinePinRequest,
+    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadIntent,
+    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRedactRequest,
+    NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::verification::live::{

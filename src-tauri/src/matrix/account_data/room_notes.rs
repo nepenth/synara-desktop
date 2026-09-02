@@ -6,10 +6,12 @@
 pub use synara_core::app::account_data::{
     complete_room_todo_item, complete_room_todo_item_live, delete_room_note_item_live,
     move_room_todo_item, move_room_todo_item_live, normalize_room_note_item,
-    normalize_room_notes_content, put_room_note_item, remove_room_note_item, snapshot_room_notes,
-    upsert_room_note_item, NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraRoomNoteItem,
-    SynaraRoomNoteItemKind, SynaraRoomNotesContent, SynaraRoomNotesRoom, MAX_MESSAGE_BODY_LENGTH,
-    MAX_NOTE_BODY_LENGTH, ROOM_NOTES_ACCOUNT_DATA_VERSION, ROOM_NOTES_EVENT_TYPE,
+    normalize_room_notes_content, normalize_room_notes_content_checked, put_room_note_item,
+    remove_room_note_item, snapshot_room_notes, upsert_room_note_item, NativeRoomNotesSnapshot,
+    RoomNoteMoveDirection, SynaraRoomNoteItem, SynaraRoomNoteItemKind, SynaraRoomNotesContent,
+    SynaraRoomNotesRoom, MAX_MESSAGE_BODY_LENGTH, MAX_NOTE_BODY_LENGTH, MAX_NOTE_ID_LENGTH,
+    MAX_ROOM_NOTES_CONTENT_BYTES, MAX_SENDER_LENGTH, ROOM_NOTES_ACCOUNT_DATA_VERSION,
+    ROOM_NOTES_EVENT_TYPE,
 };
 
 #[cfg(test)]
@@ -48,6 +50,22 @@ mod tests {
         assert_eq!(content.rooms["!r:s"].items.len(), 1);
         let body = content.rooms["!r:s"].items["note:1"].body.as_ref().unwrap();
         assert_eq!(body.chars().count(), MAX_NOTE_BODY_LENGTH);
+    }
+
+    #[test]
+    fn checked_normalize_rejects_unknown_or_missing_versions() {
+        assert_eq!(
+            normalize_room_notes_content_checked(Some(&json!({ "version": 2, "rooms": {} }))),
+            Err("v-timeline-room-notes-unsupported-version")
+        );
+        assert_eq!(
+            normalize_room_notes_content_checked(Some(&json!({ "rooms": {} }))),
+            Err("v-timeline-room-notes-unsupported-version")
+        );
+        assert_eq!(
+            normalize_room_notes_content_checked(Some(&json!({ "version": 1, "rooms": {} }))),
+            Ok(SynaraRoomNotesContent::default())
+        );
     }
 
     #[test]

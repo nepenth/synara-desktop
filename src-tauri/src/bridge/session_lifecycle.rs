@@ -1,8 +1,8 @@
 //! Safe desktop-session lifecycle bridge for the managed shared Core.
 //!
-//! The desktop remains the sole owner of Matrix SDK clients, credentials, and
-//! persistence. This module mirrors only its already-installed, credential-free
-//! session projection into the one Core that P3.1 manages at application startup.
+//! The shared Core owns Matrix SDK clients and session lifecycle. The desktop
+//! retains only the platform credential/vault boundary and installs a
+//! credential-free session projection into that Core.
 
 use serde::{de::DeserializeOwned, Deserialize};
 use synara_core::app::sync::{

@@ -76,6 +76,38 @@ test('native timeline rows retain hover/focus action access without restoring th
   assert.doesNotMatch(presenter, /from ['"][^'"]*RoomTimeline['"]/);
 });
 
+test('message, poll, and sticker rows share Core relation and reaction presentation', () => {
+  for (const [start, end] of [
+    ["case 'message'", "case 'membership'"],
+    ["case 'poll'", "case 'call'"],
+    ["case 'sticker'", "case 'pagination'"],
+  ]) {
+    const branch = presenter.slice(presenter.indexOf(start), presenter.indexOf(end));
+    assert.match(branch, /NativeTimelineReplySurface reply=\{row\.reply\}/);
+    assert.match(branch, /threadRoot=\{row\.threadRoot\}/);
+    assert.match(branch, /thread=\{row\.thread\}/);
+    assert.match(branch, /NativeTimelineReactionPills/);
+    assert.match(branch, /reactions=\{row\.reactions\}/);
+  }
+  assert.match(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
+  assert.match(presenter, /variant=\{reaction\.own \? 'Primary' : 'Secondary'\}/);
+});
+
+test('Core-classified approval prompts cannot use the generic desktop reaction route', () => {
+  assert.match(
+    presenter,
+    /approvalOwnsReactionActions = row\.kind === 'message' && Boolean\(row\.isAgentApproval\)/
+  );
+  assert.match(
+    presenter,
+    /approvalOwnsReactionActions && capabilities \? \{ \.\.\.capabilities, react: false \} : capabilities/
+  );
+  assert.match(presenter, /if \(!eventId \|\| !genericReactionCapabilities\?\.react\) return/);
+  assert.match(presenter, /capabilities: genericReactionCapabilities/);
+  assert.match(presenter, /enabled=\{Boolean\(genericReactionCapabilities\?\.react\)\}/);
+  assert.match(presenter, /disabled=\{!enabled\}/);
+});
+
 test('native timeline navigation uses contextual controls and edge pagination', () => {
   assert.match(presenter, /scrollEl\.scrollTop <= 96/);
   assert.match(presenter, /distanceFromBottom <= 96/);
@@ -97,7 +129,9 @@ test('native timeline navigation uses contextual controls and edge pagination', 
 });
 
 test('native live tail marks the open stream read through the native owner', () => {
-  assert.match(presenter, /controller\.setReadState\('mark_read'\)/);
+  assert.match(presenter, /action: 'mark_read'/);
+  assert.match(presenter, /intent: 'automatic_visibility'/);
+  assert.match(presenter, /observedLiveTailEventId: liveTailReadTarget/);
   assert.match(presenter, /selectedPosition\.kind === 'live_bottom'/);
   assert.match(presenter, /capabilities\.markRead/);
   assert.doesNotMatch(presenter, /markAsReadInBackground/);
@@ -162,7 +196,7 @@ test('native timeline honors hide membership, hide activity receipts, and messag
   assert.match(presenter, /hideNickAvatarEvents && row\.kind === 'state'/);
   assert.match(presenter, /hideActivity,/);
   assert.match(presenter, /nativeLiveReadTarget/);
-  assert.match(presenter, /if \(!hideActivity\) \{/);
+  assert.doesNotMatch(presenter, /if \(!hideActivity\) \{/);
   assert.match(presenter, /messageSpacing=\{messageSpacing\}/);
 });
 

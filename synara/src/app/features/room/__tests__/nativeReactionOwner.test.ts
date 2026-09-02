@@ -1,12 +1,63 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
 import {
+  decideAgentApprovalWithNativeOwner,
   ensureReactionWithNativeOwner,
   redactReactionWithNativeOwner,
   toggleReactionWithNativeOwner,
   type NativeReactionMutationResult,
 } from '../nativeReactionOwner';
+
+test('approval decisions route only through the Core authority command', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const result = await decideAgentApprovalWithNativeOwner(
+    {
+      roomId: '!room:example.org',
+      eventId: '$approval:example.org',
+      actionId: 'agent-approval.approve-always',
+    },
+    async (command, args) => {
+      calls.push({ command, args });
+      return {
+        available: true,
+        value: {
+          roomId: '!room:example.org',
+          eventId: '$approval:example.org',
+          status: 'applied',
+          reaction: {
+            roomId: '!room:example.org',
+            targetEventId: '$approval:example.org',
+            key: '♾️',
+            mutation: 'added',
+          },
+        },
+      };
+    }
+  );
+
+  assert.equal(result.status, 'applied');
+  assert.deepEqual(calls, [
+    {
+      command: 'matrix_agent_approval_decide',
+      args: {
+        roomId: '!room:example.org',
+        eventId: '$approval:example.org',
+        actionId: 'agent-approval.approve-always',
+      },
+    },
+  ]);
+});
+
+test('approval card cannot bypass Core through a generic reaction write', () => {
+  const source = readFileSync(
+    `${process.cwd()}/src/app/components/agent-approval/AgentApprovalCard.tsx`,
+    'utf8'
+  );
+  assert.match(source, /decideAgentApprovalWithNativeOwner/);
+  assert.doesNotMatch(source, /ensureReactionWithNativeOwner|matrix_reaction_ensure/);
+});
 
 function ok(result: NativeReactionMutationResult) {
   return async () => ({ available: true as const, value: result });

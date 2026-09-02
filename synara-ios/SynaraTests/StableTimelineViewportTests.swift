@@ -325,6 +325,8 @@ final class StableTimelineViewportTests: XCTestCase {
     func testNewTailEventRearmsExactReadMarkerOnlyWhenPinnedAndIdle() {
         XCTAssertTrue(
             RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+                isApplicationActive: true,
+                allowsReadReceipts: true,
                 isLive: true,
                 isConfirmedPinned: true,
                 isJumpingToLatest: false,
@@ -335,6 +337,8 @@ final class StableTimelineViewportTests: XCTestCase {
         )
         XCTAssertFalse(
             RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+                isApplicationActive: true,
+                allowsReadReceipts: true,
                 isLive: true,
                 isConfirmedPinned: true,
                 isJumpingToLatest: false,
@@ -345,6 +349,8 @@ final class StableTimelineViewportTests: XCTestCase {
         )
         XCTAssertFalse(
             RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+                isApplicationActive: true,
+                allowsReadReceipts: true,
                 isLive: true,
                 isConfirmedPinned: true,
                 isJumpingToLatest: false,
@@ -353,9 +359,33 @@ final class StableTimelineViewportTests: XCTestCase {
                 lastMarkedEventID: "$old-tail"
             )
         )
+        XCTAssertFalse(
+            RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+                isApplicationActive: false,
+                allowsReadReceipts: true,
+                isLive: true,
+                isConfirmedPinned: true,
+                isJumpingToLatest: false,
+                isUserInteracting: false,
+                eventID: "$new-tail",
+                lastMarkedEventID: "$old-tail"
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+                isApplicationActive: true,
+                allowsReadReceipts: false,
+                isLive: true,
+                isConfirmedPinned: true,
+                isJumpingToLatest: false,
+                isUserInteracting: false,
+                eventID: "$new-tail",
+                lastMarkedEventID: "$old-tail"
+            )
+        )
     }
 
-    func testReadMarkerQueueHasMaximumLatencyAndFlushesOnRoomSwitch() {
+    func testReadMarkerQueueHasMaximumLatencyAndCancelsSupersededTask() {
         let firstQueuedAt = Date(timeIntervalSince1970: 100)
 
         XCTAssertEqual(
@@ -366,21 +396,6 @@ final class StableTimelineViewportTests: XCTestCase {
                 maximumLatencyNanoseconds: 2_000_000_000
             ),
             250_000_000
-        )
-        XCTAssertEqual(
-            RoomTimelineReadMarkerQueuePolicy.flushCandidate(
-                pendingEventID: "$new-server-event",
-                lastCandidateEventID: "$older-server-event",
-                lastMarkedEventID: nil
-            ),
-            "$new-server-event"
-        )
-        XCTAssertNil(
-            RoomTimelineReadMarkerQueuePolicy.flushCandidate(
-                pendingEventID: nil,
-                lastCandidateEventID: "$already-marked",
-                lastMarkedEventID: "$already-marked"
-            )
         )
         XCTAssertTrue(RoomTimelineReadMarkerTaskPolicy.ownsInstalledTask(
             installedGeneration: 8,

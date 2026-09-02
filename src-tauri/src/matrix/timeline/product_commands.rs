@@ -75,6 +75,8 @@ pub async fn matrix_timeline_set_read_state(
         core.inner().as_ref(),
         request.stream_id,
         request.action,
+        request.intent,
+        request.observed_live_tail_event_id,
     )
     .await
 }
@@ -162,11 +164,12 @@ pub async fn matrix_composer_set_reply_draft(
 #[tauri::command]
 pub async fn matrix_composer_clear_reply_draft(
     core: State<'_, Arc<synara_core::Core>>,
-    request: NativeComposerReplyDraftRoomRequest,
+    request: NativeComposerClearReplyDraftRequest,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
     crate::bridge::timeline_composer::composer_clear_reply_draft(
         core.inner().as_ref(),
         request.room_id,
+        request.expected_draft_revision,
     )
     .await
 }

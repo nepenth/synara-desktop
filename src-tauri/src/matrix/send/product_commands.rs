@@ -275,19 +275,13 @@ pub(super) fn normalize_formatted_body(
     body: &str,
     formatted_body: Option<&str>,
 ) -> Result<Option<String>, MatrixAuthCommandError> {
-    let Some(html) = formatted_body
+    let formatted_body = formatted_body
         .map(str::trim)
         .filter(|value| !value.is_empty())
-    else {
-        return Ok(None);
-    };
-    if html.len() > 65_536 {
-        return Err(map_send_error("d0.4-send-formatted-body-too-large"));
-    }
-    if !should_attach_formatted_body(body, Some(html)) {
-        return Ok(None);
-    }
-    Ok(Some(html.to_owned()))
+        .filter(|html| should_attach_formatted_body(body, Some(html)));
+    synara_core::app::send::validate_outbound_text_payload(body, formatted_body)
+        .map_err(map_send_error)?;
+    Ok(formatted_body.map(str::to_owned))
 }
 
 /// Build validated room-message content for the native composer owner.
@@ -387,6 +381,10 @@ pub(super) fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCom
         "v-send.1-attachment-empty"
         | "v-send.1-attachment-invalid-filename"
         | "v-send.1-attachment-invalid-mime"
+        | "d0.4-send-text-payload-too-large"
+        | "v-send.4-invalid-mention-user-id"
+        | "v-send.4-mention-user-id-too-long"
+        | "v-send.4-too-many-mentions"
         | "p7.4-invalid-room-id"
         | "p7.4-empty-media-handle"
         | "p7.4-file-name-cap"

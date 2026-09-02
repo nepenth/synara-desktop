@@ -229,7 +229,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var session: AppSessionStore?
     private var router: AppRouter?
     private var logger: LoggingServicing?
-    private var agentApprovalReactions: AgentApprovalReactionServicing?
+    private var agentApprovalDecisions: AgentApprovalDecisionServicing?
     private var pendingRoute: AppRoute?
     private var pendingNotificationPayload: [AnyHashable: Any]?
     private var pendingNotificationResponse: UNNotificationResponse?
@@ -246,7 +246,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         session = environment.session
         router = environment.router
         logger = environment.logger
-        agentApprovalReactions = environment.agentApprovalReactions
+        agentApprovalDecisions = environment.agentApprovalDecisions
         UNUserNotificationCenter.current().delegate = self
         backgroundSyncCoordinator.bind(
             application: UIApplication.shared,
@@ -488,7 +488,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             await MainActor.run {
                 push?.applyIncomingBadge(from: userInfo)
             }
-        case .submitReaction(let request):
+        case .submitDecision(let request):
             let dedupeKey = SynaraAgentApprovalNotificationActionDedupeStore.key(
                 roomID: request.roomID,
                 eventID: request.sourceEventID,
@@ -509,18 +509,14 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
                 return
             }
 
-            guard let agentApprovalReactions else {
+            guard let agentApprovalDecisions else {
                 routeToDestination(.room(id: request.roomID, eventID: request.sourceEventID))
                 return
             }
 
             agentApprovalActionDedupe.insert(dedupeKey)
             do {
-                try await agentApprovalReactions.submitNativeDecision(
-                    roomID: request.roomID,
-                    eventID: request.sourceEventID,
-                    actionIdentifier: actionIdentifier
-                )
+                _ = try await agentApprovalDecisions.submitDecision(request)
                 await MainActor.run {
                     push?.applyIncomingBadge(from: userInfo)
                 }
@@ -691,7 +687,7 @@ private extension AppEnvironment {
             ? .failed
             : nil
         let agentApprovals = MockAgentApprovalService(error: approvalError)
-        let agentApprovalReactions = MockAgentApprovalReactionService(error: approvalError)
+        let agentApprovalDecisions = MockAgentApprovalDecisionService(error: approvalError)
         let readMarkers = MockRoomReadMarkerService(eventID: processEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"])
         let crypto = processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
             ? MockCryptoStatusService(
@@ -723,7 +719,7 @@ private extension AppEnvironment {
                 later: later,
                 roomNotes: roomNotes,
                 agentApprovals: agentApprovals,
-                agentApprovalReactions: agentApprovalReactions,
+                agentApprovalDecisions: agentApprovalDecisions,
                 readMarkers: readMarkers,
                 crypto: crypto
             )
@@ -737,7 +733,7 @@ private extension AppEnvironment {
             later: later,
             roomNotes: roomNotes,
             agentApprovals: agentApprovals,
-            agentApprovalReactions: agentApprovalReactions,
+            agentApprovalDecisions: agentApprovalDecisions,
             readMarkers: readMarkers,
             crypto: crypto
         )
@@ -904,7 +900,8 @@ private extension AppEnvironment {
                 body: uiTestAgentApprovalPromptBody(),
                 replyToEventID: nil,
                 isEdited: false,
-                mediaURL: nil
+                mediaURL: nil,
+                isAgentApproval: true
             )
         ]
     }

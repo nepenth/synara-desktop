@@ -14,7 +14,45 @@ use matrix_sdk::ruma::{
 };
 use matrix_sdk::Room;
 
+/// Shared UTF-8 byte budget for the complete outbound text representation.
+///
+/// Matrix sends the plain fallback and optional formatted representation in
+/// one event, so the budget is deliberately applied to their combined bytes.
+/// Presentation owners apply their separate, larger inbound rendering budget.
+pub const MAX_OUTBOUND_TEXT_PAYLOAD_BYTES: usize = 65_536;
+
+/// Raw mention entries are bounded before parsing or allocating the final set.
+pub const MAX_OUTBOUND_MENTION_COUNT: usize = 256;
+
+/// Matrix identifiers are capped at 255 UTF-8 bytes by the identifier grammar.
+pub const MAX_MATRIX_IDENTIFIER_BYTES: usize = 255;
+
+pub fn validate_outbound_text_payload(
+    body: &str,
+    formatted_body: Option<&str>,
+) -> Result<(), &'static str> {
+    let payload_bytes = body
+        .len()
+        .checked_add(formatted_body.map_or(0, str::len))
+        .ok_or("d0.4-send-text-payload-too-large")?;
+    if payload_bytes > MAX_OUTBOUND_TEXT_PAYLOAD_BYTES {
+        return Err("d0.4-send-text-payload-too-large");
+    }
+    Ok(())
+}
+
+fn validate_matrix_identifier_length(
+    value: &str,
+    diagnostic_id: &'static str,
+) -> Result<(), &'static str> {
+    if value.len() > MAX_MATRIX_IDENTIFIER_BYTES {
+        return Err(diagnostic_id);
+    }
+    Ok(())
+}
+
 pub fn parse_send_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    validate_matrix_identifier_length(room_id, "d0.4-send-invalid-room-id")?;
     room_id.parse().map_err(|_| "d0.4-send-invalid-room-id")
 }
 
@@ -23,6 +61,7 @@ pub fn parse_reply_event_id(
 ) -> Result<Option<OwnedEventId>, &'static str> {
     reply_to
         .map(|event_id| {
+            validate_matrix_identifier_length(&event_id, "d0.4-send-invalid-reply-event-id")?;
             event_id
                 .parse()
                 .map_err(|_| "d0.4-send-invalid-reply-event-id")
@@ -35,6 +74,7 @@ pub fn parse_thread_root_event_id(
 ) -> Result<Option<OwnedEventId>, &'static str> {
     thread_root
         .map(|event_id| {
+            validate_matrix_identifier_length(&event_id, "v-send.5-invalid-thread-root-event-id")?;
             event_id
                 .parse()
                 .map_err(|_| "v-send.5-invalid-thread-root-event-id")
@@ -47,9 +87,10 @@ pub fn parse_transaction_id(
 ) -> Result<Option<OwnedTransactionId>, &'static str> {
     txn_id
         .map(|txn_id| {
-            if txn_id.is_empty() || txn_id.len() > 255 {
+            if txn_id.is_empty() {
                 return Err("d0.4-send-invalid-transaction-id");
             }
+            validate_matrix_identifier_length(&txn_id, "d0.4-send-invalid-transaction-id")?;
             Ok(OwnedTransactionId::from(txn_id))
         })
         .transpose()
@@ -64,6 +105,7 @@ pub fn message_content(
     reply_to: Option<OwnedEventId>,
     thread_root: Option<OwnedEventId>,
 ) -> Result<RoomMessageEventContent, &'static str> {
+    validate_outbound_text_payload(&body, formatted_body.as_deref())?;
     let mut content = match (msg_type.as_deref().unwrap_or("m.text"), formatted_body) {
         ("m.text", Some(html)) => RoomMessageEventContent::text_html(body, html),
         ("m.text", None) => RoomMessageEventContent::text_plain(body),
@@ -88,15 +130,19 @@ pub fn validated_mentions(
     mention_user_ids: Option<Vec<String>>,
     mention_room: bool,
 ) -> Result<Mentions, &'static str> {
-    let user_ids = mention_user_ids
-        .unwrap_or_default()
-        .into_iter()
-        .map(|user_id| {
+    let mention_user_ids = mention_user_ids.unwrap_or_default();
+    if mention_user_ids.len() > MAX_OUTBOUND_MENTION_COUNT {
+        return Err("v-send.4-too-many-mentions");
+    }
+    let mut user_ids = BTreeSet::new();
+    for user_id in mention_user_ids {
+        validate_matrix_identifier_length(&user_id, "v-send.4-mention-user-id-too-long")?;
+        user_ids.insert(
             user_id
                 .parse::<OwnedUserId>()
-                .map_err(|_| "v-send.4-invalid-mention-user-id")
-        })
-        .collect::<Result<BTreeSet<_>, _>>()?;
+                .map_err(|_| "v-send.4-invalid-mention-user-id")?,
+        );
+    }
     let mut mentions = Mentions::new();
     mentions.user_ids = user_ids;
     mentions.room = mention_room;
@@ -165,6 +211,7 @@ fn send_http_error_diagnostic(error: &matrix_sdk::HttpError) -> &'static str {
 }
 
 pub fn parse_edit_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
+    validate_matrix_identifier_length(event_id, "v-send.r-edit-invalid-event-id")?;
     event_id
         .parse()
         .map_err(|_| "v-send.r-edit-invalid-event-id")

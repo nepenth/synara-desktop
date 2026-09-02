@@ -65,7 +65,7 @@ import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page
 import { usePowerLevels } from '../../../hooks/usePowerLevels';
 import { useRecursiveChildScopeFactory, useSpaceChildren } from '../../../state/hooks/roomList';
 import { roomToParentsAtom } from '../../../state/room/roomToParents';
-import { markAsReadInBackground } from '../../../utils/notifications';
+import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
 import { useRoomsUnread } from '../../../state/hooks/unread';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { LeaveSpacePrompt } from '../../../components/leave-space-prompt';
@@ -100,7 +100,6 @@ type SpaceMenuProps = {
 };
 const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClose }, ref) => {
   const mx = useMatrixClient();
-  const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
   const roomToParents = useAtomValue(roomToParentsAtom);
   const powerLevels = usePowerLevels(room);
@@ -121,7 +120,9 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
   const unread = useRoomsUnread(allChild, roomToUnreadAtom);
 
   const handleMarkAsRead = () => {
-    allChild.forEach((childRoomId) => markAsReadInBackground(mx, childRoomId, hideActivity));
+    allChild.forEach((childRoomId) =>
+      markAsReadFromExplicitUserActionInBackground(mx, childRoomId)
+    );
     requestClose();
   };
 

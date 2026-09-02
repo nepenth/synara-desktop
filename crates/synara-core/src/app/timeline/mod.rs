@@ -41,9 +41,10 @@ pub use actions::{
     NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 pub use composer::{
-    reply_draft_readback, ComposerDraftRegistry, NativeComposerReplyDraft,
-    NativeComposerReplyDraftReadback, NativeComposerReplyDraftRoomRequest,
-    NativeComposerSetReplyDraftRequest, NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+    reply_draft_readback, ComposerDraftRegistry, NativeComposerClearReplyDraftRequest,
+    NativeComposerReplyDraft, NativeComposerReplyDraftReadback,
+    NativeComposerReplyDraftRoomRequest, NativeComposerSetReplyDraftRequest,
+    NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
 };
 
 pub use delta::{TimelineDeltaBatch, TimelineDeltaOp, TimelineSnapshot};
@@ -62,10 +63,10 @@ pub use native::{
     NativeTimelineDirection, NativeTimelineEventReadback, NativeTimelineItem,
     NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
-    NativeUtdPhase, NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,

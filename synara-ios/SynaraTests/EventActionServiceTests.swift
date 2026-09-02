@@ -83,6 +83,38 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertFalse(availability.canReact)
     }
 
+    func testCoreCapabilitiesOverridePresenterInference() {
+        let service = MockEventActionService()
+        let item = TimelineItem(
+            id: "$event:matrix.org",
+            eventID: "$event:matrix.org",
+            senderID: "@alice:matrix.org",
+            timestamp: TimelineFixtures.baseDate,
+            kind: .text("Hello"),
+            replyToEventID: nil,
+            actionCapabilities: TimelineRowActionCapabilities(
+                canReact: false,
+                canReply: false,
+                canEdit: false,
+                canRedact: false,
+                canReport: false,
+                canPin: false,
+                canForward: false,
+                canVote: false,
+                canDeclineCall: false
+            ),
+            isEdited: false,
+            reactions: [:]
+        )
+
+        let availability = service.availability(for: item, currentUserID: "@alice:matrix.org")
+
+        XCTAssertFalse(availability.canReply)
+        XCTAssertFalse(availability.canEdit)
+        XCTAssertFalse(availability.canRedact)
+        XCTAssertFalse(availability.canReact)
+    }
+
     func testEncryptedMediaHasNoActions() throws {
         let service = MockEventActionService()
         let item = TimelineItem(

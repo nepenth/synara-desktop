@@ -1,12 +1,12 @@
 # ROE-03 Research Memo: Timeline rows and event relationships
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership accepted; transport-parity remediation reopened; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                                                                                                                                                                                                                 |
 | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-03 (residual engine census; message-format cluster only as a boundary, not ROE-04/12)                                                                                                                                                                                                                                              |
 | Research owner     | Residual-census researcher (this memo)                                                                                                                                                                                                                                                                                                |
-| Reviewers          | Unassigned                                                                                                                                                                                                                                                                                                                            |
+| Reviewers          | Independent feature-branch review; `ACCEPT` on PR `#1086` at `cbb9b863d3a9e039c0001eeb7689cd835f186b36`                                                                                                                                                                                                                            |
 | Source census      | 2026-09-01 on worktree `roe/memo-03-timeline-rows` at `53d7b2c4968df0b9c9adb031ebfa46eab7685242`. [CENSUS.md](../program/CENSUS.md) is a `main` `011cf39a` snapshot only; source below was re-read on this commit.                                                                                                                      |
 | ADR baseline       | [ADR 0001](../../../adr/0001-ios-repository-layout.md), [0002](../../../adr/0002-ios-architecture.md), [0003](../../../adr/0003-shared-native-rust-core.md), [0004](../../../adr/0004-rust-language-boundaries.md), [0005](../../../adr/0005-native-media-handle-channel.md); last reviewed 2026-09-01; source commit as above. |
 
@@ -100,4 +100,12 @@ Regression proof to keep the close stable:
 
 ## Next gate
 
-Already owned: close the research item. No implementation plan, no Core command, no second row model, no move of scrolling/virtualization/grouping/typography/selection into Core. Do not treat UniFFI flattening or the iOS pending-send overlay as a missing `TimelineViewRow` field. Do not start P5 or invent S38 from this memo. If a later fixture corpus proves child-in-thread mis-attribution, that is a human decision to extend the **existing** row — and that decision is a stop, not a start.
+The single-row ownership question is closed: do not create a second row model
+or move scrolling, grouping, selection, or rendering into Core. Adapter and
+feature parity remain open as [A7](../program/ACTIONS.md): inventory the
+already-owned fields dropped by UniFFI/iOS (`thread`, reply preview body and
+sender, poll answers, own-reaction state, and capabilities), then run shared
+relation-permutation fixtures. If those fixtures prove child-in-thread
+mis-attribution, the smallest candidate is an optional field on the existing
+row. Widening an adapter to carry existing fields is not new semantic
+ownership, but it still requires a reviewed product plan and tests.

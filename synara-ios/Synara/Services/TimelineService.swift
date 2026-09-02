@@ -51,6 +51,50 @@ enum TimelineDeliveryStatus: Equatable {
     case failed
 }
 
+/// Active-account ownership for aggregate reactions. `unknown` is distinct
+/// from a known empty set so the UI never presents an unproven "not mine".
+enum TimelineReactionOwnership: Equatable {
+    case unknown
+    case known(Set<String>)
+
+    func contains(_ key: String) -> Bool {
+        guard case let .known(keys) = self else { return false }
+        return keys.contains(key)
+    }
+}
+
+struct TimelineThreadSummary: Equatable {
+    let rootEventID: String
+    let replyCount: Int
+    let latestEventID: String?
+}
+
+struct TimelinePollAnswer: Identifiable, Equatable {
+    let id: String
+    let text: String
+    let voteCount: Int
+    let isOwn: Bool
+}
+
+struct TimelinePollPresentation: Equatable {
+    let question: String
+    let isClosed: Bool
+    let maximumSelections: Int
+    let answers: [TimelinePollAnswer]
+}
+
+struct TimelineRowActionCapabilities: Equatable {
+    let canReact: Bool
+    let canReply: Bool
+    let canEdit: Bool
+    let canRedact: Bool
+    let canReport: Bool
+    let canPin: Bool
+    let canForward: Bool
+    let canVote: Bool
+    let canDeclineCall: Bool
+}
+
 enum TimelineMessageGroupingPolicy {
     static let maximumInterval: TimeInterval = 2 * 60 * 60
 
@@ -83,12 +127,29 @@ struct TimelineItem: Identifiable, Equatable {
     /// this nil while continuing to use `eventID` as their stable presentation ID.
     let serverEventID: String?
     let senderID: String
+    /// Core-resolved profile display name. Mock/local items leave this nil and
+    /// continue through the deterministic sender-ID fallback.
+    let senderProfileDisplayName: String?
     let senderAvatarURL: URL?
     let timestamp: Date
     let kind: Kind
     let replyToEventID: String?
+    /// Core-owned Matrix thread relation. This stays distinct from a reply
+    /// target because a thread child may reply to another child.
+    let threadRootEventID: String?
+    /// Core-owned semantic reply preview; unlike local lookup this remains
+    /// useful when the replied-to event is outside the loaded window.
+    let replyPreview: TimelineReplyPreview?
+    /// Core-owned server thread aggregation; local relation counting is only
+    /// a compatibility fallback for mock/local items.
+    let threadSummary: TimelineThreadSummary?
+    let poll: TimelinePollPresentation?
+    let actionCapabilities: TimelineRowActionCapabilities?
     let isEdited: Bool
+    /// Core-owned eligibility gate for Hermes approval presentation/actions.
+    let isAgentApproval: Bool
     let reactions: [String: Int]
+    let reactionOwnership: TimelineReactionOwnership
     let isEncrypted: Bool
     let deliveryStatus: TimelineDeliveryStatus?
     /// True when matrix-rust-sdk attached the signed-in user's durable read
@@ -100,12 +161,20 @@ struct TimelineItem: Identifiable, Equatable {
         eventID: String,
         serverEventID: String? = nil,
         senderID: String,
+        senderProfileDisplayName: String? = nil,
         senderAvatarURL: URL? = nil,
         timestamp: Date,
         kind: Kind,
         replyToEventID: String?,
+        threadRootEventID: String? = nil,
+        replyPreview: TimelineReplyPreview? = nil,
+        threadSummary: TimelineThreadSummary? = nil,
+        poll: TimelinePollPresentation? = nil,
+        actionCapabilities: TimelineRowActionCapabilities? = nil,
         isEdited: Bool,
+        isAgentApproval: Bool = false,
         reactions: [String: Int],
+        reactionOwnership: TimelineReactionOwnership = .unknown,
         isEncrypted: Bool = false,
         deliveryStatus: TimelineDeliveryStatus? = nil,
         hasCurrentUserReadReceipt: Bool = false
@@ -114,12 +183,20 @@ struct TimelineItem: Identifiable, Equatable {
         self.eventID = eventID
         self.serverEventID = deliveryStatus == nil ? (serverEventID ?? eventID) : serverEventID
         self.senderID = senderID
+        self.senderProfileDisplayName = senderProfileDisplayName
         self.senderAvatarURL = senderAvatarURL
         self.timestamp = timestamp
         self.kind = kind
         self.replyToEventID = replyToEventID
+        self.threadRootEventID = threadRootEventID
+        self.replyPreview = replyPreview
+        self.threadSummary = threadSummary
+        self.poll = poll
+        self.actionCapabilities = actionCapabilities
         self.isEdited = isEdited
+        self.isAgentApproval = isAgentApproval
         self.reactions = reactions
+        self.reactionOwnership = reactionOwnership
         self.isEncrypted = isEncrypted
         self.deliveryStatus = deliveryStatus
         self.hasCurrentUserReadReceipt = hasCurrentUserReadReceipt
@@ -135,12 +212,20 @@ struct TimelineItem: Identifiable, Equatable {
             eventID: eventID,
             serverEventID: serverEventID,
             senderID: senderID,
+            senderProfileDisplayName: senderProfileDisplayName,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
             kind: kind,
             replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
+            replyPreview: replyPreview,
+            threadSummary: threadSummary,
+            poll: poll,
+            actionCapabilities: actionCapabilities,
             isEdited: isEdited,
+            isAgentApproval: isAgentApproval,
             reactions: reactions,
+            reactionOwnership: reactionOwnership,
             isEncrypted: isEncrypted,
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
@@ -153,12 +238,20 @@ struct TimelineItem: Identifiable, Equatable {
             eventID: eventID,
             serverEventID: serverEventID,
             senderID: senderID,
+            senderProfileDisplayName: senderProfileDisplayName,
             senderAvatarURL: senderAvatarURL,
             timestamp: timestamp,
             kind: kind,
             replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
+            replyPreview: replyPreview,
+            threadSummary: threadSummary,
+            poll: poll,
+            actionCapabilities: actionCapabilities,
             isEdited: isEdited,
+            isAgentApproval: isAgentApproval,
             reactions: reactions,
+            reactionOwnership: reactionOwnership,
             isEncrypted: isEncrypted,
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
@@ -172,6 +265,7 @@ struct TimelineItem: Identifiable, Equatable {
         senderID: String,
         senderAvatarURL: URL? = nil,
         replyToEventID: String?,
+        threadRootEventID: String? = nil,
         deliveryStatus: TimelineDeliveryStatus = .sending,
         timestamp: Date = Date()
     ) -> TimelineItem {
@@ -184,6 +278,7 @@ struct TimelineItem: Identifiable, Equatable {
             timestamp: timestamp,
             kind: formattedBody.map { .formattedText(body: body, html: $0) } ?? .text(body),
             replyToEventID: replyToEventID,
+            threadRootEventID: threadRootEventID,
             isEdited: false,
             reactions: [:],
             deliveryStatus: deliveryStatus
@@ -266,6 +361,9 @@ enum TimelinePendingReconciler {
             return false
         }
         guard pending.replyToEventID == serverItem.replyToEventID else {
+            return false
+        }
+        guard pending.threadRootEventID == serverItem.threadRootEventID else {
             return false
         }
         guard let pendingBody = messageBody(for: pending),
@@ -641,6 +739,7 @@ struct RawTimelineEvent: Equatable {
     let mediaByteSize: UInt64?
     let isEncrypted: Bool
     let agentCard: SynaraAgentCard?
+    let isAgentApproval: Bool
     let reactions: [String: Int]
 
     init(
@@ -658,6 +757,7 @@ struct RawTimelineEvent: Equatable {
         mediaByteSize: UInt64? = nil,
         isEncrypted: Bool = false,
         agentCard: SynaraAgentCard? = nil,
+        isAgentApproval: Bool = false,
         reactions: [String: Int] = [:]
     ) {
         self.eventID = eventID
@@ -674,6 +774,7 @@ struct RawTimelineEvent: Equatable {
         self.mediaByteSize = mediaByteSize
         self.isEncrypted = isEncrypted
         self.agentCard = agentCard
+        self.isAgentApproval = isAgentApproval
         self.reactions = reactions
     }
 }
@@ -1103,6 +1204,7 @@ enum TimelineMapper {
             kind: kind,
             replyToEventID: event.replyToEventID,
             isEdited: event.isEdited,
+            isAgentApproval: event.isAgentApproval,
             reactions: event.reactions,
             isEncrypted: event.type == "m.room.encrypted" || event.isEncrypted
         )
@@ -1238,6 +1340,47 @@ enum TimelineReplyCounter {
     }
 }
 
+enum TimelineThreadMembership {
+    static func contains(_ item: TimelineItem, rootEventID: String) -> Bool {
+        if item.eventID == rootEventID {
+            return true
+        }
+        if let threadRootEventID = item.threadRootEventID {
+            return threadRootEventID == rootEventID
+        }
+        // Mock/local fixtures predate the Core thread-root DTO. Retain their
+        // narrow compatibility path without treating native classic replies
+        // as thread children.
+        guard item.actionCapabilities == nil else {
+            return false
+        }
+        return item.replyToEventID == rootEventID
+    }
+}
+
+enum TimelineRelationPresentation {
+    static func replyPreview(
+        for item: TimelineItem,
+        locallyResolvedByEventID: [String: TimelineReplyPreview]
+    ) -> TimelineReplyPreview? {
+        item.replyPreview
+            ?? item.replyToEventID.flatMap { locallyResolvedByEventID[$0] }
+    }
+
+    static func replyCount(for item: TimelineItem, locallyCountedByRootID: [String: Int]) -> Int {
+        if let threadSummary = item.threadSummary {
+            return threadSummary.replyCount
+        }
+        // Core-projected event rows always carry authoritative capabilities.
+        // An absent Core thread summary means this is not a thread root; do not
+        // reinterpret classic replies in the loaded window as thread children.
+        guard item.actionCapabilities == nil else {
+            return 0
+        }
+        return locallyCountedByRootID[item.eventID] ?? 0
+    }
+}
+
 final class MockTimelineService: TimelineServicing {
     var events: [RawTimelineEvent]
     var itemFixture: [TimelineItem]?
@@ -1324,16 +1467,9 @@ final class MockTimelineService: TimelineServicing {
     }
 
     private func threadTimelineItems(from items: [TimelineItem], rootEventID: String) -> [TimelineItem] {
-        let root = items.first { $0.eventID == rootEventID }
-        let replies = items
-            .filter { $0.replyToEventID == rootEventID }
+        items
+            .filter { TimelineThreadMembership.contains($0, rootEventID: rootEventID) }
             .sorted { $0.timestamp < $1.timestamp }
-
-        if let root {
-            return [root] + replies
-        }
-
-        return replies
     }
 
     private func timelineItems(roomID: String) -> [TimelineItem] {
@@ -1539,9 +1675,24 @@ enum MatrixHTMLRenderer {
     struct TableCell: Equatable {
         let content: RichText
         let isHeader: Bool
+        let inlineContent: InlineGroup?
+
+        init(content: RichText, isHeader: Bool, inlineContent: InlineGroup? = nil) {
+            self.content = content
+            self.isHeader = isHeader
+            self.inlineContent = inlineContent
+        }
 
         var plainText: String {
-            content.plainText
+            guard let inlineContent else { return content.plainText }
+            return inlineContent.pieces.map { piece in
+                switch piece {
+                case let .richText(text):
+                    return text.plainText
+                case let .spoiler(spoiler):
+                    return spoiler.reason.map { "[Spoiler: \($0) · Reveal]" } ?? "[Spoiler · Reveal]"
+                }
+            }.joined()
         }
     }
 
@@ -1552,7 +1703,18 @@ enum MatrixHTMLRenderer {
 
     struct TableBlock: Equatable {
         let caption: RichText?
+        let captionInlineContent: InlineGroup?
         let rows: [TableRow]
+
+        init(
+            caption: RichText?,
+            captionInlineContent: InlineGroup? = nil,
+            rows: [TableRow]
+        ) {
+            self.caption = caption
+            self.captionInlineContent = captionInlineContent
+            self.rows = rows
+        }
     }
 
     indirect enum Segment: Equatable {
@@ -1689,17 +1851,24 @@ enum MatrixHTMLRenderer {
                     appendSegment(child)
                 }
             case let .table(table):
-                if let caption = table.caption {
+                if let captionInlineContent = table.captionInlineContent {
+                    appendInlineGroup(captionInlineContent)
+                    appendSeparator()
+                } else if let caption = table.caption {
                     append(caption)
                     appendSeparator()
                 }
                 for (rowIndex, row) in table.rows.enumerated() {
                     if rowIndex > 0 { appendSeparator() }
-                    for (cellIndex, cell) in row.cells.enumerated() {
-                        if cellIndex > 0 {
-                            runs.append(.init(text: "\t", style: [], link: nil))
-                        }
+                for (cellIndex, cell) in row.cells.enumerated() {
+                    if cellIndex > 0 {
+                        runs.append(.init(text: "\t", style: [], link: nil))
+                    }
+                    if let inlineContent = cell.inlineContent {
+                        appendInlineGroup(inlineContent)
+                    } else {
                         append(cell.content)
+                    }
                     }
                 }
             }
@@ -2651,7 +2820,25 @@ enum MatrixHTMLRenderer {
     ) {
         guard let table = tableBlock(node: node) else { return }
         ensureNewlines(1, in: &runs)
-        if let caption = table.caption {
+        if let captionInlineContent = table.captionInlineContent {
+            for piece in captionInlineContent.pieces {
+                switch piece {
+                case let .richText(text):
+                    text.runs.forEach { appendRichTextRun($0, to: &runs) }
+                case let .spoiler(spoiler):
+                    appendRichTextRun(
+                        .init(
+                            text: spoiler.reason.map { "[Spoiler: \($0) · Reveal]" }
+                                ?? "[Spoiler · Reveal]",
+                            style: [.italic],
+                            link: nil
+                        ),
+                        to: &runs
+                    )
+                }
+            }
+            ensureNewlines(1, in: &runs)
+        } else if let caption = table.caption {
             caption.runs.forEach { appendRichTextRun($0, to: &runs) }
             ensureNewlines(1, in: &runs)
         }
@@ -2659,7 +2846,26 @@ enum MatrixHTMLRenderer {
             if rowIndex > 0 { ensureNewlines(1, in: &runs) }
             for (cellIndex, cell) in row.cells.enumerated() {
                 if cellIndex > 0 { appendRichTextRun(.init(text: "\t", style: style, link: nil), to: &runs) }
-                cell.content.runs.forEach { appendRichTextRun($0, to: &runs) }
+                if let inlineContent = cell.inlineContent {
+                    for piece in inlineContent.pieces {
+                        switch piece {
+                        case let .richText(text):
+                            text.runs.forEach { appendRichTextRun($0, to: &runs) }
+                        case let .spoiler(spoiler):
+                            appendRichTextRun(
+                                .init(
+                                    text: spoiler.reason.map { "[Spoiler: \($0) · Reveal]" }
+                                        ?? "[Spoiler · Reveal]",
+                                    style: [.italic],
+                                    link: nil
+                                ),
+                                to: &runs
+                            )
+                        }
+                    }
+                } else {
+                    cell.content.runs.forEach { appendRichTextRun($0, to: &runs) }
+                }
             }
         }
         ensureNewlines(1, in: &runs)
@@ -2833,11 +3039,24 @@ enum MatrixHTMLRenderer {
 
     private static func tableBlock(node: HTMLNode) -> TableBlock? {
         guard case let .element(name, _, children) = node, name == "table" else { return nil }
-        let caption = children.compactMap { child -> RichText? in
-            guard case let .element(childName, _, captionChildren) = child, childName == "caption" else { return nil }
+        var caption: RichText?
+        var captionInlineContent: InlineGroup?
+        if let captionNode = children.first(where: { child in
+            if case let .element(childName, _, _) = child { return childName == "caption" }
+            return false
+        }), case let .element(_, _, captionChildren) = captionNode {
             let text = richText(nodes: captionChildren)
-            return text.runs.isEmpty ? nil : text
-        }.first
+            caption = text.runs.isEmpty ? nil : text
+            var captionSegments: [Segment] = []
+            appendSegments(captionChildren, to: &captionSegments)
+            let pieces = captionSegments.flatMap(tableCellInlinePieces)
+            if pieces.contains(where: {
+                if case .spoiler = $0 { return true }
+                return false
+            }) {
+                captionInlineContent = InlineGroup(pieces: pieces)
+            }
+        }
         var rowNodes: [HTMLNode] = []
         collectTableRows(in: children, into: &rowNodes)
         let rows = rowNodes.compactMap { rowNode -> TableRow? in
@@ -2846,12 +3065,49 @@ enum MatrixHTMLRenderer {
                 guard case let .element(cellName, _, cellChildren) = cellNode,
                       cellName == "th" || cellName == "td"
                 else { return nil }
-                return TableCell(content: richText(nodes: cellChildren), isHeader: cellName == "th")
+                var segments: [Segment] = []
+                appendSegments(cellChildren, to: &segments)
+                let pieces = segments.flatMap(tableCellInlinePieces)
+                let inlineContent = pieces.contains(where: {
+                    if case .spoiler = $0 { return true }
+                    return false
+                }) ? InlineGroup(pieces: pieces) : nil
+                return TableCell(
+                    content: richText(nodes: cellChildren),
+                    isHeader: cellName == "th",
+                    inlineContent: inlineContent
+                )
             }
             guard cells.isEmpty == false else { return nil }
             return TableRow(cells: cells, isHeader: cells.allSatisfy(\.isHeader))
         }
-        return rows.isEmpty ? nil : TableBlock(caption: caption, rows: rows)
+        return rows.isEmpty ? nil : TableBlock(
+            caption: caption,
+            captionInlineContent: captionInlineContent,
+            rows: rows
+        )
+    }
+
+    private static func tableCellInlinePieces(_ segment: Segment) -> [InlinePiece] {
+        switch segment {
+        case let .richText(text), let .quote(text):
+            return [.richText(text)]
+        case let .inline(group):
+            return group.pieces
+        case let .heading(heading):
+            return [.richText(heading.content)]
+        case let .code(code):
+            return [.richText(.init(runs: [.init(text: code.code, style: [.code], link: nil)]))]
+        case let .spoiler(spoiler):
+            return [.spoiler(spoiler)]
+        case let .details(details):
+            let text = [details.summary, details.body].filter { $0.isEmpty == false }.joined(separator: "\n")
+            return text.isEmpty ? [] : [.richText(.init(runs: [.init(text: text, style: [], link: nil)]))]
+        case let .table(table):
+            let text = table.rows.map { $0.cells.map(\.plainText).joined(separator: "\t") }
+                .joined(separator: "\n")
+            return text.isEmpty ? [] : [.richText(.init(runs: [.init(text: text, style: [], link: nil)]))]
+        }
     }
 
     private static func collectTableRows(in nodes: [HTMLNode], into rows: inout [HTMLNode]) {
@@ -3787,6 +4043,12 @@ private extension String {
     }
 
     var isSafeMatrixHTMLLink: Bool {
+        guard unicodeScalars.allSatisfy({ scalar in
+            let value = scalar.value
+            return value > 0x1F && value != 0x7F
+        }) else {
+            return false
+        }
         guard let components = URLComponents(string: self),
               let scheme = components.scheme?.lowercased()
         else {

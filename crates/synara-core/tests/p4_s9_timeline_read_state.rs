@@ -97,7 +97,12 @@ fn timeline_read_state_family_without_session_fails_closed_without_echo() {
         .block_on(shared.timeline_event_readback(room_id.to_owned(), event_id.to_owned()))
         .expect_err("no attached event-readback owner");
     let set_read = rt
-        .block_on(shared.timeline_set_read_state(stream_id.to_owned(), "mark_read".to_owned()))
+        .block_on(shared.timeline_set_read_state(
+            stream_id.to_owned(),
+            "mark_read".to_owned(),
+            "explicit_user".to_owned(),
+            None,
+        ))
         .expect_err("no attached set-read-state owner");
     let jump = rt
         .block_on(shared.timeline_jump_latest(stream_id.to_owned()))
@@ -131,7 +136,12 @@ fn timeline_read_state_oversize_payload_fails_closed_without_truncate_or_echo() 
         .block_on(shared.timeline_event_readback(room_id.clone(), event_id.clone()))
         .expect_err("oversize event-readback payload must fail closed");
     let set_read = rt
-        .block_on(shared.timeline_set_read_state(stream_id.clone(), "mark_read".to_owned()))
+        .block_on(shared.timeline_set_read_state(
+            stream_id.clone(),
+            "mark_read".to_owned(),
+            "explicit_user".to_owned(),
+            None,
+        ))
         .expect_err("oversize set-read-state payload must fail closed");
     let jump = rt
         .block_on(shared.timeline_jump_latest(stream_id.clone()))
@@ -181,8 +191,12 @@ fn timeline_read_state_family_without_started_sync_returns_handler_result_withou
         rt.block_on(shared.timeline_event_readback(invalid_room.to_owned(), event_id.to_owned()));
     let invalid_event_id =
         rt.block_on(shared.timeline_event_readback(room_id.to_owned(), invalid_event.to_owned()));
-    let set_read =
-        rt.block_on(shared.timeline_set_read_state(stream_id.to_owned(), "mark_read".to_owned()));
+    let set_read = rt.block_on(shared.timeline_set_read_state(
+        stream_id.to_owned(),
+        "mark_read".to_owned(),
+        "explicit_user".to_owned(),
+        None,
+    ));
     let jump = rt.block_on(shared.timeline_jump_latest(stream_id.to_owned()));
     drop(shared);
     drop(_enter);

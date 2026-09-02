@@ -55,7 +55,7 @@ struct AppEnvironment {
     let drafts: DraftStore
     let eventActions: EventActionServicing
     let agentApprovals: AgentApprovalServicing
-    let agentApprovalReactions: AgentApprovalReactionServicing
+    let agentApprovalDecisions: AgentApprovalDecisionServicing
     let readMarkers: RoomReadMarkerServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
@@ -149,7 +149,7 @@ struct AppEnvironment {
             drafts: drafts,
             eventActions: SharedCoreEventActionService(host: host),
             agentApprovals: SharedCoreAgentApprovalService(host: host),
-            agentApprovalReactions: SharedCoreAgentApprovalReactionService(host: host),
+            agentApprovalDecisions: SharedCoreAgentApprovalDecisionService(host: host),
             readMarkers: SharedCoreRoomReadMarkerService(host: host),
             mediaLoader: SharedCoreMediaLoader(host: host),
             mediaUploader: SharedCoreMediaUploadService(host: host),
@@ -183,7 +183,7 @@ struct AppEnvironment {
         drafts: DraftStore = DraftStore(),
         eventActions: EventActionServicing = MockEventActionService(),
         agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
-        agentApprovalReactions: AgentApprovalReactionServicing = MockAgentApprovalReactionService(),
+        agentApprovalDecisions: AgentApprovalDecisionServicing = MockAgentApprovalDecisionService(),
         readMarkers: RoomReadMarkerServicing = MockRoomReadMarkerService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
@@ -227,7 +227,7 @@ struct AppEnvironment {
             drafts: drafts,
             eventActions: eventActions,
             agentApprovals: agentApprovals,
-            agentApprovalReactions: agentApprovalReactions,
+            agentApprovalDecisions: agentApprovalDecisions,
             readMarkers: readMarkers,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,

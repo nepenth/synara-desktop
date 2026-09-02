@@ -7,6 +7,7 @@
 import { accessSync, readFileSync, readdirSync } from "node:fs";
 import { constants } from "node:fs";
 import { resolve } from "node:path";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -59,6 +60,10 @@ const required = [
   "synara-ios/SynaraCore/Sources/synara_coreFFI/include/.gitkeep",
   "synara-ios/SynaraCore/.gitignore",
   "scripts/generate-synara-core-swift.sh",
+  "scripts/check-xcode-local-package-graph.mjs",
+  "scripts/__tests__/xcode-local-package-graph.test.mjs",
+  "scripts/lib/publish-generated-apple-pair.sh",
+  "scripts/__tests__/apple-pair-publication.test.mjs",
   "synara-ios/scripts/ci-build.sh",
   ".github/workflows/ci.yml",
 ];
@@ -263,7 +268,31 @@ const settingsView = readFileSync(resolve(root, "synara-ios/Synara/Features/Sett
 const packageManifest = readFileSync(resolve(root, "synara-ios/SynaraCore/Package.swift"), "utf8");
 const ignored = readFileSync(resolve(root, "synara-ios/SynaraCore/.gitignore"), "utf8");
 const generator = readFileSync(resolve(root, "scripts/generate-synara-core-swift.sh"), "utf8");
+const publicationHelper = readFileSync(
+  resolve(root, "scripts/lib/publish-generated-apple-pair.sh"),
+  "utf8"
+);
+const generatorSyntax = spawnSync(
+  "bash",
+  ["-n", resolve(root, "scripts/generate-synara-core-swift.sh")],
+  { encoding: "utf8" }
+);
+if (generatorSyntax.status !== 0) {
+  throw new Error(
+    `SynaraCore generator shell syntax failed: ${generatorSyntax.stderr || generatorSyntax.stdout}`
+  );
+}
 const iosCiBuild = readFileSync(resolve(root, "synara-ios/scripts/ci-build.sh"), "utf8");
+const iosCiSyntax = spawnSync(
+  "bash",
+  ["-n", resolve(root, "synara-ios/scripts/ci-build.sh")],
+  { encoding: "utf8" }
+);
+if (iosCiSyntax.status !== 0) {
+  throw new Error(
+    `iOS CI shell syntax failed: ${iosCiSyntax.stderr || iosCiSyntax.stdout}`
+  );
+}
 const ciWorkflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8");
 
 const assertions = [
@@ -960,6 +989,14 @@ const assertions = [
   [generator, "aarch64-apple-darwin", "Apple macOS target"],
   [generator, "cargo build --locked --release --package synara-core", "locked Rust build"],
   [generator, "SYNARA_CORE_APPLE_TARGET_DIR", "cacheable Apple Rust target directory"],
+  [generator, "SYNARA_CORE_APPLE_SPACE_BOUNDED", "opt-in space-bounded Apple build"],
+  [generator, 'target_build_dir="$work_dir/cargo-target-$target"', "isolated per-target bounded build directory"],
+  [generator, 'staged_archive="$(archive_for_target "$target")"', "bounded final-archive staging"],
+  [generator, 'remove_bounded_target_dir "$target_build_dir"', "bounded target cleanup"],
+  [generator, 'refusing to remove non-generator target directory', "bounded cleanup path guard"],
+  [generator, '"$publication_helper"', "shared generated artifact publication"],
+  [publicationHelper, 'publication_state="publishing"', "transactional publication state"],
+  [publicationHelper, 'publication_state="committed"', "coherent pair commit point"],
   [generator, "cargo run --locked --package synara-core-bindgen", "project-owned locked bindgen invocation"],
   [generator, "-- generate", "project-owned bindgen command"],
   [generator, "--no-format", "source-preserving bindgen invocation"],
@@ -967,6 +1004,8 @@ const assertions = [
   [generator, 'module.modulemap', "XCFramework module map structure"],
   [generator, '-headers "$headers_tmp"', "XCFramework generated C header inclusion"],
   [generator, "xcodebuild -create-xcframework", "XCFramework assembly"],
+  [iosCiBuild, "has_remote_package_reference", "nested remote package lock gate"],
+  [iosCiBuild, "check-xcode-local-package-graph.mjs", "semantic local package graph inspection"],
 ];
 
 for (const [source, forbidden, label] of [
@@ -2514,6 +2553,21 @@ walkProductSwift(productSwiftRoot);
 if (leftoverProductHits.length > 0) {
   throw new Error(
     `P4-S10 product Swift still has MatrixRustSDK callers:\n${leftoverProductHits.join("\n")}`
+  );
+}
+
+const generatorBehaviorTests = spawnSync(
+  process.execPath,
+  [
+    "--test",
+    resolve(root, "scripts/__tests__/xcode-local-package-graph.test.mjs"),
+    resolve(root, "scripts/__tests__/apple-pair-publication.test.mjs"),
+  ],
+  { encoding: "utf8" }
+);
+if (generatorBehaviorTests.status !== 0) {
+  throw new Error(
+    `Apple generator behavioral tests failed:\n${generatorBehaviorTests.stdout}${generatorBehaviorTests.stderr}`
   );
 }
 

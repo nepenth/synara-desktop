@@ -1,12 +1,12 @@
 # ROE-06 Research Memo: Room Sorting and Filtering Residual Census
 
-Status: draft research; docs-only; not approved for implementation.
+Status: ownership boundary accepted; semantic product decision retained; docs-only; not approved for implementation.
 
 | Field              | Value                                                                                                                                          |
 | ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | Workstream/cluster | ROE-06                                                                                                                                         |
 | Research owner     | Isolated researcher on `roe/memo-06-room-sort`                                                                                                 |
-| Reviewers          | Unassigned                                                                                                                                     |
+| Reviewers          | Independent feature-branch review; `ACCEPT_WITH_NITS` on PR `#1087` at `eff03f01`                                                             |
 | Source census      | 2026-09-01 against `b6797c3a1a223ce73e5d30838e5a634c09e3d9f7`                                                                                  |
 | ADR baseline       | ADR 0003, 0004 last reviewed 2026-09-01 (index in [`docs/adr/README.md`](../../../adr/README.md)); same census commit                           |
 
@@ -22,13 +22,13 @@ No current source evidence shows a second Matrix room-list engine. Desktop and i
 
 | Concern | Rust/Core | Desktop | iOS | Evidence/tests |
 | ------- | --------- | ------- | --- | -------------- |
-| Joined-room snapshot | Authority. `snapshot_from_sync_owner` opens `matrix-sdk-ui` `all_rooms`, applies SDK `new_filter_joined()`, and projects `RoomSummary` (tags, counts, `last_activity_ts`). Registered `matrix_room_list_snapshot` returns that snapshot; it does **not** call `sort_rooms` or `filter_rooms_by_scope`. | Thin invoke. `useBindAllRoomsAtom` hydrates `orderedRoomIds` + summaries. Dual-backend JS room-list fallback is documented forbidden. | Thin UniFFI. `SharedCoreRoomListService` maps the same command plus invites and space-parent snapshots. `PlaceholderRoomListService` is preview/test only. | [`live.rs`](../../../../crates/synara-core/src/app/room_list/live.rs); [`core.rs`](../../../../crates/synara-core/src/core.rs) `matrix_room_list_snapshot`; desktop [`roomList.ts`](../../../../synara/src/app/state/room-list/roomList.ts); iOS [`SharedCoreRoomList.swift`](../../../../synara-ios/Synara/Services/SharedCoreRoomList.swift), [`SharedCoreProductServices.swift`](../../../../synara-ios/Synara/Services/SharedCoreProductServices.swift) |
+| Joined-room snapshot | Authority. `snapshot_from_sync_owner` opens `matrix-sdk-ui` `all_rooms`, applies SDK `new_filter_joined()`, and projects `RoomSummary` (tags, counts, `last_activity_ts`). Registered `matrix_room_list_snapshot` returns that snapshot; it does **not** call `sort_rooms` or `filter_rooms_by_scope`. | Thin invoke. `useBindAllRoomsAtom` hydrates `orderedRoomIds` + summaries. Dual-backend JS room-list fallback is documented forbidden. | Thin UniFFI. Live `AppEnvironment.live()` uses `SharedCoreRoomListService`, which maps the same command plus invite-preview and space-parent snapshots. `PlaceholderRoomListService` is unused; `MockRoomListService` is the test/preview/UI-test stand-in that calls `RoomListFixtures.sorted`. | [`live.rs`](../../../../crates/synara-core/src/app/room_list/live.rs); [`core.rs`](../../../../crates/synara-core/src/core.rs) `matrix_room_list_snapshot`; desktop [`roomList.ts`](../../../../synara/src/app/state/room-list/roomList.ts); iOS [`SharedCoreRoomList.swift`](../../../../synara-ios/Synara/Services/SharedCoreRoomList.swift), [`SharedCoreProductServices.swift`](../../../../synara-ios/Synara/Services/SharedCoreProductServices.swift) |
 | Core sort helpers (`RoomListSort`, `sort_rooms`) | Unused library. `ByName` / `RecentActivity` / `FavoritesThenRecent` / `LowPriorityLast`. ASCII `#`-stripped lowercase names; missing `last_activity_ts` last; stable by `room_id`. Linked only via `matrix_room_list_markers()` and unit tests. Not on UniFFI. | Product Home does **not** import these helpers. | Product list does **not** import these helpers. | [`sort.rs`](../../../../crates/synara-core/src/app/room_list/sort.rs); [`mod.rs`](../../../../crates/synara-core/src/app/room_list/mod.rs); Tauri re-export tests in [`src-tauri/.../room_list/tests.rs`](../../../../src-tauri/src/matrix/room_list/tests.rs). Grep of `synara/` and `synara-ios/` has no `sort_rooms` / `RoomListSort::` consumer. |
 | Core filter helpers (`RoomListScope`, `room_matches_scope`, `partition_favorite_rooms`, `select_rooms_in_folder`) | Unused by product UIs. `room_matches_scope` is used only by `RoomListBadgeCounts::from_rooms` (Unread tab counter). Those badge counts are **not** on the snapshot DTO or UniFFI wire. `folder_id` is always `None` in live projection. | No call. | No call. | [`filters.rs`](../../../../crates/synara-core/src/app/room_list/filters.rs); [`counts.rs`](../../../../crates/synara-core/src/app/room_list/counts.rs); UniFFI [`RoomListSnapshotDto`](../../../../crates/synara-core/src/synara_core.udl) is `session_generation` + `ordered_room_ids` + rooms only. |
 | Favorite tag | Authority. Live row `is_favorite` from SDK `m.favourite` / `is_favourite()`. | Projection. `favoriteRoomIdSet` reads Core `isFavorite`; `partitionHomeRooms` lifts those ids out of the Home orphan-room list. | Projection. `RoomListFavorites.partition` keeps joined favorites, leaves remaining (including invites). | Core `project_room` in `live.rs`; desktop [`homeRoomList.ts`](../../../../synara/src/app/pages/client/home/homeRoomList.ts); iOS [`RoomListService.swift`](../../../../synara-ios/Synara/Services/RoomListService.swift) `RoomListFavorites` |
 | Direct chats | Authority for both `m.direct` snapshot and row `is_direct`. | Navigation. Home uses `useOrphanRooms` (not a DM, not a space child) driven by `mDirectAtom` ← `matrix_mdirect_snapshot`. Directs page is a separate root. | Section. `kind` is `.directMessage` when Core `isDirect` is true; Direct messages is a third section under the same list. | Desktop [`mDirectList.ts`](../../../../synara/src/app/state/mDirectList.ts), [`useHomeRooms.ts`](../../../../synara/src/app/pages/client/home/useHomeRooms.ts), [`Direct.tsx`](../../../../synara/src/app/pages/client/direct/Direct.tsx); iOS `SharedCoreRoomListRows` + `RoomListView` |
 | Spaces | Authority for parent ids (`matrix_space_parents_snapshot`). | Navigation. `roomToParentsAtom` from that snapshot; Home hides space children; Space sidebar owns child lists. | Section / grouping. Channels with a parent render under space headers; space chip filters the same list. | Desktop [`roomToParents.ts`](../../../../synara/src/app/state/room/roomToParents.ts), [`hooks/roomList.ts`](../../../../synara/src/app/state/hooks/roomList.ts); iOS `RoomListSpaceGrouping` |
-| Invites | Authority. Separate `matrix_invites_snapshot`; live room-list filter is joined-only. | Inbox Invites route, not Home sections. | Merges invite rows into the list and inbox sections. | Core `matrix_invites_snapshot`; iOS `RoomListSearchFilter.mergeInvitedRooms`; desktop Inbox paths |
+| Invites | Authority. Separate `matrix_invites_snapshot`; live room-list filter is joined-only. | Inbox Invites route, not Home sections. | `SharedCoreRoomListRows` overlays invite preview on rooms already present in the snapshot. `mergeInvitedRooms` can only reinsert invited-membership rooms already in the in-memory array; it does not append separate `InviteDto` rows to the joined-only list. | Core `matrix_invites_snapshot`; iOS `SharedCoreRoomListRows`, `RoomListSearchFilter.mergeInvitedRooms`; desktop Inbox paths |
 | Unread / mentions (row fields) | Authority. `room_unread_presentation` writes `unread_count` / highlight; `marked_unread` stays a separate field. Core `RoomListScope::Unread` / `::Mentions` unused by UIs. | Projection. `unreadInfosFromNativeRooms` builds nav badges from those fields; excludes spaces and muted rooms. Collapsed Rooms category hides read rooms (local chrome). No Unread/Mentions filter chips. | Projection. Filter chips: unread = `unreadCount > 0`; mentions = `hasHighlight`. Inbox splits mentions / invites / leftover unread. | Core [`counts.rs`](../../../../crates/synara-core/src/app/room_list/counts.rs); desktop [`roomToUnread.ts`](../../../../synara/src/app/state/room/roomToUnread.ts); iOS `RoomListScopeFilter`, `NotificationsInboxSections` |
 | Agents | No `RoomListScope::Agents`. | No agent room-list chip. | Observation. `isAgentRoom` from local agent-card / approval fields; Agents chip is iOS chrome. | iOS `RoomSummary.isAgentRoom`; `RoomListScopeFilter.Kind.agents` |
 | Archived / left / low-priority | Live list is SDK joined rooms. `is_low_priority` is projected on the Rust DTO and used only by unused `LowPriority` / `LowPriorityLast` helpers. UniFFI `RoomListRoomDto` **drops** `is_low_priority`. Desktop `parseRoomSummary` has no `isLowPriority`. | Not surfaced. | Not surfaced. | `live.rs` `folder_id: None`; UDL `RoomListRoomDto`; [`room.ts`](../../../../synara/src/app/features/matrix-dto/room.ts) |
@@ -43,7 +43,14 @@ Classification:
 
 Earliest actual divergence is **native sections**, not a second favorite/unread writer. Desktop Home is orphan rooms (not DMs, not space children) with a Favorites lift; Directs is another root; Spaces live in the sidebar. iOS is one list with Favorites / Channels / Directs plus space grouping and chips. Both partitions read Core `isFavorite`. Both recent sorts read Core `lastActivityTs`. Neither calls `sort_rooms` or `room_matches_scope`.
 
-The closest semantic remapping that is **not** a second engine: iOS `SharedCoreRoomListRows` sets `hasHighlight = highlightCount > 0 || markedUnread`. Mentions chips then include marked-unread rooms. Core’s unused `RoomListScope::Mentions` is highlight-only. Desktop has no mentions chip; its unread-info projection still treats `markedUnread` as unread attention, not as a highlight count. That is presenter attention chrome on Core fields.
+The closest semantic remapping that is **not** a second engine is nevertheless
+a product-semantic discrepancy: iOS `SharedCoreRoomListRows` sets
+`hasHighlight = highlightCount > 0 || markedUnread`, so the Mentions chip
+includes manually marked-unread rooms. Core’s unused `RoomListScope::Mentions`
+is highlight-only. Desktop has no Mentions chip; its unread projection treats
+`markedUnread` as unread attention, not a mention. Ownership remains split
+correctly, but product must decide whether “Mentions” means actual highlights
+only and cover the decision with presenter tests.
 
 ## Boundary constraints
 
@@ -93,24 +100,14 @@ Regression proof to keep the boundary stable:
 
 - Core: `matrix_room_list_snapshot` remains the joined-room owner; `sort_rooms` / `filter_rooms_by_scope` stay off the live snapshot path unless a later human implementation decision says otherwise.
 - Desktop: Home continues to sort from Core `lastActivityTs` / `isFavorite`; `allRoomsAtom` continues to hydrate from the native snapshot only.
-- iOS: `AppEnvironment.live()` keeps `SharedCoreRoomListService`; `PlaceholderRoomListService` stays test/preview-only.
+- iOS: `AppEnvironment.live()` keeps `SharedCoreRoomListService`; `MockRoomListService` remains the test/preview/UI-test stand-in and `PlaceholderRoomListService` remains unused.
 - Neither presenter grows a js-sdk / independent Swift room-list sort that ignores Core row fields.
 
 ## Next gate
 
-Stay platform-side. Close ROE-06. Do not write an implementation plan. Do not expose `RoomListSort` / `RoomListScope` on UniFFI. Do not move locale collation, filter chips, or navigation sections into Core. Unused helpers may remain as dead library code; deleting or wiring them is a later human product decision, not this census.
-
-## Reviewer nits (`ACCEPT_WITH_NITS` on #1087)
-
-Recorded from the independent review at `eff03f01`. They do not change the
-close:
-
-- Live iOS does not append `InviteDto` rows via
-  `RoomListSearchFilter.mergeInvitedRooms`. `SharedCoreRoomListRows`
-  overlays invite preview on already-listed snapshot rooms.
-  `mergeInvitedRooms` only reinserts invited-membership rooms already in
-  the in-memory array. Combined with joined-only `new_filter_joined()`,
-  the census table overstates “merges invite rows into the list.”
-- `PlaceholderRoomListService` is unused. `AppEnvironment.live()` uses
-  `SharedCoreRoomListService`. The test/preview/UI-test stand-in that
-  calls `RoomListFixtures.sorted` is `MockRoomListService`.
+Keep sorting, locale collation, filter-chip presentation, and navigation
+sections platform-side. Do not expose `RoomListSort` / `RoomListScope` on
+UniFFI merely to consume unused helpers. The ownership question is closed,
+but the iOS Mentions meaning remains a product-semantic decision in
+[ACTIONS.md](../program/ACTIONS.md). Resolve it with targeted presenter tests
+before declaring room-filter parity complete.
