@@ -1,0 +1,19 @@
+# Program decisions
+
+Numbered decisions for the residual-census feature branch. These do not
+amend ADRs. An ADR still wins if a later memo disagrees.
+
+| ID | Date | Decision |
+| --- | --- | --- |
+| D1 | 2026-09-01 | A human chartered overnight **docs-only** execution of this portfolio on `feature/rust-ownership-residual-census`. This is the research charter required by the [agent guide](../AGENT-GUIDE.md). |
+| D2 | 2026-09-01 | All worker PRs target the feature branch. The feature branch must not merge to `main` overnight. Promotion to `main` is a separate human action. |
+| D3 | 2026-09-01 | Product implementation, Core/UniFFI surface changes, and shared-Core playbook or goal-graph edits are forbidden until a later decision explicitly opens an implementation gate after an accepted memo (and any required ADR amendment). |
+| D4 | 2026-09-01 | Deep-cluster order tonight: ROE-08, then ROE-07. Message-format fixtures (ROE-04/12) are next only if the agent-policy cluster is idle on a human gate or closed. |
+| D5 | 2026-09-01 | Parallel census-and-close is allowed for ROE-01, ROE-02, and ROE-09 because their priors are already owned. They must not expand into implementation plans. |
+| D6 | 2026-09-01 | Multi-agent split: orchestrator assigns and merges; a researcher authors exactly one memo PR; a different agent reviews at an exact HEAD. The author cannot ACCEPT their own memo. |
+| D7 | 2026-09-01 | This program is not S38, not P4-engine-ready work, and not P5. It must not claim those gates or invent a new shared-Core phase. |
+| D8 | 2026-09-01 | [CENSUS.md](CENSUS.md) is a starting snapshot from `main` `011cf39a`. Every memo must re-verify cited paths on the commit it records. |
+| D9 | 2026-09-01 | A memo recommendation of extract or proceed is a **stop**, not a start. Record it and wait for a human implementation decision. |
+
+Add rows; do not rewrite history. If a decision is reversed, add a new
+row that cites the old ID.

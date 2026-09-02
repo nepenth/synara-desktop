@@ -126,6 +126,14 @@ All other workstreams should begin as census-and-close exercises.
 Research PRs are docs-only under `docs/future-projects/**`. They must not add
 Core commands, DTOs, UniFFI APIs, feature flags, or product code.
 
+## Feature-branch execution
+
+A human may charter docs-only research on
+`feature/rust-ownership-residual-census`. That charter is recorded under
+[`program/`](program/README.md). Worker PRs target the feature branch.
+The feature branch does not override ADRs or the goal graph and must not
+be treated as authorization to change product code or merge to `main`.
+
 ## Message-format decision ladder
 
 `TimelineViewRow` is already the semantic model at the event/row layer.

@@ -9,18 +9,20 @@ implementation plan.
 Read these completely before drawing a boundary:
 
 1. [project charter and portfolio priors](README.md);
-2. the assigned files under [`workstreams/`](workstreams/);
-3. the [ADR index and lifecycle rules](../../adr/README.md);
-4. [ADR 0001](../../adr/0001-ios-repository-layout.md) for repository ownership;
-5. [ADR 0002](../../adr/0002-ios-architecture.md) for the native iOS boundary;
-6. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
-7. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
-8. [ADR 0005](../../adr/0005-native-media-handle-channel.md) for any media or
+2. if a feature-branch program is active, [program/OPERATING.md](program/OPERATING.md)
+   and [program/STATE.md](program/STATE.md);
+3. the assigned files under [`workstreams/`](workstreams/);
+4. the [ADR index and lifecycle rules](../../adr/README.md);
+5. [ADR 0001](../../adr/0001-ios-repository-layout.md) for repository ownership;
+6. [ADR 0002](../../adr/0002-ios-architecture.md) for the native iOS boundary;
+7. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
+8. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
+9. [ADR 0005](../../adr/0005-native-media-handle-channel.md) for any media or
    byte/path question;
-9. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md)
-   and the current [goal graph](../../shared-native-core/13-language-boundary-goal-graph.md)
-   for sequencing and stop conditions;
-10. current source and tests for Rust, desktop, and iOS in the assigned domain.
+10. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md)
+    and the current [goal graph](../../shared-native-core/13-language-boundary-goal-graph.md)
+    for sequencing and stop conditions;
+11. current source and tests for Rust, desktop, and iOS in the assigned domain.
 
 Accepted decisions and current source supersede historical plans. Do not infer
 unfinished work from old command counts, migration prose, or a platform

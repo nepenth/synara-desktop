@@ -12,7 +12,7 @@ ready proposal without quietly turning a brainstorm into a migration.
 
 | Project                                                              | Question                                                                                         | Status                                  |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover? | Optional docs-only research; memo first |
+| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover? | Optional docs-only research; memo first. Overnight execution, if chartered, lives on `feature/rust-ownership-residual-census` and is tracked under [program/](rust-ownership-expansion/program/README.md). |
 
 ## Rules for work in this directory
 

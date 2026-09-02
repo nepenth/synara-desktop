@@ -6,3 +6,9 @@ Store first-pass ownership decisions here as
 
 Memos are docs-only evidence and recommendations. They do not authorize product
 code or changes to accepted architecture.
+
+While the residual-census feature branch is active, open one PR per memo
+against `feature/rust-ownership-residual-census`. A different agent must
+post `## Verdict: ACCEPT | ACCEPT_WITH_NITS | REJECT` at the exact HEAD
+SHA before the orchestrator merges. See
+[program/OPERATING.md](../program/OPERATING.md).
