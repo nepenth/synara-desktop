@@ -1,7 +1,7 @@
 # Program state
 
 Last updated: 2026-09-01 (lanes spawned).
-Integration branch: `feature/rust-ownership-residual-census` at `5f9c4e71`.
+Integration branch: `feature/rust-ownership-residual-census` at `72c69ea7`.
 Base: `main` at `011cf39a`.
 
 ## Headline
