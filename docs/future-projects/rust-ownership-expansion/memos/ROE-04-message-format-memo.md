@@ -311,3 +311,16 @@ Do not start P5 or invent S38. Do not treat leftover `RenderBody` or
 security-relevant semantic gap, that is a human decision to extend the
 **existing** `TimelineViewRow` with a small field — and that decision is a
 stop, not a start. A full AST remains an ADR replacement, not a default.
+
+## Reviewer nits (`ACCEPT_WITH_NITS` on #1089)
+
+Recorded from the independent review at `91bf0b14`. They do not change the
+close:
+
+- Desktop `normalize_formatted_body` (65,536) in
+  `src-tauri/src/matrix/send/product_commands.rs` exists but is unused.
+  Live `matrix_send_text` goes through Core `send_text` without that cap.
+  The only live 65,536 formatted-body gate is Core
+  `normalize_edit_formatted_body`.
+- Leftover inbox/pin/search go through `RenderMessageContent` →
+  `RenderBody` (one extra hop), not a second formatted-body engine.
