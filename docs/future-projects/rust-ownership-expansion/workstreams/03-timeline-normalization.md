@@ -1,21 +1,26 @@
 # ROE-03: Timeline Normalization and Event Relationships
 
-Hypothesis: protocol event normalization and relationships should be shared,
-while viewport math and visual grouping remain presenter-owned.
+Prior: **extend `TimelineViewRow` only when a proven protocol-semantic field is
+missing**.
 
-Investigate:
+`crates/synara-core/src/app/timeline` already normalizes messages, relations,
+polls, media, encrypted placeholders, and other event rows into
+`TimelineViewRow`. Do not introduce a second semantic-row layer.
 
-- edits, replies, threads, reactions, redactions, polls, state events, media,
-  encrypted placeholders, local echoes, and aggregation ordering;
-- stable event identity, pagination overlap, deduplication, late decryption,
-  relation arrival before parent, and replacement precedence;
-- which normalization matrix-rust-sdk already guarantees;
-- the smallest versioned row/relationship model that supports both clients;
-- backpressure and diff granularity needed to avoid UI invalidation storms.
+## Bounded research question
 
-Do not move scrolling, virtualization, gestures, typography, or message-cell
-grouping into Core.
+Do edits, replies, threads, reactions, redactions, local echoes, pagination
+overlap, late decryption, or relation-before-parent ordering produce a concrete
+cross-client semantic divergence that the existing row model cannot express?
+First determine what matrix-rust-sdk and current Core projection already
+guarantee.
 
-Minimum proof: event permutation/property tests, pagination and local-echo
-fixtures, malformed relation tests, multi-client Synapse histories, DTO
-contract tests, and desktop/iOS performance budgets for large rooms.
+Prefer shared event-permutation and malformed-relation fixtures. If fixtures
+prove a gap, propose the smallest versioned row/relationship field and measure
+DTO diff/serialization cost.
+
+## Keep closed
+
+Scrolling, virtualization, gesture arbitration, visual grouping, typography,
+selection, and invalidation strategy remain platform observation/rendering.
+Never duplicate the normalized timeline in another Rust or platform model.

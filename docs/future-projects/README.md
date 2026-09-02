@@ -10,9 +10,9 @@ ready proposal without quietly turning a brainstorm into a migration.
 
 ## Projects
 
-| Project                                                        | Question                                                                                                                | Status           |
-| -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| [Rust ownership expansion](rust-ownership-expansion/README.md) | Which remaining cross-client product semantics should move from platform presenters into the existing shared Rust core? | Research backlog; start with [triage](rust-ownership-expansion/TRIAGE.md) |
+| Project                                                              | Question                                                                                         | Status                                  |
+| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- |
+| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover? | Optional docs-only research; memo first |
 
 ## Rules for work in this directory
 
@@ -23,7 +23,8 @@ ready proposal without quietly turning a brainstorm into a migration.
    **delete rather than migrate** is a valid and valuable outcome.
 4. Do not create a second core, parallel Matrix engine, or Rust UI rewrite.
 5. Do not implement product code from a research brief. First produce the
-   required plan, obtain review, and record any boundary change in an ADR.
+   required short research memo. Write a full plan only after a proceed
+   recommendation and any required replacement ADR are accepted.
 6. Plans must cover desktop macOS, desktop Linux, and iOS consequences, even
    when a workstream changes only one shared component.
 7. Never place credentials, private homeserver details, private room content,

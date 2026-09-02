@@ -1,19 +1,24 @@
 # ROE-06: Room Sorting and Filtering Rules
 
-Hypothesis: shared semantic ordering and filter predicates may prevent desktop
-and iOS drift, while UI sections and platform interaction remain local.
+Prior: **stay platform-side by default**.
 
-Investigate:
+Core already contains deterministic room-list predicates and sort helpers.
+Desktop and iOS also have intentional navigation, section, interaction, and
+preference projection. Their layouts need not be identical.
 
-- favorites, spaces, direct chats, invites, unread/mentions, agents, archived
-  or left rooms, low-priority rooms, and account-specific preferences;
-- stable tie-breaking, locale/collation, timestamp uncertainty, missing names,
-  incremental updates, and large room sets;
-- which categories are Matrix semantics, Synara product policy, or purely
-  platform navigation;
-- persistence and sync of user-defined order, including note-like reordering;
-- whether Core should return ranked rows, sort keys, or reusable predicates.
+## Bounded research question
 
-Minimum proof: deterministic/property tests, locale and missing-data fixtures,
-large-list performance benchmarks, incremental-diff tests, and desktop/iOS
-parity snapshots without forcing identical layouts.
+Is shared Synara policy—favorites, spaces, direct chats, invites, unread,
+mentions, agents, archived/left/low-priority state—being decided differently,
+or are clients only presenting it differently? Determine whether existing Core
+helpers are consumed, unnecessary, or need golden vectors before proposing a
+new owner.
+
+Stable protocol/product tie-breakers may belong in Core. UI sections, local
+navigation state, incremental animation, and locale-aware display collation
+remain platform-side. Do not centralize locale presentation in Rust merely to
+force matching screenshots.
+
+A close/stay memo with deterministic fixture coverage is preferred. A Core
+change requires a demonstrated product-semantic divergence and large-list
+performance evidence.

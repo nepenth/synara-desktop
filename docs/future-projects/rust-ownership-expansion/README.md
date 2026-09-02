@@ -1,120 +1,148 @@
-# Future Project: Rust Ownership Expansion
+# Future Project: Rust Ownership Residual Census
 
-Status: research backlog; not approved for implementation.
+Status: optional, docs-only research portfolio; not approved for implementation.
 
-Read the [portfolio triage](TRIAGE.md) before opening a workstream. The
-architectural shape below is already the production path on `main`, not a
-future redesign. The triage classifies most workstreams as already owned or
-stay platform-side and records the residual questions that remain worth
-investigating.
+## Charter
 
-## Intent
+Synara already ships the intended architecture: one Rust application engine in
+`crates/synara-core`, a React/TypeScript desktop presenter, and a SwiftUI iOS
+presenter. This directory is therefore a **post-cutover residual ownership
+census**, not a Rust migration program or a twelve-item implementation queue.
 
-Explore whether additional cross-client product semantics should be owned by
-the existing `crates/synara-core` Rust engine instead of being duplicated or
-decided independently by the React/TypeScript desktop presenter and the
-SwiftUI iOS presenter.
+Research here asks whether a specific, evidenced remainder still has competing
+owners. The default answer is **leave behavior platform-side** unless harmful
+duplication of product or protocol policy is demonstrated. Thin adapters,
+renderers, viewport observations, and OS integrations are not duplicate
+engines.
 
-The intended architectural shape is a **Rust application brain with
-platform-owned interfaces**:
+## Governing decisions and stop gate
 
-```text
-matrix-rust-sdk
-       |
-       v
-crates/synara-core
-       |
-       +-- typed Tauri DTOs/events --> React presenter on macOS/Linux
-       |
-       `-- typed UniFFI models -----> SwiftUI presenter on iOS
-```
+Read and apply these sources in precedence order:
 
-This project does not presume that every candidate should move. Much of the
-Matrix lifecycle is already Rust-owned, and
-[ADR 0004](../../adr/0004-rust-language-boundaries.md) deliberately keeps UI,
-composer, viewport, HTML rendering, OS integrations, secrets, paths, and large
-media bytes on platform-specific boundaries. Research must identify the
-actual residual behavior and preserve those decisions unless a replacement
-ADR is explicitly approved.
+1. [ADR 0004](../../adr/0004-rust-language-boundaries.md) defines language
+   boundaries.
+2. [ADR 0003](../../adr/0003-shared-native-rust-core.md) defines the one shared
+   Core architecture.
+3. [ADR 0005](../../adr/0005-native-media-handle-channel.md) closes the media
+   byte/path boundary.
+4. The [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md),
+   especially section 5, and its language-boundary goal graph define the
+   current implementation priority and stop conditions.
+5. These future-project documents may organize research but cannot override an
+   ADR, the playbook, the goal graph, or release evidence.
 
-## Candidate workstreams
+The current P4 engine-ready route remains gated by its recorded iOS CI and live
+homeserver proof. This portfolio must not invent P4-S38, start P5, modify
+SCOREBOARD state, or turn a research finding into product work. A human must
+explicitly charter any docs-only investigation; implementation requires a
+separate acceptance gate.
 
-| ID     | Candidate                                           | Brief                                                            |
-| ------ | --------------------------------------------------- | ---------------------------------------------------------------- |
-| ROE-01 | Matrix SDK orchestration, sync, and encryption      | [Workstream](workstreams/01-matrix-sdk-orchestration.md)         |
-| ROE-02 | Device verification and trust state machines        | [Workstream](workstreams/02-device-verification-trust.md)        |
-| ROE-03 | Timeline normalization and event relationships      | [Workstream](workstreams/03-timeline-normalization.md)           |
-| ROE-04 | Semantic message-format presentation models         | [Workstream](workstreams/04-semantic-message-presentation.md)    |
-| ROE-05 | Read-marker and unread calculations                 | [Workstream](workstreams/05-read-marker-unread.md)               |
-| ROE-06 | Room sorting and filtering rules                    | [Workstream](workstreams/06-room-sorting-filtering.md)           |
-| ROE-07 | Notification and critical-approval policy           | [Workstream](workstreams/07-notification-critical-policy.md)     |
-| ROE-08 | Agent approval detection and action resolution      | [Workstream](workstreams/08-agent-approval-resolution.md)        |
-| ROE-09 | Notes and account-data synchronization              | [Workstream](workstreams/09-notes-account-data.md)               |
-| ROE-10 | Draft serialization and reply metadata              | [Workstream](workstreams/10-drafts-replies.md)                   |
-| ROE-11 | Media metadata and cache policy                     | [Workstream](workstreams/11-media-metadata-cache.md)             |
-| ROE-12 | Shared validation, sanitization, and security rules | [Workstream](workstreams/12-validation-sanitization-security.md) |
+## Ownership taxonomy
 
-## Typed presentation-model hypothesis
+Classify every behavior before proposing a move:
 
-ROE-04 should evaluate—not assume—the value of Rust returning a typed,
-versioned, UI-neutral message tree. Candidate nodes include:
+| Kind        | Owner    | Examples                                                                                                   |
+| ----------- | -------- | ---------------------------------------------------------------------------------------------------------- |
+| Authority   | Core     | Protocol truth, state machines, eligibility, resource bounds, shared schemas, and Matrix writes            |
+| Observation | Platform | Viewport/focus, banners, keystrokes, app lifecycle, OS delivery state, and locale UI context               |
+| Rendering   | Platform | React/SwiftUI widgets, text selection, accessibility, Prism, Dynamic Type, layout, gestures, and animation |
 
-- paragraph and text spans;
-- strong and emphasis;
-- inline code and code blocks with an optional language;
-- tables with header/body structure;
-- replies and quoted context;
-- spoilers with an optional reason;
-- links, lists, mentions, and line breaks required by observed Matrix events.
+A platform observation may be an input to Core authority without Core owning
+the observation. A presenter projection of a Core model is not a second source
+of truth.
 
-The model must not prescribe colors, typography, spacing, accessibility
-labels, gestures, selection behavior, or platform widgets. React and SwiftUI
-must remain responsible for native rendering. Research must compare this
-approach with the accepted ADR 0004 rule that Markdown/HTML rendering stays in
-TypeScript and determine whether a narrower protocol-semantic model can add
-parity without importing presenter behavior into Core.
+## Unordered research clusters
 
-## Definition of a planning-ready workstream
+The IDs are retained for traceability, not priority. Investigate at most one
+deep cluster at a time.
 
-A workstream is ready for an implementation decision only when it has:
+| Cluster                        | Workstreams                                                                                                                                                                 | Default outcome                                                                                    |
+| ------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Residual engine census         | [ROE-01](workstreams/01-matrix-sdk-orchestration.md), [ROE-02](workstreams/02-device-verification-trust.md), parts of [ROE-03](workstreams/03-timeline-normalization.md)    | Census and close behavior already owned by Core; record only a concrete remainder                  |
+| Message format and safety      | [ROE-03](workstreams/03-timeline-normalization.md), [ROE-04](workstreams/04-semantic-message-presentation.md), [ROE-12](workstreams/12-validation-sanitization-security.md) | Build shared fixtures first; keep rendering and output-context sanitization platform-side          |
+| Read and list semantics        | [ROE-05](workstreams/05-read-marker-unread.md), [ROE-06](workstreams/06-room-sorting-filtering.md)                                                                          | Formalize visibility inputs if needed; keep viewport math, sections, and locale presentation local |
+| Notifications and agent policy | [ROE-07](workstreams/07-notification-critical-policy.md), [ROE-08](workstreams/08-agent-approval-resolution.md)                                                             | Consolidate shared policy only; keep APNs/NSE/tray delivery and cards platform-owned               |
+| Account data and drafts        | [ROE-09](workstreams/09-notes-account-data.md), [ROE-10](workstreams/10-drafts-replies.md)                                                                                  | Close notes as owned; keep composer state local; examine only typed reply/draft metadata           |
+| Media metadata                 | [ROE-11](workstreams/11-media-metadata-cache.md)                                                                                                                            | Remain subordinate to ADR 0005; never reopen the generic byte/path envelope                        |
 
-1. a source-linked current-state and duplication census;
-2. explicit in-scope and out-of-scope behavior;
-3. functional, security, performance, accessibility, and compatibility
-   requirements appropriate to the domain;
-4. at least two alternatives, including leaving ownership unchanged;
-5. a proposed typed Core API, DTO/event evolution, and versioning story when
-   migration is recommended;
-6. desktop and iOS adoption paths with no dual-owner interval left ambiguous;
-7. unit, property, contract, integration, Synapse, simulator, desktop, and
-   manual validation coverage as applicable;
-8. observability, rollback, data migration, and failure-mode plans;
-9. dependencies and sequencing relative to the other workstreams;
-10. adversarial review findings and a clear go/no-go recommendation.
+## Portfolio priors
 
-Use the [agent guide](AGENT-GUIDE.md) to investigate a workstream and write the
-result using the [plan template](PLAN-TEMPLATE.md). Do not write a full
-implementation plan for a workstream whose [triage prior](TRIAGE.md#6-workstream-priors)
-is already owned or stay platform-side unless new source evidence overturns
-that prior.
+These are evidence-based defaults, not implementation commitments. A research
+memo may overturn one only with current source and test evidence.
 
-## Portfolio-level questions
+| ID     | Prior                                        | Bounded residual question                                                                                                                                                                         |
+| ------ | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ROE-01 | Already owned                                | Is any shipped desktop or iOS behavior still a second Matrix lifecycle/crypto engine rather than a thin adapter?                                                                                  |
+| ROE-02 | Already owned                                | Does iOS still lack a device-key continuity or lifecycle input required by the existing Core verification state machine?                                                                          |
+| ROE-03 | Extend existing rows only                    | Is a protocol-semantic relationship missing from `TimelineViewRow`? Never add a parallel normalization layer or move viewport behavior.                                                           |
+| ROE-04 | Stay platform-side by default                | Can shared Matrix/Hermes fixtures remove observed renderer drift? Consider small row fields only if fixtures prove a security-relevant semantic gap.                                              |
+| ROE-05 | Bounded remainder                            | Does the platform-to-Core visibility contract need formalization? Core owns counts and receipt writes; platforms own visibility measurement.                                                      |
+| ROE-06 | Stay platform-side by default                | Are existing Core predicates/sort helpers needed by both clients? Keep navigation sections and locale/collation presentation local.                                                               |
+| ROE-07 | Policy yes, delivery no                      | Is shared eligibility/privacy/deduplication policy missing? APNs, NSE, tray, banners, and actions remain platform integrations.                                                                   |
+| ROE-08 | Highest-value real residual                  | Which desktop/iOS approval classifiers or planners still compete with `app/agent_approvals.rs`, and when may they be removed without violating the iOS-on-engine sequence?                        |
+| ROE-09 | Already owned                                | Do both clients consume the existing Core schema and CRUD path without a second notes engine?                                                                                                     |
+| ROE-10 | Split ownership                              | Core may own reply metadata and a wire-neutral durable draft schema; Slate/Swift editor state and ordinary local composer bodies stay platform-side absent a cross-device rich-draft requirement. |
+| ROE-11 | Metadata only                                | Is shared cache eligibility or integrity metadata missing from the native handle owner? Paths and bytes remain on ADR 0005 channels.                                                              |
+| ROE-12 | Shared rules and fixtures, not one sanitizer | Which protocol bounds are truly identical? DOM/React and Swift attributed-text output sanitization remains platform-specific.                                                                     |
 
-- Which candidate behaviors are already correctly Rust-owned?
-- Which apparent duplicates are intentional presenter projections rather than
-  competing business logic?
-- Where would FFI/IPC latency, model churn, or serialization cost exceed the
-  parity benefit?
-- Which APIs can be delivered as end-to-end vertical slices rather than a
-  large coordinated rewrite?
-- Which workstreams share primitives and therefore require an explicit order?
-- What evidence would justify superseding any part of ADR 0004?
+After P4 engine-ready is proven, the likely investigation order is ROE-08,
+then the ROE-04/12 fixture corpus, then the ROE-05 visibility contract. All
+other workstreams should begin as census-and-close exercises.
+
+## Memo-first workflow
+
+1. Read the governing decisions, this charter, and the assigned briefs.
+2. Perform a current source/test census across Rust, desktop, and iOS.
+3. Write a short memo from [RESEARCH-MEMO-TEMPLATE.md](RESEARCH-MEMO-TEMPLATE.md)
+   under [`memos/`](memos/README.md).
+4. Recommend one of: already correctly owned; stay platform-side; extract a
+   bounded subset; proceed with Core ownership; or requires a product/ADR
+   decision.
+5. Stop. Do not design APIs or delivery slices for a recommendation of
+   already owned or stay platform-side.
+6. A full [implementation plan](PLAN-TEMPLATE.md) under [`plans/`](plans/README.md)
+   is allowed only after a proceed recommendation is accepted by a human and
+   any required replacement ADR is accepted.
+
+Research PRs are docs-only under `docs/future-projects/**`. They must not add
+Core commands, DTOs, UniFFI APIs, feature flags, or product code.
+
+## Message-format decision ladder
+
+`TimelineViewRow` is already the semantic model at the event/row layer.
+Shared fixtures should precede shared types:
+
+1. Create a shared golden and adversarial corpus of legitimate Matrix and
+   Hermes formatted bodies and run both platform renderers against it.
+2. If the corpus proves material semantic drift, consider small structured row
+   fields such as validated links, mentions, spoiler reason, or a reply-fallback
+   flag.
+3. Consider a full Core message AST only if bounded fields cannot resolve the
+   proven drift. That would replace part of ADR 0004 and requires a replacement
+   ADR before API, DTO, or UniFFI design.
+
+Matrix inbound rich text is HTML, not Markdown. A Core AST would also incur
+schema churn, serialization and 1 MiB envelope pressure while leaving
+selection, accessibility, syntax highlighting, and output-context safety in
+the presenters. It is therefore a deliberately high bar, not the default
+architecture.
+
+## Closed boundaries
+
+- No second Core, Matrix engine, or timeline-normalization layer.
+- No UI layout, widgets, gestures, colors, typography, animation, viewport
+  math, platform selection, or locale/collation presentation in Core.
+- No Slate or Swift editor state in Rust absent an accepted product requirement
+  and boundary decision.
+- No APNs, NSE, tray, banner, or notification-card delivery in Core.
+- No DOM or attributed-string sanitizer masquerading as a universal sanitizer.
+- No passwords, recovery material, local paths, or media bytes on the generic
+  Core envelope. ADR 0005's dedicated media channel remains authoritative.
+- No S38/P5/SCOREBOARD work may originate from this directory.
 
 ## Non-goals
 
-- Replacing React, SwiftUI, Slate, WebKit, or platform accessibility systems.
-- Introducing Dioxus, Slint, egui, Leptos, or another Rust UI framework.
-- Moving passwords, recovery material, local paths, or large media bytes over
-  the generic Core command envelope.
-- Rewriting Node build and governance tooling in Rust.
-- Creating speculative Core routes solely to reduce TypeScript line count.
+- Reducing TypeScript or Swift line count for its own sake.
+- Making the clients render identically instead of natively and accessibly.
+- Replacing React, SwiftUI, Slate, WebKit, Prism, or OS integration APIs.
+- Rewriting Node build/governance tooling or adopting a Rust UI framework.

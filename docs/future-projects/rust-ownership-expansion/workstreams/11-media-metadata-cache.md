@@ -1,20 +1,23 @@
 # ROE-11: Media Metadata and Cache Policy
 
-Hypothesis: media identity, metadata, cache eligibility, limits, eviction, and
-integrity policy should be shared, while byte transport and platform file
-handoff retain their dedicated native channels.
+Prior: **metadata only, subordinate to ADR 0005**.
 
-Investigate:
+ADR 0005 already establishes opaque media handles and dedicated native byte
+channels. This workstream cannot reopen the generic Core command envelope for
+paths, `mxc://` sources, attachments, or bytes.
 
-- MXC identity, encryption metadata, thumbnails, MIME claims, dimensions,
-  duration, size limits, integrity, and retry state;
-- cache keys, quotas, LRU/priority, pinning, lifecycle, logout wipe, and
-  corruption recovery;
-- desktop and iOS filesystem constraints plus NSE memory/storage constraints;
-- privacy leakage through filenames, metadata, previews, and diagnostics;
-- which decisions can cross typed DTOs without moving large bytes or paths
-  through the generic Core envelope.
+## Bounded research question
 
-Minimum proof: eviction/property tests, corrupt/truncated/adversarial media,
-quota and disk-pressure tests, encrypted-media Synapse proof, logout/wipe
-proof, desktop/iOS cache integration, and performance/memory budgets.
+Is shared authority missing for MXC identity, encryption metadata, thumbnails,
+MIME claims, dimensions, duration, size/integrity limits, cache eligibility,
+quota/eviction, retry state, corruption recovery, logout wipe, or diagnostics?
+Separate those decisions from desktop/iOS filesystem paths, file handoff, and
+NSE storage/lifecycle constraints.
+
+Any proposal must use typed metadata or existing handles and preserve the
+accepted channel. Evidence should cover corrupt/truncated/adversarial media,
+quota and disk pressure, encrypted Synapse media, logout/wipe, privacy-safe
+diagnostics, and platform performance/memory budgets.
+
+Paths and bytes on the generic envelope remain prohibited even if a metadata
+policy gap is found.

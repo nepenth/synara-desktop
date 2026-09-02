@@ -1,38 +1,43 @@
-# ROE-XX Plan: Title
+# ROE-XX Implementation Plan: Title
 
-Status: draft research plan; not approved for implementation.
+Status: gated implementation proposal; not approved for implementation.
 
-| Field               | Value                                                       |
-| ------------------- | ----------------------------------------------------------- |
-| Owner               | Unassigned                                                  |
-| Reviewers           | Unassigned                                                  |
-| Last source census  | `<date and commit>`                                         |
-| Related workstreams | `<IDs or none>`                                             |
-| ADR impact          | `<none, conforms to ADR 0004, or replacement ADR required>` |
+Do not use this template for initial research. It is available only after an
+accepted [research memo](RESEARCH-MEMO-TEMPLATE.md) recommends proceeding and
+any required replacement ADR has been accepted.
 
-## 1. Executive recommendation
+| Field               | Value                                                            |
+| ------------------- | ---------------------------------------------------------------- |
+| Accepted memo       | `<path and commit>`                                              |
+| Owner               | Unassigned                                                       |
+| Reviewers           | Unassigned                                                       |
+| Last source census  | `<date and commit>`                                              |
+| Related workstreams | `<IDs or none>`                                                  |
+| ADR impact          | `<none, conforms to accepted ADRs, or accepted replacement ADR>` |
 
-Choose one: already correctly owned; stay platform-side; extract a bounded
-subset; proceed with Core ownership; blocked on an ADR/product decision.
+## 1. Accepted recommendation and evidence
 
-State confidence, expected benefit, principal cost, and the strongest reason
-the recommendation may be wrong.
+Restate the accepted bounded change, supporting evidence, expected benefit,
+principal cost, and explicit stop conditions. Do not broaden the memo.
 
-## 2. User and product problem
+## 2. User and product requirements
 
-Describe observable behavior, affected clients, evidence of divergence or
-risk, and why changing ownership is expected to help.
+Number feature requirements `FR-01`, security/privacy requirements `SR-01`,
+performance/reliability requirements `PR-01`, and compatibility requirements
+`CR-01`. Cover normal, empty, offline, concurrent, malformed, upgraded,
+cancelled, resource-limited, accessibility, and platform-lifecycle cases as
+applicable.
 
-## 3. Current-state census
+## 3. Confirmed current-state census
 
-| Concern  | Rust/Core owner | Desktop owner | iOS owner | Tests/evidence |
-| -------- | --------------- | ------------- | --------- | -------------- |
-| Behavior |                 |               |           |                |
+| Concern  | Rust/Core authority | Desktop observation/rendering | iOS observation/rendering | Tests/evidence |
+| -------- | ------------------- | ----------------------------- | ------------------------- | -------------- |
+| Behavior |                     |                               |                           |                |
 
-Include source paths, DTOs/events, storage, background tasks, platform APIs,
-and current failure behavior. Identify behavior that is already shared.
+Identify DTOs/events, storage, background tasks, platform APIs, current failure
+behavior, and behavior that is already shared.
 
-## 4. Scope
+## 4. Scope and closed boundaries
 
 ### In scope
 
@@ -40,126 +45,83 @@ and current failure behavior. Identify behavior that is already shared.
 
 ### Out of scope
 
-- UI layout, widgets, gestures, colors, typography, and animation unless an
-  accepted ADR explicitly says otherwise.
+- UI layout, widgets, gestures, selection, colors, typography, animation,
+  viewport math, locale presentation, and OS delivery unless an accepted ADR
+  explicitly says otherwise.
 - ...
 
-## 5. Requirements
+List prohibited secrets, paths, and bytes. State how ADRs 0003–0005 apply.
 
-### Feature and functional requirements
+## 5. Ownership and invariants
 
-Number requirements `FR-01`, `FR-02`, and so on. Include normal, empty,
-offline, concurrent, malformed, upgraded, and cancellation cases.
+Document the single authority, concurrency owner, persistence owner, platform
+observations, adapters, failure behavior, resource bounds, and invariants.
 
-### Security and privacy requirements
+## 6. Typed design
 
-Number requirements `SR-01`, `SR-02`, and so on. Cover trust boundaries,
-secret/byte handling, redaction, resource bounds, and fail-closed behavior.
+### Domain model
 
-### Performance and reliability requirements
+### Commands, queries, DTOs, and events
 
-Number requirements `PR-01`, `PR-02`, and so on. Define measurable latency,
-memory, throughput, startup, backpressure, ordering, and recovery budgets.
+### Errors and cancellation
 
-### Accessibility and platform requirements
+### Persistence, versioning, and migration
 
-Describe what Core must expose so each presenter can produce a native,
-accessible experience without Core prescribing presentation.
+### Observability and redaction
 
-### Compatibility requirements
+Explain why IPC/UniFFI cost and schema churn are justified by the accepted
+problem.
 
-Cover Matrix protocol compatibility, stored data, DTO/event versions, mixed
-client versions, downgrade behavior, and unknown future variants.
-
-## 6. Ownership and boundary analysis
-
-Document the proposed source of truth, concurrency owner, persistence owner,
-platform adapters, and prohibited data. Explain how the design complies with
-ADR 0004 or why a replacement decision is required.
-
-## 7. Alternatives
-
-Compare at least:
-
-1. no ownership change;
-2. a narrow extraction;
-3. the proposed Core model.
-
-Include complexity, parity, performance, operability, migration risk, and
-reversibility. Record rejected alternatives and why they lose.
-
-## 8. Proposed design
-
-### Domain model and invariants
-
-### Typed commands, queries, DTOs, and events
-
-### Error and cancellation model
-
-### Persistence and migration
-
-### Observability and diagnostics
-
-### Resource and abuse limits
-
-## 9. Client adoption
+## 7. Client cutover
 
 ### macOS/Linux React/Tauri
 
 ### iOS SwiftUI/UniFFI
 
-State how old owners are removed and how dual ownership is prevented during
-cutover.
+Name the old owners removed in each client. There must be no ambiguous
+dual-owner interval.
 
-## 10. Delivery slices
+## 8. Delivery slices
 
-Each slice must be independently testable and reviewable.
+Each slice must be independently testable and reversible.
 
-| Slice | Behavior delivered | Code boundaries | Proof | Removal/rollback |
-| ----- | ------------------ | --------------- | ----- | ---------------- |
-| 1     |                    |                 |       |                  |
+| Slice | Behavior | Boundaries changed | Proof | Old owner removed | Rollback |
+| ----- | -------- | ------------------ | ----- | ----------------- | -------- |
+| 1     |          |                    |       |                   |          |
 
-## 11. Test and validation plan
+## 9. Test and live-proof plan
 
-Address, where applicable:
+Define acceptance criteria, not only commands. Cover applicable Rust unit and
+property tests, serialization contracts, ordering/cancellation/failure
+injection, local Synapse single- and multi-client proof, crypto fixtures,
+desktop integration/performance, iOS unit/simulator/physical-device/NSE proof,
+malformed and adversarial events, resource limits, accessibility,
+localization, offline/upgrade/rollback behavior, and release diagnostics.
 
-- Rust unit and property tests;
-- serialization and cross-language contract tests;
-- concurrency, ordering, cancellation, and failure-injection tests;
-- local Synapse single-client and multi-client proofs;
-- crypto/device fixtures without production credentials;
-- desktop React/Tauri integration and performance tests;
-- iOS unit, simulator, notification-extension, and physical-device tests;
-- malformed/adversarial Matrix events and resource-limit tests;
-- accessibility, localization, offline, upgrade, and rollback checks;
-- release smoke and diagnostics needed to prove the operating path.
+## 10. Rollout and rollback
 
-Define acceptance criteria, not merely commands to run.
+Define data migration order, mixed-version behavior, abort thresholds,
+diagnostics, exact rollback mechanics, and removal criteria. Feature flags are
+allowed only when they do not create permanent dual ownership.
 
-## 12. Rollout, rollback, and compatibility
-
-Define feature flags if justified, data migration order, mixed-version behavior,
-telemetry/diagnostics, abort thresholds, and exact rollback mechanics.
-
-## 13. Risks and open decisions
+## 11. Risks and decisions
 
 | Risk/question | Impact | Evidence needed | Owner | Blocks implementation? |
 | ------------- | ------ | --------------- | ----- | ---------------------- |
 |               |        |                 |       |                        |
 
-## 14. Adversarial review
+## 12. Adversarial review
 
-Record objections, severity, disposition, and any plan changes. Include at
-least one argument for keeping the behavior platform-side.
+Record objections, severity, disposition, and plan changes. Include the
+strongest argument for retaining the existing owner.
 
-## 15. Final acceptance gate
+## 13. Final acceptance gate
 
-- [ ] Current-state census reviewed.
-- [ ] Requirements accepted.
-- [ ] Boundary complies with accepted ADRs or replacement ADR accepted.
-- [ ] Both client adoption paths are complete.
+- [ ] Accepted memo and source census remain current.
+- [ ] Requirements and exclusions are approved.
+- [ ] Boundary complies with accepted ADRs.
+- [ ] Both client cutovers remove superseded owners.
 - [ ] Security and performance budgets are measurable.
-- [ ] Validation proves one owner end to end.
+- [ ] Automated and live proof demonstrate one authority end to end.
 - [ ] Rollback is feasible and tested.
-- [ ] Superseded code has explicit removal criteria.
-- [ ] Implementation owner and reviewers assigned.
+- [ ] Implementation owner and reviewers are assigned.

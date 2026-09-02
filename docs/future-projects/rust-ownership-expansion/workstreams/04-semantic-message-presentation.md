@@ -1,26 +1,29 @@
-# ROE-04: Semantic Message-Format Presentation Models
+# ROE-04: Semantic Message-Format Presentation
 
-Hypothesis: a versioned, UI-neutral semantic tree may improve faithful and
-consistent rendering without moving actual rendering into Rust.
+Prior: **stay platform-side; shared fixtures before shared types**.
 
-This workstream potentially conflicts with ADR 0004's decision to keep
-Markdown/HTML rendering in TypeScript. The plan must distinguish Matrix
-protocol semantics from HTML sanitization and platform presentation, and must
-request an ADR change if that accepted boundary truly needs to move.
+Matrix rich messages arrive as formatted HTML with plaintext fallback. ADR 0004
+keeps HTML/Markdown rendering in platform presenters, and `TimelineViewRow`
+already supplies the event-level semantic model. A full Core presentation AST
+is not the default next layer.
 
-Investigate:
+## Bounded research sequence
 
-- Matrix formatted-body rules, allowed HTML, plaintext fallback, mentions,
-  replies, spoilers, lists, tables, links, code, edits, and malformed input;
-- nodes such as paragraph, text, strong, emphasis, inline code, code block,
-  table, reply, spoiler, link, list, mention, and line break;
-- preservation of unknown constructs and safe fallback behavior;
-- whether Core should emit semantic nodes, sanitized protocol tokens, or only
-  normalized event content;
-- compatibility with selection, copying, accessibility, Dynamic Type,
-  localization, Prism highlighting, and platform-native widgets.
+1. Assemble one golden and adversarial Matrix/Hermes corpus covering replies,
+   mentions, spoilers, lists, tables, links, inline/code blocks, edits,
+   plaintext fallback, malformed HTML, and unknown constructs.
+2. Run the desktop and iOS renderers against that corpus and identify material
+   semantic—not merely visual—drift.
+3. If drift is security- or protocol-relevant, evaluate small structured
+   `TimelineViewRow` fields such as validated links, mentions, spoiler reason,
+   or a reply-fallback flag.
+4. Consider a full paragraph/text/strong/code/table/reply/spoiler AST only if
+   bounded fields cannot solve the proven problem.
 
-Minimum proof: corpus/golden tests from legitimate Matrix and Hermes messages,
-malformed/adversarial HTML tests, cross-language serialization tests, native
-React and SwiftUI renderer conformance, accessibility checks, and visual
-regression evidence in light/dark modes.
+## Decision boundary
+
+A full AST changes ADR 0004 and requires a replacement ADR before API, DTO, or
+UniFFI design. Its memo must account for schema/version churn, serialization
+and 1 MiB envelope costs, unknown HTML fallback, and the fact that native text
+selection, accessibility, Dynamic Type, Prism, widgets, and output-context
+sanitization still remain in React and SwiftUI.

@@ -1,21 +1,29 @@
 # ROE-08: Agent Approval Detection and Action Resolution
 
-Hypothesis: recognition, authorization options, expiry, and response mapping
-for Hermes-style approvals should be one typed Rust policy shared by clients.
+Prior: **highest-value demonstrated residual, sequenced behind the current
+iOS-on-engine gate**.
 
-Preserve platform ownership of cards, sheets, notification buttons, haptics,
-and emoji presentation.
+Rust already has `app/agent_approvals.rs` classifiers and decision planning,
+while desktop TypeScript and iOS notification code retain parallel
+classification/planning behavior. This is credible competing policy, unlike
+ordinary presenter projection.
 
-Investigate:
+## Bounded research question
 
-- the authoritative Hermes event/message contract and versioning;
-- structured events versus formatted/plaintext fallback detection;
-- approve, deny, approve-session, approve-always, expiry, revocation, and
-  duplicate-action semantics;
-- room/sender trust, spoofing resistance, power/identity checks, and audit
-  records;
-- response encoding and idempotent delivery across room UI and notifications.
+Using the authoritative Hermes contract and real fixtures, map which clients
+still independently decide prompt recognition, allowed actions, expiry,
+authorization, response mapping, and idempotency. Separate structured events
+from legacy formatted/plaintext fallback. Cover approve once, deny, approve
+session, approve always, revocation, duplicates, room/sender trust, spoofing,
+power/identity checks, response encoding, and redacted audit evidence.
 
-Minimum proof: real contract fixtures, spoof/adversarial corpus, expiry and
-duplicate property tests, end-to-end Hermes/Matrix integration, notification
-quick-action proof, desktop/iOS parity, and audit-log redaction checks.
+The preferred direction is to make existing Rust policy authoritative and
+remove competing planners, not create another approval subsystem. Sequence any
+implementation behind ADR 0004's iOS-on-engine prerequisite and the current
+goal-graph stop gate.
+
+Cards, sheets, notification buttons, haptics, emoji presentation, and OS
+delivery remain platform rendering/integration. Required eventual proof
+includes real-contract and adversarial fixtures, expiry/duplicate properties,
+Hermes/Matrix end-to-end behavior, notification quick actions, and both-client
+parity.
