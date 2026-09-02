@@ -247,3 +247,14 @@ A later product owner may project `info.size` onto the existing handle, or
 activate a metadata-only cache index, without changing this ownership
 decision. Those would be additions to the owner already censused here, and
 they still require a human implementation gate.
+
+## Reviewer nits (`ACCEPT_WITH_NITS` on #1090)
+
+Recorded from the independent review at `41c3d35b`. They do not change the
+close:
+
+- iOS `BoundedLRUCache` is slightly over-attributed as live
+  viewport/read-marker chrome; no product call sites were found. It is
+  still not a media-byte cache.
+- Historical `MediaHandle` is a compiled Core DTO plus fixture, not only
+  the JSON fixture. The memo already treats it as non-live.

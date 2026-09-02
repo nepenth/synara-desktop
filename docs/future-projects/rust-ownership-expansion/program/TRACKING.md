@@ -18,7 +18,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | Read and list semantics | ROE-06 | Split; census Core helpers | closed | [memo](../memos/ROE-06-room-sort-memo.md) | ACCEPT_WITH_NITS `#1087` | Stay platform; unused helpers; nits recorded |
 | Account data and drafts | ROE-09 | Already owned | closed | [memo](../memos/ROE-09-notes-memo.md) | ACCEPT `#1084` | No second notes engine |
 | Account data and drafts | ROE-10 | Split | closed | [memo](../memos/ROE-10-drafts-memo.md) | ACCEPT `#1088` | Already owned split; leftover UniFFI / Jotai are seams |
-| Media metadata | ROE-11 | Metadata only | in-review | [#1090](https://github.com/nepenth/synara-desktop/pull/1090) | pending | Researcher: already owned; unused cache harness is not a second engine |
+| Media metadata | ROE-11 | Metadata only | closed | [memo](../memos/ROE-11-media-metadata-memo.md) | ACCEPT_WITH_NITS `#1090` | Already owned under ADR 0005; nits recorded |
 
 ## Merged into the feature branch
 
@@ -43,6 +43,7 @@ Integration tip: update the SHA after each feature-branch merge.
 | 2026-09-01 | `b361f395` | ROE-06 memo merged (`#1087`) |
 | 2026-09-01 | `0bb6f421` | ROE-10 memo merged (`#1088`) |
 | 2026-09-01 | `a1ede8f5` | ROE-04/12 memo merged (`#1089`) |
+| 2026-09-01 | `bbca95b8` | ROE-11 memo merged (`#1090`) |
 
 ## Human implementation gate
 
