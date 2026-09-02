@@ -79,8 +79,10 @@ from live-evidence gates that still cannot honestly be closed.
   behavior derive semantically from whether the reachable generated package
   graph actually has remote packages. The Core Swift/XCFramework pair was
   regenerated across device, simulator-arm64, simulator-x86_64, and macOS.
-  After the final relation and receipt cleanup, the complete iOS unit target
-  executed 657 tests: 655 passed and 2 were intentionally skipped.
+  After the final relation and receipt cleanup, the exact promoted head's iOS
+  unit target executed 658 tests: 655 passed and 3 were intentionally skipped.
+  Its iOS UI target executed 73 tests: 59 passed and 14 were intentionally
+  skipped.
 
 The final deterministic validation also passed Core's 836-test unit target
 (833 passed, 3 environment-gated tests ignored), every Core integration binary
@@ -103,9 +105,12 @@ reply-revision finding was remediated. The final Grok 4.6 High review then
 identified an attachment-send revision-scope defect; that path was corrected,
 passed the focused executable suite and full desktop typecheck, and a targeted
 Grok re-review returned no P0-P2 findings. Consolidated deterministic
-validation is green. Promotion now requires only the normal commit, PR, CI,
-merge, and authoritative `origin/main` readback gates. Neither the research
-verdict nor compilation alone is proof that an external operating path works.
+validation is green. PR `#1092` promoted exact head `ce77bdcc` through 13
+applicable successful checks with zero failures; four scope-inapplicable checks
+were skipped and are not counted as evidence. The PR merged as `e9b5016e`, and
+both local `main` and authoritative `origin/main` resolved to that merge commit
+on 2026-09-02. Neither the research verdict nor compilation alone is proof that
+an external operating path works.
 
 ## Historical provenance
 

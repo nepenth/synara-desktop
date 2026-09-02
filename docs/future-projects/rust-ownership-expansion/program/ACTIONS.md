@@ -127,8 +127,9 @@ The final deterministic validation record is: Core's 836-test unit target
 passed 833 with 3 environment-gated tests ignored, every Core integration
 binary and doc test passed, desktop modernization passed 910/910 after a
 production renderer build and typecheck, the Tauri application compiled with
-the revised Core boundary, and the iOS unit target passed 655 with 2 skips out
-of 657 tests against the regenerated four-slice Apple package. The offline
+the revised Core boundary, and the exact promoted head's iOS targets passed
+655 with 3 skips out of 658 unit tests and 59 with 14 skips out of 73 UI tests
+against the regenerated four-slice Apple package. The offline
 cold-restart proof now closes the first SDK client through `Client::pause()`
 before rebuilding from the same store; it no longer relies on a guessed sleep
 to release persistent-store ownership.

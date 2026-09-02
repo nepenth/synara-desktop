@@ -8,7 +8,7 @@ that remains. A closed ownership verdict never implies a proven feature.
 
 | IDs | Memo | Research review | Ownership | Residual |
 | --- | --- | --- | --- | --- |
-| ROE-01 | [memo](../memos/ROE-01-orchestration-memo.md) | `ACCEPT_WITH_NITS`, `#1081`, `afba8efb` | closed: Core lifecycle owner | A11 closed: all-slice Apple generation, all-local graph, and final iOS gate passed 655 + 2 skips out of 657 |
+| ROE-01 | [memo](../memos/ROE-01-orchestration-memo.md) | `ACCEPT_WITH_NITS`, `#1081`, `afba8efb` | closed: Core lifecycle owner | A11 closed: all-slice Apple generation, all-local graph, and exact promoted iOS unit gate passed 655 + 3 skips out of 658 |
 | ROE-02 | [memo](../memos/ROE-02-verification-memo.md) | `ACCEPT`, `#1083` | closed: one Core verification owner | A3 harness hardened; live proof still open |
 | ROE-03 | [memo](../memos/ROE-03-timeline-rows-memo.md) | `ACCEPT`, `#1086` | closed: `TimelineViewRow` owner | A7 DTO/adapter and message/poll/sticker relation parity implemented; new action UI follows separately |
 | ROE-04/12 | [memo](../memos/ROE-04-message-format-memo.md) | `ACCEPT_WITH_NITS`, `#1089`, `91bf0b14` | closed: platform output-context rendering | A6 shared corpus, harness integrations, and send-bound enforcement implemented; full matrix remains open |
@@ -24,8 +24,11 @@ The detailed acceptance evidence and risk order live in
 [ACTIONS.md](ACTIONS.md). Historical merge chronology is available in git and
 the worker PRs; it is intentionally not presented as live coordination state.
 Final deterministic promotion gates: Core 833 + 3 ignored out of 836 plus all
-integration/doc tests, desktop 910/910, iOS 655 + 2 skipped out of 657, and the
-Tauri compile are green. Final Grok 4.6 High review found one attachment-send
-revision-scope defect; after correction and targeted re-review, no P0-P2
-findings remain. Branch promotion and authoritative `origin/main` readback are
-pending.
+integration/doc tests, desktop 910/910, iOS unit 655 + 3 skipped out of 658,
+iOS UI 59 + 14 skipped out of 73, and the Tauri compile are green. Final Grok
+4.6 High review found one attachment-send revision-scope defect; after
+correction and targeted re-review, no P0-P2 findings remain. PR `#1092`
+promoted exact head `ce77bdcc` through 13 applicable successful checks with
+zero failures. Four scope-inapplicable checks were skipped and are not counted
+as evidence. It merged as `e9b5016e`; local `main` and authoritative
+`origin/main` both resolved to that commit on 2026-09-02.
