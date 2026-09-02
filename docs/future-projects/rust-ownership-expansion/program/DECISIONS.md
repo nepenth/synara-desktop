@@ -14,6 +14,7 @@ amend ADRs. An ADR still wins if a later memo disagrees.
 | D7 | 2026-09-01 | This program is not S38, not P4-engine-ready work, and not P5. It must not claim those gates or invent a new shared-Core phase. |
 | D8 | 2026-09-01 | [CENSUS.md](CENSUS.md) is a starting snapshot from `main` `011cf39a`. Every memo must re-verify cited paths on the commit it records. |
 | D9 | 2026-09-01 | A memo recommendation of extract or proceed is a **stop**, not a start. Record it and wait for a human implementation decision. |
+| D10 | 2026-09-01 | Accepted memo [ROE-08-agent-approval-memo.md](../memos/ROE-08-agent-approval-memo.md) (`#1082`, ACCEPT at `cd1c655b`) recommends extracting Core `is_agent_approval_prompt` as the sole eligibility owner. **Human implementation gate is now open as a question and closed as a coding path.** Do not delete TypeScript/Swift detectors, add Core routes, or write a plan until a later decision explicitly authorizes implementation. |
 
 Add rows; do not rewrite history. If a decision is reversed, add a new
 row that cites the old ID.
