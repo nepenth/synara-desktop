@@ -1121,6 +1121,10 @@ mod view_pure {
             closed: false,
             max_selections: 1,
             answers,
+            reply: None,
+            thread_root: None,
+            thread: None,
+            reactions: Vec::new(),
         };
         let json = serde_json::to_string(&row).unwrap();
         assert!(json.contains("\"voteCount\":2"));
@@ -1166,11 +1170,13 @@ mod view_pure {
             },
             body: "Reply body".into(),
             formatted_body: None,
+            is_agent_approval: false,
             message_type: Some("text".into()),
             media_filename: None,
             media_caption: None,
             edited: false,
             reply: Some(reply),
+            thread_root: None,
             thread: Some(thread),
             reactions: Vec::new(),
             media: None,
