@@ -12,7 +12,7 @@ ready proposal without quietly turning a brainstorm into a migration.
 
 | Project                                                        | Question                                                                                                                | Status           |
 | -------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------- |
-| [Rust ownership expansion](rust-ownership-expansion/README.md) | Which remaining cross-client product semantics should move from platform presenters into the existing shared Rust core? | Research backlog |
+| [Rust ownership expansion](rust-ownership-expansion/README.md) | Which remaining cross-client product semantics should move from platform presenters into the existing shared Rust core? | Research backlog; start with [triage](rust-ownership-expansion/TRIAGE.md) |
 
 ## Rules for work in this directory
 
@@ -32,3 +32,5 @@ ready proposal without quietly turning a brainstorm into a migration.
 The accepted language boundary remains
 [ADR 0004](../adr/0004-rust-language-boundaries.md). The existing implementation
 route remains the [shared-core implementer playbook](../shared-native-core/11-implementer-playbook.md).
+Future-projects research does not override playbook §5, the language-boundary
+goal graph, or an accepted ADR.

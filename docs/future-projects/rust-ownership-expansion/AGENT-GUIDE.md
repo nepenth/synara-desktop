@@ -7,13 +7,19 @@ is **research and planning**, not implementation.
 
 Read these completely before drawing a boundary:
 
-1. [project charter](README.md);
-2. the assigned file under [`workstreams/`](workstreams/);
-3. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
-4. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
-5. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md);
-6. current source and tests for Rust, desktop, and iOS implementations in the
+1. [portfolio triage](TRIAGE.md);
+2. [project charter](README.md);
+3. the assigned file under [`workstreams/`](workstreams/);
+4. [ADR 0003](../../adr/0003-shared-native-rust-core.md);
+5. [ADR 0004](../../adr/0004-rust-language-boundaries.md);
+6. [shared-core implementer playbook](../../shared-native-core/11-implementer-playbook.md);
+7. current source and tests for Rust, desktop, and iOS implementations in the
    assigned domain.
+
+If the triage prior for the assigned workstream is **already owned** or
+**stay platform-side**, do not produce a full implementation plan unless a
+source-linked census overturns that prior. A short memo that confirms or
+revises the prior is enough.
 
 Historical plans are evidence, not current truth. Confirm every ownership and
 completion claim against the current branch.
