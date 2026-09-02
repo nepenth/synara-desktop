@@ -1,21 +1,24 @@
 # Program state
 
-Last updated: 2026-09-01 (ROE-06 memo in review; ROE-10 started).
+Last updated: 2026-09-01 (ROE-07 and ROE-03 closed; ROE-04/12 started).
 Integration branch: `feature/rust-ownership-residual-census`.
 Base: `main` at `011cf39a`.
 
 ## Headline
 
-ROE-01 and ROE-02 are closed as already owned. ROE-08 remains a human
-implementation gate (D10). ROE-09 is closed as already owned. ROE-07, ROE-03, and ROE-06 are in review. ROE-10 census is started.
-No product work. No merge to `main`.
+ROE-01, ROE-02, ROE-03, and ROE-09 are closed as already owned. ROE-07
+is closed as already-owned settings / stay-platform delivery (nits
+recorded). ROE-08 remains a human implementation gate (D10). ROE-06 is
+in review. ROE-10 census is in flight. ROE-04/12 fixture-first cluster
+is assigned. No product work. No merge to `main`.
 
 ## Next actions
 
-1. Merge #1085, #1086, and #1087 only after independent ACCEPT.
+1. Merge #1087 only after independent ACCEPT at HEAD.
 2. Review the ROE-10 PR when it exists.
-3. Keep ROE-08 implementation stopped. Do not start ROE-04/12 until
-   #1085 is closed.
+3. Keep ROE-08 implementation stopped.
+4. Review the ROE-04/12 memo when the PR exists. Fixtures before types;
+   do not design a Core AST.
 
 ## Active lanes
 
@@ -25,11 +28,12 @@ No product work. No merge to `main`.
 | ROE-08 | human-gate | merged `#1082` | accepted extract; no implementation |
 | ROE-01 | closed | merged `#1081` | already owned; nits recorded in memo |
 | ROE-02 | closed | merged `#1083` | already owned |
+| ROE-03 | closed | merged `#1086` | already owned; shared `thread_root` omission is not an extract |
 | ROE-09 | closed | merged `#1084` | already owned; no second notes engine |
-| ROE-07 | in-review | `roe/memo-07-notification-policy` | [#1085](https://github.com/nepenth/synara-desktop/pull/1085) `651e36b2` |
-| ROE-03 | in-review | `roe/memo-03-timeline-rows` | [#1086](https://github.com/nepenth/synara-desktop/pull/1086) `cbb9b863` |
+| ROE-07 | closed | merged `#1085` | already owned / stay platform; nits recorded in memo |
 | ROE-06 | in-review | `roe/memo-06-room-sort` | [#1087](https://github.com/nepenth/synara-desktop/pull/1087) `eff03f01` |
 | ROE-10 | researcher | `roe/memo-10-drafts` | assigned |
+| ROE-04/12 | researcher | `roe/memo-04-message-format` | assigned; fixtures before types; no AST |
 
 ## Blockers
 

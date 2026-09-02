@@ -220,3 +220,16 @@ Core extract. The current goal graph does not permit a new residual
 implementation slice: P4 engine-ready is pending/blocked; do not invent S38;
 do not start P5. D10 (ROE-08) remains the only open human implementation
 question in this cluster.
+
+## Reviewer nits (`ACCEPT_WITH_NITS` on #1085)
+
+Recorded from the independent review at `651e36b2`. They do not change the
+close:
+
+- Mention/keyword *settings* on iOS are a live Core presenter
+  (`SettingsView` + `SharedCoreAccountSettings` / `pushRules*`), not “no
+  mention-rule editor.” Cite those files the way desktop
+  `nativePushRules.ts` is cited.
+- Leftover `pusher_set` / `pusher_delete` exist, but live iOS APNs
+  registration already uses `SharedCoreHttpPusher.registerHttpPusher`
+  (Matrix pusher I/O, not OS delivery). Do not read that as leftover-only.
