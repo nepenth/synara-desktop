@@ -1,10 +1,11 @@
 # ROE-06: Room Sorting and Filtering Rules
 
-Prior: **stay platform-side by default**.
+Prior: **split ownership; census existing Core policy before proposing more**.
 
-Core already contains deterministic room-list predicates and sort helpers.
-Desktop and iOS also have intentional navigation, section, interaction, and
-preference projection. Their layouts need not be identical.
+Core already contains deterministic room-list predicates and sort helpers, and
+ADR 0004 permits shared product-semantic ordering policy in Core. Desktop and
+iOS also have intentional navigation, section, interaction, and preference
+projection. Their layouts need not be identical.
 
 ## Bounded research question
 
@@ -19,6 +20,8 @@ navigation state, incremental animation, and locale-aware display collation
 remain platform-side. Do not centralize locale presentation in Rust merely to
 force matching screenshots.
 
-A close/stay memo with deterministic fixture coverage is preferred. A Core
-change requires a demonstrated product-semantic divergence and large-list
-performance evidence.
+A census should first determine whether clients consume, bypass, or no longer
+need the existing Core policy. A Core change requires a demonstrated
+product-semantic divergence and large-list performance evidence; a platform
+change may simply remove a competing semantic rule while retaining native
+sections and collation.
