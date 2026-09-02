@@ -1,22 +1,21 @@
 # Program state
 
-Last updated: 2026-09-01 (ROE-08 accepted and merged; human-gate).
+Last updated: 2026-09-01 (ROE-09 closed; ROE-06 started).
 Integration branch: `feature/rust-ownership-residual-census`.
 Base: `main` at `011cf39a`.
 
 ## Headline
 
-ROE-08 is accepted and merged. Implementation of unified eligibility is
-**stopped** (D10). ROE-07 policy memo is the next deep-cluster research
-item. ROE-01 and ROE-02 remain in review. ROE-09 is still researching.
-No product work. No merge to `main`.
+ROE-01 and ROE-02 are closed as already owned. ROE-08 remains a human
+implementation gate (D10). ROE-09 is closed as already owned. ROE-07
+and ROE-03 are still researching. ROE-06 census of existing Core sort
+helpers is started. No product work. No merge to `main`.
 
 ## Next actions
 
-1. Wait for reviewer verdicts on #1081 and #1083; merge only ACCEPT.
-2. Review the ROE-09 PR when it exists.
-3. Research ROE-07 as shared notification policy only; do not reopen
-   ROE-08 detectors.
+1. Review the ROE-07 and ROE-03 PRs when they exist.
+2. Keep ROE-08 implementation stopped.
+3. Do not start ROE-04/12 until the agent-policy cluster is idle.
 
 ## Active lanes
 
@@ -24,10 +23,12 @@ No product work. No merge to `main`.
 | --- | --- | --- | --- |
 | Orchestrator | assign/merge | feature branch | active |
 | ROE-08 | human-gate | merged `#1082` | accepted extract; no implementation |
-| ROE-01 | in-review | `roe/memo-01-orchestration` | [#1081](https://github.com/nepenth/synara-desktop/pull/1081) `afba8efb` |
-| ROE-02 | in-review | `roe/memo-02-verification` | [#1083](https://github.com/nepenth/synara-desktop/pull/1083) `65d909fb` |
-| ROE-09 | researcher | `roe/memo-09-notes` | researching |
-| ROE-07 | researcher | `roe/memo-07-notification-policy` | assigned |
+| ROE-01 | closed | merged `#1081` | already owned; nits recorded in memo |
+| ROE-02 | closed | merged `#1083` | already owned |
+| ROE-09 | closed | merged `#1084` | already owned; no second notes engine |
+| ROE-07 | researcher | `roe/memo-07-notification-policy` | researching |
+| ROE-03 | researcher | `roe/memo-03-timeline-rows` | researching |
+| ROE-06 | researcher | `roe/memo-06-room-sort` | assigned |
 
 ## Blockers
 
