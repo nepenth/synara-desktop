@@ -46,7 +46,9 @@ const expand = (fixture: CorpusCase): string => {
   const generator = fixture.generator;
   if (!generator) return fixture.formattedBody;
   if (generator.kind === 'nestedTag') {
-    return `${`<${generator.tag}>`.repeat(generator.count)}${generator.text}${`</${generator.tag}>`.repeat(generator.count)}`;
+    return `${`<${generator.tag}>`.repeat(generator.count)}${
+      generator.text
+    }${`</${generator.tag}>`.repeat(generator.count)}`;
   }
   return `${generator.prefix}${generator.unit.repeat(generator.count)}${generator.suffix}`;
 };
@@ -95,7 +97,11 @@ test('desktop presentation satisfies the shared Matrix and Hermes format corpus'
     for (const excluded of fixture.expect.textExcludes) {
       assert.ok(!text.includes(excluded), `${fixture.id}: exposed text ${excluded}`);
     }
-    assert.deepEqual(linkSchemes(sanitized ?? ''), [...fixture.expect.linkSchemes].sort(), fixture.id);
+    assert.deepEqual(
+      linkSchemes(sanitized ?? ''),
+      [...fixture.expect.linkSchemes].sort(),
+      fixture.id
+    );
     assert.equal(
       sanitized?.includes('data-mx-spoiler') ?? false,
       fixture.expect.containsSpoiler,
