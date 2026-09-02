@@ -24,7 +24,8 @@ Integration tip: update the SHA after each feature-branch merge.
 
 | When | SHA | What |
 | --- | --- | --- |
-| 2026-09-01 | *(this commit)* | Program operating docs; no memos yet |
+| 2026-09-01 | `5f9c4e71` | Program operating docs |
+| 2026-09-01 | `57df6dec` | First lanes marked active; no memos yet |
 
 ## Human implementation gate
 

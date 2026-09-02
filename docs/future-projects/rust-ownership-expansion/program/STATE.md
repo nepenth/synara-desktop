@@ -1,23 +1,24 @@
 # Program state
 
-Last updated: 2026-09-01 (lanes spawned).
-Integration branch: `feature/rust-ownership-residual-census` at `72c69ea7`.
+Last updated: 2026-09-01 (orchestrator tick; no memo PRs yet).
+Integration branch: `feature/rust-ownership-residual-census`.
 Base: `main` at `011cf39a`.
 
 ## Headline
 
-Overnight research machine is armed. First assignments: ROE-08 (deep),
-ROE-01 and ROE-02 (census-and-close). No product work. No merge to
+First researchers are still in flight. No PRs target the feature branch.
+No reviewer or ROE-09 assignment this tick. No product work. No merge to
 `main`.
 
 ## Next actions
 
-1. Researcher PRs for `memos/ROE-08-agent-approval-memo.md`,
+1. Wait for researcher PRs for `memos/ROE-08-agent-approval-memo.md`,
    `memos/ROE-01-orchestration-memo.md`, and
    `memos/ROE-02-verification-memo.md`.
-2. Independent reviewers on each PR at exact HEAD.
-3. Orchestrator squash-merges ACCEPT memos into this branch and updates
-   [TRACKING.md](TRACKING.md).
+2. On the next tick that sees a memo PR, launch a different-agent
+   reviewer at exact HEAD.
+3. Do not start ROE-09 until ROE-01 or ROE-02 frees a census-and-close
+   slot. Do not start ROE-07 until the ROE-08 memo exists.
 
 ## Active lanes
 
