@@ -1,216 +1,188 @@
-# ADR 0004: Rust language boundaries
+# ADR 0004: Rust and Platform Ownership Boundaries
 
-Reviewed: 2026-08-17
+Originally accepted: 2026-08-17.
 
-Status: accepted.
+Last reviewed: 2026-09-01.
 
-Companion to [ADR 0003](0003-shared-native-rust-core.md). ADR 0003 decides
-**that** desktop and iOS share one Rust application-logic core. This ADR
-decides **what** may be written in Rust, what must stay platform-side, and
-what must not be rewritten. It does not open a new crate, UI toolkit, or
-parallel migration program.
+Status: accepted and clarified. This revision separates durable boundaries from
+implementation-era sequencing and current technology preferences.
 
-Implementation evidence:
-[the 2026-08-17 shared-core proof](../shared-native-core/15-2026-08-17-local-proof.md).
+Companion to [ADR 0003](0003-shared-native-rust-core.md), which establishes one
+shared Rust application Core. This ADR decides which behavior belongs in that
+Core and which behavior remains platform-owned.
 
 ## Context
 
-Synara ships two clients from this monorepo:
+Synara has two UI shells over one Matrix/application engine:
 
-- **Desktop** (macOS and Linux): Tauri 2 Rust shell in `src-tauri/` plus a
-  React / Vite presenter in `synara/`.
-- **iOS**: SwiftUI in `synara-ios/`, consuming `synara-core` through UniFFI.
+- macOS and Linux use Tauri 2 plus a React/TypeScript presenter;
+- iOS uses SwiftUI through project-owned UniFFI bindings;
+- `crates/synara-core` owns shared Matrix and product authority through
+  matrix-rust-sdk.
 
-There is no shipped Windows session store, standalone web client, Android
-app, or server product. `integration/synapse/` is a test harness only.
+Sharing every line of implementation is not the goal. Correctness and parity
+come from sharing authoritative decisions while each platform retains the
+observations, rendering, accessibility, and operating-system behavior that only
+it can implement well.
 
-Rust already owns the Matrix engine (`crates/synara-core`), the desktop
-shell, and the IPC/UniFFI adapters. TypeScript owns desktop presentation.
-Swift owns iOS presentation and Apple-only OS services. The remaining
-question is not whether to adopt Rust. It is which leftovers still belong
-in `synara-core`, and which proposed Rust rewrites would be a mistake.
+## Decision framework
 
-Existing decisions this ADR does not reopen:
+Classify a behavior before choosing a language or API:
 
-- [ADR 0002](0002-ios-architecture.md): SwiftUI, not Tauri iOS.
-- [ADR 0003](0003-shared-native-rust-core.md): one `synara-core`; UI, OS
-  integrations, credential stores, and app lifecycle stay platform-side.
-- [Native-first architecture spike](../native-first-architecture-spike.md):
-  do not rewrite the desktop UI in a Rust widget toolkit before iOS ships
-  on the shared engine.
+| Kind        | Default owner | Examples                                                                                                                        |
+| ----------- | ------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| Authority   | Core          | Protocol truth, state machines, eligibility, shared schemas, resource bounds, ordering, persistence policy, and Matrix writes   |
+| Observation | Platform      | Viewport/focus, keystrokes, app lifecycle, notification delivery state, local files, permissions, and locale UI context         |
+| Rendering   | Platform      | React/SwiftUI widgets, layout, typography, animation, selection, accessibility, Dynamic Type, syntax highlighting, and gestures |
 
-The shared-core cutover has landed. Desktop and iOS consume `synara-core`;
-secret- and byte-sensitive operations intentionally stay on typed platform
-boundaries. The command counts and unfinished migration notes in later sections
-are decision-time evidence, not current inventory.
+A platform observation may be a typed input to Core authority without Core
+owning the observation. A platform projection of a Core model is not duplicated
+authority.
 
-## Decision
+### Put behavior in Core when
 
-Use the rubric below before proposing any new Rust code. Follow the
-existing shared-native-core playbook for everything that **should** be
-Rust. Do not start a second core crate, a Rust UI rewrite, or a
-migration program that bypasses that playbook.
+Most of these are true:
 
-### Should be Rust
+- desktop and iOS require the same semantic result;
+- the behavior is protocol-, security-, trust-, or correctness-sensitive;
+- it needs one concurrency, persistence, or retry owner;
+- it operates over large Matrix state more efficiently before FFI/IPC;
+- it can be proven with Rust unit/property tests and Synapse integration tests;
+- leaving it in presenters would create competing product policy.
 
-Write or finish the work in `synara-core` when most of these are true:
+Examples include Matrix lifecycle, crypto and verification states, timeline
+event relationships, receipt eligibility/writes, account-data schemas,
+notification eligibility, and agent-approval authorization policy.
 
-- Shared by desktop and iOS (parity by construction).
-- Security- or correctness-sensitive (E2EE, session material, verification,
-  store identity).
-- A hot path over large Matrix state (sync, timeline projection, search,
-  media-queue metadata).
-- Needs a single supervisor / concurrency owner (no dual backend).
-- Testable without a WebView or SwiftUI (Rust unit tests and Synapse proofs).
+### Keep behavior platform-owned when
 
-### Can be Rust but should not
+Any of these dominate:
 
-Leave the current language in place when:
+- it is UI composition, rendering, accessibility, interaction, or viewport
+  behavior;
+- it is an OS API or lifecycle integration such as Keychain, APNs/NSE, tray,
+  windows, file dialogs, permissions, or haptics;
+- it is an observation that Core cannot independently know, such as whether a
+  message is genuinely visible;
+- a mature platform library owns editor or renderer state and crossing the
+  boundary would duplicate that state;
+- IPC/FFI schema churn and serialization cost exceed the parity benefit.
 
-- The work is presentation, layout, animation, or composer UX.
-- The work is OS-specific (Keychain, APNs, tray, file dialogs, NSE
-  lifecycle).
-- Crossing FFI or the Core envelope would move passwords, recovery
-  passphrases, `client_secret`, file paths, or media/attachment bytes.
-- A mature JS or Swift library already owns the problem (Slate, pdf.js,
-  SwiftUI, the Element Call widget).
-- The work is CI or governance scripting where Node already fits.
+Examples include Slate and Swift editor state, React/SwiftUI message cells,
+scroll virtualization, text selection, notification buttons, and native file
+handoff.
 
-### Must not be Rust (for now)
+## Hard invariants
 
-- A full native desktop UI rewrite (Slint, Dioxus, egui, or similar).
-- Replacing SwiftUI with a Rust UI on iOS.
-- Shipping Tauri iOS as the product path.
-- Putting passwords, key-export passphrases, or attachment bytes on the
-  generic `Core::command` / UniFFI command envelope.
-- A Rust rewrite of Node build, CI, or guardrail scripts.
-- A third Matrix engine in Swift or TypeScript.
+These restrictions protect correctness, security, or an accepted platform
+architecture:
 
-## Decision-Time Layer Map
+1. **No second Matrix engine.** Swift and TypeScript must not independently own
+   session, sync, crypto, room/timeline state, account data, or Matrix writes.
+2. **No UI framework in Core.** Core does not prescribe platform widgets,
+   layout, gestures, typography, accessibility trees, or viewport geometry.
+3. **No generic-envelope secret or byte transport.** Passwords, recovery
+   material, OAuth client secrets, local filesystem paths, and media/attachment
+   bytes must not use the generic `Core::command` JSON envelope. Narrow typed
+   platform or dedicated byte APIs are allowed when separately designed and
+   bounded.
+4. **No universal output sanitizer claim.** Core may validate protocol fields,
+   URLs, identifiers, sizes, and semantic invariants. React DOM and Swift
+   attributed-text renderers still sanitize/escape for their own output
+   contexts.
+5. **No permanent dual owner.** A migration must name the old authority being
+   removed and prove the cutover. A feature flag cannot become an indefinite
+   second implementation.
+6. **NSE remains narrow.** The iOS notification service extension must not boot
+   the full sync engine or become an independent Matrix client.
 
-| Layer | Today | Verdict |
-|---|---|---|
-| Matrix engine (sync, crypto, timeline DTOs, room list, auth policy) | Mostly `synara-core`; thin leftovers in `src-tauri/src/matrix/` | Should be Rust. Finish extraction through the playbook. |
-| Desktop IPC adapters | `src-tauri/src/bridge/` | Stay Rust. Stay thin. |
-| Desktop OS shell | `desktop_*.rs` (tray, keyring, notifications, file transfer) | Stay Rust. Stay out of core. |
-| iOS UI | SwiftUI | Stay Swift. Consume UniFFI. |
-| iOS Matrix adapters | `SharedCore*` wrappers; leftover I/O fail-closed | Thin Swift over Rust. Not a second engine. NSE stays a narrow read-only store surface and never starts sync. |
-| Desktop UI | React / Jotai / Slate / vanilla-extract | Stay TypeScript. Presenter and virtualization only. |
-| Media bytes / decrypt-for-display | Native queues; leftover `matrix_send_attachment` / `matrix_media_download` (not `Core::command`) | Rust-owned delivery. Desktop JS encrypt/decrypt and SW token injection are retired. Leftover encrypted `mxc://` without a handle fail-closes. Leftover avatar `<img src=mxc://>` display is still a later visual pass. |
-| Markdown / HTML render / PDF | TypeScript and pdf.js | Stay TypeScript. |
-| Element Call / MatrixRTC | Placeholder WebView widget | A Rust widget bridge may come later. Do not start a Rust WebRTC stack. |
-| Agent / Hermes workflows | React cards plus native action bridge | Policy and approval state may move to core if iOS must share those semantics. Composer and card UI stay put. |
-| Build / CI / guardrail scripts | Node (`scripts/*.mjs`) | Stay Node. |
-| Stale WASM / IndexedDB / js-sdk CSP | Leftover from the former browser client | Delete. Do not rewrite in Rust. |
+[ADR 0005](0005-native-media-handle-channel.md) applies invariant 3 to media
+through opaque handles and dedicated native byte channels.
 
-## Historical Prescribed Work
+## Current layer map
 
-The numbered items in this section were the accepted migration queue. They are
-retained to explain the boundary decisions and must not be treated as current
-work without confirming source and current validation status.
+| Layer                                                                      | Authoritative owner                                                       | Platform responsibility                                                                   |
+| -------------------------------------------------------------------------- | ------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------- |
+| Matrix session, sync, crypto, verification, room/timeline state and writes | `crates/synara-core`                                                      | Credentials and lifecycle observations through typed adapters                             |
+| Desktop native shell                                                       | `src-tauri/`                                                              | Windows, tray, notifications, Keychain/Secret Service, files, updater and bridge adapters |
+| Desktop presentation                                                       | `synara/` React/TypeScript                                                | Navigation, settings, Slate composer, rendering, selection and virtualization             |
+| iOS presentation and services                                              | `synara-ios/` Swift                                                       | SwiftUI, Keychain, APNs/NSE, Apple permissions, files/media UI and App Store lifecycle    |
+| Timeline semantics                                                         | Core `TimelineViewRow` and relationship owners                            | Native grouping, cells, scroll behavior and visual treatment                              |
+| Message formatting                                                         | Core may expose protocol fields, validation and bounded semantic metadata | Platform parses/sanitizes for its output context and performs native rendering            |
+| Notifications                                                              | Core push rules and shared eligibility/privacy/deduplication policy       | APNs/NSE/tray delivery, banners, actions, badges and haptics                              |
+| Agent/Hermes workflows                                                     | Core recognition, eligibility, expiry and action resolution where shared  | Cards, sheets, composer and notification UI                                               |
+| Notes/account data                                                         | Core schema, normalization and Matrix synchronization                     | Editors, drag/reorder affordances and presentation                                        |
+| Media                                                                      | Core metadata/policy and opaque handles                                   | Dedicated native byte transfer, filesystem paths, caching integration and display         |
+| Build/release governance                                                   | Current Node/shell/Rust/CI tooling                                        | Repository automation; not product runtime                                                |
 
-This is finish-the-migration work on the existing playbook, not a new
-program. Do not invent routes, crates, or bindgen paths to satisfy this
-list.
+## Message-format boundary
 
-1. **Live Matrix I/O that is not secret- or byte-sensitive** continues
-   through playbook 7B: remaining non-secret `product_commands` / `live`
-   owners become Core commands with thin Tauri adapters. As of the
-   playbook evidence tip, there is no unregistered census name whose
-   write already lives on an attached owner. Do not invent one.
-2. **The twenty-one shell leftovers stay desktop.** Password
-   continuation, export/import passphrases, setup/restore/repair, and
-   attachment/media bytes must not cross the 1 MiB Core envelope. That
-   is a should-not, not unfinished work. See playbook section 6.
-3. **iOS-on-engine (P4, then P5)** is the highest-leverage Rust outcome:
-   start SyncService through Core, replace remaining fail-closed
-   leftovers that need a live homeserver, and keep NSE read-only. Do not
-   start P5 from this ADR. Follow playbook section 5 and section 9.
-4. **Native media as the sole decrypt/delivery path.** Desktop composer
-   send and timeline/leftover `mxc://` download use the native owner.
-   `browser-encrypt-attachment` is removed; `synara/src/sw.ts` is a stub
-   (no Matrix token injection). Leftover encrypted `mxc://` without a
-   handle fail-closes. iOS leftover media I/O stays fail-closed
-   (decision 15). Byte-bearing commands stay shell-side until a written
-   owner decision defines a byte channel. Do not register
-   `matrix_send_attachment` / `matrix_upload_media` /
-   `matrix_media_download` on `Core::command`. Leftover avatar
-   `<img src=mxc://>` display is a later visual pass, not a JS decrypt
-   rewrite.
-5. **Harness-only domains go live in Core** when they are shared product
-   behavior (search is the example). Do not promote a harness just to
-   have a merge.
-6. **Optional, only after iOS-on-engine:** a typed agent-action policy
-   module in Core if iOS must share approval and Hermes card semantics.
-   Do not move the React agent-card UI.
-7. **Housekeeping, not new Rust:** fold `src-tauri` into the workspace
-   when the adapter swap is real; remove orphaned WASM, CSP, and
-   IndexedDB paths.
+Matrix rich-message input is formatted HTML with plaintext fallback. Core
+currently projects it on typed timeline rows; that field is untrusted protocol
+content, not universally sanitized rendering markup.
 
-## Stay put
+Shared golden/adversarial fixtures and small protocol-semantic row fields comply
+with this ADR. A complete paragraph/code/table/reply/spoiler presentation AST
+would materially change the existing boundary because it moves broad parsing
+and versioned presentation semantics into Core. It requires an explicit ADR
+amendment or replacement, evidence that bounded fields cannot solve the
+problem, and accounting for schema/serialization cost. Even then, rendering,
+selection, accessibility, syntax highlighting, and output-context sanitization
+remain platform-owned.
 
-These can be written in Rust and should not be:
+## Current technology choices, not hard invariants
 
-- **Timeline viewport math and virtualization** in
-  `synara/src/app/features/room/`. Rust already projects DTOs. JavaScript
-  owns the rendered window. Moving scroll policy into Rust adds IPC
-  chatter and does not help iOS, which has its own viewport.
-- **Composer, Slate, and markdown parsers.** UI-adjacent. `ruma` already
-  handles wire markdown in the SDK.
-- **pdf.js viewer.** A Rust PDF renderer would not pay off.
-- **Keyring and APNs.** Platform shell by ADR 0003.
-- **Node guardrail scripts.** They enforce the Rust boundary. Rewriting
-  them in Rust is vanity.
+React, SwiftUI, Slate, pdf.js, Prism, and Node governance scripts remain the
+preferred implementations because they fit their current jobs. Rewriting them
+in Rust solely to reduce TypeScript/Swift/Node line count is not justified.
 
-## Rejected alternatives
+These choices may be reconsidered through a product and architecture decision
+if requirements or economics materially change. They are intentionally not
+treated as security invariants equivalent to one Matrix owner or safe byte and
+secret boundaries.
 
-### Rewrite the desktop UI in Slint, Dioxus, or egui
+Likewise, Windows, Android, a standalone web client, a Rust desktop UI toolkit,
+or Tauri iOS are not current product paths. Adding or replacing a platform
+requires a separate ADR; it must not be used to bypass this ownership model.
 
-Rejected. The native-first spike already sequenced iOS-on-engine ahead of
-any desktop UI rewrite. A Rust widget toolkit would rebuild the feature
-UI without moving the remaining shared Matrix work.
+## Change process
 
-### Ship Tauri iOS, or replace SwiftUI with a Rust UI
+A proposal that crosses this boundary must:
 
-Rejected. ADR 0002 stands. Apple-only UI, Keychain, APNs, and NSE stay
-Swift. Logic moves; UI does not.
+1. identify an observable problem and the earliest duplicated authority;
+2. compare leaving ownership unchanged, a bounded extraction, and the broader
+   move;
+3. account for secrets/bytes, latency, schema versions, lifecycle, failure,
+   migration, removal, and rollback;
+4. explain how desktop and iOS retain native rendering and accessibility;
+5. land an explicit amendment or replacement ADR before implementation.
 
-### Register the twenty-one leftover commands on `Core::command`
+Current research guidance lives in the
+[Rust ownership residual census](../future-projects/rust-ownership-expansion/README.md).
+That portfolio does not override this ADR or authorize product work.
 
-Rejected. Passwords, recovery secrets, file paths, and media bytes must
-not cross the generic envelope. A watchdog prompt is not a new owner
-decision.
+## Historical implementation context
 
-### Rewrite CI, release, or guardrail scripts in Rust
-
-Rejected. Those scripts are not product runtime. Node already fits.
-
-### Expand to Windows, Android, or a web client in Rust first
-
-Rejected until the two existing apps share one live engine. New platforms
-are not a language-boundary escape hatch.
-
-### Start a second core crate or a parallel migration ledger
-
-Rejected. `crates/synara-core` and `docs/shared-native-core/` are the
-implementation path.
+The original ADR included P4/P5 sequencing, command counts, leftover routes,
+and migration tasks. Those records explain the shared-Core cutover but are not
+timeless language rules. Current program status and stop gates live under
+[`docs/shared-native-core/`](../shared-native-core/README.md). The architecture
+decision must not be used to infer that a historical phase or release gate is
+complete.
 
 ## Consequences
 
-- Future slices apply this rubric, then the playbook's "how to pick the
-  next slice" checklist. The rubric does not authorize skipping disk,
-  UniFFI, or leftover-envelope rules.
-- iOS feature work that would duplicate sync, room list, timeline, or
-  crypto in Swift is out of bounds. Add a Core owner or wait.
-- Desktop UI, SwiftUI, and Node tooling stay in their current languages
-  unless a later ADR supersedes this one.
-- Secret- and byte-sensitive commands remain documented shell leftovers
-  until a written owner decision or Platform ADR defines another channel.
+- Shared correctness policy converges in one testable Core without turning Core
+  into a UI framework or OS abstraction layer.
+- Platform clients may differ visually and behaviorally where native
+  interaction requires it, while consuming the same authoritative state.
+- New work must distinguish authority from observation/rendering before adding
+  Rust, TypeScript, or Swift owners.
+- Dedicated typed channels are legitimate; the generic envelope is not a
+  shortcut for secret-, path-, or byte-sensitive work.
 
-## Related documents
+## Related decisions
 
-- [ADR 0002 — iOS architecture](0002-ios-architecture.md)
+- [ADR 0002 — native iOS architecture](0002-ios-architecture.md)
 - [ADR 0003 — shared native Rust core](0003-shared-native-rust-core.md)
-- [Shared native core program](../shared-native-core/README.md)
-- [Implementer playbook](../shared-native-core/11-implementer-playbook.md)
-- [Native-first architecture spike](../native-first-architecture-spike.md)
+- [ADR 0005 — native media handle channel](0005-native-media-handle-channel.md)

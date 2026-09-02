@@ -19,8 +19,8 @@ power/identity checks, response encoding, and redacted audit evidence.
 
 The preferred direction is to make existing Rust policy authoritative and
 remove competing planners, not create another approval subsystem. Sequence any
-implementation behind ADR 0004's iOS-on-engine prerequisite and the current
-goal-graph stop gate.
+implementation behind the current shared-Core goal-graph stop gate; ADR 0004
+defines the ownership boundary but does not define a historical phase queue.
 
 Cards, sheets, notification buttons, haptics, emoji presentation, and OS
 delivery remain platform rendering/integration. Required eventual proof

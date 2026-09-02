@@ -1,34 +1,87 @@
-# 0005 — Native media handle channel
+# ADR 0005: Native Media Handle and Byte Channels
 
-Status: Accepted on `main` via #1001. Not program-done. Not P4 acceptance.
+Originally accepted: 2026-08-18 via PR #1001.
+
+Last reviewed: 2026-09-01.
+
+Status: accepted and implemented. This status describes the media boundary,
+not completion of every historical shared-Core phase or release gate.
+
+## Context
+
+Timeline events need to identify, authorize, decrypt, download, and display
+media without placing raw sources, local paths, or large byte arrays in the
+generic Core JSON command envelope. That envelope is capped at 1 MiB and is
+appropriate for bounded control/data models, not bulk transport.
+
+Encrypted `mxc://` sources also carry authority and key material that should
+not be reconstructed independently by presenters.
 
 ## Decision
 
-Timeline rows expose an opaque `media_handle_id` (plus mime/size metadata).
-iOS loads bytes through `SharedCore.timeline_media_bytes(handle_id)`, a
-dedicated UniFFI `bytes` argument. Desktop live timeline media uses the
-`synara-media://` protocol and `resolve_timeline_media`. The leftover
-`matrix_media_download` shell command now accepts the same
-`timeline-media-*` handle and resolves it through that owner. Plain
-`mxc://` remains only for leftover avatar/pack paths.
+Core/native media owners expose opaque media handles plus bounded metadata.
+The handle identifies a native-owned source without exposing a filesystem path
+or requiring the presenter to understand Matrix encryption metadata.
 
-Bytes must not cross `Core::command` (1 MiB envelope, 32 MiB product cap).
-Do not register `matrix_send_attachment` / `matrix_upload_media` /
-`matrix_media_download` on Core.
+- Timeline rows may expose `media_handle_id` and bounded MIME, size, dimension,
+  or duration metadata.
+- iOS resolves timeline bytes through the dedicated typed
+  `SharedCore.timeline_media_bytes(handle_id)` UniFFI byte method.
+- Desktop resolves timeline handles through the `synara-media://` native
+  protocol and the narrow `matrix_media_download` shell adapter.
+- Send/upload workflows use their dedicated native queues and byte/file
+  handoffs rather than `Core::command` JSON.
+- Cache, integrity, quota, and retry policy may live in Core when shared;
+  filesystem paths, OS file coordination, and display remain platform-owned.
 
-## Why
-
-The presenter boundary already forbids `mxc://` on timeline JSON. The
-native owner keeps `MediaSource` behind the handle, including encrypted
-sources. Desktop no longer treats leftover `mxc://` +
-`browser-encrypt-attachment` as the live timeline decrypt path. Composer
-send is native-only; JS encrypt/decrypt is retired. Leftover encrypted
-`mxc://` without a handle fail-closes. UniFFI leftover
-`media_download(mxc)` stays planted fail-closed on iOS (decision 15).
+The exact byte caps of dedicated channels are product and platform policy and
+may differ by operation. They must be explicit, tested, and fail closed; they
+do not inherit permission to use the generic envelope.
 
 ## Must not
 
-- Put media bytes or `mxc://` on `TimelineViewRowDto`
-- Download media in NSE
-- Treat leftover `media_download` as the iOS live path
-- Register `matrix_media_download` on `Core::command`
+- Put media/attachment bytes or local filesystem paths in `Core::command`.
+- Put raw `mxc://` media sources or encryption material on timeline presentation
+  DTOs when an opaque handle is required.
+- Let React or SwiftUI independently decrypt timeline media.
+- Treat legacy/plain download helpers as an alternate iOS live media engine.
+- Download media from the notification service extension.
+- Log handles, filenames, source URLs, keys, or byte payloads without the
+  redaction and diagnostic policy appropriate to that boundary.
+
+## Current evidence
+
+- `TimelineViewRowDto.media_handle_id` is defined in
+  `crates/synara-core/src/shared_core_ffi.rs` and the UniFFI schema.
+- `timeline_media_bytes` is the dedicated iOS byte path.
+- `src-tauri/src/matrix/media/product_commands.rs` resolves native timeline
+  handles for desktop with explicit URI and byte bounds.
+- `synara/src/app/matrix/media.ts` recognizes the `synara-media://` protocol.
+- Core attachment and media modules define separate bounded send/download
+  policies rather than serializing bytes into the generic envelope.
+
+## Rationale
+
+- Opaque handles preserve one source/decryption authority.
+- Dedicated byte APIs avoid JSON/base64 expansion and the generic envelope's
+  memory and serialization limits.
+- Platform paths never become portable identifiers or leak into shared models.
+- Native adapters can enforce OS storage, lifecycle, memory, and cleanup
+  constraints while Core retains shared policy.
+
+## Consequences
+
+- Media metadata can evolve through versioned typed fields without exposing
+  bytes or paths.
+- Dedicated native channels require their own size limits, cancellation,
+  backpressure, corruption handling, cache policy, and tests.
+- Plain/avatar/pack legacy paths may be retired incrementally, but they must not
+  become a second encrypted timeline-media implementation.
+- Any proposal to place media bytes on the generic envelope requires an
+  explicit replacement ADR and must overcome the security and performance
+  reasons above.
+
+## Related decisions
+
+- [ADR 0003 — shared native Rust core](0003-shared-native-rust-core.md)
+- [ADR 0004 — Rust and platform ownership boundaries](0004-rust-language-boundaries.md)

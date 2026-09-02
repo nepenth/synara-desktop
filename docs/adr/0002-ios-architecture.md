@@ -1,155 +1,87 @@
 # ADR 0002: Synara iOS Architecture
 
-Reviewed: 2026-05-26
+Originally accepted: 2026-05-26.
 
-Status: accepted for Phase 1 scaffolding.
+Last reviewed: 2026-09-01.
+
+Status: accepted as amended by [ADR 0003](0003-shared-native-rust-core.md).
 
 ## Decision
 
-Build Synara iOS as a native SwiftUI app backed by the Matrix Rust SDK Swift
-components.
+Synara iOS is a native SwiftUI application. Swift owns scenes, navigation,
+feature presentation, accessibility, Apple platform services, Keychain/APNs
+integration, and the notification service extension.
 
-Tauri iOS is not the default shipping architecture. It can remain a tactical
-experiment for compatibility research, but it should not block the native iOS
-app skeleton, Matrix service wrapper, or App Store-grade UX work.
+ADR 0003 superseded this ADR's original direct Swift service-layer adaptation
+of `matrix-rust-components-swift`. Shared Matrix lifecycle and application
+authority now live in the project-owned `crates/synara-core`; iOS consumes that
+Core through generated `SynaraCore` Swift/UniFFI bindings. Swift service objects
+are thin platform adapters and projections, not a second Matrix engine.
 
-## Evidence
+Tauri iOS is not the shipping architecture. It may be used for isolated
+research only and must not become a parallel product path without a replacement
+ADR.
 
-- The pre-iOS desktop/runtime consolidation is complete.
-- Packaged macOS and Linux CI smoke builds passed after the repository was
-  consolidated.
-- [ADR 0001](0001-ios-repository-layout.md) places iOS in this monorepo under
-  `synara-ios/`.
-- [Tauri iOS feasibility spike](../../synara-ios/docs/tauri-ios-feasibility-spike.md)
-  initialized a generated Xcode project, but simulator runtime validation was
-  blocked by local Xcode first-launch/simulator setup. Static assessment still
-  showed high risk for push, media, keyboard/composer behavior, service worker
-  assumptions, performance, and App Review fit.
-- [Matrix SDK feasibility spike](../../synara-ios/docs/matrix-sdk-feasibility-spike.md)
-  resolved the official Swift package, downloaded the binary FFI artifact,
-  compiled wrapper sources, linked a local probe, and successfully ran a
-  `MatrixRustSDK` import probe.
-- The official Matrix Rust Components Swift package currently declares iOS 16+
-  and macOS 12+ support.
+## Current ownership
 
-## Architecture
+### Swift/iOS owns
 
-Initial module boundaries:
+- SwiftUI views, navigation, layout, gestures, selection, accessibility, and
+  Dynamic Type;
+- app and scene lifecycle observations;
+- Keychain and protected platform storage adapters;
+- APNs registration, notification routing, NSE lifecycle, badges, and taps;
+- Photos, camera, Files, share sheets, permissions, signing, and App Store
+  behavior.
 
-```text
-synara-ios/
-  Synara.xcodeproj
-  Synara/
-    App/
-    Features/
-    SharedUI/
-  SynaraCore/
-    Contracts/
-    Logging/
-    Persistence/
-    Security/
-  SynaraMatrix/
-    MatrixClientService.swift
-    SessionStore.swift
-    RoomListService.swift
-    TimelineService.swift
-  SynaraPush/
-    APNsRegistrationService.swift
-    MatrixPusherService.swift
-    NotificationRouter.swift
-  SynaraAgent/
-    AgentAction.swift
-    AgentActionValidator.swift
-```
+### Shared Core owns
 
-The first scaffold may start smaller, but it should preserve these ownership
-lines:
+- Matrix client lifecycle, sync, room/timeline state, writes, crypto, trust,
+  receipts, account data, and shared product policy;
+- typed models and operations consumed by both desktop and iOS;
+- protocol validation and bounds that are independent of a UI output context.
 
-- `Synara` owns app entry, scenes, navigation, feature UI, and dependency
-  installation.
-- `SynaraCore` owns app-owned contracts, redacted logging, Keychain wrappers,
-  fixture loaders, and portable value types.
-- `SynaraMatrix` owns Matrix Rust SDK adaptation and hides SDK volatility from
-  views.
-- `SynaraPush` owns APNs, Matrix pusher registration, badge routing, and
-  notification tap handling.
-- `SynaraAgent` owns agent action/card validation against shared contracts.
+The complete boundary rubric is [ADR 0004](0004-rust-language-boundaries.md).
 
-## Shared Contracts
+## Current evidence
 
-The iOS app must consume the existing shared contracts from:
+- Product Swift sources import the repository-local `SynaraCore` module; the
+  direct `MatrixRustSDK` import remains only in the historical feasibility
+  spike.
+- `synara-ios/SynaraCore/` defines the local package and generated artifact
+  boundary.
+- `synara-ios/Synara/Services/SharedCore*` contains thin Swift adapters over the
+  shared owner.
+- The notification extension has a narrow lifecycle and must not start the full
+  sync engine.
 
-```text
-synara/docs/contracts
-```
+## Shared contracts and release consequences
 
-Swift types may be generated or manually mirrored, but fixture conformance tests
-must use the same JSON fixtures as the desktop runtime. Contract files must not
-be forked into the iOS project.
+- Cross-client schemas and fixtures remain canonical under
+  `synara/docs/contracts/`; generated or mirrored Swift types must conform to
+  those fixtures.
+- Simulator CI can run unsigned. Signed archive, physical-device, APNs,
+  privacy, export-compliance, and App Store validation remain release gates.
+- Matrix session and crypto stores use Core/matrix-rust-sdk owners. Keychain
+  holds platform secrets; decrypted message bodies are not independently
+  persisted without a separate decision.
+- Logout/local-wipe behavior must remove the scoped credentials, Core stores,
+  caches, drafts, and push state defined by current product requirements.
 
-## App Store Consequences
+## Rejected alternatives
 
-- Native SwiftUI gives the best path for App Review, accessibility, iPad
-  behavior, system permissions, and platform interaction quality.
-- The app must still pass the AGPL/App Store legal review gate before external
-  TestFlight or App Store submission.
-- APNs, Matrix pusher registration, privacy-safe payloads, App Store privacy
-  labels, export compliance, and signing/provisioning remain first-class release
-  gates.
+- **Ship Tauri iOS:** rejected for native interaction, accessibility, keyboard,
+  notification, lifecycle, and App Review reasons.
+- **Maintain a second Swift Matrix engine:** superseded because it creates
+  cross-client policy and state-machine drift.
+- **Rewrite working desktop presenters before iOS:** rejected because it does
+  not improve shared Matrix authority.
+- **Separate iOS repository:** rejected by ADR 0001.
 
-## Push Consequences
+## Consequences
 
-- Push is native APNs plus Matrix pusher registration, not browser
-  notification semantics.
-- The Matrix push gateway remains a separate infrastructure decision. Sygnal is
-  still the reference starting point unless a Synara-operated gateway is
-  justified.
-- Push payloads default to generic content. Exact room/event context is
-  recomputed after app open and local sync/decryption.
-
-## Crypto And Session Consequences
-
-- Use Matrix Rust SDK approved stores for Matrix state and crypto state.
-- Use Keychain or SDK-approved secure storage for access tokens, restore
-  handles, and bootstrap secrets.
-- Do not persist decrypted message bodies outside SDK-required stores without a
-  separate design.
-- Logout must wipe Keychain entries, SDK stores, caches, local drafts, and
-  pending push registration state.
-
-## CI Consequences
-
-- Phase 1 CI should start with unsigned simulator builds and unit tests.
-- Signed device/archive CI waits for Apple Developer enrollment and approved
-  secret storage.
-- Matrix SDK binary downloads should be pinned through `Package.resolved`.
-- The desktop CI must remain green when iOS files are added.
-
-## Rejected Alternatives
-
-### Ship Tauri iOS First
-
-Rejected as the default architecture because it carries high risk for App
-Store-grade push, storage, keyboard/composer behavior, accessibility, iPad
-layout, and App Review perception. The current runtime is valuable for desktop,
-but iOS needs native ownership of platform behavior.
-
-### Rewrite macOS And Linux Native Before iOS
-
-Rejected because macOS and Linux are already working on Tauri and remain
-first-class. A desktop rewrite would delay iOS without proving shared Matrix
-domain value first.
-
-### Build A Separate Clean-Room iOS Repository Now
-
-Rejected for Phase 1 because contracts, planning, and CI are now centralized in
-this monorepo. Separate repository access can be revisited after the app
-skeleton and Matrix path are proven.
-
-## Acceptance Criteria
-
-- Primary iOS implementation path is selected.
-- Role of Tauri iOS is recorded.
-- Matrix SDK strategy and module boundaries are recorded.
-- Consequences for App Store review, push, crypto, shared contracts, CI, and
-  maintenance are explicit.
+- Native iOS quality is preserved without duplicating Matrix/application logic.
+- Platform observations flow into Core authority through typed boundaries; Core
+  does not own SwiftUI or Apple lifecycle APIs.
+- Any proposal to replace SwiftUI, ship Tauri iOS, or restore an independent
+  Swift Matrix service layer requires a replacement ADR.
