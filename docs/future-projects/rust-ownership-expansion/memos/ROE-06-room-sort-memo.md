@@ -99,3 +99,18 @@ Regression proof to keep the boundary stable:
 ## Next gate
 
 Stay platform-side. Close ROE-06. Do not write an implementation plan. Do not expose `RoomListSort` / `RoomListScope` on UniFFI. Do not move locale collation, filter chips, or navigation sections into Core. Unused helpers may remain as dead library code; deleting or wiring them is a later human product decision, not this census.
+
+## Reviewer nits (`ACCEPT_WITH_NITS` on #1087)
+
+Recorded from the independent review at `eff03f01`. They do not change the
+close:
+
+- Live iOS does not append `InviteDto` rows via
+  `RoomListSearchFilter.mergeInvitedRooms`. `SharedCoreRoomListRows`
+  overlays invite preview on already-listed snapshot rooms.
+  `mergeInvitedRooms` only reinserts invited-membership rooms already in
+  the in-memory array. Combined with joined-only `new_filter_joined()`,
+  the census table overstates “merges invite rows into the list.”
+- `PlaceholderRoomListService` is unused. `AppEnvironment.live()` uses
+  `SharedCoreRoomListService`. The test/preview/UI-test stand-in that
+  calls `RoomListFixtures.sorted` is `MockRoomListService`.
