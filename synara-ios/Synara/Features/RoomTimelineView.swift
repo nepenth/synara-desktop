@@ -7465,14 +7465,17 @@ private struct ComposerFormattingBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: SynaraSpacing.xSmall) {
+            // Eight 44-point hit targets plus spacing and row padding must fit
+            // a 377-point composer row: keep the accessible frame and tighten
+            // the visual box and rhythm instead.
+            HStack(spacing: 2) {
                 ForEach(ComposerMarkdownFormat.allCases) { format in
                     Button {
                         onFormat(format)
                     } label: {
                         Image(systemName: format.systemImage)
                             .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 36, height: 36)
+                            .frame(width: 34, height: 34)
                             .background(SynaraColor.surface)
                             .foregroundStyle(SynaraColor.primaryText)
                             .clipShape(
@@ -7493,7 +7496,7 @@ private struct ComposerFormattingBar: View {
                     .accessibilityIdentifier("ComposerFormat-\(format.rawValue)")
                 }
             }
-            .padding(.horizontal, SynaraSpacing.small)
+            .padding(.horizontal, SynaraSpacing.xSmall)
             .padding(.vertical, SynaraSpacing.xSmall)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
