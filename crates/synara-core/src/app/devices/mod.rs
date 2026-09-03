@@ -46,9 +46,11 @@ pub struct NativeDeviceSnapshot {
     /// cross-signing identity signing this device.
     pub own_verification: NativeOwnDeviceVerification,
     /// Whether the SDK found an eligible, cross-signed peer authority for
-    /// verifying this device. `None` means the initial key query failed and is
-    /// deliberately not collapsed to "no authority". This is not inferred
-    /// from local row trust.
+    /// verifying this device. When the authority `/keys/query` fails or times
+    /// out, this projects the same SDK predicate over the concurrently
+    /// fetched local device set instead of collapsing to unknown; `None` is
+    /// reserved for a missing crypto machine, where there is no local set to
+    /// project. This is not inferred from local row trust.
     pub has_devices_to_verify_against: Option<bool>,
     pub devices: Vec<NativeDeviceSummary>,
 }
@@ -175,7 +177,9 @@ mod tests {
             .expect("device snapshot owner");
         assert!(snapshot.contains("has_devices_to_verify_against()"));
         assert!(snapshot.contains("Duration::from_secs(8)"));
-        assert!(snapshot.contains("Ok(Err(_)) | Err(_) => None"));
+        assert!(snapshot.contains("Ok(Err(_)) | Err(_) => match crypto_devices.as_ref()"));
+        assert!(snapshot.contains("eligible_local_authority("));
+        assert!(snapshot.contains("Err(matrix_sdk::Error::NoOlmMachine) => None"));
         assert!(!snapshot.contains("device-verification-state-failed"));
     }
 

@@ -8,7 +8,7 @@ use tokio::sync::Mutex as AsyncMutex;
 
 use futures_util::StreamExt;
 use matrix_sdk::{
-    encryption::VerificationState,
+    encryption::{identities::UserDevices, VerificationState},
     ruma::{
         api::client::uiaa::{
             AuthData, AuthType, MatrixUserIdentifier, Password, UiaaInfo, UserIdentifier,
@@ -421,6 +421,20 @@ impl Drop for NativeDeviceOwner {
     }
 }
 
+/// Mirror of the SDK's `has_devices_to_verify_against` predicate over an
+/// already-fetched local device set: signed by the owner's cross-signing key,
+/// Olm-capable, and not dehydrated. Used only when the authority `/keys/query`
+/// itself fails or times out; the authoritative path above stays preferred.
+fn eligible_local_authority(devices: Option<&UserDevices>) -> bool {
+    devices.is_some_and(|devices| {
+        devices.devices().any(|device| {
+            device.is_cross_signed_by_owner()
+                && device.curve25519_key().is_some()
+                && !device.is_dehydrated()
+        })
+    })
+}
+
 pub async fn snapshot(
     client: &Client,
     session_generation: u64,
@@ -449,7 +463,17 @@ pub async fn snapshot(
     );
     let has_devices_to_verify_against = match eligibility {
         Ok(Ok(has_devices)) => Some(has_devices),
-        Ok(Err(_)) | Err(_) => None,
+        // The authority lookup performs its own `/keys/query`. When it fails
+        // or times out, project the same SDK predicate over the concurrently
+        // fetched local device set instead of blanking eligibility to
+        // "could not check". A fresh store with no tracked devices projects
+        // `Some(false)`, which keeps the actionable "open a verified session"
+        // guidance instead of a retry dead-end. Without a crypto machine
+        // there is no local set to project, so `None` is preserved.
+        Ok(Err(_)) | Err(_) => match crypto_devices.as_ref() {
+            Err(matrix_sdk::Error::NoOlmMachine) => None,
+            Err(_) | Ok(_) => Some(eligible_local_authority(crypto_devices.as_ref().ok())),
+        },
     };
     let own_verification = match encryption.verification_state().get() {
         VerificationState::Unknown => NativeOwnDeviceVerification::Unknown,

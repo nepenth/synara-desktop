@@ -40,7 +40,7 @@ struct RoomListView: View {
                     }
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.small)
+                    .padding(.bottom, SynaraSpacing.xSmall)
                     .background(SynaraChrome.roomList)
 
                     List {
@@ -134,7 +134,7 @@ struct RoomListView: View {
                     }
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.small)
+                    .padding(.bottom, SynaraSpacing.xSmall)
                     .background(SynaraChrome.roomList)
 
                     List {
