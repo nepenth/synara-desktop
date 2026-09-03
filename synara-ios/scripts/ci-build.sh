@@ -6,15 +6,22 @@ PACKAGE_CACHE_PATH="${IOS_PACKAGE_CACHE_PATH:-/private/tmp/synara-ios-package-ca
 RESULT_BUNDLE_DIR="${IOS_RESULT_BUNDLE_DIR:-/private/tmp/synara-ios-results}"
 RESULT_STAMP="${IOS_RESULT_STAMP:-$(date +%Y%m%d-%H%M%S)-$$}"
 APPLE_SLICES="${SYNARA_CORE_APPLE_SLICES:-all}"
+# Xcode 26 rejects `{ generic:1, platform:iOS Simulator, arch:arm64 }`.
+# Named arm64 destinations exist; use one so the arm64-only XCFramework links.
 if [[ -n "${IOS_BUILD_DESTINATION:-}" ]]; then
   BUILD_DESTINATION="$IOS_BUILD_DESTINATION"
 elif [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
-  # Rust XCFramework slices are arm64-only; universal simulator builds fail to link.
-  BUILD_DESTINATION="generic/platform=iOS Simulator,arch=arm64"
+  BUILD_DESTINATION="platform=iOS Simulator,name=iPhone 17,arch=arm64"
 else
   BUILD_DESTINATION="generic/platform=iOS Simulator"
 fi
-TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
+if [[ -n "${IOS_TEST_DESTINATION:-}" ]]; then
+  TEST_DESTINATION="$IOS_TEST_DESTINATION"
+elif [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
+  TEST_DESTINATION="platform=iOS Simulator,name=iPhone 17,arch=arm64"
+else
+  TEST_DESTINATION="platform=iOS Simulator,name=iPhone 17"
+fi
 TEST_SUITE="${IOS_TEST_SUITE:-all}"
 DEVICE_DERIVED_DATA_PATH="${IOS_DEVICE_DERIVED_DATA_PATH:-/private/tmp/synara-ios-device-derived}"
 CLONED_SOURCE_PACKAGES_DIR_PATH="${IOS_CLONED_SOURCE_PACKAGES_DIR_PATH:-}"
