@@ -159,7 +159,7 @@ private struct AccountMenuSheet: View {
             } catch {
                 await MainActor.run {
                     isLoggingOut = false
-                    logoutError = LocalWipeError.sessionDeleteFailed.localizedDescription
+                    logoutError = LocalWipeError.displayMessage(for: error)
                     environment.logger.error("Local logout failed from account menu", category: .auth)
                 }
             }

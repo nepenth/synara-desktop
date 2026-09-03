@@ -297,6 +297,15 @@ final class OutgoingSendServiceTests: XCTestCase {
                 hasApprovalPrompt: false
             )
         )
+        XCTAssertTrue(
+            TimelineRowAccessibility.containsChildren(
+                deliveryStatus: nil,
+                kind: .text("Poll"),
+                replyCount: 0,
+                hasApprovalPrompt: false,
+                hasInteractivePoll: true
+            )
+        )
     }
 
     func testPendingItemsSurfaceWhileTimelineIsLoadingOrFailed() {

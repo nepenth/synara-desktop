@@ -18,11 +18,11 @@ final class NotificationService: UNNotificationServiceExtension {
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
         let requestID = coordinator.begin(content: request.content, handler: contentHandler)
-        SynaraNotificationDiagnostics.record(.received)
+        SynaraNotificationDiagnostics.record(.received, runID: requestID)
 
         guard let content = request.content.mutableCopy() as? UNMutableNotificationContent else {
             logger.error("preview stage=content-copy-failed")
-            SynaraNotificationDiagnostics.record(.contentCopyFailed)
+            SynaraNotificationDiagnostics.record(.contentCopyFailed, runID: requestID)
             deliver(request.content, requestID: requestID)
             return
         }
@@ -38,39 +38,49 @@ final class NotificationService: UNNotificationServiceExtension {
         }
         guard let payload = SynaraNotificationPreviewPayloadParser.payload(from: request.content.userInfo) else {
             logger.info("preview stage=payload-invalid")
-            SynaraNotificationDiagnostics.record(.payloadInvalid)
+            SynaraNotificationDiagnostics.record(.payloadInvalid, runID: requestID)
             deliver(content, requestID: requestID)
             return
         }
         guard showPreview || timeSensitiveApprovals else {
             logger.info("preview stage=preferences-disabled")
-            SynaraNotificationDiagnostics.record(.preferencesDisabled)
+            SynaraNotificationDiagnostics.record(.preferencesDisabled, runID: requestID)
             deliver(content, requestID: requestID)
             return
         }
 
         logger.info("preview stage=resolution-started")
-        SynaraNotificationDiagnostics.record(.resolutionQueued)
+        SynaraNotificationDiagnostics.record(.resolutionQueued, runID: requestID)
         let resolver = MatrixNotificationPreviewResolver()
         let logger = self.logger
         let enrichmentTask = Task { [coordinator, resolutionGate] in
             guard await resolutionGate.acquire() else {
-                SynaraNotificationDiagnostics.record(.resolutionCancelled)
-                coordinator.deliver(content, requestID: requestID)
+                SynaraNotificationDiagnostics.record(.resolutionCancelled, runID: requestID)
+                coordinator.deliver(content, requestID: requestID) {
+                    SynaraNotificationDiagnostics.record(.delivered, runID: requestID)
+                }
                 return
             }
             if Task.isCancelled {
                 await resolutionGate.release()
-                SynaraNotificationDiagnostics.record(.resolutionCancelled)
-                coordinator.deliver(content, requestID: requestID)
+                SynaraNotificationDiagnostics.record(.resolutionCancelled, runID: requestID)
+                coordinator.deliver(content, requestID: requestID) {
+                    SynaraNotificationDiagnostics.record(.delivered, runID: requestID)
+                }
                 return
             }
-            if let resolved = await resolver.resolve(for: payload, onRequest: { request in
-                coordinator.installCoreCancellation(
-                    { request.cancel() },
-                    requestID: requestID
-                )
-            }) {
+            if let resolved = await resolver.resolve(
+                for: payload,
+                onRequest: { request in
+                    coordinator.installCoreCancellation(
+                        { request.cancel() },
+                        requestID: requestID
+                    )
+                },
+                recordStage: { stage in
+                    SynaraNotificationDiagnostics.record(stage, runID: requestID)
+                }
+            ) {
                 var diagnosticStage = SynaraNotificationDiagnostics.Stage.resolvedWithoutPreview
                 if showPreview, let preview = resolved.preview {
                     content.title = preview.title
@@ -93,26 +103,28 @@ final class NotificationService: UNNotificationServiceExtension {
                     diagnosticStage = .resolvedApproval
                 }
                 logger.info("preview stage=resolved")
-                SynaraNotificationDiagnostics.record(diagnosticStage)
+                SynaraNotificationDiagnostics.record(diagnosticStage, runID: requestID)
             } else {
                 logger.error("preview stage=resolution-failed")
             }
             await resolutionGate.release()
-            SynaraNotificationDiagnostics.record(.delivered)
-            coordinator.deliver(content, requestID: requestID)
+            coordinator.deliver(content, requestID: requestID) {
+                SynaraNotificationDiagnostics.record(.delivered, runID: requestID)
+            }
         }
         coordinator.install(task: enrichmentTask, requestID: requestID)
     }
 
     override func serviceExtensionTimeWillExpire() {
         logger.error("preview stage=system-deadline")
-        SynaraNotificationDiagnostics.record(.systemDeadline)
-        coordinator.expireAll()
+        let expiredRequestIDs = coordinator.expireAll()
+        SynaraNotificationDiagnostics.recordDeadlineDeliveries(for: expiredRequestIDs)
     }
 
     private func deliver(_ content: UNNotificationContent, requestID: UUID) {
-        SynaraNotificationDiagnostics.record(.delivered)
-        coordinator.deliver(content, requestID: requestID)
+        coordinator.deliver(content, requestID: requestID) {
+            SynaraNotificationDiagnostics.record(.delivered, runID: requestID)
+        }
     }
 
 }
@@ -187,7 +199,8 @@ private struct MatrixNotificationPreviewResolver {
 
     func resolve(
         for payload: SynaraNotificationPreviewPayload,
-        onRequest: (NsePreviewRequest) -> Void
+        onRequest: (NsePreviewRequest) -> Void,
+        recordStage: (SynaraNotificationDiagnostics.Stage) -> Void
     ) async -> ResolvedNotificationEvent? {
         let fileManager = FileManager.default
         guard Task.isCancelled == false else {
@@ -196,13 +209,13 @@ private struct MatrixNotificationPreviewResolver {
         }
         guard let session = sessionStore.load() else {
             logger.error("preview stage=shared-session-missing")
-            SynaraNotificationDiagnostics.record(.sharedSessionMissing)
+            recordStage(.sharedSessionMissing)
             return nil
         }
         guard let storeRoot = SynaraSharedConstants.sharedCoreStoreRoot(fileManager: fileManager),
               SynaraSharedConstants.sharedCoreStoreIsReady(at: storeRoot, fileManager: fileManager) else {
             logger.error("preview stage=shared-store-not-ready")
-            SynaraNotificationDiagnostics.record(.sharedStoreNotReady)
+            recordStage(.sharedStoreNotReady)
             return nil
         }
 
@@ -249,7 +262,7 @@ private struct MatrixNotificationPreviewResolver {
             let peakKB = await memorySampler.peakFootprintKB
             logger.error("preview memory failed_peak_footprint_kb=\(peakKB, privacy: .public)")
             logger.error("preview stage=core-resolution-error")
-            SynaraNotificationDiagnostics.record(.coreResolutionFailed)
+            recordStage(.coreResolutionFailed)
             return nil
         }
     }

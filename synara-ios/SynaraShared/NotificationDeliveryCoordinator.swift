@@ -64,6 +64,7 @@ final class NotificationDeliveryCoordinator: @unchecked Sendable {
     }
 
     private struct Completion {
+        let id: UUID
         let handler: ContentHandler?
         let content: UNNotificationContent
         let task: Task<Void, Never>?
@@ -117,35 +118,51 @@ final class NotificationDeliveryCoordinator: @unchecked Sendable {
         if cancel { cancelCore() }
     }
 
-    func deliver(_ content: UNNotificationContent, requestID: UUID) {
+    /// Returns true only when this call owned the request's one completion.
+    /// A resolver finishing after Apple's deadline therefore cannot claim a
+    /// second delivery in diagnostics.
+    @discardableResult
+    func deliver(
+        _ content: UNNotificationContent,
+        requestID: UUID,
+        beforeDelivery: () -> Void = {}
+    ) -> Bool {
         let delivery = queue.sync { () -> Completion? in
             guard let current = requests.removeValue(forKey: requestID),
                   current.handler != nil else {
                 return nil
             }
             return Completion(
+                id: current.id,
                 handler: current.handler,
                 content: (content.copy() as? UNNotificationContent) ?? content,
                 task: nil,
                 cancelCore: nil
             )
         }
+        guard delivery != nil else { return false }
+        beforeDelivery()
         complete(delivery, cancelWork: false)
+        return true
     }
 
-    func expireAll() {
+    @discardableResult
+    func expireAll() -> [UUID] {
         let deliveries = queue.sync { () -> [Completion] in
             let current = requests.values.map(Self.completion)
             requests.removeAll(keepingCapacity: true)
             return current
         }
+        let requestIDs = deliveries.map(\.id)
         for delivery in deliveries {
             complete(delivery, cancelWork: true)
         }
+        return requestIDs
     }
 
     private static func completion(_ state: RequestState) -> Completion {
         Completion(
+            id: state.id,
             handler: state.handler,
             content: state.fallback,
             task: state.task,

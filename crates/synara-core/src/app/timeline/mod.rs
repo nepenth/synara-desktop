@@ -76,15 +76,16 @@ pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
 pub use utd::{UtdEntry, UtdIndex, UtdPhase, UtdReasonCode, UtdUpdate, MAX_UTD_ENTRIES};
 pub use view::{
-    project_event_row, project_event_row_base, project_formatted_body,
+    project_event_row, project_event_row_base, project_formatted_body, project_forward_transport,
     project_message_type_and_media, project_poll_answers, project_timeline_diffs,
     project_timeline_diffs_with_media, project_timeline_item, project_timeline_item_with_media,
-    TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase, TimelineMediaHandle,
-    TimelineMembershipRow, TimelineMessageRow, TimelineOtherRow, TimelinePageState,
-    TimelinePaginationState, TimelinePollAnswer, TimelinePollRow, TimelineReaction,
-    TimelineReadState, TimelineRedactedRow, TimelineReplyPreview, TimelineRowCapabilities,
-    TimelineStateRow, TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch,
-    TimelineViewDeltaOp, TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
+    TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase,
+    TimelineForwardTransport, TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow,
+    TimelineOtherRow, TimelinePageState, TimelinePaginationState, TimelinePollAnswer,
+    TimelinePollRow, TimelineReaction, TimelineReadState, TimelineRedactedRow,
+    TimelineReplyPreview, TimelineRoomActionAuthority, TimelineRowCapabilities, TimelineStateRow,
+    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
+    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
     NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 pub use view_emit::{TimelineViewUpdateEmit, ViewDeltaEmitter};

@@ -184,8 +184,16 @@ final class SynaraAgentApprovalNotificationActionDedupeStore {
 protocol MatrixPusherServicing {
     var isGatewayConfigured: Bool { get }
     var configuredGatewayURL: URL? { get }
-    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws
-    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws
+    func bindPusher(to session: AuthenticatedSession) throws -> MatrixPusherAccountServicing
+}
+
+/// A capability retained by the push reconciler for exactly one authenticated
+/// Matrix client. Rotation and logout must invoke this bound owner rather than
+/// resolving through whichever Core session is current at cleanup time.
+protocol MatrixPusherAccountServicing: AnyObject {
+    func registerPusher(pushKey: String) async throws
+    func unregisterPusher(pushKey: String) async throws
+    func unregisterAllPushersForDevice() async throws
 }
 
 struct MatrixPusherRegistrationFailure: Error {
@@ -194,21 +202,43 @@ struct MatrixPusherRegistrationFailure: Error {
 
 @MainActor
 final class SynaraPushService: NSObject, @preconcurrency PushServicing {
+    private struct PusherBinding: Equatable {
+        let session: AuthenticatedSession
+        let sessionSignature: String
+        let pushKey: String
+        let owner: MatrixPusherAccountServicing
+
+        static func == (lhs: PusherBinding, rhs: PusherBinding) -> Bool {
+            lhs.session == rhs.session
+                && lhs.sessionSignature == rhs.sessionSignature
+                && lhs.pushKey == rhs.pushKey
+        }
+    }
+
     private(set) var isRegistered = false
     private(set) var fullDeviceToken: String?
-    private var sessionBoundPushKey: String?
+    private var registeredBinding: PusherBinding?
     var pushGatewayURL: String? { pusherService.configuredGatewayURL?.absoluteString }
     var tokenSnippet: String? {
         fullDeviceToken?.prefix(10).description
     }
     private(set) var registrationStateDescription = "Waiting for APNs token"
     private(set) var currentSession: AuthenticatedSession?
+    private var currentPusherOwner: MatrixPusherAccountServicing?
 
     private let pusherService: MatrixPusherServicing
     private let sparseRouteResolver: SparsePushRouteResolving?
     private let logger: LoggingServicing
     private(set) var isRegistrationAvailable: Bool = true
     private var currentSessionSignature: String?
+    private var reconciliationRevision: UInt64 = 0
+    private var reconciliationTask: Task<Void, Never>?
+    private var registrationDiagnosticRunID: UUID?
+    private var isRegistrationTeardownInProgress = false
+    /// UIKit may rotate the APNs token while logout is suspended on remote or
+    /// Keychain work. Keep only the latest value in memory: successful logout
+    /// discards it, while a failed local handoff restores the correct token.
+    private var pendingDeviceTokenDuringTeardown: String?
 
     #if targetEnvironment(simulator)
     private let isSimulator = true
@@ -246,6 +276,11 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             logger.info("Push registration unavailable on this device", category: .push)
             return
         }
+        guard isRegistrationTeardownInProgress == false else { return }
+
+        let runID = UUID()
+        registrationDiagnosticRunID = runID
+        SynaraNotificationDiagnostics.record(.apnsRegistrationRequested, runID: runID)
 
         #if canImport(UIKit)
         Task { @MainActor in
@@ -258,10 +293,19 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         guard isRegistrationAvailable else {
             return
         }
-
         let token = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
-        if let existingToken = fullDeviceToken, existingToken != token {
+        guard isRegistrationTeardownInProgress == false else {
+            pendingDeviceTokenDuringTeardown = token
+            return
+        }
+        acceptDeviceToken(token)
+    }
+
+    private func acceptDeviceToken(_ token: String) {
+        let tokenChanged = fullDeviceToken.map { $0 != token } ?? false
+        if tokenChanged {
             registrationStateDescription = "Token changed, re-registering"
+            registrationDiagnosticRunID = UUID()
         }
 
         fullDeviceToken = token
@@ -269,44 +313,144 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
             ? "Token captured for APNs"
             : "Push gateway not configured"
         logger.info("APNs token captured", category: .push)
-
-        Task {
-            await registerWithMatrixIfPossible()
-        }
+        let runID = registrationDiagnosticRunID ?? UUID()
+        registrationDiagnosticRunID = runID
+        SynaraNotificationDiagnostics.record(.apnsTokenCaptured, runID: runID)
+        schedulePusherReconciliation()
     }
 
-    func clearRegistrationState() async {
-        let session = currentSession
-        let pushKey = sessionBoundPushKey ?? fullDeviceToken
-        if let session, let pushKey {
+    func handleRegistrationFailure() {
+        guard isRegistrationTeardownInProgress == false else { return }
+        let runID = registrationDiagnosticRunID ?? UUID()
+        registrationDiagnosticRunID = runID
+        SynaraNotificationDiagnostics.record(.apnsRegistrationFailed, runID: runID)
+        registrationStateDescription = isRegistered
+            ? "APNs registration failed; existing pusher retained"
+            : "APNs registration failed"
+    }
+
+    @discardableResult
+    func clearRegistrationState() async -> Bool {
+        let diagnosticRunID = registrationDiagnosticRunID ?? UUID()
+        isRegistrationTeardownInProgress = true
+        reconciliationRevision &+= 1
+        reconciliationTask?.cancel()
+        await reconciliationTask?.value
+        reconciliationTask = nil
+
+        let logoutOwner = registeredBinding?.owner ?? currentPusherOwner
+        if logoutOwner == nil, currentSession != nil {
+            isRegistered = false
+            SynaraNotificationDiagnostics.record(
+                .pusherUnregistrationFailed,
+                runID: diagnosticRunID
+            )
+            abortRegistrationTeardown(
+                statusDescription: "Pusher owner unavailable; retry sign out"
+            )
+            return false
+        }
+        if let logoutOwner {
+            SynaraNotificationDiagnostics.record(
+                .pusherUnregistrationStarted,
+                runID: diagnosticRunID
+            )
             do {
-                try await pusherService.unregisterPusher(session: session, pushKey: pushKey)
+                // Logout always enumerates exact app+device pushers in Core.
+                // This removes stale registrations left by an earlier crash;
+                // exact-key deletion remains rotation/supersession-only.
+                try await logoutOwner.unregisterAllPushersForDevice()
+                SynaraNotificationDiagnostics.record(
+                    .pusherUnregistrationSucceeded,
+                    runID: diagnosticRunID
+                )
             } catch {
                 logger.error("Push unregister failed", category: .push)
+                SynaraNotificationDiagnostics.record(
+                    .pusherUnregistrationFailed,
+                    runID: diagnosticRunID
+                )
+                isRegistered = false
+                // Retain the account-bound owner, token, and binding. Local
+                // sign-out is blocked while this returns false, so a later
+                // sign-out attempt can retry before the Matrix credential is
+                // deleted or revoked.
+                abortRegistrationTeardown(
+                    statusDescription: "Pusher cleanup failed; retry sign out"
+                )
+                return false
             }
         }
 
+        registeredBinding = nil
         isRegistered = false
-        sessionBoundPushKey = nil
+        registrationStateDescription = "Pusher cleanup complete, finishing sign out"
+        return true
+    }
+
+    func completeRegistrationTeardown() {
+        guard isRegistrationTeardownInProgress else { return }
         currentSessionSignature = nil
         currentSession = nil
+        currentPusherOwner = nil
         fullDeviceToken = nil
+        pendingDeviceTokenDuringTeardown = nil
+        registrationDiagnosticRunID = nil
         registrationStateDescription = isSimulator ? "Simulator: APNs unavailable" : "Waiting for APNs token"
+        // Stay gated while signed out. SessionCoordinator explicitly resumes
+        // registration before a later authenticated session is configured.
+    }
+
+    func cancelRegistrationTeardown() {
+        guard isRegistrationTeardownInProgress else { return }
+        abortRegistrationTeardown(
+            statusDescription: "Sign out cancelled, restoring push registration"
+        )
+    }
+
+    private func abortRegistrationTeardown(statusDescription: String) {
+        isRegistrationTeardownInProgress = false
+        registrationStateDescription = statusDescription
+        if let pendingDeviceTokenDuringTeardown {
+            self.pendingDeviceTokenDuringTeardown = nil
+            acceptDeviceToken(pendingDeviceTokenDuringTeardown)
+        } else if fullDeviceToken == nil {
+            beginRegistration()
+        } else {
+            schedulePusherReconciliation()
+        }
+    }
+
+    func resumeRegistrationLifecycle() {
+        isRegistrationTeardownInProgress = false
     }
 
     func configure(with session: AuthenticatedSession) {
+        guard isRegistrationTeardownInProgress == false else { return }
         let nextSignature = sessionSignature(for: session)
+        let previousSignature = currentSessionSignature
         if let previousSignature = currentSessionSignature, previousSignature != nextSignature {
-            isRegistered = false
-            sessionBoundPushKey = nil
             registrationStateDescription = "Session changed, updating push registration"
+            registrationDiagnosticRunID = UUID()
         }
 
-        currentSession = session
-        currentSessionSignature = nextSignature
-        Task {
-            await registerWithMatrixIfPossible()
+        do {
+            currentPusherOwner = try pusherService.bindPusher(to: session)
+            currentSession = session
+            currentSessionSignature = nextSignature
+        } catch {
+            if previousSignature != nextSignature {
+                currentPusherOwner = nil
+            }
+            currentSession = session
+            currentSessionSignature = nextSignature
+            if currentPusherOwner == nil {
+                isRegistered = false
+                registrationStateDescription = "Pusher owner unavailable"
+            }
+            logger.error("Push owner binding failed", category: .push)
         }
+        schedulePusherReconciliation()
     }
 
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute? {
@@ -387,49 +531,201 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         }
     }
 
-    private func registerWithMatrixIfPossible() async {
+    private func schedulePusherReconciliation() {
+        guard isRegistrationTeardownInProgress == false else { return }
+        reconciliationRevision &+= 1
+        guard reconciliationTask == nil else { return }
+
+        reconciliationTask = Task { [weak self] in
+            await self?.drainPusherReconciliation()
+        }
+    }
+
+    private func drainPusherReconciliation() async {
+        while Task.isCancelled == false {
+            let revision = reconciliationRevision
+            await reconcilePusher()
+            guard Task.isCancelled == false, revision != reconciliationRevision else {
+                break
+            }
+        }
+        reconciliationTask = nil
+    }
+
+    private func reconcilePusher() async {
         guard isRegistrationAvailable,
               let token = fullDeviceToken,
-              let session = currentSession else {
+              let session = currentSession,
+              let sessionSignature = currentSessionSignature else {
             return
         }
 
+        let diagnosticRunID = registrationDiagnosticRunID ?? UUID()
+        if registrationDiagnosticRunID == nil {
+            registrationDiagnosticRunID = diagnosticRunID
+        }
         guard pusherService.isGatewayConfigured else {
             registrationStateDescription = "Push gateway not configured"
+            SynaraNotificationDiagnostics.record(
+                .pusherGatewayUnavailable,
+                runID: diagnosticRunID
+            )
             return
         }
 
-        if isRegistered {
-            if let sessionBoundPushKey, sessionBoundPushKey == token {
-                return
-            }
+        if let binding = registeredBinding,
+           bindingMatchesDesired(
+               binding,
+               session: session,
+               sessionSignature: sessionSignature,
+               pushKey: token
+           ) {
+            isRegistered = true
+            return
+        }
 
-            if let currentSession {
-                do {
-                    try await pusherService.unregisterPusher(session: currentSession, pushKey: sessionBoundPushKey ?? token)
-                    isRegistered = false
-                    registrationStateDescription = "Replacing previous push registration"
-                } catch {
-                    logger.error("Push unregister failed during rotation: \(error)", category: .push)
+        if let previousBinding = registeredBinding {
+            registrationStateDescription = "Replacing previous push registration"
+            SynaraNotificationDiagnostics.record(
+                .pusherUnregistrationStarted,
+                runID: diagnosticRunID
+            )
+            do {
+                try await previousBinding.owner.unregisterPusher(pushKey: previousBinding.pushKey)
+                if registeredBinding == previousBinding {
+                    registeredBinding = nil
                     isRegistered = false
                 }
+                SynaraNotificationDiagnostics.record(
+                    .pusherUnregistrationSucceeded,
+                    runID: diagnosticRunID
+                )
+            } catch {
+                logger.error("Push unregister failed during rotation", category: .push)
+                isRegistered = false
+                registrationStateDescription = "Previous pusher cleanup failed"
+                SynaraNotificationDiagnostics.record(
+                    .pusherUnregistrationFailed,
+                    runID: diagnosticRunID
+                )
+                // Keep the exact old binding so a later trigger or logout can
+                // retry deletion. Never overwrite it with a new registration
+                // and lose the only credentials that can remove it.
+                return
             }
         }
 
+        guard Task.isCancelled == false,
+              currentSession == session,
+              currentSessionSignature == sessionSignature,
+              fullDeviceToken == token else {
+            return
+        }
+        guard let owner = currentPusherOwner else {
+            isRegistered = false
+            registrationStateDescription = "Pusher owner unavailable"
+            return
+        }
+        let desiredBinding = PusherBinding(
+            session: session,
+            sessionSignature: sessionSignature,
+            pushKey: token,
+            owner: owner
+        )
+        guard
+              isDesired(desiredBinding) else {
+            return
+        }
+
+        SynaraNotificationDiagnostics.record(
+            .pusherRegistrationStarted,
+            runID: diagnosticRunID
+        )
         do {
-            try await pusherService.registerPusher(session: session, pushKey: token)
-            sessionBoundPushKey = token
-            isRegistered = true
-            registrationStateDescription = "Pusher registration complete"
+            try await desiredBinding.owner.registerPusher(pushKey: token)
+            if Task.isCancelled == false,
+               isDesired(desiredBinding) {
+                registeredBinding = desiredBinding
+                isRegistered = true
+                registrationStateDescription = "Pusher registration complete"
+                SynaraNotificationDiagnostics.record(
+                    .pusherRegistrationSucceeded,
+                    runID: diagnosticRunID
+                )
+            } else {
+                // The target changed while registration was in flight. Remove
+                // the stale binding with the exact session that created it;
+                // the drain loop will then reconcile the latest target.
+                SynaraNotificationDiagnostics.record(
+                    .pusherRegistrationSuperseded,
+                    runID: diagnosticRunID
+                )
+                SynaraNotificationDiagnostics.record(
+                    .pusherUnregistrationStarted,
+                    runID: diagnosticRunID
+                )
+                do {
+                    try await desiredBinding.owner.unregisterPusher(pushKey: desiredBinding.pushKey)
+                    SynaraNotificationDiagnostics.record(
+                        .pusherUnregistrationSucceeded,
+                        runID: diagnosticRunID
+                    )
+                } catch {
+                    logger.error("Stale push registration cleanup failed", category: .push)
+                    registeredBinding = desiredBinding
+                    isRegistered = false
+                    registrationStateDescription = "Stale pusher cleanup failed"
+                    SynaraNotificationDiagnostics.record(
+                        .pusherUnregistrationFailed,
+                        runID: diagnosticRunID
+                    )
+                }
+            }
         } catch {
-            logger.error("Push registration failed: \(error)", category: .push)
+            logger.error("Push registration failed", category: .push)
             isRegistered = false
             registrationStateDescription = "Pusher registration failed"
+            SynaraNotificationDiagnostics.record(
+                .pusherRegistrationFailed,
+                runID: diagnosticRunID
+            )
         }
     }
 
     private func sessionSignature(for session: AuthenticatedSession) -> String {
         "\(session.userID)|\(session.deviceID)|\(session.homeserverURL.absoluteString)"
+    }
+
+    private func isDesired(_ binding: PusherBinding) -> Bool {
+        currentSession == binding.session
+            && currentSessionSignature == binding.sessionSignature
+            && fullDeviceToken == binding.pushKey
+    }
+
+    private func bindingMatchesDesired(
+        _ binding: PusherBinding,
+        session: AuthenticatedSession,
+        sessionSignature: String,
+        pushKey: String
+    ) -> Bool {
+        binding.session == session
+            && binding.sessionSignature == sessionSignature
+            && binding.pushKey == pushKey
+    }
+
+    private func currentDesiredBinding() -> PusherBinding? {
+        guard let session = currentSession,
+              let sessionSignature = currentSessionSignature,
+              let pushKey = fullDeviceToken,
+              let owner = currentPusherOwner else {
+            return nil
+        }
+        return PusherBinding(
+            session: session,
+            sessionSignature: sessionSignature,
+            pushKey: pushKey,
+            owner: owner
+        )
     }
 
 }
@@ -483,8 +779,22 @@ private struct DisabledMatrixPusherService: MatrixPusherServicing {
     var isGatewayConfigured: Bool { false }
     var configuredGatewayURL: URL? { nil }
 
-    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {}
-    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {}
+    func bindPusher(to session: AuthenticatedSession) throws -> MatrixPusherAccountServicing {
+        _ = session
+        return DisabledMatrixPusherAccountService()
+    }
+}
+
+private final class DisabledMatrixPusherAccountService: MatrixPusherAccountServicing {
+    func registerPusher(pushKey: String) async throws {
+        _ = pushKey
+    }
+
+    func unregisterPusher(pushKey: String) async throws {
+        _ = pushKey
+    }
+
+    func unregisterAllPushersForDevice() async throws {}
 }
 
 enum NotificationPushRouteParser {

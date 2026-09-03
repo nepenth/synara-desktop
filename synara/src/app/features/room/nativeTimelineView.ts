@@ -6,6 +6,7 @@ import {
   isSynaraDesktop,
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
+import type { RoomEncryptionStatus } from '../matrix-dto/room';
 
 const NATIVE_TIMELINE_VIEW_UPDATED_EVENT = 'matrix-timeline-view-updated';
 const TIMELINE_VIEW_SCHEMA_VERSION = 1;
@@ -69,6 +70,9 @@ export type NativeTimelineRelationPresentation = {
   reactions?: NativeTimelineReaction[];
 };
 
+/** Core-owned action route. Presenters must not infer this from media handles. */
+export type NativeTimelineForwardTransport = 'text' | 'media';
+
 type NativeTimelineMessageRow = NativeTimelineEventRowBase &
   NativeTimelineRelationPresentation & {
     kind: 'message';
@@ -78,6 +82,7 @@ type NativeTimelineMessageRow = NativeTimelineEventRowBase &
     /** Core-owned approval eligibility; body parsing below is presentation-only. */
     isAgentApproval?: boolean;
     messageType?: string;
+    forwardTransport?: NativeTimelineForwardTransport;
     mediaFilename?: string;
     mediaCaption?: string;
     edited: boolean;
@@ -107,6 +112,7 @@ type NativeTimelineStickerRow = {
   kind: 'sticker';
   event: NativeTimelineEventRowBase;
   media: NativeTimelineMediaHandle;
+  forwardTransport?: NativeTimelineForwardTransport;
 } & NativeTimelineRelationPresentation;
 
 export type NativeTimelinePollAnswer = {
@@ -144,11 +150,20 @@ type NativeTimelineCallRow = NativeTimelineEventRowBase & {
   callKind: string;
 };
 
+type NativeTimelineOtherRow = {
+  kind: 'other';
+  itemId: string;
+  eventId?: string;
+  event?: NativeTimelineEventRowBase;
+  eventType?: string;
+  forwardTransport?: NativeTimelineForwardTransport;
+  summary: string;
+};
+
 type NativeTimelineSimpleRow = {
   kind:
     | 'redacted'
     | 'encrypted_unavailable'
-    | 'other'
     | 'date_separator'
     | 'read_marker'
     | 'unread_marker'
@@ -170,6 +185,7 @@ export type NativeTimelineViewRow =
   | NativeTimelineMembershipRow
   | NativeTimelineStateRow
   | NativeTimelineCallRow
+  | NativeTimelineOtherRow
   | NativeTimelineSimpleRow;
 
 export type NativeTimelineViewSnapshot = {
@@ -377,6 +393,21 @@ export const shouldAttachFormattedBody = (body: string, formattedBody?: string |
   return html !== body.trim();
 };
 
+/**
+ * Preserve Matrix HTML only when the user deliberately edited it, or when the
+ * plain-text fallback is unchanged. Reusing the original HTML after changing
+ * only the fallback would send two different messages in one event.
+ */
+export const editedFormattedBodyForSubmit = (
+  initialBody: string,
+  nextBody: string,
+  formattedBody: string,
+  formattedBodyWasEdited: boolean
+): string | undefined => {
+  if (!formattedBodyWasEdited && nextBody.trim() !== initialBody.trim()) return undefined;
+  return shouldAttachFormattedBody(nextBody, formattedBody) ? formattedBody.trim() : undefined;
+};
+
 /** Prefer the latest remote thread event when focusing from a thread summary. */
 export const nativeThreadFocusEventId = (
   thread: NativeTimelineThreadSummary | undefined
@@ -385,7 +416,7 @@ export const nativeThreadFocusEventId = (
 export type NativeForwardTargetRoom = {
   roomId: string;
   name?: string;
-  isEncrypted?: boolean;
+  encryptionStatus: RoomEncryptionStatus;
   isSpace?: boolean;
 };
 
@@ -407,11 +438,20 @@ export const filterNativeForwardTargets = (
   });
 };
 
-/** True when forwarding from an encrypted room into a cleartext target. */
-export const needsNativeForwardEncryptionConfirm = (
-  sourceEncrypted: boolean | undefined,
-  targetEncrypted: boolean | undefined
-): boolean => Boolean(sourceEncrypted) && targetEncrypted === false;
+export type NativeForwardEncryptionDecision = 'unavailable' | 'confirm_downgrade' | 'proceed';
+
+/**
+ * Fail-closed forward policy over Core's authoritative room-encryption state.
+ * Missing, malformed, and SDK Unknown/error projections never become cleartext.
+ */
+export const nativeForwardEncryptionDecision = (
+  source: RoomEncryptionStatus | undefined,
+  target: RoomEncryptionStatus | undefined
+): NativeForwardEncryptionDecision => {
+  if (!source || !target || source === 'unknown' || target === 'unknown') return 'unavailable';
+  if (source === 'encrypted' && target === 'not_encrypted') return 'confirm_downgrade';
+  return 'proceed';
+};
 
 export type NativeTimelineOpenInput = {
   roomId: string;

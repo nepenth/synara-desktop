@@ -13,6 +13,7 @@ struct Corpus {
     schema_version: u32,
     outbound_text_payload_max_bytes: usize,
     presentation_formatted_body_max_bytes: usize,
+    coverage: std::collections::BTreeMap<String, Vec<String>>,
     cases: Vec<CorpusCase>,
 }
 
@@ -40,6 +41,22 @@ enum Generator {
         suffix: String,
     },
 }
+
+const REQUIRED_COVERAGE_AREAS: &[&str] = &[
+    "executable-content",
+    "formatted-reply-fallback",
+    "inline-code",
+    "links",
+    "lists",
+    "malformed-html",
+    "mentions",
+    "plaintext-fallback",
+    "preformatted-code",
+    "presentation-size-boundary",
+    "remote-resource-blocking",
+    "spoilers",
+    "tables",
+];
 
 fn load_corpus() -> Corpus {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join(
@@ -120,4 +137,26 @@ fn shared_corpus_keeps_core_projection_protocol_faithful_and_caps_outbound_text_
             );
         }
     }
+
+    for (area, fixture_ids) in &corpus.coverage {
+        assert!(
+            !fixture_ids.is_empty(),
+            "coverage area has no fixtures: {area}"
+        );
+        for fixture_id in fixture_ids {
+            assert!(
+                ids.contains(fixture_id.as_str()),
+                "coverage area {area} references unknown fixture: {fixture_id}"
+            );
+        }
+    }
+    assert_eq!(
+        corpus
+            .coverage
+            .keys()
+            .map(String::as_str)
+            .collect::<HashSet<_>>(),
+        REQUIRED_COVERAGE_AREAS.iter().copied().collect(),
+        "shared corpus coverage register drifted"
+    );
 }

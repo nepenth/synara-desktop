@@ -31,7 +31,7 @@ use crate::app::members::{
 use crate::app::notifications::{
     MatrixHttpPusherWriteResult, MatrixPushRulesSnapshot, MatrixPushRulesWriteResult,
     MatrixRoomNotificationSnapshot, MatrixRoomNotificationWriteResult,
-    MatrixRoomNotificationsSnapshot,
+    MatrixRoomNotificationsSnapshot, NativeHttpPusherOwner,
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
@@ -932,6 +932,7 @@ struct MatrixTimelineForwardTextRequest {
     target_room_id: String,
     #[serde(default)]
     as_quote: bool,
+    confirmed_encryption_downgrade: bool,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_forward_media`.
@@ -941,6 +942,7 @@ struct MatrixTimelineForwardMediaRequest {
     source_room_id: String,
     event_id: String,
     target_room_id: String,
+    confirmed_encryption_downgrade: bool,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_composer_set_reply_draft`.
@@ -1355,6 +1357,7 @@ pub struct CoreState {
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
+    http_pusher: Mutex<Option<Arc<NativeHttpPusherOwner>>>,
     timelines: Mutex<Option<Arc<NativeTimelineOwner>>>,
     sync: Mutex<Option<Arc<SyncServiceOwner>>>,
 }
@@ -1420,6 +1423,13 @@ impl CoreState {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
 
+    fn http_pusher_owner(&self) -> Result<Option<Arc<NativeHttpPusherOwner>>, MatrixIpcError> {
+        self.http_pusher
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
     fn timeline_owner(&self) -> Result<Option<Arc<NativeTimelineOwner>>, MatrixIpcError> {
         self.timelines
             .lock()
@@ -1453,6 +1463,7 @@ impl Core {
                 devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
+                http_pusher: Mutex::new(None),
                 timelines: Mutex::new(None),
                 sync: Mutex::new(None),
             }),
@@ -1542,6 +1553,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *image_packs = None;
         drop(image_packs);
+        let mut http_pusher = self
+            .state
+            .http_pusher
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *http_pusher = None;
+        drop(http_pusher);
         let mut timelines = self
             .state
             .timelines
@@ -1761,22 +1779,14 @@ impl Core {
         app_id: &str,
         gateway_url: &str,
         app_display_name: &str,
-        device_display_name: &str,
         lang: &str,
     ) -> Result<MatrixHttpPusherWriteResult, MatrixIpcError> {
-        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+        let owner = self.state.http_pusher_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-register-http-pusher-no-session")
         })?;
         owner
-            .register_http_pusher(
-                push_key,
-                app_id,
-                gateway_url,
-                app_display_name,
-                device_display_name,
-                lang,
-            )
+            .register(push_key, app_id, gateway_url, app_display_name, lang)
             .await
             .map_err(http_pusher_owner_error)
     }
@@ -1788,14 +1798,39 @@ impl Core {
         push_key: &str,
         app_id: &str,
     ) -> Result<MatrixHttpPusherWriteResult, MatrixIpcError> {
-        let owner = self.state.image_pack_owner()?.ok_or_else(|| {
+        let owner = self.state.http_pusher_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-delete-http-pusher-no-session")
         })?;
         owner
-            .delete_http_pusher(push_key, app_id)
+            .delete(push_key, app_id)
             .await
             .map_err(http_pusher_owner_error)
+    }
+
+    /// Capture the currently authenticated owner for an account-bound HTTP
+    /// pusher handle. The returned `Arc` remains bound to that owner's Matrix
+    /// client even if a later session attach replaces Core's current owner.
+    pub(crate) fn http_pusher_owner(&self) -> Result<Arc<NativeHttpPusherOwner>, MatrixIpcError> {
+        self.state.http_pusher_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-bind-http-pusher-no-session")
+        })
+    }
+
+    /// Install the live account-bound HTTP-pusher owner created by the shell
+    /// after login or restore.
+    pub fn attach_http_pusher(
+        &self,
+        owner: Arc<NativeHttpPusherOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut pusher = self
+            .state
+            .http_pusher
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *pusher = Some(owner);
+        Ok(())
     }
 
     /// Install the live join-rule owner created by the shell after login/restore.
@@ -2984,6 +3019,7 @@ fn matrix_timeline_forward_text(state: Arc<CoreState>, request: CommandEnvelope)
                 &payload.event_id,
                 &payload.target_room_id,
                 payload.as_quote,
+                payload.confirmed_encryption_downgrade,
             )
             .await
             .map_err(timeline_action_owner_error)?;
@@ -3005,6 +3041,7 @@ fn matrix_timeline_forward_media(state: Arc<CoreState>, request: CommandEnvelope
                 &payload.source_room_id,
                 &payload.event_id,
                 &payload.target_room_id,
+                payload.confirmed_encryption_downgrade,
             )
             .await
             .map_err(timeline_action_owner_error)?;
@@ -3098,6 +3135,9 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-forward-invalid-event-id"
         | "v-timeline-forward-source-room-not-found"
         | "v-timeline-forward-target-room-not-found"
+        | "v-timeline-forward-source-encryption-unavailable"
+        | "v-timeline-forward-target-encryption-unavailable"
+        | "v-timeline-forward-encryption-downgrade-not-confirmed"
         | "v-timeline-forward-event-unavailable"
         | "v-timeline-forward-event-decode-failed"
         | "v-timeline-forward-event-redacted"
@@ -9889,7 +9929,8 @@ mod tests {
                 payload: serde_json::json!({
                     "sourceRoomId":"!s:example.org",
                     "eventId":"$e",
-                    "targetRoomId":"!t:example.org"
+                    "targetRoomId":"!t:example.org",
+                    "confirmedEncryptionDowngrade":false
                 }),
             })
             .await
@@ -9912,7 +9953,8 @@ mod tests {
                 payload: serde_json::json!({
                     "sourceRoomId":"!s:example.org",
                     "eventId":"$e",
-                    "targetRoomId":"!t:example.org"
+                    "targetRoomId":"!t:example.org",
+                    "confirmedEncryptionDowngrade":false
                 }),
             })
             .await

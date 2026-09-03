@@ -2,6 +2,22 @@ import XCTest
 @testable import Synara
 
 final class LocalWipeServiceTests: XCTestCase {
+    func testLogoutFailurePresentationPreservesActionableKindsAndRedactsUnknownErrors() {
+        XCTAssertEqual(
+            LocalWipeError.displayMessage(for: LocalWipeError.pusherCleanupFailed),
+            "Could not remove this device's push registration. Try signing out again."
+        )
+        XCTAssertEqual(
+            LocalWipeError.displayMessage(for: LocalWipeError.sessionDeleteFailed),
+            "Could not clear local session state."
+        )
+
+        let unknown = LocalizedSecretFailure()
+        let message = LocalWipeError.displayMessage(for: unknown)
+        XCTAssertEqual(message, "Could not clear local session state.")
+        XCTAssertFalse(message.contains(unknown.errorDescription ?? ""))
+    }
+
     func testLogoutWipeCallsAllRegisteredStores() async throws {
         let secureStore = InMemorySecureSessionStore(session: try makeSession())
         let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
@@ -49,6 +65,8 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(roomList.clearCallCount, 1)
         XCTAssertEqual(timeline.clearSessionCachesCallCount, 1)
         XCTAssertEqual(push.clearCallCount, 1)
+        XCTAssertEqual(push.cancelRegistrationTeardownCallCount, 0)
+        XCTAssertEqual(push.completeRegistrationTeardownCallCount, 1)
         XCTAssertEqual(secureStore.deleteCallCount, 1)
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
         XCTAssertTrue(outgoingSends.queue.items.isEmpty)
@@ -90,14 +108,16 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(matrix.stopCallCount, 0)
         XCTAssertTrue(matrix.revokedSessions.isEmpty)
         XCTAssertEqual(matrix.resetCallCount, 0)
-        XCTAssertEqual(push.clearCallCount, 0)
+        XCTAssertEqual(push.clearCallCount, 1)
+        XCTAssertEqual(push.cancelRegistrationTeardownCallCount, 1)
+        XCTAssertEqual(push.completeRegistrationTeardownCallCount, 0)
         XCTAssertEqual(roomList.clearCallCount, 0)
         XCTAssertEqual(timeline.clearSessionCachesCallCount, 0)
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "preserve")
         XCTAssertEqual(router.selectedTab, .settings)
     }
 
-    func testDurableSessionDeletionPrecedesRemoteAndLocalTeardown() async throws {
+    func testPusherCleanupPrecedesDurableSessionDeletionAndTeardown() async throws {
         let persistedSession = try makeSession()
         let recorder = WipeOperationRecorder()
         let secureStore = RecordingSecureSessionStore(session: persistedSession) {
@@ -122,8 +142,57 @@ final class LocalWipeServiceTests: XCTestCase {
 
         XCTAssertEqual(
             recorder.events,
-            ["session-delete", "push-clear", "server-revoke", "matrix-stop", "matrix-reset"]
+            [
+                "push-clear",
+                "session-delete",
+                "push-finish",
+                "server-revoke",
+                "matrix-stop",
+                "matrix-reset"
+            ]
         )
+        XCTAssertEqual(
+            recorder.wasRecordedOnMainThread("session-delete"),
+            true,
+            "Deleting the durable session also publishes signed-out state and must remain MainActor-owned"
+        )
+    }
+
+    func testFailedPusherCleanupBlocksSessionDeletionAndCanRetry() async throws {
+        let persistedSession = try makeSession()
+        let secureStore = InMemorySecureSessionStore(session: persistedSession)
+        let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
+        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let push = MockPushService()
+        push.clearRegistrationResult = false
+        let wipe = AppLocalWipeService(
+            session: session,
+            matrix: matrix,
+            roomList: MockRoomListService(),
+            timeline: MockTimelineService(),
+            drafts: DraftStore(),
+            push: push,
+            router: AppRouter()
+        )
+
+        do {
+            try await wipe.logoutAndWipe()
+            XCTFail("Expected pusher cleanup to fail")
+        } catch {
+            XCTAssertEqual(error as? LocalWipeError, .pusherCleanupFailed)
+        }
+        XCTAssertEqual(session.currentState, .signedIn(persistedSession))
+        XCTAssertEqual(secureStore.deleteCallCount, 0)
+        XCTAssertTrue(matrix.revokedSessions.isEmpty)
+
+        push.clearRegistrationResult = true
+        try await wipe.logoutAndWipe()
+
+        XCTAssertEqual(push.clearCallCount, 2)
+        XCTAssertEqual(push.completeRegistrationTeardownCallCount, 1)
+        XCTAssertEqual(session.currentState, .signedOut)
+        XCTAssertEqual(secureStore.deleteCallCount, 1)
+        XCTAssertEqual(matrix.revokedSessions.map(\.userID), [persistedSession.userID])
     }
 
     func testProductResetLocalStateDoesNotWipePersistedStores() throws {
@@ -185,9 +254,14 @@ final class LocalWipeServiceTests: XCTestCase {
     }
 }
 
+private struct LocalizedSecretFailure: LocalizedError {
+    let errorDescription: String? = "token=do-not-display"
+}
+
 private final class WipeOperationRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var recordedEvents: [String] = []
+    private var mainThreadByEvent: [String: Bool] = [:]
 
     var events: [String] {
         lock.lock()
@@ -198,7 +272,14 @@ private final class WipeOperationRecorder: @unchecked Sendable {
     func record(_ event: String) {
         lock.lock()
         recordedEvents.append(event)
+        mainThreadByEvent[event] = Thread.isMainThread
         lock.unlock()
+    }
+
+    func wasRecordedOnMainThread(_ event: String) -> Bool? {
+        lock.lock()
+        defer { lock.unlock() }
+        return mainThreadByEvent[event]
     }
 }
 

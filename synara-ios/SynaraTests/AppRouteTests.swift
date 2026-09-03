@@ -201,6 +201,7 @@ final class AppRouteTests: XCTestCase {
         XCTAssertEqual(router.roomsPath, [.room(id: "!roomid:example.org", title: nil)])
     }
 
+    @MainActor
     func testRouterResetClearsNavigationAndSheets() {
         let router = AppRouter()
         router.route(to: .settings)

@@ -3,11 +3,11 @@ import Foundation
 /// P4-S27/S28 map of privacy-safe SharedCore leftover/session status reads
 /// to product session and room crypto status.
 ///
-/// Uses existing backup / secret-storage / crypto status plus invite
-/// encryption when the room is an invite. Joined-room encryption is not
-/// on the list DTO. Recovery keys, missing-secret lists, and UTD counts
-/// never appear on the product status. This is not iOS-on-engine and not
-/// P4 acceptance.
+/// Uses existing backup / secret-storage / crypto status and the Core room
+/// list's authoritative joined-room encryption tri-state. Invite encryption
+/// never substitutes for a missing joined-room state. Recovery keys,
+/// missing-secret lists, and UTD counts never appear on the product status.
+/// This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreSessionCrypto {
     static func status(
         crossSigningState: String?,
@@ -92,8 +92,15 @@ enum SharedCoreSessionCrypto {
         isEncrypted: Bool?,
         session: SessionCryptoStatus
     ) -> RoomCryptoStatus {
+        roomStatus(encryption: encryption(isEncrypted), session: session)
+    }
+
+    static func roomStatus(
+        encryption: SynaraRoomEncryptionStatus,
+        session: SessionCryptoStatus
+    ) -> RoomCryptoStatus {
         RoomCryptoStatus(
-            encryption: encryption(isEncrypted),
+            encryption: encryption,
             verification: session.verification,
             recovery: session.recovery,
             backup: session.backup,

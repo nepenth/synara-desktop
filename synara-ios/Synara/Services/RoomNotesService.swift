@@ -176,7 +176,9 @@ final class SharedCoreRoomNotesService: RoomNotesServicing {
     }
 
     func pinMessage(roomID: String, item: TimelineItem) async -> Result<[SynaraRoomNoteItem], RoomNotesError> {
-        guard let eventID = item.serverEventID, eventID.isEmpty == false else {
+        guard TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes,
+              let eventID = item.serverEventID
+        else {
             return .failure(.invalidItem)
         }
         let timestamp = now().millisecondsSince1970
@@ -350,7 +352,11 @@ final class MockRoomNotesService: RoomNotesServicing {
     }
 
     func pinMessage(roomID: String, item: TimelineItem) async -> Result<[SynaraRoomNoteItem], RoomNotesError> {
-        guard let eventID = item.serverEventID else { return .failure(.invalidItem) }
+        guard TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes,
+              let eventID = item.serverEventID
+        else {
+            return .failure(.invalidItem)
+        }
         let timestamp = now()
         items.append(SynaraRoomNoteItem(
             id: "message:\(UUID().uuidString.lowercased())",

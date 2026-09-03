@@ -145,6 +145,16 @@ pub struct TimelineViewCapabilities {
     pub paginate_forward: bool,
 }
 
+/// Current room-power authorization used to project server-mutating row
+/// affordances. Absence or a failed power-level read maps to `default()` and
+/// therefore withdraws every privileged capability.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct TimelineRoomActionAuthority {
+    pub can_pin_events: bool,
+    pub can_redact_own: bool,
+    pub can_redact_other: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineEventRowBase {
@@ -169,6 +179,15 @@ pub struct TimelineEventRowBase {
 /// typed native command surface: reply/edit/redact/forward/react open only when
 /// those owners exist. Reactions consume the merged V-SEND.2 commands.
 pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> TimelineEventRowBase {
+    project_event_row_base_for_user(item_id, event, None, TimelineRoomActionAuthority::default())
+}
+
+fn project_event_row_base_for_user(
+    item_id: &str,
+    event: &EventTimelineItem,
+    own_user_id: Option<&RumaUserId>,
+    authority: TimelineRoomActionAuthority,
+) -> TimelineEventRowBase {
     let sender_id = event.sender().to_string();
     let (sender_name, sender_avatar_url) = project_sender_presentation(event);
     TimelineEventRowBase {
@@ -178,7 +197,7 @@ pub fn project_event_row_base(item_id: &str, event: &EventTimelineItem) -> Timel
         sender_id,
         sender_avatar_url,
         origin_server_ts: event.timestamp().get().into(),
-        capabilities: project_row_action_capabilities(event),
+        capabilities: project_row_action_capabilities(event, own_user_id, authority),
     }
 }
 
@@ -208,8 +227,13 @@ fn sender_localpart_or_id(sender_id: &str) -> String {
         .unwrap_or_else(|| sender_id.to_owned())
 }
 
-fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapabilities {
+fn project_row_action_capabilities(
+    event: &EventTimelineItem,
+    own_user_id: Option<&RumaUserId>,
+    authority: TimelineRoomActionAuthority,
+) -> TimelineRowCapabilities {
     let has_remote_id = event.event_id().is_some();
+    let is_redacted = event.content().is_redacted();
     let forwardable = matches!(
         event.content(),
         TimelineItemContent::MsgLike(content)
@@ -231,37 +255,92 @@ fn project_row_action_capabilities(event: &EventTimelineItem) -> TimelineRowCapa
         TimelineItemContent::MsgLike(content)
             if matches!(&content.kind, MsgLikeKind::Poll(poll) if poll.results().end_time.is_none())
     );
-    let declineable =
-        matches!(event.content(), TimelineItemContent::RtcNotification { .. }) && !event.is_own();
+    let declineable = match event.content() {
+        TimelineItemContent::RtcNotification { declined_by, .. } => {
+            rtc_can_decline(event.is_own(), own_user_id, declined_by)
+        }
+        _ => false,
+    };
     TimelineRowCapabilities {
         // V-SEND.2 reaction toggle/ensure/redact is on the integration tip.
-        react: has_remote_id && reactable,
+        react: has_remote_id && reactable && own_user_id.is_some(),
         reply: has_remote_id && forwardable,
         edit: event.is_editable(),
-        redact: has_remote_id,
+        // Moderator redaction remains hidden until Core projects an
+        // authoritative room-power decision; own non-redacted events are safe.
+        redact: can_offer_redact(has_remote_id, event.is_own(), is_redacted, authority),
         report: has_remote_id && !event.is_own(),
-        pin: has_remote_id,
+        pin: can_offer_pin(has_remote_id, authority.can_pin_events, is_redacted),
         forward: has_remote_id && forwardable,
         vote: has_remote_id && voteable,
         decline_call: has_remote_id && declineable,
     }
 }
 
+fn can_offer_redact(
+    has_remote_id: bool,
+    event_is_own: bool,
+    is_redacted: bool,
+    authority: TimelineRoomActionAuthority,
+) -> bool {
+    has_remote_id
+        && !is_redacted
+        && if event_is_own {
+            authority.can_redact_own
+        } else {
+            authority.can_redact_other
+        }
+}
+
+fn can_offer_pin(has_remote_id: bool, can_pin_events: bool, is_redacted: bool) -> bool {
+    has_remote_id && can_pin_events && !is_redacted
+}
+
+fn rtc_can_decline(
+    event_is_own: bool,
+    own_user_id: Option<&RumaUserId>,
+    declined_by: &[matrix_sdk::ruma::OwnedUserId],
+) -> bool {
+    !event_is_own
+        && own_user_id
+            .is_some_and(|user_id| !declined_by.iter().any(|declined| declined == user_id))
+}
+
+fn poll_has_vote_controls(is_closed: bool, max_selections: u64, answer_count: usize) -> bool {
+    !is_closed && max_selections > 0 && answer_count > 0
+}
+
 pub fn project_event_row(item_id: &str, event: &EventTimelineItem) -> TimelineViewRow {
-    project_event_row_for_user(item_id, event, None, None)
+    project_event_row_for_user(
+        item_id,
+        event,
+        None,
+        TimelineRoomActionAuthority::default(),
+        None,
+    )
 }
 
 fn project_event_row_for_user(
     item_id: &str,
     event: &EventTimelineItem,
     own_user_id: Option<&RumaUserId>,
+    authority: TimelineRoomActionAuthority,
     mut media_registry: Option<&mut TimelineMediaRegistry>,
 ) -> TimelineViewRow {
-    let base = project_event_row_base(item_id, event);
+    let mut base = project_event_row_base_for_user(item_id, event, own_user_id, authority);
     match event.content() {
         TimelineItemContent::MsgLike(content) => match &content.kind {
             MsgLikeKind::Message(message) => {
                 let msgtype = message.msgtype();
+                let forward_transport = project_forward_transport(msgtype);
+                // A generic room-message body is not proof that flattening the
+                // event to `m.text` preserves its semantics (for example
+                // location, verification, server-notice, or custom messages).
+                // Core therefore withdraws the capability unless it also owns
+                // an exact supported transport.
+                if forward_transport.is_none() {
+                    base.capabilities.forward = false;
+                }
                 let (message_type, media) =
                     project_message_type_and_media(item_id, msgtype, media_registry.as_deref_mut());
                 let (media_filename, media_caption) = project_media_filename_and_caption(msgtype);
@@ -283,6 +362,7 @@ fn project_event_row_for_user(
                     agent_card_json: project_agent_card_json(event, message.body()),
                     is_agent_approval,
                     message_type,
+                    forward_transport,
                     media_filename,
                     media_caption,
                     edited: message.is_edited(),
@@ -295,6 +375,11 @@ fn project_event_row_for_user(
             }
             MsgLikeKind::Poll(poll) => {
                 let results = poll.results();
+                base.capabilities.vote &= poll_has_vote_controls(
+                    results.end_time.is_some(),
+                    results.max_selections,
+                    results.answers.len(),
+                );
                 TimelineViewRow::Poll(TimelinePollRow {
                     event: base,
                     question: results.question,
@@ -346,15 +431,21 @@ fn project_event_row_for_user(
                     Some(media) => TimelineViewRow::Sticker {
                         event: base,
                         media,
+                        forward_transport: TimelineForwardTransport::Media,
                         reply: project_reply(content),
                         thread_root: content.thread_root.as_ref().map(ToString::to_string),
                         thread: project_thread_summary(content, event),
                         reactions: project_reactions(content, own_user_id),
                     },
-                    None => other_event_row(base, None, "Sticker unavailable"),
+                    None => other_event_row(
+                        base,
+                        None,
+                        Some(TimelineForwardTransport::Media),
+                        "Sticker unavailable",
+                    ),
                 }
             }
-            _ => other_event_row(base, None, "Unsupported timeline event"),
+            _ => other_event_row(base, None, None, "Unsupported timeline event"),
         },
         TimelineItemContent::MembershipChange(change) => {
             TimelineViewRow::Membership(TimelineMembershipRow {
@@ -383,7 +474,7 @@ fn project_event_row_for_user(
         }),
         TimelineItemContent::FailedToParseMessageLike { .. }
         | TimelineItemContent::FailedToParseState { .. } => {
-            other_event_row(base, None, "Unsupported timeline event")
+            other_event_row(base, None, None, "Unsupported timeline event")
         }
     }
 }
@@ -598,6 +689,22 @@ pub fn project_message_type_and_media(
     }
 }
 
+/// Select the only Core action owner capable of faithfully forwarding this
+/// Matrix message. This remains stable even when the bounded media registry
+/// cannot currently allocate a presentation/download handle.
+pub fn project_forward_transport(msgtype: &MessageType) -> Option<TimelineForwardTransport> {
+    match msgtype {
+        MessageType::Image(_)
+        | MessageType::File(_)
+        | MessageType::Audio(_)
+        | MessageType::Video(_) => Some(TimelineForwardTransport::Media),
+        MessageType::Text(_) | MessageType::Notice(_) | MessageType::Emote(_) => {
+            Some(TimelineForwardTransport::Text)
+        }
+        _ => None,
+    }
+}
+
 fn membership_change_summary(change: &RoomMembershipChange) -> String {
     let target = change
         .display_name()
@@ -784,7 +891,13 @@ pub fn project_timeline_item(
 ) -> TimelineViewRow {
     let item_id = item.unique_id().0.clone();
     if let Some(event) = item.as_event() {
-        return project_event_row_for_user(&item_id, event, own_user_id, None);
+        return project_event_row_for_user(
+            &item_id,
+            event,
+            own_user_id,
+            TimelineRoomActionAuthority::default(),
+            None,
+        );
     }
 
     match item.as_virtual() {
@@ -805,11 +918,18 @@ pub fn project_timeline_item(
 pub fn project_timeline_item_with_media(
     item: &SdkTimelineItem,
     own_user_id: Option<&RumaUserId>,
+    authority: TimelineRoomActionAuthority,
     media_registry: &mut TimelineMediaRegistry,
 ) -> TimelineViewRow {
     let item_id = item.unique_id().0.clone();
     if let Some(event) = item.as_event() {
-        return project_event_row_for_user(&item_id, event, own_user_id, Some(media_registry));
+        return project_event_row_for_user(
+            &item_id,
+            event,
+            own_user_id,
+            authority,
+            Some(media_registry),
+        );
     }
     project_timeline_item(item, own_user_id)
 }
@@ -820,6 +940,7 @@ fn other_row(item_id: &str, event_id: Option<EventId>, summary: &str) -> Timelin
         event_id,
         event: None,
         event_type: None,
+        forward_transport: None,
         summary: summary.to_owned(),
     })
 }
@@ -827,6 +948,7 @@ fn other_row(item_id: &str, event_id: Option<EventId>, summary: &str) -> Timelin
 fn other_event_row(
     event: TimelineEventRowBase,
     event_type: Option<String>,
+    forward_transport: Option<TimelineForwardTransport>,
     summary: &str,
 ) -> TimelineViewRow {
     TimelineViewRow::Other(TimelineOtherRow {
@@ -834,6 +956,7 @@ fn other_event_row(
         event_id: event.event_id.clone(),
         event: Some(event),
         event_type,
+        forward_transport,
         summary: summary.to_owned(),
     })
 }
@@ -858,6 +981,9 @@ pub struct TimelineMessageRow {
     pub is_agent_approval: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message_type: Option<String>,
+    /// Core-owned dispatch route for forwarding this semantic event.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward_transport: Option<TimelineForwardTransport>,
     /// Matrix media filename, never inferred from `body` by presenters.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media_filename: Option<String>,
@@ -877,6 +1003,22 @@ pub struct TimelineMessageRow {
     pub reactions: Vec<TimelineReaction>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub media: Option<TimelineMediaHandle>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum TimelineForwardTransport {
+    Text,
+    Media,
+}
+
+impl TimelineForwardTransport {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Text => "text",
+            Self::Media => "media",
+        }
+    }
 }
 
 /// One poll answer option. Vote tallies are counts only — never voter user IDs.
@@ -965,6 +1107,8 @@ pub struct TimelineOtherRow {
     pub event: Option<TimelineEventRowBase>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub event_type: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forward_transport: Option<TimelineForwardTransport>,
     pub summary: String,
 }
 
@@ -979,6 +1123,7 @@ pub enum TimelineViewRow {
     Sticker {
         event: TimelineEventRowBase,
         media: TimelineMediaHandle,
+        forward_transport: TimelineForwardTransport,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reply: Option<TimelineReplyPreview>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1125,6 +1270,7 @@ pub fn project_timeline_diffs(
 pub fn project_timeline_diffs_with_media(
     diffs: &[VectorDiff<Arc<SdkTimelineItem>>],
     own_user_id: Option<&RumaUserId>,
+    authority: TimelineRoomActionAuthority,
     media_registry: &mut TimelineMediaRegistry,
 ) -> Vec<TimelineViewDeltaOp> {
     diffs
@@ -1133,32 +1279,66 @@ pub fn project_timeline_diffs_with_media(
             VectorDiff::Append { values } => TimelineViewDeltaOp::Append {
                 rows: values
                     .iter()
-                    .map(|item| project_timeline_item_with_media(item, own_user_id, media_registry))
+                    .map(|item| {
+                        project_timeline_item_with_media(
+                            item,
+                            own_user_id,
+                            authority,
+                            media_registry,
+                        )
+                    })
                     .collect(),
             },
             VectorDiff::Clear => TimelineViewDeltaOp::Clear,
             VectorDiff::PushFront { value } => TimelineViewDeltaOp::PushFront {
-                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+                row: project_timeline_item_with_media(
+                    value,
+                    own_user_id,
+                    authority,
+                    media_registry,
+                ),
             },
             VectorDiff::PushBack { value } => TimelineViewDeltaOp::PushBack {
-                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+                row: project_timeline_item_with_media(
+                    value,
+                    own_user_id,
+                    authority,
+                    media_registry,
+                ),
             },
             VectorDiff::PopFront => TimelineViewDeltaOp::PopFront,
             VectorDiff::PopBack => TimelineViewDeltaOp::PopBack,
             VectorDiff::Insert { index, value } => TimelineViewDeltaOp::Insert {
                 index: *index,
-                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+                row: project_timeline_item_with_media(
+                    value,
+                    own_user_id,
+                    authority,
+                    media_registry,
+                ),
             },
             VectorDiff::Set { index, value } => TimelineViewDeltaOp::Set {
                 index: *index,
-                row: project_timeline_item_with_media(value, own_user_id, media_registry),
+                row: project_timeline_item_with_media(
+                    value,
+                    own_user_id,
+                    authority,
+                    media_registry,
+                ),
             },
             VectorDiff::Remove { index } => TimelineViewDeltaOp::Remove { index: *index },
             VectorDiff::Truncate { length } => TimelineViewDeltaOp::Truncate { len: *length },
             VectorDiff::Reset { values } => TimelineViewDeltaOp::Reset {
                 rows: values
                     .iter()
-                    .map(|item| project_timeline_item_with_media(item, own_user_id, media_registry))
+                    .map(|item| {
+                        project_timeline_item_with_media(
+                            item,
+                            own_user_id,
+                            authority,
+                            media_registry,
+                        )
+                    })
                     .collect(),
             },
         })
@@ -1169,9 +1349,10 @@ pub fn project_timeline_diffs_with_media(
 mod tests {
     use super::*;
     use matrix_sdk::ruma::events::room::message::{
-        EmoteMessageEventContent, ImageMessageEventContent, NoticeMessageEventContent,
-        TextMessageEventContent,
+        EmoteMessageEventContent, ImageMessageEventContent, LocationMessageEventContent,
+        NoticeMessageEventContent, TextMessageEventContent,
     };
+    use matrix_sdk::ruma::user_id;
 
     #[test]
     fn virtual_timeline_rows_serialize_camel_case_fields() {
@@ -1226,6 +1407,16 @@ mod tests {
         let message = MessageType::Image(image);
 
         assert_eq!(
+            project_forward_transport(&message),
+            Some(TimelineForwardTransport::Media)
+        );
+        assert_eq!(
+            project_message_type_and_media("item", &message, None).1,
+            None,
+            "forward transport must not depend on a currently allocated media handle"
+        );
+
+        assert_eq!(
             project_media_filename_and_caption(&message),
             (Some("sunset.jpg".to_owned()), Some("A sunset".to_owned()))
         );
@@ -1241,6 +1432,30 @@ mod tests {
         assert_eq!(
             project_media_filename_and_caption(&bare),
             (Some("bare.jpg".to_owned()), None)
+        );
+        assert_eq!(
+            project_forward_transport(&MessageType::Text(TextMessageEventContent::plain("hi"))),
+            Some(TimelineForwardTransport::Text)
+        );
+        assert_eq!(
+            project_forward_transport(&MessageType::Notice(NoticeMessageEventContent::plain(
+                "notice",
+            ))),
+            Some(TimelineForwardTransport::Text)
+        );
+        assert_eq!(
+            project_forward_transport(&MessageType::Emote(EmoteMessageEventContent::plain(
+                "waves",
+            ))),
+            Some(TimelineForwardTransport::Text)
+        );
+        assert_eq!(
+            project_forward_transport(&MessageType::Location(LocationMessageEventContent::new(
+                "location".to_owned(),
+                "geo:1,2".to_owned(),
+            ))),
+            None,
+            "semantic message types must not silently flatten into m.text"
         );
     }
 
@@ -1421,6 +1636,53 @@ mod tests {
     }
 
     #[test]
+    fn poll_vote_controls_require_open_poll_with_positive_bound_and_answers() {
+        assert!(poll_has_vote_controls(false, 1, 2));
+        assert!(!poll_has_vote_controls(true, 1, 2));
+        assert!(!poll_has_vote_controls(false, 0, 2));
+        assert!(!poll_has_vote_controls(false, 1, 0));
+    }
+
+    #[test]
+    fn rtc_decline_capability_requires_remote_undecided_event_and_known_user() {
+        let own = user_id!("@me:example.org");
+        assert!(rtc_can_decline(false, Some(own), &[]));
+        assert!(!rtc_can_decline(true, Some(own), &[]));
+        assert!(!rtc_can_decline(false, None, &[]));
+        assert!(!rtc_can_decline(false, Some(own), &[own.to_owned()]));
+    }
+
+    #[test]
+    fn destructive_capabilities_fail_closed_without_identity_or_room_power() {
+        let moderator = TimelineRoomActionAuthority {
+            can_pin_events: true,
+            can_redact_own: true,
+            can_redact_other: true,
+        };
+        let member = TimelineRoomActionAuthority {
+            can_pin_events: false,
+            can_redact_own: true,
+            can_redact_other: false,
+        };
+        assert!(can_offer_redact(true, true, false, member));
+        assert!(!can_offer_redact(true, false, false, member));
+        assert!(can_offer_redact(true, false, false, moderator));
+        assert!(!can_offer_redact(true, true, true, moderator));
+        assert!(!can_offer_redact(
+            true,
+            true,
+            false,
+            TimelineRoomActionAuthority::default()
+        ));
+        assert!(!can_offer_redact(false, true, false, moderator));
+
+        assert!(can_offer_pin(true, true, false));
+        assert!(!can_offer_pin(true, false, false));
+        assert!(!can_offer_pin(true, true, true));
+        assert!(!can_offer_pin(false, true, false));
+    }
+
+    #[test]
     fn reply_and_thread_summary_serialize_product_shape_without_secrets() {
         let reply = TimelineReplyPreview {
             event_id: "$parent:example.org".into(),
@@ -1458,6 +1720,7 @@ mod tests {
             agent_card_json: None,
             is_agent_approval: false,
             message_type: Some("text".into()),
+            forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,
             media_caption: None,
             edited: false,

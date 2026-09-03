@@ -655,7 +655,8 @@ final class SharedCoreRoomListService: RoomListServicing {
                         markedUnread: $0.markedUnread,
                         lastActivityTs: $0.lastActivityTs,
                         lastMessagePreview: $0.lastMessagePreview,
-                        isFavorite: $0.isFavorite
+                        isFavorite: $0.isFavorite,
+                        encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
                     )
                 },
                 invites: invites.map {
@@ -1338,6 +1339,7 @@ final class SharedCoreMessageSendService: MessageSending {
 
 final class SharedCoreEventActionService: EventActionServicing {
     private let host: SharedCoreProductHost
+    private let inFlight = TimelineActionInFlightCoordinator()
 
     init(host: SharedCoreProductHost) {
         self.host = host
@@ -1347,7 +1349,122 @@ final class SharedCoreEventActionService: EventActionServicing {
         MockEventActionService().availability(for: item, currentUserID: currentUserID)
     }
 
+    func availability(
+        for item: TimelineItem,
+        currentUserID: String,
+        roomID: String
+    ) -> EventActionAvailability {
+        let sessionEpoch = host.sessionStore.sessionEpoch
+        inFlight.bindSession(epoch: sessionEpoch)
+        let pollKey = actionKey(
+            sessionEpoch: sessionEpoch,
+            roomID: roomID,
+            eventID: item.eventID,
+            actionKey: "poll-vote"
+        )
+        if let poll = item.poll {
+            inFlight.observePollProjection(
+                pollKey,
+                ownAnswerIDs: poll.answers.filter(\.isOwn).map(\.id)
+            )
+        }
+        let reactionPrefix = actionKey(
+            sessionEpoch: sessionEpoch,
+            roomID: roomID,
+            eventID: item.eventID,
+            actionKey: "react:"
+        )
+        inFlight.observeReactionProjection(
+            reactionPrefix,
+            ownership: item.reactionOwnership
+        )
+        let projected = availability(for: item, currentUserID: currentUserID)
+        let ownsReactionState: Bool
+        if case .known = item.reactionOwnership {
+            ownsReactionState = true
+        } else {
+            ownsReactionState = false
+        }
+        let pollPending = inFlight.contains(pollKey) && projected.canVote
+        let reactionPending = inFlight.contains(prefix: reactionPrefix) && projected.canReact
+        guard pollPending || reactionPending || (projected.canReact && !ownsReactionState) else {
+            return projected
+        }
+        return EventActionAvailability(
+            canReply: projected.canReply,
+            canEdit: projected.canEdit,
+            canRedact: projected.canRedact,
+            canReact: projected.canReact && ownsReactionState && !reactionPending,
+            canReport: projected.canReport,
+            canForward: projected.canForward,
+            canVote: projected.canVote && !pollPending,
+            canDeclineCall: projected.canDeclineCall
+        )
+    }
+
     func apply(
+        _ action: EventActionType,
+        to item: TimelineItem,
+        currentUserID: String,
+        roomID: String
+    ) async throws -> TimelineItem {
+        let sessionEpoch = host.sessionStore.sessionEpoch
+        inFlight.bindSession(epoch: sessionEpoch)
+        let key = actionKey(
+            sessionEpoch: sessionEpoch,
+            roomID: roomID,
+            eventID: item.eventID,
+            actionKey: action.inFlightKey
+        )
+        let claimed: Bool
+        if case .pollVote(let answerIDs) = action {
+            claimed = inFlight.beginPoll(key, answerIDs: answerIDs)
+        } else if case .react(let reaction) = action {
+            guard case let .known(ownKeys) = item.reactionOwnership else {
+                throw EventActionError.failed
+            }
+            claimed = inFlight.beginReaction(
+                key,
+                reactionKey: reaction,
+                expectedOwn: !ownKeys.contains(reaction)
+            )
+        } else {
+            claimed = inFlight.begin(key)
+        }
+        guard claimed else {
+            throw EventActionError.alreadyInProgress
+        }
+        do {
+            let updated = try await applyUnlocked(
+                action,
+                to: item,
+                currentUserID: currentUserID,
+                roomID: roomID
+            )
+            if case .pollVote = action {
+                inFlight.settlePollDispatch(key)
+            } else if case .react = action {
+                inFlight.settleReactionDispatch(key)
+            } else {
+                inFlight.end(key)
+            }
+            return updated
+        } catch {
+            inFlight.end(key)
+            throw error
+        }
+    }
+
+    private func actionKey(
+        sessionEpoch: Int,
+        roomID: String,
+        eventID: String,
+        actionKey: String
+    ) -> String {
+        "\(sessionEpoch)\u{0}\(roomID)\u{0}\(eventID)\u{0}\(actionKey)"
+    }
+
+    private func applyUnlocked(
         _ action: EventActionType,
         to item: TimelineItem,
         currentUserID: String,
@@ -1359,24 +1476,179 @@ final class SharedCoreEventActionService: EventActionServicing {
             return item
         case .redact:
             do {
-                _ = try await SharedCoreTimelineMutate.timelineRedact(
+                let readback = try await SharedCoreTimelineMutate.timelineRedact(
                     core: host.core,
                     roomId: roomID,
                     eventId: item.eventID,
                     reason: nil
                 )
+                guard TimelineActionReadbackPolicy.accepts(
+                    schemaVersion: readback.schemaVersion,
+                    action: readback.action,
+                    roomID: readback.roomId,
+                    eventID: readback.eventId,
+                    status: readback.status,
+                    expectedAction: "redact",
+                    expectedRoomID: roomID,
+                    expectedStatus: "redacted",
+                    expectedEventID: item.eventID
+                ) else {
+                    throw EventActionError.failed
+                }
             } catch {
                 throw EventActionError.failed
             }
             return item
         case .react(let reaction):
             do {
-                _ = try await SharedCoreTimelineReactions.timelineReactionToggle(
+                guard case let .known(ownKeys) = item.reactionOwnership else {
+                    throw EventActionError.failed
+                }
+                let expectedOwn = !ownKeys.contains(reaction)
+                let readback = try await SharedCoreTimelineReactions.timelineReactionToggle(
                     core: host.core,
                     roomId: roomID,
                     eventId: item.eventID,
                     key: reaction
                 )
+                guard TimelineReactionReadbackPolicy.acceptsToggle(
+                          roomID: readback.roomId,
+                          targetEventID: readback.targetEventId,
+                          key: readback.key,
+                          mutation: readback.mutation,
+                          readbackKey: readback.readback?.key,
+                          readbackOwnsReaction: readback.readback?.me,
+                          expectedRoomID: roomID,
+                          expectedTargetEventID: item.eventID,
+                          expectedKey: reaction,
+                          expectedOwn: expectedOwn
+                      )
+                else {
+                    throw EventActionError.failed
+                }
+            } catch {
+                throw EventActionError.failed
+            }
+            return item
+        case .report(let reason):
+            do {
+                let readback = try await SharedCoreTimelineMutate.timelineReport(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: item.eventID,
+                    reason: reason
+                )
+                guard TimelineActionReadbackPolicy.accepts(
+                    schemaVersion: readback.schemaVersion,
+                    action: readback.action,
+                    roomID: readback.roomId,
+                    eventID: readback.eventId,
+                    status: readback.status,
+                    expectedAction: "report",
+                    expectedRoomID: roomID,
+                    expectedStatus: "reported",
+                    expectedEventID: item.eventID
+                ) else {
+                    throw EventActionError.failed
+                }
+            } catch {
+                throw EventActionError.failed
+            }
+            return item
+        case let .forward(targetRoomID, asQuote, confirmedEncryptionDowngrade):
+            do {
+                switch item.forwardTransport {
+                case .text:
+                    let readback = try await SharedCoreTimelineForward.timelineForwardText(
+                        core: host.core,
+                        sourceRoomId: roomID,
+                        eventId: item.eventID,
+                        targetRoomId: targetRoomID,
+                        asQuote: asQuote,
+                        confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
+                    )
+                    guard TimelineActionReadbackPolicy.accepts(
+                        schemaVersion: readback.schemaVersion,
+                        action: readback.action,
+                        roomID: readback.roomId,
+                        eventID: readback.eventId,
+                        status: readback.status,
+                        expectedAction: "forward_text",
+                        expectedRoomID: targetRoomID,
+                        expectedStatus: "sent"
+                    ) else {
+                        throw EventActionError.failed
+                    }
+                case .media:
+                    let readback = try await SharedCoreTimelineForward.timelineForwardMedia(
+                        core: host.core,
+                        sourceRoomId: roomID,
+                        eventId: item.eventID,
+                        targetRoomId: targetRoomID,
+                        confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
+                    )
+                    guard TimelineActionReadbackPolicy.accepts(
+                        schemaVersion: readback.schemaVersion,
+                        action: readback.action,
+                        roomID: readback.roomId,
+                        eventID: readback.eventId,
+                        status: readback.status,
+                        expectedAction: "forward_media",
+                        expectedRoomID: targetRoomID,
+                        expectedStatus: "sent"
+                    ) else {
+                        throw EventActionError.failed
+                    }
+                case .unavailable:
+                    throw EventActionError.failed
+                }
+            } catch {
+                throw EventActionError.failed
+            }
+            return item
+        case .pollVote(let answerIDs):
+            do {
+                let readback = try await SharedCoreTimelineVoteDecline.timelinePollVote(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: item.eventID,
+                    answerIds: answerIDs
+                )
+                guard TimelineActionReadbackPolicy.accepts(
+                    schemaVersion: readback.schemaVersion,
+                    action: readback.action,
+                    roomID: readback.roomId,
+                    eventID: readback.eventId,
+                    status: readback.status,
+                    expectedAction: "poll_vote",
+                    expectedRoomID: roomID,
+                    expectedStatus: "voted"
+                ) else {
+                    throw EventActionError.failed
+                }
+            } catch {
+                throw EventActionError.failed
+            }
+            return item
+        case .declineCall:
+            do {
+                let readback = try await SharedCoreTimelineVoteDecline.timelineCallDecline(
+                    core: host.core,
+                    roomId: roomID,
+                    eventId: item.eventID
+                )
+                guard TimelineActionReadbackPolicy.accepts(
+                    schemaVersion: readback.schemaVersion,
+                    action: readback.action,
+                    roomID: readback.roomId,
+                    eventID: readback.eventId,
+                    status: readback.status,
+                    expectedAction: "call_decline",
+                    expectedRoomID: roomID,
+                    expectedStatus: "declined"
+                ) else {
+                    throw EventActionError.failed
+                }
             } catch {
                 throw EventActionError.failed
             }
@@ -1451,6 +1723,12 @@ final class SharedCoreAgentApprovalDecisionService: AgentApprovalDecisionServici
 }
 
 final class SharedCoreCryptoStatusService: CryptoStatusServicing {
+    struct JoinedRoomEncryptionRow: Equatable {
+        let roomID: String
+        let membership: String
+        let encryption: SynaraRoomEncryptionStatus
+    }
+
     private let host: SharedCoreProductHost
     private let flowLock = NSLock()
     private var flowId: String?
@@ -1461,14 +1739,15 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
         let session = await sessionStatus()
-        let listEncrypted = await listEncryption(roomID: roomID)
-        let inviteEncrypted = await inviteEncryption(roomID: roomID)
-        let isEncrypted = listEncrypted ?? inviteEncrypted
-        guard session != .unknown || isEncrypted != nil else {
+        // Timeline actions address joined rooms. Their encryption authority is
+        // the joined-room Core snapshot only; an invite Bool is not a valid
+        // fallback when that snapshot is missing or failed.
+        let encryption = await listEncryption(roomID: roomID)
+        guard session != .unknown || encryption != .unknown else {
             return .unknown
         }
         return SharedCoreSessionCrypto.roomStatus(
-            isEncrypted: isEncrypted,
+            encryption: encryption,
             session: session
         )
     }
@@ -1727,18 +2006,34 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
     }
 
-    private func listEncryption(roomID: String) async -> Bool? {
-        guard let rooms = try? await SharedCoreRoomList.roomListSnapshot(core: host.core) else {
-            return nil
+    static func joinedRoomEncryption(
+        roomID: String,
+        rows: [JoinedRoomEncryptionRow]?
+    ) -> SynaraRoomEncryptionStatus {
+        guard let row = rows?.first(where: {
+            $0.roomID == roomID && $0.membership == "join"
+        }) else {
+            return .unknown
         }
-        return rooms.rooms.first { $0.roomId == roomID }?.isEncrypted
+        return row.encryption
     }
 
-    private func inviteEncryption(roomID: String) async -> Bool? {
-        guard let invites = try? await SharedCoreInvites.invitesSnapshot(core: host.core) else {
-            return nil
+    private func listEncryption(roomID: String) async -> SynaraRoomEncryptionStatus {
+        guard let rooms = try? await SharedCoreRoomList.roomListSnapshot(core: host.core) else {
+            // A failed joined-room read is not evidence that the room is clear;
+            // preserve Unknown so callers cannot fall through to a Bool path.
+            return .unknown
         }
-        return invites.invites.first { $0.roomId == roomID }?.isEncrypted
+        return Self.joinedRoomEncryption(
+            roomID: roomID,
+            rows: rooms.rooms.map {
+                JoinedRoomEncryptionRow(
+                    roomID: $0.roomId,
+                    membership: $0.membership,
+                    encryption: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
+                )
+            }
+        )
     }
 
     func currentVerificationState() async -> CryptoVerificationState? {
@@ -1938,8 +2233,18 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
 
     func roomDetails(roomID: String) async -> RoomDetails? {
         let ownUserID = await coreSessionUserID()
-        let list = try? await SharedCoreRoomList.roomListSnapshot(core: host.core)
-        let room = list?.rooms.first(where: { $0.roomId == roomID })
+        let list: RoomListSnapshotDto?
+        let roomListReadFailed: Bool
+        do {
+            list = try await SharedCoreRoomList.roomListSnapshot(core: host.core)
+            roomListReadFailed = false
+        } catch {
+            list = nil
+            roomListReadFailed = true
+        }
+        let room = list?.rooms.first(where: {
+            $0.roomId == roomID && $0.membership == "join"
+        })
         let members = try? await SharedCoreRoomMembersSnapshots.roomMembersSnapshot(
             core: host.core,
             roomId: roomID
@@ -1961,6 +2266,16 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             core: host.core,
             roomId: roomID
         )
+        let encryptionStatus: SynaraRoomEncryptionStatus
+        if let room {
+            encryptionStatus = SharedCoreRoomListRows.encryptionStatus(room.encryptionStatus)
+        } else if roomListReadFailed {
+            encryptionStatus = .unavailable
+        } else if let invite {
+            encryptionStatus = SharedCoreSessionCrypto.encryption(invite.isEncrypted)
+        } else {
+            encryptionStatus = .unknown
+        }
         return SharedCoreRoomDetails.details(
             roomID: roomID,
             ownUserID: ownUserID,
@@ -1982,7 +2297,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             powerLevelsJSON: power?.contentJson,
             joinRule: join?.joinRule,
             topic: invite?.roomTopic,
-            isEncrypted: room?.isEncrypted ?? invite?.isEncrypted ?? false,
+            encryptionStatus: encryptionStatus,
             notificationMode: SharedCoreRoomDetails.notificationMode(
                 notification?.mode ?? room?.notificationMode
             )
@@ -2223,10 +2538,12 @@ struct SharedCoreSparsePushRouteResolver: SparsePushRouteResolving {
 }
 
 final class SharedCorePusherService: MatrixPusherServicing {
-    private let host: SharedCoreProductHost
+    typealias OwnerBinder = (AuthenticatedSession) throws -> SharedCoreHttpPusherOwning
+
     private let gatewayURL: URL?
     private let appID: String
     private let logger: LoggingServicing
+    private let ownerBinder: OwnerBinder
 
     var isGatewayConfigured: Bool {
         gatewayURL != nil
@@ -2240,35 +2557,77 @@ final class SharedCorePusherService: MatrixPusherServicing {
         host: SharedCoreProductHost,
         appID: String = "com.whylandcreative.synara",
         gatewayURL: URL? = nil,
-        logger: LoggingServicing = AppLogger()
+        logger: LoggingServicing = AppLogger(),
+        ownerBinder: OwnerBinder? = nil
     ) {
-        self.host = host
+        self.appID = appID
+        self.gatewayURL = gatewayURL
+        self.logger = logger
+        self.ownerBinder = ownerBinder ?? { session in
+            try SharedCoreHttpPusher.bind(
+                core: host.core,
+                userID: session.userID,
+                deviceID: session.deviceID,
+                homeserverURL: session.homeserverURL.absoluteString
+            )
+        }
+    }
+
+    func bindPusher(to session: AuthenticatedSession) throws -> MatrixPusherAccountServicing {
+        let owner = try ownerBinder(session)
+        return SharedCoreBoundPusherService(
+            owner: owner,
+            appID: appID,
+            gatewayURL: gatewayURL,
+            logger: logger
+        )
+    }
+}
+
+private final class SharedCoreBoundPusherService: MatrixPusherAccountServicing {
+    private let owner: SharedCoreHttpPusherOwning
+    private let appID: String
+    private let gatewayURL: URL?
+    private let logger: LoggingServicing
+
+    init(
+        owner: SharedCoreHttpPusherOwning,
+        appID: String,
+        gatewayURL: URL?,
+        logger: LoggingServicing
+    ) {
+        self.owner = owner
         self.appID = appID
         self.gatewayURL = gatewayURL
         self.logger = logger
     }
 
-    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
+    func registerPusher(pushKey: String) async throws {
         guard let gatewayURL else {
             logger.info("Push gateway URL is not configured; skipping pusher registration", category: .push)
             return
         }
         _ = try await SharedCoreHttpPusher.register(
-            core: host.core,
+            owner: owner,
             pushKey: pushKey,
             appId: appID,
             gatewayUrl: gatewayURL.absoluteString,
             appDisplayName: "Synara",
-            deviceDisplayName: session.deviceID,
             lang: "en-US"
         )
     }
 
-    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
-        _ = session
+    func unregisterPusher(pushKey: String) async throws {
         _ = try await SharedCoreHttpPusher.delete(
-            core: host.core,
+            owner: owner,
             pushKey: pushKey,
+            appId: appID
+        )
+    }
+
+    func unregisterAllPushersForDevice() async throws {
+        _ = try await SharedCoreHttpPusher.deleteForDevice(
+            owner: owner,
             appId: appID
         )
     }

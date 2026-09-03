@@ -226,6 +226,7 @@ pub async fn matrix_timeline_forward_text(
         request.event_id,
         request.target_room_id,
         request.as_quote,
+        request.confirmed_encryption_downgrade,
     )
     .await
 }
@@ -240,6 +241,7 @@ pub async fn matrix_timeline_forward_media(
         request.source_room_id,
         request.event_id,
         request.target_room_id,
+        request.confirmed_encryption_downgrade,
     )
     .await
 }

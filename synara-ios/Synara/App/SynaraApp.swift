@@ -297,9 +297,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
     func application(
         _ application: UIApplication,
-        didFailToRegisterForRemoteNotificationsWithError error: Error
+        didFailToRegisterForRemoteNotificationsWithError _: Error
     ) {
-        logger?.error("APNs registration failed: \(error.localizedDescription)", category: .push)
+        push?.handleRegistrationFailure()
+        logger?.error("APNs registration failed", category: .push)
     }
 
     func application(
@@ -307,6 +308,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         didReceiveRemoteNotification userInfo: [AnyHashable: Any],
         fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void
     ) {
+        SynaraNotificationDiagnostics.record(.backgroundReceived, runID: UUID())
         logNotificationPayloadShape(userInfo, context: "background")
         Task {
             let result = await handleBackgroundRemoteNotification(userInfo)
@@ -332,6 +334,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             return
         }
         let userInfo = response.notification.request.content.userInfo
+        SynaraNotificationDiagnostics.record(.responseReceived, runID: UUID())
         logNotificationPayloadShape(userInfo, context: "response")
         if SynaraAgentApprovalNotificationActionID(rawValue: response.actionIdentifier) != nil {
             await handleAgentApprovalNotificationAction(
@@ -425,6 +428,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification
     ) async -> UNNotificationPresentationOptions {
+        SynaraNotificationDiagnostics.record(.foregroundReceived, runID: UUID())
         logNotificationPayloadShape(notification.request.content.userInfo, context: "foreground")
         await MainActor.run {
             push?.applyIncomingBadge(from: notification.request.content.userInfo)

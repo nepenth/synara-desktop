@@ -102,11 +102,21 @@ export const Reactions = as<'div', ReactionsProps>(
     const handleReactionToggle = useCallback(
       (key: string) => {
         setReactionError(undefined);
-        void toggleReactionWithNativeOwner({ roomId, eventId: mEventId, key }).catch(() => {
+        const projected = reactions.find((reaction) => reaction.key === key);
+        if (!projected) {
+          setReactionError('Reaction ownership is unavailable.');
+          return;
+        }
+        void toggleReactionWithNativeOwner({
+          roomId,
+          eventId: mEventId,
+          key,
+          expectedOwn: !projected.me,
+        }).catch(() => {
           setReactionError('Failed to update reaction.');
         });
       },
-      [mEventId, roomId]
+      [mEventId, reactions, roomId]
     );
 
     const handleViewReaction: MouseEventHandler<HTMLButtonElement> = (evt) => {

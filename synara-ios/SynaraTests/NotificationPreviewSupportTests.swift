@@ -115,10 +115,12 @@ final class NotificationPreviewSupportTests: XCTestCase {
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
         defer { defaults.removePersistentDomain(forName: suiteName) }
         let start = Date(timeIntervalSince1970: 2_000_000)
+        let runID = UUID()
 
         for offset in 0 ..< SynaraNotificationDiagnostics.maximumEntries + 5 {
             SynaraNotificationDiagnostics.record(
                 offset.isMultiple(of: 2) ? .received : .payloadInvalid,
+                runID: runID,
                 now: start.addingTimeInterval(TimeInterval(offset)),
                 defaults: defaults
             )
@@ -128,6 +130,7 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertEqual(entries.count, SynaraNotificationDiagnostics.maximumEntries)
         XCTAssertEqual(entries.first?.timestamp, start.addingTimeInterval(5))
         XCTAssertEqual(entries.last?.stage, SynaraNotificationDiagnostics.Stage.received.rawValue)
+        XCTAssertTrue(entries.allSatisfy { $0.runID == runID })
         XCTAssertTrue(entries.allSatisfy { SynaraNotificationDiagnostics.Stage(rawValue: $0.stage) != nil })
 
         let encoded = try XCTUnwrap(
@@ -138,8 +141,67 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertFalse(storedText.contains("event_id"))
         XCTAssertFalse(storedText.contains("body"))
         XCTAssertFalse(storedText.contains("token"))
+        XCTAssertFalse(storedText.contains("matrix.org"))
 
         SynaraNotificationDiagnostics.clear(defaults: defaults)
         XCTAssertTrue(SynaraNotificationDiagnostics.entries(defaults: defaults).isEmpty)
     }
+
+    func testNotificationDiagnosticsDecodeRecordsFromBeforeCorrelationIDs() throws {
+        let suiteName = "synara.notification-diagnostics.legacy.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let legacyEntry = LegacyNotificationDiagnosticEntry(
+            id: UUID(),
+            timestamp: Date(timeIntervalSince1970: 2_000_000),
+            stage: SynaraNotificationDiagnostics.Stage.received.rawValue
+        )
+        defaults.set(
+            try JSONEncoder().encode([legacyEntry]),
+            forKey: SynaraSharedConstants.notificationDiagnosticsKey
+        )
+
+        let decoded = try XCTUnwrap(SynaraNotificationDiagnostics.entries(defaults: defaults).first)
+        XCTAssertEqual(decoded.id, legacyEntry.id)
+        XCTAssertNil(decoded.runID)
+        XCTAssertEqual(decoded.stage, legacyEntry.stage)
+    }
+
+    func testEmptyDeadlineExpirationDoesNotCreateUncorrelatedDiagnostic() throws {
+        let suiteName = "synara.notification-diagnostics.empty-deadline.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        SynaraNotificationDiagnostics.recordDeadlineDeliveries(for: [], defaults: defaults)
+
+        XCTAssertTrue(SynaraNotificationDiagnostics.entries(defaults: defaults).isEmpty)
+    }
+
+    func testDeadlineDiagnosticsAreCorrelatedOnlyToWinningRequestIDs() throws {
+        let suiteName = "synara.notification-diagnostics.deadline.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let requestID = UUID()
+
+        SynaraNotificationDiagnostics.recordDeadlineDeliveries(
+            for: [requestID],
+            defaults: defaults
+        )
+
+        let entries = SynaraNotificationDiagnostics.entries(defaults: defaults)
+        XCTAssertEqual(entries.map(\.runID), [requestID, requestID])
+        XCTAssertEqual(
+            entries.map(\.stage),
+            [
+                SynaraNotificationDiagnostics.Stage.systemDeadline.rawValue,
+                SynaraNotificationDiagnostics.Stage.delivered.rawValue
+            ]
+        )
+    }
+}
+
+private struct LegacyNotificationDiagnosticEntry: Codable {
+    let id: UUID
+    let timestamp: Date
+    let stage: String
 }

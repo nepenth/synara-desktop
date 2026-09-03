@@ -1,10 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import parse, {
-  attributesToProps,
-  domToReact,
-  Element,
-  HTMLReactParserOptions,
-} from 'html-react-parser';
+import { attributesToProps, domToReact, Element, HTMLReactParserOptions } from 'html-react-parser';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
@@ -15,7 +10,10 @@ import {
   inferCodeLanguage,
   nativeCodeBlockFromPreChildren,
 } from './nativeTimelineCodeHighlight';
-import { prepareNativeFormattedBody } from './nativeTimelineRichText';
+import {
+  classifyNativeFormattedElement,
+  projectNativeFormattedBody,
+} from './nativeTimelinePresentationProjection';
 import * as htmlCss from './nativeTimelineHtml.css';
 import { MatrixColorSpan, MatrixColorSurface } from '../../components/message/MatrixColorSpan';
 
@@ -126,7 +124,9 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
     if (!(domNode instanceof Element) || !('name' in domNode)) {
       return undefined;
     }
-    if (domNode.name === 'table') {
+    const parentName = domNode.parent instanceof Element ? domNode.parent.name : undefined;
+    const presentation = classifyNativeFormattedElement(domNode.name, domNode.attribs, parentName);
+    if (presentation === 'table') {
       return (
         <MatrixColorSurface surface="table">
           <div
@@ -144,7 +144,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </MatrixColorSurface>
       );
     }
-    if (domNode.name === 'span' && 'data-mx-spoiler' in domNode.attribs) {
+    if (presentation === 'spoiler') {
       return (
         <NativeSpoiler
           reason={domNode.attribs['data-mx-spoiler']}
@@ -155,10 +155,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </NativeSpoiler>
       );
     }
-    if (
-      domNode.name === 'span' &&
-      ('data-mx-color' in domNode.attribs || 'data-mx-bg-color' in domNode.attribs)
-    ) {
+    if (presentation === 'matrixColor') {
       return (
         <MatrixColorSpan
           foreground={domNode.attribs['data-mx-color']}
@@ -168,7 +165,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </MatrixColorSpan>
       );
     }
-    if (domNode.name === 'img') {
+    if (presentation === 'inlineImageFallback') {
       // Matrix formatted HTML only permits mxc:// image sources. Loading those
       // directly in the webview bypasses shared-core media authentication and
       // simply fails. Preserve the accessible producer fallback without a
@@ -180,10 +177,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </span>
       );
     }
-    if (
-      domNode.name === 'code' &&
-      !(domNode.parent instanceof Element && domNode.parent.name === 'pre')
-    ) {
+    if (presentation === 'inlineCode') {
       return (
         <MatrixColorSurface surface="inlineCode">
           <code {...attributesToProps(domNode.attribs)}>
@@ -192,7 +186,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
         </MatrixColorSurface>
       );
     }
-    if (domNode.name !== 'pre') return undefined;
+    if (presentation !== 'codeBlock') return undefined;
     const { code, languageClass } = nativeCodeBlockFromPreChildren(domNode.children);
     return (
       <MatrixColorSurface surface="codeBlock">
@@ -211,15 +205,15 @@ export function NativeFormattedBody({
   fallbackBody: string;
   style?: React.CSSProperties;
 }) {
-  const sanitized = useMemo(() => prepareNativeFormattedBody(html), [html]);
+  const projection = useMemo(() => projectNativeFormattedBody(html), [html]);
   const parsed = useMemo(() => {
-    if (!sanitized) return undefined;
+    if (!projection) return undefined;
     try {
-      return parse(sanitized, nativeFormattedHtmlParserOptions);
+      return domToReact(projection.domNodes, nativeFormattedHtmlParserOptions);
     } catch {
       return undefined;
     }
-  }, [sanitized]);
+  }, [projection]);
 
   return (
     <div

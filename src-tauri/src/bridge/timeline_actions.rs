@@ -179,6 +179,7 @@ pub(crate) async fn timeline_forward_text(
     event_id: String,
     target_room_id: String,
     as_quote: bool,
+    confirmed_encryption_downgrade: bool,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let response = core
         .command(CommandEnvelope {
@@ -190,6 +191,7 @@ pub(crate) async fn timeline_forward_text(
                 "eventId": event_id,
                 "targetRoomId": target_room_id,
                 "asQuote": as_quote,
+                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
             }),
         })
         .await
@@ -202,6 +204,7 @@ pub(crate) async fn timeline_forward_media(
     source_room_id: String,
     event_id: String,
     target_room_id: String,
+    confirmed_encryption_downgrade: bool,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     let response = core
         .command(CommandEnvelope {
@@ -212,6 +215,7 @@ pub(crate) async fn timeline_forward_media(
                 "sourceRoomId": source_room_id,
                 "eventId": event_id,
                 "targetRoomId": target_room_id,
+                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
             }),
         })
         .await
@@ -252,6 +256,15 @@ fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
                 "v-timeline-call-decline-bad-event-type" => (
                     "InvalidRequest",
                     "Only m.rtc.notification events can be declined.",
+                ),
+                "v-timeline-forward-source-encryption-unavailable"
+                | "v-timeline-forward-target-encryption-unavailable" => (
+                    "Unavailable",
+                    "Room encryption status is unavailable. Forwarding was not started.",
+                ),
+                "v-timeline-forward-encryption-downgrade-not-confirmed" => (
+                    "ConfirmationRequired",
+                    "Confirm before forwarding from an encrypted room to an unencrypted room.",
                 ),
                 _ => (
                     "InvalidRequest",

@@ -140,7 +140,7 @@ struct SettingsView: View {
                 }
             } catch {
                 await MainActor.run {
-                    state = .failed(LocalWipeError.sessionDeleteFailed.localizedDescription)
+                    state = .failed(LocalWipeError.displayMessage(for: error))
                     environment.logger.error("Local logout failed", category: .auth)
                 }
             }
@@ -830,9 +830,15 @@ private struct NotificationSettingsView: View {
                         .foregroundStyle(SynaraColor.secondaryText)
                         .accessibilityIdentifier("NotificationDiagnosticsEmpty")
                 } else {
-                    ForEach(notificationDiagnostics.suffix(8).reversed()) { entry in
+                    ForEach(notificationDiagnostics.suffix(24).reversed()) { entry in
                         LabeledContent(entry.stage) {
-                            Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                            VStack(alignment: .trailing, spacing: 2) {
+                                Text(entry.timestamp.formatted(date: .omitted, time: .standard))
+                                if let runID = entry.runID {
+                                    Text(String(runID.uuidString.prefix(8)).lowercased())
+                                        .font(.caption2.monospaced())
+                                }
+                            }
                                 .foregroundStyle(SynaraColor.secondaryText)
                         }
                         .accessibilityIdentifier("NotificationDiagnostic-\(entry.id.uuidString)")
@@ -852,7 +858,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Local Delivery Diagnostics")
             } footer: {
-                Text("Stores up to 48 stage codes and timestamps on this device. It never records message content, Matrix IDs, senders, push payloads, tokens, URLs, or account secrets.")
+                Text("Stores up to 256 fixed stage codes, timestamps, and random local correlation IDs on this device. It never records message content, Matrix IDs, senders, push payloads, tokens, URLs, or account secrets.")
             }
 
             if let pushRules {

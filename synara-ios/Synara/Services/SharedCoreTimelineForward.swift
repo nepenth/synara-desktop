@@ -16,13 +16,15 @@ enum SharedCoreTimelineForward {
         sourceRoomId: String,
         eventId: String,
         targetRoomId: String,
-        asQuote: Bool
+        asQuote: Bool,
+        confirmedEncryptionDowngrade: Bool
     ) async throws -> TimelineForwardDto {
         try await core.timelineForwardText(
             sourceRoomId: sourceRoomId,
             eventId: eventId,
             targetRoomId: targetRoomId,
-            asQuote: asQuote
+            asQuote: asQuote,
+            confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
         )
     }
 
@@ -30,12 +32,14 @@ enum SharedCoreTimelineForward {
         core: SharedCore,
         sourceRoomId: String,
         eventId: String,
-        targetRoomId: String
+        targetRoomId: String,
+        confirmedEncryptionDowngrade: Bool
     ) async throws -> TimelineForwardDto {
         try await core.timelineForwardMedia(
             sourceRoomId: sourceRoomId,
             eventId: eventId,
-            targetRoomId: targetRoomId
+            targetRoomId: targetRoomId,
+            confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
         )
     }
 }

@@ -1,6 +1,6 @@
 # Reconciled program state
 
-Last updated: 2026-09-02.
+Last updated: 2026-09-03.
 Research run: completed 2026-09-01 on
 `feature/rust-ownership-residual-census`, based on `main` `011cf39a`.
 Remediation pass: explicitly human-authorized 2026-09-02 on the same branch.
@@ -62,19 +62,54 @@ from live-evidence gates that still cannot honestly be closed.
   policy remains whole-document last-write-wins at the server; only the local
   read-your-write projection is bounded to 30 seconds. No merge protocol is
   invented.
-- A6 added one shared semantic/security corpus for the desktop and iOS
-  harnesses. Core now rejects, rather than truncates, combined plain/formatted
-  text and caption payloads above 65,536 UTF-8 bytes and bounds raw mention
-  cardinality and identifiers before parsing; the action remains partial until
-  the complete adversarial matrix is present.
+- A6's deterministic presentation/security slice is complete. Its 22-case
+  shared corpus and required-coverage register run through Core, desktop, and
+  iOS harnesses for formatted reply fallback, mentions, spoilers, links,
+  nested lists, inline/preformatted code, tables, malformed/executable HTML,
+  remote-resource rejection, plaintext fallback, and UTF-8 size boundaries.
+  Core rejects, rather than truncates, combined plain/formatted text and
+  caption payloads above 65,536 UTF-8 bytes and bounds raw mention cardinality
+  and identifiers before parsing. The expanded corpus exposed and repaired
+  iOS's loss of the historical Matrix `<strike>` alias by normalizing it to
+  `<s>` at the iOS output-context boundary, matching desktop without moving
+  sanitization into Core. Timeline sequencing remains a separate Core concern
+  under A7 rather than duplicate presenter logic.
 - A7 transports Core-owned sender, reply, thread, poll, reaction, and
   capability presentation without dropping non-message event metadata.
   Desktop message, poll, and sticker rows share the typed reply/thread/reaction
   presenter. The existing reply/edit/redact/react/pin UI consumes its
-  applicable gates;
-  poll voting and report/forward/decline-call UI remain explicit follow-on
-  product scope.
+  applicable gates. Capability-driven poll vote, report, forward, and
+  decline-call surfaces are now implemented across desktop and iOS with Core
+  validation, typed exact readback, fail-closed forwarding, and duplicate-write
+  exclusion. A pinned-SDK/Core suite proves redaction replacement, late
+  decryption, pagination overlap, relation-before-parent ordering, and
+  power-level capability reprojection without duplicate row identity. Live
+  Matrix/two-client action interoperability remains **Not confirmed**; see
+  [A7-TIMELINE-PRODUCT-ACTIONS.md](A7-TIMELINE-PRODUCT-ACTIONS.md).
 - A8 is decided and tested: marked-unread alone is not a mention.
+- A9 has a repaired iOS pusher-registration owner: duplicate triggers are
+  single-flight, every binding retains a dedicated account-bound Core/client
+  capability plus its exact token, stale in-flight results are removed, and
+  failed rotation cleanup remains retryable instead of being overwritten.
+  Logout uses that capability to enumerate and delete every exact Synara
+  app+Matrix-device pusher before local credential teardown, including after a
+  process restart with no redelivered APNs token. Its two-phase gate remains in
+  force through Keychain deletion: remote failure blocks sign-out, while local
+  deletion failure resumes and reconciles push for the still-signed-in session.
+  App/NSE diagnostics use only fixed stage codes plus opaque local correlation
+  IDs, and deadline races complete coordinator-owned fallbacks before recording
+  only those request IDs. Physical
+  foreground/background/terminated APNs and encrypted/unencrypted NSE proof
+  remains **Not confirmed**. Desktop tray delivery remains **Failed** at its
+  unwired Core candidate/decision source; no room-list polling or JS policy
+  fallback was added. See [A9-NOTIFICATION-DELIVERY.md](A9-NOTIFICATION-DELIVERY.md).
+- A10 measures the existing media byte-channel boundary without changing its
+  architecture. A loopback Matrix SDK harness proves authenticated client-v1
+  routing, exact declared/chunked caps, only the documented 404/405 legacy
+  fallback, uncached repeated fetches, and caller-task cancellation. iOS adds
+  content-free duration/byte-count/outcome signposts. Real-device process-memory,
+  radio/network, and in-flight cancellation evidence remains **Not confirmed**,
+  so the unused cache stays unwired and the existing platform caps remain.
 - A11 removes the retired direct Matrix Swift package edge and makes CI lock
   behavior derive semantically from whether the reachable generated package
   graph actually has remote packages. The Core Swift/XCFramework pair was
@@ -84,33 +119,68 @@ from live-evidence gates that still cannot honestly be closed.
   Its iOS UI target executed 73 tests: 59 passed and 14 were intentionally
   skipped.
 
-The final deterministic validation also passed Core's 836-test unit target
-(833 passed, 3 environment-gated tests ignored), every Core integration binary
-and doc test, desktop modernization 910/910 after typecheck and production
-build, and the complete Tauri compile. The offline cold-restart proof was
+The prior A1-A5/A8/A11 remediation baseline also passed Core's 836-test unit
+target (833 passed, 3 environment-gated tests ignored), every Core integration
+binary and doc test, desktop modernization 910/910 after typecheck and
+production build, and the complete Tauri compile. The offline cold-restart proof was
 repaired at the Matrix SDK store-lifecycle boundary: the first client now
 awaits `Client::pause()` before the same persistent root is reopened, replacing
 the nondeterministic `drop` plus guessed delay.
 
-Notification-delivery reliability (A9), media measurement/cache policy (A10),
-the remaining A2/A3/A4/A5 live proofs, and the explicit A6/A7 follow-ons remain
-open. Deterministic tests must not be cited as those live proofs.
+Physical notification delivery (A9), real-device media measurement/cache policy
+(A10), the remaining A2/A3/A4/A5 live proofs, and A7 live action
+interoperability remain open. Deterministic tests must not be cited as those
+live proofs.
 
-## Promotion status
+## Prior remediation promotion status
 
-The memos and original run remain docs-only research artifacts. The 2026-09-02
-product changes were separately authorized and implemented in the remediation
-change set. Independent implementation review completed and its concrete P1
+The memos and original run remain docs-only research artifacts. The earlier
+2026-09-02 A1-A5/A8/A11 product changes were separately authorized and
+implemented in the remediation change set. Independent implementation review
+completed and its concrete P1
 reply-revision finding was remediated. The final Grok 4.6 High review then
 identified an attachment-send revision-scope defect; that path was corrected,
 passed the focused executable suite and full desktop typecheck, and a targeted
-Grok re-review returned no P0-P2 findings. Consolidated deterministic
-validation is green. PR `#1092` promoted exact head `ce77bdcc` through 13
+Grok re-review returned no P0-P2 findings. That prior change set's consolidated
+deterministic validation was green. PR `#1092` promoted exact head `ce77bdcc` through 13
 applicable successful checks with zero failures; four scope-inapplicable checks
 were skipped and are not counted as evidence. The PR merged as `e9b5016e`, and
 both local `main` and authoritative `origin/main` resolved to that merge commit
-on 2026-09-02. Neither the research verdict nor compilation alone is proof that
-an external operating path works.
+on 2026-09-02. None of those results validate the current follow-on branch.
+Neither the research verdict nor compilation alone is proof that an external
+operating path works.
+
+## Follow-on validation status
+
+The separately authorized A6/A7/A9/A10 candidate on
+`feature/rust-ownership-follow-ons` is deterministic-validation complete. The
+complete Rust workspace passed formatting, all-target Clippy with warnings
+denied, check, and 1,072 tests with 3 environment-gated ignores. Tauri passed
+formatting, all-target Clippy, check, 441 tests, and the 2,722-file Matrix
+boundary/SDK guardrails. Desktop passed formatting, lint, both typechecks, a
+production build, 926 modernization tests, and 6 real-layout Chromium tests;
+the repository delivery suite passed 277 tests. Production npm audit is clean,
+and both Rust lockfiles have no advisory outside the reviewed cargo-audit
+allowlists.
+
+The exact Apple candidate transactionally regenerated Core and NSE packages,
+passed build-for-testing, and executed 777 tests: 760 passed, 17 intentionally
+skipped, and 0 failed. Its fresh log has zero matches for the prior
+background-publish, `ObservedObject`, main-actor-isolation, invalid-frame, or
+non-finite-frame warnings. Generated Swift compiled the tri-state room
+encryption DTO and both explicit forward-downgrade confirmation parameters
+end-to-end.
+
+Validation found and repaired stale test contracts for the required room
+encryption field, the new HTTP-pusher owner, and the Tauri tri-state projection,
+plus one desktop no-unused-binding violation. The message sanitizer was updated
+from vulnerable 2.17.6 to fixed 2.17.7 and the affected desktop gates were
+rerun. Independent review accepted the final iOS CI remediation and centralized
+logout error presentation with no P0-P2 findings. The independent whole-change
+review and final Grok 4.6 High review both returned `ACCEPT` with no actionable
+P0-P2 findings. Remote PR CI is still a promotion gate; no merge or release is
+implied. Physical notification delivery, real-device media measurement, and
+every live/two-client gate listed above remain open.
 
 ## Historical provenance
 

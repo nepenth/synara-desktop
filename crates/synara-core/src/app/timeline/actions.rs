@@ -68,6 +68,8 @@ pub struct NativeTimelineForwardTextRequest {
     pub target_room_id: String,
     #[serde(default)]
     pub as_quote: bool,
+    /// Deliberate user authorization for an encrypted-to-cleartext copy.
+    pub confirmed_encryption_downgrade: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -76,6 +78,8 @@ pub struct NativeTimelineForwardMediaRequest {
     pub source_room_id: String,
     pub event_id: String,
     pub target_room_id: String,
+    /// Deliberate user authorization for an encrypted-to-cleartext copy.
+    pub confirmed_encryption_downgrade: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -216,7 +220,8 @@ mod tests {
         let media: NativeTimelineForwardMediaRequest = serde_json::from_value(serde_json::json!({
             "sourceRoomId": "!source:example.org",
             "eventId": "$media:example.org",
-            "targetRoomId": "!target:example.org"
+            "targetRoomId": "!target:example.org",
+            "confirmedEncryptionDowngrade": false
         }))
         .unwrap();
         assert_eq!(media.event_id, "$media:example.org");
@@ -252,10 +257,12 @@ mod tests {
             "sourceRoomId": "!source:example.org",
             "eventId": "$fwd:example.org",
             "targetRoomId": "!target:example.org",
-            "asQuote": true
+            "asQuote": true,
+            "confirmedEncryptionDowngrade": true
         }))
         .unwrap();
         assert!(forward.as_quote);
+        assert!(forward.confirmed_encryption_downgrade);
 
         let readback = NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,

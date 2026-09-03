@@ -1,5 +1,6 @@
 import XCTest
 @testable import Synara
+import SynaraCore
 
 @MainActor
 final class PushServiceTests: XCTestCase {
@@ -393,8 +394,49 @@ final class PushServiceTests: XCTestCase {
                 && pusher.registerCount >= 1
         }
         XCTAssertTrue(service.isRegistered)
-        XCTAssertGreaterThanOrEqual(pusher.registerCount, 1)
+        XCTAssertEqual(pusher.registerCount, 1)
         XCTAssertEqual(pusher.lastPushKey, "7ab13c")
+    }
+
+    func testPushServiceCoalescesRepeatedRegistrationTriggers() async {
+        let pusher = StubPusherService()
+        let session = makeSession()
+        let token = Data([0x7A, 0xB1, 0x3C])
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: session)
+        service.handleDeviceToken(token)
+        service.configure(with: session)
+        service.handleDeviceToken(token)
+
+        await waitUntil { service.isRegistered }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(pusher.registerCount, 1)
+        XCTAssertEqual(pusher.unregisterCount, 0)
+    }
+
+    func testPushServiceCoalescesIdenticalTriggerWhileRegistrationIsInFlight() async {
+        let pusher = StubPusherService(registerDelayNanoseconds: 80_000_000)
+        let session = makeSession()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: session)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { pusher.registerCount == 1 }
+        service.configure(with: session)
+
+        await waitUntil { service.isRegistered }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(pusher.registerCount, 1)
+        XCTAssertEqual(pusher.unregisterCount, 0)
     }
 
     func testPushServiceClearsRegistrationAndUnregistersOnLogout() async {
@@ -409,12 +451,262 @@ final class PushServiceTests: XCTestCase {
         service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
         await waitUntil { service.isRegistered && pusher.registerCount >= 1 }
 
-        await service.clearRegistrationState()
-        await waitUntil { pusher.unregisterCount >= 1 && service.isRegistered == false }
+        let cleanupSucceeded = await service.clearRegistrationState()
+        await waitUntil { pusher.unregisterAllCount >= 1 && service.isRegistered == false }
 
-        XCTAssertEqual(service.tokenSnippet, nil)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
         XCTAssertFalse(service.isRegistered)
-        XCTAssertEqual(pusher.unregisterCount, 1)
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertTrue(cleanupSucceeded)
+        service.completeRegistrationTeardown()
+        XCTAssertNil(service.tokenSnippet)
+    }
+
+    func testPushServiceRetainsLogoutOwnerAndTokenUntilFailedCleanupRetriesSuccessfully() async {
+        let pusher = StubPusherService()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+        pusher.unregisterFailuresRemaining = 1
+
+        let firstAttempt = await service.clearRegistrationState()
+
+        XCTAssertFalse(firstAttempt)
+        XCTAssertFalse(service.isRegistered)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+
+        let retry = await service.clearRegistrationState()
+
+        XCTAssertTrue(retry)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
+        XCTAssertEqual(pusher.unregisterAllCount, 2)
+        XCTAssertEqual(pusher.unregisteredAllSessions, [makeSession(), makeSession()])
+        service.completeRegistrationTeardown()
+        XCTAssertNil(service.tokenSnippet)
+    }
+
+    func testReinstantiatedPushServiceLogsOutByEnumeratingBoundDevicePushersWithoutAPNSToken() async {
+        let pusher = StubPusherService()
+        let session = makeSession()
+        var original: SynaraPushService? = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        original?.configure(with: session)
+        original?.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { original?.isRegistered == true }
+        original = nil
+
+        let reloaded = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        reloaded.configure(with: session)
+        let cleanupSucceeded = await reloaded.clearRegistrationState()
+
+        XCTAssertTrue(cleanupSucceeded)
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(pusher.unregisteredAllSessions, [session])
+        XCTAssertNil(reloaded.tokenSnippet)
+        reloaded.completeRegistrationTeardown()
+    }
+
+    func testImmediateLogoutAfterAPNSFailureEnumeratesBoundDevicePushers() async {
+        let pusher = StubPusherService()
+        let session = makeSession()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: session)
+        service.handleRegistrationFailure()
+
+        let cleanupSucceeded = await service.clearRegistrationState()
+
+        XCTAssertTrue(cleanupSucceeded)
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(pusher.unregisteredAllSessions, [session])
+        service.completeRegistrationTeardown()
+    }
+
+    func testImmediateLogoutFailsClosedWithoutAccountBoundOwner() async {
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: ThrowingPusherService(),
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleRegistrationFailure()
+
+        let cleanupSucceeded = await service.clearRegistrationState()
+
+        XCTAssertFalse(cleanupSucceeded)
+        XCTAssertEqual(
+            service.registrationStateDescription,
+            "Pusher owner unavailable; retry sign out"
+        )
+    }
+
+    func testPushCallbacksCannotRestartRegistrationWhileLogoutCleanupIsSuspended() async {
+        let pusher = StubPusherService(unregisterDelayNanoseconds: 150_000_000)
+        let session = makeSession()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: session)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+
+        let cleanupTask = Task { await service.clearRegistrationState() }
+        await waitUntil { pusher.unregisterAllCount == 1 }
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+        service.handleRegistrationFailure()
+        service.configure(with: session)
+
+        let cleanupSucceeded = await cleanupTask.value
+        XCTAssertTrue(cleanupSucceeded)
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+        service.configure(with: session)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(pusher.registerCount, 1)
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
+        XCTAssertFalse(service.isRegistered)
+        service.completeRegistrationTeardown()
+        XCTAssertNil(service.tokenSnippet)
+    }
+
+    func testCancelledLocalTeardownRestoresDeletedPusherForSignedInSession() async {
+        let pusher = StubPusherService()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+
+        let cleanupSucceeded = await service.clearRegistrationState()
+        XCTAssertTrue(cleanupSucceeded)
+        service.cancelRegistrationTeardown()
+        await waitUntil { service.isRegistered && pusher.registerCount == 2 }
+
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
+    }
+
+    func testTokenRotatedDuringTeardownIsRestoredAfterKeychainDeletionFailure() async throws {
+        let authenticatedSession = makeSession()
+        let secureStore = PushTestDeleteFailingSecureSessionStore(session: authenticatedSession)
+        let sessionStore = AppSessionStore(
+            secureStore: secureStore,
+            restorePersistedSession: true
+        )
+        let pusher = StubPusherService(unregisterDelayNanoseconds: 150_000_000)
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: authenticatedSession)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+        let wipe = AppLocalWipeService(
+            session: sessionStore,
+            matrix: MockMatrixClientService(syncStatus: .syncing),
+            roomList: MockRoomListService(),
+            timeline: MockTimelineService(),
+            drafts: DraftStore(),
+            push: service,
+            router: AppRouter()
+        )
+
+        let logout = Task { () -> LocalWipeError? in
+            do {
+                try await wipe.logoutAndWipe()
+                return nil
+            } catch let error as LocalWipeError {
+                return error
+            } catch {
+                XCTFail("Unexpected logout error: \(error)")
+                return nil
+            }
+        }
+        await waitUntil { pusher.unregisterAllCount == 1 }
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+
+        let logoutError = await logout.value
+        await waitUntil { service.isRegistered && pusher.registerCount == 2 }
+
+        XCTAssertEqual(logoutError, .sessionDeleteFailed)
+        XCTAssertEqual(sessionStore.currentState, .signedIn(authenticatedSession))
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(pusher.lastPushKey, "aa5500")
+        XCTAssertEqual(service.tokenSnippet, "aa5500")
+    }
+
+    func testTokenRotatedDuringFailedRemoteCleanupIsAppliedAndReconciled() async {
+        let pusher = StubPusherService(unregisterDelayNanoseconds: 150_000_000)
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+        pusher.unregisterFailuresRemaining = 1
+
+        let cleanup = Task { await service.clearRegistrationState() }
+        await waitUntil { pusher.unregisterAllCount == 1 }
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+
+        let cleanupSucceeded = await cleanup.value
+        await waitUntil {
+            service.isRegistered
+                && pusher.unregisterCount == 1
+                && pusher.registerCount == 2
+        }
+
+        XCTAssertFalse(cleanupSucceeded)
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(pusher.lastUnregisterPushKey, "7ab13c")
+        XCTAssertEqual(pusher.lastPushKey, "aa5500")
+        XCTAssertEqual(service.tokenSnippet, "aa5500")
+    }
+
+    func testPushServiceLogoutEnumeratesDeviceWhenRegistrationIsInFlight() async {
+        let pusher = StubPusherService(registerDelayNanoseconds: 200_000_000)
+        let session = makeSession()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: session)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { pusher.registerCount == 1 }
+        let cleanupSucceeded = await service.clearRegistrationState()
+
+        XCTAssertTrue(cleanupSucceeded)
+        XCTAssertFalse(service.isRegistered)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
+        XCTAssertEqual(pusher.unregisteredAllSessions, [session])
+        service.completeRegistrationTeardown()
+        XCTAssertNil(service.tokenSnippet)
     }
 
     func testPushServiceReplacesRegistrationOnTokenRotation() async {
@@ -441,6 +733,221 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(pusher.unregisterCount, 1)
         XCTAssertEqual(pusher.lastUnregisterPushKey, "7ab13c")
         XCTAssertEqual(service.tokenSnippet, "aa5500")
+    }
+
+    func testPushServiceRetainsOldBindingUntilFailedRotationCleanupCanRetry() async {
+        let pusher = StubPusherService()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+
+        pusher.unregisterFailuresRemaining = 1
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+        await waitUntil { pusher.unregisterCount == 1 }
+
+        XCTAssertFalse(service.isRegistered)
+        XCTAssertEqual(service.registrationStateDescription, "Previous pusher cleanup failed")
+        XCTAssertEqual(pusher.registerCount, 1)
+
+        service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 2 }
+        XCTAssertEqual(pusher.unregisterCount, 2)
+        XCTAssertEqual(pusher.lastUnregisterPushKey, "7ab13c")
+        XCTAssertEqual(pusher.lastPushKey, "aa5500")
+    }
+
+    func testPushServiceReplacesRegistrationUsingOriginallyBoundSession() async {
+        let pusher = StubPusherService()
+        let firstSession = makeSession()
+        let secondSession = AuthenticatedSession(
+            userID: "@bob:matrix.org",
+            deviceID: "SECOND",
+            homeserverURL: URL(string: "https://matrix.org")!,
+            accessToken: "second-token"
+        )
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: firstSession)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered && pusher.registerCount == 1 }
+
+        service.configure(with: secondSession)
+        await waitUntil {
+            service.isRegistered
+                && pusher.unregisterCount == 1
+                && pusher.registerCount == 2
+        }
+
+        XCTAssertEqual(pusher.unregisteredSessions, [firstSession])
+        XCTAssertEqual(pusher.registeredSessions, [firstSession, secondSession])
+        XCTAssertEqual(pusher.lastUnregisterPushKey, "7ab13c")
+    }
+
+    func testProductionPusherAdapterDeletesThroughOriginallyBoundCoreOwnerOnAccountRotation() async throws {
+        let firstOwner = RecordingSharedCoreHttpPusherOwner()
+        let secondOwner = RecordingSharedCoreHttpPusherOwner()
+        let firstSession = AuthenticatedSession(
+            userID: "@first:example.org",
+            deviceID: "FIRST",
+            homeserverURL: try XCTUnwrap(URL(string: "https://first.example.org")),
+            accessToken: ""
+        )
+        let secondSession = AuthenticatedSession(
+            userID: "@second:example.org",
+            deviceID: "SECOND",
+            homeserverURL: try XCTUnwrap(URL(string: "https://second.example.org")),
+            accessToken: ""
+        )
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        var boundSessionSignatures: [String] = []
+        let adapter = SharedCorePusherService(
+            host: host,
+            gatewayURL: try XCTUnwrap(URL(string: "https://push.example.org")),
+            logger: MockLoggingService(),
+            ownerBinder: { session in
+                boundSessionSignatures.append("\(session.userID)|\(session.deviceID)")
+                return session == firstSession ? firstOwner : secondOwner
+            }
+        )
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: adapter,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: firstSession)
+        service.handleDeviceToken(Data([0x7a, 0xb1, 0x3c]))
+        await waitUntil { service.isRegistered && firstOwner.registeredPushKeys.count == 1 }
+
+        service.configure(with: secondSession)
+        await waitUntil {
+            service.isRegistered
+                && firstOwner.deletedPushKeys.count == 1
+                && secondOwner.registeredPushKeys.count == 1
+        }
+
+        XCTAssertEqual(boundSessionSignatures, ["@first:example.org|FIRST", "@second:example.org|SECOND"])
+        XCTAssertEqual(firstOwner.registeredPushKeys, ["7ab13c"])
+        XCTAssertEqual(firstOwner.deletedPushKeys, ["7ab13c"])
+        XCTAssertEqual(secondOwner.registeredPushKeys, ["7ab13c"])
+        XCTAssertTrue(secondOwner.deletedPushKeys.isEmpty)
+    }
+
+    func testProductionPusherAdapterCleansOldOwnerWhenNewOwnerBindingFails() async throws {
+        let firstOwner = RecordingSharedCoreHttpPusherOwner()
+        let firstSession = AuthenticatedSession(
+            userID: "@first:example.org",
+            deviceID: "FIRST",
+            homeserverURL: try XCTUnwrap(URL(string: "https://first.example.org")),
+            accessToken: ""
+        )
+        let secondSession = AuthenticatedSession(
+            userID: "@second:example.org",
+            deviceID: "SECOND",
+            homeserverURL: try XCTUnwrap(URL(string: "https://second.example.org")),
+            accessToken: ""
+        )
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let adapter = SharedCorePusherService(
+            host: host,
+            gatewayURL: try XCTUnwrap(URL(string: "https://push.example.org")),
+            logger: MockLoggingService(),
+            ownerBinder: { session in
+                guard session == firstSession else {
+                    throw StubPusherError.plannedFailure
+                }
+                return firstOwner
+            }
+        )
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: adapter,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: firstSession)
+        service.handleDeviceToken(Data([0x7a, 0xb1, 0x3c]))
+        await waitUntil { service.isRegistered && firstOwner.registeredPushKeys.count == 1 }
+
+        service.configure(with: secondSession)
+        await waitUntil { firstOwner.deletedPushKeys.count == 1 }
+
+        XCTAssertFalse(service.isRegistered)
+        XCTAssertEqual(service.registrationStateDescription, "Pusher owner unavailable")
+        XCTAssertEqual(firstOwner.registeredPushKeys, ["7ab13c"])
+        XCTAssertEqual(firstOwner.deletedPushKeys, ["7ab13c"])
+    }
+
+    func testProductionPusherAdapterEnumeratesCurrentDeviceForTokenlessLogout() async throws {
+        let owner = RecordingSharedCoreHttpPusherOwner()
+        let session = makeSession()
+        let host = SharedCoreProductHost(
+            core: SharedCore(),
+            storeRoot: FileManager.default.temporaryDirectory,
+            sessionStore: AppSessionStore()
+        )
+        let adapter = SharedCorePusherService(
+            host: host,
+            gatewayURL: try XCTUnwrap(URL(string: "https://push.example.org")),
+            logger: MockLoggingService(),
+            ownerBinder: { _ in owner }
+        )
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: adapter,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: session)
+
+        let cleanupSucceeded = await service.clearRegistrationState()
+        XCTAssertTrue(cleanupSucceeded)
+        XCTAssertEqual(owner.deleteForDeviceCount, 1)
+    }
+
+    func testPushServiceCleansStaleInFlightRegistrationBeforeBindingNewSession() async {
+        let pusher = StubPusherService(registerDelayNanoseconds: 80_000_000)
+        let firstSession = makeSession()
+        let secondSession = AuthenticatedSession(
+            userID: "@bob:matrix.org",
+            deviceID: "SECOND",
+            homeserverURL: URL(string: "https://matrix.org")!,
+            accessToken: "second-token"
+        )
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+
+        service.configure(with: firstSession)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { pusher.registerCount == 1 }
+        service.configure(with: secondSession)
+
+        await waitUntil(timeoutNanoseconds: 2_000_000_000) {
+            service.isRegistered && pusher.registerCount == 2
+        }
+
+        XCTAssertEqual(pusher.registeredSessions, [firstSession, secondSession])
+        XCTAssertEqual(pusher.unregisteredSessions, [firstSession])
+        XCTAssertEqual(pusher.unregisterCount, 1)
     }
 
     func testResolveRouteFallsBackToSparseResolver() async {
@@ -476,6 +983,27 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(pusher.registerCount, 0)
         XCTAssertFalse(service.isRegistered)
         XCTAssertEqual(service.registrationStateDescription, "Push gateway not configured")
+    }
+
+    func testApnsRegistrationFailurePreservesAnExistingPusherBinding() async {
+        let pusher = StubPusherService()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: makeSession())
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+        await waitUntil { service.isRegistered }
+
+        service.handleRegistrationFailure()
+
+        XCTAssertTrue(service.isRegistered)
+        XCTAssertEqual(
+            service.registrationStateDescription,
+            "APNs registration failed; existing pusher retained"
+        )
+        XCTAssertEqual(pusher.registerCount, 1)
     }
 
     private func makeSession() -> AuthenticatedSession {
@@ -536,24 +1064,149 @@ private final class StubPusherService: MatrixPusherServicing {
         }
         private(set) var registerCount = 0
         private(set) var unregisterCount = 0
+        private(set) var unregisterAllCount = 0
         private(set) var lastPushKey: String?
         private(set) var lastUnregisterPushKey: String?
+        private(set) var registeredSessions: [AuthenticatedSession] = []
+        private(set) var unregisteredSessions: [AuthenticatedSession] = []
+        private(set) var unregisteredAllSessions: [AuthenticatedSession] = []
+        private(set) var boundSessions: [AuthenticatedSession] = []
+        let registerDelayNanoseconds: UInt64
+        let unregisterDelayNanoseconds: UInt64
+        var unregisterFailuresRemaining = 0
         var onRegister: () -> Void = {}
         var onUnregister: () -> Void = {}
 
-        init(isGatewayConfigured: Bool = true) {
+        init(
+            isGatewayConfigured: Bool = true,
+            registerDelayNanoseconds: UInt64 = 0,
+            unregisterDelayNanoseconds: UInt64 = 0
+        ) {
             self.isGatewayConfigured = isGatewayConfigured
+            self.registerDelayNanoseconds = registerDelayNanoseconds
+            self.unregisterDelayNanoseconds = unregisterDelayNanoseconds
         }
 
-    func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
-        registerCount += 1
-        lastPushKey = pushKey
-        onRegister()
+    func bindPusher(to session: AuthenticatedSession) throws -> MatrixPusherAccountServicing {
+        boundSessions.append(session)
+        return StubPusherAccountService(service: self, session: session)
     }
 
-    func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
+    fileprivate func registerPusher(session: AuthenticatedSession, pushKey: String) async throws {
+        registerCount += 1
+        lastPushKey = pushKey
+        registeredSessions.append(session)
+        onRegister()
+        if registerDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: registerDelayNanoseconds)
+        }
+    }
+
+    fileprivate func unregisterPusher(session: AuthenticatedSession, pushKey: String) async throws {
         unregisterCount += 1
         lastUnregisterPushKey = pushKey
+        unregisteredSessions.append(session)
         onUnregister()
+        if unregisterFailuresRemaining > 0 {
+            unregisterFailuresRemaining -= 1
+            throw StubPusherError.plannedFailure
+        }
+        if unregisterDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: unregisterDelayNanoseconds)
+        }
+    }
+
+    fileprivate func unregisterAllPushers(session: AuthenticatedSession) async throws {
+        unregisterAllCount += 1
+        unregisteredAllSessions.append(session)
+        if unregisterDelayNanoseconds > 0 {
+            try await Task.sleep(nanoseconds: unregisterDelayNanoseconds)
+        }
+        if unregisterFailuresRemaining > 0 {
+            unregisterFailuresRemaining -= 1
+            throw StubPusherError.plannedFailure
+        }
+    }
+}
+
+private final class StubPusherAccountService: MatrixPusherAccountServicing {
+    private let service: StubPusherService
+    private let session: AuthenticatedSession
+
+    init(service: StubPusherService, session: AuthenticatedSession) {
+        self.service = service
+        self.session = session
+    }
+
+    func registerPusher(pushKey: String) async throws {
+        try await service.registerPusher(session: session, pushKey: pushKey)
+    }
+
+    func unregisterPusher(pushKey: String) async throws {
+        try await service.unregisterPusher(session: session, pushKey: pushKey)
+    }
+
+    func unregisterAllPushersForDevice() async throws {
+        try await service.unregisterAllPushers(session: session)
+    }
+}
+
+private enum StubPusherError: Error {
+    case plannedFailure
+}
+
+private final class PushTestDeleteFailingSecureSessionStore: SecureSessionStoring {
+    private let session: AuthenticatedSession
+
+    init(session: AuthenticatedSession) {
+        self.session = session
+    }
+
+    func save(_: AuthenticatedSession) throws {}
+    func load() throws -> AuthenticatedSession? { session }
+    func delete() throws { throw SecureSessionStoreError.keychainFailure(status: -1) }
+    func migrateIfNeeded() throws -> SessionMigrationResult { .notNeeded }
+}
+
+private final class ThrowingPusherService: MatrixPusherServicing {
+    var isGatewayConfigured: Bool { true }
+    var configuredGatewayURL: URL? { URL(string: "https://push.example.internal") }
+
+    func bindPusher(to session: AuthenticatedSession) throws -> MatrixPusherAccountServicing {
+        _ = session
+        throw StubPusherError.plannedFailure
+    }
+}
+
+private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwning {
+    private(set) var registeredPushKeys: [String] = []
+    private(set) var deletedPushKeys: [String] = []
+    private(set) var deleteForDeviceCount = 0
+
+    func registerHttpPusher(
+        pushKey: String,
+        appId: String,
+        gatewayUrl: String,
+        appDisplayName: String,
+        lang: String
+    ) async throws -> PusherWriteDto {
+        _ = appId
+        _ = gatewayUrl
+        _ = appDisplayName
+        _ = lang
+        registeredPushKeys.append(pushKey)
+        return PusherWriteDto(status: "ok")
+    }
+
+    func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto {
+        _ = appId
+        deletedPushKeys.append(pushKey)
+        return PusherWriteDto(status: "ok")
+    }
+
+    func deleteHttpPushersForDevice(appId: String) async throws -> PusherWriteDto {
+        _ = appId
+        deleteForDeviceCount += 1
+        return PusherWriteDto(status: "ok")
     }
 }

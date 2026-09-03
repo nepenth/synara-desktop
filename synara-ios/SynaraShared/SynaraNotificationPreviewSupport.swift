@@ -51,6 +51,9 @@ enum SynaraSharedConstants {
 
 struct SynaraNotificationDiagnosticEntry: Codable, Equatable, Identifiable {
     let id: UUID
+    /// Opaque local correlation only. It is never derived from a Matrix or
+    /// APNs identifier and may be absent in records written by older builds.
+    let runID: UUID?
     let timestamp: Date
     let stage: String
 }
@@ -78,26 +81,67 @@ enum SynaraNotificationDiagnostics {
         case resolvedApproval = "resolved-approval"
         case delivered = "delivered"
         case systemDeadline = "system-deadline"
+        case permissionRequested = "permission-requested"
+        case permissionAuthorized = "permission-authorized"
+        case permissionDenied = "permission-denied"
+        case permissionUnavailable = "permission-unavailable"
+        case apnsRegistrationRequested = "apns-registration-requested"
+        case apnsTokenCaptured = "apns-token-captured"
+        case apnsRegistrationFailed = "apns-registration-failed"
+        case pusherGatewayUnavailable = "pusher-gateway-unavailable"
+        case pusherRegistrationStarted = "pusher-registration-started"
+        case pusherRegistrationSucceeded = "pusher-registration-succeeded"
+        case pusherRegistrationFailed = "pusher-registration-failed"
+        case pusherRegistrationSuperseded = "pusher-registration-superseded"
+        case pusherUnregistrationStarted = "pusher-unregistration-started"
+        case pusherUnregistrationSucceeded = "pusher-unregistration-succeeded"
+        case pusherUnregistrationFailed = "pusher-unregistration-failed"
+        case foregroundReceived = "foreground-received"
+        case backgroundReceived = "background-received"
+        case responseReceived = "response-received"
     }
 
-    static let maximumEntries = 48
+    static let maximumEntries = 256
     private static let lock = NSLock()
 
     static func record(
         _ stage: Stage,
+        runID: UUID? = nil,
         now: Date = Date(),
         defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
     ) {
         guard let defaults else { return }
-        lock.lock()
-        defer { lock.unlock() }
-        var current = entriesWithoutLock(defaults: defaults)
-        current.append(.init(id: UUID(), timestamp: now, stage: stage.rawValue))
-        if current.count > maximumEntries {
-            current = Array(current.suffix(maximumEntries))
+        append(
+            [.init(id: UUID(), runID: runID, timestamp: now, stage: stage.rawValue)],
+            defaults: defaults
+        )
+    }
+
+    /// Record only deadline completions actually won by the coordinator.
+    /// An empty expiration must not create an uncorrelated diagnostic entry.
+    static func recordDeadlineDeliveries(
+        for runIDs: [UUID],
+        now: Date = Date(),
+        defaults: UserDefaults? = SynaraSharedConstants.appGroupDefaults()
+    ) {
+        guard let defaults, runIDs.isEmpty == false else { return }
+        let additions = runIDs.flatMap { runID in
+            [
+                SynaraNotificationDiagnosticEntry(
+                    id: UUID(),
+                    runID: runID,
+                    timestamp: now,
+                    stage: Stage.systemDeadline.rawValue
+                ),
+                SynaraNotificationDiagnosticEntry(
+                    id: UUID(),
+                    runID: runID,
+                    timestamp: now,
+                    stage: Stage.delivered.rawValue
+                )
+            ]
         }
-        guard let data = try? JSONEncoder().encode(current) else { return }
-        defaults.set(data, forKey: SynaraSharedConstants.notificationDiagnosticsKey)
+        append(additions, defaults: defaults)
     }
 
     static func entries(
@@ -123,6 +167,26 @@ enum SynaraNotificationDiagnostics {
             return []
         }
         return Array(decoded.suffix(maximumEntries))
+    }
+
+    /// One in-process read/modify/write keeps a deadline batch internally
+    /// consistent and minimizes work after Apple's completion deadline. The
+    /// app and NSE remain separate processes, so this is intentionally not
+    /// described as a durable cross-process audit log.
+    private static func append(
+        _ additions: [SynaraNotificationDiagnosticEntry],
+        defaults: UserDefaults
+    ) {
+        guard additions.isEmpty == false else { return }
+        lock.lock()
+        defer { lock.unlock() }
+        var current = entriesWithoutLock(defaults: defaults)
+        current.append(contentsOf: additions)
+        if current.count > maximumEntries {
+            current = Array(current.suffix(maximumEntries))
+        }
+        guard let data = try? JSONEncoder().encode(current) else { return }
+        defaults.set(data, forKey: SynaraSharedConstants.notificationDiagnosticsKey)
     }
 }
 

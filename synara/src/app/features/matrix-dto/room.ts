@@ -30,6 +30,14 @@ export function isNotificationMode(value: unknown): value is NotificationMode {
   return typeof value === 'string' && NOTIFICATION_MODE_SET.has(value);
 }
 
+export const ROOM_ENCRYPTION_STATUSES = ['encrypted', 'not_encrypted', 'unknown'] as const;
+export type RoomEncryptionStatus = typeof ROOM_ENCRYPTION_STATUSES[number];
+const ROOM_ENCRYPTION_STATUS_SET = new Set<string>(ROOM_ENCRYPTION_STATUSES);
+
+export function isRoomEncryptionStatus(value: unknown): value is RoomEncryptionStatus {
+  return typeof value === 'string' && ROOM_ENCRYPTION_STATUS_SET.has(value);
+}
+
 export type RoomHero = {
   userId: UserId;
   displayName?: string;
@@ -46,6 +54,8 @@ export type RoomSummary = {
   isCall: boolean;
   isFavorite: boolean;
   isEncrypted: boolean;
+  /** Authoritative Core projection. Security decisions must not use `isEncrypted`. */
+  encryptionStatus: RoomEncryptionStatus;
   joinRule?: string;
   unreadCount: number;
   highlightCount: number;
@@ -76,6 +86,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const isCall = optBoolean(value, 'isCall') ?? false;
   const isFavorite = optBoolean(value, 'isFavorite') ?? false;
   const isEncrypted = reqBoolean(value, 'isEncrypted');
+  const encryptionStatus = value.encryptionStatus;
   const joinRule = optString(value, 'joinRule');
   const unreadCount = reqNumber(value, 'unreadCount');
   const highlightCount = reqNumber(value, 'highlightCount');
@@ -91,6 +102,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     isDirect === null ||
     isSpace === null ||
     isEncrypted === null ||
+    !isRoomEncryptionStatus(encryptionStatus) ||
     joinRule === null ||
     unreadCount === null ||
     highlightCount === null ||
@@ -102,6 +114,9 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   ) {
     return null;
   }
+  // Keep the legacy display boolean internally consistent, but never infer the
+  // authoritative tri-state from it. Unknown deliberately remains fail-closed.
+  if (isEncrypted !== (encryptionStatus === 'encrypted')) return null;
 
   let notificationMode: NotificationMode | undefined;
   if (value.notificationMode !== undefined) {
@@ -131,6 +146,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     isCall: isCall ?? false,
     isFavorite: isFavorite ?? false,
     isEncrypted,
+    encryptionStatus,
     joinRule,
     unreadCount,
     highlightCount,

@@ -17,6 +17,7 @@
           "membership": "join",
           "isDirect": false,
           "isEncrypted": true,
+          "encryptionStatus": "encrypted",
           "joinRule": "invite",
           "unreadCount": 2,
           "highlightCount": 1,

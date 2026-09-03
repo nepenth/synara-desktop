@@ -29,7 +29,7 @@ enum SharedCoreRoomDetails {
         powerLevelsJSON: String?,
         joinRule: String?,
         topic: String?,
-        isEncrypted: Bool,
+        encryptionStatus: SynaraRoomEncryptionStatus,
         notificationMode: SynaraRoomNotificationMode = .default
     ) -> RoomDetails {
         let power = powerSummary(
@@ -45,7 +45,7 @@ enum SharedCoreRoomDetails {
             name: room?.name ?? room?.canonicalAlias ?? roomID,
             topic: topic,
             aliases: aliases,
-            isEncrypted: isEncrypted,
+            encryptionStatus: encryptionStatus,
             isPublic: joinRule.map { $0 == "public" },
             memberCount: members.filter { $0.membership == "join" }.count,
             canInvite: power?.canInvite ?? false,

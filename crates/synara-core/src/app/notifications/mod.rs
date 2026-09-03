@@ -16,8 +16,8 @@ mod room_notification;
 
 pub use error::NotificationError;
 pub use http_pusher::{
-    delete_http_pusher, register_http_pusher, MatrixHttpPusherWriteResult, MAX_APP_ID_BYTES,
-    MAX_PUSH_KEY_BYTES,
+    delete_http_pusher, register_http_pusher, MatrixHttpPusherWriteResult, NativeHttpPusherOwner,
+    MAX_APP_ID_BYTES, MAX_PUSH_KEY_BYTES,
 };
 pub use index::{NotificationIndex, MAX_PENDING_CANDIDATES};
 pub use push_rules::{

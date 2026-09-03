@@ -189,6 +189,7 @@ use crate::app::lifecycle::{
     restore_session_from_vault, restore_session_from_vault_with_room_load_settings,
     restore_session_onto_client, SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
+use crate::app::notifications::NativeHttpPusherOwner;
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
     NativePresenceSubscription, NativePresenceUpdate, NativePresenceWriteResult,
@@ -358,6 +359,7 @@ const ATTACHED_OWNER_NAMES: &[&str] = &[
     "devices",
     "join_rules",
     "image_packs",
+    "http_pusher",
     "timelines",
     "sync",
 ];
@@ -659,6 +661,8 @@ const PLAIN_MEDIA_FAILED_DESCRIPTION: &str = "The plain-media request could not 
 const PLAIN_MEDIA_OWNER_DESCRIPTION: &str = "The plain-media request is not available.";
 const REGISTER_HTTP_PUSHER_NO_SESSION_CODE: &str = "p2-register-http-pusher-no-session";
 const DELETE_HTTP_PUSHER_NO_SESSION_CODE: &str = "p2-delete-http-pusher-no-session";
+const BIND_HTTP_PUSHER_NO_SESSION_CODE: &str = "p2-bind-http-pusher-no-session";
+const HTTP_PUSHER_SESSION_MISMATCH_CODE: &str = "v-pusher.session-mismatch";
 const HTTP_PUSHER_NO_SESSION_DESCRIPTION: &str = "No HTTP pusher session is available.";
 const HTTP_PUSHER_FAILED_CODE: &str = "p4-s9-http-pusher-failed";
 const HTTP_PUSHER_FAILED_DESCRIPTION: &str = "The HTTP pusher request could not be completed.";
@@ -1263,6 +1267,7 @@ pub struct RoomListRoomDto {
     pub last_activity_ts: Option<u64>,
     pub last_message_preview: Option<String>,
     pub is_encrypted: bool,
+    pub encryption_status: crate::dto::RoomEncryptionStatus,
     pub notification_mode: Option<String>,
 }
 
@@ -1454,6 +1459,8 @@ pub struct TimelineViewRowDto {
     pub capabilities: Option<TimelineViewRowCapabilitiesDto>,
     pub decryption_state: Option<String>,
     pub message_type: Option<String>,
+    /// Closed Core-owned dispatch route: `text` or `media`.
+    pub forward_transport: Option<String>,
     pub formatted_body: Option<String>,
     pub agent_card_json: Option<String>,
     pub is_agent_approval: bool,
@@ -2502,6 +2509,9 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 capabilities,
                 decryption_state: None,
                 message_type: message.message_type,
+                forward_transport: message
+                    .forward_transport
+                    .map(|transport| transport.as_str().to_owned()),
                 formatted_body: message.formatted_body,
                 agent_card_json: message.agent_card_json,
                 is_agent_approval: message.is_agent_approval,
@@ -2518,6 +2528,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
         TimelineViewRow::Sticker {
             event,
             media,
+            forward_transport,
             reply,
             thread_root,
             thread,
@@ -2548,6 +2559,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 capabilities,
                 decryption_state: None,
                 message_type: Some("m.sticker".to_owned()),
+                forward_transport: Some(forward_transport.as_str().to_owned()),
                 formatted_body: None,
                 agent_card_json: None,
                 is_agent_approval: false,
@@ -2586,6 +2598,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 capabilities: Some(capabilities),
                 decryption_state: None,
                 message_type: None,
+                forward_transport: None,
                 formatted_body: None,
                 agent_card_json: None,
                 is_agent_approval: false,
@@ -2617,6 +2630,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             capabilities: Some(view_row_capabilities_dto(membership.event.capabilities)),
             decryption_state: None,
             message_type: None,
+            forward_transport: None,
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
@@ -2647,6 +2661,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             capabilities: Some(view_row_capabilities_dto(state.event.capabilities)),
             decryption_state: None,
             message_type: Some(state.state_type),
+            forward_transport: None,
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
@@ -2677,6 +2692,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             capabilities: Some(view_row_capabilities_dto(call.event.capabilities)),
             decryption_state: None,
             message_type: None,
+            forward_transport: None,
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
@@ -2707,6 +2723,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             capabilities: Some(view_row_capabilities_dto(redacted.event.capabilities)),
             decryption_state: None,
             message_type: None,
+            forward_transport: None,
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
@@ -2737,6 +2754,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             capabilities: Some(view_row_capabilities_dto(encrypted.event.capabilities)),
             decryption_state: Some(encrypted.reason_code),
             message_type: None,
+            forward_transport: None,
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
@@ -2780,6 +2798,9 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
                 capabilities,
                 decryption_state: None,
                 message_type: other.event_type,
+                forward_transport: other
+                    .forward_transport
+                    .map(|transport| transport.as_str().to_owned()),
                 formatted_body: None,
                 agent_card_json: None,
                 is_agent_approval: false,
@@ -2814,6 +2835,7 @@ fn timeline_view_row_dto(row: TimelineViewRow) -> TimelineViewRowDto {
             capabilities: None,
             decryption_state: None,
             message_type: None,
+            forward_transport: None,
             formatted_body: None,
             agent_card_json: None,
             is_agent_approval: false,
@@ -2852,6 +2874,7 @@ fn virtual_row_dto(kind: &str, item_id: String) -> TimelineViewRowDto {
         capabilities: None,
         decryption_state: None,
         message_type: None,
+        forward_transport: None,
         formatted_body: None,
         agent_card_json: None,
         is_agent_approval: false,
@@ -3776,6 +3799,10 @@ impl SharedCore {
             NativeImagePackOwner::start(&client, image_packs_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let http_pusher = Arc::new(
+            NativeHttpPusherOwner::new(&client)
+                .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
         let timeline_updates = Arc::clone(&self.timeline_view_updates);
         let timeline_emit: TimelineViewUpdateEmit = Arc::new(move |batch| {
             if let Ok(mut guard) = timeline_updates.lock() {
@@ -3809,6 +3836,9 @@ impl SharedCore {
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_image_packs(image_packs)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_http_pusher(http_pusher)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_timelines(timelines)
@@ -4078,7 +4108,8 @@ impl SharedCore {
                     marked_unread: room.marked_unread,
                     last_activity_ts: room.last_activity_ts,
                     last_message_preview: room.last_message_preview,
-                    is_encrypted: room.is_encrypted,
+                    is_encrypted: room.encryption_status.is_encrypted(),
+                    encryption_status: room.encryption_status,
                     notification_mode: room.notification_mode.map(|mode| mode.as_str().to_owned()),
                 })
                 .collect(),
@@ -5144,31 +5175,83 @@ impl SharedCore {
         app_id: String,
         gateway_url: String,
         app_display_name: String,
-        device_display_name: String,
         lang: String,
     ) -> Result<PusherWriteDto, PusherCommandError> {
         http_pusher_reject_oversize(push_key.len())?;
         http_pusher_reject_oversize(app_id.len())?;
         http_pusher_reject_oversize(gateway_url.len())?;
         http_pusher_reject_oversize(app_display_name.len())?;
-        http_pusher_reject_oversize(device_display_name.len())?;
         http_pusher_reject_oversize(lang.len())?;
         let result = self
             .core
-            .register_http_pusher(
-                &push_key,
-                &app_id,
-                &gateway_url,
-                &app_display_name,
-                &device_display_name,
-                &lang,
-            )
+            .register_http_pusher(&push_key, &app_id, &gateway_url, &app_display_name, &lang)
             .await
             .map_err(|error| {
                 map_http_pusher_core_error(REGISTER_HTTP_PUSHER_NO_SESSION_CODE, error)
             })?;
         Ok(PusherWriteDto {
             status: result.status.to_owned(),
+        })
+    }
+
+    /// Capture a pusher owner bound to the exact retained Matrix client.
+    /// Identity inputs are used only for fail-closed owner selection and are
+    /// never returned or included in errors.
+    pub fn bind_http_pusher_owner(
+        &self,
+        user_id: String,
+        device_id: String,
+        homeserver_url: String,
+    ) -> Result<Arc<HttpPusherOwner>, PusherCommandError> {
+        http_pusher_reject_oversize(user_id.len())?;
+        http_pusher_reject_oversize(device_id.len())?;
+        http_pusher_reject_oversize(homeserver_url.len())?;
+        let owner = self
+            .core
+            .http_pusher_owner()
+            .map_err(|error| map_http_pusher_core_error(BIND_HTTP_PUSHER_NO_SESSION_CODE, error))?;
+        if !owner.owns_session(&user_id, &device_id, &homeserver_url) {
+            return Err(http_pusher_failed(
+                HTTP_PUSHER_SESSION_MISMATCH_CODE,
+                HTTP_PUSHER_OWNER_DESCRIPTION,
+            ));
+        }
+        Ok(Arc::new(HttpPusherOwner { owner }))
+    }
+
+    /// Test-only attach of the production HTTP-pusher owner from the retained
+    /// Matrix client, without starting unrelated account/device owners.
+    /// Not exported through UniFFI.
+    #[doc(hidden)]
+    pub fn attach_http_pusher_owner_for_test(&self) -> Result<(), PusherCommandError> {
+        let client = {
+            let guard = self.restored_client.lock().map_err(|_| {
+                http_pusher_failed(
+                    BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                    HTTP_PUSHER_OWNER_DESCRIPTION,
+                )
+            })?;
+            match &*guard {
+                RestoredClientSlot::Ready(client) => client.clone(),
+                RestoredClientSlot::Empty | RestoredClientSlot::InFlight => {
+                    return Err(http_pusher_failed(
+                        BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                        HTTP_PUSHER_OWNER_DESCRIPTION,
+                    ));
+                }
+            }
+        };
+        let owner = Arc::new(NativeHttpPusherOwner::new(&client).map_err(|_| {
+            http_pusher_failed(
+                BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                HTTP_PUSHER_OWNER_DESCRIPTION,
+            )
+        })?);
+        self.core.attach_http_pusher(owner).map_err(|_| {
+            http_pusher_failed(
+                BIND_HTTP_PUSHER_NO_SESSION_CODE,
+                HTTP_PUSHER_OWNER_DESCRIPTION,
+            )
         })
     }
 
@@ -6539,6 +6622,7 @@ impl SharedCore {
         event_id: String,
         target_room_id: String,
         as_quote: bool,
+        confirmed_encryption_downgrade: bool,
     ) -> Result<TimelineForwardDto, TimelineForwardError> {
         self.timeline_forward_command(
             TIMELINE_FORWARD_TEXT_COMMAND,
@@ -6548,6 +6632,7 @@ impl SharedCore {
                 "eventId": event_id,
                 "targetRoomId": target_room_id,
                 "asQuote": as_quote,
+                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
             }),
         )
         .await
@@ -6558,6 +6643,7 @@ impl SharedCore {
         source_room_id: String,
         event_id: String,
         target_room_id: String,
+        confirmed_encryption_downgrade: bool,
     ) -> Result<TimelineForwardDto, TimelineForwardError> {
         self.timeline_forward_command(
             TIMELINE_FORWARD_MEDIA_COMMAND,
@@ -6566,6 +6652,7 @@ impl SharedCore {
                 "sourceRoomId": source_room_id,
                 "eventId": event_id,
                 "targetRoomId": target_room_id,
+                "confirmedEncryptionDowngrade": confirmed_encryption_downgrade,
             }),
         )
         .await
@@ -9336,6 +9423,88 @@ fn room_notification_write_dto(
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PusherWriteDto {
     pub status: String,
+}
+
+/// Account-bound HTTP pusher capability. It retains the exact Core owner—and
+/// therefore the exact authenticated Matrix client—captured at bind time.
+/// No account identity, token, push key, or gateway is projected back out.
+pub struct HttpPusherOwner {
+    owner: Arc<NativeHttpPusherOwner>,
+}
+
+impl HttpPusherOwner {
+    pub async fn register_http_pusher(
+        &self,
+        push_key: String,
+        app_id: String,
+        gateway_url: String,
+        app_display_name: String,
+        lang: String,
+    ) -> Result<PusherWriteDto, PusherCommandError> {
+        http_pusher_reject_oversize(push_key.len())?;
+        http_pusher_reject_oversize(app_id.len())?;
+        http_pusher_reject_oversize(gateway_url.len())?;
+        http_pusher_reject_oversize(app_display_name.len())?;
+        http_pusher_reject_oversize(lang.len())?;
+        let result = self
+            .owner
+            .register(&push_key, &app_id, &gateway_url, &app_display_name, &lang)
+            .await
+            .map_err(|error| {
+                map_http_pusher_core_error(
+                    REGISTER_HTTP_PUSHER_NO_SESSION_CODE,
+                    MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                        .with_diagnostic(error),
+                )
+            })?;
+        Ok(PusherWriteDto {
+            status: result.status.to_owned(),
+        })
+    }
+
+    pub async fn delete_http_pusher(
+        &self,
+        push_key: String,
+        app_id: String,
+    ) -> Result<PusherWriteDto, PusherCommandError> {
+        http_pusher_reject_oversize(push_key.len())?;
+        http_pusher_reject_oversize(app_id.len())?;
+        let result = self
+            .owner
+            .delete(&push_key, &app_id)
+            .await
+            .map_err(|error| {
+                map_http_pusher_core_error(
+                    DELETE_HTTP_PUSHER_NO_SESSION_CODE,
+                    MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                        .with_diagnostic(error),
+                )
+            })?;
+        Ok(PusherWriteDto {
+            status: result.status.to_owned(),
+        })
+    }
+
+    pub async fn delete_http_pushers_for_device(
+        &self,
+        app_id: String,
+    ) -> Result<PusherWriteDto, PusherCommandError> {
+        http_pusher_reject_oversize(app_id.len())?;
+        let result = self
+            .owner
+            .delete_for_device(&app_id)
+            .await
+            .map_err(|error| {
+                map_http_pusher_core_error(
+                    DELETE_HTTP_PUSHER_NO_SESSION_CODE,
+                    MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                        .with_diagnostic(error),
+                )
+            })?;
+        Ok(PusherWriteDto {
+            status: result.status.to_owned(),
+        })
+    }
 }
 
 /// Static fail-closed HTTP pusher-family error. Fields are source constants only.
@@ -13741,8 +13910,8 @@ mod tests {
     #[test]
     fn timeline_view_row_dto_maps_message_without_token_echo() {
         use crate::app::timeline::{
-            TimelineEventRowBase, TimelineMessageRow, TimelineReaction, TimelineReplyPreview,
-            TimelineRowCapabilities, TimelineThreadSummary,
+            TimelineEventRowBase, TimelineForwardTransport, TimelineMessageRow, TimelineReaction,
+            TimelineReplyPreview, TimelineRowCapabilities, TimelineThreadSummary,
         };
         let row = TimelineViewRow::Message(Box::new(TimelineMessageRow {
             event: TimelineEventRowBase {
@@ -13769,6 +13938,7 @@ mod tests {
             agent_card_json: Some(r#"{"title":"Approval"}"#.to_owned()),
             is_agent_approval: true,
             message_type: Some("m.text".to_owned()),
+            forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,
             media_caption: None,
             edited: false,
@@ -13809,6 +13979,7 @@ mod tests {
         );
         assert_eq!(dto.body, "hello");
         assert_eq!(dto.message_type.as_deref(), Some("m.text"));
+        assert_eq!(dto.forward_transport.as_deref(), Some("text"));
         assert_eq!(
             dto.agent_card_json.as_deref(),
             Some(r#"{"title":"Approval"}"#)
@@ -13937,7 +14108,8 @@ mod tests {
     #[test]
     fn timeline_view_row_dto_preserves_incoming_sticker_media() {
         use crate::app::timeline::{
-            TimelineEventRowBase, TimelineMediaHandle, TimelineRowCapabilities,
+            TimelineEventRowBase, TimelineForwardTransport, TimelineMediaHandle,
+            TimelineRowCapabilities,
         };
 
         let row = TimelineViewRow::Sticker {
@@ -13967,6 +14139,7 @@ mod tests {
                 height: Some(128),
                 duration_ms: None,
             },
+            forward_transport: TimelineForwardTransport::Media,
             reply: None,
             thread_root: Some("$sticker-root:example.org".to_owned()),
             thread: None,
@@ -13981,6 +14154,7 @@ mod tests {
         assert_eq!(dto.kind, "sticker");
         assert_eq!(dto.event_id, "$sticker:example.org");
         assert_eq!(dto.message_type.as_deref(), Some("m.sticker"));
+        assert_eq!(dto.forward_transport.as_deref(), Some("media"));
         assert_eq!(
             dto.thread_root_event_id.as_deref(),
             Some("$sticker-root:example.org")
@@ -14063,6 +14237,7 @@ mod tests {
             event_id: other_base.event_id.clone(),
             event: Some(other_base),
             event_type: Some("org.example.unknown".to_owned()),
+            forward_transport: None,
             summary: "Unsupported timeline event".to_owned(),
         }));
         assert_eq!(other.kind, "other");

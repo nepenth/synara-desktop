@@ -197,7 +197,12 @@ protocol PushServicing {
 
     func beginRegistration()
     func handleDeviceToken(_ tokenData: Data)
-    func clearRegistrationState() async
+    func handleRegistrationFailure()
+    @discardableResult
+    func clearRegistrationState() async -> Bool
+    func completeRegistrationTeardown()
+    func cancelRegistrationTeardown()
+    func resumeRegistrationLifecycle()
     func configure(with session: AuthenticatedSession)
     func route(from notificationPayload: [AnyHashable: Any]) -> AppRoute?
     func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute?
@@ -284,6 +289,19 @@ enum SynaraRoomEncryptionStatus: Equatable {
     case notEncrypted
     case encrypted
     case unavailable
+
+    var roomDetailsLabel: String {
+        switch self {
+        case .encrypted:
+            return "Encrypted"
+        case .notEncrypted:
+            return "Not encrypted"
+        case .unknown:
+            return "Unknown"
+        case .unavailable:
+            return "Unavailable"
+        }
+    }
 }
 
 enum SynaraCryptoVerificationStatus: Equatable {
@@ -647,7 +665,7 @@ struct RoomDetails: Equatable {
     let name: String
     let topic: String?
     let aliases: [String]
-    let isEncrypted: Bool
+    let encryptionStatus: SynaraRoomEncryptionStatus
     let isPublic: Bool?
     let memberCount: Int
     let canInvite: Bool
@@ -659,6 +677,10 @@ struct RoomDetails: Equatable {
     let notificationMode: SynaraRoomNotificationMode
     let avatarURL: String?
     let members: [RoomMemberSummary]
+
+    var isEncrypted: Bool { encryptionStatus == .encrypted }
+
+    var encryptionLabel: String { encryptionStatus.roomDetailsLabel }
 }
 
 enum RoomManagementError: LocalizedError, Equatable {
@@ -754,6 +776,7 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
+    @MainActor
     func restore() throws {
         do {
             if let restored = try secureStore.load() {
@@ -772,12 +795,14 @@ final class AppSessionStore: ObservableObject {
         }
     }
 
+    @MainActor
     func completeLogin(_ session: AuthenticatedSession) throws {
         try secureStore.save(session)
         sessionEpoch += 1
         currentState = .signedIn(session)
     }
 
+    @MainActor
     func signOut() throws {
         try secureStore.delete()
         sessionEpoch += 1
@@ -846,7 +871,12 @@ final class PlaceholderPushService: PushServicing {
 
     func handleDeviceToken(_ tokenData: Data) {}
 
-    func clearRegistrationState() async {}
+    func handleRegistrationFailure() {}
+
+    func clearRegistrationState() async -> Bool { true }
+    func completeRegistrationTeardown() {}
+    func cancelRegistrationTeardown() {}
+    func resumeRegistrationLifecycle() {}
 
     func configure(with session: AuthenticatedSession) {}
 
@@ -955,7 +985,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             name: trimmedName,
             topic: request.topic.isEmpty ? nil : request.topic,
             aliases: [],
-            isEncrypted: request.isEncrypted,
+            encryptionStatus: request.isEncrypted ? .encrypted : .notEncrypted,
             isPublic: request.visibility == .public,
             memberCount: 1,
             canInvite: true,
@@ -1031,7 +1061,9 @@ final class MockRoomManagementService: RoomManagementServicing {
             name: roomID,
             topic: "Room details from the current Matrix session.",
             aliases: [],
-            isEncrypted: roomID.localizedCaseInsensitiveContains("encrypted"),
+            encryptionStatus: roomID.localizedCaseInsensitiveContains("encrypted")
+                ? .encrypted
+                : .notEncrypted,
             isPublic: nil,
             memberCount: 3,
             canInvite: true,
@@ -1083,7 +1115,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             name: trimmedName ?? details.name,
             topic: trimmedTopic ?? details.topic,
             aliases: aliases,
-            isEncrypted: details.isEncrypted,
+            encryptionStatus: details.encryptionStatus,
             isPublic: details.isPublic,
             memberCount: details.memberCount,
             canInvite: details.canInvite,
@@ -1119,7 +1151,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             name: details.name,
             topic: details.topic,
             aliases: details.aliases,
-            isEncrypted: details.isEncrypted,
+            encryptionStatus: details.encryptionStatus,
             isPublic: details.isPublic,
             memberCount: details.memberCount,
             canInvite: details.canInvite,
@@ -1151,10 +1183,24 @@ struct UserNotificationPermissionService: NotificationPermissionServicing {
     }
 
     func requestAuthorization() async -> NotificationPermissionStatus {
+        let runID = UUID()
+        SynaraNotificationDiagnostics.record(.permissionRequested, runID: runID)
         do {
             _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
-            return await currentStatus()
+            let status = await currentStatus()
+            let diagnosticStage: SynaraNotificationDiagnostics.Stage
+            switch status {
+            case .authorized, .provisional, .ephemeral:
+                diagnosticStage = .permissionAuthorized
+            case .denied:
+                diagnosticStage = .permissionDenied
+            case .notDetermined, .unavailable:
+                diagnosticStage = .permissionUnavailable
+            }
+            SynaraNotificationDiagnostics.record(diagnosticStage, runID: runID)
+            return status
         } catch {
+            SynaraNotificationDiagnostics.record(.permissionUnavailable, runID: runID)
             return .unavailable
         }
     }
@@ -1308,7 +1354,12 @@ final class MockPushService: PushServicing {
     private(set) var badgeParseCallCount = 0
     private(set) var badgeApplyCallCount = 0
     private(set) var tokenCallCount = 0
+    private(set) var registrationFailureCallCount = 0
+    private(set) var completeRegistrationTeardownCallCount = 0
+    private(set) var cancelRegistrationTeardownCallCount = 0
+    private(set) var resumeRegistrationLifecycleCallCount = 0
     var isRegistered = false
+    var clearRegistrationResult = true
     var tokenSnippet: String?
     var onOperation: ((String) -> Void)?
     var registrationStateDescription: String {
@@ -1337,11 +1388,32 @@ final class MockPushService: PushServicing {
         isRegistered = true
     }
 
-    func clearRegistrationState() async {
+    func handleRegistrationFailure() {
+        registrationFailureCallCount += 1
+    }
+
+    func clearRegistrationState() async -> Bool {
         onOperation?("push-clear")
         clearCallCount += 1
-        isRegistered = false
-        tokenSnippet = nil
+        if clearRegistrationResult {
+            isRegistered = false
+            tokenSnippet = nil
+        }
+        return clearRegistrationResult
+    }
+
+    func completeRegistrationTeardown() {
+        onOperation?("push-finish")
+        completeRegistrationTeardownCallCount += 1
+    }
+
+    func cancelRegistrationTeardown() {
+        onOperation?("push-cancel")
+        cancelRegistrationTeardownCallCount += 1
+    }
+
+    func resumeRegistrationLifecycle() {
+        resumeRegistrationLifecycleCallCount += 1
     }
 
     func configure(with session: AuthenticatedSession) {

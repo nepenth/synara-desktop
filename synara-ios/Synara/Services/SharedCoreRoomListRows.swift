@@ -1,4 +1,5 @@
 import Foundation
+import SynaraCore
 
 /// P4-S25 map of privacy-safe SharedCore room-list, invite, and space-parent
 /// snapshots to product room rows. P4-S26 adds unread lookup from that
@@ -9,6 +10,17 @@ import Foundation
 /// from the invite snapshot. Avatar is an `mxc://` URL. This is not
 /// iOS-on-engine and not P4 acceptance.
 enum SharedCoreRoomListRows {
+    static func encryptionStatus(_ status: RoomEncryptionStatus) -> SynaraRoomEncryptionStatus {
+        switch status {
+        case .encrypted:
+            return .encrypted
+        case .notEncrypted:
+            return .notEncrypted
+        case .unknown:
+            return .unknown
+        }
+    }
+
     struct RoomRow {
         let roomId: String
         let name: String?
@@ -21,6 +33,7 @@ enum SharedCoreRoomListRows {
         let lastActivityTs: UInt64?
         let lastMessagePreview: String?
         let isFavorite: Bool
+        let encryptionStatus: SynaraRoomEncryptionStatus
     }
 
     struct InviteRow {
@@ -67,7 +80,8 @@ enum SharedCoreRoomListRows {
                     namesByID: namesByID
                 ),
                 avatarURL: room.avatarUrl.flatMap(URL.init(string:)),
-                isFavorite: room.isFavorite
+                isFavorite: room.isFavorite,
+                encryptionStatus: room.encryptionStatus
             )
         }
     }

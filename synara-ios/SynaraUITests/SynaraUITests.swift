@@ -81,8 +81,20 @@ final class SynaraUITests: XCTestCase {
             contentSizeCategory: "UICTContentSizeCategoryAccessibilityXL"
         )
         let window = app.windows.firstMatch
+
+        // The approval room is in the initially visible Ops space. Verify its
+        // combined status before moving through the virtualized list to the
+        // Workspace room below it.
+        let approvalRoom = app.buttons["RoomRow-!agent-workflows:matrix.org"]
+        XCTAssertTrue(approvalRoom.waitForExistence(timeout: 5))
+        XCTAssertTrue(approvalRoom.label.contains("Agent Workflows"))
+        XCTAssertTrue(approvalRoom.label.contains("approval required"))
+
         let mentionedRoom = app.buttons["RoomRow-!project:matrix.org"]
-        XCTAssertTrue(mentionedRoom.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            revealForDirectHit(mentionedRoom, in: app.collectionViews["RoomList"], app: app),
+            "A room below the initially materialized Accessibility XL rows must remain reachable"
+        )
         XCTAssertGreaterThanOrEqual(mentionedRoom.frame.minX, window.frame.minX)
         XCTAssertLessThanOrEqual(mentionedRoom.frame.maxX, window.frame.maxX)
         XCTAssertTrue(mentionedRoom.label.contains("Product"))
@@ -93,11 +105,6 @@ final class SynaraUITests: XCTestCase {
         XCTAssertGreaterThan(mentionedTitle.frame.width, 44, "The visible room title must not collapse behind status controls")
         XCTAssertGreaterThanOrEqual(mentionedTitle.frame.minX, mentionedRoom.frame.minX)
         XCTAssertLessThanOrEqual(mentionedTitle.frame.maxX, mentionedRoom.frame.maxX)
-
-        let approvalRoom = app.buttons["RoomRow-!agent-workflows:matrix.org"]
-        XCTAssertTrue(approvalRoom.exists)
-        XCTAssertTrue(approvalRoom.label.contains("Agent Workflows"))
-        XCTAssertTrue(approvalRoom.label.contains("approval required"))
     }
 
     func testRoomHeaderAccountMenuShowsSettingsAndLogout() {

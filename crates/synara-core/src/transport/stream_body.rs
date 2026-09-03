@@ -232,6 +232,7 @@ mod tests {
                 "membership": "join",
                 "isDirect": false,
                 "isEncrypted": true,
+                "encryptionStatus": "encrypted",
                 "unreadCount": 0,
                 "highlightCount": 0,
                 "markedUnread": false

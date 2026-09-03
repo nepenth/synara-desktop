@@ -102,7 +102,7 @@ fn room_summary_round_trip_and_fixture() {
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,
-        is_encrypted: true,
+        encryption_status: RoomEncryptionStatus::Encrypted,
         join_rule: Some("invite".into()),
         unread_count: 2,
         highlight_count: 1,
@@ -120,6 +120,25 @@ fn room_summary_round_trip_and_fixture() {
     let from_fix: RoomSummary = load_fixture_as("valid_room_summary.json");
     assert_eq!(from_fix.room_id, "!room:example.org");
     assert_eq!(from_fix.membership, Membership::Join);
+}
+
+#[test]
+fn room_summary_rejects_missing_or_contradictory_encryption_authority() {
+    let missing = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": false, "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    assert!(serde_json::from_str::<RoomSummary>(missing).is_err());
+
+    let contradictory = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": false, "encryptionStatus": "encrypted", "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    assert!(serde_json::from_str::<RoomSummary>(contradictory).is_err());
+
+    let inverse_contradiction = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": true, "encryptionStatus": "not_encrypted", "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    assert!(serde_json::from_str::<RoomSummary>(inverse_contradiction).is_err());
+
+    let unknown = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": false, "encryptionStatus": "unknown", "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    let decoded = serde_json::from_str::<RoomSummary>(unknown).expect("unknown remains distinct");
+    assert_eq!(decoded.encryption_status, RoomEncryptionStatus::Unknown);
+    let encoded = serde_json::to_value(decoded).expect("unknown serializes");
+    assert_eq!(encoded["isEncrypted"], false);
+    assert_eq!(encoded["encryptionStatus"], "unknown");
 }
 
 #[test]
@@ -352,7 +371,7 @@ fn room_summary_is_call_defaults_and_round_trips() {
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,
-        is_encrypted: true,
+        encryption_status: RoomEncryptionStatus::Encrypted,
         join_rule: Some("invite".into()),
         unread_count: 3,
         highlight_count: 0,
@@ -364,7 +383,7 @@ fn room_summary_is_call_defaults_and_round_trips() {
         tombstone_successor_room_id: None,
     };
     // Absent field deserializes to false (serde default) — backward compatible.
-    let raw = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": true, "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    let raw = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": true, "encryptionStatus": "encrypted", "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
     let parsed: RoomSummary = serde_json::from_str(raw).expect("default is_call");
     assert!(!parsed.is_call);
     // Explicit true round-trips.

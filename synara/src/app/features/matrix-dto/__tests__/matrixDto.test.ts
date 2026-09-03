@@ -182,6 +182,24 @@ test('valid_room_summary parses', () => {
   assert.equal(r.lastMessagePreview, undefined);
   assert.equal(r.heroes?.length, 1);
   assert.equal(r.isFavorite, false);
+  assert.equal(r.encryptionStatus, 'encrypted');
+});
+
+test('room summary requires a closed authoritative encryption status', () => {
+  const valid = loadFixture('valid_room_summary.json') as Record<string, unknown>;
+  const withoutStatus = { ...valid };
+  Reflect.deleteProperty(withoutStatus, 'encryptionStatus');
+  assert.equal(parseRoomSummary(withoutStatus), null);
+  assert.equal(parseRoomSummary({ ...valid, encryptionStatus: 'error' }), null);
+  assert.equal(
+    parseRoomSummary({ ...valid, isEncrypted: false, encryptionStatus: 'unknown' })
+      ?.encryptionStatus,
+    'unknown'
+  );
+  assert.equal(
+    parseRoomSummary({ ...valid, isEncrypted: false, encryptionStatus: 'encrypted' }),
+    null
+  );
 });
 
 test('room summary rejects invalid membership', () => {

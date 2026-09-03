@@ -831,7 +831,8 @@ mod actions_pure {
         let media: NativeTimelineForwardMediaRequest = serde_json::from_value(serde_json::json!({
             "sourceRoomId": "!source:example.org",
             "eventId": "$media:example.org",
-            "targetRoomId": "!target:example.org"
+            "targetRoomId": "!target:example.org",
+            "confirmedEncryptionDowngrade": false
         }))
         .unwrap();
         assert_eq!(media.event_id, "$media:example.org");
@@ -867,10 +868,12 @@ mod actions_pure {
             "sourceRoomId": "!source:example.org",
             "eventId": "$fwd:example.org",
             "targetRoomId": "!target:example.org",
-            "asQuote": true
+            "asQuote": true,
+            "confirmedEncryptionDowngrade": true
         }))
         .unwrap();
         assert!(forward.as_quote);
+        assert!(forward.confirmed_encryption_downgrade);
 
         let readback = NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
@@ -994,6 +997,7 @@ mod view_pure {
         EmoteMessageEventContent, NoticeMessageEventContent, TextMessageEventContent,
     };
     use std::collections::HashMap;
+    use synara_core::app::timeline::TimelineForwardTransport;
 
     use matrix_sdk::ruma::events::room::message::MessageType;
     #[test]
@@ -1172,6 +1176,7 @@ mod view_pure {
             formatted_body: None,
             is_agent_approval: false,
             message_type: Some("text".into()),
+            forward_transport: Some(TimelineForwardTransport::Text),
             media_filename: None,
             media_caption: None,
             edited: false,

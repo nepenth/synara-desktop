@@ -4,7 +4,7 @@
 //! a sliding-sync partial-path harness lands; this module only constructs DTOs from
 //! pure product fields (no matrix-sdk types).
 
-use crate::dto::{Membership, RoomId, RoomSummary};
+use crate::dto::{Membership, RoomEncryptionStatus, RoomId, RoomSummary};
 
 /// Minimal builder for harness room rows (no tokens, no media bytes).
 #[derive(Debug, Clone)]
@@ -17,7 +17,7 @@ pub struct RoomSummaryBuilder {
     is_favorite: bool,
     is_low_priority: bool,
     folder_id: Option<String>,
-    is_encrypted: bool,
+    encryption_status: RoomEncryptionStatus,
     unread_count: u32,
     highlight_count: u32,
     marked_unread: bool,
@@ -36,7 +36,7 @@ impl RoomSummaryBuilder {
             is_favorite: false,
             is_low_priority: false,
             folder_id: None,
-            is_encrypted: false,
+            encryption_status: RoomEncryptionStatus::Unknown,
             unread_count: 0,
             highlight_count: 0,
             marked_unread: false,
@@ -81,7 +81,16 @@ impl RoomSummaryBuilder {
     }
 
     pub fn encrypted(mut self, is_encrypted: bool) -> Self {
-        self.is_encrypted = is_encrypted;
+        self.encryption_status = if is_encrypted {
+            RoomEncryptionStatus::Encrypted
+        } else {
+            RoomEncryptionStatus::NotEncrypted
+        };
+        self
+    }
+
+    pub fn encryption_status(mut self, encryption_status: RoomEncryptionStatus) -> Self {
+        self.encryption_status = encryption_status;
         self
     }
 
@@ -126,7 +135,7 @@ impl RoomSummaryBuilder {
             is_favorite: self.is_favorite,
             is_low_priority: self.is_low_priority,
             folder_id: self.folder_id,
-            is_encrypted: self.is_encrypted,
+            encryption_status: self.encryption_status,
             join_rule: None,
             unread_count: self.unread_count,
             highlight_count: self.highlight_count,

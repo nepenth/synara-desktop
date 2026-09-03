@@ -39,17 +39,23 @@ import {
 import {
   callDeclineWithNativeTimelineOwner,
   isNativeTimelineForwardMedia,
+  isNativeTimelineForwardTransport,
+  NativePollFlightCoordinator,
+  NativeReactionFlightCoordinator,
+  nativePollSubmission,
   selectNativeTimelinePinAction,
+  toggleNativePollSelection,
 } from './nativeTimelineActions';
 import {
+  editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
+  nativeForwardEncryptionDecision,
   nativeThreadFocusEventId,
   nativeTimelineMediaSrc,
-  needsNativeForwardEncryptionConfirm,
   parseNativeTimelineAgentCard,
-  shouldAttachFormattedBody,
   type NativeTimelineMediaHandle,
+  type NativeTimelinePollAnswer,
   type NativeTimelineReaction,
   type NativeTimelineReplyPreview,
   type NativeTimelineRowCapabilities,
@@ -57,6 +63,7 @@ import {
   type NativeTimelineViewRow,
   useNativeTimelineView,
 } from './nativeTimelineView';
+import type { RoomEncryptionStatus } from '../matrix-dto/room';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
@@ -130,12 +137,14 @@ const findAnchorIndex = (
 
 const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilities | undefined => {
   if (row.kind === 'sticker') return row.event.capabilities;
+  if (row.kind === 'other') return row.event?.capabilities;
   if ('capabilities' in row) return row.capabilities;
   return undefined;
 };
 
 const rowOriginServerTs = (row: NativeTimelineViewRow): number | undefined => {
   if (row.kind === 'sticker') return row.event.originServerTs;
+  if (row.kind === 'other') return row.event?.originServerTs;
   if ('originServerTs' in row && typeof row.originServerTs === 'number') return row.originServerTs;
   return undefined;
 };
@@ -143,18 +152,21 @@ const rowOriginServerTs = (row: NativeTimelineViewRow): number | undefined => {
 const rowSenderId = (row: NativeTimelineViewRow | undefined): string | undefined => {
   if (!row) return undefined;
   if (row.kind === 'sticker') return row.event.senderId;
+  if (row.kind === 'other') return row.event?.senderId;
   if ('senderId' in row) return row.senderId;
   return undefined;
 };
 
 const rowSenderName = (row: NativeTimelineViewRow): string => {
   if (row.kind === 'sticker') return row.event.senderName;
+  if (row.kind === 'other') return row.event?.senderName ?? rowSenderId(row) ?? '';
   if ('senderName' in row) return row.senderName;
   return rowSenderId(row) ?? '';
 };
 
 const rowSenderAvatarUrl = (row: NativeTimelineViewRow): string | undefined => {
   if (row.kind === 'sticker') return row.event.senderAvatarUrl;
+  if (row.kind === 'other') return row.event?.senderAvatarUrl;
   if ('senderAvatarUrl' in row) return row.senderAvatarUrl;
   return undefined;
 };
@@ -196,57 +208,112 @@ type NativeTimelineRowProps = {
   grouped: boolean;
   groupsNext: boolean;
   roomId: string;
+  sessionGeneration: number;
   messageSpacing: MessageSpacing;
   pinnedEventIds?: string[];
-  sourceEncrypted?: boolean;
+  sourceEncryptionStatus?: RoomEncryptionStatus;
   onActionError: (message: string) => void;
   onFocusEvent: (eventId: string) => void;
+};
+
+// Popout menus can unmount while a Core write is still running. Keep the
+// event/action lock outside transient presenter state so reopening the menu
+// cannot dispatch the same server mutation twice.
+const nativeTimelineActionsInFlight = new Set<string>();
+const nativePollFlights = new NativePollFlightCoordinator();
+const nativeReactionFlights = new NativeReactionFlightCoordinator();
+let nativeTimelineActionSessionGeneration: number | undefined;
+const bindNativeTimelineActionSession = (sessionGeneration: number) => {
+  if (nativeTimelineActionSessionGeneration === sessionGeneration) return;
+  nativeTimelineActionSessionGeneration = sessionGeneration;
+  nativeTimelineActionsInFlight.clear();
+  nativePollFlights.bindSession(sessionGeneration);
+  nativeReactionFlights.bindSession(sessionGeneration);
+};
+const nativeTimelineActionFlightKey = (
+  sessionGeneration: number,
+  roomId: string,
+  eventId: string,
+  action: string
+) => `${sessionGeneration}\u0000${roomId}\u0000${eventId}\u0000${action}`;
+const canonicalPollSelection = (answerIds: readonly string[]) =>
+  [...answerIds].sort().join('\u0000');
+
+const beginNativeTimelineAction = (sessionGeneration: number, key: string): boolean => {
+  bindNativeTimelineActionSession(sessionGeneration);
+  if (nativeTimelineActionsInFlight.has(key)) return false;
+  nativeTimelineActionsInFlight.add(key);
+  return true;
+};
+
+const isTimelineActionEditableTarget = (target: EventTarget | null): boolean => {
+  if (!(target instanceof HTMLElement)) return false;
+  return (
+    target.isContentEditable ||
+    target.tagName === 'INPUT' ||
+    target.tagName === 'TEXTAREA' ||
+    target.tagName === 'SELECT'
+  );
 };
 
 const runNativeRowAction = (
   action: () => Promise<unknown>,
   onActionError: (message: string) => void,
-  failureLabel: string
+  failureLabel: string,
+  inFlightKey?: string,
+  sessionGeneration?: number
 ) => {
-  void action().catch((error) => {
-    onActionError(error instanceof Error ? error.message : failureLabel);
-  });
+  if (
+    inFlightKey &&
+    (sessionGeneration === undefined || !beginNativeTimelineAction(sessionGeneration, inFlightKey))
+  ) {
+    onActionError('That action is already in progress.');
+    return;
+  }
+  void action()
+    .catch((error) => {
+      onActionError(error instanceof Error ? error.message : failureLabel);
+    })
+    .finally(() => {
+      if (inFlightKey) nativeTimelineActionsInFlight.delete(inFlightKey);
+    });
 };
 
 type NativeTimelineRowActionsProps = {
+  sessionGeneration: number;
   roomId: string;
   eventId?: string;
   body?: string;
   formattedBody?: string;
-  rowKind?: NativeTimelineViewRow['kind'];
-  messageType?: string;
-  hasMedia?: boolean;
+  forwardTransport?: 'text' | 'media';
   capabilities?: NativeTimelineRowCapabilities;
   pinned?: boolean;
-  sourceEncrypted?: boolean;
+  sourceEncryptionStatus?: RoomEncryptionStatus;
   onActionError: (message: string) => void;
   /** Close the transient row menu after a completed one-shot action. */
   onRequestClose?: () => void;
 };
 
 const NativeTimelineRowActions = ({
+  sessionGeneration,
   roomId,
   eventId,
   body,
   formattedBody,
-  rowKind,
-  messageType,
-  hasMedia,
+  forwardTransport,
   capabilities,
   pinned,
-  sourceEncrypted,
+  sourceEncryptionStatus,
   onActionError,
   onRequestClose,
 }: NativeTimelineRowActionsProps) => {
   const roomList = useNativeRoomListSnapshot();
   const [editing, setEditing] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [reportReason, setReportReason] = useState('');
   const [editBody, setEditBody] = useState(body ?? '');
   const [editFormattedBody, setEditFormattedBody] = useState(formattedBody ?? '');
+  const [editFormattedBodyWasEdited, setEditFormattedBodyWasEdited] = useState(false);
   const [forwarding, setForwarding] = useState(false);
   const [forwardQuery, setForwardQuery] = useState('');
   const [forwardAsQuote, setForwardAsQuote] = useState(false);
@@ -254,11 +321,24 @@ const NativeTimelineRowActions = ({
     roomId: string;
     name?: string;
   } | null>(null);
+  const [pendingProductAction, setPendingProductAction] = useState<
+    'report' | 'forward' | undefined
+  >();
+  const pendingProductActionRef = useRef<'report' | 'forward' | undefined>(undefined);
+  const actionsMountedRef = useRef(true);
+
+  useEffect(() => {
+    actionsMountedRef.current = true;
+    return () => {
+      actionsMountedRef.current = false;
+    };
+  }, []);
 
   useEffect(() => {
     if (!editing) {
       setEditBody(body ?? '');
       setEditFormattedBody(formattedBody ?? '');
+      setEditFormattedBodyWasEdited(false);
     }
   }, [body, editing, formattedBody]);
 
@@ -268,7 +348,7 @@ const NativeTimelineRowActions = ({
         roomList.rooms.map((room) => ({
           roomId: room.roomId,
           name: room.name,
-          isEncrypted: room.isEncrypted,
+          encryptionStatus: room.encryptionStatus,
           isSpace: room.isSpace,
         })),
         roomId,
@@ -344,21 +424,24 @@ const NativeTimelineRowActions = ({
           setEditing((open) => !open);
           setEditBody(body ?? '');
           setEditFormattedBody(formattedBody ?? '');
+          setEditFormattedBodyWasEdited(false);
         }}
       >
         {editing ? 'Cancel edit' : 'Edit'}
       </MenuItem>
     );
   }
-  if (capabilities.forward) {
+  if (capabilities.forward && isNativeTimelineForwardTransport(forwardTransport)) {
     buttons.push(
       <MenuItem
         key="forward"
         size="300"
         fill="Soft"
         radii="300"
+        disabled={pendingProductAction !== undefined}
         onClick={() => {
           setEditing(false);
+          setReporting(false);
           setForwarding((open) => !open);
           setForwardConfirm(null);
         }}
@@ -379,7 +462,9 @@ const NativeTimelineRowActions = ({
           runNativeRowAction(
             () => redactWithNativeTimelineAction({ roomId, eventId }),
             onActionError,
-            'Native redact failed.'
+            'Native redact failed.',
+            nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'redact'),
+            sessionGeneration
           );
           closeAfterOneShotAction();
         }}
@@ -396,16 +481,14 @@ const NativeTimelineRowActions = ({
         size="300"
         fill="Soft"
         radii="300"
+        disabled={pendingProductAction !== undefined}
         onClick={() => {
-          runNativeRowAction(
-            () => reportWithNativeTimelineAction({ roomId, eventId }),
-            onActionError,
-            'Native report failed.'
-          );
-          closeAfterOneShotAction();
+          setEditing(false);
+          setForwarding(false);
+          setReporting((open) => !open);
         }}
       >
-        Report
+        {reporting ? 'Cancel report' : 'Report'}
       </MenuItem>
     );
   }
@@ -424,7 +507,9 @@ const NativeTimelineRowActions = ({
                 ? unpinWithNativeTimelineAction({ roomId, eventId })
                 : pinWithNativeTimelineAction({ roomId, eventId }),
             onActionError,
-            pinAction === 'unpin' ? 'Native unpin failed.' : 'Native pin failed.'
+            pinAction === 'unpin' ? 'Native unpin failed.' : 'Native pin failed.',
+            nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, pinAction),
+            sessionGeneration
           );
           closeAfterOneShotAction();
         }}
@@ -460,9 +545,12 @@ const NativeTimelineRowActions = ({
       onActionError('Edited body cannot be empty.');
       return;
     }
-    const nextFormatted = shouldAttachFormattedBody(nextBody, editFormattedBody)
-      ? editFormattedBody.trim()
-      : undefined;
+    const nextFormatted = editedFormattedBodyForSubmit(
+      body ?? '',
+      nextBody,
+      editFormattedBody,
+      editFormattedBodyWasEdited
+    );
     runNativeRowAction(
       async () => {
         await editTextWithNativeTimelineAction({
@@ -475,47 +563,101 @@ const NativeTimelineRowActions = ({
         onRequestClose?.();
       },
       onActionError,
-      'Native edit failed.'
+      'Native edit failed.',
+      nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'edit'),
+      sessionGeneration
     );
   };
 
-  const sendForward = (targetRoomId: string) => {
-    const useMedia =
-      !forwardAsQuote &&
-      isNativeTimelineForwardMedia({
-        kind: rowKind,
-        messageType,
-        hasMedia,
+  const submitReport = async () => {
+    if (pendingProductActionRef.current !== undefined) return;
+    const actionKey = nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'report');
+    if (!beginNativeTimelineAction(sessionGeneration, actionKey)) {
+      onActionError('That report is already in progress.');
+      return;
+    }
+    pendingProductActionRef.current = 'report';
+    setPendingProductAction('report');
+    try {
+      await reportWithNativeTimelineAction({
+        roomId,
+        eventId,
+        reason: reportReason.trim() || undefined,
       });
-    runNativeRowAction(
-      async () => {
-        if (useMedia) {
-          await forwardMediaWithNativeTimelineAction({
-            sourceRoomId: roomId,
-            eventId,
-            targetRoomId,
-          });
-        } else {
-          await forwardTextWithNativeTimelineAction({
-            sourceRoomId: roomId,
-            eventId,
-            targetRoomId,
-            asQuote: forwardAsQuote,
-          });
-        }
-        setForwarding(false);
-        setForwardQuery('');
-        setForwardAsQuote(false);
-        setForwardConfirm(null);
-        onRequestClose?.();
-      },
-      onActionError,
-      'Native forward failed.'
-    );
+      setReporting(false);
+      setReportReason('');
+      onRequestClose?.();
+    } catch (error) {
+      onActionError(error instanceof Error ? error.message : 'Native report failed.');
+    } finally {
+      nativeTimelineActionsInFlight.delete(actionKey);
+      pendingProductActionRef.current = undefined;
+      if (actionsMountedRef.current) setPendingProductAction(undefined);
+    }
   };
 
-  const requestForward = (target: { roomId: string; name?: string; isEncrypted?: boolean }) => {
-    if (needsNativeForwardEncryptionConfirm(sourceEncrypted, target.isEncrypted)) {
+  const forwardCanQuote = forwardTransport === 'text';
+
+  const sendForward = async (targetRoomId: string, confirmedEncryptionDowngrade = false) => {
+    if (pendingProductActionRef.current !== undefined) return;
+    if (!isNativeTimelineForwardTransport(forwardTransport)) {
+      onActionError('Native forward transport is unavailable.');
+      return;
+    }
+    const actionKey = nativeTimelineActionFlightKey(sessionGeneration, roomId, eventId, 'forward');
+    if (!beginNativeTimelineAction(sessionGeneration, actionKey)) {
+      onActionError('That forward is already in progress.');
+      return;
+    }
+    const useMedia = isNativeTimelineForwardMedia(forwardTransport);
+    pendingProductActionRef.current = 'forward';
+    setPendingProductAction('forward');
+    try {
+      if (useMedia) {
+        await forwardMediaWithNativeTimelineAction({
+          sourceRoomId: roomId,
+          eventId,
+          targetRoomId,
+          confirmedEncryptionDowngrade,
+        });
+      } else {
+        await forwardTextWithNativeTimelineAction({
+          sourceRoomId: roomId,
+          eventId,
+          targetRoomId,
+          asQuote: forwardCanQuote && forwardAsQuote,
+          confirmedEncryptionDowngrade,
+        });
+      }
+      setForwarding(false);
+      setForwardQuery('');
+      setForwardAsQuote(false);
+      setForwardConfirm(null);
+      onRequestClose?.();
+    } catch (error) {
+      onActionError(error instanceof Error ? error.message : 'Native forward failed.');
+    } finally {
+      nativeTimelineActionsInFlight.delete(actionKey);
+      pendingProductActionRef.current = undefined;
+      if (actionsMountedRef.current) setPendingProductAction(undefined);
+    }
+  };
+
+  const requestForward = (target: {
+    roomId: string;
+    name?: string;
+    encryptionStatus: RoomEncryptionStatus;
+  }) => {
+    if (pendingProductActionRef.current !== undefined) return;
+    const decision = nativeForwardEncryptionDecision(
+      sourceEncryptionStatus,
+      target.encryptionStatus
+    );
+    if (decision === 'unavailable') {
+      onActionError('Room encryption status is unavailable. Forwarding was not started.');
+      return;
+    }
+    if (decision === 'confirm_downgrade') {
       setForwardConfirm({ roomId: target.roomId, name: target.name });
       return;
     }
@@ -538,7 +680,10 @@ const NativeTimelineRowActions = ({
           />
           <textarea
             value={editFormattedBody}
-            onChange={(event) => setEditFormattedBody(event.target.value)}
+            onChange={(event) => {
+              setEditFormattedBodyWasEdited(true);
+              setEditFormattedBody(event.target.value);
+            }}
             rows={3}
             style={{ width: '100%', resize: 'vertical' }}
             aria-label="Edit message HTML body"
@@ -551,19 +696,54 @@ const NativeTimelineRowActions = ({
           </Box>
         </Box>
       )}
+      {reporting && (
+        <Box direction="Column" gap="100">
+          <textarea
+            value={reportReason}
+            onChange={(event) => setReportReason(event.target.value)}
+            maxLength={512}
+            rows={3}
+            style={{ width: '100%', resize: 'vertical' }}
+            aria-label="Optional report reason"
+            placeholder="Reason (optional)"
+            autoFocus
+            disabled={pendingProductAction !== undefined}
+          />
+          <Text size="T200">This report is sent to your homeserver administrators.</Text>
+          <Box gap="100">
+            <Button
+              size="300"
+              variant="Critical"
+              onClick={() => void submitReport()}
+              disabled={pendingProductAction !== undefined}
+            >
+              {pendingProductAction === 'report' ? 'Reporting…' : 'Send report'}
+            </Button>
+          </Box>
+        </Box>
+      )}
       {forwarding && (
         <Box direction="Column" gap="100">
           {forwardConfirm ? (
             <Box direction="Column" gap="100">
               <Text size="T200">
                 Forward from an encrypted room into {forwardConfirm.name || forwardConfirm.roomId}{' '}
-                (not encrypted)? Media keys will not transfer.
+                (not encrypted)? The forwarded copy will not be protected by room encryption.
               </Text>
               <Box gap="100">
-                <Button size="300" onClick={() => sendForward(forwardConfirm.roomId)}>
-                  Forward anyway
+                <Button
+                  size="300"
+                  onClick={() => void sendForward(forwardConfirm.roomId, true)}
+                  disabled={pendingProductAction !== undefined}
+                >
+                  {pendingProductAction === 'forward' ? 'Forwarding…' : 'Forward anyway'}
                 </Button>
-                <Button size="300" fill="Soft" onClick={() => setForwardConfirm(null)}>
+                <Button
+                  size="300"
+                  fill="Soft"
+                  onClick={() => setForwardConfirm(null)}
+                  disabled={pendingProductAction !== undefined}
+                >
                   Cancel
                 </Button>
               </Box>
@@ -576,15 +756,20 @@ const NativeTimelineRowActions = ({
                 placeholder="Filter rooms by name or id"
                 style={{ width: '100%' }}
                 aria-label="Forward target room filter"
+                autoFocus
+                disabled={pendingProductAction !== undefined}
               />
-              <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                <input
-                  type="checkbox"
-                  checked={forwardAsQuote}
-                  onChange={(event) => setForwardAsQuote(event.target.checked)}
-                />
-                <Text size="T200">Forward as quote</Text>
-              </label>
+              {forwardCanQuote && (
+                <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <input
+                    type="checkbox"
+                    checked={forwardAsQuote}
+                    onChange={(event) => setForwardAsQuote(event.target.checked)}
+                    disabled={pendingProductAction !== undefined}
+                  />
+                  <Text size="T200">Forward as quote</Text>
+                </label>
+              )}
               <Box direction="Column" gap="100" style={{ maxHeight: 180, overflow: 'auto' }}>
                 {forwardTargets.length === 0 ? (
                   <Text size="T200">No matching rooms.</Text>
@@ -595,9 +780,11 @@ const NativeTimelineRowActions = ({
                       size="300"
                       fill="Soft"
                       onClick={() => requestForward(target)}
+                      disabled={pendingProductAction !== undefined}
                     >
                       {target.name || target.roomId}
-                      {target.isEncrypted ? ' · encrypted' : ''}
+                      {target.encryptionStatus === 'encrypted' ? ' · encrypted' : ''}
+                      {target.encryptionStatus === 'unknown' ? ' · encryption unavailable' : ''}
                     </Button>
                   ))
                 )}
@@ -709,8 +896,10 @@ const NativeTimelineRowActionSurface = ({
                       initialFocus: false,
                       onDeactivate: closeMenu,
                       clickOutsideDeactivates: true,
-                      isKeyForward: (event: KeyboardEvent) => event.key === 'ArrowDown',
-                      isKeyBackward: (event: KeyboardEvent) => event.key === 'ArrowUp',
+                      isKeyForward: (event: KeyboardEvent) =>
+                        event.key === 'ArrowDown' && !isTimelineActionEditableTarget(event.target),
+                      isKeyBackward: (event: KeyboardEvent) =>
+                        event.key === 'ArrowUp' && !isTimelineActionEditableTarget(event.target),
                       escapeDeactivates: stopPropagation,
                     }}
                   >
@@ -923,18 +1112,160 @@ const NativeTimelineReactionPills = ({
     </Box>
   ) : null;
 
+const NativeTimelinePollAnswers = ({
+  answers,
+  maximumSelections,
+  canVote,
+  closed,
+  onVote,
+}: {
+  answers: NativeTimelinePollAnswer[];
+  maximumSelections: number;
+  canVote: boolean;
+  closed: boolean;
+  onVote: (answerIds: string[]) => Promise<boolean>;
+}) => {
+  const original = useMemo(
+    () => new Set(answers.filter((answer) => answer.own).map((answer) => answer.id)),
+    [answers]
+  );
+  const available = useMemo(() => new Set(answers.map((answer) => answer.id)), [answers]);
+  const [selection, setSelection] = useState<Set<string>>(original);
+  const [submitting, setSubmitting] = useState(false);
+  const submittingRef = useRef(false);
+  const pendingSelectionRef = useRef<string | undefined>(undefined);
+  const pollDispatchSettledRef = useRef(false);
+  const pollProjectionObservedRef = useRef(false);
+  const pollMountedRef = useRef(true);
+
+  useEffect(() => setSelection(original), [original]);
+  useEffect(() => {
+    if (
+      pendingSelectionRef.current !== undefined &&
+      pendingSelectionRef.current === canonicalPollSelection([...original])
+    ) {
+      pollProjectionObservedRef.current = true;
+      if (pollDispatchSettledRef.current) {
+        pendingSelectionRef.current = undefined;
+        pollDispatchSettledRef.current = false;
+        pollProjectionObservedRef.current = false;
+        submittingRef.current = false;
+        setSubmitting(false);
+      }
+    }
+  }, [original]);
+  useEffect(() => {
+    pollMountedRef.current = true;
+    return () => {
+      pollMountedRef.current = false;
+    };
+  }, []);
+
+  const submit = async (answerIds: string[]) => {
+    if (submittingRef.current) return;
+    submittingRef.current = true;
+    setSubmitting(true);
+    pendingSelectionRef.current = canonicalPollSelection(answerIds);
+    pollDispatchSettledRef.current = false;
+    pollProjectionObservedRef.current = false;
+    const accepted = await onVote(answerIds);
+    if (accepted) {
+      // Action readback proves the send, while the poll projection remains
+      // the authority for selected answers. Keep the controls locked until
+      // that exact state arrives rather than enabling a stale second vote.
+      pollDispatchSettledRef.current = true;
+      if (pollProjectionObservedRef.current) {
+        pendingSelectionRef.current = undefined;
+        pollDispatchSettledRef.current = false;
+        pollProjectionObservedRef.current = false;
+        submittingRef.current = false;
+        if (pollMountedRef.current) setSubmitting(false);
+      }
+      return;
+    }
+    pendingSelectionRef.current = undefined;
+    pollDispatchSettledRef.current = false;
+    pollProjectionObservedRef.current = false;
+    submittingRef.current = false;
+    if (pollMountedRef.current) setSubmitting(false);
+  };
+  const submission = nativePollSubmission(
+    selection,
+    original,
+    available,
+    maximumSelections,
+    canVote,
+    closed
+  );
+
+  return (
+    <Box direction="Column" gap="100">
+      {answers.map((answer) => {
+        const selected = selection.has(answer.id);
+        return (
+          <Button
+            key={answer.id}
+            size="300"
+            variant={selected ? 'Primary' : 'Secondary'}
+            fill="Soft"
+            disabled={!canVote || closed || submitting}
+            aria-pressed={selected}
+            onClick={() => {
+              const next = toggleNativePollSelection(
+                selection,
+                answer.id,
+                available,
+                maximumSelections
+              );
+              setSelection(next);
+              if (maximumSelections === 1) {
+                const immediate = nativePollSubmission(
+                  next,
+                  original,
+                  available,
+                  maximumSelections,
+                  canVote,
+                  closed
+                );
+                if (immediate) void submit(immediate);
+              }
+            }}
+          >
+            {answer.text} ({answer.voteCount})
+          </Button>
+        );
+      })}
+      {maximumSelections > 1 && submission ? (
+        <Button
+          size="300"
+          variant="Primary"
+          fill="Solid"
+          disabled={submitting}
+          onClick={() => void submit(submission)}
+        >
+          {submission.length === 0 ? 'Clear vote' : 'Submit vote'}
+        </Button>
+      ) : null}
+    </Box>
+  );
+};
+
 const NativeTimelineRow = ({
   row,
   grouped,
   groupsNext,
   roomId,
+  sessionGeneration,
   messageSpacing,
   pinnedEventIds,
-  sourceEncrypted,
+  sourceEncryptionStatus,
   onActionError,
   onFocusEvent,
 }: NativeTimelineRowProps) => {
   const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
+  const [declinePending, setDeclinePending] = useState(false);
+  const declinePendingRef = useRef(false);
+  const rowMountedRef = useRef(true);
   const wheelResetTimer = useRef<number | undefined>(undefined);
   const nonMousePan = useRef<
     | {
@@ -986,12 +1317,13 @@ const NativeTimelineRow = ({
     if (cancelled || !pan.active) setGroupedTimestampOffset(0);
     else scheduleGroupedTimestampReset(900);
   };
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    rowMountedRef.current = true;
+    return () => {
+      rowMountedRef.current = false;
       if (wheelResetTimer.current !== undefined) window.clearTimeout(wheelResetTimer.current);
-    },
-    []
-  );
+    };
+  }, []);
   const groupedTimestampRevealProps = grouped
     ? {
         onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => {
@@ -1040,37 +1372,124 @@ const NativeTimelineRow = ({
     : {};
   const runReaction = (key: string) => {
     if (!eventId || !genericReactionCapabilities?.react) return;
-    void toggleReactionWithNativeOwner({ roomId, eventId, key }).catch((error) => {
-      onActionError(error instanceof Error ? error.message : 'Native reaction failed.');
-    });
-  };
-  const runDecline = () => {
-    if (!eventId || !capabilities?.declineCall) return;
-    void callDeclineWithNativeTimelineOwner(
-      { roomId, eventId },
-      isSynaraDesktop(),
-      invokeDesktopWithAvailability
-    )
-      .then((result) => {
-        if (result === 'unavailable') onActionError('Native call decline is unavailable.');
+    const reactions =
+      row.kind === 'sticker' ? row.reactions ?? [] : 'reactions' in row ? row.reactions ?? [] : [];
+    const projected = reactions.find((reaction) => reaction.key === key);
+    if (projected !== undefined && projected.own === undefined) {
+      onActionError('Reaction ownership is unavailable.');
+      return;
+    }
+    const expectedOwn = !(projected?.own ?? false);
+    const actionKey = nativeTimelineActionFlightKey(
+      sessionGeneration,
+      roomId,
+      eventId,
+      `reaction:${key}`
+    );
+    if (!beginNativeTimelineAction(sessionGeneration, actionKey)) {
+      onActionError('That reaction is already in progress.');
+      return;
+    }
+    nativeReactionFlights.prepare(actionKey, key, expectedOwn);
+    void toggleReactionWithNativeOwner({ roomId, eventId, key, expectedOwn })
+      .then(() => {
+        if (nativeReactionFlights.settleDispatch(actionKey, true)) {
+          nativeTimelineActionsInFlight.delete(actionKey);
+        }
       })
       .catch((error) => {
-        onActionError(error instanceof Error ? error.message : 'Native call decline failed.');
+        onActionError(error instanceof Error ? error.message : 'Native reaction failed.');
+        nativeReactionFlights.settleDispatch(actionKey, false);
+        nativeTimelineActionsInFlight.delete(actionKey);
       });
   };
-  const runPollVote = (answerId: string) => {
-    if (!eventId || !capabilities?.vote) return;
-    runNativeRowAction(
-      () =>
-        pollVoteWithNativeTimelineAction({
-          roomId,
-          eventId,
-          answerIds: [answerId],
-        }),
-      onActionError,
-      'Native poll vote failed.'
+  const runDecline = async () => {
+    if (!eventId || !capabilities?.declineCall || declinePendingRef.current) return;
+    const actionKey = nativeTimelineActionFlightKey(
+      sessionGeneration,
+      roomId,
+      eventId,
+      'call_decline'
     );
+    if (!beginNativeTimelineAction(sessionGeneration, actionKey)) {
+      onActionError('That call decline is already in progress.');
+      return;
+    }
+    declinePendingRef.current = true;
+    setDeclinePending(true);
+    try {
+      const result = await callDeclineWithNativeTimelineOwner(
+        { roomId, eventId },
+        isSynaraDesktop(),
+        invokeDesktopWithAvailability
+      );
+      if (result === 'unavailable') onActionError('Native call decline is unavailable.');
+    } catch (error) {
+      onActionError(error instanceof Error ? error.message : 'Native call decline failed.');
+    } finally {
+      nativeTimelineActionsInFlight.delete(actionKey);
+      declinePendingRef.current = false;
+      if (rowMountedRef.current) setDeclinePending(false);
+    }
   };
+  const runPollVote = async (answerIds: string[]): Promise<boolean> => {
+    if (!eventId || !capabilities?.vote) return false;
+    const actionKey = nativeTimelineActionFlightKey(
+      sessionGeneration,
+      roomId,
+      eventId,
+      'poll_vote'
+    );
+    if (!beginNativeTimelineAction(sessionGeneration, actionKey)) {
+      onActionError('That poll vote is already in progress.');
+      return false;
+    }
+    nativePollFlights.bindSession(sessionGeneration);
+    nativePollFlights.prepare(actionKey, answerIds);
+    try {
+      await pollVoteWithNativeTimelineAction({ roomId, eventId, answerIds });
+      if (nativePollFlights.settleDispatch(actionKey, true)) {
+        nativeTimelineActionsInFlight.delete(actionKey);
+      }
+      return true;
+    } catch (error) {
+      onActionError(error instanceof Error ? error.message : 'Native poll vote failed.');
+      nativePollFlights.settleDispatch(actionKey, false);
+      nativeTimelineActionsInFlight.delete(actionKey);
+      return false;
+    }
+  };
+  useEffect(() => {
+    if (row.kind !== 'poll' || !eventId) return;
+    const actionKey = nativeTimelineActionFlightKey(
+      sessionGeneration,
+      roomId,
+      eventId,
+      'poll_vote'
+    );
+    if (
+      nativePollFlights.observeProjection(
+        actionKey,
+        (row.answers ?? []).filter((answer) => answer.own).map((answer) => answer.id)
+      )
+    ) {
+      nativeTimelineActionsInFlight.delete(actionKey);
+    }
+  }, [eventId, roomId, row, sessionGeneration]);
+  useEffect(() => {
+    if (!eventId) return;
+    const reactions =
+      row.kind === 'sticker' ? row.reactions ?? [] : 'reactions' in row ? row.reactions ?? [] : [];
+    const actionPrefix = nativeTimelineActionFlightKey(
+      sessionGeneration,
+      roomId,
+      eventId,
+      'reaction:'
+    );
+    for (const completed of nativeReactionFlights.observeEventProjection(actionPrefix, reactions)) {
+      nativeTimelineActionsInFlight.delete(completed);
+    }
+  }, [eventId, roomId, row, sessionGeneration]);
 
   switch (row.kind) {
     case 'message': {
@@ -1082,16 +1501,15 @@ const NativeTimelineRow = ({
       return (
         <NativeTimelineRowActionSurface
           actionProps={{
+            sessionGeneration,
             roomId,
             eventId,
             body: row.body,
             formattedBody: row.formattedBody,
-            rowKind: row.kind,
-            messageType: row.messageType,
-            hasMedia: Boolean(row.media),
+            forwardTransport: row.forwardTransport,
             capabilities: genericReactionCapabilities,
             pinned,
-            sourceEncrypted,
+            sourceEncryptionStatus,
             onActionError,
           }}
           onReaction={runReaction}
@@ -1223,20 +1641,33 @@ const NativeTimelineRow = ({
     case 'membership':
     case 'state':
       return (
-        <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
-          <Text size="T300">{row.summary}</Text>
-        </Box>
+        <NativeTimelineRowActionSurface
+          actionProps={{
+            sessionGeneration,
+            roomId,
+            eventId,
+            capabilities,
+            pinned,
+            sourceEncryptionStatus,
+            onActionError,
+          }}
+          onReaction={runReaction}
+        >
+          <Box className={`${rowClassName} ${htmlCss.SystemRow}`}>
+            <Text size="T300">{row.summary}</Text>
+          </Box>
+        </NativeTimelineRowActionSurface>
       );
     case 'poll':
       return (
         <NativeTimelineRowActionSurface
           actionProps={{
+            sessionGeneration,
             roomId,
             eventId,
-            rowKind: row.kind,
             capabilities,
             pinned,
-            sourceEncrypted,
+            sourceEncryptionStatus,
             onActionError,
           }}
           onReaction={runReaction}
@@ -1252,18 +1683,13 @@ const NativeTimelineRow = ({
             <NativeTimelineReplySurface reply={row.reply} onFocusEvent={onFocusEvent} />
             <Text size="L400">{row.question}</Text>
             <Text size="T300">{row.closed ? 'Poll closed' : 'Poll open'}</Text>
-            {(row.answers ?? []).map((answer) => (
-              <Button
-                key={answer.id}
-                size="300"
-                variant={answer.own ? 'Primary' : 'Secondary'}
-                fill="Soft"
-                disabled={row.closed || !capabilities?.vote}
-                onClick={() => runPollVote(answer.id)}
-              >
-                {answer.text} ({answer.voteCount})
-              </Button>
-            ))}
+            <NativeTimelinePollAnswers
+              answers={row.answers ?? []}
+              maximumSelections={Math.max(0, row.maxSelections ?? 1)}
+              canVote={Boolean(capabilities?.vote)}
+              closed={row.closed}
+              onVote={runPollVote}
+            />
             <NativeTimelineThreadSurface
               threadRoot={row.threadRoot}
               thread={row.thread}
@@ -1279,14 +1705,33 @@ const NativeTimelineRow = ({
       );
     case 'call':
       return (
-        <Box direction="Column" gap="100" className={rowClassName}>
-          <Text size="T300">{row.callKind}</Text>
-          {capabilities?.declineCall && (
-            <Button size="300" fill="Soft" onClick={runDecline}>
-              Decline call
-            </Button>
-          )}
-        </Box>
+        <NativeTimelineRowActionSurface
+          actionProps={{
+            sessionGeneration,
+            roomId,
+            eventId,
+            capabilities,
+            pinned,
+            sourceEncryptionStatus,
+            onActionError,
+          }}
+          onReaction={runReaction}
+        >
+          <Box direction="Column" gap="100" className={rowClassName}>
+            <Text size="T300">{row.callKind}</Text>
+            {capabilities?.declineCall && (
+              <Button
+                size="300"
+                fill="Soft"
+                disabled={declinePending}
+                onClick={() => void runDecline()}
+                aria-label="Decline call"
+              >
+                {declinePending ? 'Declining…' : 'Decline call'}
+              </Button>
+            )}
+          </Box>
+        </NativeTimelineRowActionSurface>
       );
     case 'date_separator':
       return row.timestampMs && Number.isFinite(row.timestampMs) ? (
@@ -1320,33 +1765,73 @@ const NativeTimelineRow = ({
       );
     case 'redacted':
       return (
-        <Box className={rowClassName}>
-          <Text size="T300">{row.summary ?? 'Message removed'}</Text>
-        </Box>
+        <NativeTimelineRowActionSurface
+          actionProps={{
+            sessionGeneration,
+            roomId,
+            eventId,
+            capabilities,
+            pinned,
+            sourceEncryptionStatus,
+            onActionError,
+          }}
+          onReaction={runReaction}
+        >
+          <Box className={rowClassName}>
+            <Text size="T300">{row.summary ?? 'Message removed'}</Text>
+          </Box>
+        </NativeTimelineRowActionSurface>
       );
     case 'encrypted_unavailable':
       return (
-        <Box className={rowClassName}>
-          <Text size="T300">This encrypted message is not available on this device.</Text>
-        </Box>
+        <NativeTimelineRowActionSurface
+          actionProps={{
+            sessionGeneration,
+            roomId,
+            eventId,
+            capabilities,
+            pinned,
+            sourceEncryptionStatus,
+            onActionError,
+          }}
+          onReaction={runReaction}
+        >
+          <Box className={rowClassName}>
+            <Text size="T300">This encrypted message is not available on this device.</Text>
+          </Box>
+        </NativeTimelineRowActionSurface>
       );
     case 'other':
       return row.summary ? (
-        <Box className={rowClassName}>
-          <Text size="T300">{row.summary}</Text>
-        </Box>
+        <NativeTimelineRowActionSurface
+          actionProps={{
+            sessionGeneration,
+            roomId,
+            eventId,
+            forwardTransport: row.forwardTransport,
+            capabilities,
+            pinned,
+            sourceEncryptionStatus,
+            onActionError,
+          }}
+          onReaction={runReaction}
+        >
+          <Box className={rowClassName}>
+            <Text size="T300">{row.summary}</Text>
+          </Box>
+        </NativeTimelineRowActionSurface>
       ) : null;
     case 'sticker': {
       return (
         <NativeTimelineRowActionSurface
           actionProps={{
+            sessionGeneration,
             roomId,
             eventId,
-            rowKind: row.kind,
-            hasMedia: Boolean(row.media),
+            forwardTransport: row.forwardTransport,
             capabilities,
             pinned,
-            sourceEncrypted,
+            sourceEncryptionStatus,
             onActionError,
           }}
           onReaction={runReaction}
@@ -1431,6 +1916,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const { setReadState } = controller;
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
+  const activeSessionGeneration = readyState?.snapshot.sessionGeneration;
   const [actionError, setActionError] = useState<string>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [documentActive, setDocumentActive] = useState(
@@ -1440,7 +1926,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       document.hasFocus()
   );
   const roomList = useNativeRoomListSnapshot();
-  const sourceEncrypted = roomList.rooms.find((room) => room.roomId === roomId)?.isEncrypted;
+  const sourceEncryptionStatus = roomList.rooms.find(
+    (room) => room.roomId === roomId
+  )?.encryptionStatus;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
   const pendingBackwardGrowRef = useRef(false);
@@ -1452,6 +1940,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
+  useEffect(() => {
+    if (activeSessionGeneration === undefined) return;
+    bindNativeTimelineActionSession(activeSessionGeneration);
+  }, [activeSessionGeneration]);
   const rows = useMemo(() => {
     const raw = readyState?.snapshot.rows ?? [];
     return raw.filter((row) => {
@@ -1869,6 +2361,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                 >
                   <NativeTimelineRow
                     row={row}
+                    sessionGeneration={snapshot.sessionGeneration}
                     grouped={isGroupedWithPrevious(
                       virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
                       row
@@ -1880,7 +2373,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                     roomId={roomId}
                     messageSpacing={messageSpacing}
                     pinnedEventIds={snapshot.pinnedEventIds}
-                    sourceEncrypted={sourceEncrypted}
+                    sourceEncryptionStatus={sourceEncryptionStatus}
                     onActionError={setActionError}
                     onFocusEvent={onFocusEvent}
                   />

@@ -282,6 +282,12 @@ interface RoomListUpdateError {
 };
 
 // Privacy-safe room-list row. No tokens or password.
+enum RoomEncryptionStatus {
+  "Encrypted",
+  "NotEncrypted",
+  "Unknown"
+};
+
 dictionary RoomListRoomDto {
   string room_id;
   string? name;
@@ -296,7 +302,10 @@ dictionary RoomListRoomDto {
   boolean marked_unread;
   u64? last_activity_ts;
   string? last_message_preview;
+  // Legacy chrome hint only. Forward-security code consumes the required
+  // tri-state value below and must never infer cleartext from this boolean.
   boolean is_encrypted;
+  RoomEncryptionStatus encryption_status;
   string? notification_mode;
 };
 
@@ -430,6 +439,8 @@ dictionary TimelineViewRowDto {
   TimelineViewRowCapabilitiesDto? capabilities;
   string? decryption_state;
   string? message_type;
+  // Closed Core-owned dispatch route: `text` or `media`.
+  string? forward_transport;
   string? formatted_body;
   // Recognized, size-bounded Synara/Hermes card payload only; never raw event JSON.
   string? agent_card_json;
@@ -1248,6 +1259,21 @@ interface PusherCommandError {
   Failed(string code, string description);
 };
 
+// Account-bound capability retaining the exact Matrix client and device ID
+// selected when SharedCore validates and binds a shell session. Device identity
+// is not accepted again on write. App ID stays explicit because the shared Core
+// is embedded by platform products with distinct application identities.
+interface HttpPusherOwner {
+  [Async, Throws=PusherCommandError]
+  PusherWriteDto register_http_pusher(string push_key, string app_id, string gateway_url, string app_display_name, string lang);
+
+  [Async, Throws=PusherCommandError]
+  PusherWriteDto delete_http_pusher(string push_key, string app_id);
+
+  [Async, Throws=PusherCommandError]
+  PusherWriteDto delete_http_pushers_for_device(string app_id);
+};
+
 // Privacy-safe backup restore ack. Status only; never recovery key or passphrase.
 dictionary RestoreBackupDto {
   string status;
@@ -1834,7 +1860,10 @@ interface SharedCore {
   MediaBytesDto thumbnail_plain_media(string content_uri, u64 width, u64 height);
 
   [Async, Throws=PusherCommandError]
-  PusherWriteDto register_http_pusher(string push_key, string app_id, string gateway_url, string app_display_name, string device_display_name, string lang);
+  PusherWriteDto register_http_pusher(string push_key, string app_id, string gateway_url, string app_display_name, string lang);
+
+  [Throws=PusherCommandError]
+  HttpPusherOwner bind_http_pusher_owner(string user_id, string device_id, string homeserver_url);
 
   [Async, Throws=PusherCommandError]
   PusherWriteDto delete_http_pusher(string push_key, string app_id);
@@ -2067,10 +2096,10 @@ interface SharedCore {
   TimelineVoteDeclineDto timeline_call_decline(string room_id, string event_id);
 
   [Async, Throws=TimelineForwardError]
-  TimelineForwardDto timeline_forward_text(string source_room_id, string event_id, string target_room_id, boolean as_quote);
+  TimelineForwardDto timeline_forward_text(string source_room_id, string event_id, string target_room_id, boolean as_quote, boolean confirmed_encryption_downgrade);
 
   [Async, Throws=TimelineForwardError]
-  TimelineForwardDto timeline_forward_media(string source_room_id, string event_id, string target_room_id);
+  TimelineForwardDto timeline_forward_media(string source_room_id, string event_id, string target_room_id, boolean confirmed_encryption_downgrade);
 
   [Async, Throws=SessionStatusError]
   SessionSnapshotDto session_snapshot();

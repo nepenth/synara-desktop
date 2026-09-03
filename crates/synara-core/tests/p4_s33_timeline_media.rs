@@ -30,6 +30,21 @@ fn timeline_media_surface_is_handle_channel_not_leftover_envelope() {
 }
 
 #[test]
+fn shared_core_timeline_media_source_guard_keeps_the_32_mib_cap() {
+    let owner = include_str!("../src/app/timeline/live.rs");
+    let media_fetch = owner
+        .split("pub async fn media_bytes")
+        .nth(1)
+        .and_then(|rest| rest.split("pub async fn event_readback").next())
+        .expect("timeline media fetch method");
+    assert!(
+        media_fetch.contains("download_media_bounded(&self.client, &request, 32 * 1024 * 1024)")
+    );
+    assert!(!media_fetch.contains("MediaCacheIndex"));
+    assert!(!media_fetch.contains("retry("));
+}
+
+#[test]
 fn timeline_media_without_session_fails_closed_without_echo() {
     let shared = SharedCore::new();
     let handle = "timeline-media-s33-secret";
