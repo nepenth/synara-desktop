@@ -1,0 +1,11 @@
+Synara 2.1.25 improves shared Matrix behavior across iOS, macOS, and Linux.
+
+What's new:
+- More reliable reactions, polls, reports, call declines, and encrypted-room forwarding.
+- Clear recovery when forwarding security cannot be confirmed.
+- Safer, more faithful rendering of replies, tables, code, spoilers, and Hermes messages.
+- Stronger notification-preview diagnostics and device-specific push cleanup during logout.
+- Bounded, authenticated media downloads and decryption.
+- Better composer formatting controls and more compact room-list spacing.
+
+This build passed the full desktop, Rust, native Matrix, package, iOS unit, and iOS UI validation gates.
