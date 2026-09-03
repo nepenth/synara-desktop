@@ -137,6 +137,27 @@ async fn read_response_bounded(
     Ok(bytes)
 }
 
+fn decrypt_attachment_bounded(
+    ciphertext: Vec<u8>,
+    file: &matrix_sdk::ruma::events::room::EncryptedFile,
+    max_bytes: usize,
+) -> Result<Vec<u8>, BoundedMediaError> {
+    let mut cursor = Cursor::new(ciphertext);
+    let mut decryptor =
+        matrix_sdk_crypto::AttachmentDecryptor::new(&mut cursor, file.clone().into())
+            .map_err(|_| BoundedMediaError::DecryptionFailed)?;
+    let mut plaintext = Vec::new();
+    decryptor
+        .by_ref()
+        .take(max_bytes.saturating_add(1) as u64)
+        .read_to_end(&mut plaintext)
+        .map_err(|_| BoundedMediaError::DecryptionFailed)?;
+    if plaintext.len() > max_bytes {
+        return Err(BoundedMediaError::TooLarge);
+    }
+    Ok(plaintext)
+}
+
 /// Download and, when needed, decrypt a Matrix media response without ever
 /// buffering more than `max_bytes` of attacker-controlled network content.
 pub async fn download_media_bounded(
@@ -161,20 +182,7 @@ pub async fn download_media_bounded(
     let Some(file) = encrypted_file else {
         return Ok(ciphertext);
     };
-    let mut cursor = Cursor::new(ciphertext);
-    let mut decryptor =
-        matrix_sdk_crypto::AttachmentDecryptor::new(&mut cursor, file.clone().into())
-            .map_err(|_| BoundedMediaError::DecryptionFailed)?;
-    let mut plaintext = Vec::new();
-    decryptor
-        .by_ref()
-        .take(max_bytes.saturating_add(1) as u64)
-        .read_to_end(&mut plaintext)
-        .map_err(|_| BoundedMediaError::DecryptionFailed)?;
-    if plaintext.len() > max_bytes {
-        return Err(BoundedMediaError::TooLarge);
-    }
-    Ok(plaintext)
+    decrypt_attachment_bounded(ciphertext, file, max_bytes)
 }
 
 #[cfg(test)]
@@ -184,10 +192,14 @@ mod tests {
 
     use matrix_sdk::{
         authentication::matrix::MatrixSession,
-        ruma::{events::room::MediaSource, OwnedDeviceId, OwnedMxcUri, UserId},
+        ruma::{
+            events::room::{EncryptedFile, MediaSource},
+            OwnedDeviceId, OwnedMxcUri, UserId,
+        },
         store::RoomLoadSettings,
         Client, SessionMeta, SessionTokens,
     };
+    use matrix_sdk_crypto::AttachmentEncryptor;
     use tokio::{
         io::{AsyncReadExt, AsyncWriteExt},
         net::TcpListener,
@@ -287,6 +299,22 @@ mod tests {
         )
     }
 
+    fn encrypted_attachment(plaintext: &[u8]) -> (Vec<u8>, EncryptedFile) {
+        let mut cursor = Cursor::new(plaintext);
+        let mut encryptor = AttachmentEncryptor::new(&mut cursor);
+        let mut ciphertext = Vec::new();
+        encryptor
+            .read_to_end(&mut ciphertext)
+            .expect("encrypt attachment fixture");
+        let info = encryptor.finish();
+        let file = EncryptedFile::new(
+            OwnedMxcUri::from("mxc://example.org/encrypted-proof-media"),
+            info.encryption_info,
+            info.hashes,
+        );
+        (ciphertext, file)
+    }
+
     #[test]
     fn bounded_accumulator_rejects_the_chunk_that_crosses_the_cap() {
         let mut bytes = vec![1, 2];
@@ -296,6 +324,23 @@ mod tests {
             Err(BoundedMediaError::TooLarge)
         );
         assert_eq!(bytes, vec![1, 2, 3, 4]);
+    }
+
+    #[test]
+    fn encrypted_attachment_decrypts_in_cap_and_rejects_plaintext_overflow() {
+        let expected = b"encrypted-media";
+        let (ciphertext, file) = encrypted_attachment(expected);
+        assert_eq!(
+            decrypt_attachment_bounded(ciphertext, &file, expected.len()),
+            Ok(expected.to_vec())
+        );
+
+        let oversized = vec![0x5a; 65];
+        let (ciphertext, file) = encrypted_attachment(&oversized);
+        assert_eq!(
+            decrypt_attachment_bounded(ciphertext, &file, 64),
+            Err(BoundedMediaError::TooLarge)
+        );
     }
 
     #[tokio::test]

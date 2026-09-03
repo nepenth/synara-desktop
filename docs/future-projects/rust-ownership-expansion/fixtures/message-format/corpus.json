@@ -269,7 +269,13 @@
         "textExcludes": ["ignored title"],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["https://", "javascript:"]
+        "forbiddenFragments": [
+          "https://",
+          "javascript:",
+          "<img",
+          "src=",
+          "mxc://"
+        ]
       },
       "notCompared": ["inlineImageFallbackGlyph"]
     },

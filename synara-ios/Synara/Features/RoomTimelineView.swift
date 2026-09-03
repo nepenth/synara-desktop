@@ -442,14 +442,11 @@ struct RoomTimelineView: View {
                 sourceTransport: item.forwardTransport,
                 roomList: environment.roomList,
                 onForward: { targetRoomID, asQuote, confirmedEncryptionDowngrade in
-                    await performAction(
-                        .forward(
-                            targetRoomID: targetRoomID,
-                            asQuote: asQuote,
-                            confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
-                        ),
+                    await performForwardAction(
+                        targetRoomID: targetRoomID,
+                        asQuote: asQuote,
+                        confirmedEncryptionDowngrade: confirmedEncryptionDowngrade,
                         to: item,
-                        successMessage: "Message forwarded."
                     )
                 }
             )
@@ -2803,6 +2800,40 @@ struct RoomTimelineView: View {
         }
     }
 
+    @MainActor
+    private func performForwardAction(
+        targetRoomID: String,
+        asQuote: Bool,
+        confirmedEncryptionDowngrade: Bool,
+        to item: TimelineItem
+    ) async -> EventActionError? {
+        let action = EventActionType.forward(
+            targetRoomID: targetRoomID,
+            asQuote: asQuote,
+            confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
+        )
+        let inFlightKey = "\(item.eventID):\(action.inFlightKey)"
+        guard inFlightTimelineActionKeys.insert(inFlightKey).inserted else {
+            return .alreadyInProgress
+        }
+        defer { inFlightTimelineActionKeys.remove(inFlightKey) }
+        do {
+            let updated = try await environment.eventActions.apply(
+                action,
+                to: item,
+                currentUserID: currentUserID,
+                roomID: roomID
+            )
+            replace(updated)
+            timelineActionMessage = "Message forwarded."
+            return nil
+        } catch let error as EventActionError {
+            return error
+        } catch {
+            return .failed
+        }
+    }
+
     private func clearComposerRelation() {
         attachmentSendTransaction = nil
         if editSession != nil {
@@ -3293,14 +3324,11 @@ struct ThreadTimelineView: View {
                 sourceTransport: item.forwardTransport,
                 roomList: environment.roomList,
                 onForward: { targetRoomID, asQuote, confirmedEncryptionDowngrade in
-                    await performAction(
-                        .forward(
-                            targetRoomID: targetRoomID,
-                            asQuote: asQuote,
-                            confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
-                        ),
+                    await performForwardAction(
+                        targetRoomID: targetRoomID,
+                        asQuote: asQuote,
+                        confirmedEncryptionDowngrade: confirmedEncryptionDowngrade,
                         to: item,
-                        successMessage: "Message forwarded."
                     )
                 }
             )
@@ -3514,6 +3542,39 @@ struct ThreadTimelineView: View {
         } catch {
             timelineActionMessage = error.localizedDescription
             return false
+        }
+    }
+
+    @MainActor
+    private func performForwardAction(
+        targetRoomID: String,
+        asQuote: Bool,
+        confirmedEncryptionDowngrade: Bool,
+        to item: TimelineItem
+    ) async -> EventActionError? {
+        let action = EventActionType.forward(
+            targetRoomID: targetRoomID,
+            asQuote: asQuote,
+            confirmedEncryptionDowngrade: confirmedEncryptionDowngrade
+        )
+        let inFlightKey = "\(item.eventID):\(action.inFlightKey)"
+        guard inFlightTimelineActionKeys.insert(inFlightKey).inserted else {
+            return .alreadyInProgress
+        }
+        defer { inFlightTimelineActionKeys.remove(inFlightKey) }
+        do {
+            _ = try await environment.eventActions.apply(
+                action,
+                to: item,
+                currentUserID: currentUserID,
+                roomID: roomID
+            )
+            timelineActionMessage = "Message forwarded."
+            return nil
+        } catch let error as EventActionError {
+            return error
+        } catch {
+            return .failed
         }
     }
 
@@ -6209,18 +6270,32 @@ private struct TimelinePollCard: View {
 }
 
 private struct TimelineForwardSheet: View {
+    private enum ForwardAlert: Identifiable {
+        case confirmDowngrade(RoomSummary)
+        case blocked(String)
+
+        var id: String {
+            switch self {
+            case .confirmDowngrade(let target):
+                "confirm-downgrade-\(target.id)"
+            case .blocked(let message):
+                "blocked-\(message)"
+            }
+        }
+    }
+
     let sourceRoomID: String
     let sourceEncryption: SynaraRoomEncryptionStatus
     let sourceTransport: TimelineForwardTransport
     let roomList: any RoomListServicing
-    let onForward: (String, Bool, Bool) async -> Bool
+    let onForward: (String, Bool, Bool) async -> EventActionError?
 
     @Environment(\.dismiss) private var dismiss
     @State private var state: RoomListState = .loading
     @State private var query = ""
     @State private var asQuote = false
     @State private var forwardingRoomID: String?
-    @State private var unencryptedForwardTarget: RoomSummary?
+    @State private var forwardAlert: ForwardAlert?
 
     var body: some View {
         NavigationStack {
@@ -6309,18 +6384,24 @@ private struct TimelineForwardSheet: View {
             }
         }
         .task { await loadRooms() }
-        .alert("Forward to an Unencrypted Room?", isPresented: Binding(
-            get: { unencryptedForwardTarget != nil },
-            set: { if !$0 { unencryptedForwardTarget = nil } }
-        )) {
-            Button("Cancel", role: .cancel) { unencryptedForwardTarget = nil }
-            Button("Forward Anyway", role: .destructive) {
-                guard let target = unencryptedForwardTarget else { return }
-                unencryptedForwardTarget = nil
-                forward(to: target.id, confirmedEncryptionDowngrade: true)
+        .alert(item: $forwardAlert) { alert in
+            switch alert {
+            case .confirmDowngrade(let target):
+                Alert(
+                    title: Text("Forward to an Unencrypted Room?"),
+                    message: Text("The source room is encrypted, but this room is not. The forwarded copy will not be protected by room encryption."),
+                    primaryButton: .destructive(Text("Forward Anyway")) {
+                        forward(to: target, confirmedEncryptionDowngrade: true)
+                    },
+                    secondaryButton: .cancel()
+                )
+            case .blocked(let message):
+                Alert(
+                    title: Text("Cannot Forward"),
+                    message: Text(message),
+                    dismissButton: .cancel(Text("OK"))
+                )
             }
-        } message: {
-            Text("The source room is encrypted, but this room is not. The forwarded copy will not be protected by room encryption.")
         }
         .accessibilityIdentifier("TimelineForwardSheet")
     }
@@ -6346,20 +6427,30 @@ private struct TimelineForwardSheet: View {
     }
 
     private func forward(
-        to targetRoomID: String,
+        to target: RoomSummary,
         confirmedEncryptionDowngrade: Bool = false
     ) {
         guard forwardingRoomID == nil else { return }
-        forwardingRoomID = targetRoomID
+        forwardingRoomID = target.id
         Task { @MainActor in
-            let succeeded = await onForward(
-                targetRoomID,
+            let error = await onForward(
+                target.id,
                 sourceTransport == .text && asQuote,
                 confirmedEncryptionDowngrade
             )
             forwardingRoomID = nil
-            if succeeded {
+            switch error {
+            case nil:
                 dismiss()
+            case .some(.forwardDowngradeNotConfirmed):
+                forwardAlert = .confirmDowngrade(target)
+            case .some(.forwardEncryptionUnavailable):
+                forwardAlert = .blocked(
+                    EventActionError.forwardEncryptionUnavailable.errorDescription
+                        ?? "Room encryption status is unavailable. Forwarding was not started."
+                )
+            case .some(let error):
+                forwardAlert = .blocked(error.errorDescription ?? "Forwarding was not completed.")
             }
         }
     }
@@ -6371,12 +6462,15 @@ private struct TimelineForwardSheet: View {
             targetEncryption: target.encryptionStatus
         ) {
         case .unavailable:
+            forwardAlert = .blocked(
+                "Room encryption status is unavailable. Forwarding was not started."
+            )
             return
         case .confirmDowngrade:
-            unencryptedForwardTarget = target
+            forwardAlert = .confirmDowngrade(target)
             return
         case .proceed:
-            forward(to: target.id)
+            forward(to: target)
         }
     }
 

@@ -37,6 +37,18 @@ bounds elapsed wall time around that primitive and proves:
   waiter. Prompt transport/socket teardown is **Not confirmed**: the current
   HTTP stack did not expose a bounded server-observable close signal.
 
+The deterministic suite also constructs encrypted attachments with the pinned
+SDK crypto implementation and enters the production decrypt-and-plaintext-cap
+step. It proves an in-cap attachment returns the exact plaintext and a
+plaintext result one byte above the cap fails with `TooLarge`. This closes the
+previously unexecuted decrypt branch; it does not measure peak process memory or
+prove Swift-to-Rust in-flight cancellation.
+
+The post-review exact working tree reran the complete Rust workspace on
+2026-09-03 with this branch enabled and passed. This is deterministic branch
+coverage only; the real-device RSS, Swift/UniFFI in-flight cancellation, and
+cache-decision gates below remain open.
+
 Source-boundary guards separately pin the 32 MiB iOS/Core cap, the 64 MiB
 desktop-protocol cap, the desktop no-store response, and the absence of the
 currently unused `MediaCacheIndex` identifier or an inline generic `retry(`

@@ -24,8 +24,9 @@ use ruma::{
     room_id, EventId, RoomVersionId,
 };
 use synara_core::app::timeline::{
-    project_timeline_diffs, project_timeline_item, NativeTimelineOpenPosition,
-    NativeTimelineOpenRequest, NativeTimelineOwner, TimelineMessageRow, TimelineViewDeltaBatch,
+    project_timeline_diffs, project_timeline_diffs_with_media, project_timeline_item,
+    NativeTimelineOpenPosition, NativeTimelineOpenRequest, NativeTimelineOwner,
+    TimelineMediaRegistry, TimelineMessageRow, TimelineRoomActionAuthority, TimelineViewDeltaBatch,
     TimelineViewDeltaOp, TimelineViewRow,
 };
 use tokio::time::timeout;
@@ -191,6 +192,7 @@ async fn redaction_replaces_the_existing_projected_row_without_duplicate_identit
     let (_, mut stream) = timeline.subscribe().await;
     let event_id = event_id!("$a7-redaction-target");
     let f = EventFactory::new().room(room_id);
+    let mut media_registry = TimelineMediaRegistry::new(7, room_id.as_str());
 
     server
         .sync_room(
@@ -199,10 +201,19 @@ async fn redaction_replaces_the_existing_projected_row_without_duplicate_identit
                 .add_timeline_event(f.text_msg("remove me").sender(*ALICE).event_id(event_id)),
         )
         .await;
-    let inserted = project_timeline_diffs(&next_batch(&mut stream).await, client.user_id());
+    let inserted_diffs = next_batch(&mut stream).await;
+    let inserted = project_timeline_diffs(&inserted_diffs, client.user_id());
+    let live_inserted = project_timeline_diffs_with_media(
+        &inserted_diffs,
+        client.user_id(),
+        TimelineRoomActionAuthority::default(),
+        &mut media_registry,
+    );
     let original = projected_event(&inserted, event_id);
+    let live_original = projected_event(&live_inserted, event_id);
     assert!(matches!(original, TimelineViewRow::Message(_)));
     let original_item_id = row_item_id(original).to_owned();
+    assert_eq!(row_item_id(live_original), original_item_id);
     let original_index = timeline
         .subscribe()
         .await
@@ -218,7 +229,14 @@ async fn redaction_replaces_the_existing_projected_row_without_duplicate_identit
                 .add_timeline_event(f.redaction(event_id).sender(*ALICE)),
         )
         .await;
-    let replacement = project_timeline_diffs(&next_batch(&mut stream).await, client.user_id());
+    let replacement_diffs = next_batch(&mut stream).await;
+    let replacement = project_timeline_diffs(&replacement_diffs, client.user_id());
+    let live_replacement = project_timeline_diffs_with_media(
+        &replacement_diffs,
+        client.user_id(),
+        TimelineRoomActionAuthority::default(),
+        &mut media_registry,
+    );
     let (replacement_index, replacement_row) = replacement
         .iter()
         .find_map(|op| match op {
@@ -234,6 +252,20 @@ async fn redaction_replaces_the_existing_projected_row_without_duplicate_identit
     assert_eq!(replacement_index, original_index);
     assert!(matches!(replacement_row, TimelineViewRow::Redacted(_)));
     assert_eq!(row_item_id(replacement_row), original_item_id);
+    let (live_replacement_index, live_replacement_row) = live_replacement
+        .iter()
+        .find_map(|op| match op {
+            TimelineViewDeltaOp::Set { index, row }
+                if row_event_id(row) == Some(event_id.as_str()) =>
+            {
+                Some((*index, row))
+            }
+            _ => None,
+        })
+        .expect("live redaction projector must preserve the in-place Set");
+    assert_eq!(live_replacement_index, original_index);
+    assert!(matches!(live_replacement_row, TimelineViewRow::Redacted(_)));
+    assert_eq!(row_item_id(live_replacement_row), original_item_id);
     assert!(replacement.iter().all(|op| match op_row(op) {
         Some(row) if row_event_id(row) == Some(event_id.as_str()) => {
             matches!(op, TimelineViewDeltaOp::Set { .. })
@@ -276,6 +308,7 @@ async fn late_decryption_replaces_utd_with_plaintext_at_the_same_projected_ident
     let timeline = room.timeline().await.unwrap();
     let (_, mut stream) = timeline.subscribe().await;
     let event_id = event_id!("$a7-late-decryption");
+    let mut media_registry = TimelineMediaRegistry::new(7, room_id.as_str());
     let encrypted = f
         .event(RoomEncryptedEventContent::new(
             EncryptedEventScheme::MegolmV1AesSha2(
@@ -298,10 +331,19 @@ async fn late_decryption_replaces_utd_with_plaintext_at_the_same_projected_ident
             JoinedRoomBuilder::new(room_id).add_timeline_event(encrypted),
         )
         .await;
-    let utd_ops = project_timeline_diffs(&next_batch(&mut stream).await, client.user_id());
+    let utd_diffs = next_batch(&mut stream).await;
+    let utd_ops = project_timeline_diffs(&utd_diffs, client.user_id());
+    let live_utd_ops = project_timeline_diffs_with_media(
+        &utd_diffs,
+        client.user_id(),
+        TimelineRoomActionAuthority::default(),
+        &mut media_registry,
+    );
     let utd_row = projected_event(&utd_ops, event_id);
+    let live_utd_row = projected_event(&live_utd_ops, event_id);
     assert!(matches!(utd_row, TimelineViewRow::EncryptedUnavailable(_)));
     let original_item_id = row_item_id(utd_row).to_owned();
+    assert_eq!(row_item_id(live_utd_row), original_item_id);
 
     let exported_keys = decrypt_room_key_export(Cursor::new(SESSION_KEY), "1234").unwrap();
     client
@@ -314,7 +356,14 @@ async fn late_decryption_replaces_utd_with_plaintext_at_the_same_projected_ident
         .await
         .unwrap();
 
-    let decrypted_ops = project_timeline_diffs(&next_batch(&mut stream).await, client.user_id());
+    let decrypted_diffs = next_batch(&mut stream).await;
+    let decrypted_ops = project_timeline_diffs(&decrypted_diffs, client.user_id());
+    let live_decrypted_ops = project_timeline_diffs_with_media(
+        &decrypted_diffs,
+        client.user_id(),
+        TimelineRoomActionAuthority::default(),
+        &mut media_registry,
+    );
     let (replacement_index, decrypted_row) = decrypted_ops
         .iter()
         .find_map(|op| match op {
@@ -332,6 +381,23 @@ async fn late_decryption_replaces_utd_with_plaintext_at_the_same_projected_ident
     assert_eq!(replacement_index, 1);
     assert_eq!(message.body, "It's a secret to everybody");
     assert_eq!(row_item_id(decrypted_row), original_item_id);
+    let (live_replacement_index, live_decrypted_row) = live_decrypted_ops
+        .iter()
+        .find_map(|op| match op {
+            TimelineViewDeltaOp::Set { index, row }
+                if row_event_id(row) == Some(event_id.as_str()) =>
+            {
+                Some((*index, row))
+            }
+            _ => None,
+        })
+        .expect("live late-decrypt projector must preserve the in-place Set");
+    let TimelineViewRow::Message(live_message) = live_decrypted_row else {
+        panic!("live late-decrypted event was not projected as a message")
+    };
+    assert_eq!(live_replacement_index, 1);
+    assert_eq!(live_message.body, "It's a secret to everybody");
+    assert_eq!(row_item_id(live_decrypted_row), original_item_id);
 }
 
 #[tokio::test]

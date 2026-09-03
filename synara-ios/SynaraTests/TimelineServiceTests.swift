@@ -237,6 +237,13 @@ final class TimelineServiceTests: XCTestCase {
             for forbidden in fixture.expect.forbiddenFragments {
                 XCTAssertFalse((sanitized ?? "").contains(forbidden), "\(fixture.id): retained \(forbidden)")
             }
+            if fixture.id == "adversarial-mxc-inline-image" {
+                let clipboardHTML = sanitized ?? ""
+                XCTAssertFalse(clipboardHTML.contains("<img"), "\(fixture.id): retained img")
+                XCTAssertFalse(clipboardHTML.contains("mxc://"), "\(fixture.id): retained mxc")
+                XCTAssertFalse(clipboardHTML.contains("src="), "\(fixture.id): retained src")
+                XCTAssertTrue(text.contains("diagram"), "\(fixture.id): alt text missing")
+            }
             let expectedKinds = fixture.expect.semanticKinds ?? []
             for kind in expectedKinds {
                 XCTAssertTrue(

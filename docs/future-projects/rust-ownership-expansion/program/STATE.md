@@ -152,8 +152,8 @@ operating path works.
 
 ## Follow-on validation status
 
-The separately authorized A6/A7/A9/A10 candidate on
-`feature/rust-ownership-follow-ons` is deterministic-validation complete. The
+The initial separately authorized A6/A7/A9/A10 candidate on
+`feature/rust-ownership-follow-ons` completed deterministic validation. The
 complete Rust workspace passed formatting, all-target Clippy with warnings
 denied, check, and 1,072 tests with 3 environment-gated ignores. Tauri passed
 formatting, all-target Clippy, check, 441 tests, and the 2,722-file Matrix
@@ -181,6 +181,31 @@ review and final Grok 4.6 High review both returned `ACCEPT` with no actionable
 P0-P2 findings. Remote PR CI is still a promotion gate; no merge or release is
 implied. Physical notification delivery, real-device media measurement, and
 every live/two-client gate listed above remain open.
+
+That initial record is not the final promotion state. A later third-party
+review on PR `#1094` identified stale-reaction readback handling, incomplete
+remote-resource corpus assertions, collapsed iOS forward diagnostics, a
+missing logout owner-rebind attempt, fragile pusher display-name matching,
+missing encrypted-decrypt and production-projector test coverage, a misleading
+decline-call error class, and an unused reaction path outside the flight
+coordinator.
+
+The accepted findings are remediated on the feature branch. Command commitment
+and projection settlement are now separate for reactions; MXC image nodes are
+reduced to inert alt text at the desktop output boundary and forbidden by both
+platform harnesses; forwarding security races remain fail-closed but are
+visible and retryable where confirmation is appropriate; pusher cleanup keeps
+exact app/device authority with an exact last-known key as a secondary match;
+and the missing decrypt/projector branches execute deterministically. Exact-head
+validation on 2026-09-03 passed the complete Rust workspace, all desktop
+format/lint/type/build/security gates and 927 modernization tests, Tauri's 441
+tests and audit gates, and both iOS targets: 703 unit tests passed with 3
+intentional skips and 59 UI tests passed with 14 intentional skips. Grok 4.6
+High found one iOS 16 stacked-alert defect in the initial correction; the
+forwarding sheet was reduced to one mutually exclusive item-driven alert and
+the targeted re-review returned `ACCEPT` with no P0-P3 finding. Remote PR CI is
+still a promotion gate. The physical APNs/NSE, live pusher readback, two-client
+action, and real-device media gates remain open.
 
 ## Historical provenance
 

@@ -224,8 +224,8 @@ test('product action owners reject readback for the wrong room, event, or status
     ),
     'unavailable'
   );
-  assert.equal(
-    await callDeclineWithNativeTimelineOwner(
+  await assert.rejects(
+    callDeclineWithNativeTimelineOwner(
       { roomId: '!room:example.org', eventId: '$call:example.org' },
       true,
       okInvoke('matrix_timeline_call_decline', {
@@ -236,7 +236,7 @@ test('product action owners reject readback for the wrong room, event, or status
         status: 'declined',
       })
     ),
-    'unavailable'
+    /readback did not match/
   );
 });
 

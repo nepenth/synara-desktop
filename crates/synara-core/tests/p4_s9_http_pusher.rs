@@ -306,7 +306,7 @@ fn account_bound_pusher_owner_survives_core_account_rotation_with_original_crede
                 .expect("bind new account owner");
 
             old_owner
-                .delete_http_pushers_for_device("com.whylandcreative.synara".to_owned())
+                .delete_http_pushers_for_device("com.whylandcreative.synara".to_owned(), None)
                 .await
                 .expect("enumerate and delete with retained old account owner");
             new_owner
@@ -379,7 +379,7 @@ fn account_bound_device_cleanup_is_idempotent_when_no_pusher_matches() {
 
             for _ in 0..2 {
                 owner
-                    .delete_http_pushers_for_device("com.whylandcreative.synara".to_owned())
+                    .delete_http_pushers_for_device("com.whylandcreative.synara".to_owned(), None)
                     .await
                     .expect("empty cleanup remains idempotent");
             }

@@ -1,7 +1,7 @@
 # Residual action register
 
 Status: authoritative record of residual findings from the 2026-09-01
-ownership census, reconciled and remediated where proven on 2026-09-02. The
+ownership census, reconciled and remediated where proven through 2026-09-03. The
 original census was docs-only. A human explicitly authorized the subsequent
 product remediation on `feature/rust-ownership-residual-census`; that later
 authorization does not retroactively turn the research memos into implementation
@@ -124,6 +124,32 @@ required external environment or second client was unavailable.
 
 ## Promotion rule
 
+### Post-PR review remediation
+
+PR `#1094` received an additional third-party operating-path review after the
+initial local review record below. The accepted findings were remediated on the
+same feature branch:
+
+- desktop and iOS reaction commands now accept a matching committed mutation
+  even when the immediate aggregation ownership is stale, while the existing
+  projection coordinator continues to own visible completion;
+- the shared presentation corpus now forbids resource-owning MXC image output,
+  both platform harnesses assert the outbound/clipboard boundary, and desktop
+  converts image alt text to inert plaintext;
+- iOS preserves Core forward security diagnostics and handles write-time
+  downgrade or unavailable-encryption races inside the active forwarding sheet;
+- logout retries a missing account-bound pusher owner once and may use the exact
+  last-known push key as a same-app secondary cleanup match without deleting
+  arbitrary devices;
+- the encrypted attachment decrypt/plaintext-cap branch and the production
+  media/authority sequencing twins now have deterministic coverage; and
+- a misleading decline-call `unavailable` result and an unused reaction
+  component that bypassed the flight coordinator were removed.
+
+These changes do not close the live homeserver pusher-field, physical APNs/NSE,
+two-client action, or real-device media gates. Exact-head validation and final
+review evidence supersede, rather than inherit, the earlier candidate results.
+
 The research record and the later remediation may be promoted only after the
 state documents distinguish deterministic implementation from live evidence,
 tests proportionate to the actions pass, independent review is recorded, and
@@ -152,18 +178,16 @@ live Matrix proof gate.
 ## Follow-on validation status
 
 The A6/A7/A9/A10 follow-on candidate on
-`feature/rust-ownership-follow-ons` has completed its local deterministic
-validation. The complete Rust workspace passed formatting, all-target Clippy
-with warnings denied, check, and 1,072 tests with 3 environment-gated ignores.
-The Tauri workspace passed the same formatting/lint/check gates and 441 tests.
-Desktop passed formatting, lint, both typechecks, a production build, 926
-modernization tests, and 6 real-layout Chromium tests. The repository delivery
-suite passed 277 tests. Production npm audit reports zero vulnerabilities;
-both Rust lockfiles passed the repository's reviewed cargo-audit policy with no
-unallowed advisory. The exact Apple candidate regenerated both local packages,
-passed build-for-testing, and executed 777 tests: 760 passed, 17 intentionally
-skipped, and 0 failed. Its fresh log contains none of the previously observed
-background-publish, actor-isolation, or invalid-frame warning signatures.
+`feature/rust-ownership-follow-ons` has completed its post-review local
+deterministic validation. The complete Rust workspace passed formatting,
+all-target Clippy with warnings denied, and every unit, integration, and doc
+test. The Tauri workspace passed the same formatting/lint/check gates and 441
+tests. Desktop passed formatting, lint, both typechecks, a production build,
+927 modernization tests, and the production dependency audit with zero
+vulnerabilities. Both Rust lockfiles passed the repository's reviewed
+cargo-audit policy with no unallowed advisory. The exact Apple candidate
+regenerated both four-slice local packages, passed build-for-testing, and
+executed 779 tests: 762 passed, 17 intentionally skipped, and 0 failed.
 
 That run also found and repaired four stale migration assertions/formatting
 sites: the stream fixture now carries authoritative `encryptionStatus`, the
@@ -173,9 +197,12 @@ no-unused-binding rule. The direct `sanitize-html` dependency was advanced from
 2.17.6 to the fixed 2.17.7 release and the entire affected desktop suite was
 rerun.
 
-Independent review accepted the final iOS remediation and bounded logout-error
-presentation changes with no P0-P2 findings. The independent whole-change
-review and final Grok 4.6 High review also returned `ACCEPT` with no actionable
-P0-P2 findings. Remote PR CI remains required before promotion. None of these
-deterministic results closes the physical APNs/NSE, live Matrix
-interoperability, or real-device media gates recorded above.
+The third-party PR findings were dispositioned against the operating paths and
+all accepted P1-P3 items were corrected. Grok 4.6 High accepted every area
+except an iOS 16 stacked-alert risk it found in the first forwarding-sheet
+repair. That alert path was consolidated into one mutually exclusive
+item-driven state, recompiled through the full iOS targets, and accepted by a
+targeted Grok 4.6 High re-review with no P0-P3 finding. Remote PR CI remains
+required before promotion. None of these deterministic results closes the
+physical APNs/NSE, live Matrix interoperability, or real-device media gates
+recorded above.

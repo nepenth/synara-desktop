@@ -96,8 +96,10 @@ impl NativeHttpPusherOwner {
     pub async fn delete_for_device(
         &self,
         app_id: &str,
+        last_push_key: Option<&str>,
     ) -> Result<MatrixHttpPusherWriteResult, &'static str> {
         let app_id = parse_app_id(app_id)?;
+        let last_push_key = last_push_key.map(parse_push_key).transpose()?;
         let response = self
             .client
             .send(get_pushers::v3::Request::new())
@@ -107,7 +109,7 @@ impl NativeHttpPusherOwner {
             .pushers
             .into_iter()
             .filter(|pusher| {
-                pusher.ids.app_id == app_id && pusher.device_display_name == self.device_id
+                matches_device_pusher(pusher, &app_id, &self.device_id, last_push_key.as_deref())
             })
             .map(|pusher| pusher.ids)
             .collect();
@@ -120,6 +122,17 @@ impl NativeHttpPusherOwner {
         }
         Ok(MatrixHttpPusherWriteResult { status: "ok" })
     }
+}
+
+fn matches_device_pusher(
+    pusher: &Pusher,
+    app_id: &str,
+    device_id: &str,
+    last_push_key: Option<&str>,
+) -> bool {
+    pusher.ids.app_id == app_id
+        && (pusher.device_display_name == device_id
+            || last_push_key.is_some_and(|key| pusher.ids.pushkey == key))
 }
 
 fn parse_push_key(push_key: &str) -> Result<String, &'static str> {
@@ -320,5 +333,80 @@ mod tests {
         assert!(data.get("body").is_none());
         assert!(data.get("event_id").is_none());
         assert!(data.get("room_id").is_none());
+    }
+
+    #[test]
+    fn device_cleanup_matches_only_the_exact_app_and_device() {
+        let app_id = "com.whylandcreative.synara";
+        let exact = build_http_pusher(
+            "device-key",
+            app_id,
+            "https://push.example.org/_matrix/push/v1/notify",
+            "Synara",
+            "DEVICE",
+            "en-US",
+        )
+        .unwrap();
+        let other_device = build_http_pusher(
+            "other-key",
+            app_id,
+            "https://push.example.org/_matrix/push/v1/notify",
+            "Synara",
+            "OTHER",
+            "en-US",
+        )
+        .unwrap();
+        let other_app = build_http_pusher(
+            "device-key",
+            "org.example.other",
+            "https://push.example.org/_matrix/push/v1/notify",
+            "Other",
+            "DEVICE",
+            "en-US",
+        )
+        .unwrap();
+
+        assert!(matches_device_pusher(&exact, app_id, "DEVICE", None));
+        assert!(!matches_device_pusher(
+            &other_device,
+            app_id,
+            "DEVICE",
+            None
+        ));
+        assert!(!matches_device_pusher(
+            &other_app,
+            app_id,
+            "DEVICE",
+            Some("device-key")
+        ));
+    }
+
+    #[test]
+    fn device_cleanup_uses_an_exact_last_known_push_key_when_display_name_drifts() {
+        let app_id = "com.whylandcreative.synara";
+        let mut drifted = build_http_pusher(
+            "known-key",
+            app_id,
+            "https://push.example.org/_matrix/push/v1/notify",
+            "Synara",
+            "DEVICE",
+            "en-US",
+        )
+        .unwrap();
+        drifted.device_display_name.clear();
+
+        assert!(matches_device_pusher(
+            &drifted,
+            app_id,
+            "DEVICE",
+            Some("known-key")
+        ));
+        assert!(!matches_device_pusher(
+            &drifted,
+            app_id,
+            "DEVICE",
+            Some("different-key")
+        ));
+        assert!(!matches_device_pusher(&drifted, app_id, "DEVICE", None));
     }
 }

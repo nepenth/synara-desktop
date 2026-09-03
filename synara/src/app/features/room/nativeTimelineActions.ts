@@ -465,11 +465,13 @@ export async function callDeclineWithNativeTimelineOwner(
   if (!desktopAvailable) return 'unavailable';
   const result = await invoke('matrix_timeline_call_decline', { request: input });
   if (!result.available) return 'unavailable';
-  return (
-    acceptActionReadback(result.value, {
-      action: 'call_decline',
-      roomId: input.roomId,
-      statuses: new Set(['declined']),
-    }) ?? 'unavailable'
-  );
+  const accepted = acceptActionReadback(result.value, {
+    action: 'call_decline',
+    roomId: input.roomId,
+    statuses: new Set(['declined']),
+  });
+  if (!accepted) {
+    throw new Error('Native call decline readback did not match the requested action.');
+  }
+  return accepted;
 }

@@ -9488,11 +9488,15 @@ impl HttpPusherOwner {
     pub async fn delete_http_pushers_for_device(
         &self,
         app_id: String,
+        last_push_key: Option<String>,
     ) -> Result<PusherWriteDto, PusherCommandError> {
         http_pusher_reject_oversize(app_id.len())?;
+        if let Some(push_key) = last_push_key.as_ref() {
+            http_pusher_reject_oversize(push_key.len())?;
+        }
         let result = self
             .owner
-            .delete_for_device(&app_id)
+            .delete_for_device(&app_id, last_push_key.as_deref())
             .await
             .map_err(|error| {
                 map_http_pusher_core_error(

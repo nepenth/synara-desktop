@@ -12,7 +12,8 @@ protocol SharedCoreHttpPusherOwning: AnyObject {
 
     func deleteHttpPusher(pushKey: String, appId: String) async throws -> PusherWriteDto
     func deleteHttpPushersForDevice(
-        appId: String
+        appId: String,
+        lastPushKey: String?
     ) async throws -> PusherWriteDto
 }
 
@@ -65,8 +66,12 @@ enum SharedCoreHttpPusher {
 
     static func deleteForDevice(
         owner: SharedCoreHttpPusherOwning,
-        appId: String
+        appId: String,
+        lastPushKey: String?
     ) async throws -> PusherWriteDto {
-        try await owner.deleteHttpPushersForDevice(appId: appId)
+        try await owner.deleteHttpPushersForDevice(
+            appId: appId,
+            lastPushKey: lastPushKey
+        )
     }
 }

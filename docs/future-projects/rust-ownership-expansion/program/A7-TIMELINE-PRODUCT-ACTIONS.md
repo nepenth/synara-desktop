@@ -19,14 +19,21 @@ navigation, or changed form payload cannot create a concurrent duplicate.
 Poll controls remain pending after send readback until the Core timeline
 projection reports the exact selected answer set.
 
+Reaction toggles apply the same two-stage rule. A matching Core mutation is
+proof that the SDK write committed; an immediate aggregation `me` value may
+still describe the pre-write projection and is therefore not treated as a
+command failure. Desktop and iOS keep the reaction flight pending until the
+authoritative timeline projection reaches the requested ownership state.
+Wrong room, event, key, mutation, or projected reaction key still fails closed.
+
 ## Independent slices
 
-| Slice        | Core authority and validation                                                                                                                                    | Native presenter                                                                                                                                                               | Deterministic status   | Live status                                                  |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------- | ------------------------------------------------------------ |
-| Vote         | Open Core poll capability; exact visible poll options, closed state, maximum selections, uniqueness, and shared poll-wire bounds are checked before the SDK send | Accessible single/multi-select answers, clear vote, bounded selection, pending state                                                                                           | Implemented and tested | **Not confirmed**                                            |
-| Report       | Remote-event Core capability; optional reason is trimmed and capped at 512 Unicode scalar values; exact source-event readback                                    | Deliberate destructive confirmation, optional bounded reason, administrator disclosure                                                                                         | Implemented and tested | **Not confirmed**                                            |
+| Slice        | Core authority and validation                                                                                                                                                                                                                  | Native presenter                                                                                                                                                                                   | Deterministic status   | Live status                                                  |
+| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------- | ------------------------------------------------------------ |
+| Vote         | Open Core poll capability; exact visible poll options, closed state, maximum selections, uniqueness, and shared poll-wire bounds are checked before the SDK send                                                                               | Accessible single/multi-select answers, clear vote, bounded selection, pending state                                                                                                               | Implemented and tested | **Not confirmed**                                            |
+| Report       | Remote-event Core capability; optional reason is trimmed and capped at 512 Unicode scalar values; exact source-event readback                                                                                                                  | Deliberate destructive confirmation, optional bounded reason, administrator disclosure                                                                                                             | Implemented and tested | **Not confirmed**                                            |
 | Forward      | Core projects only `text` for text/notice/emote and `media` for image/file/audio/video/sticker; every other semantic message fails closed; the write owner re-reads both rooms' encryption state and requires explicit downgrade authorization | Searchable joined-room target picker; quote only for text; forwarding consumes the required tri-state Core room projection, blocks Unknown/error, and asks for encrypted-to-cleartext confirmation | Implemented and tested | **Not confirmed**, including encrypted-to-encrypted readback |
-| Decline call | Remote active-call Core capability; SDK prepares and sends the decline event; exact new-event readback                                                           | Accessible pending decline control on call rows                                                                                                                                | Implemented and tested | **Not confirmed**                                            |
+| Decline call | Remote active-call Core capability; SDK prepares and sends the decline event; exact new-event readback                                                                                                                                         | Accessible pending decline control on call rows                                                                                                                                                    | Implemented and tested | **Not confirmed**                                            |
 
 Desktop also consumes applicable Core action capabilities on membership, state,
 call, redacted, undecryptable, and fallback rows instead of silently dropping
@@ -42,6 +49,10 @@ rejects Unknown/error, and rejects encrypted-to-cleartext unless the request
 carries the presenter's explicit downgrade authorization. The request never
 carries platform-derived encryption facts, so Core remains authoritative and a
 direct service caller cannot bypass the policy or race a stale room-list fact.
+The iOS forwarding sheet also consumes the Core diagnostic classes instead of
+collapsing them to a generic failure: a write-time downgrade race reopens the
+existing deliberate confirmation, while unavailable encryption state shows a
+blocking reason in the sheet. Unknown diagnostic codes remain fail-closed.
 
 ## Deterministic evidence
 
@@ -56,6 +67,15 @@ direct service caller cannot bypass the policy or race a stale room-list fact.
   stable action keys, the session-lifetime duplicate coordinator, closed
   forward transport, poll policy, and VoiceOver child containment.
 
+On 2026-09-03 the post-review exact working tree passed the complete Rust
+workspace, 927 desktop modernization tests, and the iOS unit/UI targets (762
+passed, 17 intentionally skipped, 0 failed out of 779). Grok 4.6 High found
+one iOS 16 presentation defect in the initial correction: two forwarding alerts
+were attached to the same sheet. The sheet now has one mutually exclusive,
+item-driven alert for downgrade confirmation or blocked/error state; the
+targeted re-review returned `ACCEPT`. These remain deterministic results, not
+live action-interoperability evidence.
+
 ## Explicitly open evidence
 
 No deterministic presenter or projection test proves a homeserver accepted and
@@ -68,9 +88,11 @@ evidence before promotion from **Not confirmed**.
 `crates/synara-core/tests/p4_s37_timeline_sequencing.rs` drives the pinned
 `matrix-sdk-ui` timeline against a mocked homeserver and sends the SDK's real,
 ordered `VectorDiff` batches through Synara's identity/delta projection helper.
-The first four cases use `project_timeline_diffs` specifically to prove stable
-identity and ordered replacement semantics; that helper is not the live
-capability-authority or media projection path. The executable cases prove:
+The redaction and late-decryption cases run each SDK batch through both the
+identity-only helper and the production media/authority projector. The
+pagination and relation-order cases remain identity-only because they prove
+ordered replacement rather than media or room authority. The executable cases
+prove:
 
 - `redaction_replaces_the_existing_projected_row_without_duplicate_identity`:
   the SDK's in-place redaction `Set` becomes one redacted Core row at the same
@@ -85,10 +107,10 @@ capability-authority or media projection path. The executable cases prove:
   an unavailable reply target is replaced by ordered pending and ready `Set`
   operations without changing the reply row identity; and
 - `room_power_grant_and_revoke_reset_existing_row_capabilities_and_redact_preflight`:
-  unlike the four identity-only cases, this opens `NativeTimelineOwner` and
-  exercises the live authority-aware projector; room-power grants and
-  revocations reset historical row capabilities and the redact command
-  independently enforces the same current authority.
+  this opens `NativeTimelineOwner` and exercises the live authority-aware
+  projector; room-power grants and revocations reset historical row
+  capabilities and the redact command independently enforces the same current
+  authority.
 
 These are deterministic SDK/Core adapter proofs. They are not evidence of live
 homeserver acceptance, cross-device decryption, or two-client interoperability;

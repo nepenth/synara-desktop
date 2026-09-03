@@ -181,7 +181,7 @@ test('native reaction command failure never invents a JS SDK fallback', async ()
   );
 });
 
-test('reaction owners reject mismatched identity, mutation, and projected state', async () => {
+test('reaction owners reject mismatched identity and mutation', async () => {
   const request = {
     roomId: '!room:example.org',
     eventId: '$event:example.org',
@@ -216,20 +216,6 @@ test('reaction owners reject mismatched identity, mutation, and projected state'
       key: request.key,
       mutation: 'redacted',
     },
-    {
-      roomId: request.roomId,
-      targetEventId: request.eventId,
-      key: request.key,
-      mutation: 'added',
-      readback: { key: request.key, count: 1, me: false, senders: [] },
-    },
-    {
-      roomId: request.roomId,
-      targetEventId: request.eventId,
-      key: request.key,
-      mutation: 'removed',
-      readback: { key: request.key, count: 1, me: true, senders: [] },
-    },
   ];
 
   for (const value of invalid) {
@@ -238,6 +224,39 @@ test('reaction owners reject mismatched identity, mutation, and projected state'
       /readback did not match/
     );
   }
+});
+
+test('toggle accepts a committed mutation while immediate aggregation ownership is stale', async () => {
+  const addRequest = {
+    roomId: '!room:example.org',
+    eventId: '$event:example.org',
+    key: '✅',
+    expectedOwn: true,
+  };
+  const added = await toggleReactionWithNativeOwner(addRequest, async () => ({
+    available: true,
+    value: {
+      roomId: addRequest.roomId,
+      targetEventId: addRequest.eventId,
+      key: addRequest.key,
+      mutation: 'added',
+      readback: { key: addRequest.key, count: 1, me: false, senders: [] },
+    },
+  }));
+  assert.equal(added.mutation, 'added');
+
+  const removeRequest = { ...addRequest, expectedOwn: false };
+  const removed = await toggleReactionWithNativeOwner(removeRequest, async () => ({
+    available: true,
+    value: {
+      roomId: removeRequest.roomId,
+      targetEventId: removeRequest.eventId,
+      key: removeRequest.key,
+      mutation: 'removed',
+      readback: { key: removeRequest.key, count: 1, me: true, senders: [] },
+    },
+  }));
+  assert.equal(removed.mutation, 'removed');
 });
 
 test('toggle accepts committed add without immediate readback but rejects the wrong mutation', async () => {

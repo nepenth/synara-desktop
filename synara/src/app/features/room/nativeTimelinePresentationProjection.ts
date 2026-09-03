@@ -80,7 +80,7 @@ export const projectNativeFormattedBody = (
   const codeBlocks: string[] = [];
   const orderedListStarts: number[] = [];
   const inlineImageFallbacks: string[] = [];
-  let resourceOwningElements = 0;
+  const resourceOwningElements = (sanitizedHtml.match(/<img\b/gi) ?? []).length;
 
   const visit = (node: DOMNode): void => {
     if (!(node instanceof Element)) return;
@@ -121,7 +121,6 @@ export const projectNativeFormattedBody = (
         break;
       case 'matrixColor':
       case 'passthrough':
-        if (node.name === 'img') resourceOwningElements += 1;
         break;
     }
 

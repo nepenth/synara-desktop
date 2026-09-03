@@ -1602,6 +1602,13 @@ final class SharedCoreEventActionService: EventActionServicing {
                 case .unavailable:
                     throw EventActionError.failed
                 }
+            } catch let error as EventActionError {
+                throw error
+            } catch let error as TimelineForwardError {
+                if case let .Failed(code, _) = error {
+                    throw TimelineForwardErrorPolicy.map(coreCode: code)
+                }
+                throw EventActionError.failed
             } catch {
                 throw EventActionError.failed
             }
@@ -2625,10 +2632,11 @@ private final class SharedCoreBoundPusherService: MatrixPusherAccountServicing {
         )
     }
 
-    func unregisterAllPushersForDevice() async throws {
+    func unregisterAllPushersForDevice(lastPushKey: String?) async throws {
         _ = try await SharedCoreHttpPusher.deleteForDevice(
             owner: owner,
-            appId: appID
+            appId: appID,
+            lastPushKey: lastPushKey
         )
     }
 }

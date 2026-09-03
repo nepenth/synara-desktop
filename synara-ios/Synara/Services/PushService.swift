@@ -193,7 +193,7 @@ protocol MatrixPusherServicing {
 protocol MatrixPusherAccountServicing: AnyObject {
     func registerPusher(pushKey: String) async throws
     func unregisterPusher(pushKey: String) async throws
-    func unregisterAllPushersForDevice() async throws
+    func unregisterAllPushersForDevice(lastPushKey: String?) async throws
 }
 
 struct MatrixPusherRegistrationFailure: Error {
@@ -338,17 +338,22 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         await reconciliationTask?.value
         reconciliationTask = nil
 
-        let logoutOwner = registeredBinding?.owner ?? currentPusherOwner
-        if logoutOwner == nil, currentSession != nil {
-            isRegistered = false
-            SynaraNotificationDiagnostics.record(
-                .pusherUnregistrationFailed,
-                runID: diagnosticRunID
-            )
-            abortRegistrationTeardown(
-                statusDescription: "Pusher owner unavailable; retry sign out"
-            )
-            return false
+        var logoutOwner = registeredBinding?.owner ?? currentPusherOwner
+        if logoutOwner == nil, let session = currentSession {
+            do {
+                logoutOwner = try pusherService.bindPusher(to: session)
+                currentPusherOwner = logoutOwner
+            } catch {
+                isRegistered = false
+                SynaraNotificationDiagnostics.record(
+                    .pusherUnregistrationFailed,
+                    runID: diagnosticRunID
+                )
+                abortRegistrationTeardown(
+                    statusDescription: "Pusher owner unavailable; retry sign out"
+                )
+                return false
+            }
         }
         if let logoutOwner {
             SynaraNotificationDiagnostics.record(
@@ -359,7 +364,9 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                 // Logout always enumerates exact app+device pushers in Core.
                 // This removes stale registrations left by an earlier crash;
                 // exact-key deletion remains rotation/supersession-only.
-                try await logoutOwner.unregisterAllPushersForDevice()
+                try await logoutOwner.unregisterAllPushersForDevice(
+                    lastPushKey: registeredBinding?.pushKey ?? fullDeviceToken
+                )
                 SynaraNotificationDiagnostics.record(
                     .pusherUnregistrationSucceeded,
                     runID: diagnosticRunID
@@ -794,7 +801,9 @@ private final class DisabledMatrixPusherAccountService: MatrixPusherAccountServi
         _ = pushKey
     }
 
-    func unregisterAllPushersForDevice() async throws {}
+    func unregisterAllPushersForDevice(lastPushKey: String?) async throws {
+        _ = lastPushKey
+    }
 }
 
 enum NotificationPushRouteParser {

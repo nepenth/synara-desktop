@@ -556,6 +556,27 @@ final class PushServiceTests: XCTestCase {
         )
     }
 
+    func testImmediateLogoutRebindsOnceBeforeEnumeratingDevicePushers() async {
+        let pusher = StubPusherService()
+        pusher.bindFailuresRemaining = 1
+        let session = makeSession()
+        let service = SynaraPushService(
+            logger: MockLoggingService(),
+            pusherService: pusher,
+            isRegistrationAvailable: true
+        )
+        service.configure(with: session)
+        service.handleDeviceToken(Data([0x7A, 0xB1, 0x3C]))
+
+        let cleanupSucceeded = await service.clearRegistrationState()
+
+        XCTAssertTrue(cleanupSucceeded)
+        XCTAssertEqual(pusher.boundSessions, [session, session])
+        XCTAssertEqual(pusher.unregisterAllCount, 1)
+        XCTAssertEqual(pusher.unregisteredAllSessions, [session])
+        XCTAssertEqual(pusher.lastUnregisterAllPushKey, "7ab13c")
+    }
+
     func testPushCallbacksCannotRestartRegistrationWhileLogoutCleanupIsSuspended() async {
         let pusher = StubPusherService(unregisterDelayNanoseconds: 150_000_000)
         let session = makeSession()
@@ -1067,6 +1088,7 @@ private final class StubPusherService: MatrixPusherServicing {
         private(set) var unregisterAllCount = 0
         private(set) var lastPushKey: String?
         private(set) var lastUnregisterPushKey: String?
+        private(set) var lastUnregisterAllPushKey: String?
         private(set) var registeredSessions: [AuthenticatedSession] = []
         private(set) var unregisteredSessions: [AuthenticatedSession] = []
         private(set) var unregisteredAllSessions: [AuthenticatedSession] = []
@@ -1074,6 +1096,7 @@ private final class StubPusherService: MatrixPusherServicing {
         let registerDelayNanoseconds: UInt64
         let unregisterDelayNanoseconds: UInt64
         var unregisterFailuresRemaining = 0
+        var bindFailuresRemaining = 0
         var onRegister: () -> Void = {}
         var onUnregister: () -> Void = {}
 
@@ -1089,6 +1112,10 @@ private final class StubPusherService: MatrixPusherServicing {
 
     func bindPusher(to session: AuthenticatedSession) throws -> MatrixPusherAccountServicing {
         boundSessions.append(session)
+        if bindFailuresRemaining > 0 {
+            bindFailuresRemaining -= 1
+            throw StubPusherError.plannedFailure
+        }
         return StubPusherAccountService(service: self, session: session)
     }
 
@@ -1116,9 +1143,13 @@ private final class StubPusherService: MatrixPusherServicing {
         }
     }
 
-    fileprivate func unregisterAllPushers(session: AuthenticatedSession) async throws {
+    fileprivate func unregisterAllPushers(
+        session: AuthenticatedSession,
+        lastPushKey: String?
+    ) async throws {
         unregisterAllCount += 1
         unregisteredAllSessions.append(session)
+        lastUnregisterAllPushKey = lastPushKey
         if unregisterDelayNanoseconds > 0 {
             try await Task.sleep(nanoseconds: unregisterDelayNanoseconds)
         }
@@ -1146,8 +1177,11 @@ private final class StubPusherAccountService: MatrixPusherAccountServicing {
         try await service.unregisterPusher(session: session, pushKey: pushKey)
     }
 
-    func unregisterAllPushersForDevice() async throws {
-        try await service.unregisterAllPushers(session: session)
+    func unregisterAllPushersForDevice(lastPushKey: String?) async throws {
+        try await service.unregisterAllPushers(
+            session: session,
+            lastPushKey: lastPushKey
+        )
     }
 }
 
@@ -1204,8 +1238,12 @@ private final class RecordingSharedCoreHttpPusherOwner: SharedCoreHttpPusherOwni
         return PusherWriteDto(status: "ok")
     }
 
-    func deleteHttpPushersForDevice(appId: String) async throws -> PusherWriteDto {
+    func deleteHttpPushersForDevice(
+        appId: String,
+        lastPushKey: String?
+    ) async throws -> PusherWriteDto {
         _ = appId
+        _ = lastPushKey
         deleteForDeviceCount += 1
         return PusherWriteDto(status: "ok")
     }

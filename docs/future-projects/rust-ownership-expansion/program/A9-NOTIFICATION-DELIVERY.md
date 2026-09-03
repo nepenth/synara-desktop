@@ -3,7 +3,7 @@
 Status: deterministic iOS registration repair implemented; physical APNs/NSE
 and desktop tray delivery are not confirmed.
 
-Last updated: 2026-09-02 on `feature/rust-ownership-follow-ons`.
+Last updated: 2026-09-03 on `feature/rust-ownership-follow-ons`.
 
 This record deliberately separates executable contract evidence from external
 delivery evidence. A unit test, simulator run, compiled extension, or valid
@@ -93,7 +93,12 @@ Logout has a stricter destructive boundary. Remote pusher deletion runs before
 local Keychain session deletion or Matrix session revocation. It does not
 depend on UIKit redelivering the APNs token after process launch: Core first
 enumerates the account's pushers, filters by exact Synara `app_id` and Matrix
-device ID, and deletes every match without projecting push keys over UniFFI.
+device ID, and deletes every match without projecting enumerated push keys over
+UniFFI. When this process still has the last registered token, Core also accepts
+that exact key as a secondary match under the same app ID. This repairs a
+homeserver readback whose device display name is empty or rewritten without
+broadening cleanup to another application or arbitrary device. A missing token
+does not weaken the app+device predicate.
 That enumeration is used on every logout, including when an in-process binding
 exists, so a same-device stale pusher left by an earlier crash is not skipped.
 Exact push-key deletion is reserved for in-process token/account rotation.
@@ -110,6 +115,12 @@ attempt can retry before the Matrix credential is deleted or revoked. After proc
 securely restored Matrix session binds a new exact Core capability; no Matrix
 credential, access token, APNs token, or cleanup push key is duplicated into a
 new persistence mechanism.
+
+If session configuration retained an authenticated session but its initial
+pusher-owner bind failed, logout makes one fresh bind attempt before failing
+closed. A successful retry reaches device cleanup; a second bind failure still
+blocks credential deletion and preserves the signed-in state for another
+attempt.
 
 The teardown gate also spans main-actor suspension: session/configuration,
 registration-failure, and reconciliation callbacks cannot create a new pusher
@@ -158,23 +169,32 @@ invalid-frame, and non-finite-frame warnings returned no matches. `E1` does
 not exercise a homeserver, push gateway, physical APNs delivery, an NSE under
 the device deadline, or OS notification presentation.
 
-| Claim                                                    | Evidence required                                                                                                                                                                        | Verdict                                                                                       |
-| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| HTTP pusher set is sparse and idempotent                 | Core contract tests assert `event_id_only` and `append = false`                                                                                                                          | passed: focused Core unit plus 6-test HTTP-pusher integration target; not live delivery       |
-| duplicate callbacks create one desired binding           | focused iOS tests repeat session/token both before and during suspended registration                                                                                                     | passed in `E1` deterministic simulator suite; not physical APNs                               |
-| token rotation removes old token                         | focused iOS test captures delete/set order and key                                                                                                                                       | passed in `E1` deterministic simulator suite; not live homeserver readback                    |
-| session rotation uses the account-bound Core/client      | Core loopback observes old/new bearer credentials on distinct servers; production-adapter tests retain distinct owner capabilities                                                       | passed deterministically; not live homeserver readback                                        |
-| tokenless and crash-stale logout cleanup                 | Core loopback enumerates and deletes only exact app+device matches and proves repeated empty cleanup is idempotent; re-instantiation and APNs-failure tests log out without a token      | Core 6-test integration target and `E1` passed; not live homeserver readback                  |
-| logout cleanup remains reachable                         | failed remote cleanup blocks Keychain deletion and succeeds on retry; failed Keychain deletion cancels teardown and restores registration                                                | passed in `E1` deterministic simulator suite; not live homeserver readback                    |
-| teardown rejects reentrant callbacks                     | delayed cleanup test injects token/configuration/failure callbacks both during remote await and before local finalization                                                                | passed in `E1` deterministic simulator suite; not physical APNs                               |
-| stale in-flight set cannot become current                | delayed pusher test changes session while set is suspended                                                                                                                               | passed in `E1` deterministic simulator suite; not live homeserver readback                    |
-| failed cleanup remains retryable                         | focused iOS test proves an old binding is retained and not overwritten                                                                                                                   | passed in `E1` deterministic simulator suite; not live homeserver readback                    |
-| NSE privacy and exactly-once fallback                    | preview, coordinator, cancellation, timeout, deadline-winner, empty-deadline, and diagnostic allowlist tests; deadline completion occurs before one best-effort batched diagnostic write | passed in `E1` deterministic simulator suite; physical NSE delivery remains **Not confirmed** |
-| unencrypted preview, foreground/background/terminated    | physical TestFlight device plus gateway/pusher/NSE stage readback                                                                                                                        | **Not confirmed**                                                                             |
-| encrypted preview, foreground/background/terminated      | physical TestFlight device with shared store and decryptable event                                                                                                                       | **Not confirmed**                                                                             |
-| preview disabled retains useful generic alert            | physical TestFlight device                                                                                                                                                               | **Not confirmed**                                                                             |
-| token rotation and logout remove live homeserver pushers | disposable account/device plus authenticated pusher readback                                                                                                                             | **Not confirmed**                                                                             |
-| desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                            | **Failed at source; not implemented**                                                         |
+Executable evidence `E2` (post-review simulator/contract evidence only): on
+2026-09-03, the corrected working tree passed the complete iOS unit target
+(703 passed, 3 intentionally skipped, 0 failed) and the serial UI target (59
+passed, 14 intentionally skipped, 0 failed) after regenerating both four-slice
+Apple packages. The added logout-rebind and exact-last-key cases are part of
+this run. `E2` does not supersede any live gate: it does not read a homeserver's
+pusher fields or exercise a push gateway, physical APNs delivery, an NSE under
+the device deadline, or OS notification presentation.
+
+| Claim                                                    | Evidence required                                                                                                                                                                                                                           | Verdict                                                                                                  |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| HTTP pusher set is sparse and idempotent                 | Core contract tests assert `event_id_only` and `append = false`                                                                                                                                                                             | passed: focused Core unit plus 6-test HTTP-pusher integration target; not live delivery                  |
+| duplicate callbacks create one desired binding           | focused iOS tests repeat session/token both before and during suspended registration                                                                                                                                                        | passed in `E1` deterministic simulator suite; not physical APNs                                          |
+| token rotation removes old token                         | focused iOS test captures delete/set order and key                                                                                                                                                                                          | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
+| session rotation uses the account-bound Core/client      | Core loopback observes old/new bearer credentials on distinct servers; production-adapter tests retain distinct owner capabilities                                                                                                          | passed deterministically; not live homeserver readback                                                   |
+| tokenless and crash-stale logout cleanup                 | Core loopback enumerates and deletes only exact app+device matches; unit coverage proves an exact last-known key is a secondary same-app match; re-instantiation, bind-retry, and APNs-failure tests exercise logout without broad deletion | passed in `E2` deterministic simulator/Core suites; live pusher-field readback remains **Not confirmed** |
+| logout cleanup remains reachable                         | failed remote cleanup blocks Keychain deletion and succeeds on retry; failed Keychain deletion cancels teardown and restores registration                                                                                                   | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
+| teardown rejects reentrant callbacks                     | delayed cleanup test injects token/configuration/failure callbacks both during remote await and before local finalization                                                                                                                   | passed in `E1` deterministic simulator suite; not physical APNs                                          |
+| stale in-flight set cannot become current                | delayed pusher test changes session while set is suspended                                                                                                                                                                                  | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
+| failed cleanup remains retryable                         | focused iOS test proves an old binding is retained and not overwritten                                                                                                                                                                      | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
+| NSE privacy and exactly-once fallback                    | preview, coordinator, cancellation, timeout, deadline-winner, empty-deadline, and diagnostic allowlist tests; deadline completion occurs before one best-effort batched diagnostic write                                                    | passed in `E1` deterministic simulator suite; physical NSE delivery remains **Not confirmed**            |
+| unencrypted preview, foreground/background/terminated    | physical TestFlight device plus gateway/pusher/NSE stage readback                                                                                                                                                                           | **Not confirmed**                                                                                        |
+| encrypted preview, foreground/background/terminated      | physical TestFlight device with shared store and decryptable event                                                                                                                                                                          | **Not confirmed**                                                                                        |
+| preview disabled retains useful generic alert            | physical TestFlight device                                                                                                                                                                                                                  | **Not confirmed**                                                                                        |
+| token rotation and logout remove live homeserver pushers | disposable account/device plus authenticated pusher readback                                                                                                                                                                                | **Not confirmed**                                                                                        |
+| desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                                                                               | **Failed at source; not implemented**                                                                    |
 
 ## Clean rerun protocol
 

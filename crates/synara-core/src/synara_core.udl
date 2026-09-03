@@ -1271,7 +1271,7 @@ interface HttpPusherOwner {
   PusherWriteDto delete_http_pusher(string push_key, string app_id);
 
   [Async, Throws=PusherCommandError]
-  PusherWriteDto delete_http_pushers_for_device(string app_id);
+  PusherWriteDto delete_http_pushers_for_device(string app_id, string? last_push_key);
 };
 
 // Privacy-safe backup restore ack. Status only; never recovery key or passphrase.

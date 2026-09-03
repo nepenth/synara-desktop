@@ -73,14 +73,10 @@ enum TimelineReactionReadbackPolicy {
         switch mutation {
         case "added":
             guard expectedOwn else { return false }
-            return readbackKey == nil
-                ? readbackOwnsReaction == nil
-                : readbackKey == key && readbackOwnsReaction == true
+            return readbackKey == nil || readbackKey == key
         case "removed":
             guard expectedOwn == false else { return false }
-            return readbackKey == nil
-                ? readbackOwnsReaction == nil
-                : readbackKey == key && readbackOwnsReaction == false
+            return readbackKey == nil || readbackKey == key
         default:
             return false
         }
@@ -122,6 +118,8 @@ enum EventActionError: LocalizedError, Equatable {
     case signedOut
     case alreadyInProgress
     case failed
+    case forwardEncryptionUnavailable
+    case forwardDowngradeNotConfirmed
 
     var errorDescription: String? {
         switch self {
@@ -131,6 +129,24 @@ enum EventActionError: LocalizedError, Equatable {
             return "That action is already in progress."
         case .failed:
             return "That action could not be completed. Try again."
+        case .forwardEncryptionUnavailable:
+            return "Room encryption status is unavailable. Forwarding was not started."
+        case .forwardDowngradeNotConfirmed:
+            return "Confirm before forwarding from an encrypted room to an unencrypted room."
+        }
+    }
+}
+
+enum TimelineForwardErrorPolicy {
+    static func map(coreCode: String) -> EventActionError {
+        switch coreCode {
+        case "v-timeline-forward-encryption-downgrade-not-confirmed":
+            return .forwardDowngradeNotConfirmed
+        case "v-timeline-forward-source-encryption-unavailable",
+             "v-timeline-forward-target-encryption-unavailable":
+            return .forwardEncryptionUnavailable
+        default:
+            return .failed
         }
     }
 }

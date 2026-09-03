@@ -319,7 +319,8 @@ test('native formatted HTML applies the exact Matrix v1.19 presentation profile'
   assert.match(sanitized, /<s>legacy strike<\/s>/);
   assert.match(sanitized, /<ol start="10">/);
   assert.match(sanitized, /<ol><li>one<\/li><\/ol>/);
-  assert.match(sanitized, /<img src="mxc:\/\/example\.org\/media" alt="diagram" \/>/);
+  assert.doesNotMatch(sanitized, /<img|src=|mxc:\/\//);
+  assert.match(sanitized, /<span>diagram<\/span>/);
 });
 
 test('native formatted renderer explicitly owns spoilers, image fallback, and plain-body fallback', () => {

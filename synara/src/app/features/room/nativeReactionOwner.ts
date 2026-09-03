@@ -64,11 +64,11 @@ function acceptsNativeReactionReadback(
   switch (value.mutation) {
     case 'added':
       if (expectedOwn === false) return false;
-      return projected === undefined || projected.me === true;
+      return true;
     case 'already_present':
-      return projected === undefined || projected.me === true;
+      return expectedOwn !== false;
     case 'removed':
-      return expectedOwn !== true && (projected === undefined || projected.me === false);
+      return expectedOwn !== true;
     case 'redacted':
       return true;
   }

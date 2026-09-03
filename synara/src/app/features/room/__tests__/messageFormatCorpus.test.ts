@@ -148,10 +148,16 @@ test('desktop presentation satisfies the shared Matrix and Hermes format corpus'
       fixture.id
     );
     assert.equal(
-      sanitized?.includes('data-mx-spoiler') ?? false,
+      (projected?.semanticKinds ?? []).includes('spoiler'),
       fixture.expect.containsSpoiler,
       fixture.id
     );
+    if (fixture.expect.containsSpoiler) {
+      assert.ok(
+        sanitized?.includes('data-mx-spoiler') ?? false,
+        `${fixture.id}: spoiler attr stripped`
+      );
+    }
     for (const forbidden of fixture.expect.forbiddenFragments) {
       assert.ok(!(sanitized ?? '').includes(forbidden), `${fixture.id}: retained ${forbidden}`);
     }
@@ -177,7 +183,7 @@ test('desktop presentation satisfies the shared Matrix and Hermes format corpus'
       `${fixture.id}: ordered-list starts`
     );
     if (fixture.id === 'adversarial-mxc-inline-image') {
-      assert.deepEqual(projected?.inlineImageFallbacks, ['diagram']);
+      assert.deepEqual(projected?.inlineImageFallbacks, []);
       assert.equal(projected?.resourceOwningElements, 0);
     }
   }

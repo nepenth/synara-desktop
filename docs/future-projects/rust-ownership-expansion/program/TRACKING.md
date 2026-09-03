@@ -1,7 +1,7 @@
 # Research tracking and residual status
 
 Status: completed research run plus explicitly authorized remediation pass,
-reconciled 2026-09-02.
+reconciled 2026-09-03.
 
 `Ownership` answers the census question. `Residual` reports product/proof work
 that remains. A closed ownership verdict never implies a proven feature.
@@ -20,6 +20,16 @@ that remains. A closed ownership verdict never implies a proven feature.
 | ROE-10    | [memo](../memos/ROE-10-drafts-memo.md)              | original `ACCEPT`, `#1088`; promotion review elevated defect | closed: reply metadata in Core/editor native        | A1 closed: Core-revision compare-and-clear spans every desktop send/cancel route; final upload-scope correction passed focused executable and full type validation                                        |
 | ROE-11    | [memo](../memos/ROE-11-media-metadata-memo.md)      | `ACCEPT_WITH_NITS`, `#1090`, `41c3d35b`                      | closed: ADR 0005 handle/channel split               | [A10](A10-MEDIA-MEASUREMENT.md) deterministic bounded-transport measurement complete; real-device performance/cancellation evidence open and cache remains unwired                                        |
 
+PR `#1094` subsequently received an additional operating-path review. Its
+accepted findings are remediated on the same feature branch: reaction flights
+now distinguish committed writes from lagging aggregation, presenter fixtures
+forbid resource-owning MXC image output, iOS preserves and surfaces Core forward
+security diagnostics, logout can rebind once and use an exact same-app
+last-known key as a secondary pusher match, encrypted media enters the bounded
+decrypt branch in tests, and redaction/late-decryption sequencing also runs the
+production projector. These are deterministic corrections only; all live
+evidence gates in the table remain unchanged.
+
 The detailed acceptance evidence and risk order live in
 [ACTIONS.md](ACTIONS.md). Historical merge chronology is available in git and
 the worker PRs; it is intentionally not presented as live coordination state.
@@ -33,12 +43,12 @@ applicable successful checks with zero failures. Four scope-inapplicable checks
 were skipped and are not counted as evidence. It merged as `e9b5016e`; local
 `main` and authoritative `origin/main` both resolved to that commit on
 2026-09-02. Those historical gates do not validate
-`feature/rust-ownership-follow-ons`; its exact-head validation and review record
-is locally green: Rust workspace 1,072 passed with 3 ignored, Tauri 441 passed,
-desktop modernization 926 passed, Chromium layout 6 passed, repository delivery
-277 passed, and Apple 760 passed with 17 intentional skips out of 777. The
-production npm audit is clean and the Rust audits have no finding outside their
-reviewed allowlists. Independent review accepted the final iOS remediation and
-logout error mapping. The independent whole-change review and final Grok 4.6
-High review both returned `ACCEPT` with no actionable P0-P2 findings. Remote PR
-CI remains pending; all physical/live evidence gates remain open.
+`feature/rust-ownership-follow-ons`; its post-review exact-head validation is
+locally green: the complete Rust workspace passed, Tauri passed 441 tests,
+desktop modernization passed 927 tests, and Apple passed 762 with 17
+intentional skips out of 779. Production npm audit is clean and the Rust audits
+have no finding outside their reviewed allowlists. Grok 4.6 High identified an
+iOS 16 stacked-alert defect in the initial forwarding-sheet correction; the
+single item-driven replacement compiled through both iOS targets and its
+targeted re-review returned `ACCEPT` with no P0-P3 finding. Remote PR CI remains
+pending; all physical/live evidence gates remain open.

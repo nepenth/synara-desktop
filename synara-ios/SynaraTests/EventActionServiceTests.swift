@@ -448,7 +448,7 @@ final class EventActionServiceTests: XCTestCase {
         XCTAssertTrue(coordinator.beginPoll(key, answerIDs: ["b"]))
     }
 
-    func testReactionReadbackRequiresExactMutationAndProjectedOwnership() {
+    func testReactionReadbackRequiresExactIdentityAndMutation() {
         XCTAssertTrue(
             TimelineReactionReadbackPolicy.acceptsToggle(
                 roomID: "!room:matrix.org",
@@ -491,7 +491,7 @@ final class EventActionServiceTests: XCTestCase {
                 expectedOwn: true
             )
         )
-        XCTAssertFalse(
+        XCTAssertTrue(
             TimelineReactionReadbackPolicy.acceptsToggle(
                 roomID: "!room:matrix.org",
                 targetEventID: "$event:matrix.org",
@@ -535,6 +535,31 @@ final class EventActionServiceTests: XCTestCase {
                 expectedKey: "👍",
                 expectedOwn: true
             )
+        )
+    }
+
+    func testForwardCoreDiagnosticsPreserveRecoverableSecurityFailures() {
+        XCTAssertEqual(
+            TimelineForwardErrorPolicy.map(
+                coreCode: "v-timeline-forward-encryption-downgrade-not-confirmed"
+            ),
+            .forwardDowngradeNotConfirmed
+        )
+        XCTAssertEqual(
+            TimelineForwardErrorPolicy.map(
+                coreCode: "v-timeline-forward-source-encryption-unavailable"
+            ),
+            .forwardEncryptionUnavailable
+        )
+        XCTAssertEqual(
+            TimelineForwardErrorPolicy.map(
+                coreCode: "v-timeline-forward-target-encryption-unavailable"
+            ),
+            .forwardEncryptionUnavailable
+        )
+        XCTAssertEqual(
+            TimelineForwardErrorPolicy.map(coreCode: "v-timeline-forward-send-failed"),
+            .failed
         )
     }
 
