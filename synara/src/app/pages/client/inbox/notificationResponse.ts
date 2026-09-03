@@ -28,6 +28,16 @@ export class InvalidNotificationsResponseError extends Error {
   }
 }
 
+export class HomeserverNotificationsError extends Error {
+  readonly errcode?: string;
+
+  constructor(errcode?: string, message?: string) {
+    super(message || 'The homeserver returned a notifications error.');
+    this.name = errcode || 'HomeserverNotificationsError';
+    this.errcode = errcode;
+  }
+}
+
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 
@@ -53,9 +63,30 @@ const isNotification = (value: unknown): value is NotificationReading => {
  * Validate the untrusted `/notifications` response at the HTTP boundary.
  * A malformed envelope is a real load failure rather than a false empty Inbox.
  * Individual malformed entries are discarded so valid siblings remain usable.
+ *
+ * Two accommodations keep this honest against real-world servers:
+ * - an error-shaped envelope (`errcode`/`error`) surfaces the homeserver's
+ *   own diagnostic instead of the generic validation message;
+ * - an explicit `notifications: null` reads as an empty timeline. Some
+ *   homeservers encode an empty list as null (Go nil-slice JSON), which is not
+ *   a failure. A missing key is still malformed.
  */
 export const normalizeNotificationsResponse = (value: unknown): NotificationsResponseReading => {
-  if (!isRecord(value) || !Array.isArray(value.notifications)) {
+  if (!isRecord(value)) {
+    throw new InvalidNotificationsResponseError();
+  }
+  const errcode = typeof value.errcode === 'string' ? value.errcode : undefined;
+  const serverMessage = typeof value.error === 'string' ? value.error : undefined;
+  if (errcode !== undefined || serverMessage !== undefined) {
+    throw new HomeserverNotificationsError(errcode, serverMessage);
+  }
+  if (value.notifications === null) {
+    return {
+      notifications: [],
+      next_token: typeof value.next_token === 'string' ? value.next_token : undefined,
+    };
+  }
+  if (!Array.isArray(value.notifications)) {
     throw new InvalidNotificationsResponseError();
   }
   const notifications = value.notifications.filter(isNotification);

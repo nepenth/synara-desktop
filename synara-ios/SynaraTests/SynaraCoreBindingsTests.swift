@@ -690,6 +690,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 capabilities: nil,
                 decryptionState: nil,
                 messageType: "m.text",
+                forwardTransport: "text",
                 formattedBody: nil,
                 agentCardJson: nil,
                 isAgentApproval: false,
@@ -804,6 +805,18 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ]),
             .unknown
         )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.forwardTransport("text"),
+            .text
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.forwardTransport("media"),
+            .media
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.forwardTransport(nil),
+            .unavailable
+        )
     }
 
     func testSharedCoreTimelineRowsMapsNonMessageEventMetadata() throws {
@@ -837,6 +850,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 capabilities: capabilities,
                 decryptionState: nil,
                 messageType: nil,
+                forwardTransport: nil,
                 formattedBody: nil,
                 agentCardJson: nil,
                 isAgentApproval: false,
@@ -1154,7 +1168,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
             powerLevelsJSON: powerJSON,
             joinRule: "public",
             topic: "Invite topic",
-            isEncrypted: true
+            encryptionStatus: .encrypted
         )
         XCTAssertEqual(details.name, "Ops")
         XCTAssertEqual(details.topic, "Invite topic")
@@ -1164,6 +1178,11 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(details.members.map(\.userID), ["@alice:example.org", "@bob:example.org"])
         XCTAssertEqual(details.isPublic, true)
         XCTAssertEqual(details.isEncrypted, true)
+        XCTAssertEqual(details.encryptionStatus, .encrypted)
+        XCTAssertEqual(details.encryptionLabel, "Encrypted")
+        XCTAssertEqual(SynaraRoomEncryptionStatus.notEncrypted.roomDetailsLabel, "Not encrypted")
+        XCTAssertEqual(SynaraRoomEncryptionStatus.unknown.roomDetailsLabel, "Unknown")
+        XCTAssertEqual(SynaraRoomEncryptionStatus.unavailable.roomDetailsLabel, "Unavailable")
         XCTAssertEqual(
             SharedCoreRoomDetails.notificationMode("mentions"),
             .mentionsOnly
@@ -1206,6 +1225,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
     }
 
     func testSharedCoreRoomListRowsMapsInviteAndSpaceWithoutEcho() {
+        XCTAssertEqual(SharedCoreRoomListRows.encryptionStatus(.encrypted), .encrypted)
+        XCTAssertEqual(SharedCoreRoomListRows.encryptionStatus(.notEncrypted), .notEncrypted)
+        XCTAssertEqual(SharedCoreRoomListRows.encryptionStatus(.unknown), .unknown)
+        let unknownRoom = RoomSummary(
+            id: "!unknown:example.org",
+            name: "Unknown",
+            lastMessagePreview: "",
+            unreadCount: 0,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: .distantPast
+        )
+        XCTAssertEqual(unknownRoom.encryptionStatus, .unknown)
+        XCTAssertFalse(unknownRoom.isEncrypted)
         let rooms = SharedCoreRoomListRows.rooms(
             rooms: [
                 SharedCoreRoomListRows.RoomRow(
@@ -1219,7 +1253,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     markedUnread: true,
                     lastActivityTs: 1_700_000_000_000,
                     lastMessagePreview: nil,
-                    isFavorite: false
+                    isFavorite: false,
+                    encryptionStatus: .encrypted
                 ),
                 SharedCoreRoomListRows.RoomRow(
                     roomId: "!space:example.org",
@@ -1232,7 +1267,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     markedUnread: false,
                     lastActivityTs: 0,
                     lastMessagePreview: "Hello from Alice",
-                    isFavorite: true
+                    isFavorite: true,
+                    encryptionStatus: .notEncrypted
                 ),
             ],
             invites: [
@@ -1257,6 +1293,10 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.first?.membership, .invited)
         XCTAssertEqual(rooms.first?.isFavorite, false)
         XCTAssertEqual(rooms.last?.isFavorite, true)
+        XCTAssertEqual(rooms.first?.isEncrypted, true)
+        XCTAssertEqual(rooms.last?.isEncrypted, false)
+        XCTAssertEqual(rooms.first?.encryptionStatus, .encrypted)
+        XCTAssertEqual(rooms.last?.encryptionStatus, .notEncrypted)
         XCTAssertEqual(rooms.first?.hasHighlight, false)
         XCTAssertEqual(rooms.first?.isMarkedUnread, true)
         XCTAssertEqual(rooms.last?.lastActivityAt, .distantPast)
@@ -1420,6 +1460,69 @@ final class SynaraCoreBindingsTests: XCTestCase {
         for forbidden in ["password", "syt_", "token", "missing_secrets", "recovery_key"] {
             XCTAssertFalse(publicError.contains(forbidden))
         }
+    }
+
+    func testSharedCoreForwardSourceUsesOnlyJoinedRoomEncryptionTriState() {
+        let joinedRows = [
+            SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
+                roomID: "!encrypted:example.org",
+                membership: "join",
+                encryption: .encrypted
+            ),
+            SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
+                roomID: "!clear:example.org",
+                membership: "join",
+                encryption: .notEncrypted
+            ),
+            SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
+                roomID: "!unknown:example.org",
+                membership: "join",
+                encryption: .unknown
+            ),
+            SharedCoreCryptoStatusService.JoinedRoomEncryptionRow(
+                roomID: "!invite:example.org",
+                membership: "invite",
+                encryption: .notEncrypted
+            ),
+        ]
+
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.joinedRoomEncryption(
+                roomID: "!encrypted:example.org",
+                rows: joinedRows
+            ),
+            .encrypted
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.joinedRoomEncryption(
+                roomID: "!clear:example.org",
+                rows: joinedRows
+            ),
+            .notEncrypted
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.joinedRoomEncryption(
+                roomID: "!unknown:example.org",
+                rows: joinedRows
+            ),
+            .unknown
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.joinedRoomEncryption(
+                roomID: "!invite:example.org",
+                rows: joinedRows
+            ),
+            .unknown,
+            "An invite Bool must never authorize a joined-room forward"
+        )
+        XCTAssertEqual(
+            SharedCoreCryptoStatusService.joinedRoomEncryption(
+                roomID: "!missing:example.org",
+                rows: nil
+            ),
+            .unknown,
+            "A failed or absent joined-room snapshot must fail closed"
+        )
     }
 
     func testSharedCoreTypingPresenceWithoutSessionFailsClosed() async {
@@ -3234,7 +3337,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 sourceRoomId: sourceRoomId,
                 eventId: eventId,
                 targetRoomId: targetRoomId,
-                asQuote: false
+                asQuote: false,
+                confirmedEncryptionDowngrade: false
             )
             XCTFail("Fail-closed SharedCore must not forward timeline text without a session")
         } catch {
@@ -3250,7 +3354,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 core: core,
                 sourceRoomId: sourceRoomId,
                 eventId: eventId,
-                targetRoomId: targetRoomId
+                targetRoomId: targetRoomId,
+                confirmedEncryptionDowngrade: true
             )
             XCTFail("Fail-closed SharedCore must not forward timeline media without a session")
         } catch {
@@ -3260,6 +3365,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
+    }
+
+    func testSharedCoreTimelineForwardWrapperForwardsDowngradeAuthorizationExactly() throws {
+        let testsURL = URL(fileURLWithPath: #filePath)
+        let serviceURL = testsURL
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Synara/Services/SharedCoreTimelineForward.swift")
+        let source = try String(contentsOf: serviceURL, encoding: .utf8)
+        XCTAssertEqual(
+            source.components(separatedBy: "confirmedEncryptionDowngrade: confirmedEncryptionDowngrade").count - 1,
+            2
+        )
+        XCTAssertFalse(source.contains("confirmedEncryptionDowngrade: false"))
+        XCTAssertFalse(source.contains("confirmedEncryptionDowngrade: true"))
     }
 
     func testRegisterFlowsRejectsHostileURLWithStaticPrivacySafeError() async {

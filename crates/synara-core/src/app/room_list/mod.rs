@@ -37,6 +37,7 @@ mod projection;
 mod sort;
 mod summary;
 
+pub use crate::dto::RoomEncryptionStatus;
 pub use activity_recovery::{room_activity_recovery_required, RoomActivityPreviousState};
 pub use counts::{
     room_unread_presentation, RoomListBadgeCounts, RoomUnreadMembership, RoomUnreadPresentationDto,

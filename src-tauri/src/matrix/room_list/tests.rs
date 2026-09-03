@@ -231,7 +231,7 @@ fn summary_builder_membership_and_privacy() {
         .unwrap();
     assert_eq!(s.membership, Membership::Invite);
     assert!(s.is_direct);
-    assert!(s.is_encrypted);
+    assert!(s.encryption_status.is_encrypted());
     assert_eq!(s.unread_count, 3);
     let dbg = format!("{s:?}");
     assert!(!dbg.contains("access_token"));

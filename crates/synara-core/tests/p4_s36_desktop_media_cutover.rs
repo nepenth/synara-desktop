@@ -17,3 +17,11 @@ fn desktop_download_owner_resolves_timeline_handles() {
     assert!(download.contains("MediaSource::Plain"));
     assert!(!download.contains("matrix_login_password"));
 }
+
+#[test]
+fn desktop_protocol_source_guard_keeps_the_64_mib_cap_and_no_store_policy() {
+    let protocol = include_str!("../../../src-tauri/src/lib.rs");
+    assert!(protocol.contains("const TIMELINE_MEDIA_MAX_BYTES: usize = 64 * 1_048_576;"));
+    assert!(protocol.contains("tauri::http::header::CACHE_CONTROL, \"no-store\""));
+    assert!(!protocol.contains("MediaCacheIndex"));
+}

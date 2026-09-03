@@ -836,35 +836,6 @@ impl NativeImagePackOwner {
     ) -> Result<Vec<u8>, &'static str> {
         crate::app::media::thumbnail_plain_media(&self.client, content_uri, width, height).await
     }
-
-    pub async fn register_http_pusher(
-        &self,
-        push_key: &str,
-        app_id: &str,
-        gateway_url: &str,
-        app_display_name: &str,
-        device_display_name: &str,
-        lang: &str,
-    ) -> Result<crate::app::notifications::MatrixHttpPusherWriteResult, &'static str> {
-        crate::app::notifications::register_http_pusher(
-            &self.client,
-            push_key,
-            app_id,
-            gateway_url,
-            app_display_name,
-            device_display_name,
-            lang,
-        )
-        .await
-    }
-
-    pub async fn delete_http_pusher(
-        &self,
-        push_key: &str,
-        app_id: &str,
-    ) -> Result<crate::app::notifications::MatrixHttpPusherWriteResult, &'static str> {
-        crate::app::notifications::delete_http_pusher(&self.client, push_key, app_id).await
-    }
 }
 
 #[cfg(test)]

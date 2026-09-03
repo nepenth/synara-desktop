@@ -65,7 +65,13 @@ fn forward_text_plain(
     target_room_id: String,
     as_quote: bool,
 ) -> Result<TimelineForwardDto, TimelineForwardError> {
-    rt.block_on(shared.timeline_forward_text(source_room_id, event_id, target_room_id, as_quote))
+    rt.block_on(shared.timeline_forward_text(
+        source_room_id,
+        event_id,
+        target_room_id,
+        as_quote,
+        false,
+    ))
 }
 
 fn forward_media_plain(
@@ -75,7 +81,7 @@ fn forward_media_plain(
     event_id: String,
     target_room_id: String,
 ) -> Result<TimelineForwardDto, TimelineForwardError> {
-    rt.block_on(shared.timeline_forward_media(source_room_id, event_id, target_room_id))
+    rt.block_on(shared.timeline_forward_media(source_room_id, event_id, target_room_id, false))
 }
 
 fn error_text(error: &TimelineForwardError) -> String {

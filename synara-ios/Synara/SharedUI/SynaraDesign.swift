@@ -16,21 +16,53 @@ enum SynaraSpacing {
 /// A clear scroll tail lets the final actionable row move fully above that glass
 /// without painting an opaque footer or duplicating screen-specific estimates.
 enum SynaraTabRootContentReachability {
-    static let minimumSeparation: CGFloat = SynaraSpacing.small
+    // Keep more than the eight-point assertion boundary. Accessibility-sized
+    // List rows settle on one-third-point coordinates, so an exact eight-point
+    // tail can round to 7.999... and leave the final action geometrically
+    // touching the floating chrome even when it looks separated.
+    static let minimumSeparation: CGFloat = SynaraSpacing.medium
 
     static func scrollTailHeight(
         windowBounds: CGRect,
         tabBarFrame: CGRect,
         isVisible: Bool
     ) -> CGFloat {
-        guard isVisible else {
+        guard isVisible,
+              isFinite(windowBounds),
+              isFinite(tabBarFrame),
+              windowBounds.width > 0,
+              windowBounds.height > 0,
+              tabBarFrame.width > 0,
+              tabBarFrame.height > 0
+        else {
             return 0
         }
         let visibleTabBar = tabBarFrame.intersection(windowBounds)
-        guard visibleTabBar.isNull == false, visibleTabBar.height > 0 else {
+        guard visibleTabBar.isNull == false,
+              isFinite(visibleTabBar),
+              visibleTabBar.height > 0
+        else {
             return 0
         }
-        return max(0, windowBounds.maxY - visibleTabBar.minY) + minimumSeparation
+        let rawHeight = windowBounds.maxY - visibleTabBar.minY + minimumSeparation
+        guard rawHeight.isFinite else {
+            return 0
+        }
+        return min(max(0, rawHeight), windowBounds.height + minimumSeparation)
+    }
+
+    static func sanitizedScrollTailHeight(_ height: CGFloat) -> CGFloat {
+        guard height.isFinite else {
+            return 0
+        }
+        return max(0, height)
+    }
+
+    private static func isFinite(_ rect: CGRect) -> Bool {
+        rect.origin.x.isFinite
+            && rect.origin.y.isFinite
+            && rect.size.width.isFinite
+            && rect.size.height.isFinite
     }
 }
 
@@ -38,10 +70,11 @@ extension View {
     func synaraTabRootContentReachability(scrollTailHeight: CGFloat) -> some View {
         safeAreaInset(edge: .bottom, spacing: 0) {
             Color.clear
-                .frame(height: max(0, scrollTailHeight))
+                .frame(height: SynaraTabRootContentReachability.sanitizedScrollTailHeight(scrollTailHeight))
                 .accessibilityHidden(true)
         }
     }
+
 }
 
 struct SynaraThemeTokens: Equatable {

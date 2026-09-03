@@ -83,6 +83,55 @@ struct TimelinePollPresentation: Equatable {
     let answers: [TimelinePollAnswer]
 }
 
+enum TimelinePollSelectionPolicy {
+    static func toggledSelection(
+        current: Set<String>,
+        answerID: String,
+        availableAnswerIDs: Set<String>,
+        maximumSelections: Int
+    ) -> Set<String> {
+        guard availableAnswerIDs.contains(answerID), maximumSelections > 0 else {
+            return current.intersection(availableAnswerIDs)
+        }
+        var next = current.intersection(availableAnswerIDs)
+        if maximumSelections == 1 {
+            return next == [answerID] ? [] : [answerID]
+        }
+        if next.contains(answerID) {
+            next.remove(answerID)
+        } else if next.count < maximumSelections {
+            next.insert(answerID)
+        }
+        return next
+    }
+
+    static func submission(
+        selection: Set<String>,
+        original: Set<String>,
+        availableAnswerIDs: Set<String>,
+        maximumSelections: Int,
+        canVote: Bool,
+        isClosed: Bool
+    ) -> [String]? {
+        guard canVote, isClosed == false, maximumSelections > 0 else { return nil }
+        let bounded = selection.intersection(availableAnswerIDs)
+        guard bounded.count <= maximumSelections,
+              bounded != original.intersection(availableAnswerIDs)
+        else {
+            return nil
+        }
+        return bounded.sorted()
+    }
+}
+
+/// Selects the already-typed Core forward command without re-reading Matrix
+/// event JSON in Swift. Core remains responsible for validating the source.
+enum TimelineForwardTransport: Equatable {
+    case text
+    case media
+    case unavailable
+}
+
 struct TimelineRowActionCapabilities: Equatable {
     let canReact: Bool
     let canReply: Bool
@@ -93,6 +142,31 @@ struct TimelineRowActionCapabilities: Equatable {
     let canForward: Bool
     let canVote: Bool
     let canDeclineCall: Bool
+}
+
+/// Keeps the account-private Notes action separate from the Matrix room-state
+/// pin action. A private note stores a durable event anchor in account data and
+/// therefore only needs a non-redacted remote event. Changing
+/// `m.room.pinned_events` remains exclusively gated by Core's room-power
+/// capability projection.
+struct TimelinePinActionAvailability: Equatable {
+    let canPinToPrivateNotes: Bool
+    let canPinToMatrixRoom: Bool
+
+    static func forItem(_ item: TimelineItem) -> Self {
+        let hasRemoteEvent = item.serverEventID?.isEmpty == false
+        let isRedacted: Bool
+        if case .redacted = item.kind {
+            isRedacted = true
+        } else {
+            isRedacted = false
+        }
+        let canAnchorPrivateNote = hasRemoteEvent && isRedacted == false
+        return Self(
+            canPinToPrivateNotes: canAnchorPrivateNote,
+            canPinToMatrixRoom: canAnchorPrivateNote && item.actionCapabilities?.canPin == true
+        )
+    }
 }
 
 enum TimelineMessageGroupingPolicy {
@@ -145,6 +219,7 @@ struct TimelineItem: Identifiable, Equatable {
     let threadSummary: TimelineThreadSummary?
     let poll: TimelinePollPresentation?
     let actionCapabilities: TimelineRowActionCapabilities?
+    let forwardTransport: TimelineForwardTransport
     let isEdited: Bool
     /// Core-owned eligibility gate for Hermes approval presentation/actions.
     let isAgentApproval: Bool
@@ -171,6 +246,7 @@ struct TimelineItem: Identifiable, Equatable {
         threadSummary: TimelineThreadSummary? = nil,
         poll: TimelinePollPresentation? = nil,
         actionCapabilities: TimelineRowActionCapabilities? = nil,
+        forwardTransport: TimelineForwardTransport = .unavailable,
         isEdited: Bool,
         isAgentApproval: Bool = false,
         reactions: [String: Int],
@@ -193,6 +269,7 @@ struct TimelineItem: Identifiable, Equatable {
         self.threadSummary = threadSummary
         self.poll = poll
         self.actionCapabilities = actionCapabilities
+        self.forwardTransport = forwardTransport
         self.isEdited = isEdited
         self.isAgentApproval = isAgentApproval
         self.reactions = reactions
@@ -222,6 +299,7 @@ struct TimelineItem: Identifiable, Equatable {
             threadSummary: threadSummary,
             poll: poll,
             actionCapabilities: actionCapabilities,
+            forwardTransport: forwardTransport,
             isEdited: isEdited,
             isAgentApproval: isAgentApproval,
             reactions: reactions,
@@ -248,6 +326,7 @@ struct TimelineItem: Identifiable, Equatable {
             threadSummary: threadSummary,
             poll: poll,
             actionCapabilities: actionCapabilities,
+            forwardTransport: forwardTransport,
             isEdited: isEdited,
             isAgentApproval: isAgentApproval,
             reactions: reactions,
@@ -3440,7 +3519,7 @@ private extension String {
             "del", "h1", "h2", "h3", "h4", "h5", "h6", "blockquote", "p", "a",
             "ul", "ol", "sup", "sub", "li", "b", "i", "u", "strong", "em", "s",
             "code", "hr", "br", "div", "table", "thead", "tbody", "tr", "th", "td",
-            "caption", "pre", "span", "font", "img", "details", "summary",
+            "caption", "pre", "span", "font", "strike", "img", "details", "summary",
         ]
         let contentDroppingTags: Set<String> = [
             "script", "style", "iframe", "object", "embed", "svg", "math", "template",
@@ -3535,7 +3614,14 @@ private extension String {
             }
 
             let shouldEmit = openTags.last?.emitted != false && openTags.count < maximumTagNesting
-            let outputTagName = tag.name == "font" ? "span" : tag.name
+            // Normalize Matrix's historical aliases before the typed native
+            // renderer sees them. This matches the desktop presentation
+            // boundary without treating Core's protocol HTML as pre-sanitized.
+            let outputTagName = switch tag.name {
+            case "font": "span"
+            case "strike": "s"
+            default: tag.name
+            }
             if voidTags.contains(tag.name) == false, tag.isSelfClosing == false {
                 openTags.append(OpenTag(name: tag.name, outputName: outputTagName, emitted: shouldEmit))
             }

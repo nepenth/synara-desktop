@@ -10,6 +10,7 @@ const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): Ro
   isCall: false,
   isFavorite: false,
   isEncrypted: false,
+  encryptionStatus: 'not_encrypted',
   unreadCount: 0,
   highlightCount: 0,
   markedUnread: false,

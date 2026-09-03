@@ -91,6 +91,7 @@ fn normalized_name(room: &RoomSummary) -> Option<String> {
 mod tests {
     use super::*;
     use crate::app::room_list::summary::RoomSummaryBuilder;
+    use crate::dto::RoomEncryptionStatus;
 
     fn named(id: &str, name: &str, ts: u64) -> RoomSummary {
         RoomSummaryBuilder::new(id)
@@ -172,7 +173,7 @@ mod tests {
         ];
         let sorted = sort_rooms(&rooms, RoomListSort::RecentActivity);
         assert_eq!(sorted[0].room_id.as_str(), "!encrypted:example.org");
-        assert!(sorted[0].is_encrypted);
+        assert_eq!(sorted[0].encryption_status, RoomEncryptionStatus::Encrypted);
         assert_eq!(sorted[0].last_activity_ts, Some(40));
     }
 }

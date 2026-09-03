@@ -50,9 +50,11 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
         }
 
         original.body = "mutated after begin"
-        coordinator.expireAll()
-        coordinator.deliver(original, requestID: requestID)
+        let expiredRequestIDs = coordinator.expireAll()
+        let lateResolverWon = coordinator.deliver(original, requestID: requestID)
 
+        XCTAssertEqual(expiredRequestIDs, [requestID])
+        XCTAssertFalse(lateResolverWon)
         XCTAssertEqual(delivered, ["private fallback"])
     }
 
@@ -69,11 +71,14 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
         let secondID = coordinator.begin(content: second) { secondDeliveries.append($0.body) }
         let firstResult = UNMutableNotificationContent()
         firstResult.body = "first result"
-        coordinator.deliver(firstResult, requestID: firstID)
+        let firstWon = coordinator.deliver(firstResult, requestID: firstID)
         let currentResult = UNMutableNotificationContent()
         currentResult.body = "current result"
-        coordinator.deliver(currentResult, requestID: secondID)
+        let secondWon = coordinator.deliver(currentResult, requestID: secondID)
 
+        XCTAssertTrue(firstWon)
+        XCTAssertTrue(secondWon)
+        XCTAssertFalse(coordinator.deliver(currentResult, requestID: secondID))
         XCTAssertEqual(firstDeliveries, ["first result"])
         XCTAssertEqual(secondDeliveries, ["current result"])
     }
@@ -89,9 +94,11 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
         coordinator.install(task: task, requestID: requestID)
         coordinator.installCoreCancellation({ events.append("core-cancelled") }, requestID: requestID)
 
-        coordinator.expireAll()
-        coordinator.expireAll()
+        let firstExpiredRequestIDs = coordinator.expireAll()
+        let secondExpiredRequestIDs = coordinator.expireAll()
 
+        XCTAssertEqual(firstExpiredRequestIDs, [requestID])
+        XCTAssertTrue(secondExpiredRequestIDs.isEmpty)
         XCTAssertTrue(task.isCancelled)
         XCTAssertEqual(events.filter { $0 == "core-cancelled" }.count, 1)
         XCTAssertEqual(events.filter { $0 == "handler" }.count, 1)
@@ -99,6 +106,18 @@ final class NotificationDeliveryCoordinatorTests: XCTestCase {
             events.firstIndex(of: "core-cancelled")!,
             events.firstIndex(of: "handler")!
         )
+    }
+
+    func testExpirationReturnsWinningIDsOnlyAfterFallbackDelivery() {
+        let coordinator = NotificationDeliveryCoordinator()
+        let content = UNMutableNotificationContent()
+        var delivered = false
+        _ = coordinator.begin(content: content) { _ in delivered = true }
+
+        let expiredRequestIDs = coordinator.expireAll()
+
+        XCTAssertTrue(delivered)
+        XCTAssertEqual(expiredRequestIDs.count, 1)
     }
 }
 

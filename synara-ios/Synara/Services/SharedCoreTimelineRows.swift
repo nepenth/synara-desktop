@@ -56,6 +56,7 @@ enum SharedCoreTimelineRows {
             threadSummary: threadSummary(from: row.threadSummary),
             poll: poll(from: row.poll),
             actionCapabilities: actionCapabilities(from: row.capabilities),
+            forwardTransport: forwardTransport(row.forwardTransport),
             isEdited: row.edited,
             isAgentApproval: row.isAgentApproval,
             reactions: reactions(from: row.reactions),
@@ -189,6 +190,14 @@ enum SharedCoreTimelineRows {
             canVote: dto.vote,
             canDeclineCall: dto.declineCall
         )
+    }
+
+    static func forwardTransport(_ coreValue: String?) -> TimelineForwardTransport {
+        switch coreValue {
+        case "text": .text
+        case "media": .media
+        default: .unavailable
+        }
     }
 
     static func reactionCounts(_ rows: [(key: String, count: UInt32)]) -> [String: Int] {

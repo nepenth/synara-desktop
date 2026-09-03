@@ -174,7 +174,7 @@ final class SynaraThemeRampTests: XCTestCase {
                 tabBarFrame: CGRect(x: 0, y: 760, width: 390, height: 84),
                 isVisible: true
             ),
-            92
+            96
         )
     }
 
@@ -196,6 +196,39 @@ final class SynaraThemeRampTests: XCTestCase {
             ),
             0
         )
+    }
+
+    func testTabBarScrollTailRejectsInvalidTransitionGeometry() {
+        let window = CGRect(x: 0, y: 0, width: 390, height: 844)
+
+        XCTAssertEqual(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: window,
+                tabBarFrame: CGRect(x: 0, y: CGFloat.nan, width: 390, height: 84),
+                isVisible: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: window,
+                tabBarFrame: CGRect(x: 0, y: 760, width: CGFloat.infinity, height: 84),
+                isVisible: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            SynaraTabRootContentReachability.scrollTailHeight(
+                windowBounds: CGRect(x: 0, y: 0, width: 0, height: 844),
+                tabBarFrame: CGRect(x: 0, y: 760, width: 390, height: 84),
+                isVisible: true
+            ),
+            0
+        )
+        XCTAssertEqual(SynaraTabRootContentReachability.sanitizedScrollTailHeight(CGFloat.nan), 0)
+        XCTAssertEqual(SynaraTabRootContentReachability.sanitizedScrollTailHeight(CGFloat.infinity), 0)
+        XCTAssertEqual(SynaraTabRootContentReachability.sanitizedScrollTailHeight(-12), 0)
+        XCTAssertEqual(SynaraTabRootContentReachability.sanitizedScrollTailHeight(92), 92)
     }
 
     func testNormalizeAcceptsOnlyFullHashPrefixedHexColors() {

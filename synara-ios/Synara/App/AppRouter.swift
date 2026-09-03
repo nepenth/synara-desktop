@@ -121,6 +121,7 @@ final class AppRouter: ObservableObject {
         }
     }
 
+    @MainActor
     func resetNavigationPathsForAccountChange() {
         selectedTab = .rooms
         authPath = []

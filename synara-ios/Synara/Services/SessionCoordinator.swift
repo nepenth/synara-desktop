@@ -28,6 +28,7 @@ enum SessionCoordinator {
 
     static func startSignedInSession(environment: AppEnvironment, session: AuthenticatedSession) async {
         guard await prepareMatrixOwner(environment: environment, session: session) else { return }
+        environment.push.resumeRegistrationLifecycle()
         environment.push.configure(with: session)
         await NotificationPermissionCoordinator.promptOnFirstSignInIfNeeded(environment: environment)
     }

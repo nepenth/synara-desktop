@@ -40,7 +40,7 @@ struct RoomListView: View {
                     }
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.small)
+                    .padding(.bottom, SynaraSpacing.xSmall)
                     .background(SynaraChrome.roomList)
 
                     List {
@@ -134,7 +134,7 @@ struct RoomListView: View {
                     }
                     .padding(.horizontal, SynaraSpacing.large)
                     .padding(.top, SynaraSpacing.medium)
-                    .padding(.bottom, SynaraSpacing.small)
+                    .padding(.bottom, SynaraSpacing.xSmall)
                     .background(SynaraChrome.roomList)
 
                     List {
@@ -394,7 +394,7 @@ struct RoomListView: View {
             } catch {
                 await MainActor.run {
                     isResettingSession = false
-                    sessionRecoveryError = LocalWipeError.sessionDeleteFailed.localizedDescription
+                    sessionRecoveryError = LocalWipeError.displayMessage(for: error)
                 }
             }
         }
@@ -550,7 +550,6 @@ struct RoomListView: View {
                         boundaryColor: room.hasHighlight ? SynaraColor.accent : SynaraColor.separator
                     )
                     .contentShape(Rectangle())
-                    .accessibilityIdentifier("RoomRow-\(room.id)")
             }
             .buttonStyle(SynaraListRowButtonStyle())
             .frame(maxWidth: .infinity, alignment: .leading)

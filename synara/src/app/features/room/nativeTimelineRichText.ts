@@ -50,7 +50,6 @@ const MATRIX_V1_19_TAGS = [
 
 const MATRIX_V1_19_SCHEMES = new Set(['https', 'http', 'ftp', 'mailto', 'magnet']);
 const MATRIX_COLOR_RE = /^#[0-9a-f]{6}$/i;
-const MATRIX_MXC_RE = /^mxc:\/\/[^/\s]+\/[^/?#\s]+$/;
 const MATRIX_LANGUAGE_RE = /^language-[\w+.-]+$/;
 const MATRIX_OL_START_RE = /^-?\d+$/;
 
@@ -96,13 +95,8 @@ const transformCurrentSpan: Transformer = (_tagName, attribs) => {
 };
 
 const transformCurrentImage: Transformer = (_tagName, attribs) => {
-  const next: Record<string, string> = {};
-  if (attribs.src && MATRIX_MXC_RE.test(attribs.src)) next.src = attribs.src;
-  if (attribs.alt) next.alt = attribs.alt;
-  if (attribs.title) next.title = attribs.title;
-  if (attribs.width && /^\d+$/.test(attribs.width)) next.width = attribs.width;
-  if (attribs.height && /^\d+$/.test(attribs.height)) next.height = attribs.height;
-  return { tagName: 'img', attribs: next };
+  const fallback = attribs.alt?.trim() || attribs.title?.trim() || 'Inline image';
+  return { tagName: 'span', attribs: {}, text: fallback };
 };
 
 export const sanitizeMatrixV119PresentationHtml = (html: string): string =>
@@ -114,7 +108,6 @@ export const sanitizeMatrixV119PresentationHtml = (html: string): string =>
       a: ['href', 'target', 'rel'],
       code: ['class'],
       div: ['data-mx-maths'],
-      img: ['width', 'height', 'alt', 'title', 'src'],
       ol: ['start'],
       font: ['color', 'data-mx-bg-color', 'data-mx-color'],
       span: ['data-mx-bg-color', 'data-mx-color', 'data-mx-spoiler', 'data-mx-maths'],
@@ -144,11 +137,8 @@ export const sanitizeMatrixV119PresentationHtml = (html: string): string =>
     },
     disallowedTagsMode: 'discard',
     nonTextTags: ['style', 'script', 'textarea', 'option', 'noscript', 'mx-reply'],
-    allowedSchemes: [...MATRIX_V1_19_SCHEMES, 'mxc'],
-    allowedSchemesByTag: {
-      a: [...MATRIX_V1_19_SCHEMES],
-      img: ['mxc'],
-    },
+    allowedSchemes: [...MATRIX_V1_19_SCHEMES],
+    allowedSchemesByTag: { a: [...MATRIX_V1_19_SCHEMES] },
     allowedSchemesAppliedToAttributes: ['href', 'src'],
     allowProtocolRelative: false,
     nestingLimit: 100,

@@ -10,7 +10,7 @@ use eyeball_im::VectorDiff;
 use futures_util::StreamExt;
 use matrix_sdk::notification_settings::RoomNotificationMode;
 use matrix_sdk::ruma::events::MessageLikeEventContent;
-use matrix_sdk::{Room, RoomState};
+use matrix_sdk::{EncryptionState, Room, RoomState};
 use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
@@ -21,7 +21,7 @@ use crate::app::room_list::last_message::{
     last_message_preview_from_invite,
 };
 use crate::app::sync::SyncServiceOwner;
-use crate::dto::{Membership, NotificationMode, RoomSummary};
+use crate::dto::{Membership, NotificationMode, RoomEncryptionStatus, RoomSummary};
 
 /// Privacy-safe room-list wake-up. No room ids, names, tokens, or password.
 /// iOS re-fetches via the existing snapshot command.
@@ -151,6 +151,7 @@ async fn project_room(room: &Room) -> RoomSummary {
     );
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
     // `notable_tags` derived from the room's m.tag account data.
+    let encryption_status = project_encryption_status(room.latest_encryption_state().await);
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
@@ -163,11 +164,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         is_favorite: room.is_favourite(),
         is_low_priority: room.is_low_priority(),
         folder_id: None,
-        is_encrypted: room
-            .latest_encryption_state()
-            .await
-            .map(|state| state.is_encrypted())
-            .unwrap_or(false),
+        encryption_status,
         join_rule: None,
         unread_count: bounded_count(unread.unread_count),
         highlight_count: bounded_count(room.num_unread_mentions().max(counts.highlight_count)),
@@ -177,6 +174,15 @@ async fn project_room(room: &Room) -> RoomSummary {
         last_message_preview: last_message_preview(room),
         heroes: None,
         tombstone_successor_room_id: None,
+    }
+}
+
+fn project_encryption_status<E>(result: Result<EncryptionState, E>) -> RoomEncryptionStatus {
+    match result {
+        Ok(state) if state.is_unknown() => RoomEncryptionStatus::Unknown,
+        Ok(state) if state.is_encrypted() => RoomEncryptionStatus::Encrypted,
+        Ok(_) => RoomEncryptionStatus::NotEncrypted,
+        Err(_) => RoomEncryptionStatus::Unknown,
     }
 }
 
@@ -259,5 +265,25 @@ mod tests {
     fn unread_counts_are_bounded_for_ipc() {
         assert_eq!(bounded_count(7), 7);
         assert_eq!(bounded_count(u64::MAX), u32::MAX);
+    }
+
+    #[test]
+    fn encryption_projection_preserves_unknown_and_errors_fail_closed() {
+        assert_eq!(
+            project_encryption_status::<()>(Ok(EncryptionState::Encrypted)),
+            RoomEncryptionStatus::Encrypted
+        );
+        assert_eq!(
+            project_encryption_status::<()>(Ok(EncryptionState::NotEncrypted)),
+            RoomEncryptionStatus::NotEncrypted
+        );
+        assert_eq!(
+            project_encryption_status::<()>(Ok(EncryptionState::Unknown)),
+            RoomEncryptionStatus::Unknown
+        );
+        assert_eq!(
+            project_encryption_status::<()>(Err(())),
+            RoomEncryptionStatus::Unknown
+        );
     }
 }

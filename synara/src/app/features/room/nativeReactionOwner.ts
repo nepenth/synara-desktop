@@ -40,6 +40,40 @@ type ReactionInput = {
   key: string;
 };
 
+type ToggleReactionInput = ReactionInput & {
+  /** Exact ownership expected after applying the toggle to the projected row. */
+  expectedOwn: boolean;
+};
+
+function acceptsNativeReactionReadback(
+  value: NativeReactionMutationResult,
+  input: ReactionInput,
+  allowedMutations: ReadonlySet<NativeReactionMutation>,
+  expectedOwn?: boolean
+): boolean {
+  if (
+    value.roomId !== input.roomId ||
+    value.targetEventId !== input.eventId ||
+    value.key !== input.key ||
+    !allowedMutations.has(value.mutation)
+  ) {
+    return false;
+  }
+  const projected = value.readback;
+  if (projected && projected.key !== input.key) return false;
+  switch (value.mutation) {
+    case 'added':
+      if (expectedOwn === false) return false;
+      return true;
+    case 'already_present':
+      return expectedOwn !== false;
+    case 'removed':
+      return expectedOwn !== true;
+    case 'redacted':
+      return true;
+  }
+}
+
 const defaultInvoke: NativeReactionInvoke = (command, args) =>
   invokeDesktopWithAvailability<NativeReactionMutationResult>(command, args);
 const defaultAgentApprovalInvoke: NativeAgentApprovalInvoke = (command, args) =>
@@ -48,21 +82,35 @@ const defaultAgentApprovalInvoke: NativeAgentApprovalInvoke = (command, args) =>
 async function invokeNativeReaction(
   command: string,
   args: Record<string, string>,
-  invoke: NativeReactionInvoke
+  invoke: NativeReactionInvoke,
+  expected: ReactionInput,
+  allowedMutations: ReadonlySet<NativeReactionMutation>,
+  expectedOwn?: boolean
 ): Promise<NativeReactionMutationResult> {
   const result = await invoke(command, args);
   if (!result.available || !result.value) {
     throw new Error('Native Matrix reactions are unavailable.');
+  }
+  if (!acceptsNativeReactionReadback(result.value, expected, allowedMutations, expectedOwn)) {
+    throw new Error('Native Matrix reaction readback did not match the requested action.');
   }
   return result.value;
 }
 
 /** Native timeline-owned self reaction add/remove. There is no JS SDK fallback. */
 export function toggleReactionWithNativeOwner(
-  input: ReactionInput,
+  input: ToggleReactionInput,
   invoke: NativeReactionInvoke = defaultInvoke
 ) {
-  return invokeNativeReaction('matrix_timeline_reaction_toggle', input, invoke);
+  const { expectedOwn, ...request } = input;
+  return invokeNativeReaction(
+    'matrix_timeline_reaction_toggle',
+    request,
+    invoke,
+    request,
+    new Set(['added', 'removed']),
+    expectedOwn
+  );
 }
 
 /** Native idempotent add used by approval controls; never implemented as a toggle. */
@@ -70,7 +118,13 @@ export function ensureReactionWithNativeOwner(
   input: ReactionInput,
   invoke: NativeReactionInvoke = defaultInvoke
 ) {
-  return invokeNativeReaction('matrix_reaction_ensure', input, invoke);
+  return invokeNativeReaction(
+    'matrix_reaction_ensure',
+    input,
+    invoke,
+    input,
+    new Set(['added', 'already_present'])
+  );
 }
 
 /**
@@ -106,6 +160,8 @@ export function redactReactionWithNativeOwner(
       targetEventId: eventId,
       reactionEventId,
     },
-    invoke
+    invoke,
+    input,
+    new Set(['redacted'])
   );
 }

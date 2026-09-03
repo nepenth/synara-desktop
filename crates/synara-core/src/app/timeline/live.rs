@@ -4,7 +4,7 @@
 //! product snapshot containing only stable identifiers, sender IDs,
 //! event types, timestamps, and safe display text.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Weak};
 
@@ -15,7 +15,6 @@ use matrix_sdk::{
     room::{calls::CallError, edit::EditedContent, Receipts},
     ruma::{
         events::{
-            poll::unstable_response::UnstablePollResponseEventContent,
             reaction::ReactionEventContent,
             receipt::{ReceiptThread, ReceiptType as EventReceiptType},
             relation::Annotation,
@@ -24,15 +23,16 @@ use matrix_sdk::{
                 RoomMessageEventContentWithoutRelation,
             },
             sticker::StickerEventContent,
-            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
+            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncStateEvent,
+            AnySyncTimelineEvent, Mentions, StateEventType,
         },
         OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
     },
-    Client, Room,
+    Client, EncryptionState, Room,
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    EncryptedMessage, ReactionStatus, Timeline, TimelineBuilder, TimelineDetails,
+    EncryptedMessage, MsgLikeKind, ReactionStatus, Timeline, TimelineBuilder, TimelineDetails,
     TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
     TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
     TimelineReadReceiptTracking,
@@ -49,7 +49,7 @@ use crate::app::send::{
     MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult, SendQueue,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
-use crate::dto::TimelineEncryptedUnavailableItem;
+use crate::dto::{RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
 
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
@@ -64,11 +64,11 @@ use super::{
     NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
     NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
     NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
-    TimelinePaginationState, TimelineReadState, TimelineViewCapabilities, TimelineViewDeltaBatch,
-    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
-    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
-    TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
+    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
@@ -78,6 +78,50 @@ const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
 const AGENT_APPROVAL_SIDE_EFFECT_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_TIMELINE_ACTION_REASON_CHARS: usize = 512;
+
+fn normalize_timeline_action_reason(
+    reason: Option<&str>,
+    too_long_diagnostic: &'static str,
+) -> Result<Option<String>, &'static str> {
+    let reason = reason.map(str::trim).filter(|value| !value.is_empty());
+    if reason.is_some_and(|value| value.chars().count() > MAX_TIMELINE_ACTION_REASON_CHARS) {
+        return Err(too_long_diagnostic);
+    }
+    Ok(reason.map(str::to_owned))
+}
+
+fn validate_poll_vote_selection(
+    answer_ids: Vec<String>,
+    available_answer_ids: &HashSet<String>,
+    max_selections: usize,
+    is_closed: bool,
+) -> Result<Vec<String>, &'static str> {
+    if is_closed {
+        return Err("v-timeline-poll-vote-closed");
+    }
+    if max_selections == 0 {
+        return Err("v-timeline-poll-vote-selection-bound-invalid");
+    }
+    // Empty `answer_ids` is the MSC3381 retract/clear (`answers: []`). Desktop
+    // and iOS "Clear vote" presenters already submit that list.
+    if answer_ids.len() > max_selections {
+        return Err("v-timeline-poll-vote-too-many-answers");
+    }
+    let mut unique = HashSet::with_capacity(answer_ids.len());
+    for answer_id in &answer_ids {
+        if answer_id.is_empty()
+            || answer_id.trim() != answer_id
+            || !available_answer_ids.contains(answer_id)
+        {
+            return Err("v-timeline-poll-vote-invalid-answer");
+        }
+        if !unique.insert(answer_id.as_str()) {
+            return Err("v-timeline-poll-vote-duplicate-answer");
+        }
+    }
+    Ok(answer_ids)
+}
 
 fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
     Receipts::new()
@@ -816,15 +860,14 @@ impl NativeTimelineOwner {
             .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
             .await
             .map_err(|_| "v-timeline-edit-prepare-failed")?;
-        let response = room
-            .send(edit_content)
+        room.send(edit_content)
             .await
             .map_err(|_| "v-timeline-edit-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::EditText,
             room_id: room_id.to_string(),
-            event_id: response.response.event_id.to_string(),
+            event_id: event_id.to_string(),
             status: "sent".into(),
         })
     }
@@ -837,12 +880,55 @@ impl NativeTimelineOwner {
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
         let event_id = parse_action_event_id(event_id, "v-timeline-redact-invalid-event-id")?;
-        let reason = reason.map(str::trim).filter(|value| !value.is_empty());
+        let reason = normalize_timeline_action_reason(reason, "v-timeline-redact-reason-too-long")?;
         let room = self
             .client
             .get_room(&room_id)
             .ok_or("v-timeline-redact-room-not-found")?;
-        room.redact(&event_id, reason, None)
+        let own_user_id = self
+            .client
+            .user_id()
+            .ok_or("v-timeline-redact-permission-denied")?;
+        let timelines = {
+            let registry = self.registry.lock().await;
+            let mut timelines = Vec::new();
+            if let Some(entry) = registry.entries.get(room_id.as_str()) {
+                timelines.push(entry.timeline.clone());
+            }
+            timelines.extend(
+                registry
+                    .view_streams
+                    .values()
+                    .filter(|entry| entry.room_id == room_id.as_str())
+                    .map(|entry| entry.timeline.clone()),
+            );
+            timelines.extend(
+                registry
+                    .focused_entries
+                    .iter()
+                    .filter(|((entry_room_id, _), _)| entry_room_id == room_id.as_str())
+                    .map(|(_, timeline)| timeline.clone()),
+            );
+            timelines
+        };
+        let mut event_is_own = None;
+        for timeline in timelines {
+            if let Some(item) = timeline.item_by_event_id(&event_id).await {
+                event_is_own = Some(item.sender() == own_user_id);
+                break;
+            }
+        }
+        let event_is_own = event_is_own.ok_or("v-timeline-redact-event-not-visible")?;
+        let authority = room_action_authority(&room, Some(own_user_id)).await;
+        let authorized = if event_is_own {
+            authority.can_redact_own
+        } else {
+            authority.can_redact_other
+        };
+        if !authorized {
+            return Err("v-timeline-redact-permission-denied");
+        }
+        room.redact(&event_id, reason.as_deref(), None)
             .await
             .map_err(|_| "v-timeline-redact-failed")?;
         Ok(NativeTimelineActionReadback {
@@ -862,10 +948,7 @@ impl NativeTimelineOwner {
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
         let event_id = parse_action_event_id(event_id, "v-timeline-report-invalid-event-id")?;
-        let reason = reason
-            .map(str::trim)
-            .filter(|value| !value.is_empty())
-            .map(str::to_owned);
+        let reason = normalize_timeline_action_reason(reason, "v-timeline-report-reason-too-long")?;
         let room = self
             .client
             .get_room(&room_id)
@@ -918,6 +1001,13 @@ impl NativeTimelineOwner {
         } else {
             "v-timeline-unpin-room-not-found"
         })?;
+        if !user_can_pin_events(&room, self.client.user_id()).await {
+            return Err(if pin {
+                "v-timeline-pin-permission-denied"
+            } else {
+                "v-timeline-unpin-permission-denied"
+            });
+        }
         let changed = if pin {
             room.pin_event(&event_id)
                 .await
@@ -959,28 +1049,84 @@ impl NativeTimelineOwner {
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
         let event_id = parse_action_event_id(event_id, "v-timeline-poll-vote-invalid-event-id")?;
-        let answer_ids = answer_ids
-            .into_iter()
-            .map(|answer| answer.trim().to_owned())
-            .filter(|answer| !answer.is_empty())
-            .collect::<Vec<_>>();
         let room = self
             .client
             .get_room(&room_id)
             .ok_or("v-timeline-poll-vote-room-not-found")?;
-        let content = UnstablePollResponseEventContent::new(answer_ids, event_id);
-        let sent_event_id = room
-            .send(content)
+        // Validate against the same SDK timeline object that projected the
+        // visible poll/capability. Never trust presenter-supplied option IDs or
+        // selection bounds, and never send a response after an observed close.
+        let timelines = {
+            let registry = self.registry.lock().await;
+            let mut timelines = Vec::new();
+            if let Some(entry) = registry.entries.get(room_id.as_str()) {
+                timelines.push(entry.timeline.clone());
+            }
+            timelines.extend(
+                registry
+                    .view_streams
+                    .values()
+                    .filter(|entry| entry.room_id == room_id.as_str())
+                    .map(|entry| entry.timeline.clone()),
+            );
+            timelines.extend(
+                registry
+                    .focused_entries
+                    .iter()
+                    .filter(|((entry_room_id, _), _)| entry_room_id == room_id.as_str())
+                    .map(|(_, timeline)| timeline.clone()),
+            );
+            timelines
+        };
+        let mut poll_definitions = Vec::new();
+        for timeline in timelines {
+            let Some(item) = timeline.item_by_event_id(&event_id).await else {
+                continue;
+            };
+            if let SdkTimelineItemContent::MsgLike(content) = item.content() {
+                if let MsgLikeKind::Poll(poll) = &content.kind {
+                    let results = poll.results();
+                    poll_definitions.push((
+                        results
+                            .answers
+                            .into_iter()
+                            .map(|answer| answer.id)
+                            .collect::<HashSet<_>>(),
+                        results.max_selections,
+                        results.end_time.is_some(),
+                    ));
+                }
+            }
+        }
+        let (available_answer_ids, max_selections, _) = poll_definitions
+            .first()
+            .ok_or("v-timeline-poll-vote-poll-not-visible")?;
+        if poll_definitions.iter().any(|(_, _, closed)| *closed) {
+            return Err("v-timeline-poll-vote-closed");
+        }
+        if poll_definitions
+            .iter()
+            .any(|(answers, max, _)| answers != available_answer_ids || max != max_selections)
+        {
+            return Err("v-timeline-poll-vote-state-conflict");
+        }
+        let answer_ids = validate_poll_vote_selection(
+            answer_ids,
+            available_answer_ids,
+            usize::try_from(*max_selections)
+                .map_err(|_| "v-timeline-poll-vote-selection-bound-invalid")?,
+            false,
+        )?;
+        let content = poll_response_content(event_id.as_str(), &answer_ids)
+            .map_err(|_| "v-timeline-poll-vote-invalid-answer")?;
+        room.send(content)
             .await
-            .map_err(|_| "v-timeline-poll-vote-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .map_err(|_| "v-timeline-poll-vote-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::PollVote,
             room_id: room_id.to_string(),
-            event_id: sent_event_id,
+            event_id: event_id.to_string(),
             status: "voted".into(),
         })
     }
@@ -1004,18 +1150,14 @@ impl NativeTimelineOwner {
                     CallError::BadEventType => "v-timeline-call-decline-bad-event-type",
                     _ => "v-timeline-call-decline-prepare-failed",
                 })?;
-        let sent_event_id = room
-            .send(content)
+        room.send(content)
             .await
-            .map_err(|_| "v-timeline-call-decline-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .map_err(|_| "v-timeline-call-decline-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::CallDecline,
             room_id: room_id.to_string(),
-            event_id: sent_event_id,
+            event_id: event_id.to_string(),
             status: "declined".into(),
         })
     }
@@ -1026,6 +1168,7 @@ impl NativeTimelineOwner {
         event_id: &str,
         target_room_id: &str,
         as_quote: bool,
+        confirmed_encryption_downgrade: bool,
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         let source_room_id = parse_action_room_id(source_room_id)?;
         let target_room_id = parse_action_room_id(target_room_id)?;
@@ -1038,6 +1181,8 @@ impl NativeTimelineOwner {
             .client
             .get_room(&target_room_id)
             .ok_or("v-timeline-forward-target-room-not-found")?;
+        validate_forward_encryption(&source_room, &target_room, confirmed_encryption_downgrade)
+            .await?;
         let (sender_label, body) = load_forwardable_text(&source_room, &event_id).await?;
         let forwarded_body = format_forwarded_plain_body(&sender_label, &body, as_quote);
         let mut content = RoomMessageEventContent::text_plain(forwarded_body);
@@ -1063,6 +1208,7 @@ impl NativeTimelineOwner {
         source_room_id: &str,
         event_id: &str,
         target_room_id: &str,
+        confirmed_encryption_downgrade: bool,
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         let source_room_id = parse_action_room_id(source_room_id)?;
         let target_room_id = parse_action_room_id(target_room_id)?;
@@ -1076,6 +1222,8 @@ impl NativeTimelineOwner {
             .client
             .get_room(&target_room_id)
             .ok_or("v-timeline-forward-media-target-room-not-found")?;
+        validate_forward_encryption(&source_room, &target_room, confirmed_encryption_downgrade)
+            .await?;
         let content = load_forwardable_media(&source_room, &event_id).await?;
         let sent_event_id = target_room
             .send(content)
@@ -1422,6 +1570,7 @@ impl NativeTimelineRegistry {
             }
         };
         let own_user_id = client.user_id().map(ToOwned::to_owned);
+        let action_authority = room_action_authority(timeline.room(), own_user_id.as_deref()).await;
         self.next_view_stream_id = self.next_view_stream_id.saturating_add(1);
         let subscription_key = format!(
             "{}:{}",
@@ -1471,7 +1620,12 @@ impl NativeTimelineRegistry {
             items
                 .iter()
                 .map(|item| {
-                    project_timeline_item_with_media(item, own_user_id.as_deref(), &mut registry)
+                    project_timeline_item_with_media(
+                        item,
+                        own_user_id.as_deref(),
+                        action_authority,
+                        &mut registry,
+                    )
                 })
                 .collect()
         };
@@ -2105,6 +2259,11 @@ impl NativeTimelineRegistry {
         // used for event readback; no JS relation inspection is involved.
         let focus_key = (room_id.to_owned(), target_event_id.to_string());
         if !self.focused_entries.contains_key(&focus_key) {
+            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                    self.focused_entries.remove(&oldest_key);
+                }
+            }
             let room = client
                 .get_room(parse_room_id(room_id)?.as_ref())
                 .ok_or("v-send.2-reaction-room-not-found")?;
@@ -2518,13 +2677,27 @@ fn spawn_view_update_owner(
         hit_start,
         hydrate_sender_profiles,
     } = input;
+    let client = timeline.room().client();
+    let (power_authority_tx, mut power_authority_rx) = tokio::sync::mpsc::unbounded_channel();
+    let power_handler = client.add_event_handler(move |event: AnySyncStateEvent| {
+        let power_authority_tx = power_authority_tx.clone();
+        async move {
+            if event.event_type() == StateEventType::RoomPowerLevels {
+                let _ = power_authority_tx.send(());
+            }
+        }
+    });
+    let power_handler = client.event_handler_drop_guard(power_handler);
     tokio::spawn(async move {
+        let _power_handler = power_handler;
         let emitter = ViewDeltaEmitter::new(emit, session_generation, stream_id, room_id, revision);
         let mut last_read_state =
             project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
         let mut last_pagination =
             pagination_state_from_hit_start(hit_start.load(Ordering::Acquire));
         let mut last_pinned_event_ids = project_pinned_event_ids(timeline.room());
+        let mut last_action_authority =
+            room_action_authority(timeline.room(), own_user_id.as_deref()).await;
 
         let mut room_info = timeline.room().subscribe_info();
         let mut read_receipts = timeline.subscribe_own_user_read_receipts_changed().await;
@@ -2559,6 +2732,10 @@ fn spawn_view_update_owner(
                     members_hydrated = true;
                 }
                 Some(diffs) = updates.next() => {
+                    let action_authority = room_action_authority(
+                        timeline.room(),
+                        own_user_id.as_deref(),
+                    ).await;
                     apply_item_id_diffs(&mut item_ids, &diffs);
                     let ops = {
                         let mut registry = media.lock().await;
@@ -2566,6 +2743,7 @@ fn spawn_view_update_owner(
                         project_timeline_diffs_with_media(
                             &diffs,
                             own_user_id.as_deref(),
+                            action_authority,
                             &mut registry,
                         )
                     };
@@ -2578,9 +2756,12 @@ fn spawn_view_update_owner(
                     let read_state =
                         project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
                     let pinned_event_ids = project_pinned_event_ids(timeline.room());
+                    let action_authority =
+                        room_action_authority(timeline.room(), own_user_id.as_deref()).await;
                     let read_changed = read_state != last_read_state;
                     let pins_changed = pinned_event_ids != last_pinned_event_ids;
-                    if !read_changed && !pins_changed {
+                    let authority_changed = action_authority != last_action_authority;
+                    if !read_changed && !pins_changed && !authority_changed {
                         continue;
                     }
                     if read_changed {
@@ -2589,11 +2770,71 @@ fn spawn_view_update_owner(
                     if pins_changed {
                         last_pinned_event_ids = pinned_event_ids.clone();
                     }
+                    let ops = if authority_changed {
+                        last_action_authority = action_authority;
+                        let items = timeline.items().await;
+                        item_ids = items
+                            .iter()
+                            .map(|item| item.unique_id().0.clone())
+                            .collect();
+                        let rows = {
+                            let mut registry = media.lock().await;
+                            registry.retain_items(item_ids.iter().map(String::as_str));
+                            items
+                                .iter()
+                                .map(|item| {
+                                    project_timeline_item_with_media(
+                                        item,
+                                        own_user_id.as_deref(),
+                                        action_authority,
+                                        &mut registry,
+                                    )
+                                })
+                                .collect()
+                        };
+                        vec![super::TimelineViewDeltaOp::Reset { rows }]
+                    } else {
+                        Vec::new()
+                    };
                     emitter.emit(
-                        Vec::new(),
+                        ops,
                         read_changed.then_some(read_state),
                         None,
                         pins_changed.then_some(pinned_event_ids),
+                    );
+                }
+                Some(()) = power_authority_rx.recv() => {
+                    let action_authority =
+                        room_action_authority(timeline.room(), own_user_id.as_deref()).await;
+                    if action_authority == last_action_authority {
+                        continue;
+                    }
+                    last_action_authority = action_authority;
+                    let items = timeline.items().await;
+                    item_ids = items
+                        .iter()
+                        .map(|item| item.unique_id().0.clone())
+                        .collect();
+                    let rows = {
+                        let mut registry = media.lock().await;
+                        registry.retain_items(item_ids.iter().map(String::as_str));
+                        items
+                            .iter()
+                            .map(|item| {
+                                project_timeline_item_with_media(
+                                    item,
+                                    own_user_id.as_deref(),
+                                    action_authority,
+                                    &mut registry,
+                                )
+                            })
+                            .collect()
+                    };
+                    emitter.emit(
+                        vec![super::TimelineViewDeltaOp::Reset { rows }],
+                        None,
+                        None,
+                        None,
                     );
                 }
                 Some(()) = read_receipts.next() => {
@@ -2695,13 +2936,20 @@ async fn view_snapshot_from_timeline(
     media: Arc<AsyncMutex<TimelineMediaRegistry>>,
 ) -> TimelineViewSnapshot {
     let (items, _updates) = timeline.subscribe().await;
+    let action_authority =
+        room_action_authority(timeline.room(), input.own_user_id.as_deref()).await;
     let rows = {
         let mut registry = media.lock().await;
         registry.retain_items(items.iter().map(|item| item.unique_id().0.as_str()));
         items
             .iter()
             .map(|item| {
-                project_timeline_item_with_media(item, input.own_user_id.as_deref(), &mut registry)
+                project_timeline_item_with_media(
+                    item,
+                    input.own_user_id.as_deref(),
+                    action_authority,
+                    &mut registry,
+                )
             })
             .collect()
     };
@@ -2795,6 +3043,29 @@ fn project_pinned_event_ids(room: &Room) -> Vec<String> {
         .collect()
 }
 
+async fn user_can_pin_events(room: &Room, own_user_id: Option<&UserId>) -> bool {
+    room_action_authority(room, own_user_id)
+        .await
+        .can_pin_events
+}
+
+async fn room_action_authority(
+    room: &Room,
+    own_user_id: Option<&UserId>,
+) -> TimelineRoomActionAuthority {
+    let Some(user_id) = own_user_id else {
+        return TimelineRoomActionAuthority::default();
+    };
+    let Ok(levels) = room.power_levels().await else {
+        return TimelineRoomActionAuthority::default();
+    };
+    TimelineRoomActionAuthority {
+        can_pin_events: levels.user_can_send_state(user_id, StateEventType::RoomPinnedEvents),
+        can_redact_own: levels.user_can_redact_own_event(user_id),
+        can_redact_other: levels.user_can_redact_event_of_other(user_id),
+    }
+}
+
 fn reaction_contains_event_id(
     reaction: &NativeTimelineReaction,
     reaction_event_id: &OwnedEventId,
@@ -2836,6 +3107,61 @@ fn normalize_edit_formatted_body(
     Ok(formatted_body.map(str::to_owned))
 }
 
+async fn validate_forward_encryption(
+    source_room: &Room,
+    target_room: &Room,
+    confirmed_encryption_downgrade: bool,
+) -> Result<(), &'static str> {
+    let source = project_forward_encryption_read(
+        source_room.latest_encryption_state().await,
+        "v-timeline-forward-source-encryption-unavailable",
+    )?;
+    let target = project_forward_encryption_read(
+        target_room.latest_encryption_state().await,
+        "v-timeline-forward-target-encryption-unavailable",
+    )?;
+    validate_forward_encryption_status(source, target, confirmed_encryption_downgrade)
+}
+
+fn project_forward_encryption_read<E>(
+    result: Result<EncryptionState, E>,
+    unavailable_diagnostic: &'static str,
+) -> Result<RoomEncryptionStatus, &'static str> {
+    result
+        .map(project_forward_encryption_state)
+        .map_err(|_| unavailable_diagnostic)
+}
+
+fn project_forward_encryption_state(state: EncryptionState) -> RoomEncryptionStatus {
+    if state.is_unknown() {
+        RoomEncryptionStatus::Unknown
+    } else if state.is_encrypted() {
+        RoomEncryptionStatus::Encrypted
+    } else {
+        RoomEncryptionStatus::NotEncrypted
+    }
+}
+
+fn validate_forward_encryption_status(
+    source: RoomEncryptionStatus,
+    target: RoomEncryptionStatus,
+    confirmed_encryption_downgrade: bool,
+) -> Result<(), &'static str> {
+    if source == RoomEncryptionStatus::Unknown {
+        return Err("v-timeline-forward-source-encryption-unavailable");
+    }
+    if target == RoomEncryptionStatus::Unknown {
+        return Err("v-timeline-forward-target-encryption-unavailable");
+    }
+    if source == RoomEncryptionStatus::Encrypted
+        && target == RoomEncryptionStatus::NotEncrypted
+        && !confirmed_encryption_downgrade
+    {
+        return Err("v-timeline-forward-encryption-downgrade-not-confirmed");
+    }
+    Ok(())
+}
+
 async fn load_forwardable_text(
     room: &Room,
     event_id: &OwnedEventId,
@@ -2853,12 +3179,20 @@ async fn load_forwardable_text(
             let original = message
                 .as_original()
                 .ok_or("v-timeline-forward-event-redacted")?;
-            Ok((
-                original.sender.to_string(),
-                original.content.body().to_owned(),
-            ))
+            let body = forwardable_text_body(&original.content.msgtype)
+                .ok_or("v-timeline-forward-unsupported-event")?;
+            Ok((original.sender.to_string(), body.to_owned()))
         }
         _ => Err("v-timeline-forward-unsupported-event"),
+    }
+}
+
+fn forwardable_text_body(msgtype: &MessageType) -> Option<&str> {
+    match msgtype {
+        MessageType::Text(content) => Some(&content.body),
+        MessageType::Notice(content) => Some(&content.body),
+        MessageType::Emote(content) => Some(&content.body),
+        _ => None,
     }
 }
 
@@ -3152,6 +3486,113 @@ fn safe_body_from_parts(redacted: bool, unable_to_decrypt: bool, body: Option<&s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn action_reasons_are_trimmed_bounded_and_never_echoed_in_diagnostics() {
+        assert_eq!(
+            normalize_timeline_action_reason(Some("  abuse  "), "too-long").unwrap(),
+            Some("abuse".to_owned())
+        );
+        assert_eq!(
+            normalize_timeline_action_reason(Some("  "), "too-long").unwrap(),
+            None
+        );
+        assert_eq!(
+            normalize_timeline_action_reason(Some(&"x".repeat(513)), "too-long"),
+            Err("too-long")
+        );
+    }
+
+    #[test]
+    fn text_forward_owner_rejects_semantically_lossy_message_variants() {
+        let text = MessageType::Text(
+            matrix_sdk::ruma::events::room::message::TextMessageEventContent::plain("hello"),
+        );
+        let location = MessageType::Location(
+            matrix_sdk::ruma::events::room::message::LocationMessageEventContent::new(
+                "location".to_owned(),
+                "geo:1,2".to_owned(),
+            ),
+        );
+        assert_eq!(forwardable_text_body(&text), Some("hello"));
+        assert_eq!(forwardable_text_body(&location), None);
+    }
+
+    #[test]
+    fn forward_encryption_policy_fails_closed_and_requires_downgrade_confirmation() {
+        use RoomEncryptionStatus::{Encrypted, NotEncrypted, Unknown};
+
+        assert_eq!(
+            validate_forward_encryption_status(Unknown, NotEncrypted, false),
+            Err("v-timeline-forward-source-encryption-unavailable")
+        );
+        assert_eq!(
+            validate_forward_encryption_status(NotEncrypted, Unknown, false),
+            Err("v-timeline-forward-target-encryption-unavailable")
+        );
+        assert_eq!(
+            validate_forward_encryption_status(Encrypted, NotEncrypted, false),
+            Err("v-timeline-forward-encryption-downgrade-not-confirmed")
+        );
+        assert!(validate_forward_encryption_status(Encrypted, NotEncrypted, true).is_ok());
+        assert!(validate_forward_encryption_status(NotEncrypted, NotEncrypted, false).is_ok());
+        assert!(validate_forward_encryption_status(NotEncrypted, Encrypted, false).is_ok());
+        assert!(validate_forward_encryption_status(Encrypted, Encrypted, false).is_ok());
+        assert_eq!(
+            project_forward_encryption_read::<()>(
+                Err(()),
+                "v-timeline-forward-source-encryption-unavailable"
+            ),
+            Err("v-timeline-forward-source-encryption-unavailable")
+        );
+        assert_eq!(
+            project_forward_encryption_read::<()>(
+                Err(()),
+                "v-timeline-forward-target-encryption-unavailable"
+            ),
+            Err("v-timeline-forward-target-encryption-unavailable")
+        );
+    }
+
+    #[test]
+    fn poll_vote_selection_is_validated_by_core_semantics() {
+        let answers = HashSet::from(["a".to_owned(), "b".to_owned()]);
+        assert_eq!(
+            validate_poll_vote_selection(vec!["a".to_owned()], &answers, 1, false).unwrap(),
+            vec!["a".to_owned()]
+        );
+        assert_eq!(
+            validate_poll_vote_selection(Vec::new(), &answers, 1, false).unwrap(),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            validate_poll_vote_selection(vec!["a".to_owned()], &answers, 1, true),
+            Err("v-timeline-poll-vote-closed")
+        );
+        assert_eq!(
+            validate_poll_vote_selection(vec!["a".to_owned(), "b".to_owned()], &answers, 1, false,),
+            Err("v-timeline-poll-vote-too-many-answers")
+        );
+        assert_eq!(
+            validate_poll_vote_selection(vec!["unknown".to_owned()], &answers, 1, false),
+            Err("v-timeline-poll-vote-invalid-answer")
+        );
+        assert_eq!(
+            validate_poll_vote_selection(vec!["a".to_owned(), "a".to_owned()], &answers, 2, false,),
+            Err("v-timeline-poll-vote-duplicate-answer")
+        );
+        let oversized_id = "x".repeat(65);
+        let oversized_set = HashSet::from([oversized_id.clone()]);
+        let selected = validate_poll_vote_selection(vec![oversized_id], &oversized_set, 1, false)
+            .expect("timeline semantics permit only an exact projected option before wire bounds");
+        assert!(poll_response_content("$poll:example.org", &selected).is_err());
+
+        let too_many = (0..21).map(|index| format!("a{index}")).collect::<Vec<_>>();
+        let many_answers = too_many.iter().cloned().collect::<HashSet<_>>();
+        let selected = validate_poll_vote_selection(too_many, &many_answers, 25, false)
+            .expect("timeline max is checked independently from global wire bounds");
+        assert!(poll_response_content("$poll:example.org", &selected).is_err());
+    }
 
     fn assert_thread_reply(
         thread: &matrix_sdk::ruma::events::relation::Thread,

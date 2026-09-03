@@ -985,6 +985,7 @@ const assertions = [
   [generator, '[[ "$(uname -s)" != "Darwin" ]]', "clear non-Apple failure"],
   [generator, "aarch64-apple-ios-sim", "Apple Silicon simulator target"],
   [generator, "x86_64-apple-ios", "Intel simulator target"],
+  [generator, "simulator-arm64", "Apple Silicon-only simulator generation mode"],
   [generator, "xcrun lipo -create", "combined generic simulator library"],
   [generator, "aarch64-apple-darwin", "Apple macOS target"],
   [generator, "cargo build --locked --release --package synara-core", "locked Rust build"],

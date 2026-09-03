@@ -9,7 +9,8 @@ import {
   isNativeTimelineReadbackStale,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
-  needsNativeForwardEncryptionConfirm,
+  editedFormattedBodyForSubmit,
+  nativeForwardEncryptionDecision,
   shouldAttachFormattedBody,
   type NativeTimelineViewRow,
   type NativeTimelineViewSnapshot,
@@ -213,19 +214,49 @@ test('pin and forward pure helpers gate native presenter UX', () => {
 
   const targets = filterNativeForwardTargets(
     [
-      { roomId: '!source:example.org', name: 'Source', isSpace: false },
-      { roomId: '!space:example.org', name: 'Space', isSpace: true },
-      { roomId: '!target:example.org', name: 'Target room', isEncrypted: false },
-      { roomId: '!secure:example.org', name: 'Secure', isEncrypted: true },
+      {
+        roomId: '!source:example.org',
+        name: 'Source',
+        encryptionStatus: 'unknown',
+        isSpace: false,
+      },
+      {
+        roomId: '!space:example.org',
+        name: 'Space',
+        encryptionStatus: 'not_encrypted',
+        isSpace: true,
+      },
+      { roomId: '!target:example.org', name: 'Target room', encryptionStatus: 'not_encrypted' },
+      { roomId: '!secure:example.org', name: 'Secure', encryptionStatus: 'encrypted' },
     ],
     '!source:example.org',
     'target'
   );
   assert.equal(targets.length, 1);
   assert.equal(targets[0]?.roomId, '!target:example.org');
-  assert.equal(needsNativeForwardEncryptionConfirm(true, false), true);
-  assert.equal(needsNativeForwardEncryptionConfirm(true, true), false);
-  assert.equal(needsNativeForwardEncryptionConfirm(false, false), false);
+  assert.equal(nativeForwardEncryptionDecision('encrypted', 'not_encrypted'), 'confirm_downgrade');
+  assert.equal(nativeForwardEncryptionDecision('encrypted', 'encrypted'), 'proceed');
+  assert.equal(nativeForwardEncryptionDecision('not_encrypted', 'not_encrypted'), 'proceed');
+  assert.equal(nativeForwardEncryptionDecision('not_encrypted', 'encrypted'), 'proceed');
+  assert.equal(nativeForwardEncryptionDecision('unknown', 'not_encrypted'), 'unavailable');
+  assert.equal(nativeForwardEncryptionDecision('encrypted', 'unknown'), 'unavailable');
+  assert.equal(nativeForwardEncryptionDecision(undefined, 'not_encrypted'), 'unavailable');
+  assert.equal(nativeForwardEncryptionDecision('encrypted', undefined), 'unavailable');
+});
+
+test('editing plain text cannot silently reuse stale Matrix HTML', () => {
+  assert.equal(
+    editedFormattedBodyForSubmit('old', 'new', '<strong>old</strong>', false),
+    undefined
+  );
+  assert.equal(
+    editedFormattedBodyForSubmit('old', 'new', '<strong>new</strong>', true),
+    '<strong>new</strong>'
+  );
+  assert.equal(
+    editedFormattedBodyForSubmit('old', 'old', '<strong>old</strong>', false),
+    '<strong>old</strong>'
+  );
 });
 
 test('timeline open is not aborted when event listen is unavailable', () => {

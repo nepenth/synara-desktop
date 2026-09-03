@@ -66,7 +66,12 @@ function ok(result: NativeReactionMutationResult) {
 test('toggle routes only through matrix_timeline_reaction_toggle with no fallback', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const result = await toggleReactionWithNativeOwner(
-    { roomId: '!room:example.org', eventId: '$event:example.org', key: '✅' },
+    {
+      roomId: '!room:example.org',
+      eventId: '$event:example.org',
+      key: '✅',
+      expectedOwn: true,
+    },
     async (command, args) => {
       calls.push({ command, args });
       return {
@@ -111,6 +116,7 @@ test('ensure is a distinct idempotent command, never toggle', async () => {
         targetEventId: '$event:example.org',
         key: '👍',
         mutation: 'already_present',
+        readback: { key: '👍', count: 1, me: true, senders: [] },
       })();
     }
   );
@@ -156,7 +162,12 @@ test('redact binds the selected annotation event id for the viewer path', async 
 test('native reaction command failure never invents a JS SDK fallback', async () => {
   await assert.rejects(
     toggleReactionWithNativeOwner(
-      { roomId: '!room:example.org', eventId: '$event:example.org', key: '✅' },
+      {
+        roomId: '!room:example.org',
+        eventId: '$event:example.org',
+        key: '✅',
+        expectedOwn: true,
+      },
       async () => ({ available: false })
     ),
     /Native Matrix reactions are unavailable/
@@ -167,5 +178,115 @@ test('native reaction command failure never invents a JS SDK fallback', async ()
       async () => ({ available: true, value: undefined })
     ),
     /Native Matrix reactions are unavailable/
+  );
+});
+
+test('reaction owners reject mismatched identity and mutation', async () => {
+  const request = {
+    roomId: '!room:example.org',
+    eventId: '$event:example.org',
+    key: '✅',
+    expectedOwn: true,
+  };
+  const invalid: NativeReactionMutationResult[] = [
+    {
+      roomId: '!other:example.org',
+      targetEventId: request.eventId,
+      key: request.key,
+      mutation: 'added',
+      readback: { key: request.key, count: 1, me: true, senders: [] },
+    },
+    {
+      roomId: request.roomId,
+      targetEventId: '$other:example.org',
+      key: request.key,
+      mutation: 'added',
+      readback: { key: request.key, count: 1, me: true, senders: [] },
+    },
+    {
+      roomId: request.roomId,
+      targetEventId: request.eventId,
+      key: '👎',
+      mutation: 'added',
+      readback: { key: '👎', count: 1, me: true, senders: [] },
+    },
+    {
+      roomId: request.roomId,
+      targetEventId: request.eventId,
+      key: request.key,
+      mutation: 'redacted',
+    },
+  ];
+
+  for (const value of invalid) {
+    await assert.rejects(
+      toggleReactionWithNativeOwner(request, async () => ({ available: true, value })),
+      /readback did not match/
+    );
+  }
+});
+
+test('toggle accepts a committed mutation while immediate aggregation ownership is stale', async () => {
+  const addRequest = {
+    roomId: '!room:example.org',
+    eventId: '$event:example.org',
+    key: '✅',
+    expectedOwn: true,
+  };
+  const added = await toggleReactionWithNativeOwner(addRequest, async () => ({
+    available: true,
+    value: {
+      roomId: addRequest.roomId,
+      targetEventId: addRequest.eventId,
+      key: addRequest.key,
+      mutation: 'added',
+      readback: { key: addRequest.key, count: 1, me: false, senders: [] },
+    },
+  }));
+  assert.equal(added.mutation, 'added');
+
+  const removeRequest = { ...addRequest, expectedOwn: false };
+  const removed = await toggleReactionWithNativeOwner(removeRequest, async () => ({
+    available: true,
+    value: {
+      roomId: removeRequest.roomId,
+      targetEventId: removeRequest.eventId,
+      key: removeRequest.key,
+      mutation: 'removed',
+      readback: { key: removeRequest.key, count: 1, me: true, senders: [] },
+    },
+  }));
+  assert.equal(removed.mutation, 'removed');
+});
+
+test('toggle accepts committed add without immediate readback but rejects the wrong mutation', async () => {
+  const request = {
+    roomId: '!room:example.org',
+    eventId: '$event:example.org',
+    key: '✅',
+    expectedOwn: true,
+  };
+  const added = await toggleReactionWithNativeOwner(request, async () => ({
+    available: true,
+    value: {
+      roomId: request.roomId,
+      targetEventId: request.eventId,
+      key: request.key,
+      mutation: 'added',
+    },
+  }));
+  assert.equal(added.mutation, 'added');
+
+  await assert.rejects(
+    toggleReactionWithNativeOwner(request, async () => ({
+      available: true,
+      value: {
+        roomId: request.roomId,
+        targetEventId: request.eventId,
+        key: request.key,
+        mutation: 'removed',
+      },
+    })),
+    /readback did not match/
   );
 });

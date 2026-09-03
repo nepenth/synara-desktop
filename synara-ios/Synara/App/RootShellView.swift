@@ -192,7 +192,7 @@ struct RootShellView: View {
                 try await environment.wipe.logoutAndWipe()
             } catch {
                 await MainActor.run {
-                    signOutError = LocalWipeError.sessionDeleteFailed.localizedDescription
+                    signOutError = LocalWipeError.displayMessage(for: error)
                 }
             }
         }

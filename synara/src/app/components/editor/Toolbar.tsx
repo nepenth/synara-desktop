@@ -29,6 +29,7 @@ import {
   toggleMark,
 } from './utils';
 import * as css from './Editor.css';
+import * as depthCss from '../../styles/Depth.css';
 import { BlockType, MarkType } from './types';
 import { HeadingLevel } from './slate';
 import { isMacOS } from '../../utils/user-agent';
@@ -73,6 +74,7 @@ export function MarkButton({ format, icon, label, tooltip }: MarkButtonProps) {
       {(triggerRef) => (
         <IconButton
           ref={triggerRef}
+          className={depthCss.quietInteractiveSurface}
           variant="SurfaceVariant"
           onClick={handleClick}
           aria-label={label}
@@ -107,6 +109,7 @@ export function BlockButton({ format, icon, label, tooltip }: BlockButtonProps) 
       {(triggerRef) => (
         <IconButton
           ref={triggerRef}
+          className={depthCss.quietInteractiveSurface}
           variant="SurfaceVariant"
           onClick={handleClick}
           aria-label={label}
@@ -167,6 +170,7 @@ export function HeadingBlockButton() {
                 {(triggerRef) => (
                   <IconButton
                     ref={triggerRef}
+                    className={depthCss.quietInteractiveSurface}
                     onClick={() => handleMenuSelect(1)}
                     aria-label="Heading 1"
                     size="400"
@@ -183,6 +187,7 @@ export function HeadingBlockButton() {
                 {(triggerRef) => (
                   <IconButton
                     ref={triggerRef}
+                    className={depthCss.quietInteractiveSurface}
                     onClick={() => handleMenuSelect(2)}
                     aria-label="Heading 2"
                     size="400"
@@ -199,6 +204,7 @@ export function HeadingBlockButton() {
                 {(triggerRef) => (
                   <IconButton
                     ref={triggerRef}
+                    className={depthCss.quietInteractiveSurface}
                     onClick={() => handleMenuSelect(3)}
                     aria-label="Heading 3"
                     size="400"
@@ -215,6 +221,7 @@ export function HeadingBlockButton() {
     >
       <IconButton
         style={{ width: 'unset' }}
+        className={depthCss.quietInteractiveSurface}
         variant="SurfaceVariant"
         onClick={handleMenuOpen}
         aria-label={isActive ? `Clear heading ${level ?? ''}` : 'Choose heading level'}
@@ -249,6 +256,7 @@ export function ExitFormatting({ tooltip }: ExitFormattingProps) {
       {(triggerRef) => (
         <IconButton
           ref={triggerRef}
+          className={depthCss.quietInteractiveSurface}
           variant="SurfaceVariant"
           onClick={handleClick}
           aria-label="Exit formatting"
@@ -365,6 +373,7 @@ export function Toolbar() {
               {(triggerRef) => (
                 <IconButton
                   ref={triggerRef}
+                  className={depthCss.quietInteractiveSurface}
                   variant="SurfaceVariant"
                   onClick={() => setIsMarkdown(!isMarkdown)}
                   aria-label={

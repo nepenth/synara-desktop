@@ -100,6 +100,17 @@ sandbox-exec: sandbox_apply: Operation not permitted
 If that appears while parsing the Swift package manifest, run the same script
 from a normal macOS Terminal or macOS CI runner with CoreSimulator access.
 
+Hosted CI uses two lanes:
+
+- **PR default (`ios-tests`):** `SYNARA_CORE_APPLE_SLICES=simulator-arm64` and
+  `IOS_TEST_SUITE=unit`. This is the merge-bar simulator proof.
+- **UI lane (`ios-ui-tests`):** same arm64 generate with `IOS_TEST_SUITE=ui`.
+  It runs on `main` / `release/**` pushes that already selected iOS, nightly
+  schedule, `workflow_dispatch`, or a PR labeled `needs-ios-ui`.
+
+Device Release / notification-service archive proof is the TestFlight job
+(`CHECK_IOS_DEVICE_RELEASE=1` remains available for a local or tagged rerun).
+
 The release gate is therefore:
 
 1. Run `scripts/ci-build.sh` from a normal macOS Terminal or a macOS CI runner.

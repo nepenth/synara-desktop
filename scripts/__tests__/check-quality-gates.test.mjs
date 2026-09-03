@@ -34,6 +34,10 @@ jobs:
     needs: [changes]
     runs-on: macos-latest
 ${iosBuildStep}
+  ios-ui-tests:
+    needs: [changes]
+    runs-on: macos-latest
+${iosBuildStep}
   synapse-native-reactions:
     name: Synapse native reaction proof
     needs: [changes]
@@ -102,13 +106,14 @@ ${iosBuildStep}
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs: [changes, validate, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-latest
     steps:
       - name: Require every scheduled client validation job
         env:
           DESKTOP_RESULT: \${{ needs.validate.result }}
           IOS_RESULT: \${{ needs.ios-tests.result }}
+          IOS_UI_RESULT: \${{ needs.ios-ui-tests.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: \${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: \${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: \${{ needs.synapse-native-polls.result }}
@@ -137,6 +142,7 @@ ${iosBuildStep}
           fail=0
           ok "Desktop/runtime validation" "$DESKTOP_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
+          ok "iOS simulator UI tests" "$IOS_UI_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
@@ -440,8 +446,8 @@ test("rejects an aggregate that drops a native synapse proof", () => {
   // the native synapse proof family remains a required client-validation signal.
   const result = inspect({
     ciWorkflow: ciWorkflow.replace(
-      "validate, ios-tests, synapse-native-reactions, synapse-native-attachments",
-      "validate, ios-tests, synapse-native-attachments"
+      "validate, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments",
+      "validate, ios-tests, ios-ui-tests, synapse-native-attachments"
     ),
   });
   assert.equal(result.ok, false);

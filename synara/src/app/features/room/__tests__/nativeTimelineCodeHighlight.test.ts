@@ -33,6 +33,10 @@ import {
 
 const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
 const formattedBody = readFileSync('src/app/features/room/nativeTimelineFormattedBody.tsx', 'utf8');
+const presentationProjection = readFileSync(
+  'src/app/features/room/nativeTimelinePresentationProjection.ts',
+  'utf8'
+);
 const highlight = readFileSync('src/app/features/room/nativeTimelineCodeHighlight.ts', 'utf8');
 const htmlCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
 const compatibilityPrismCss = readFileSync('src/app/plugins/react-prism/ReactPrism.css', 'utf8');
@@ -103,7 +107,8 @@ const ensurePythonGrammar = () => {
 
 test('native presenter routes formatted HTML through the sanitized Prism code-block path', () => {
   assert.match(presenter, /NativeFormattedBody/);
-  assert.match(formattedBody, /prepareNativeFormattedBody/);
+  assert.match(presentationProjection, /prepareNativeFormattedBody/);
+  assert.match(formattedBody, /classifyNativeFormattedElement/);
   assert.match(formattedBody, /react-prism\/ReactPrism/);
   assert.match(formattedBody, /highlightNativeCode/);
   assert.match(formattedBody, /gutterCode = displayCodeText/);
@@ -314,14 +319,15 @@ test('native formatted HTML applies the exact Matrix v1.19 presentation profile'
   assert.match(sanitized, /<s>legacy strike<\/s>/);
   assert.match(sanitized, /<ol start="10">/);
   assert.match(sanitized, /<ol><li>one<\/li><\/ol>/);
-  assert.match(sanitized, /<img src="mxc:\/\/example\.org\/media" alt="diagram" \/>/);
+  assert.doesNotMatch(sanitized, /<img|src=|mxc:\/\//);
+  assert.match(sanitized, /<span>diagram<\/span>/);
 });
 
 test('native formatted renderer explicitly owns spoilers, image fallback, and plain-body fallback', () => {
   assert.match(formattedBody, /data-mx-spoiler/);
   assert.match(formattedBody, /Reveal spoiler/);
   assert.match(formattedBody, /InlineImageFallback/);
-  assert.match(formattedBody, /prepareNativeFormattedBody/);
+  assert.match(presentationProjection, /prepareNativeFormattedBody/);
   assert.match(formattedBody, /fallbackBody/);
   assert.doesNotMatch(formattedBody, /<img/);
 });

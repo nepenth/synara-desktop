@@ -71,6 +71,7 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(service.requests, [request])
     }
 
+    @MainActor
     func testSessionStoreTransitions() throws {
         let homeserverURL = try XCTUnwrap(URL(string: "https://matrix.org"))
         let session = AuthenticatedSession(

@@ -28,6 +28,11 @@ struct RoomSummary: Identifiable, Equatable {
     let latestAgentCardEventID: String?
     let pendingAgentApprovals: [PendingAgentCardRef]
     let isFavorite: Bool
+    /// Authoritative Core tri-state. Security decisions must consume this value.
+    let encryptionStatus: SynaraRoomEncryptionStatus
+
+    /// Legacy display convenience. Unknown never becomes authoritative cleartext.
+    var isEncrypted: Bool { encryptionStatus == .encrypted }
 
     init(
         id: String,
@@ -45,7 +50,9 @@ struct RoomSummary: Identifiable, Equatable {
         latestAgentCard: SynaraAgentCard? = nil,
         latestAgentCardEventID: String? = nil,
         pendingAgentApprovals: [PendingAgentCardRef] = [],
-        isFavorite: Bool = false
+        isFavorite: Bool = false,
+        isEncrypted: Bool? = nil,
+        encryptionStatus: SynaraRoomEncryptionStatus? = nil
     ) {
         self.id = id
         self.name = name
@@ -63,6 +70,13 @@ struct RoomSummary: Identifiable, Equatable {
         self.latestAgentCardEventID = latestAgentCardEventID
         self.pendingAgentApprovals = pendingAgentApprovals
         self.isFavorite = isFavorite
+        if let encryptionStatus {
+            self.encryptionStatus = encryptionStatus
+        } else if let isEncrypted {
+            self.encryptionStatus = isEncrypted ? .encrypted : .notEncrypted
+        } else {
+            self.encryptionStatus = .unknown
+        }
     }
 
     var isAgentRoom: Bool {

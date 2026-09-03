@@ -58,12 +58,16 @@ enum TimelineRowAccessibility {
         deliveryStatus: TimelineDeliveryStatus?,
         kind: TimelineItem.Kind,
         replyCount: Int,
-        hasApprovalPrompt: Bool
+        hasApprovalPrompt: Bool,
+        hasInteractivePoll: Bool = false
     ) -> Bool {
         if deliveryStatus == .failed {
             return true
         }
         if hasApprovalPrompt {
+            return true
+        }
+        if hasInteractivePoll {
             return true
         }
         if case .agentCard = kind {

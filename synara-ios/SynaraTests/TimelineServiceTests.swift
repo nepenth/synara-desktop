@@ -5,6 +5,7 @@ import XCTest
 private struct MessageFormatCorpus: Decodable {
     let schemaVersion: Int
     let presentationFormattedBodyMaxBytes: Int
+    let coverage: [String: [String]]
     let cases: [MessageFormatCorpusCase]
 }
 
@@ -26,6 +27,12 @@ private struct MessageFormatCorpusCase: Decodable {
         let linkSchemes: [String]
         let containsSpoiler: Bool
         let forbiddenFragments: [String]
+        let semanticKinds: [String]?
+        let mentionTargets: [String]?
+        let spoilerReasons: [String]?
+        let inlineCode: [String]?
+        let codeBlocks: [String]?
+        let orderedListStarts: [Int]?
     }
 
     let id: String
@@ -52,6 +59,109 @@ private struct MessageFormatCorpusCase: Decodable {
     }
 }
 
+private func matrixMessageHasSemanticKind(
+    _ kind: String,
+    segments: [MatrixHTMLRenderer.Segment],
+    projection: MatrixHTMLRenderer.SelectionProjection
+) -> Bool {
+    switch kind {
+    case "bold":
+        return projection.richText.runs.contains { $0.style.contains(.bold) }
+    case "heading":
+        return segments.contains { if case .heading = $0 { return true }; return false }
+    case "inlineCode":
+        return projection.richText.runs.contains { $0.style.contains(.code) }
+    case "orderedList":
+        return projection.richText.plainText.range(
+            of: #"(?m)^(?:  )*-?\d+\. "#,
+            options: .regularExpression
+        ) != nil
+    case "preformattedCode":
+        return matrixCodeBlocks(in: segments).isEmpty == false
+    case "spoiler":
+        return projection.containsSpoilers
+    case "strikethrough":
+        return projection.richText.runs.contains { $0.style.contains(.strikethrough) }
+    case "table":
+        return segments.contains { if case .table = $0 { return true }; return false }
+    case "unorderedList":
+        return projection.richText.plainText.range(
+            of: #"(?m)^(?:  )*• "#,
+            options: .regularExpression
+        ) != nil
+    default:
+        return false
+    }
+}
+
+private func matrixCodeBlocks(in segments: [MatrixHTMLRenderer.Segment]) -> [String] {
+    segments.flatMap { segment -> [String] in
+        switch segment {
+        case let .code(block):
+            return [block.code]
+        case let .details(block):
+            return matrixCodeBlocks(in: block.content)
+        default:
+            return []
+        }
+    }
+}
+
+private func matrixSpoilerReasons(in segments: [MatrixHTMLRenderer.Segment]) -> [String] {
+    segments.flatMap { segment -> [String] in
+        switch segment {
+        case let .spoiler(block):
+            return block.reason.map { [$0] } ?? []
+        case let .inline(group):
+            return group.pieces.compactMap { piece in
+                if case let .spoiler(block) = piece { return block.reason }
+                return nil
+            }
+        case let .details(block):
+            return matrixSpoilerReasons(in: block.content)
+        case let .table(block):
+            let captionReasons: [String] = block.captionInlineContent?.pieces.compactMap { piece in
+                if case let .spoiler(spoiler) = piece { return spoiler.reason }
+                return nil
+            } ?? []
+            let cellReasons: [String] = block.rows.flatMap(\.cells).flatMap { cell -> [String] in
+                cell.inlineContent?.pieces.compactMap { piece in
+                    if case let .spoiler(spoiler) = piece { return spoiler.reason }
+                    return nil
+                } ?? []
+            }
+            return captionReasons + cellReasons
+        default:
+            return []
+        }
+    }
+}
+
+private func matrixRenderedOrderedListOrdinals(in plainText: String) -> [Int] {
+    guard let regex = try? NSRegularExpression(
+        pattern: #"(?m)^(?:  )*(-?\d+)\. "#
+    ) else { return [] }
+    let source = plainText as NSString
+    return regex.matches(
+        in: plainText,
+        range: NSRange(location: 0, length: source.length)
+    ).compactMap {
+        guard $0.numberOfRanges == 2 else { return nil }
+        return Int(source.substring(with: $0.range(at: 1)))
+    }
+}
+
+private func matrixRenderedListLines(in plainText: String) -> [String] {
+    plainText.split(separator: "\n", omittingEmptySubsequences: false).compactMap { line in
+        let rendered = String(line)
+        guard rendered.range(
+            of: #"^(?:  )*(?:(?:-?\d+)\.|•) .+$"#,
+            options: .regularExpression
+        ) != nil else { return nil }
+        return rendered
+    }
+}
+
 final class TimelineServiceTests: XCTestCase {
     private actor RecoveryInvocationCounter {
         private(set) var value = 0
@@ -75,12 +185,39 @@ final class TimelineServiceTests: XCTestCase {
 
         XCTAssertEqual(corpus.schemaVersion, 1)
         XCTAssertEqual(corpus.presentationFormattedBodyMaxBytes, 256 * 1_024)
-        XCTAssertEqual(Set(corpus.cases.map(\.id)).count, corpus.cases.count)
+        let fixtureIDs = Set(corpus.cases.map(\.id))
+        XCTAssertEqual(fixtureIDs.count, corpus.cases.count)
+        XCTAssertEqual(
+            Set(corpus.coverage.keys),
+            Set([
+                "executable-content",
+                "formatted-reply-fallback",
+                "inline-code",
+                "links",
+                "lists",
+                "malformed-html",
+                "mentions",
+                "plaintext-fallback",
+                "preformatted-code",
+                "presentation-size-boundary",
+                "remote-resource-blocking",
+                "spoilers",
+                "tables",
+            ]),
+            "shared corpus coverage register drifted"
+        )
+        for (area, ids) in corpus.coverage {
+            XCTAssertFalse(ids.isEmpty, "coverage area has no fixtures: \(area)")
+            for id in ids {
+                XCTAssertTrue(fixtureIDs.contains(id), "unknown \(area) fixture: \(id)")
+            }
+        }
 
         for fixture in corpus.cases {
             let html = fixture.expandedFormattedBody
             let sanitized = MatrixHTMLRenderer.sanitizedHTMLForClipboard(html: html)
             XCTAssertEqual(sanitized != nil, fixture.expect.accepted, fixture.id)
+            let segments = MatrixHTMLRenderer.segments(body: fixture.body, html: html)
             let projection = MatrixHTMLRenderer.selectionProjection(
                 body: fixture.body,
                 html: html,
@@ -99,6 +236,64 @@ final class TimelineServiceTests: XCTestCase {
             XCTAssertEqual(projection.containsSpoilers, fixture.expect.containsSpoiler, fixture.id)
             for forbidden in fixture.expect.forbiddenFragments {
                 XCTAssertFalse((sanitized ?? "").contains(forbidden), "\(fixture.id): retained \(forbidden)")
+            }
+            if fixture.id == "adversarial-mxc-inline-image" {
+                let clipboardHTML = sanitized ?? ""
+                XCTAssertFalse(clipboardHTML.contains("<img"), "\(fixture.id): retained img")
+                XCTAssertFalse(clipboardHTML.contains("mxc://"), "\(fixture.id): retained mxc")
+                XCTAssertFalse(clipboardHTML.contains("src="), "\(fixture.id): retained src")
+                XCTAssertTrue(text.contains("diagram"), "\(fixture.id): alt text missing")
+            }
+            let expectedKinds = fixture.expect.semanticKinds ?? []
+            for kind in expectedKinds {
+                XCTAssertTrue(
+                    matrixMessageHasSemanticKind(
+                        kind,
+                        segments: segments,
+                        projection: projection
+                    ),
+                    "\(fixture.id): missing semantic kind \(kind)"
+                )
+            }
+            XCTAssertEqual(
+                projection.richText.runs.compactMap(\.link).map(\.absoluteString)
+                    .filter { $0.hasPrefix("https://matrix.to/#/@") },
+                fixture.expect.mentionTargets ?? [],
+                "\(fixture.id): mention targets"
+            )
+            XCTAssertEqual(
+                matrixSpoilerReasons(in: segments),
+                fixture.expect.spoilerReasons ?? [],
+                "\(fixture.id): spoiler reasons"
+            )
+            for expected in fixture.expect.inlineCode ?? [] {
+                XCTAssertTrue(
+                    projection.richText.runs.contains {
+                        $0.text == expected && $0.style.contains(.code)
+                    },
+                    "\(fixture.id): missing inline code \(expected)"
+                )
+            }
+            XCTAssertEqual(
+                matrixCodeBlocks(in: segments),
+                fixture.expect.codeBlocks ?? [],
+                "\(fixture.id): code blocks"
+            )
+            let renderedOrdinals = matrixRenderedOrderedListOrdinals(
+                in: projection.richText.plainText
+            )
+            for expectedStart in fixture.expect.orderedListStarts ?? [] {
+                XCTAssertTrue(
+                    renderedOrdinals.contains(expectedStart),
+                    "\(fixture.id): missing rendered ordered-list start \(expectedStart)"
+                )
+            }
+            if expectedKinds.contains("orderedList") || expectedKinds.contains("unorderedList") {
+                XCTAssertEqual(
+                    matrixRenderedListLines(in: projection.richText.plainText),
+                    matrixRenderedListLines(in: fixture.body),
+                    "\(fixture.id): rendered list ordinals, nesting, or bullets drifted"
+                )
             }
         }
     }
@@ -2824,19 +3019,71 @@ final class TimelineServiceTests: XCTestCase {
         let service = MockRoomNotesService(now: { now })
         let message = TimelineItem(
             id: "$event", eventID: "$event", senderID: "@mina:example.org", timestamp: now,
-            kind: .text("Pinned message preview"), replyToEventID: nil, isEdited: false, reactions: [:]
+            kind: .text("Pinned message preview"), replyToEventID: nil,
+            actionCapabilities: TimelineRowActionCapabilities(
+                canReact: true,
+                canReply: true,
+                canEdit: false,
+                canRedact: false,
+                canReport: true,
+                canPin: false,
+                canForward: true,
+                canVote: false,
+                canDeclineCall: false
+            ),
+            isEdited: false, reactions: [:]
         )
 
-        guard case let .success(items) = await service.pinMessage(roomID: "!room:example.org", item: message) else {
+        let availability = TimelinePinActionAvailability.forItem(message)
+        XCTAssertTrue(availability.canPinToPrivateNotes)
+        XCTAssertFalse(availability.canPinToMatrixRoom)
+
+        guard case let .success(items) = await service.pinMessage(
+            roomID: "!room:example.org",
+            item: message
+        ) else {
             return XCTFail("Expected pinned message snapshot")
         }
         XCTAssertEqual(items.first?.kind, .message)
         XCTAssertEqual(items.first?.eventID, "$event")
         XCTAssertEqual(items.first?.body, "Pinned message preview")
 
-        let pending = TimelineItem.pendingMessage(body: "Not durable", senderID: "@mina:example.org", replyToEventID: nil)
+        let pending = TimelineItem.pendingMessage(
+            body: "Not durable",
+            senderID: "@mina:example.org",
+            replyToEventID: nil
+        )
         let pendingResult = await service.pinMessage(roomID: "!room:example.org", item: pending)
         XCTAssertEqual(pendingResult, .failure(.invalidItem))
+
+        let redacted = TimelineItem(
+            id: "$redacted", eventID: "$redacted", senderID: "@mina:example.org", timestamp: now,
+            kind: .redacted, replyToEventID: nil,
+            actionCapabilities: TimelineRowActionCapabilities(
+                canReact: false,
+                canReply: false,
+                canEdit: false,
+                canRedact: false,
+                canReport: true,
+                canPin: true,
+                canForward: false,
+                canVote: false,
+                canDeclineCall: false
+            ),
+            isEdited: false, reactions: [:]
+        )
+        XCTAssertEqual(
+            TimelinePinActionAvailability.forItem(redacted),
+            TimelinePinActionAvailability(
+                canPinToPrivateNotes: false,
+                canPinToMatrixRoom: false
+            )
+        )
+        let redactedResult = await service.pinMessage(
+            roomID: "!room:example.org",
+            item: redacted
+        )
+        XCTAssertEqual(redactedResult, .failure(.invalidItem))
     }
 
     func testTimelineSearchFilterMatchesMessageBody() {

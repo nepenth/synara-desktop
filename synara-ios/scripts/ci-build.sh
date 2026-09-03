@@ -5,8 +5,24 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/private/tmp/synara-ios-derived}"
 PACKAGE_CACHE_PATH="${IOS_PACKAGE_CACHE_PATH:-/private/tmp/synara-ios-package-cache}"
 RESULT_BUNDLE_DIR="${IOS_RESULT_BUNDLE_DIR:-/private/tmp/synara-ios-results}"
 RESULT_STAMP="${IOS_RESULT_STAMP:-$(date +%Y%m%d-%H%M%S)-$$}"
-BUILD_DESTINATION="${IOS_BUILD_DESTINATION:-generic/platform=iOS Simulator}"
-TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
+APPLE_SLICES="${SYNARA_CORE_APPLE_SLICES:-all}"
+# Xcode 26 rejects `{ generic:1, platform:iOS Simulator, arch:arm64 }`.
+# Named arm64 destinations exist; use one so the arm64-only XCFramework links.
+if [[ -n "${IOS_BUILD_DESTINATION:-}" ]]; then
+  BUILD_DESTINATION="$IOS_BUILD_DESTINATION"
+elif [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
+  BUILD_DESTINATION="platform=iOS Simulator,name=iPhone 17,arch=arm64"
+else
+  BUILD_DESTINATION="generic/platform=iOS Simulator"
+fi
+if [[ -n "${IOS_TEST_DESTINATION:-}" ]]; then
+  TEST_DESTINATION="$IOS_TEST_DESTINATION"
+elif [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
+  TEST_DESTINATION="platform=iOS Simulator,name=iPhone 17,arch=arm64"
+else
+  TEST_DESTINATION="platform=iOS Simulator,name=iPhone 17"
+fi
+TEST_SUITE="${IOS_TEST_SUITE:-all}"
 DEVICE_DERIVED_DATA_PATH="${IOS_DEVICE_DERIVED_DATA_PATH:-/private/tmp/synara-ios-device-derived}"
 CLONED_SOURCE_PACKAGES_DIR_PATH="${IOS_CLONED_SOURCE_PACKAGES_DIR_PATH:-}"
 export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-/private/tmp/synara-ios-module-cache}"
@@ -20,6 +36,13 @@ UNSIGNED_BUILD_ARGS=(
   CODE_SIGN_STYLE=Manual
   DEVELOPMENT_TEAM=
 )
+if [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
+  UNSIGNED_BUILD_ARGS+=(
+    ARCHS=arm64
+    ONLY_ACTIVE_ARCH=YES
+    EXCLUDED_ARCHS=x86_64
+  )
+fi
 PACKAGE_ARGS=(
   -packageCachePath "$PACKAGE_CACHE_PATH"
   -scmProvider system
@@ -31,6 +54,28 @@ PACKAGE_ARGS=(
 if [[ -n "$CLONED_SOURCE_PACKAGES_DIR_PATH" ]]; then
   PACKAGE_ARGS+=(-clonedSourcePackagesDirPath "$CLONED_SOURCE_PACKAGES_DIR_PATH")
 fi
+
+case "$TEST_SUITE" in
+  all)
+    TEST_ONLY_ARGS=()
+    PARALLEL_TESTING="${IOS_PARALLEL_TESTING:-NO}"
+    MAX_TEST_SIMULATORS="${IOS_MAX_TEST_SIMULATORS:-1}"
+    ;;
+  unit)
+    TEST_ONLY_ARGS=(-only-testing:SynaraTests)
+    PARALLEL_TESTING="${IOS_PARALLEL_TESTING:-YES}"
+    MAX_TEST_SIMULATORS="${IOS_MAX_TEST_SIMULATORS:-1}"
+    ;;
+  ui)
+    TEST_ONLY_ARGS=(-only-testing:SynaraUITests)
+    PARALLEL_TESTING="${IOS_PARALLEL_TESTING:-YES}"
+    MAX_TEST_SIMULATORS="${IOS_MAX_TEST_SIMULATORS:-2}"
+    ;;
+  *)
+    echo "IOS_TEST_SUITE must be all, unit, or ui (got $TEST_SUITE)" >&2
+    exit 1
+    ;;
+esac
 
 cd "$(dirname "$0")/.."
 
@@ -210,17 +255,25 @@ xcodebuild \
   "${UNSIGNED_BUILD_ARGS[@]}"
 
 if [[ "${RUN_IOS_TESTS:-0}" == "1" ]]; then
-  xcodebuild \
-    -project Synara.xcodeproj \
-    -scheme Synara \
-    -destination "$TEST_DESTINATION" \
-    -derivedDataPath "$DERIVED_DATA_PATH" \
-    -resultBundlePath "$RESULT_BUNDLE_DIR/test-$RESULT_STAMP.xcresult" \
-    -parallel-testing-enabled NO \
-    -maximum-concurrent-test-simulator-destinations 1 \
-    "${PACKAGE_ARGS[@]}" \
-    test-without-building \
+  test_command=(
+    xcodebuild
+    -project Synara.xcodeproj
+    -scheme Synara
+    -destination "$TEST_DESTINATION"
+    -derivedDataPath "$DERIVED_DATA_PATH"
+    -resultBundlePath "$RESULT_BUNDLE_DIR/test-$RESULT_STAMP.xcresult"
+    -parallel-testing-enabled "$PARALLEL_TESTING"
+    -maximum-concurrent-test-simulator-destinations "$MAX_TEST_SIMULATORS"
+  )
+  if [[ "$TEST_SUITE" != "all" ]]; then
+    test_command+=("${TEST_ONLY_ARGS[@]}")
+  fi
+  test_command+=(
+    "${PACKAGE_ARGS[@]}"
+    test-without-building
     "${UNSIGNED_BUILD_ARGS[@]}"
+  )
+  "${test_command[@]}"
 fi
 
 # The simulator product cannot prove the architecture, linkage, or stripped

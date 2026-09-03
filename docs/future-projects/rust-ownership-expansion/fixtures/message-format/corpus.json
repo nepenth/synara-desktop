@@ -2,6 +2,60 @@
   "schemaVersion": 1,
   "outboundTextPayloadMaxBytes": 65536,
   "presentationFormattedBodyMaxBytes": 262144,
+  "coverage": {
+    "formatted-reply-fallback": [
+      "adversarial-reply-fallback",
+      "golden-formatted-reply-current-content"
+    ],
+    "mentions": [
+      "golden-mentions-and-links",
+      "adversarial-mention-and-duplicate-href"
+    ],
+    "spoilers": [
+      "golden-spoiler-table",
+      "golden-spoiler-table-caption",
+      "adversarial-nested-spoiler"
+    ],
+    "links": [
+      "golden-mentions-and-links",
+      "adversarial-nonallowlisted-links",
+      "adversarial-mention-and-duplicate-href"
+    ],
+    "lists": ["golden-rich-structure", "golden-nested-lists"],
+    "inline-code": [
+      "golden-rich-structure",
+      "golden-formatted-reply-current-content"
+    ],
+    "preformatted-code": ["golden-hermes-approval", "golden-code-whitespace"],
+    "tables": [
+      "golden-spoiler-table",
+      "golden-spoiler-table-caption",
+      "golden-table-with-inline-code"
+    ],
+    "plaintext-fallback": [
+      "adversarial-content-only-fallback",
+      "adversarial-oversize-presentation",
+      "adversarial-oversize-unicode"
+    ],
+    "malformed-html": [
+      "adversarial-legacy-and-malformed",
+      "adversarial-nested-spoiler",
+      "adversarial-unterminated-comment"
+    ],
+    "executable-content": [
+      "adversarial-executable-content",
+      "adversarial-nested-spoiler"
+    ],
+    "remote-resource-blocking": [
+      "adversarial-executable-content",
+      "adversarial-mxc-inline-image"
+    ],
+    "presentation-size-boundary": [
+      "golden-presentation-limit",
+      "adversarial-oversize-presentation",
+      "adversarial-oversize-unicode"
+    ]
+  },
   "cases": [
     {
       "id": "golden-rich-structure",
@@ -14,7 +68,10 @@
         "textExcludes": [],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["heading", "bold", "orderedList", "inlineCode"],
+        "inlineCode": ["cargo test"],
+        "orderedListStarts": [1]
       },
       "notCompared": ["typography", "listMarkers", "prismTokens", "dynamicType"]
     },
@@ -25,11 +82,25 @@
       "formattedBody": "<p>⚠️ <strong>Dangerous command requires approval</strong></p><pre><code class=\"language-shell\">rm -rf /tmp/example\n</code></pre><p>Reply <code>!approve</code>, <code>!approve session</code>, <code>!approve always</code>, or <code>!deny</code>.</p>",
       "expect": {
         "accepted": true,
-        "textContains": ["Dangerous command requires approval", "rm -rf /tmp/example", "!approve session", "!approve always", "!deny"],
+        "textContains": [
+          "Dangerous command requires approval",
+          "rm -rf /tmp/example",
+          "!approve session",
+          "!approve always",
+          "!deny"
+        ],
         "textExcludes": [],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["bold", "inlineCode", "preformattedCode"],
+        "inlineCode": [
+          "!approve",
+          "!approve session",
+          "!approve always",
+          "!deny"
+        ],
+        "codeBlocks": ["rm -rf /tmp/example\n"]
       },
       "notCompared": ["approvalCardChrome", "syntaxHighlighting", "typography"]
     },
@@ -44,7 +115,8 @@
         "textExcludes": [],
         "linkSchemes": ["https", "http", "mailto", "ftp", "magnet"],
         "containsSpoiler": false,
-        "forbiddenFragments": ["javascript:", "data:text/html"]
+        "forbiddenFragments": ["javascript:", "data:text/html"],
+        "mentionTargets": ["https://matrix.to/#/@alice:example.org"]
       },
       "notCompared": ["linkColor", "target", "rel"]
     },
@@ -59,7 +131,9 @@
         "textExcludes": [],
         "linkSchemes": [],
         "containsSpoiler": true,
-        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["spoiler", "table"],
+        "spoilerReasons": ["deployment"]
       },
       "notCompared": ["tableChrome", "columnWidths", "spoilerChrome"]
     },
@@ -74,7 +148,9 @@
         "textExcludes": [],
         "linkSchemes": [],
         "containsSpoiler": true,
-        "forbiddenFragments": ["onclick=", "javascript:", "<script"]
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["spoiler", "table"],
+        "spoilerReasons": ["environment"]
       },
       "notCompared": ["tableChrome", "spoilerChrome"]
     },
@@ -82,29 +158,45 @@
       "id": "adversarial-executable-content",
       "class": "adversarial",
       "body": "tap safe",
-      "formattedBody": "<p><a href=\"javascript:alert(1)\" onclick=\"alert(2)\">tap</a><script>stolen-secret</script><img src=\"https://tracker.example/pixel\" alt=\"safe\"></p>",
+      "formattedBody": "<meta http-equiv=\"refresh\" content=\"0;url=data:text/html,owned\"><p><a href=\"javascript:alert(1)\" onclick=\"alert(2)\" onpointerenter=\"alert(3)\">tap</a><script>stolen-secret</script><img src=\"https://tracker.example/pixel\" alt=\"safe\"></p>",
       "expect": {
         "accepted": true,
         "textContains": ["tap", "safe"],
         "textExcludes": ["stolen-secret"],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["javascript:", "onclick=", "stolen-secret", "https://tracker.example", "<script"]
+        "forbiddenFragments": [
+          "javascript:",
+          "data:text/html",
+          "onclick=",
+          "onpointerenter=",
+          "http-equiv=",
+          "content=",
+          "stolen-secret",
+          "https://tracker.example",
+          "<script"
+        ]
       },
       "notCompared": ["inlineImageFallbackGlyph"]
     },
     {
       "id": "adversarial-nonallowlisted-links",
       "class": "adversarial",
-      "body": "matrix relative control",
-      "formattedBody": "<p><a href=\"matrix:roomid/abc\">matrix</a> <a href=\"/relative\">relative</a> <a href=\"https://example.org/&#10;javascript:alert(1)\">control</a></p>",
+      "body": "matrix relative control data entity",
+      "formattedBody": "<p><a href=\"matrix:roomid/abc\">matrix</a> <a href=\"/relative\">relative</a> <a href=\"https://example.org/&#10;javascript:alert(1)\">control</a> <a href=\"data:text/html,owned\">data</a> <a href=\"java&#x73;cript:alert(2)\">entity</a></p>",
       "expect": {
         "accepted": true,
-        "textContains": ["matrix", "relative", "control"],
+        "textContains": ["matrix", "relative", "control", "data", "entity"],
         "textExcludes": [],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["href=", "javascript:", "matrix:", "/relative"]
+        "forbiddenFragments": [
+          "href=",
+          "javascript:",
+          "data:text/html",
+          "matrix:",
+          "/relative"
+        ]
       },
       "notCompared": ["linkColor"]
     },
@@ -177,7 +269,13 @@
         "textExcludes": ["ignored title"],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["https://", "javascript:"]
+        "forbiddenFragments": [
+          "https://",
+          "javascript:",
+          "<img",
+          "src=",
+          "mxc://"
+        ]
       },
       "notCompared": ["inlineImageFallbackGlyph"]
     },
@@ -192,9 +290,199 @@
         "textExcludes": [],
         "linkSchemes": [],
         "containsSpoiler": false,
-        "forbiddenFragments": ["<strike", "<font", "onclick=", "javascript:"]
+        "forbiddenFragments": ["<strike", "<font", "onclick=", "javascript:"],
+        "semanticKinds": ["strikethrough"]
       },
       "notCompared": ["hexCase", "malformedTagBalancing"]
+    },
+    {
+      "id": "golden-formatted-reply-current-content",
+      "class": "golden",
+      "body": "Current answer uses safe_call().",
+      "formattedBody": "<mx-reply><blockquote><a href=\"https://matrix.to/#/!room:example.org/$old\">Alice</a><br>Old fallback must not render</blockquote></mx-reply><p><strong>Current answer</strong> uses <code>safe_call()</code>.</p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Current answer", "safe_call()"],
+        "textExcludes": ["Alice", "Old fallback must not render"],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": [
+          "<mx-reply",
+          "$old",
+          "Old fallback must not render"
+        ],
+        "semanticKinds": ["bold", "inlineCode"],
+        "inlineCode": ["safe_call()"]
+      },
+      "notCompared": ["replyPreviewChrome", "typography"]
+    },
+    {
+      "id": "golden-nested-lists",
+      "class": "golden",
+      "body": "4. Outer\n  • Inner\n    11. Eleven\n5. After",
+      "formattedBody": "<ol start=\"4\"><li>Outer<ul><li><strong>Inner</strong><ol start=\"11\"><li>Eleven</li></ol></li></ul></li><li>After</li></ol>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Outer", "Inner", "Eleven", "After"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["bold", "orderedList", "unorderedList"],
+        "orderedListStarts": [4, 11]
+      },
+      "notCompared": ["listMarkerGlyph", "indentation", "typography"]
+    },
+    {
+      "id": "golden-code-whitespace",
+      "class": "golden",
+      "body": "line one\n  line two & <tag>\n",
+      "formattedBody": "<pre><code class=\"language-rust\">line one\n  line two &amp; &lt;tag&gt;\n</code></pre>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["line one", "line two", "&", "<tag>"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["preformattedCode"],
+        "codeBlocks": ["line one\n  line two & <tag>\n"]
+      },
+      "notCompared": ["syntaxHighlighting", "lineNumbers", "typography"]
+    },
+    {
+      "id": "golden-table-with-inline-code",
+      "class": "golden",
+      "body": "State Value Build green",
+      "formattedBody": "<table><thead><tr><th>State</th><th>Value</th></tr></thead><tbody><tr><td>Build</td><td><code>green</code></td></tr></tbody></table>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["State", "Value", "Build", "green"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["onclick=", "javascript:", "<script"],
+        "semanticKinds": ["inlineCode", "table"],
+        "inlineCode": ["green"]
+      },
+      "notCompared": ["tableChrome", "columnWidths", "inlineCodePaint"]
+    },
+    {
+      "id": "adversarial-mention-and-duplicate-href",
+      "class": "adversarial",
+      "body": "Alice unsafe",
+      "formattedBody": "<p><a href=\"https://matrix.to/#/@alice:example.org\" href=\"javascript:alert(1)\">Alice</a> <a href=\"javascript:alert(2)\">unsafe</a></p>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["Alice", "unsafe"],
+        "textExcludes": [],
+        "linkSchemes": ["https"],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["javascript:", "alert(1)", "alert(2)"],
+        "mentionTargets": ["https://matrix.to/#/@alice:example.org"]
+      },
+      "notCompared": ["linkColor", "target", "rel"]
+    },
+    {
+      "id": "adversarial-nested-spoiler",
+      "class": "adversarial",
+      "body": "before classified unsafe after",
+      "formattedBody": "<p><unknown><strong>before</unknown> <span data-mx-spoiler=\"  incident details  \">classified <a href=\"javascript:alert(1)\">unsafe</a></span> after</strong></p><script>stolen-secret</script>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["before", "classified", "unsafe", "after"],
+        "textExcludes": ["stolen-secret"],
+        "linkSchemes": [],
+        "containsSpoiler": true,
+        "forbiddenFragments": [
+          "javascript:",
+          "stolen-secret",
+          "<script",
+          "<unknown"
+        ],
+        "semanticKinds": ["bold", "spoiler"],
+        "spoilerReasons": ["incident details"]
+      },
+      "notCompared": ["malformedTagBalancing", "spoilerChrome"]
+    },
+    {
+      "id": "adversarial-unterminated-comment",
+      "class": "adversarial",
+      "body": "visible fallback",
+      "formattedBody": "<p>visible</p><!-- hidden <script>stolen-secret</script>",
+      "expect": {
+        "accepted": true,
+        "textContains": ["visible"],
+        "textExcludes": ["hidden", "stolen-secret"],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["hidden", "stolen-secret", "<script", "<!--"]
+      },
+      "notCompared": ["malformedTagBalancing"]
+    },
+    {
+      "id": "adversarial-content-only-fallback",
+      "class": "adversarial",
+      "body": "safe plaintext fallback",
+      "formattedBody": "<mx-reply><blockquote>old secret fallback</blockquote></mx-reply><script>stolen-secret</script>",
+      "expect": {
+        "accepted": false,
+        "textContains": ["safe plaintext fallback"],
+        "textExcludes": ["old secret fallback", "stolen-secret"],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": [
+          "old secret fallback",
+          "stolen-secret",
+          "<script",
+          "<mx-reply"
+        ]
+      },
+      "notCompared": ["fallbackTypography"]
+    },
+    {
+      "id": "golden-presentation-limit",
+      "class": "golden",
+      "body": "bounded plaintext",
+      "formattedBody": "",
+      "generator": {
+        "kind": "repeatedText",
+        "prefix": "<p>",
+        "unit": "x",
+        "count": 262137,
+        "suffix": "</p>"
+      },
+      "expect": {
+        "accepted": true,
+        "textContains": ["xxxxxxxxxxxxxxxx"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["<script", "javascript:"]
+      },
+      "notCompared": ["allocationStrategy", "typography"]
+    },
+    {
+      "id": "adversarial-oversize-unicode",
+      "class": "adversarial",
+      "body": "bounded unicode fallback",
+      "formattedBody": "",
+      "generator": {
+        "kind": "repeatedText",
+        "prefix": "<p>",
+        "unit": "🙂",
+        "count": 65537,
+        "suffix": "</p>"
+      },
+      "expect": {
+        "accepted": false,
+        "textContains": ["bounded unicode fallback"],
+        "textExcludes": [],
+        "linkSchemes": [],
+        "containsSpoiler": false,
+        "forbiddenFragments": ["<script", "javascript:"]
+      },
+      "notCompared": ["allocationStrategy"]
     }
   ]
 }

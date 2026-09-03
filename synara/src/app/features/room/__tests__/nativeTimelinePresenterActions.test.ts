@@ -93,6 +93,64 @@ test('message, poll, and sticker rows share Core relation and reaction presentat
   assert.match(presenter, /variant=\{reaction\.own \? 'Primary' : 'Secondary'\}/);
 });
 
+test('poll and call actions consume Core capabilities with accessible pending controls', () => {
+  assert.match(presenter, /NativeTimelinePollAnswers/);
+  assert.match(presenter, /maximumSelections=\{Math\.max\(0, row\.maxSelections \?\? 1\)\}/);
+  assert.match(presenter, /nativePollSubmission/);
+  assert.match(presenter, /toggleNativePollSelection/);
+  assert.match(presenter, /aria-pressed=\{selected\}/);
+  assert.match(presenter, /disabled=\{!canVote \|\| closed \|\| submitting\}/);
+  assert.match(presenter, /disabled=\{declinePending\}/);
+  assert.match(presenter, /callDeclineWithNativeTimelineOwner/);
+  assert.doesNotMatch(presenter, /sendEvent\(['"]m\.poll\.response/);
+  assert.doesNotMatch(presenter, /sendEvent\(['"]m\.rtc/);
+});
+
+test('report and forward await exact native readback and expose safe accessible controls', () => {
+  assert.match(presenter, /aria-label="Optional report reason"/);
+  assert.match(presenter, /homeserver administrators/);
+  assert.match(presenter, /autoFocus/);
+  assert.match(presenter, /pendingProductAction/);
+  assert.match(presenter, /The forwarded copy will not be protected by room encryption/);
+  assert.match(presenter, /disabled=\{pendingProductAction !== undefined\}/);
+  assert.match(presenter, /await reportWithNativeTimelineAction/);
+  assert.match(presenter, /await forwardTextWithNativeTimelineAction/);
+  assert.match(presenter, /await forwardMediaWithNativeTimelineAction/);
+  assert.match(presenter, /nativeForwardEncryptionDecision/);
+  assert.match(presenter, /sendForward\(forwardConfirm\.roomId, true\)/);
+  assert.match(presenter, /confirmedEncryptionDowngrade/);
+  assert.match(presenter, /Room encryption status is unavailable\. Forwarding was not started\./);
+  assert.match(presenter, /maxLength=\{512\}/);
+});
+
+test('transient action surfaces use persistent locks and preserve editable arrow keys', () => {
+  assert.match(presenter, /const nativeTimelineActionsInFlight = new Set<string>\(\)/);
+  assert.match(
+    presenter,
+    /nativeTimelineActionFlightKey\(\s*sessionGeneration,\s*roomId,\s*eventId,\s*`reaction:\$\{key\}`/
+  );
+  assert.match(presenter, /nativePollFlights\.prepare\(actionKey, answerIds\)/);
+  assert.match(presenter, /nativePollFlights\.settleDispatch\(actionKey, true\)/);
+  assert.match(presenter, /nativePollFlights\.observeProjection/);
+  assert.match(presenter, /That reaction is already in progress/);
+  assert.match(presenter, /target\.isContentEditable/);
+  assert.match(presenter, /target\.tagName === 'INPUT'/);
+  assert.match(presenter, /target\.tagName === 'TEXTAREA'/);
+  assert.match(presenter, /!isTimelineActionEditableTarget\(event\.target\)/);
+});
+
+test('redacted and undecryptable rows retain Core-projected event actions', () => {
+  for (const [start, end] of [
+    ["case 'redacted'", "case 'encrypted_unavailable'"],
+    ["case 'encrypted_unavailable'", "case 'other'"],
+  ]) {
+    const branch = presenter.slice(presenter.indexOf(start), presenter.indexOf(end));
+    assert.match(branch, /NativeTimelineRowActionSurface/);
+    assert.match(branch, /capabilities/);
+    assert.match(branch, /eventId/);
+  }
+});
+
 test('Core-classified approval prompts cannot use the generic desktop reaction route', () => {
   assert.match(
     presenter,
