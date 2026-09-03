@@ -1629,7 +1629,8 @@ final class SharedCoreEventActionService: EventActionServicing {
                     status: readback.status,
                     expectedAction: "poll_vote",
                     expectedRoomID: roomID,
-                    expectedStatus: "voted"
+                    expectedStatus: "voted",
+                    expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
                 }
@@ -1652,7 +1653,8 @@ final class SharedCoreEventActionService: EventActionServicing {
                     status: readback.status,
                     expectedAction: "call_decline",
                     expectedRoomID: roomID,
-                    expectedStatus: "declined"
+                    expectedStatus: "declined",
+                    expectedEventID: item.eventID
                 ) else {
                     throw EventActionError.failed
                 }

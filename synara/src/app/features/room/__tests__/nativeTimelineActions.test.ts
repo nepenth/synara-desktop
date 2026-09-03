@@ -36,13 +36,13 @@ test('editTextWithNativeTimelineOwner accepts typed edit readback', async () => 
       schemaVersion: 1,
       action: 'edit_text',
       roomId: '!room:example.org',
-      eventId: '$two:example.org',
+      eventId: '$one:example.org',
       status: 'sent',
     })
   );
   assert.notEqual(readback, 'unavailable');
   if (readback === 'unavailable') return;
-  assert.equal(readback.eventId, '$two:example.org');
+  assert.equal(readback.eventId, '$one:example.org');
 });
 
 test('redact and forward owners reject mismatched action kinds', async () => {
@@ -154,7 +154,7 @@ test('poll vote and call decline owners accept typed readback', async () => {
       schemaVersion: 1,
       action: 'poll_vote',
       roomId: '!room:example.org',
-      eventId: '$vote:example.org',
+      eventId: '$poll:example.org',
       status: 'voted',
     })
   );
@@ -168,7 +168,7 @@ test('poll vote and call decline owners accept typed readback', async () => {
       schemaVersion: 1,
       action: 'call_decline',
       roomId: '!room:example.org',
-      eventId: '$decline:example.org',
+      eventId: '$rtc:example.org',
       status: 'declined',
     })
   );
@@ -219,6 +219,20 @@ test('product action owners reject readback for the wrong room, event, or status
         action: 'poll_vote',
         roomId: '!room:example.org',
         eventId: '$vote:example.org',
+        status: 'voted',
+      })
+    ),
+    'unavailable'
+  );
+  assert.equal(
+    await editTextWithNativeTimelineOwner(
+      { roomId: '!room:example.org', eventId: '$one:example.org', body: 'edited' },
+      true,
+      okInvoke('matrix_timeline_edit_text', {
+        schemaVersion: 1,
+        action: 'edit_text',
+        roomId: '!room:example.org',
+        eventId: '$other:example.org',
         status: 'sent',
       })
     ),

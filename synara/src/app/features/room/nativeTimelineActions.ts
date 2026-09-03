@@ -330,6 +330,7 @@ export async function editTextWithNativeTimelineOwner(
       action: 'edit_text',
       roomId: input.roomId,
       statuses: new Set(['sent']),
+      eventId: input.eventId,
     }) ?? 'unavailable'
   );
 }
@@ -453,6 +454,7 @@ export async function pollVoteWithNativeTimelineOwner(
       action: 'poll_vote',
       roomId: input.roomId,
       statuses: new Set(['voted']),
+      eventId: input.eventId,
     }) ?? 'unavailable'
   );
 }
@@ -469,6 +471,7 @@ export async function callDeclineWithNativeTimelineOwner(
     action: 'call_decline',
     roomId: input.roomId,
     statuses: new Set(['declined']),
+    eventId: input.eventId,
   });
   if (!accepted) {
     throw new Error('Native call decline readback did not match the requested action.');

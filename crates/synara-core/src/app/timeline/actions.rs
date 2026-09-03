@@ -106,7 +106,8 @@ pub struct NativeTimelineActionReadback {
     pub schema_version: u32,
     pub action: NativeTimelineActionKind,
     pub room_id: String,
-    /// For edit/forward: the newly sent event id. For redact: the redacted event id.
+    /// For forward: the newly sent event in the target room. For every other
+    /// action: the event the write targeted.
     pub event_id: String,
     #[serde(deserialize_with = "deserialize_action_status")]
     pub status: String,

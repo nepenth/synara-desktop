@@ -113,14 +113,14 @@ async fn read_response_bounded(
     response: Response,
     max_bytes: usize,
 ) -> Result<Vec<u8>, BoundedMediaError> {
+    if !response.status().is_success() {
+        return Err(BoundedMediaError::RequestFailed);
+    }
     if response
         .content_length()
         .is_some_and(|length| length > max_bytes as u64)
     {
         return Err(BoundedMediaError::TooLarge);
-    }
-    if !response.status().is_success() {
-        return Err(BoundedMediaError::RequestFailed);
     }
 
     let mut bytes = Vec::with_capacity(
@@ -158,8 +158,12 @@ fn decrypt_attachment_bounded(
     Ok(plaintext)
 }
 
-/// Download and, when needed, decrypt a Matrix media response without ever
-/// buffering more than `max_bytes` of attacker-controlled network content.
+/// Download and, when needed, decrypt a Matrix media response.
+///
+/// Plain responses buffer at most `max_bytes`. Encrypted responses buffer at
+/// most `max_bytes` of ciphertext plus at most `max_bytes` of plaintext during
+/// decrypt (peak ~2× `max_bytes`), because the ciphertext `Cursor` stays alive
+/// while the capped plaintext `Vec` is built.
 pub async fn download_media_bounded(
     client: &Client,
     request: &MediaRequestParameters,
@@ -451,6 +455,29 @@ mod tests {
                 Err(BoundedMediaError::RequestFailed)
             );
             assert_eq!(failure_server.await.expect("failure server").len(), 1);
+
+            let oversized_error_listener = TcpListener::bind("127.0.0.1:0")
+                .await
+                .expect("bind oversized-error server");
+            let oversized_error_client = restored_client(&oversized_error_listener).await;
+            let oversized_error_server = tokio::spawn(serve_responses(
+                oversized_error_listener,
+                vec![
+                    "HTTP/1.1 500 Internal Server Error\r\nContent-Length: 999999\r\nConnection: close\r\n\r\n"
+                        .to_owned(),
+                ],
+            ));
+            assert_eq!(
+                download_media_bounded(&oversized_error_client, &media_request(), 64).await,
+                Err(BoundedMediaError::RequestFailed)
+            );
+            assert_eq!(
+                oversized_error_server
+                    .await
+                    .expect("oversized-error server")
+                    .len(),
+                1
+            );
         })
         .await
         .expect("fallback loopback proof timed out");

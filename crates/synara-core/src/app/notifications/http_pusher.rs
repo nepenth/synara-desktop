@@ -99,7 +99,9 @@ impl NativeHttpPusherOwner {
         last_push_key: Option<&str>,
     ) -> Result<MatrixHttpPusherWriteResult, &'static str> {
         let app_id = parse_app_id(app_id)?;
-        let last_push_key = last_push_key.map(parse_push_key).transpose()?;
+        // An optional last-known key is only a secondary match hint. A missing
+        // or malformed hint must not disable display-name cleanup.
+        let last_push_key = optional_last_push_key(last_push_key);
         let response = self
             .client
             .send(get_pushers::v3::Request::new())
@@ -113,12 +115,22 @@ impl NativeHttpPusherOwner {
             })
             .map(|pusher| pusher.ids)
             .collect();
+        let mut first_error = None;
         for ids in matching_ids {
-            self.client
+            if let Err(diagnostic) = self
+                .client
                 .pusher()
                 .delete(ids)
                 .await
-                .map_err(|_| "v-pusher.sdk-failed")?;
+                .map_err(|_| "v-pusher.sdk-failed")
+            {
+                if first_error.is_none() {
+                    first_error = Some(diagnostic);
+                }
+            }
+        }
+        if let Some(diagnostic) = first_error {
+            return Err(diagnostic);
         }
         Ok(MatrixHttpPusherWriteResult { status: "ok" })
     }
@@ -130,9 +142,16 @@ fn matches_device_pusher(
     device_id: &str,
     last_push_key: Option<&str>,
 ) -> bool {
+    if !matches!(pusher.kind, PusherKind::Http(_)) {
+        return false;
+    }
     pusher.ids.app_id == app_id
         && (pusher.device_display_name == device_id
             || last_push_key.is_some_and(|key| pusher.ids.pushkey == key))
+}
+
+fn optional_last_push_key(last_push_key: Option<&str>) -> Option<String> {
+    last_push_key.and_then(|key| parse_push_key(key).ok())
 }
 
 fn parse_push_key(push_key: &str) -> Result<String, &'static str> {
@@ -408,5 +427,51 @@ mod tests {
             Some("different-key")
         ));
         assert!(!matches_device_pusher(&drifted, app_id, "DEVICE", None));
+    }
+
+    #[test]
+    fn device_cleanup_ignores_a_malformed_last_key_and_still_matches_display_name() {
+        let app_id = "com.whylandcreative.synara";
+        let exact = build_http_pusher(
+            "device-key",
+            app_id,
+            "https://push.example.org/_matrix/push/v1/notify",
+            "Synara",
+            "DEVICE",
+            "en-US",
+        )
+        .unwrap();
+
+        assert!(optional_last_push_key(Some("")).is_none());
+        assert!(optional_last_push_key(Some("known-key")).as_deref() == Some("known-key"));
+        assert!(matches_device_pusher(
+            &exact,
+            app_id,
+            "DEVICE",
+            optional_last_push_key(Some("")).as_deref()
+        ));
+    }
+
+    #[test]
+    fn device_cleanup_ignores_non_http_pushers_with_the_same_app_and_device() {
+        let app_id = "com.whylandcreative.synara";
+        let mut email = build_http_pusher(
+            "device-key",
+            app_id,
+            "https://push.example.org/_matrix/push/v1/notify",
+            "Synara",
+            "DEVICE",
+            "en-US",
+        )
+        .unwrap();
+        email.kind = PusherKind::Email(matrix_sdk::ruma::api::client::push::EmailPusherData::new());
+
+        assert!(!matches_device_pusher(&email, app_id, "DEVICE", None));
+        assert!(!matches_device_pusher(
+            &email,
+            app_id,
+            "DEVICE",
+            Some("device-key")
+        ));
     }
 }

@@ -365,7 +365,9 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                 // This removes stale registrations left by an earlier crash;
                 // exact-key deletion remains rotation/supersession-only.
                 try await logoutOwner.unregisterAllPushersForDevice(
-                    lastPushKey: registeredBinding?.pushKey ?? fullDeviceToken
+                    lastPushKey: [registeredBinding?.pushKey, fullDeviceToken]
+                        .compactMap { $0 }
+                        .first { $0.isEmpty == false }
                 )
                 SynaraNotificationDiagnostics.record(
                     .pusherUnregistrationSucceeded,

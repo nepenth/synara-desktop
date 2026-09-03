@@ -350,6 +350,32 @@ final class EventActionServiceTests: XCTestCase {
                 expectedEventID: "$event:matrix.org"
             )
         )
+        XCTAssertFalse(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: "poll_vote",
+                roomID: "!room:matrix.org",
+                eventID: "$other:matrix.org",
+                status: "voted",
+                expectedAction: "poll_vote",
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: "voted",
+                expectedEventID: "$poll:matrix.org"
+            )
+        )
+        XCTAssertFalse(
+            TimelineActionReadbackPolicy.accepts(
+                schemaVersion: 1,
+                action: "call_decline",
+                roomID: "!room:matrix.org",
+                eventID: "$other:matrix.org",
+                status: "declined",
+                expectedAction: "call_decline",
+                expectedRoomID: "!room:matrix.org",
+                expectedStatus: "declined",
+                expectedEventID: "$call:matrix.org"
+            )
+        )
     }
 
     func testIOSActionPresentationIsCapabilityGatedAccessibleAndCoreRouted() throws {

@@ -103,6 +103,8 @@ fn validate_poll_vote_selection(
     if max_selections == 0 {
         return Err("v-timeline-poll-vote-selection-bound-invalid");
     }
+    // Empty `answer_ids` is the MSC3381 retract/clear (`answers: []`). Desktop
+    // and iOS "Clear vote" presenters already submit that list.
     if answer_ids.len() > max_selections {
         return Err("v-timeline-poll-vote-too-many-answers");
     }
@@ -858,15 +860,14 @@ impl NativeTimelineOwner {
             .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
             .await
             .map_err(|_| "v-timeline-edit-prepare-failed")?;
-        let response = room
-            .send(edit_content)
+        room.send(edit_content)
             .await
             .map_err(|_| "v-timeline-edit-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::EditText,
             room_id: room_id.to_string(),
-            event_id: response.response.event_id.to_string(),
+            event_id: event_id.to_string(),
             status: "sent".into(),
         })
     }
@@ -1118,18 +1119,14 @@ impl NativeTimelineOwner {
         )?;
         let content = poll_response_content(event_id.as_str(), &answer_ids)
             .map_err(|_| "v-timeline-poll-vote-invalid-answer")?;
-        let sent_event_id = room
-            .send(content)
+        room.send(content)
             .await
-            .map_err(|_| "v-timeline-poll-vote-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .map_err(|_| "v-timeline-poll-vote-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::PollVote,
             room_id: room_id.to_string(),
-            event_id: sent_event_id,
+            event_id: event_id.to_string(),
             status: "voted".into(),
         })
     }
@@ -1153,18 +1150,14 @@ impl NativeTimelineOwner {
                     CallError::BadEventType => "v-timeline-call-decline-bad-event-type",
                     _ => "v-timeline-call-decline-prepare-failed",
                 })?;
-        let sent_event_id = room
-            .send(content)
+        room.send(content)
             .await
-            .map_err(|_| "v-timeline-call-decline-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .map_err(|_| "v-timeline-call-decline-send-failed")?;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::CallDecline,
             room_id: room_id.to_string(),
-            event_id: sent_event_id,
+            event_id: event_id.to_string(),
             status: "declined".into(),
         })
     }
@@ -2266,6 +2259,11 @@ impl NativeTimelineRegistry {
         // used for event readback; no JS relation inspection is involved.
         let focus_key = (room_id.to_owned(), target_event_id.to_string());
         if !self.focused_entries.contains_key(&focus_key) {
+            if self.focused_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                if let Some(oldest_key) = self.focused_entries.keys().next().cloned() {
+                    self.focused_entries.remove(&oldest_key);
+                }
+            }
             let room = client
                 .get_room(parse_room_id(room_id)?.as_ref())
                 .ok_or("v-send.2-reaction-room-not-found")?;
@@ -3563,7 +3561,10 @@ mod tests {
             validate_poll_vote_selection(vec!["a".to_owned()], &answers, 1, false).unwrap(),
             vec!["a".to_owned()]
         );
-        assert!(validate_poll_vote_selection(Vec::new(), &answers, 1, false).is_ok());
+        assert_eq!(
+            validate_poll_vote_selection(Vec::new(), &answers, 1, false).unwrap(),
+            Vec::<String>::new()
+        );
         assert_eq!(
             validate_poll_vote_selection(vec!["a".to_owned()], &answers, 1, true),
             Err("v-timeline-poll-vote-closed")

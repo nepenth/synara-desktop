@@ -468,11 +468,12 @@ pub async fn snapshot(
         // fetched local device set instead of blanking eligibility to
         // "could not check". A fresh store with no tracked devices projects
         // `Some(false)`, which keeps the actionable "open a verified session"
-        // guidance instead of a retry dead-end. Without a crypto machine
-        // there is no local set to project, so `None` is preserved.
+        // guidance instead of a retry dead-end. If the local set itself failed
+        // to load, keep `None` so presenters show Retry rather than a false
+        // "no eligible session".
         Ok(Err(_)) | Err(_) => match crypto_devices.as_ref() {
-            Err(matrix_sdk::Error::NoOlmMachine) => None,
-            Err(_) | Ok(_) => Some(eligible_local_authority(crypto_devices.as_ref().ok())),
+            Ok(devices) => Some(eligible_local_authority(Some(devices))),
+            Err(matrix_sdk::Error::NoOlmMachine) | Err(_) => None,
         },
     };
     let own_verification = match encryption.verification_state().get() {
