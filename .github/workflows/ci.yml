@@ -4,7 +4,11 @@ on:
   push:
     branches: [main, "release/**"]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
     branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
+  schedule:
+    # Nightly full client suite, including the XCUITest lane.
+    - cron: "17 11 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -29,6 +33,7 @@ jobs:
       rust_audit: ${{ steps.scope.outputs.rust_audit }}
       validate_frontend: ${{ steps.scope.outputs.validate_frontend }}
       ios: ${{ steps.scope.outputs.ios }}
+      ios_ui: ${{ steps.scope.outputs.ios_ui }}
       synapse_native_reactions: ${{ steps.scope.outputs.synapse_native_reactions }}
       synapse_native_attachments: ${{ steps.scope.outputs.synapse_native_attachments }}
       synapse_native_polls: ${{ steps.scope.outputs.synapse_native_polls }}
@@ -49,6 +54,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVENT_NAME: ${{ github.event_name }}
+          PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           set -euo pipefail
 
@@ -59,6 +65,7 @@ jobs:
             echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
+            echo "ios_ui=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
@@ -74,6 +81,7 @@ jobs:
             echo "rust_audit=false" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
             echo "ios=false" >> "$GITHUB_OUTPUT"
+            echo "ios_ui=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=false" >> "$GITHUB_OUTPUT"
@@ -82,10 +90,10 @@ jobs:
             echo "synapse_native_receipts=false" >> "$GITHUB_OUTPUT"
           }
 
-          if [[ "${EVENT_NAME}" == "workflow_dispatch" ]]; then
+          if [[ "${EVENT_NAME}" == "workflow_dispatch" || "${EVENT_NAME}" == "schedule" ]]; then
             echo "icon_only=false" >> "$GITHUB_OUTPUT"
             emit_full
-            echo "CI scope: full (workflow_dispatch)"
+            echo "CI scope: full (${EVENT_NAME})"
             exit 0
           fi
 
@@ -245,6 +253,20 @@ jobs:
             IOS=true
           fi
 
+          # XCUITests and the device-Release proof stay off the default PR
+          # path. Opt in with label needs-ios-ui; main/release pushes that
+          # already selected ios also run the UI lane.
+          if [[ "$IOS" != "true" ]]; then
+            echo "ios_ui=false" >> "$GITHUB_OUTPUT"
+            IOS_UI=false
+          elif [[ "${EVENT_NAME}" == "pull_request" && ",${PR_LABELS:-}," != *",needs-ios-ui,"* ]]; then
+            echo "ios_ui=false" >> "$GITHUB_OUTPUT"
+            IOS_UI=false
+          else
+            echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+            IOS_UI=true
+          fi
+
           # Two-client Synapse integration (JS runtime scenarios).
           # src-tauri-only Matrix harness work does not require this job.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
@@ -342,7 +364,7 @@ jobs:
             SYNAPSE_NATIVE_RECEIPTS=true
           fi
 
-          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} rust_tests=${VALIDATE_RUST_TESTS:-n/a} rust_audit=${RUST_AUDIT:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
+          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} rust_tests=${VALIDATE_RUST_TESTS:-n/a} rust_audit=${RUST_AUDIT:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} ios_ui=${IOS_UI} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
 
   validate-rust:
@@ -527,11 +549,9 @@ jobs:
     needs: [changes]
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
-    # Bounded cap allows post-test device-Release proof and result upload.
-    # The complete simulator suite can pass around 65m, after which the clean
-    # arm64 device build still needs roughly 30m; a 90m cap canceled that valid
-    # second proof mid-compile on PR #1047.
-    timeout-minutes: 120
+    # PR default: arm64 simulator slice + SynaraTests only. XCUITests and
+    # the device-Release NSE archive proof are separate lanes.
+    timeout-minutes: 50
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -540,13 +560,13 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
           toolchain: 1.93
-          targets: aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
           workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple-simulator
+          shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -562,17 +582,63 @@ jobs:
         working-directory: synara-ios
         env:
           RUN_IOS_TESTS: "1"
-          CHECK_IOS_DEVICE_RELEASE: "1"
-          SYNARA_CORE_APPLE_SLICES: simulator
+          IOS_TEST_SUITE: unit
+          SYNARA_CORE_APPLE_SLICES: simulator-arm64
 
       - name: Upload iOS result bundles
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ios-test-results
-          path: |
-            /private/tmp/synara-ios-results/*.xcresult
-            /private/tmp/synara-ios-results/notification_service_archive_report.txt
+          path: /private/tmp/synara-ios-results/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
+  ios-ui-tests:
+    name: iOS simulator UI tests
+    needs: [changes]
+    if: needs.changes.outputs.ios_ui == 'true'
+    runs-on: macos-26
+    timeout-minutes: 75
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+          targets: aarch64-apple-ios-sim
+
+      - name: Cache Apple SynaraCore build
+        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        with:
+          workspaces: ". -> target/synara-core-apple"
+          shared-key: ci-synara-core-apple-simulator-arm64
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Check SynaraCore Swift scaffold
+        run: node scripts/check-synara-core-swift-scaffold.mjs
+
+      - name: Check SynaraNseCore isolation
+        run: node scripts/check-synara-nse-core-isolation.mjs
+
+      - name: Build and run unsigned simulator UI tests
+        run: scripts/ci-build.sh
+        working-directory: synara-ios
+        env:
+          RUN_IOS_TESTS: "1"
+          IOS_TEST_SUITE: ui
+          SYNARA_CORE_APPLE_SLICES: simulator-arm64
+
+      - name: Upload iOS UI result bundles
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-ui-test-results
+          path: /private/tmp/synara-ios-results/*.xcresult
           if-no-files-found: warn
           retention-days: 14
 
@@ -789,7 +855,7 @@ jobs:
   quality-gate:
     name: Quality gate
     if: always()
-    needs: [changes, validate-rust, validate-frontend, ios-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -798,6 +864,7 @@ jobs:
           DESKTOP_RUST_RESULT: ${{ needs.validate-rust.result }}
           DESKTOP_FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
           IOS_RESULT: ${{ needs.ios-tests.result }}
+          IOS_UI_RESULT: ${{ needs.ios-ui-tests.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: ${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: ${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: ${{ needs.synapse-native-polls.result }}
@@ -828,6 +895,7 @@ jobs:
           ok "Desktop/runtime Rust validation" "$DESKTOP_RUST_RESULT" || fail=1
           ok "Desktop/runtime Node validation" "$DESKTOP_FRONTEND_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
+          ok "iOS simulator UI tests" "$IOS_UI_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1

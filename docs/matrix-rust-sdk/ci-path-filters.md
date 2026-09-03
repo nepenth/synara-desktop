@@ -26,20 +26,24 @@ either:
 Push to `main` / `release/**` and `workflow_dispatch` always run the **full**
 desktop/runtime suite.
 
-**TEMPORARY (2026-08-17):** hosted iOS simulator CI is paused until `main` is
-stable. `ios-tests` is hard-skipped (`if: false`); the `ios` scope output is
-forced `false` on pull requests, pushes, and `workflow_dispatch`. Quality gate
-already treats a skipped iOS job as OK. `ios-skeleton.yml` is skipped the same
-way. Release.yml TestFlight / exact-tag iOS jobs are **not** paused. Re-enable
-by restoring `ios=true` on the full-suite paths and
-`if: needs.changes.outputs.ios == 'true'` on `ios-tests`.
+iOS is split into two jobs so the PR merge bar is not the hour-long UI +
+device-Release proof:
+
+| Output | When it is true | Job |
+| --- | --- | --- |
+| `ios` | UniFFI / `synara-ios` / Apple generate paths change | **iOS simulator tests** — arm64 sim slice + `SynaraTests` only |
+| `ios_ui` | `ios` is true **and** the event is a `main`/`release/**` push, nightly schedule, `workflow_dispatch`, or a PR labeled **`needs-ios-ui`** | **iOS simulator UI tests** — `SynaraUITests`, two simulators |
+
+Device Release / NSE archive proof stays on `release.yml` TestFlight upload.
+`ios-skeleton.yml` remains a manual unsigned simulator diagnostic.
 
 ## PR scopes
 
 | Output | True when the PR diff touches… | Heavy job |
 | --- | --- | --- |
 | `validate` | `src-tauri/`, `synara/`, `scripts/`, root package lock/config, `ci.yml` | Validate desktop and runtime |
-| `ios` | *paused 2026-08-17 — always `false` until main is stable* | iOS simulator tests (skipped) |
+| `ios` | UniFFI / `synara-ios` / Apple generate paths | iOS simulator unit tests (`SynaraTests`, arm64) |
+| `ios_ui` | `ios` plus main/release push, nightly, dispatch, or label `needs-ios-ui` | iOS simulator UI tests (`SynaraUITests`) |
 | `synapse_native_*` | `src-tauri/src/matrix/**`, `synara/`, `scripts/synapse-integration.sh`, package lock, `ci.yml` | Native Matrix Rust synapse proofs (reactions/attachments/call/polls/rich-messages/threads/**receipts**) |
 
 > **Retired 2026-08-09:** the legacy `synapse` two-client **js-sdk** integration
@@ -48,13 +52,13 @@ by restoring `ios=true` on the full-suite paths and
 
 Examples:
 
-| PR content | validate | ios | synapse_native_* |
-| --- | --- | --- | --- |
-| `docs/matrix-rust-sdk/PROGRESS.md` only | skip | skip | skip |
-| `src-tauri/src/matrix/**` only | run | skip | run (rust path) |
-| `synara-ios/**` only | skip | skip (paused) | skip |
-| `synara/` frontend only | run | skip | run |
-| Workflow `ci.yml` change | run | skip (paused) | run |
+| PR content | validate | ios | ios_ui | synapse_native_* |
+| --- | --- | --- | --- | --- |
+| `docs/matrix-rust-sdk/PROGRESS.md` only | skip | skip | skip | skip |
+| `src-tauri/src/matrix/**` only | run | skip | skip | run (rust path) |
+| `synara-ios/**` only | skip | run | skip unless `needs-ios-ui` | skip |
+| `synara/` frontend only | run | skip | skip | run |
+| Workflow `ci.yml` change | run | run | skip unless `needs-ios-ui` | run |
 
 ## Quality gate
 
@@ -86,9 +90,9 @@ Push and pull_request for the same branch share one cancellable concurrency
 lane. Version/changelog/release-note diffs are **metadata-only** and skip iOS,
 Synapse proofs, Rust tests, and package smoke.
 
-CI iOS simulator jobs build a fat simulator XCFramework slice only. TestFlight
-builds the device slice. The four-architecture XCFramework remains the default
-local/full generate.
+CI iOS simulator jobs build the **arm64** simulator XCFramework slice only.
+TestFlight builds the device slice. Local `SYNARA_CORE_APPLE_SLICES=simulator`
+still produces the fat Intel+ARM slice; `all` remains the default full generate.
 
 ## Validate Rust cache
 

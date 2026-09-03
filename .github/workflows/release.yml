@@ -159,7 +159,7 @@ jobs:
     name: Exact-tag iOS simulator tests
     needs: [validate]
     runs-on: macos-26
-    # Match CI ios-tests: SNC generate + simulator tests exceed 45m.
+    # Exact-tag reruns the full simulator suite (unit + UI) on arm64.
     timeout-minutes: 90
     steps:
       - name: Checkout tagged commit
@@ -178,14 +178,14 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
         with:
           toolchain: 1.93
-          targets: aarch64-apple-ios-sim,x86_64-apple-ios
+          targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
         if: steps.reuse.outputs.reuse != 'true'
         uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
         with:
           workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple-simulator
+          shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
         if: steps.reuse.outputs.reuse != 'true'
@@ -197,7 +197,8 @@ jobs:
         working-directory: synara-ios
         env:
           RUN_IOS_TESTS: "1"
-          SYNARA_CORE_APPLE_SLICES: simulator
+          IOS_TEST_SUITE: all
+          SYNARA_CORE_APPLE_SLICES: simulator-arm64
 
       - name: Upload exact-tag iOS result bundles
         if: always() && steps.reuse.outputs.reuse != 'true'

@@ -24,11 +24,14 @@ case "$apple_slices" in
   simulator)
     targets=(aarch64-apple-ios-sim x86_64-apple-ios)
     ;;
+  simulator-arm64)
+    targets=(aarch64-apple-ios-sim)
+    ;;
   device)
     targets=(aarch64-apple-ios)
     ;;
   *)
-    printf 'generate-synara-core-swift: SYNARA_CORE_APPLE_SLICES must be all, simulator, or device (got %s)\n' "$apple_slices" >&2
+    printf 'generate-synara-core-swift: SYNARA_CORE_APPLE_SLICES must be all, simulator, simulator-arm64, or device (got %s)\n' "$apple_slices" >&2
     exit 1
     ;;
 esac
@@ -178,6 +181,11 @@ if [[ "$apple_slices" == "all" || "$apple_slices" == "simulator" ]]; then
     -output "$simulator_library"
   create_xcframework+=(
     -library "$simulator_library"
+    -headers "$headers_tmp"
+  )
+elif [[ "$apple_slices" == "simulator-arm64" ]]; then
+  create_xcframework+=(
+    -library "$(archive_for_target aarch64-apple-ios-sim)"
     -headers "$headers_tmp"
   )
 fi

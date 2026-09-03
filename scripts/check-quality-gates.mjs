@@ -299,6 +299,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "changes",
     "validate",
     "ios-tests",
+    "ios-ui-tests",
     "synapse-native-reactions",
     "synapse-native-attachments",
     "synapse-native-polls",
@@ -311,6 +312,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "validate-rust",
     "validate-frontend",
     "ios-tests",
+    "ios-ui-tests",
     "synapse-native-reactions",
     "synapse-native-attachments",
     "synapse-native-polls",
@@ -344,6 +346,9 @@ function pathFilteredCiAggregateError(jobLines) {
     const iosVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.ios-tests.result }}"
     )?.[0];
+    const iosUiVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.ios-ui-tests.result }}"
+    )?.[0];
     const synapseNativeReactionsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-reactions.result }}"
     )?.[0];
@@ -370,6 +375,7 @@ function pathFilteredCiAggregateError(jobLines) {
       !changesVar ||
       !desktopOk ||
       !iosVar ||
+      !iosUiVar ||
       !synapseNativeReactionsVar ||
       !synapseNativeAttachmentsVar ||
       !synapseNativePollsVar ||
@@ -406,6 +412,7 @@ function pathFilteredCiAggregateError(jobLines) {
     if (
       !desktopRefsOk ||
       !runText.includes(`"$${iosVar}"`) ||
+      !runText.includes(`"$${iosUiVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
       !runText.includes(`"$${synapseNativeAttachmentsVar}"`) ||
       !runText.includes(`"$${synapseNativePollsVar}"`) ||
@@ -437,7 +444,7 @@ function pathFilteredCiAggregateError(jobLines) {
     if (failExit >= 0) return undefined;
   }
 
-  return "job must require changes=success, allow success|skipped for validate/ios/native-synapse, and exit 1 on failure";
+  return "job must require changes=success, allow success|skipped for validate/ios/ios-ui/native-synapse, and exit 1 on failure";
 }
 
 export function inspectQualityGates({
@@ -462,6 +469,11 @@ export function inspectQualityGates({
   if (!hasIosTestBuildStep(ciJobs.get("ios-tests"))) {
     errors.push(
       "CI iOS validation must invoke synara-ios/scripts/ci-build.sh with RUN_IOS_TESTS=1 in the same step."
+    );
+  }
+  if (!hasIosTestBuildStep(ciJobs.get("ios-ui-tests"))) {
+    errors.push(
+      "CI iOS UI validation must invoke synara-ios/scripts/ci-build.sh with RUN_IOS_TESTS=1 in the same step."
     );
   }
   if (!hasIosTestBuildStep(iosJobs.get("test"))) {
