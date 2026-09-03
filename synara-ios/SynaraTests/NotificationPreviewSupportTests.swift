@@ -110,6 +110,28 @@ final class NotificationPreviewSupportTests: XCTestCase {
         )
     }
 
+    func testAppGroupUnavailableStageIsAFixedDecodableCode() throws {
+        XCTAssertEqual(
+            SynaraNotificationDiagnostics.Stage.appGroupUnavailable.rawValue,
+            "app-group-unavailable"
+        )
+        let suiteName = "synara.notification-diagnostics.app-group.test.\(UUID().uuidString)"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let runID = UUID()
+
+        SynaraNotificationDiagnostics.record(.appGroupUnavailable, runID: runID, defaults: defaults)
+
+        let entries = SynaraNotificationDiagnostics.entries(defaults: defaults)
+        XCTAssertEqual(entries.count, 1)
+        XCTAssertEqual(entries.first?.runID, runID)
+        XCTAssertEqual(entries.first?.stage, "app-group-unavailable")
+        XCTAssertEqual(
+            SynaraNotificationDiagnostics.Stage(rawValue: entries.first?.stage ?? ""),
+            .appGroupUnavailable
+        )
+    }
+
     func testNotificationDiagnosticsAreBoundedStageOnlyAndClearable() throws {
         let suiteName = "synara.notification-diagnostics.test.\(UUID().uuidString)"
         let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))

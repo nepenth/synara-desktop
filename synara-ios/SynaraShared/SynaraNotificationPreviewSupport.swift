@@ -71,6 +71,7 @@ enum SynaraNotificationDiagnostics {
         case contentCopyFailed = "content-copy-failed"
         case payloadInvalid = "payload-invalid"
         case preferencesDisabled = "preferences-disabled"
+        case appGroupUnavailable = "app-group-unavailable"
         case resolutionQueued = "resolution-queued"
         case resolutionCancelled = "resolution-cancelled"
         case sharedSessionMissing = "shared-session-missing"

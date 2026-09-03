@@ -53,7 +53,10 @@ authenticated write.
 6. When authorized, a decrypted `m.room.message` becomes a bounded local
    title/body preview. Missing session/store/event, undecryptable content,
    disabled previews, cancellation, and deadline expiry retain the nonblank
-   generic alert. The completion handler fires once.
+   generic alert. A missing App Group suite in the extension records the
+   distinct `app-group-unavailable` stage before the preference check, so a
+   sharing failure is never misread as a user-disabled `preferences-disabled`
+   outcome. The completion handler fires once.
 7. Foreground presentation is chosen by UIKit; background and terminated
    presentation are chosen by the OS. Tapping routes using sparse room/event
    metadata. Only the foreground application can execute an approval write.

@@ -42,6 +42,12 @@ final class NotificationService: UNNotificationServiceExtension {
             deliver(content, requestID: requestID)
             return
         }
+        guard SynaraSharedConstants.appGroupDefaults() != nil else {
+            logger.error("preview stage=app-group-unavailable")
+            SynaraNotificationDiagnostics.record(.appGroupUnavailable, runID: requestID)
+            deliver(content, requestID: requestID)
+            return
+        }
         guard showPreview || timeSensitiveApprovals else {
             logger.info("preview stage=preferences-disabled")
             SynaraNotificationDiagnostics.record(.preferencesDisabled, runID: requestID)
