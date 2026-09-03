@@ -2,6 +2,31 @@
 
 ## Unreleased
 
+## 2.1.25 - 2026-09-03
+
+- Moved timeline reactions, poll voting, reports, encrypted-room forwarding,
+  call declines, and their authoritative readback policies through the shared
+  Rust ownership path across desktop and iOS.
+- Prevented a committed reaction from appearing to fail while its projected
+  aggregation catches up, keeping duplicate taps from accidentally reversing
+  the successful action.
+- Added a shared Matrix and Hermes message-format corpus with stricter
+  cross-client sanitization for spoilers, inline media, tables, code, replies,
+  and other semantic message relationships.
+- Hardened iOS notification preview and HTTP-pusher lifecycle handling,
+  including bounded logout cleanup, privacy-safe extension diagnostics, and
+  time-sensitive agent-approval classification.
+- Preserved actionable encrypted-forwarding errors on iOS and kept verification
+  eligibility unknown when neither the homeserver nor local device store can
+  provide authoritative evidence.
+- Added bounded authenticated Matrix media download and decrypt paths with
+  explicit ciphertext/plaintext memory limits and honest diagnostic behavior.
+- Improved composer formatting controls, compact iOS room-list rhythm, and
+  desktop Inbox handling for valid empty and error-shaped homeserver responses.
+- Split iOS unit and UI validation into explicit arm64 simulator lanes while
+  retaining full UI coverage for main, release, nightly, and opted-in PR runs.
+- See [`docs/releases/v2.1.25.md`](docs/releases/v2.1.25.md) for details.
+
 ## 2.1.24 - 2026-09-01
 
 - Improved rich-message readability across desktop and iOS with semantic
