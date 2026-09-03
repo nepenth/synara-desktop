@@ -5,7 +5,15 @@ DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/private/tmp/synara-ios-derived}"
 PACKAGE_CACHE_PATH="${IOS_PACKAGE_CACHE_PATH:-/private/tmp/synara-ios-package-cache}"
 RESULT_BUNDLE_DIR="${IOS_RESULT_BUNDLE_DIR:-/private/tmp/synara-ios-results}"
 RESULT_STAMP="${IOS_RESULT_STAMP:-$(date +%Y%m%d-%H%M%S)-$$}"
-BUILD_DESTINATION="${IOS_BUILD_DESTINATION:-generic/platform=iOS Simulator}"
+APPLE_SLICES="${SYNARA_CORE_APPLE_SLICES:-all}"
+if [[ -n "${IOS_BUILD_DESTINATION:-}" ]]; then
+  BUILD_DESTINATION="$IOS_BUILD_DESTINATION"
+elif [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
+  # Rust XCFramework slices are arm64-only; universal simulator builds fail to link.
+  BUILD_DESTINATION="generic/platform=iOS Simulator,arch=arm64"
+else
+  BUILD_DESTINATION="generic/platform=iOS Simulator"
+fi
 TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17}"
 TEST_SUITE="${IOS_TEST_SUITE:-all}"
 DEVICE_DERIVED_DATA_PATH="${IOS_DEVICE_DERIVED_DATA_PATH:-/private/tmp/synara-ios-device-derived}"
@@ -21,6 +29,13 @@ UNSIGNED_BUILD_ARGS=(
   CODE_SIGN_STYLE=Manual
   DEVELOPMENT_TEAM=
 )
+if [[ "$APPLE_SLICES" == "simulator-arm64" ]]; then
+  UNSIGNED_BUILD_ARGS+=(
+    ARCHS=arm64
+    ONLY_ACTIVE_ARCH=YES
+    EXCLUDED_ARCHS=x86_64
+  )
+fi
 PACKAGE_ARGS=(
   -packageCachePath "$PACKAGE_CACHE_PATH"
   -scmProvider system
