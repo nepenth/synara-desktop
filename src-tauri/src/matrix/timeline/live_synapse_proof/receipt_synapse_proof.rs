@@ -20,7 +20,7 @@
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use matrix_sdk::config::SyncSettings;
 use matrix_sdk::room::Receipts;
 use matrix_sdk::ruma::api::client::room::create_room::v3::Request as CreateRoomRequest;
