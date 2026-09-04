@@ -223,8 +223,10 @@ jobs:
             RUST_AUDIT=true
           fi
 
-          # iOS simulator suite. Mechanical P1 moves under
-          # crates/synara-core/src/app/ stay on validate-rust.
+          # iOS path probe. Mechanical P1 moves under
+          # crates/synara-core/src/app/ stay on validate-rust. The long
+          # simulator jobs are gated again below: feature PRs into main skip
+          # them unless labeled needs-ios / needs-ios-ui.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             rust-toolchain.toml \
             Cargo.toml \
@@ -253,9 +255,8 @@ jobs:
             IOS=true
           fi
 
-          # XCUITests and the device-Release proof stay off the default PR
-          # path. Opt in with label needs-ios-ui; main/release pushes that
-          # already selected ios also run the UI lane.
+          # XCUITests stay off the default PR path. Label needs-ios-ui to
+          # opt in. Release cuts always run the full simulator lane.
           if [[ "$IOS" != "true" ]]; then
             echo "ios_ui=false" >> "$GITHUB_OUTPUT"
             IOS_UI=false
@@ -263,6 +264,37 @@ jobs:
             echo "ios_ui=false" >> "$GITHUB_OUTPUT"
             IOS_UI=false
           else
+            echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+            IOS_UI=true
+          fi
+
+          # Long iOS simulator jobs (~30-50m unit, longer with UI):
+          # - Feature PRs into main skip them (docs/script tweaks were
+          #   paying the full bill). Opt in with needs-ios or needs-ios-ui.
+          # - release/** push and PRs always run unit + UI — that is the
+          #   release-cut gate (release/vX.Y.Z is created from main).
+          # - Push to main still runs unit when iOS paths changed, so a
+          #   merged break is caught before the next release branch.
+          if [[ "${EVENT_NAME}" == "pull_request" ]]; then
+            if [[ "${GITHUB_BASE_REF:-}" == release/* ]]; then
+              echo "ios=true" >> "$GITHUB_OUTPUT"
+              IOS=true
+              echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+              IOS_UI=true
+            elif [[ ",${PR_LABELS:-}," == *",needs-ios-ui,"* ]]; then
+              echo "ios=true" >> "$GITHUB_OUTPUT"
+              IOS=true
+              echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+              IOS_UI=true
+            elif [[ ",${PR_LABELS:-}," != *",needs-ios,"* ]]; then
+              echo "ios=false" >> "$GITHUB_OUTPUT"
+              IOS=false
+              echo "ios_ui=false" >> "$GITHUB_OUTPUT"
+              IOS_UI=false
+            fi
+          elif [[ "${EVENT_NAME}" == "push" && "${GITHUB_REF_NAME:-}" == release/* ]]; then
+            echo "ios=true" >> "$GITHUB_OUTPUT"
+            IOS=true
             echo "ios_ui=true" >> "$GITHUB_OUTPUT"
             IOS_UI=true
           fi

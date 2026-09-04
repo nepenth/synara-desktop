@@ -22,6 +22,20 @@ export type NativePushRulesSnapshot = {
 const isMode = (value: unknown): value is NativePushRuleMode =>
   value === 'all' || value === 'mentions' || value === 'mute';
 
+type NativePushRulesListener = () => void;
+const listeners = new Set<NativePushRulesListener>();
+
+export function subscribeNativePushRules(listener: NativePushRulesListener): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function emitNativePushRulesChanged(): void {
+  listeners.forEach((listener) => listener());
+}
+
 export async function nativePushRulesSnapshot(): Promise<NativePushRulesSnapshot> {
   const result = await invokeDesktopWithAvailability<NativePushRulesSnapshot>(
     'matrix_push_rules_snapshot'
@@ -72,6 +86,7 @@ export async function nativePushRulesSetDefault(
   if (!result.available || result.value?.status !== 'ok') {
     throw new Error('Native push-rule update is unavailable.');
   }
+  emitNativePushRulesChanged();
 }
 
 export async function nativePushRulesSetMention(ruleId: string, enabled: boolean): Promise<void> {
@@ -85,6 +100,7 @@ export async function nativePushRulesSetMention(ruleId: string, enabled: boolean
   if (!result.available || result.value?.status !== 'ok') {
     throw new Error('Native mention-rule update is unavailable.');
   }
+  emitNativePushRulesChanged();
 }
 
 export async function nativePushRulesAddKeyword(keyword: string): Promise<void> {
@@ -97,6 +113,7 @@ export async function nativePushRulesAddKeyword(keyword: string): Promise<void> 
   if (!result.available || result.value?.status !== 'ok') {
     throw new Error('Native keyword update is unavailable.');
   }
+  emitNativePushRulesChanged();
 }
 
 export async function nativePushRulesRemoveKeyword(keyword: string): Promise<void> {
@@ -109,4 +126,5 @@ export async function nativePushRulesRemoveKeyword(keyword: string): Promise<voi
   if (!result.available || result.value?.status !== 'ok') {
     throw new Error('Native keyword update is unavailable.');
   }
+  emitNativePushRulesChanged();
 }
