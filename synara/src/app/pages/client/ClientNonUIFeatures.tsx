@@ -511,8 +511,8 @@ function MessageNotifications() {
         playSound();
       }
 
-      // Ack the delivered candidate so the 128-pending cap does not evict
-      // older seen-event keys. Dedup memory stays in Core after dismiss.
+      // Ack delivery to release the pending candidate. Core retains bounded
+      // recent-event dedup independently of the pending queue.
       void dismissNotificationWithNativeOwner(shownCandidateId).catch(() => undefined);
     },
     [

@@ -10,6 +10,7 @@ mod desktop_agent_actions;
 mod desktop_file_transfer;
 mod desktop_integration;
 mod desktop_logging;
+mod desktop_navigation;
 mod desktop_notifications;
 mod desktop_platform;
 mod desktop_sanitize;
@@ -622,6 +623,18 @@ pub fn run() {
                 WebviewUrl::External(parsed_url)
             };
 
+            // Match the actual dev server or selected packaged asset origin.
+            // Other localhost ports have unrelated content and must never load
+            // in this privileged webview, even though the ACL spans ports.
+            #[cfg(debug_assertions)]
+            let navigation_url = app.config().build.dev_url.clone()
+                .ok_or("Desktop development requires a configured devUrl")?;
+            #[cfg(not(debug_assertions))]
+            let navigation_url = match &window_url {
+                WebviewUrl::External(url) => url.clone(),
+                _ => return Err("Packaged desktop requires its local asset origin".into()),
+            };
+
             let app_handle = app.handle().clone();
             let bridge_script = format!(
                 "{}\nif (window.__SYNARA_DESKTOP__) {{ window.__SYNARA_DESKTOP__.supportsUpdater = {}; window.__SYNARA_DESKTOP__.supportsSecureSecretStore = {}; }}",
@@ -634,6 +647,7 @@ pub fn run() {
                 .inner_size(1280.0, 900.0)
                 .min_inner_size(960.0, 720.0)
                 .initialization_script(bridge_script)
+                .on_navigation(move |url| desktop_navigation::is_app_navigation(&navigation_url, url))
                 .on_new_window(move |url, _features| {
                     if desktop::is_safe_external_url(url.as_str()) {
                         if let Err(error) = app_handle.opener().open_url(url.as_str(), None::<&str>)

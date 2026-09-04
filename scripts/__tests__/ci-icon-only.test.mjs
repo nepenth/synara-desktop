@@ -10,7 +10,6 @@ test("accepts reviewed icon assets plus exact icon infrastructure", () => {
       "src-tauri/icons/icon.icns",
       "synara-ios/Synara/Resources/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png",
       "scripts/check-app-icons.mjs",
-      ".github/workflows/ci.yml",
       "docs/design/app-icon-refresh/README.md",
     ]),
     true
@@ -21,8 +20,6 @@ test("accepts release metadata only when a production icon also changed", () => 
   assert.equal(
     isIconOnlyChange([
       "src-tauri/icons/icon.png",
-      "package.json",
-      "src-tauri/tauri.conf.json",
       "CHANGELOG.md",
       "docs/releases/v2.1.16.md",
       "synara-ios/release-notes/v2.1.16-en-US.txt",
@@ -38,6 +35,11 @@ test("fails closed for production code, dependencies, and unrelated workflows", 
     "synara/src/app/App.tsx",
     "synara-ios/Synara/App/SynaraApp.swift",
     "package-lock.json.backup",
+    "package.json",
+    "package-lock.json",
+    "src-tauri/tauri.conf.json",
+    ".github/workflows/ci.yml",
+    ".github/workflows/desktop-package-smoke.yml",
     ".github/workflows/release.yml",
     "scripts/build-runtime.mjs",
   ]) {

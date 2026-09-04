@@ -335,3 +335,42 @@ test('message notifications never decide mute policy in TypeScript', () => {
   assert.doesNotMatch(source, /NotificationType\.Mute/);
   assert.doesNotMatch(source, /unreadNotificationCache/);
 });
+
+test('explicit mention metadata disables legacy matching but preserves keywords', () => {
+  const input = {
+    content: { 'm.mentions': {} },
+    userId: '@alice:example.org',
+    isEncrypted: false,
+    body: 'Alice alice @alice @room',
+    displayName: 'Alice',
+    localpart: 'alice',
+    flags: ALL_ON_FLAGS,
+  };
+  assert.equal(eventIsHighlightObservation(input), false);
+  assert.equal(eventIsHighlightObservation({ ...input, content: {} }), true);
+  assert.equal(eventIsHighlightObservation({ ...input, keywords: ['Alice'] }), true);
+  assert.equal(
+    eventIsHighlightObservation({
+      ...input,
+      content: { 'm.mentions': { user_ids: ['@alice:example.org'] } },
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      ...input,
+      content: { 'm.mentions': { room: true } },
+      flags: { ...ALL_ON_FLAGS, roomMention: false },
+    }),
+    false
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      ...input,
+      content: {},
+      body: '@room',
+      flags: { ...ALL_ON_FLAGS, atRoom: false },
+    }),
+    false
+  );
+});

@@ -414,8 +414,9 @@ impl NativeNotificationDecisionOwner {
             diagnostic_id: "v-notify.owner-poisoned",
         })?;
         // Classify the suppression exactly before enqueue: duplicates are
-        // permanent (survive dismiss), focus is transient. `enqueue` checks
-        // focus first, so pre-read both signals without leaking identifiers.
+        // retained across dismiss within the recent-event bound; focus is
+        // transient. `enqueue` checks focus first, so pre-read both signals
+        // without leaking identifiers.
         let duplicate = event_id_for_dedup
             .as_deref()
             .is_some_and(|event_id| index.is_duplicate(&candidate.room_id, event_id));

@@ -12,6 +12,10 @@ use super::error::NotificationError;
 
 /// Soft cap on pending candidates (memory / UI backlog bound).
 pub const MAX_PENDING_CANDIDATES: usize = 128;
+/// Recent-event dedup survives dismiss and pending eviction, but not forever.
+/// A long-running client retains at most this many successfully accepted events.
+pub const MAX_SEEN_EVENTS: usize = 4096;
+const MAX_IDENTIFIER_BYTES: usize = 512;
 
 /// Session-generation-stamped notification candidate index.
 #[derive(Debug, Default)]
@@ -22,6 +26,7 @@ pub struct NotificationIndex {
     by_id: HashMap<NotificationCandidateId, NotificationCandidate>,
     /// Dedup keys: (room_id, event_id) when event present.
     seen_events: HashSet<(RoomId, String)>,
+    seen_order: VecDeque<(RoomId, String)>,
     next_seq: u64,
     /// Currently focused room (suppress_if_focused_room honor).
     focused_room_id: Option<RoomId>,
@@ -34,6 +39,7 @@ impl NotificationIndex {
             order: VecDeque::new(),
             by_id: HashMap::new(),
             seen_events: HashSet::new(),
+            seen_order: VecDeque::new(),
             next_seq: 0,
             focused_room_id: None,
         }
@@ -73,7 +79,12 @@ impl NotificationIndex {
                 diagnostic_id: "p7.1-empty-candidate-id",
             });
         }
-        if c.room_id.is_empty() || !c.room_id.starts_with('!') {
+        if c.candidate_id.len() > MAX_IDENTIFIER_BYTES {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "p7.1-candidate-id-too-long",
+            });
+        }
+        if c.room_id.len() > MAX_IDENTIFIER_BYTES || !c.room_id.starts_with('!') {
             return Err(NotificationError::Invalid {
                 diagnostic_id: "p7.1-invalid-room-id",
             });
@@ -84,7 +95,7 @@ impl NotificationIndex {
             });
         }
         if let Some(ev) = &c.event_id {
-            if ev.is_empty() || !ev.starts_with('$') {
+            if ev.len() > MAX_IDENTIFIER_BYTES || !ev.starts_with('$') {
                 return Err(NotificationError::Invalid {
                     diagnostic_id: "p7.1-invalid-event-id",
                 });
@@ -117,28 +128,43 @@ impl NotificationIndex {
             }
         }
 
-        if let Some(ev) = &candidate.event_id {
-            let key = (candidate.room_id.clone(), ev.clone());
-            if self.seen_events.contains(&key) {
-                return Ok(None);
-            }
-            self.seen_events.insert(key);
+        let event_key = candidate
+            .event_id
+            .as_ref()
+            .map(|event_id| (candidate.room_id.clone(), event_id.clone()));
+        if event_key
+            .as_ref()
+            .is_some_and(|key| self.seen_events.contains(key))
+        {
+            return Ok(None);
         }
 
-        if self.by_id.len() >= MAX_PENDING_CANDIDATES {
-            // Drop oldest pending to make room. Keep seen_events so an
-            // already-shown event cannot notify again after cap eviction.
-            if let Some(old) = self.order.pop_front() {
-                self.by_id.remove(&old);
-            }
-        }
-
+        // Validate collisions before recording dedup or evicting a pending item.
+        // A rejected enqueue must not suppress a later valid retry.
         let id = candidate.candidate_id.clone();
         if self.by_id.contains_key(&id) {
             return Err(NotificationError::Invalid {
                 diagnostic_id: "p7.1-duplicate-candidate-id",
             });
         }
+
+        if let Some(key) = event_key {
+            if self.seen_order.len() == MAX_SEEN_EVENTS {
+                if let Some(old) = self.seen_order.pop_front() {
+                    self.seen_events.remove(&old);
+                }
+            }
+            self.seen_order.push_back(key.clone());
+            self.seen_events.insert(key);
+        }
+
+        if self.by_id.len() >= MAX_PENDING_CANDIDATES {
+            // Pending eviction does not remove the event from recent dedup.
+            if let Some(old) = self.order.pop_front() {
+                self.by_id.remove(&old);
+            }
+        }
+
         self.order.push_back(id.clone());
         self.by_id.insert(id.clone(), candidate);
         Ok(Some(id))
@@ -158,14 +184,11 @@ impl NotificationIndex {
 
     /// Acknowledge / dismiss a candidate (posted or user dismissed).
     pub fn dismiss(&mut self, candidate_id: &str) -> bool {
-        let Some(removed) = self.by_id.remove(candidate_id) else {
+        let Some(_) = self.by_id.remove(candidate_id) else {
             return false;
         };
         self.order.retain(|id| id != candidate_id);
-        if let Some(ev) = removed.event_id {
-            // Keep seen_events so we do not re-notify the same event.
-            let _ = ev;
-        }
+        // Dismissal retains the bounded recent-event dedup history.
         true
     }
 
@@ -173,6 +196,7 @@ impl NotificationIndex {
         self.order.clear();
         self.by_id.clear();
         self.seen_events.clear();
+        self.seen_order.clear();
     }
 
     /// Bump generation and wipe (logout / account switch).
