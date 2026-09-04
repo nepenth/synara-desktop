@@ -33,6 +33,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import classNames from 'classnames';
 
 import * as css from './MembersDrawer.css';
+import * as depthCss from '../../styles/Depth.css';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import {
@@ -76,7 +77,12 @@ function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
     typeof joinedMemberCount === 'number' ? `${millify(joinedMemberCount)} Members` : 'Members';
 
   return (
-    <Header className={css.MembersDrawerHeader} variant="Background" size="600">
+    <Header
+      className={css.MembersDrawerHeader}
+      variant="Background"
+      size="600"
+      data-tauri-drag-region
+    >
       <Box grow="Yes" alignItems="Center" gap="200">
         <Box grow="Yes" alignItems="Center" gap="200">
           <Text title={title} size="H5" truncate>
@@ -97,6 +103,7 @@ function MemberDrawerHeader({ joinedMemberCount }: MemberDrawerHeaderProps) {
             {(triggerRef) => (
               <IconButton
                 ref={triggerRef}
+                className={depthCss.quietInteractiveSurface}
                 variant="Background"
                 onClick={() => setPeopleDrawer(false)}
               >
@@ -141,6 +148,7 @@ function MemberItem({
 
   return (
     <MenuItem
+      className={depthCss.quietInteractiveSurface}
       style={{ padding: `0 ${config.space.S200}` }}
       aria-pressed={pressed}
       data-user-id={member.userId}
@@ -298,6 +306,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
                       }
                     >
                       <Chip
+                        className={depthCss.quietInteractiveSurface}
                         onClick={
                           ((evt) =>
                             setAnchor(
@@ -330,6 +339,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
                       }
                     >
                       <Chip
+                        className={depthCss.quietInteractiveSurface}
                         onClick={
                           ((evt) =>
                             setAnchor(
@@ -360,6 +370,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
                   after={
                     result && (
                       <Chip
+                        className={depthCss.quietInteractiveSurface}
                         variant={result.items.length > 0 ? 'Success' : 'Critical'}
                         size="400"
                         radii="Pill"
@@ -385,6 +396,7 @@ export function MembersDrawer({ room }: MembersDrawerProps) {
 
             <ScrollTopContainer scrollRef={scrollRef} anchorRef={scrollTopAnchorRef}>
               <IconButton
+                className={depthCss.quietInteractiveSurface}
                 onClick={() => virtualizer.scrollToOffset(0)}
                 variant="Surface"
                 radii="Pill"

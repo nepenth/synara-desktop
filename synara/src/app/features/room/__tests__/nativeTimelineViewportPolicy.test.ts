@@ -3,6 +3,8 @@ import test from 'node:test';
 
 import {
   NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+  nativeFollowLiveAttemptKey,
+  nativeFollowLiveTarget,
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
   latestNativeReadEventId,
@@ -133,5 +135,37 @@ test('hidden SDK-projected events still advance the exact read target', () => {
   assert.equal(
     latestNativeReadEventId([visibleMessage, undefined, hiddenMembershipTail]),
     hiddenMembershipTail
+  );
+});
+
+test('follow-live targets only painted tails on non-live positions', () => {
+  const base = {
+    roomId: '!room:example.org',
+    atLiveBottom: true,
+    positionKind: 'unread' as const,
+    latestVisibleEventId: '$tail:example.org',
+  };
+  assert.equal(nativeFollowLiveTarget(base), '$tail:example.org');
+  assert.equal(nativeFollowLiveTarget({ ...base, positionKind: 'restored' }), '$tail:example.org');
+  assert.equal(nativeFollowLiveTarget({ ...base, positionKind: 'focused' }), '$tail:example.org');
+  // Already live: the receipt path owns the tail, never follow.
+  assert.equal(nativeFollowLiveTarget({ ...base, positionKind: 'live_bottom' }), undefined);
+  // Not at the visual bottom, or no painted tail: no transition.
+  assert.equal(nativeFollowLiveTarget({ ...base, atLiveBottom: false }), undefined);
+  assert.equal(nativeFollowLiveTarget({ ...base, latestVisibleEventId: undefined }), undefined);
+  assert.equal(
+    nativeFollowLiveTarget({ ...base, latestVisibleEventId: 'not-an-event' }),
+    undefined
+  );
+});
+
+test('follow-live attempts are keyed per painted tail', () => {
+  assert.equal(
+    nativeFollowLiveAttemptKey('!room:example.org', '$a:example.org'),
+    '!room:example.org:$a:example.org:follow-live'
+  );
+  assert.notEqual(
+    nativeFollowLiveAttemptKey('!room:example.org', '$a:example.org'),
+    nativeFollowLiveAttemptKey('!room:example.org', '$b:example.org')
   );
 });

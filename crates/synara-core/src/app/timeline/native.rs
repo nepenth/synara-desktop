@@ -98,6 +98,20 @@ pub struct NativeTimelineJumpLatestRequest {
     pub stream_id: String,
 }
 
+/// Re-anchor one opened non-live view to the live bottom without reopening.
+///
+/// Compare-and-transition, mirroring automatic read receipts: the platform
+/// passes the exact tail event it painted at the visual bottom, and Core flips
+/// the stream position only when that event is still the SDK-authoritative
+/// live tail. A newer arrival fails closed so the client can paginate forward
+/// or jump to latest instead of claiming a live edge it cannot see.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineFollowLiveRequest {
+    pub stream_id: String,
+    pub observed_live_tail_event_id: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeTimelineReadAction {

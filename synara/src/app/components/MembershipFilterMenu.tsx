@@ -1,6 +1,7 @@
 import FocusTrap from 'focus-trap-react';
 import React from 'react';
 import { config, Menu, MenuItem, Text } from 'folds';
+import * as depthCss from '../styles/Depth.css';
 import { stopPropagation } from '../utils/keyboard';
 import { useMembershipFilterMenu } from '../hooks/useMemberFilter';
 
@@ -27,10 +28,11 @@ export function MembershipFilterMenu({
         escapeDeactivates: stopPropagation,
       }}
     >
-      <Menu style={{ padding: config.space.S100 }}>
+      <Menu className={depthCss.floatingSurface} style={{ padding: config.space.S100 }}>
         {membershipFilterMenu.map((menuItem, index) => (
           <MenuItem
             key={menuItem.name}
+            className={depthCss.quietInteractiveSurface}
             variant="Surface"
             aria-pressed={selected === index}
             size="300"

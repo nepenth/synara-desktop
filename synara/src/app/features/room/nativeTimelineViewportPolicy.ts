@@ -120,6 +120,36 @@ export const nativeLiveReadAttemptKey = (
   isMarkedUnread: boolean
 ): string => `${roomId}:${eventId}:${isMarkedUnread ? 'explicit-unread' : 'read-frontier'}`;
 
+export type NativeFollowLiveTargetInput = {
+  roomId: string;
+  atLiveBottom: boolean;
+  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | undefined;
+  latestVisibleEventId?: string;
+};
+
+/**
+ * Select the painted tail eligible for a Core-verified follow-live
+ * transition. Forward pagination never re-anchors a non-live stream, so a
+ * room opened at unread/restored/focused would otherwise gate automatic
+ * receipts off forever no matter how far the user scrolls. Core still
+ * verifies the observation against the SDK tail and fails closed when the
+ * loaded window does not reach live.
+ */
+export const nativeFollowLiveTarget = ({
+  atLiveBottom,
+  positionKind,
+  latestVisibleEventId,
+}: NativeFollowLiveTargetInput): string | undefined => {
+  if (!atLiveBottom) return undefined;
+  if (positionKind === 'live_bottom') return undefined;
+  if (!isValidEventIdHint(latestVisibleEventId)) return undefined;
+  return latestVisibleEventId;
+};
+
+/** One follow-live attempt per painted tail; a newer tail retries. */
+export const nativeFollowLiveAttemptKey = (roomId: string, eventId: string): string =>
+  `${roomId}:${eventId}:follow-live`;
+
 /** Resolve the SDK-projected tail without applying presentation filters. */
 export const latestNativeReadEventId = (
   eventIds: readonly (string | undefined)[]

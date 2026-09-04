@@ -1,6 +1,7 @@
 import FocusTrap from 'focus-trap-react';
 import React from 'react';
 import { config, Menu, MenuItem, Text } from 'folds';
+import * as depthCss from '../styles/Depth.css';
 import { stopPropagation } from '../utils/keyboard';
 import { useMemberSortMenu } from '../hooks/useMemberSort';
 
@@ -23,10 +24,11 @@ export function MemberSortMenu({ selected, onSelect, requestClose }: MemberSortM
         escapeDeactivates: stopPropagation,
       }}
     >
-      <Menu style={{ padding: config.space.S100 }}>
+      <Menu className={depthCss.floatingSurface} style={{ padding: config.space.S100 }}>
         {memberSortMenu.map((menuItem, index) => (
           <MenuItem
             key={menuItem.name}
+            className={depthCss.quietInteractiveSurface}
             variant="Surface"
             aria-pressed={selected === index}
             size="300"

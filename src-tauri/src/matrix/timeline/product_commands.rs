@@ -32,6 +32,20 @@ pub async fn matrix_timeline_jump_latest(
 }
 
 #[tauri::command]
+pub async fn matrix_timeline_follow_live(
+    core: State<'_, Arc<synara_core::Core>>,
+    stream_id: String,
+    observed_live_tail_event_id: String,
+) -> Result<crate::matrix::timeline::TimelineViewSnapshot, MatrixAuthCommandError> {
+    crate::bridge::timeline_follow_live::timeline_follow_live(
+        core.inner().as_ref(),
+        stream_id,
+        observed_live_tail_event_id,
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_event_readback(
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,

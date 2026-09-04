@@ -114,11 +114,12 @@ exploit was established.
 [Browserslist advisory](https://github.com/advisories/GHSA-c83g-rgw3-j3cx),
 [fast-uri advisory](https://github.com/advisories/GHSA-f65p-4m7j-42xc).
 
-## Open PR #1100: changes needed before merge
+## PR #1100: findings and integration corrections
 
-These findings concern code present only on the open PR, not on this branch's
-`main` baseline. This branch does not import or rewrite that PR's unmerged work.
-Both findings need behavioral regression tests on the PR before merge.
+These findings were identified on the initially open PR. Following the request
+to integrate warranted work and release, this branch incorporates #1100's desktop
+UI changes with the corrections below. #1100 independently merged to `main` at
+`4b986b64` during integration; the fixes also apply against that updated base.
 
 1. **P1 — iOS silent follow can acknowledge unseen history.** In
    `RoomTimelineView.silentlyFollowLive`, a valid-looking painted event ID is only
@@ -147,6 +148,21 @@ The associated tests mostly cover policy predicates, transport routing, and
 source strings. They do not establish that an old context window is rejected
 or that moving away during an async follow prevents acknowledgement. At review
 time #1100's iOS simulator checks were skipped despite Swift changes.
+
+Integration corrections:
+
+- Core promotes unread placement only when the stream holds the same SDK
+  provider as the registry's live room entry. A focused provider is rejected,
+  even when its loaded tail happens to match the current room tail. The exact
+  painted-tail comparison still rejects newer arrivals on a live provider.
+- The SDK-backed regression suite verifies focused rejection, stale-tail
+  rejection, unread-to-live promotion, and continued sync delivery after that
+  promotion. Desktop follow completions also check the captured stream and
+  session before updating presentation.
+- The iOS implicit `transitionToLive()` path and its predicate-only tests were
+  excluded from integration. The established explicit Jump to latest and
+  provider/viewport-gated acknowledgement paths remain. Historical windows do
+  not become live based on bottom visibility alone.
 
 ## Recommended follow-on work
 

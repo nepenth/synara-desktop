@@ -4,6 +4,7 @@ import {
   convertDesktopFileSrc,
   invokeDesktopWithAvailability,
   isSynaraDesktop,
+  type DesktopInvokeResult,
 } from '../../utils/desktop';
 import { parseHermesAgentPayload, type HermesAgentPayload } from '../../utils/hermes';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
@@ -265,6 +266,13 @@ export type NativeTimelineViewController = {
     intent: 'automatic_visibility' | 'explicit_user';
     observedLiveTailEventId?: string;
   }) => Promise<void>;
+  /**
+   * Re-anchor a non-live view to the live bottom without reopening. Fails
+   * closed when the observed tail is no longer the SDK live tail; on success
+   * the controller adopts the flipped position so live-tail gates observe the
+   * transition and automatic receipts can proceed.
+   */
+  followLive: (request: { observedLiveTailEventId: string }) => Promise<void>;
   jumpLatest: () => Promise<void>;
 };
 
@@ -529,6 +537,34 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
  * Mounted via NativeTimelinePresenter (V-TIMELINE.C1); JS RoomTimeline deleted
  * in V-TIMELINE.C2.
  */
+export type NativeTimelineFollowLiveInvoke = (
+  command: string,
+  args?: Record<string, unknown>
+) => Promise<DesktopInvokeResult<NativeTimelineViewSnapshot>>;
+
+const defaultFollowLiveInvoke: NativeTimelineFollowLiveInvoke = (command, args) =>
+  invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(command, args);
+
+/**
+ * Core-verified follow-live transition for one opened stream. Returns the
+ * flipped snapshot on success; Core fails closed when the observed tail is no
+ * longer live. There is no presenter fallback: a stale tail keeps the stream
+ * and the visible Jump to latest path.
+ */
+export async function requestNativeTimelineFollowLive(
+  input: { streamId: string; observedLiveTailEventId: string },
+  invoke: NativeTimelineFollowLiveInvoke = defaultFollowLiveInvoke
+): Promise<NativeTimelineViewSnapshot> {
+  const result = await invoke('matrix_timeline_follow_live', {
+    streamId: input.streamId,
+    observedLiveTailEventId: input.observedLiveTailEventId,
+  });
+  if (!result.available || !result.value) {
+    throw new Error('Native timeline follow-live is unavailable.');
+  }
+  return result.value;
+}
+
 export const useNativeTimelineView = (
   input: NativeTimelineOpenInput | undefined
 ): NativeTimelineViewController => {
@@ -655,6 +691,35 @@ export const useNativeTimelineView = (
         error: new Error('Native timeline read state lost synchronization.'),
       });
       throw new Error('Native timeline read state lost synchronization.');
+    },
+    [acceptSnapshot]
+  );
+
+  const followLive = useCallback(
+    async (request: { observedLiveTailEventId: string }) => {
+      const streamId = streamIdRef.current;
+      const snapshot = snapshotRef.current;
+      if (!streamId || !snapshot) {
+        throw new Error('Native timeline follow-live is unavailable.');
+      }
+      const next = await requestNativeTimelineFollowLive(
+        { streamId, observedLiveTailEventId: request.observedLiveTailEventId },
+        invokeDesktopWithAvailability
+      );
+      if (
+        streamIdRef.current !== streamId ||
+        snapshotRef.current?.sessionGeneration !== snapshot.sessionGeneration ||
+        isNativeTimelineReadbackStale(snapshotRef.current, next)
+      ) {
+        return;
+      }
+      // Adopt the flipped position so live-tail gates observe the transition.
+      selectedPositionRef.current = next.position;
+      if (acceptSnapshot(next)) {
+        return;
+      }
+      // A superseded follow is not a desync: the stream keeps flowing and the
+      // next painted tail retries through the same path.
     },
     [acceptSnapshot]
   );
@@ -839,7 +904,7 @@ export const useNativeTimelineView = (
     };
   }, [acceptSnapshot, nativeRequest]);
 
-  return { state, paginate, setReadState, jumpLatest };
+  return { state, paginate, setReadState, followLive, jumpLatest };
 };
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>

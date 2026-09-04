@@ -122,7 +122,11 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   };
 
   return (
-    <Menu ref={ref} style={{ maxWidth: toRem(160), width: '100vw' }}>
+    <Menu
+      ref={ref}
+      className={depthCss.floatingSurface}
+      style={{ maxWidth: toRem(160), width: '100vw' }}
+    >
       {invitePrompt && (
         <InviteUserPrompt
           room={room}
@@ -138,6 +142,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           size="300"
           after={<Icon size="100" src={unread ? Icons.CheckTwice : Icons.MessageUnread} />}
           radii="300"
+          className={depthCss.quietInteractiveSurface}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
             {unread ? 'Mark as Read' : 'Mark as Unread'}
@@ -155,6 +160,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
                 )
               }
               radii="300"
+              className={depthCss.quietInteractiveSurface}
               aria-pressed={opened}
               onClick={handleOpen}
             >
@@ -174,6 +180,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           size="300"
           after={<Icon size="100" src={Icons.UserPlus} />}
           radii="300"
+          className={depthCss.quietInteractiveSurface}
           aria-pressed={invitePrompt}
           disabled={!canInvite}
         >
@@ -186,6 +193,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           size="300"
           after={<Icon size="100" src={Icons.Link} />}
           radii="300"
+          className={depthCss.quietInteractiveSurface}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
             Copy Link
@@ -196,6 +204,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
           size="300"
           after={<Icon size="100" src={Icons.Setting} />}
           radii="300"
+          className={depthCss.quietInteractiveSurface}
         >
           <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
             Room Settings
@@ -209,6 +218,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
                 size="300"
                 after={<Icon size="100" src={Icons.RecentClock} />}
                 radii="300"
+                className={depthCss.quietInteractiveSurface}
                 aria-pressed={promptJump}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
@@ -241,6 +251,7 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
                 size="300"
                 after={<Icon size="100" src={Icons.ArrowGoLeft} />}
                 radii="300"
+                className={depthCss.quietInteractiveSurface}
                 aria-pressed={promptLeave}
               >
                 <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
@@ -338,6 +349,7 @@ export function RoomViewHeader({
 
   return (
     <PageHeader
+      data-tauri-drag-region
       className={ContainerColor({ variant: 'SurfaceVariant' })}
       balance={screenSize === ScreenSize.Mobile}
     >
