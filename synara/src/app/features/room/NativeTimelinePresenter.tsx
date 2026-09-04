@@ -76,6 +76,8 @@ import { stopPropagation } from '../../utils/keyboard';
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import {
+  nativeFollowLiveAttemptKey,
+  nativeFollowLiveTarget,
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
   latestNativeReadEventId,
@@ -1913,7 +1915,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [focusEventId, openingViewport, roomId]
   );
   const controller = useNativeTimelineView(input);
-  const { setReadState } = controller;
+  const { setReadState, followLive } = controller;
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const activeSessionGeneration = readyState?.snapshot.sessionGeneration;
@@ -1994,6 +1996,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
 
   const liveTailSubmittedKeyRef = useRef<string | undefined>(undefined);
   const liveTailMarkGenerationRef = useRef(0);
+  const followLiveSubmittedKeyRef = useRef<string | undefined>(undefined);
   useEffect(() => {
     const updateDocumentActive = () => {
       setDocumentActive(document.visibilityState === 'visible' && document.hasFocus());
@@ -2018,6 +2021,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     lastTotalSizeRef.current = 0;
     pendingBackwardGrowRef.current = false;
     liveTailSubmittedKeyRef.current = undefined;
+    followLiveSubmittedKeyRef.current = undefined;
     setAtLiveBottom(false);
   }, [roomId]);
 
@@ -2127,6 +2131,70 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       mutationObserver?.disconnect();
     };
   }, [liveTailAlreadyRead, liveTailMarkReadKey, liveTailReadTarget, setReadState]);
+
+  // A room opened at an unread/restored/focused position keeps that position
+  // no matter how far the user scrolls: forward pagination never re-anchors
+  // the stream, so automatic receipts stay gated off forever. When the painted
+  // tail is visually at the bottom, attempt one Core-verified follow-live
+  // transition per tail; success flips the snapshot to live_bottom and the
+  // receipt effect above fires. A stale tail fails closed (Jump to latest
+  // stays visible) and a newer tail retries through a fresh key.
+  const followLiveTarget =
+    readyState && atLiveBottom
+      ? nativeFollowLiveTarget({
+          roomId,
+          atLiveBottom,
+          positionKind: readyState.selectedPosition.kind,
+          latestVisibleEventId: latestRemoteTailEventId,
+        })
+      : undefined;
+  const followLiveKey =
+    followLiveTarget !== undefined
+      ? nativeFollowLiveAttemptKey(roomId, followLiveTarget)
+      : undefined;
+  useEffect(() => {
+    if (!followLiveKey || !followLiveTarget) return undefined;
+    if (followLiveSubmittedKeyRef.current === followLiveKey) return undefined;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return undefined;
+    let cancelled = false;
+    let timer = 0;
+    let attempted = false;
+    const attemptFollowLive = () => {
+      if (cancelled || attempted) return;
+      const paintedAtBottom = Boolean(
+        scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 8 &&
+          document.visibilityState === 'visible' &&
+          document.hasFocus()
+      );
+      if (!paintedAtBottom) return;
+      attempted = true;
+      followLiveSubmittedKeyRef.current = followLiveKey;
+      void followLive({ observedLiveTailEventId: followLiveTarget }).catch(() => {
+        // Tail not loaded or superseded: keep the stream and the visible Jump
+        // to latest path. A newer tail retries through a fresh key.
+        if (followLiveSubmittedKeyRef.current === followLiveKey) {
+          followLiveSubmittedKeyRef.current = undefined;
+        }
+      });
+    };
+    const scheduleAttempt = () => {
+      if (cancelled || attempted) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(attemptFollowLive, 500);
+    };
+    scrollEl.addEventListener('scroll', scheduleAttempt, { passive: true });
+    window.addEventListener('focus', scheduleAttempt);
+    document.addEventListener('visibilitychange', scheduleAttempt);
+    scheduleAttempt();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+      scrollEl.removeEventListener('scroll', scheduleAttempt);
+      window.removeEventListener('focus', scheduleAttempt);
+      document.removeEventListener('visibilitychange', scheduleAttempt);
+    };
+  }, [followLiveKey, followLiveTarget, followLive, roomId]);
 
   useEffect(() => {
     if (!readyState) return undefined;

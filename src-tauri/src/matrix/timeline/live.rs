@@ -10,7 +10,7 @@ use tauri::{AppHandle, Emitter};
 pub use synara_core::app::timeline::{
     NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineFollowLiveRequest, NativeTimelineItem, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
     NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
     NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
     NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,

@@ -58,17 +58,18 @@ use super::{
     NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEventReadback, NativeTimelineItem, NativeTimelineJumpLatestRequest,
-    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineReaction, NativeTimelineReactionSender, NativeTimelineReadAction,
-    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, NativeTimelineViewportHint,
-    NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
-    TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
-    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
-    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineEventReadback, NativeTimelineFollowLiveRequest, NativeTimelineItem,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
+    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry,
+    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
+    TimelineRoomActionAuthority, TimelineViewCapabilities, TimelineViewDeltaBatch,
+    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
+    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
@@ -404,6 +405,19 @@ impl NativeTimelineOwner {
             .lock()
             .await
             .set_read_state(&self.client, request)
+            .await
+    }
+
+    /// Re-anchor one opened non-live view to the live bottom without reopening.
+    /// Fails closed when the observed tail is no longer the SDK live tail.
+    pub async fn follow_live_tail(
+        &self,
+        request: NativeTimelineFollowLiveRequest,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        self.registry
+            .lock()
+            .await
+            .follow_live_tail(&self.client, request)
             .await
     }
 
@@ -1798,6 +1812,53 @@ impl NativeTimelineRegistry {
             acknowledged_event_id: acknowledged_event_id.map(|event_id| event_id.to_string()),
             snapshot,
         })
+    }
+
+    /// Re-anchor one opened non-live view to the live bottom without reopening.
+    ///
+    /// Compare-and-transition, mirroring automatic read receipts: the platform
+    /// passes the exact tail event it painted at the visual bottom, and the
+    /// stream position flips only when that event is still the
+    /// SDK-authoritative live tail. A newer arrival fails closed with
+    /// `v-timeline-follow-live-tail-not-loaded` so the client paginates
+    /// forward or jumps to latest instead of claiming a live edge it cannot
+    /// see. Streams already at the live bottom succeed idempotently without
+    /// consulting the tail.
+    pub async fn follow_live_tail(
+        &mut self,
+        client: &Client,
+        request: NativeTimelineFollowLiveRequest,
+    ) -> Result<TimelineViewSnapshot, &'static str> {
+        let raw_observed = request.observed_live_tail_event_id.trim();
+        if raw_observed.is_empty() {
+            return Err("v-timeline-follow-live-tail-required");
+        }
+        let observed = parse_action_event_id(raw_observed, "v-timeline-follow-live-tail-invalid")?;
+        let already_live = self
+            .view_streams
+            .get(&request.stream_id)
+            .ok_or("v-timeline-view-not-open")
+            .map(|stream| stream.position == TimelineViewPosition::LiveBottom)?;
+        if !already_live {
+            let sdk_tail = self
+                .view_streams
+                .get(&request.stream_id)
+                .ok_or("v-timeline-view-not-open")?
+                .timeline
+                .latest_event_id()
+                .await;
+            match sdk_tail {
+                Some(tail) if tail == observed => {
+                    self.view_streams
+                        .get_mut(&request.stream_id)
+                        .ok_or("v-timeline-view-not-open")?
+                        .position = TimelineViewPosition::LiveBottom;
+                }
+                _ => return Err("v-timeline-follow-live-tail-not-loaded"),
+            }
+        }
+        self.view_snapshot_for_stream(client, &request.stream_id)
+            .await
     }
 
     /// Send receipts and/or the unread flag for a room that may not have a view.

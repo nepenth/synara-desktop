@@ -120,6 +120,36 @@ pub fn desktop_hide(app: AppHandle) -> Result<(), String> {
     hide_main_window(&app).map_err(|error| error.to_string())
 }
 
+/// Window controls for the in-app titlebar (Linux borderless mode).
+/// The main window always exists when the renderer is alive; a missing
+/// window fails closed rather than inventing window state.
+#[tauri::command]
+pub fn desktop_window_minimize(app: AppHandle) -> Result<(), String> {
+    main_window(&app)
+        .ok_or_else(|| "No native main window is active.".to_owned())
+        .and_then(|window| window.minimize().map_err(|error| error.to_string()))
+}
+
+#[tauri::command]
+pub fn desktop_window_toggle_maximize(app: AppHandle) -> Result<bool, String> {
+    let window = main_window(&app).ok_or_else(|| "No native main window is active.".to_owned())?;
+    let maximized = window.is_maximized().map_err(|error| error.to_string())?;
+    if maximized {
+        window.unmaximize().map_err(|error| error.to_string())?;
+        Ok(false)
+    } else {
+        window.maximize().map_err(|error| error.to_string())?;
+        Ok(true)
+    }
+}
+
+#[tauri::command]
+pub fn desktop_window_close(app: AppHandle) -> Result<(), String> {
+    main_window(&app)
+        .ok_or_else(|| "No native main window is active.".to_owned())
+        .and_then(|window| window.close().map_err(|error| error.to_string()))
+}
+
 #[tauri::command]
 pub fn desktop_navigate(app: AppHandle, route: String) -> Result<(), String> {
     let route = sanitize_route(route)?;

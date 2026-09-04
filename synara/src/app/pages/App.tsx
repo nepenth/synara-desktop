@@ -9,6 +9,7 @@ import { ClientConfigLoader } from '../components/ClientConfigLoader';
 import { ClientConfigProvider } from '../hooks/useClientConfig';
 import { ConfigConfigError, ConfigConfigLoading } from './ConfigConfig';
 import { createRouter } from './Router';
+import { DesktopTitleBar } from '../features/desktop-titlebar/DesktopTitleBar';
 import { ScreenSizeProvider, useScreenSize } from '../hooks/useScreenSize';
 import { useCompositionEndTracking } from '../hooks/useComposingCheck';
 import { useDesktopExternalLinkInterceptor } from '../utils/appLinks';
@@ -37,6 +38,7 @@ function App() {
                 <ClientConfigProvider value={clientConfig}>
                   <QueryClientProvider client={queryClient}>
                     <JotaiProvider>
+                      <DesktopTitleBar />
                       <RouterProvider router={createRouter(clientConfig, screenSize)} />
                     </JotaiProvider>
                     <ReactQueryDevtools initialIsOpen={false} />

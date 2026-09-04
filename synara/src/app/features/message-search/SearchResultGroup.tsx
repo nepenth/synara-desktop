@@ -6,6 +6,7 @@ import type { EventedRoomReading } from '../../utils/roomEvents';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Avatar, Box, Chip, Header, Icon, Icons, Text, config } from 'folds';
+import * as depthCss from '../../styles/Depth.css';
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import {
   factoryRenderLinkifyWithMention,
@@ -315,6 +316,7 @@ export function SearchResultGroup({
                   </Box>
                   <Box shrink="No" gap="200" alignItems="Center">
                     <Chip
+                      className={depthCss.quietInteractiveSurface}
                       data-event-id={mainEventId}
                       onClick={handleOpenClick}
                       variant="Secondary"

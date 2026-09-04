@@ -44,6 +44,7 @@ import { VirtualTile } from '../../components/virtualizer';
 import { stopPropagation } from '../../utils/keyboard';
 import { MessageSearchTypeFilter, parseSenderFilter } from '../../utils/messageSearchFilters';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
+import * as depthCss from '../../styles/Depth.css';
 
 type OrderButtonProps = {
   order?: string;
@@ -75,13 +76,14 @@ function OrderButton({ order, onChange }: OrderButtonProps) {
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Menu variant="Surface">
+          <Menu className={depthCss.floatingSurface} variant="Surface">
             <Header size="300" variant="Surface" style={{ padding: `0 ${config.space.S300}` }}>
               <Text size="L400">Sort by</Text>
             </Header>
             <Line variant="Surface" size="300" />
             <div style={{ padding: config.space.S100 }}>
               <MenuItem
+                className={depthCss.quietInteractiveSurface}
                 onClick={() => setOrder()}
                 variant="Surface"
                 size="300"
@@ -91,6 +93,7 @@ function OrderButton({ order, onChange }: OrderButtonProps) {
                 <Text size="T300">Recent</Text>
               </MenuItem>
               <MenuItem
+                className={depthCss.quietInteractiveSurface}
                 onClick={() => setOrder('rank')}
                 variant="Surface"
                 size="300"
@@ -105,6 +108,7 @@ function OrderButton({ order, onChange }: OrderButtonProps) {
       }
     >
       <Chip
+        className={depthCss.quietInteractiveSurface}
         variant="SurfaceVariant"
         radii="Pill"
         after={<Icon size="50" src={Icons.Sort} />}
@@ -212,7 +216,11 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Menu variant="Surface" style={{ width: toRem(250) }}>
+          <Menu
+            className={depthCss.floatingSurface}
+            variant="Surface"
+            style={{ width: toRem(250) }}
+          >
             <Box direction="Column" style={{ maxHeight: toRem(450), maxWidth: toRem(300) }}>
               <Box
                 shrink="No"
@@ -270,6 +278,7 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
                           key={vItem.index}
                         >
                           <MenuItem
+                            className={depthCss.quietInteractiveSurface}
                             data-room-id={roomId}
                             onClick={handleRoomClick}
                             variant={selected ? 'Success' : 'Surface'}
@@ -299,7 +308,13 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
               </Scroll>
               <Line variant="Surface" size="300" />
               <Box shrink="No" direction="Column" gap="100" style={{ padding: config.space.S200 }}>
-                <Button size="300" variant="Secondary" radii="300" onClick={handleSave}>
+                <Button
+                  className={depthCss.quietInteractiveSurface}
+                  size="300"
+                  variant="Secondary"
+                  radii="300"
+                  onClick={handleSave}
+                >
                   {localSelected && localSelected.length > 0 ? (
                     <Text size="B300">Save ({localSelected.length})</Text>
                   ) : (
@@ -307,6 +322,7 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
                   )}
                 </Button>
                 <Button
+                  className={depthCss.quietInteractiveSurface}
                   size="300"
                   radii="300"
                   variant="Secondary"
@@ -323,6 +339,7 @@ function SelectRoomButton({ roomList, selectedRooms, onChange }: SelectRoomButto
       }
     >
       <Chip
+        className={depthCss.quietInteractiveSurface}
         onClick={handleOpenMenu}
         variant="SurfaceVariant"
         radii="Pill"
@@ -428,6 +445,7 @@ export function SearchFilters({
       <Text size="L400">{t('modernization.search.filter_title', 'Filter')}</Text>
       <Box gap="200" wrap="Wrap">
         <Chip
+          className={depthCss.quietInteractiveSurface}
           variant={!global ? 'Success' : 'Surface'}
           aria-pressed={!global}
           before={!global && <Icon size="100" src={Icons.Check} />}
@@ -438,6 +456,7 @@ export function SearchFilters({
         </Chip>
         {allowGlobal && (
           <Chip
+            className={depthCss.quietInteractiveSurface}
             variant={global ? 'Success' : 'Surface'}
             aria-pressed={global}
             before={global && <Icon size="100" src={Icons.Check} />}
@@ -460,6 +479,7 @@ export function SearchFilters({
           return (
             <Chip
               key={roomId}
+              className={depthCss.quietInteractiveSurface}
               variant="Success"
               onClick={() => onSelectedRoomsChange(selectedRooms.filter((rId) => rId !== roomId))}
               radii="Pill"
@@ -490,6 +510,7 @@ export function SearchFilters({
           return (
             <Chip
               key={filterType}
+              className={depthCss.quietInteractiveSurface}
               variant={selected ? 'Success' : 'Surface'}
               aria-pressed={selected}
               before={selected && <Icon size="100" src={Icons.Check} />}
@@ -527,10 +548,11 @@ export function SearchFilters({
               ))}
             </datalist>
           </Box>
-          <Button size="300" radii="300" type="submit">
+          <Button className={depthCss.quietInteractiveSurface} size="300" radii="300" type="submit">
             <Text size="B300">{t('modernization.search.apply', 'Apply')}</Text>
           </Button>
           <Button
+            className={depthCss.quietInteractiveSurface}
             size="300"
             radii="300"
             variant="Secondary"
@@ -567,10 +589,11 @@ export function SearchFilters({
               aria-label={t('modernization.search.to_aria_label', 'Search to date')}
             />
           </Box>
-          <Button size="300" radii="300" type="submit">
+          <Button className={depthCss.quietInteractiveSurface} size="300" radii="300" type="submit">
             <Text size="B300">{t('modernization.search.apply_dates', 'Apply dates')}</Text>
           </Button>
           <Button
+            className={depthCss.quietInteractiveSurface}
             size="300"
             radii="300"
             variant="Secondary"

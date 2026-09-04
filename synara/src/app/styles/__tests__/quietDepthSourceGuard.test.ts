@@ -95,3 +95,51 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   assert.match(editorToolbar, /import \* as depthCss from '\.\.\/\.\.\/styles\/Depth\.css'/);
   assert.match(editorToolbar, /className=\{depthCss\.quietInteractiveSurface\}/);
 });
+
+test('room menus, members, and message search share quiet interactive depth', () => {
+  const header = source('src/app/features/room/RoomViewHeader.tsx');
+  const members = source('src/app/features/room/MembersDrawer.tsx');
+  const memberFilter = source('src/app/components/MembershipFilterMenu.tsx');
+  const memberSort = source('src/app/components/MemberSortMenu.tsx');
+  const sidePanel = source('src/app/features/room/RoomSidePanel.tsx');
+  const search = source('src/app/features/message-search/MessageSearch.tsx');
+  const searchInput = source('src/app/features/message-search/SearchInput.tsx');
+  const searchFilters = source('src/app/features/message-search/SearchFilters.tsx');
+  const searchResults = source('src/app/features/message-search/SearchResultGroup.tsx');
+
+  // Overflow menu: floating container with quiet options.
+  assert.match(header, /<Menu[\s>]/);
+  assert.match(header, /ref=\{ref\}/);
+  assert.match(header, /depthCss\.floatingSurface/);
+  assert.match(memberFilter, /<Menu/);
+  assert.match(memberFilter, /depthCss\.floatingSurface/);
+  assert.match(memberSort, /<Menu/);
+  assert.match(memberSort, /depthCss\.floatingSurface/);
+  // Members drawer controls.
+  assert.match(members, /import \* as depthCss from '\.\.\/\.\.\/styles\/Depth\.css'/);
+  assert.match(members, /className=\{depthCss\.quietInteractiveSurface\}/);
+  // Search section controls.
+  assert.match(sidePanel, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(search, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(searchInput, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(searchFilters, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(searchFilters, /<Menu className=\{depthCss\.floatingSurface\}/);
+  assert.match(searchResults, /className=\{depthCss\.quietInteractiveSurface\}/);
+  // No menu option renders without quiet depth: each of these surfaces
+  // carries at least one interactive class per MenuItem it renders.
+  for (const [name, component] of Object.entries({
+    header,
+    memberFilter,
+    memberSort,
+    members,
+    searchFilters,
+  })) {
+    const items = component.match(/<MenuItem[\s/>]/g) ?? [];
+    const depth = component.match(/quietInteractiveSurface/g) ?? [];
+    assert.ok(items.length > 0, `${name} must render menu options`);
+    assert.ok(
+      depth.length >= items.length,
+      `${name} has ${items.length} menu options but only ${depth.length} quiet-depth classes`
+    );
+  }
+});

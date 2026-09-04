@@ -332,6 +332,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             desktop::desktop_show,
             desktop::desktop_hide,
+            desktop::desktop_window_minimize,
+            desktop::desktop_window_toggle_maximize,
+            desktop::desktop_window_close,
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
             desktop::desktop_set_shortcuts,
@@ -466,6 +469,7 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_set_read_state,
             matrix::auth::product::matrix_timeline_event_readback,
+            matrix::auth::product::matrix_timeline_follow_live,
             matrix::auth::product::matrix_timeline_reaction_toggle,
             matrix::auth::product::matrix_reaction_ensure,
             matrix::auth::product::matrix_agent_approval_decide,
@@ -629,10 +633,22 @@ pub fn run() {
                 updater_configured,
                 desktop::desktop_bridge_supports_secure_secret_store()
             );
-            let window = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
+            let window_builder = WebviewWindowBuilder::new(app, "main".to_string(), window_url)
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
-                .min_inner_size(960.0, 720.0)
+                .min_inner_size(960.0, 720.0);
+            // The native titlebar is OS-painted and never matches the app
+            // theme. macOS overlays traffic lights over web content (headers
+            // expose drag regions and clear the lights); Linux drops server
+            // decorations in favor of the in-app titlebar strip, which owns
+            // drag and window controls through the desktop_window_* commands.
+            #[cfg(target_os = "macos")]
+            let window_builder = window_builder
+                .title_bar_style(tauri::TitleBarStyle::Overlay)
+                .hidden_title(true);
+            #[cfg(target_os = "linux")]
+            let window_builder = window_builder.decorations(false);
+            let window = window_builder
                 .initialization_script(bridge_script)
                 .on_new_window(move |url, _features| {
                     if desktop::is_safe_external_url(url.as_str()) {

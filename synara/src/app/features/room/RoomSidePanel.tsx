@@ -1,6 +1,7 @@
 import React, { PointerEventHandler, useRef, useState } from 'react';
 import { Box, Header, Icon, IconButton, Icons, Line, Scroll, Text, config, toRem } from 'folds';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import * as depthCss from '../../styles/Depth.css';
 import type { EventedRoomReading } from '../../utils/roomEvents';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import { RoomPinMenu } from './room-pin-menu';
@@ -18,12 +19,21 @@ function RoomSearchPanel({ room, requestClose }: RoomSearchPanelProps) {
 
   return (
     <Box className={ContainerColor({ variant: 'Surface' })} direction="Column" grow="Yes">
-      <Header size="600" style={{ padding: `0 ${config.space.S200} 0 ${config.space.S400}` }}>
+      <Header
+        size="600"
+        data-tauri-drag-region
+        style={{ padding: `0 ${config.space.S200} 0 ${config.space.S400}` }}
+      >
         <Box grow="Yes" alignItems="Center" gap="200">
           <Icon src={Icons.Search} size="300" />
           <Text size="H4">Message Search</Text>
         </Box>
-        <IconButton size="300" onClick={requestClose} radii="300">
+        <IconButton
+          className={depthCss.quietInteractiveSurface}
+          size="300"
+          onClick={requestClose}
+          radii="300"
+        >
           <Icon src={Icons.Cross} size="400" />
         </IconButton>
       </Header>
