@@ -6,8 +6,13 @@ import { NotificationType } from '../../../../types/matrix/room';
 import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
+  effectiveNotificationRoomMode,
+  eventIsHighlightObservation,
   eventMentionsUser,
+  notificationBodyContainsToken,
   notificationRoomModeForType,
+  resolveObservedNotificationRoomMode,
+  roomOverrideMapFromSnapshots,
   setNotificationFocusWithNativeOwner,
 } from '../nativeNotificationDecision';
 
@@ -30,6 +35,165 @@ test('highlight observation reads explicit user mentions only', () => {
   assert.equal(eventMentionsUser({}, '@u:example.org'), false);
   assert.equal(eventMentionsUser(null, '@u:example.org'), false);
   assert.equal(eventMentionsUser({ 'm.mentions': { user_ids: ['@u:example.org'] } }, null), false);
+});
+
+const ALL_ON_FLAGS = {
+  userMention: true,
+  displayName: true,
+  userName: true,
+  roomMention: true,
+  atRoom: true,
+};
+
+test('muted native override resolves to mute, not inherited default', () => {
+  const rooms = roomOverrideMapFromSnapshots([
+    { roomId: '!muted:example.org', mode: 'mute' },
+    { roomId: '!mentions:example.org', mode: 'mentions' },
+    { roomId: '!ignored:example.org', mode: 'default' },
+  ]);
+  assert.equal(rooms.get('!muted:example.org'), 'mute');
+  assert.equal(
+    resolveObservedNotificationRoomMode({
+      userDefined: rooms.get('!muted:example.org'),
+      isEncrypted: false,
+      isDirect: false,
+      defaults: { dm: 'all', dmEncrypted: 'all', group: 'all', groupEncrypted: 'all' },
+    }),
+    'mute'
+  );
+  assert.equal(
+    resolveObservedNotificationRoomMode({
+      userDefined: rooms.get('!mentions:example.org'),
+      isEncrypted: false,
+      isDirect: false,
+      defaults: { dm: 'all', dmEncrypted: 'all', group: 'all', groupEncrypted: 'all' },
+    }),
+    'mentions'
+  );
+});
+
+test('rooms without an override inherit account defaults and fail closed', () => {
+  const defaults = {
+    dm: 'mute',
+    dmEncrypted: 'mentions',
+    group: 'all',
+    groupEncrypted: 'mute',
+  } as const;
+  assert.equal(
+    effectiveNotificationRoomMode({
+      userDefined: 'default',
+      isEncrypted: false,
+      isDirect: true,
+      defaults,
+    }),
+    'mute'
+  );
+  assert.equal(
+    resolveObservedNotificationRoomMode({
+      userDefined: undefined,
+      isEncrypted: true,
+      isDirect: false,
+      defaults,
+    }),
+    'mute'
+  );
+  assert.equal(
+    resolveObservedNotificationRoomMode({
+      userDefined: 'default',
+      listMode: 'all',
+      isEncrypted: false,
+      isDirect: false,
+      defaults: null,
+    }),
+    'all'
+  );
+  assert.equal(
+    resolveObservedNotificationRoomMode({
+      userDefined: 'default',
+      isEncrypted: false,
+      isDirect: false,
+    }),
+    'mentions'
+  );
+});
+
+test('highlight observation covers mentions, @room, keywords, and skips ciphertext', () => {
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { 'm.mentions': { user_ids: ['@u:example.org'] } },
+      userId: '@u:example.org',
+      isEncrypted: false,
+      flags: ALL_ON_FLAGS,
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { 'm.mentions': { room: true } },
+      userId: '@u:example.org',
+      isEncrypted: true,
+      body: 'ciphertext-must-not-match keyword',
+      keywords: ['keyword'],
+      flags: ALL_ON_FLAGS,
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { body: 'please see @room later' },
+      userId: '@u:example.org',
+      isEncrypted: false,
+      body: 'please see @room later',
+      flags: ALL_ON_FLAGS,
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { body: 'ship the launch keyword today' },
+      userId: '@u:example.org',
+      isEncrypted: false,
+      body: 'ship the launch keyword today',
+      keywords: ['keyword'],
+      flags: ALL_ON_FLAGS,
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { body: 'hey Alice Smith' },
+      userId: '@u:example.org',
+      isEncrypted: false,
+      body: 'hey Alice Smith',
+      displayName: 'Alice Smith',
+      flags: ALL_ON_FLAGS,
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { body: 'ping @u later' },
+      userId: '@u:example.org',
+      isEncrypted: false,
+      body: 'ping @u later',
+      localpart: 'u',
+      flags: ALL_ON_FLAGS,
+    }),
+    true
+  );
+  assert.equal(
+    eventIsHighlightObservation({
+      content: { ciphertext: 'AAAA', body: 'keyword' },
+      userId: '@u:example.org',
+      isEncrypted: true,
+      body: 'keyword',
+      keywords: ['keyword'],
+      flags: ALL_ON_FLAGS,
+    }),
+    false
+  );
+  assert.equal(notificationBodyContainsToken('this has keyword inside', 'keyword'), true);
+  assert.equal(notificationBodyContainsToken('keywords', 'keyword'), false);
 });
 
 test('decide routes only through matrix_notification_decide with closed observations', async () => {
@@ -159,10 +323,15 @@ test('message notifications never decide mute policy in TypeScript', () => {
   );
   assert.match(source, /decideNotificationWithNativeOwner/);
   assert.match(source, /setNotificationFocusWithNativeOwner/);
-  assert.match(source, /notificationRoomModeForType/);
-  // The renderer observes the room mode and passes it in; only Core branches
-  // on it. No TS mute matcher, no room-list polling on this path.
-  assert.doesNotMatch(source, /getNotificationType\(mx, room\.roomId\) ===/);
+  assert.match(source, /dismissNotificationWithNativeOwner/);
+  assert.match(source, /resolveObservedNotificationRoomMode/);
+  assert.match(source, /nativeRoomNotificationsSnapshot/);
+  assert.match(source, /nativePushRulesSnapshot/);
+  assert.match(source, /eventIsHighlightObservation/);
+  // The renderer observes Core snapshots and passes a resolved mode; only
+  // Core branches on mute/mentions. No JS push-rule stub, no TS mute matcher.
+  assert.doesNotMatch(source, /getNotificationType\(/);
+  assert.doesNotMatch(source, /notificationRoomModeForType/);
   assert.doesNotMatch(source, /NotificationType\.Mute/);
   assert.doesNotMatch(source, /unreadNotificationCache/);
 });

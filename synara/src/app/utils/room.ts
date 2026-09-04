@@ -102,6 +102,9 @@ export type RoomReading = {
   isCallRoom(): boolean;
   isSpaceRoom(): boolean;
   isFavorite?: boolean;
+  isDirect?: boolean;
+  isEncrypted?: boolean;
+  notificationMode?: 'all' | 'mentions' | 'mute' | 'default';
   getTimelineForEvent?(
     eventId: string
   ): { getTimelineSet(): EventTimelineSetReading; getEvents(): MatrixEventReading[] } | null;

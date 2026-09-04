@@ -126,13 +126,10 @@ impl NotificationIndex {
         }
 
         if self.by_id.len() >= MAX_PENDING_CANDIDATES {
-            // Drop oldest pending to make room.
+            // Drop oldest pending to make room. Keep seen_events so an
+            // already-shown event cannot notify again after cap eviction.
             if let Some(old) = self.order.pop_front() {
-                if let Some(removed) = self.by_id.remove(&old) {
-                    if let Some(ev) = removed.event_id {
-                        self.seen_events.remove(&(removed.room_id, ev));
-                    }
-                }
+                self.by_id.remove(&old);
             }
         }
 

@@ -360,6 +360,15 @@ const toRoomReading = (
     get isFavorite() {
       return summary().isFavorite;
     },
+    get isDirect() {
+      return summary().isDirect;
+    },
+    get isEncrypted() {
+      return summary().isEncrypted;
+    },
+    get notificationMode() {
+      return summary().notificationMode;
+    },
     getTimelineForEvent: () => null,
     hasMembershipState: () => summary().membership === 'join',
     on: roomClient?.on,

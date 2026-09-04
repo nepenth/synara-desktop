@@ -8,7 +8,9 @@
 //! - `room_mode`: the shell-resolved per-room mode vocabulary
 //!   (`all` / `mentions` / `mute` / `default`). The shell resolves it through
 //!   the existing `matrix_room_notification_snapshot` / push-rules snapshots
-//!   and passes the closed string; Core never accepts a TS-computed boolean.
+//!   and should pass `all` / `mentions` / `mute`. `default` without inherited
+//!   account defaults fail-closes to mentions (never notify-all). Core never
+//!   accepts a TS-computed boolean.
 //! - `highlight`: whether the event is a mention/keyword highlight. The shell
 //!   passes the Matrix highlight signal it observed; Core owns what that
 //!   signal means for each mode.
@@ -55,6 +57,50 @@ pub enum NotificationRoomMode {
     Mentions,
     Mute,
     Default,
+}
+
+/// Account-default modes from `matrix_push_rules_snapshot`, used when the
+/// shell still sends `default` for a room without a user-defined override.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AccountNotificationDefaults {
+    pub dm: NotificationRoomMode,
+    pub dm_encrypted: NotificationRoomMode,
+    pub group: NotificationRoomMode,
+    pub group_encrypted: NotificationRoomMode,
+}
+
+fn closed_or_mentions(mode: NotificationRoomMode) -> NotificationRoomMode {
+    match mode {
+        NotificationRoomMode::All | NotificationRoomMode::Mentions | NotificationRoomMode::Mute => {
+            mode
+        }
+        NotificationRoomMode::Default => NotificationRoomMode::Mentions,
+    }
+}
+
+/// Same inheritance table as `push_rules.rs` (`get_default_room_notification_mode`
+/// mapped to `all` / `mentions` / `mute`). Missing defaults fail closed to
+/// mentions so an unresolved `default` never notifies every message.
+pub fn effective_room_mode(
+    user_defined: NotificationRoomMode,
+    defaults: Option<&AccountNotificationDefaults>,
+    is_encrypted: bool,
+    is_direct: bool,
+) -> NotificationRoomMode {
+    match user_defined {
+        NotificationRoomMode::All | NotificationRoomMode::Mentions | NotificationRoomMode::Mute => {
+            user_defined
+        }
+        NotificationRoomMode::Default => match defaults {
+            Some(defaults) => closed_or_mentions(match (is_direct, is_encrypted) {
+                (true, false) => defaults.dm,
+                (true, true) => defaults.dm_encrypted,
+                (false, false) => defaults.group,
+                (false, true) => defaults.group_encrypted,
+            }),
+            None => NotificationRoomMode::Mentions,
+        },
+    }
 }
 
 impl NotificationRoomMode {
@@ -331,15 +377,18 @@ impl NativeNotificationDecisionOwner {
         if input.is_own_event {
             return Ok(suppressed(NotificationSuppressReason::OwnEvent));
         }
+        // Shell should send a resolved mode. `default` without inherited
+        // account defaults fail-closes to mentions — never notify-all.
+        let room_mode = effective_room_mode(input.room_mode, None, input.is_encrypted, false);
         // Mute suppresses timeline messages. Invites, agent approvals, and
         // Later reminders are explicit user commitments outside the muted
         // room's message policy and still surface.
-        if input.room_mode == NotificationRoomMode::Mute
+        if room_mode == NotificationRoomMode::Mute
             && input.kind == NotificationDecisionKind::Message
         {
             return Ok(suppressed(NotificationSuppressReason::MutedRoom));
         }
-        if input.room_mode == NotificationRoomMode::Mentions
+        if room_mode == NotificationRoomMode::Mentions
             && input.kind == NotificationDecisionKind::Message
             && !input.highlight
         {
@@ -692,6 +741,86 @@ mod tests {
         assert_eq!(
             readback.candidate.unwrap().title.chars().count(),
             NOTIFICATION_TITLE_MAX_CHARS
+        );
+    }
+
+    #[test]
+    fn default_mode_fail_closes_to_mentions() {
+        let owner = owner();
+        let plain = owner
+            .decide(input(
+                "!r:example.org",
+                Some("$d1"),
+                NotificationDecisionKind::Message,
+                NotificationRoomMode::Default,
+                false,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(plain.decision, "suppress");
+        assert_eq!(
+            plain.reason.as_deref(),
+            Some("mentions-only-without-highlight")
+        );
+
+        let highlighted = owner
+            .decide(input(
+                "!r:example.org",
+                Some("$d2"),
+                NotificationDecisionKind::Message,
+                NotificationRoomMode::Default,
+                true,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(highlighted.decision, "show");
+    }
+
+    #[test]
+    fn effective_room_mode_inherits_account_defaults() {
+        let defaults = AccountNotificationDefaults {
+            dm: NotificationRoomMode::Mute,
+            dm_encrypted: NotificationRoomMode::Mentions,
+            group: NotificationRoomMode::All,
+            group_encrypted: NotificationRoomMode::Mute,
+        };
+        assert_eq!(
+            effective_room_mode(NotificationRoomMode::Mute, Some(&defaults), false, false),
+            NotificationRoomMode::Mute
+        );
+        assert_eq!(
+            effective_room_mode(NotificationRoomMode::Default, Some(&defaults), false, true),
+            NotificationRoomMode::Mute
+        );
+        assert_eq!(
+            effective_room_mode(NotificationRoomMode::Default, Some(&defaults), true, true),
+            NotificationRoomMode::Mentions
+        );
+        assert_eq!(
+            effective_room_mode(NotificationRoomMode::Default, Some(&defaults), false, false),
+            NotificationRoomMode::All
+        );
+        assert_eq!(
+            effective_room_mode(NotificationRoomMode::Default, Some(&defaults), true, false),
+            NotificationRoomMode::Mute
+        );
+        assert_eq!(
+            effective_room_mode(NotificationRoomMode::Default, None, false, false),
+            NotificationRoomMode::Mentions
+        );
+        assert_eq!(
+            effective_room_mode(
+                NotificationRoomMode::Default,
+                Some(&AccountNotificationDefaults {
+                    dm: NotificationRoomMode::Default,
+                    dm_encrypted: NotificationRoomMode::Default,
+                    group: NotificationRoomMode::Default,
+                    group_encrypted: NotificationRoomMode::Default,
+                }),
+                false,
+                false
+            ),
+            NotificationRoomMode::Mentions
         );
     }
 

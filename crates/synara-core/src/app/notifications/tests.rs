@@ -149,6 +149,19 @@ fn cap_drops_oldest() {
     assert_eq!(idx.len(), MAX_PENDING_CANDIDATES);
     assert!(idx.get("c0").is_none());
     assert!(idx.get("overflow").is_some());
+    // Evicting the oldest pending candidate must not forget that $0 already
+    // notified. Re-showing it would duplicate a delivered event.
+    assert!(idx.is_duplicate("!r:example.org", "$0"));
+    assert!(idx
+        .enqueue(candidate(
+            "again",
+            "!r:example.org",
+            Some("$0"),
+            NotificationKind::Message,
+            false,
+        ))
+        .unwrap()
+        .is_none());
 }
 
 #[test]
