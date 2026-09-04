@@ -1,19 +1,28 @@
-//! P7.1 — Notification candidate index foundation (harness).
+//! P7.1 — Notification candidate index foundation.
 //!
-//! Pure index of privacy-filtered Synara [`NotificationCandidate`] DTOs.
-//! No OS notification posting, no production Tauri commands, no dual-backend.
+//! Pure index of privacy-filtered Synara [`NotificationCandidate`] DTOs plus
+//! the account-bound [`NativeNotificationDecisionOwner`] production policy
+//! over it. No OS notification posting, no dual-backend.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p7.1-notifications.md`
 
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod decision;
 mod error;
 mod http_pusher;
 mod index;
 mod push_rules;
 mod room_notification;
 
+pub use decision::{
+    NativeNotificationDecideRequest, NativeNotificationDecisionOwner,
+    NativeNotificationDismissRequest, NativeNotificationFocusSetRequest, NotificationDecisionInput,
+    NotificationDecisionKind, NotificationDecisionReadback, NotificationRoomMode,
+    NotificationSuppressReason, NOTIFICATION_BODY_MAX_CHARS, NOTIFICATION_ROUTE_MAX_CHARS,
+    NOTIFICATION_TITLE_MAX_CHARS,
+};
 pub use error::NotificationError;
 pub use http_pusher::{
     delete_http_pusher, register_http_pusher, MatrixHttpPusherWriteResult, NativeHttpPusherOwner,

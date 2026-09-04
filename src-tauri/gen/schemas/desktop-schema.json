@@ -795,6 +795,30 @@
           "markdownDescription": "Enables the matrix_message_search command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_notification_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-decide",
+          "markdownDescription": "Enables the matrix_notification_decide command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-dismiss",
+          "markdownDescription": "Enables the matrix_notification_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_focus_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-focus-set",
+          "markdownDescription": "Enables the matrix_notification_focus_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_pending_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-pending-snapshot",
+          "markdownDescription": "Enables the matrix_notification_pending_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_password_reset_complete command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-password-reset-complete",
@@ -1921,6 +1945,30 @@
           "type": "string",
           "const": "deny-matrix-message-search",
           "markdownDescription": "Denies the matrix_message_search command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-decide",
+          "markdownDescription": "Denies the matrix_notification_decide command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-dismiss",
+          "markdownDescription": "Denies the matrix_notification_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_focus_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-focus-set",
+          "markdownDescription": "Denies the matrix_notification_focus_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_pending_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-pending-snapshot",
+          "markdownDescription": "Denies the matrix_notification_pending_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_password_reset_complete command without any pre-configured scope.",

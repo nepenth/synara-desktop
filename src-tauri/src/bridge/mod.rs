@@ -19,6 +19,7 @@ pub(crate) mod later;
 pub(crate) mod mdirect;
 pub(crate) mod media_config;
 pub(crate) mod message_search;
+pub(crate) mod notification_decision;
 pub(crate) mod own_profile;
 pub(crate) mod presence_set;
 pub(crate) mod presence_snapshot;

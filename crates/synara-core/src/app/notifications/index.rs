@@ -1,7 +1,8 @@
-//! Notification candidate index (P7.1 harness foundation).
+//! Notification candidate index (P7.1 foundation).
 //!
-//! Pure queue/index of privacy-filtered [`NotificationCandidate`] DTOs.
-//! No OS notification posting, no dual-backend, no tokens in errors.
+//! Pure queue/index of privacy-filtered [`NotificationCandidate`] DTOs owned
+//! in production by the notification decision owner. No OS notification
+//! posting, no dual-backend, no tokens in errors.
 
 use std::collections::{HashMap, HashSet, VecDeque};
 
@@ -56,6 +57,14 @@ impl NotificationIndex {
 
     pub fn focused_room(&self) -> Option<&str> {
         self.focused_room_id.as_deref()
+    }
+
+    /// Whether this `(room_id, event_id)` pair already notified. Used by the
+    /// decision owner to report the exact suppress reason without leaking
+    /// identifiers. Events without an id are never duplicates.
+    pub fn is_duplicate(&self, room_id: &str, event_id: &str) -> bool {
+        self.seen_events
+            .contains(&(room_id.to_owned(), event_id.to_owned()))
     }
 
     fn validate(c: &NotificationCandidate) -> Result<(), NotificationError> {
@@ -117,13 +126,10 @@ impl NotificationIndex {
         }
 
         if self.by_id.len() >= MAX_PENDING_CANDIDATES {
-            // Drop oldest pending to make room.
+            // Drop oldest pending to make room. Keep seen_events so an
+            // already-shown event cannot notify again after cap eviction.
             if let Some(old) = self.order.pop_front() {
-                if let Some(removed) = self.by_id.remove(&old) {
-                    if let Some(ev) = removed.event_id {
-                        self.seen_events.remove(&(removed.room_id, ev));
-                    }
-                }
+                self.by_id.remove(&old);
             }
         }
 
