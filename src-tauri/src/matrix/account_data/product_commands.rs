@@ -345,3 +345,44 @@ pub(super) fn map_later_notes_error(diagnostic_id: &'static str) -> MatrixAuthCo
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
+
+/// A9 decision stream: record the platform-observed focused room in Core.
+/// `room_id` is None when no room has focus. Unknown rooms fail closed.
+#[tauri::command]
+pub async fn matrix_notification_focus_set(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: Option<String>,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::notification_decision::notification_focus_set(core.inner().as_ref(), room_id)
+        .await
+}
+
+/// A9 decision stream: apply the Core suppress/show policy to one observed
+/// event. Returns the closed show/suppress readback; the renderer delivers
+/// shown candidates through the existing platform notification facade.
+#[tauri::command]
+pub async fn matrix_notification_decide(
+    core: State<'_, Arc<synara_core::Core>>,
+    request: synara_core::app::notifications::NativeNotificationDecideRequest,
+) -> Result<synara_core::app::notifications::NotificationDecisionReadback, MatrixAuthCommandError> {
+    crate::bridge::notification_decision::notification_decide(core.inner().as_ref(), request).await
+}
+
+/// A9 decision stream: acknowledge a delivered or dismissed candidate.
+/// Dedup memory is retained so the same event never re-notifies.
+#[tauri::command]
+pub async fn matrix_notification_dismiss(
+    core: State<'_, Arc<synara_core::Core>>,
+    candidate_id: String,
+) -> Result<bool, MatrixAuthCommandError> {
+    crate::bridge::notification_decision::notification_dismiss(core.inner().as_ref(), candidate_id)
+        .await
+}
+
+/// A9 decision stream: pending Core-decided candidates in insertion order.
+#[tauri::command]
+pub async fn matrix_notification_pending_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<Vec<synara_core::dto::NotificationCandidate>, MatrixAuthCommandError> {
+    crate::bridge::notification_decision::notification_pending_snapshot(core.inner().as_ref()).await
+}

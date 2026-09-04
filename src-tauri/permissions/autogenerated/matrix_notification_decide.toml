@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-notification-decide"
+description = "Enables the matrix_notification_decide command without any pre-configured scope."
+commands.allow = ["matrix_notification_decide"]
+
+[[permission]]
+identifier = "deny-matrix-notification-decide"
+description = "Denies the matrix_notification_decide command without any pre-configured scope."
+commands.deny = ["matrix_notification_decide"]

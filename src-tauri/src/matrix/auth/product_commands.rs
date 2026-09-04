@@ -151,6 +151,17 @@ pub async fn matrix_login_password(
         crate::matrix::timeline::timeline_view_emit(app.clone()),
         session_generation,
     ));
+    // A9 decision stream: account-bound Core policy owner. The shell keeps no
+    // handle; Core drops it on logout alongside the timeline registry.
+    let notification_decisions = Arc::new(
+        synara_core::app::notifications::NativeNotificationDecisionOwner::new(
+            &client,
+            session_generation,
+        )
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?,
+    );
     // A successfully installed session supersedes every pending/awaiting
     // recovery capability, including one prepared by an earlier failed login.
     state.clear_store_recovery().await;
@@ -201,6 +212,11 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_timelines(timelines)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+    core.inner()
+        .attach_notification_decisions(notification_decisions)
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?;
     core.inner()
         .attach_sync(sync)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
@@ -425,7 +441,7 @@ pub async fn matrix_register(
             error_message: challenge.error_message,
         }),
         RegisterSubmitOutcome::Complete(secrets) => {
-            let (identity, session_generation) =
+            let (identity, session_generation, notification_decisions) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
             let (typing, presence, verification, devices, join_rules, image_packs, timelines, sync) =
                 session
@@ -474,6 +490,11 @@ pub async fn matrix_register(
                 .attach_timelines(timelines)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
             core.inner()
+                .attach_notification_decisions(notification_decisions)
+                .map_err(|_| {
+                    MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+                })?;
+            core.inner()
                 .attach_sync(sync)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
             Ok(MatrixRegisterOutcome::Complete { identity })
@@ -486,7 +507,14 @@ pub(super) async fn install_session_from_register_secrets(
     state: &State<'_, MatrixAuthState>,
     session: &mut Option<ManagedMatrixSession>,
     secrets: super::super::RegisterCompleteSecrets,
-) -> Result<(MatrixLoginIdentity, u64), MatrixAuthCommandError> {
+) -> Result<
+    (
+        MatrixLoginIdentity,
+        u64,
+        Arc<synara_core::app::notifications::NativeNotificationDecisionOwner>,
+    ),
+    MatrixAuthCommandError,
+> {
     let homeserver_url = normalize_homeserver_url(&secrets.homeserver_url)
         .map_err(map_register_auth_error)?
         .into_string();
@@ -551,6 +579,16 @@ pub(super) async fn install_session_from_register_secrets(
         .map_err(map_room_join_rule_owner_error)?,
     );
     let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
+    // A9 decision stream: account-bound Core policy owner (see login path).
+    let notification_decisions = Arc::new(
+        synara_core::app::notifications::NativeNotificationDecisionOwner::new(
+            &client,
+            session_generation,
+        )
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?,
+    );
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed"))?;
@@ -592,7 +630,7 @@ pub(super) async fn install_session_from_register_secrets(
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
-    Ok((identity, session_generation))
+    Ok((identity, session_generation, notification_decisions))
 }
 
 /// SNC-P3.2 — forward the existing read-only React session snapshot through
@@ -789,6 +827,16 @@ pub async fn matrix_restore_session(
         crate::matrix::timeline::timeline_view_emit(app.clone()),
         session_generation,
     ));
+    // A9 decision stream: account-bound Core policy owner (see login path).
+    let notification_decisions = Arc::new(
+        synara_core::app::notifications::NativeNotificationDecisionOwner::new(
+            &client,
+            session_generation,
+        )
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?,
+    );
     // Restoring persisted material installs a new live session and therefore
     // revokes any stale recovery capability from an earlier failed login.
     state.clear_store_recovery().await;
@@ -839,6 +887,11 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_timelines(timelines)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
+    core.inner()
+        .attach_notification_decisions(notification_decisions)
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?;
     core.inner()
         .attach_sync(sync)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
