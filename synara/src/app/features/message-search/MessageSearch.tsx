@@ -13,6 +13,7 @@ import { SequenceCard } from '../../components/sequence-card';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { ScrollTopContainer } from '../../components/scroll-top-container';
 import { ContainerColor } from '../../styles/ContainerColor.css';
+import * as depthCss from '../../styles/Depth.css';
 import { decodeSearchParamValueArray, encodeSearchParamValueArray } from '../../pages/pathUtils';
 import { useRooms } from '../../state/hooks/roomList';
 import { allRoomsAtom } from '../../state/room-list/roomList';
@@ -238,6 +239,7 @@ export function MessageSearch({
     <Box direction="Column" gap="700">
       <ScrollTopContainer scrollRef={scrollRef} anchorRef={scrollTopAnchorRef}>
         <IconButton
+          className={depthCss.quietInteractiveSurface}
           onClick={() => virtualizer.scrollToOffset(0)}
           variant="SurfaceVariant"
           radii="Pill"

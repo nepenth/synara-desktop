@@ -1,5 +1,6 @@
 import React, { FormEventHandler, RefObject } from 'react';
 import { Box, Text, Input, Icon, Icons, Spinner, Chip, config } from 'folds';
+import * as depthCss from '../../styles/Depth.css';
 
 type SearchProps = {
   active?: boolean;
@@ -45,6 +46,7 @@ export function SearchInput({ active, loading, searchInputRef, onSearch, onReset
           active ? (
             <Chip
               key="resetButton"
+              className={depthCss.quietInteractiveSurface}
               type="reset"
               variant="Secondary"
               size="400"
@@ -56,7 +58,14 @@ export function SearchInput({ active, loading, searchInputRef, onSearch, onReset
               <Text size="B300">Clear</Text>
             </Chip>
           ) : (
-            <Chip type="submit" variant="Primary" size="400" radii="Pill" outlined>
+            <Chip
+              className={depthCss.quietInteractiveSurface}
+              type="submit"
+              variant="Primary"
+              size="400"
+              radii="Pill"
+              outlined
+            >
               <Text size="B300">Enter</Text>
             </Chip>
           )

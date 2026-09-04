@@ -102,6 +102,8 @@ const tests = [
   'src/app/features/room/__tests__/nativeNotificationDecision.test.ts',
   'src/app/features/room/__tests__/nativeTimelineCapabilityGuard.test.ts',
   'src/app/features/room/__tests__/nativeTimelineActions.test.ts',
+  'src/app/features/room/__tests__/nativeTimelineFollowLive.test.ts',
+  'src/app/features/desktop-titlebar/__tests__/desktopTitleBar.test.ts',
   'src/app/features/room/__tests__/nativeTimelineCodeHighlight.test.ts',
   'src/app/features/room/__tests__/messageFormatCorpus.test.ts',
   'src/app/features/room/__tests__/nativeTimelinePresenterActions.test.ts',

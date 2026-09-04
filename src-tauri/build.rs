@@ -4,6 +4,9 @@ use std::process::Command;
 const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_show",
     "desktop_hide",
+    "desktop_window_minimize",
+    "desktop_window_toggle_maximize",
+    "desktop_window_close",
     "desktop_navigate",
     "desktop_set_badge_count",
     "desktop_set_shortcuts",
@@ -158,6 +161,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_set_read_state",
     "matrix_timeline_close",
     "matrix_timeline_event_readback",
+    "matrix_timeline_follow_live",
     "matrix_timeline_jump_latest",
     "matrix_timeline_edit_text",
     "matrix_timeline_redact",

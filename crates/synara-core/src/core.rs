@@ -69,10 +69,10 @@ use crate::app::timeline::{
     NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
     NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelineReadAction,
-    NativeTimelineReadIntent, NativeTimelineReadStateReadback, NativeTimelineReadStateRequest,
-    NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
+    NativeTimelineFollowLiveRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
+    NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
+    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::user_profile::{
@@ -775,6 +775,19 @@ struct MatrixTimelineSetReadStateRequest {
     intent: NativeTimelineReadIntent,
     #[serde(default)]
     observed_live_tail_event_id: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_follow_live`.
+///
+/// The renderer sends the tail event it painted at the visual bottom; Core
+/// flips the stream position only when that event is still the
+/// SDK-authoritative live tail. Unknown keys are rejected so the follow route
+/// cannot grow identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineFollowLiveRequest {
+    stream_id: String,
+    observed_live_tail_event_id: String,
 }
 
 /// Exact React/Tauri envelope payload for reaction toggle/ensure.
@@ -2434,6 +2447,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_paginate", matrix_timeline_paginate)
         .expect("built-in matrix_timeline_paginate must remain in the command census");
     registry
+        .register("matrix_timeline_follow_live", matrix_timeline_follow_live)
+        .expect("built-in matrix_timeline_follow_live must remain in the command census");
+    registry
         .register(
             "matrix_timeline_reaction_toggle",
             matrix_timeline_reaction_toggle,
@@ -2676,9 +2692,10 @@ fn timeline_view_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-read-observed-tail-invalid"
         | "v-timeline-read-observed-tail-unexpected"
         | "v-timeline-read-requires-live-view"
-        | "v-timeline-read-mark-unread-requires-explicit-intent" => {
-            MatrixIpcErrorCategory::SdkInvariant
-        }
+        | "v-timeline-read-mark-unread-requires-explicit-intent"
+        | "v-timeline-follow-live-tail-required"
+        | "v-timeline-follow-live-tail-invalid"
+        | "v-timeline-follow-live-tail-not-loaded" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2706,6 +2723,26 @@ fn matrix_timeline_set_read_state(
             .map_err(timeline_view_owner_error)?;
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-timeline-set-read-state-serialization-failed"))
+    })
+}
+
+fn matrix_timeline_follow_live(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineFollowLiveRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-timeline-follow-live-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-follow-live-no-session")
+        })?;
+        let snapshot: TimelineViewSnapshot = owner
+            .follow_live_tail(NativeTimelineFollowLiveRequest {
+                stream_id: payload.stream_id,
+                observed_live_tail_event_id: payload.observed_live_tail_event_id,
+            })
+            .await
+            .map_err(timeline_view_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-timeline-follow-live-serialization-failed"))
     })
 }
 
@@ -6296,6 +6333,7 @@ mod tests {
                 "matrix_timeline_close",
                 "matrix_timeline_edit_text",
                 "matrix_timeline_event_readback",
+                "matrix_timeline_follow_live",
                 "matrix_timeline_forward_media",
                 "matrix_timeline_forward_text",
                 "matrix_timeline_jump_latest",
@@ -9707,6 +9745,52 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-set-read-state-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_follow_live_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_follow_live".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "streamId":"view-1",
+                    "observedLiveTailEventId":"$e1"
+                }),
+            })
+            .await
+            .expect_err("timeline follow_live without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-follow-live-no-session")
+        );
+        assert!(!format!("{error:?}").contains("$e1"));
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_follow_live_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_follow_live".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "streamId":"view-1",
+                    "observedLiveTailEventId":"$e1",
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline follow_live must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-follow-live-invalid-payload")
         );
     }
 

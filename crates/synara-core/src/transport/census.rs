@@ -147,6 +147,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_timeline_close",
     "matrix_timeline_edit_text",
     "matrix_timeline_event_readback",
+    "matrix_timeline_follow_live",
     "matrix_timeline_forward_media",
     "matrix_timeline_forward_text",
     "matrix_timeline_jump_latest",

@@ -351,6 +351,24 @@
           "markdownDescription": "Enables the desktop_update_tray_state command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_window_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-window-close",
+          "markdownDescription": "Enables the desktop_window_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_window_minimize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-window-minimize",
+          "markdownDescription": "Enables the desktop_window_minimize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the desktop_window_toggle_maximize command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-window-toggle-maximize",
+          "markdownDescription": "Enables the desktop_window_toggle_maximize command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-backup-repair",
@@ -1137,6 +1155,12 @@
           "markdownDescription": "Enables the matrix_timeline_event_readback command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_follow_live command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-follow-live",
+          "markdownDescription": "Enables the matrix_timeline_follow_live command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_forward_media command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-forward-media",
@@ -1453,6 +1477,24 @@
           "type": "string",
           "const": "deny-desktop-update-tray-state",
           "markdownDescription": "Denies the desktop_update_tray_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_window_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-window-close",
+          "markdownDescription": "Denies the desktop_window_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_window_minimize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-window-minimize",
+          "markdownDescription": "Denies the desktop_window_minimize command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_window_toggle_maximize command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-window-toggle-maximize",
+          "markdownDescription": "Denies the desktop_window_toggle_maximize command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",
@@ -2239,6 +2281,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-event-readback",
           "markdownDescription": "Denies the matrix_timeline_event_readback command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_follow_live command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-follow-live",
+          "markdownDescription": "Denies the matrix_timeline_follow_live command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_forward_media command without any pre-configured scope.",

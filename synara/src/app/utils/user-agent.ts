@@ -4,6 +4,8 @@ export const ua = () => UAParser(window.navigator.userAgent);
 
 export const isMacOS = () => ua().os.name === 'Mac OS';
 
+export const isLinuxOS = () => ua().os.name === 'Linux';
+
 export const synaraDeviceDisplayName = (): string => {
   const osName = ua().os.name;
 

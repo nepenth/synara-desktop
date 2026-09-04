@@ -201,7 +201,7 @@ function HomeHeader() {
 
   return (
     <>
-      <PageNavHeader>
+      <PageNavHeader data-tauri-drag-region>
         <Box alignItems="Center" grow="Yes" gap="300">
           <Box grow="Yes" alignItems="Center" gap="200">
             <img
