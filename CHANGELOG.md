@@ -2,6 +2,23 @@
 
 ## Unreleased
 
+## 2.1.26 - 2026-09-04
+
+- Added integrated Linux window controls, a macOS overlay titlebar, and more
+  consistent room, member, and message-search surfaces.
+- Limited automatic follow-live to the actual Core live provider with an exact
+  painted-tail observation; historical windows retain explicit Jump to latest.
+- Removed iOS implicit historical-window replacement and unseen-tail read
+  acknowledgement introduced during desktop UX integration.
+- Routed desktop notification candidates through Core, bounded recent-event
+  deduplication, and made rejected candidate conflicts atomic.
+- Honored explicit Matrix mention metadata instead of legacy body matching.
+- Restricted privileged desktop document navigation to the application origin.
+- Closed CI filename-based validation bypasses and retained simulator gates for
+  release branches and explicit iOS opt-ins.
+- Updated Rust and JavaScript dependencies and included TestFlight export-retry
+  and exact-tag release validation improvements.
+
 ## 2.1.25 - 2026-09-03
 
 - Moved timeline reactions, poll voting, reports, encrypted-room forwarding,
