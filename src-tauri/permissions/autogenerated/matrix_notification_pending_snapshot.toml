@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-notification-pending-snapshot"
+description = "Enables the matrix_notification_pending_snapshot command without any pre-configured scope."
+commands.allow = ["matrix_notification_pending_snapshot"]
+
+[[permission]]
+identifier = "deny-matrix-notification-pending-snapshot"
+description = "Denies the matrix_notification_pending_snapshot command without any pre-configured scope."
+commands.deny = ["matrix_notification_pending_snapshot"]
