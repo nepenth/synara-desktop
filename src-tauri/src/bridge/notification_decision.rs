@@ -87,10 +87,7 @@ async fn dispatch(
 }
 
 fn map_notification_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
-    let diagnostic = error
-        .diagnostic_id
-        .as_deref()
-        .unwrap_or("v-notify.failed");
+    let diagnostic = error.diagnostic_id.as_deref().unwrap_or("v-notify.failed");
     match error.category {
         MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
             "Forbidden",

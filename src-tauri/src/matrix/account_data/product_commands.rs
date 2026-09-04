@@ -375,11 +375,8 @@ pub async fn matrix_notification_dismiss(
     core: State<'_, Arc<synara_core::Core>>,
     candidate_id: String,
 ) -> Result<bool, MatrixAuthCommandError> {
-    crate::bridge::notification_decision::notification_dismiss(
-        core.inner().as_ref(),
-        candidate_id,
-    )
-    .await
+    crate::bridge::notification_decision::notification_dismiss(core.inner().as_ref(), candidate_id)
+        .await
 }
 
 /// A9 decision stream: pending Core-decided candidates in insertion order.

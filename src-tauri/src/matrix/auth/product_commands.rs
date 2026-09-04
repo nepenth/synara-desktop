@@ -214,7 +214,9 @@ pub async fn matrix_login_password(
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
     core.inner()
         .attach_notification_decisions(notification_decisions)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed"))?;
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?;
     core.inner()
         .attach_sync(sync)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
@@ -887,7 +889,9 @@ pub async fn matrix_restore_session(
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
     core.inner()
         .attach_notification_decisions(notification_decisions)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed"))?;
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
+        })?;
     core.inner()
         .attach_sync(sync)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
