@@ -31,8 +31,16 @@ Optional environment variables:
 ```sh
 SYNARA_IOS_ARCHIVE_ROOT=/tmp \
 SYNARA_IOS_PACKAGE_CACHE_PATH=/path/to/swift-package-cache \
+SYNARA_TESTFLIGHT_EXPORT_RETRIES=2 \
+SYNARA_TESTFLIGHT_EXPORT_RETRY_SECONDS=15 \
 synara-ios/scripts/upload-testflight-internal.sh
 ```
+
+Export retries only the App Store Connect `exportArchive` hop (default: 2 extra
+attempts, 15 seconds apart) when Xcode reports a transient API-key JWT failure
+such as `Account credentials have expired`. Archive, signing, and missing-secret
+failures are not retried. A redundant upload of the same already-accepted build
+is treated as success so a retry cannot fail a release Apple already has.
 
 The current app package graph is entirely local and intentionally has no
 `Package.resolved`. Project build operations still disable automatic package

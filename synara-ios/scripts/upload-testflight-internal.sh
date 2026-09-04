@@ -38,6 +38,23 @@ if [[ "$TESTFLIGHT_INTERNAL_ONLY" != "true" && "$TESTFLIGHT_INTERNAL_ONLY" != "f
   echo "SYNARA_TESTFLIGHT_INTERNAL_ONLY must be 'true' or 'false'." >&2
   exit 1
 fi
+
+is_nonneg_int() {
+  [[ "$1" =~ ^[0-9]+$ ]]
+}
+
+# Extra export attempts after the first failure. Archive is never retried.
+EXPORT_RETRIES="${SYNARA_TESTFLIGHT_EXPORT_RETRIES:-2}"
+EXPORT_RETRY_SECONDS="${SYNARA_TESTFLIGHT_EXPORT_RETRY_SECONDS:-15}"
+if ! is_nonneg_int "$EXPORT_RETRIES"; then
+  echo "SYNARA_TESTFLIGHT_EXPORT_RETRIES must be a non-negative integer." >&2
+  exit 1
+fi
+if ! is_nonneg_int "$EXPORT_RETRY_SECONDS"; then
+  echo "SYNARA_TESTFLIGHT_EXPORT_RETRY_SECONDS must be a non-negative integer." >&2
+  exit 1
+fi
+EXPORT_MAX_ATTEMPTS=$((EXPORT_RETRIES + 1))
 xcode_auth_args=()
 has_xcode_auth_args=0
 if [[ -n "${SYNARA_ASC_KEY_PATH:-}" || -n "${SYNARA_ASC_KEY_ID:-}" || -n "${SYNARA_ASC_ISSUER_ID:-}" ]]; then
@@ -75,6 +92,32 @@ run_project_xcodebuild() {
 read_build_setting() {
   local key="$1"
   awk -F '= ' -v setting="$key" '$1 ~ setting"[[:space:]]*$" { print $2; exit }'
+}
+
+is_transient_export_failure() {
+  local log_file="$1"
+  grep -Eqi \
+    'Account credentials have expired|reauthenticationNotSupported|NOT_AUTHORIZED|Authentication credentials are missing or invalid|Provide a properly configured and signed bearer token' \
+    "$log_file"
+}
+
+is_duplicate_build_accepted() {
+  local log_file="$1"
+  grep -Eqi \
+    'Redundant Binary Upload|already exists a binary|already been uploaded|ITMS-4230' \
+    "$log_file"
+}
+
+copy_export_distribution_logs() {
+  local log_file="$1"
+  local distribution_log_path
+  distribution_log_path="$(
+    sed -nE 's/.*Created bundle at path "([^"]+\.xcdistributionlogs)".*/\1/p' \
+      "$log_file" | tail -n 1
+  )"
+  if [[ -n "$distribution_log_path" && -d "$distribution_log_path" ]]; then
+    cp -R "$distribution_log_path" "$DIAGNOSTICS_DIR/$(basename "$distribution_log_path")"
+  fi
 }
 
 build_settings="$(
@@ -173,27 +216,47 @@ fi
   "$archive_path" \
   "$DIAGNOSTICS_DIR"
 
-echo "Uploading Synara ${marketing_version} (${build_number}) to App Store Connect"
-set +e
-run_xcodebuild \
-  -exportArchive \
-  -archivePath "$archive_path" \
-  -exportOptionsPlist "$export_options" \
-  -exportPath "$export_path" \
-  -allowProvisioningUpdates \
-  2>&1 | tee "$DIAGNOSTICS_DIR/xcodebuild-export.log"
-export_status="${PIPESTATUS[0]}"
-set -e
+export_status=1
+export_attempt=1
+while (( export_attempt <= EXPORT_MAX_ATTEMPTS )); do
+  attempt_log="$DIAGNOSTICS_DIR/xcodebuild-export.log"
+  if (( export_attempt > 1 )); then
+    attempt_log="$DIAGNOSTICS_DIR/xcodebuild-export-attempt-${export_attempt}.log"
+    echo "Retrying App Store Connect export (attempt ${export_attempt}/${EXPORT_MAX_ATTEMPTS}) after transient auth failure."
+    sleep "$EXPORT_RETRY_SECONDS"
+  else
+    echo "Uploading Synara ${marketing_version} (${build_number}) to App Store Connect"
+  fi
 
-distribution_log_path="$(
-  sed -nE 's/.*Created bundle at path "([^"]+\.xcdistributionlogs)".*/\1/p' \
-    "$DIAGNOSTICS_DIR/xcodebuild-export.log" | tail -n 1
-)"
-if [[ -n "$distribution_log_path" && -d "$distribution_log_path" ]]; then
-  cp -R "$distribution_log_path" "$DIAGNOSTICS_DIR/$(basename "$distribution_log_path")"
-fi
-if [[ "$export_status" -ne 0 ]]; then
+  set +e
+  run_xcodebuild \
+    -exportArchive \
+    -archivePath "$archive_path" \
+    -exportOptionsPlist "$export_options" \
+    -exportPath "$export_path" \
+    -allowProvisioningUpdates \
+    2>&1 | tee "$attempt_log"
+  export_status="${PIPESTATUS[0]}"
+  set -e
+
+  if (( export_attempt > 1 )); then
+    cp "$attempt_log" "$DIAGNOSTICS_DIR/xcodebuild-export.log"
+  fi
+  copy_export_distribution_logs "$attempt_log"
+
+  if [[ "$export_status" -eq 0 ]]; then
+    break
+  fi
+  if is_duplicate_build_accepted "$attempt_log"; then
+    echo "App Store Connect already has this build; treating export as success."
+    export_status=0
+    break
+  fi
+  if (( export_attempt < EXPORT_MAX_ATTEMPTS )) && is_transient_export_failure "$attempt_log"; then
+    export_attempt=$((export_attempt + 1))
+    continue
+  fi
   exit "$export_status"
-fi
+done
 
 echo "Upload transport complete. App Store Connect processing must still be verified."
