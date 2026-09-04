@@ -10,8 +10,6 @@ test("version bumps and release notes are metadata-only", () => {
       "package-lock.json",
       "synara/package.json",
       "synara/package-lock.json",
-      "src-tauri/Cargo.toml",
-      "src-tauri/Cargo.lock",
       "src-tauri/tauri.conf.json",
       "synara-ios/project.yml",
       "synara-ios/Synara.xcodeproj/project.pbxproj",
@@ -36,5 +34,10 @@ test("product or workflow changes are not metadata-only", () => {
   assert.equal(
     isMetadataOnlyChange(["src-tauri/src/matrix/auth/product.rs"]),
     false
+  );
+  assert.equal(
+    isMetadataOnlyChange(["src-tauri/Cargo.toml", "src-tauri/Cargo.lock"]),
+    false,
+    "Dependabot rust lockfile bumps must run cargo validation"
   );
 });
