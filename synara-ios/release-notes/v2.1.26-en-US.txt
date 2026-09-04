@@ -1,0 +1,9 @@
+Synara 2.1.26 strengthens shared client behavior and release validation.
+
+What's new:
+- Historical timelines retain the explicit Jump to latest action. Reaching the bottom of an older window no longer silently replaces it or acknowledges unseen messages.
+- Shared notification state has bounded recent-event deduplication and safer candidate rejection.
+- Updated dependencies and stronger build, packaging, and simulator validation.
+- Companion macOS and Linux clients include improved window controls, room menus, and message search surfaces.
+
+Please test historical timeline navigation, read-state continuity, and push delivery on a physical device.

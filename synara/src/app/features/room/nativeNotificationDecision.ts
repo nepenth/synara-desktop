@@ -220,22 +220,26 @@ export function eventIsHighlightObservation(input: {
     atRoom: false,
   };
   if (flags.userMention && eventMentionsUser(input.content, input.userId)) return true;
-  if ((flags.roomMention || flags.atRoom) && mentionsRoom(input.content)) return true;
+  if (flags.roomMention && mentionsRoom(input.content)) return true;
   if (input.isEncrypted) return false;
 
   const body = typeof input.body === 'string' ? input.body : '';
   if (!body) return false;
-  if ((flags.roomMention || flags.atRoom) && notificationBodyContainsToken(body, '@room')) {
+  // Intentional mentions, including {}, disable legacy name/@room matching.
+  // Custom keyword rules still apply independently of mention metadata.
+  const legacyMentions = !Object.prototype.hasOwnProperty.call(input.content ?? {}, 'm.mentions');
+  if (legacyMentions && flags.atRoom && notificationBodyContainsToken(body, '@room')) {
     return true;
   }
   if (
+    legacyMentions &&
     flags.displayName &&
     input.displayName &&
     notificationBodyContainsToken(body, input.displayName)
   ) {
     return true;
   }
-  if (flags.userName && input.localpart) {
+  if (legacyMentions && flags.userName && input.localpart) {
     if (
       notificationBodyContainsToken(body, `@${input.localpart}`) ||
       notificationBodyContainsToken(body, input.localpart)

@@ -1,18 +1,15 @@
 //! Deterministic proof for the read-state follow-live transition.
 //!
-//! A room opened at a non-live position (focused history anchor) can never
-//! satisfy automatic read receipts: both the presenter gate and Core require a
-//! live-bottom stream. These tests drive the pinned `matrix-sdk-ui` timeline
-//! against a mocked homeserver and prove Core flips the stream position only
-//! on an exact SDK-tail observation — never on a stale tail, and idempotently
-//! when already live.
+//! A focused provider must never become live merely because its loaded tail
+//! was painted. Promotion is valid only for unread placement on the owner's
+//! actual live SDK provider, with an exact observation of its current tail.
 
 use std::sync::Arc;
 use std::time::Duration;
 
 use matrix_sdk::test_utils::mocks::{MatrixMockServer, RoomContextResponseTemplate};
 use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
-use ruma::{event_id, room_id, RoomVersionId};
+use ruma::{event_id, events::AnyRoomAccountDataEvent, room_id, serde::Raw, RoomVersionId};
 use synara_core::app::timeline::{
     NativeTimelineFollowLiveRequest, NativeTimelineOpenPosition, NativeTimelineOpenRequest,
     NativeTimelineOwner, TimelineViewPosition,
@@ -23,6 +20,7 @@ const WAIT: Duration = Duration::from_secs(5);
 
 async fn focused_owner() -> (
     MatrixMockServer,
+    matrix_sdk::Client,
     NativeTimelineOwner,
     String,
     String,
@@ -41,14 +39,24 @@ async fn focused_owner() -> (
             &client,
             JoinedRoomBuilder::new(room_id)
                 .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
+                .set_unread_notifications_count(serde_json::json!({"notification_count": 1}))
+                .add_account_data(
+                    Raw::<AnyRoomAccountDataEvent>::from_json_string(
+                        serde_json::json!({
+                            "type": "m.fully_read", "content": {"event_id": older_id}
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+                )
                 .add_timeline_event(f.text_msg("older message").sender(*BOB).event_id(older_id))
                 .add_timeline_event(f.text_msg("newer message").sender(*BOB).event_id(newer_id)),
         )
         .await;
     server.mock_room_state_encryption().plain().mount().await;
     // Focused opens resolve their anchor through /context, not sync: serve
-    // the anchor with the newer message after it so the focused controller's
-    // live tail is the newer event.
+    // the anchor with the newer message after it. Even when this focused
+    // window reaches the current sync tail, its provider is still not live.
     server
         .mock_room_event_context()
         .room(room_id)
@@ -79,6 +87,7 @@ async fn focused_owner() -> (
     );
     (
         server,
+        client,
         owner,
         room_id.to_string(),
         older_id.to_string(),
@@ -87,8 +96,15 @@ async fn focused_owner() -> (
 }
 
 #[tokio::test]
-async fn follow_live_flips_a_focused_stream_on_the_exact_sdk_tail() {
-    let (_server, owner, room_id, _older_id, newer_id) = focused_owner().await;
+async fn follow_live_rejects_a_focused_provider_even_on_the_exact_room_tail() {
+    let (_server, _client, owner, room_id, _older_id, newer_id) = focused_owner().await;
+    owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room_id.clone(),
+            position: NativeTimelineOpenPosition::LiveBottom,
+        })
+        .await
+        .expect("live provider must be registered");
     let older = event_id!("$follow-live-older");
     let opened = timeout(
         WAIT,
@@ -108,7 +124,7 @@ async fn follow_live_flips_a_focused_stream_on_the_exact_sdk_tail() {
         "a focused open must not already be live or the flip proof is vacuous"
     );
 
-    let snapshot = timeout(
+    let error = timeout(
         WAIT,
         owner.follow_live_tail(NativeTimelineFollowLiveRequest {
             stream_id: opened.stream_id.clone(),
@@ -117,14 +133,13 @@ async fn follow_live_flips_a_focused_stream_on_the_exact_sdk_tail() {
     )
     .await
     .expect("follow must complete")
-    .expect("exact-tail follow must succeed");
-    assert_eq!(snapshot.position, TimelineViewPosition::LiveBottom);
-    assert_eq!(snapshot.room_id.as_str(), room_id.as_str());
+    .expect_err("a focused SDK provider must remain focused");
+    assert_eq!(error, "v-timeline-follow-live-tail-not-loaded");
 }
 
 #[tokio::test]
 async fn follow_live_fails_closed_on_a_stale_observed_tail() {
-    let (_server, owner, room_id, older_id, _newer_id) = focused_owner().await;
+    let (_server, _client, owner, room_id, older_id, _newer_id) = focused_owner().await;
     let older = event_id!("$follow-live-older");
     let opened = timeout(
         WAIT,
@@ -178,7 +193,7 @@ async fn follow_live_fails_closed_on_a_stale_observed_tail() {
 
 #[tokio::test]
 async fn follow_live_is_idempotent_on_an_already_live_stream() {
-    let (_server, owner, room_id, _older_id, _newer_id) = focused_owner().await;
+    let (_server, _client, owner, room_id, _older_id, _newer_id) = focused_owner().await;
     let opened = timeout(
         WAIT,
         owner.open_at(NativeTimelineOpenRequest {
@@ -205,4 +220,71 @@ async fn follow_live_is_idempotent_on_an_already_live_stream() {
     .expect("follow must complete")
     .expect("live streams follow idempotently");
     assert_eq!(snapshot.position, TimelineViewPosition::LiveBottom);
+}
+
+#[tokio::test]
+async fn follow_live_promotes_unread_placement_and_keeps_receiving_sync() {
+    let (server, client, owner, room_id, older_id, newer_id) = focused_owner().await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room_id.clone(),
+            position: NativeTimelineOpenPosition::Unread,
+        })
+        .await
+        .expect("unread open must succeed");
+    assert!(matches!(
+        opened.position,
+        TimelineViewPosition::Unread { .. }
+    ));
+    let error = owner
+        .follow_live_tail(NativeTimelineFollowLiveRequest {
+            stream_id: opened.stream_id.clone(),
+            observed_live_tail_event_id: older_id,
+        })
+        .await
+        .expect_err("a stale live observation must fail");
+    assert_eq!(error, "v-timeline-follow-live-tail-not-loaded");
+    assert!(matches!(
+        owner.snapshot(&opened.stream_id).await.unwrap().position,
+        TimelineViewPosition::Unread { .. }
+    ));
+
+    let followed = owner
+        .follow_live_tail(NativeTimelineFollowLiveRequest {
+            stream_id: opened.stream_id.clone(),
+            observed_live_tail_event_id: newer_id,
+        })
+        .await
+        .expect("exact live tail promotes unread placement");
+    assert_eq!(followed.position, TimelineViewPosition::LiveBottom);
+
+    let room_id = room_id!("!follow-live:example.org");
+    let next_id = event_id!("$follow-live-arrival");
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_timeline_event(
+                f.text_msg("arrives after follow")
+                    .sender(*BOB)
+                    .event_id(next_id),
+            ),
+        )
+        .await;
+    timeout(WAIT, async {
+        loop {
+            let snapshot = owner.snapshot(&opened.stream_id).await.unwrap();
+            if snapshot.rows.iter().any(|row| {
+                matches!(row,
+                synara_core::app::timeline::TimelineViewRow::Message(message)
+                if message.event.event_id.as_deref() == Some(next_id.as_str()))
+            }) {
+                assert_eq!(snapshot.position, TimelineViewPosition::LiveBottom);
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .expect("promoted provider must still receive live events");
 }

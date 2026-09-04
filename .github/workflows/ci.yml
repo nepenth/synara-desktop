@@ -104,7 +104,14 @@ jobs:
             exit 0
           fi
 
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-icon-only.mjs; then
+          # Release branches and explicit iOS opt-ins must reach their gates,
+          # even when the diff contains only release notes or icons.
+          FORCE_CLIENT_GATES=false
+          if [[ "${GITHUB_BASE_REF:-}" == release/* || "${GITHUB_HEAD_REF:-}" == release/* || "${GITHUB_REF_NAME:-}" == release/* || ",${PR_LABELS:-}," == *",needs-ios,"* || ",${PR_LABELS:-}," == *",needs-ios-ui,"* ]]; then
+            FORCE_CLIENT_GATES=true
+          fi
+
+          if [[ "$FORCE_CLIENT_GATES" != "true" ]] && git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-icon-only.mjs; then
             emit_none
             echo "icon_only=true" >> "$GITHUB_OUTPUT"
             echo "CI scope: app-icon-only"
@@ -116,7 +123,7 @@ jobs:
 
           echo "icon_only=false" >> "$GITHUB_OUTPUT"
 
-          if git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-metadata-only.mjs; then
+          if [[ "$FORCE_CLIENT_GATES" != "true" ]] && git diff --name-only "$BASE_SHA" "$HEAD_SHA" | node scripts/ci-metadata-only.mjs; then
             emit_none
             echo "CI scope: metadata-only"
             node scripts/check-version-consistency.mjs
@@ -126,9 +133,15 @@ jobs:
 
           # Desktop / runtime validation (Node + Rust Tauri shell + synara frontend).
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
-            .github/workflows/ci.yml \
+            .github/workflows \
+            .cargo \
+            devAssets \
+            packaging \
             .node-version \
             config.json \
+            Cargo.toml \
+            Cargo.lock \
+            rust-toolchain.toml \
             package.json \
             package-lock.json \
             scripts \
@@ -147,6 +160,9 @@ jobs:
           if [[ "$VALIDATE" == "true" ]]; then
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
               .github/workflows/ci.yml \
+              Cargo.toml \
+              Cargo.lock \
+              .cargo \
               crates \
               src-tauri \
               rust-toolchain.toml; then
@@ -157,7 +173,9 @@ jobs:
               VALIDATE_RUST=true
             fi
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
-              .github/workflows/ci.yml \
+              .github/workflows \
+              devAssets \
+              packaging \
               .node-version \
               config.json \
               package.json \
@@ -276,7 +294,7 @@ jobs:
           # - Push to main still runs unit when iOS paths changed, so a
           #   merged break is caught before the next release branch.
           if [[ "${EVENT_NAME}" == "pull_request" ]]; then
-            if [[ "${GITHUB_BASE_REF:-}" == release/* ]]; then
+            if [[ "${GITHUB_BASE_REF:-}" == release/* || "${GITHUB_HEAD_REF:-}" == release/* ]]; then
               echo "ios=true" >> "$GITHUB_OUTPUT"
               IOS=true
               echo "ios_ui=true" >> "$GITHUB_OUTPUT"

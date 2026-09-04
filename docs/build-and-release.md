@@ -122,8 +122,10 @@ manual workflow branch selector is not a safe release-source selector.
 npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 ```
 
-2. Open a metadata-only PR (version files, changelog, release notes). Quality
-   gate should skip iOS, Synapse, and `cargo test`.
+2. Open a release PR (version files, changelog, release notes). Version-bearing
+   manifests and configuration are executable build inputs and run the relevant
+   validation. Use a `release/vX.Y.Z` head branch to require the iOS unit and UI
+   suites as well. Only inert release prose qualifies for metadata-only skips.
 3. Merge when Quality gate is green, then tag `vX.Y.Z` at that `main` commit.
    Do not wait for a second full suite on the merge push.
 4. The `Release` workflow validates that the tag matches the committed shared

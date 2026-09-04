@@ -706,7 +706,11 @@ export const useNativeTimelineView = (
         { streamId, observedLiveTailEventId: request.observedLiveTailEventId },
         invokeDesktopWithAvailability
       );
-      if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {
+      if (
+        streamIdRef.current !== streamId ||
+        snapshotRef.current?.sessionGeneration !== snapshot.sessionGeneration ||
+        isNativeTimelineReadbackStale(snapshotRef.current, next)
+      ) {
         return;
       }
       // Adopt the flipped position so live-tail gates observe the transition.

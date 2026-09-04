@@ -1,6 +1,6 @@
 {
   "name": "synara",
-  "version": "2.1.25",
+  "version": "2.1.26",
   "description": "Synara app runtime for the native desktop shell",
   "main": "index.js",
   "type": "module",
@@ -129,7 +129,7 @@
     "brace-expansion@2": "2.1.4",
     "brace-expansion@4": "5.0.9",
     "brace-expansion@5": "5.0.9",
-    "fast-uri": "3.1.5",
+    "fast-uri": "3.1.6",
     "js-yaml": "4.3.1",
     "minimatch@10.0.0": "10.2.6",
     "minimatch@10.0.2": "10.2.6",

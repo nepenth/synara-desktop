@@ -408,7 +408,7 @@ impl NativeTimelineOwner {
             .await
     }
 
-    /// Re-anchor one opened non-live view to the live bottom without reopening.
+    /// Promote unread placement on an existing live provider without reopening.
     /// Fails closed when the observed tail is no longer the SDK live tail.
     pub async fn follow_live_tail(
         &self,
@@ -1814,12 +1814,14 @@ impl NativeTimelineRegistry {
         })
     }
 
-    /// Re-anchor one opened non-live view to the live bottom without reopening.
+    /// Promote unread placement on an existing live provider without reopening.
     ///
     /// Compare-and-transition, mirroring automatic read receipts: the platform
     /// passes the exact tail event it painted at the visual bottom, and the
     /// stream position flips only when that event is still the
-    /// SDK-authoritative live tail. A newer arrival fails closed with
+    /// SDK-authoritative live tail. Focused providers cannot be promoted: their
+    /// loaded tail is not the room live edge and they do not follow sync.
+    /// A newer arrival or focused provider fails closed with
     /// `v-timeline-follow-live-tail-not-loaded` so the client paginates
     /// forward or jumps to latest instead of claiming a live edge it cannot
     /// see. Streams already at the live bottom succeed idempotently without
@@ -1834,11 +1836,18 @@ impl NativeTimelineRegistry {
             return Err("v-timeline-follow-live-tail-required");
         }
         let observed = parse_action_event_id(raw_observed, "v-timeline-follow-live-tail-invalid")?;
-        let already_live = self
+        let stream = self
             .view_streams
             .get(&request.stream_id)
-            .ok_or("v-timeline-view-not-open")
-            .map(|stream| stream.position == TimelineViewPosition::LiveBottom)?;
+            .ok_or("v-timeline-view-not-open")?;
+        let uses_live_provider = self
+            .entries
+            .get(&stream.room_id)
+            .is_some_and(|live| Arc::ptr_eq(&live.timeline, &stream.timeline));
+        if !uses_live_provider {
+            return Err("v-timeline-follow-live-tail-not-loaded");
+        }
+        let already_live = stream.position == TimelineViewPosition::LiveBottom;
         if !already_live {
             let sdk_tail = self
                 .view_streams

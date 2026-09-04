@@ -156,34 +156,6 @@ enum RoomTimelineReadAcknowledgementPolicy {
     }
 }
 
-enum RoomTimelineSilentFollowPolicy {
-    /// Whether a pinned bottom on a non-live provider should silently
-    /// re-anchor to live. One-shot per non-live episode: explicit jumps and
-    /// in-flight follows take precedence, and a live provider never follows.
-    /// A missing painted server tail fails closed — Jump to latest stays
-    /// visible instead of loading a live window the user has not reached.
-    static func shouldFollow(
-        isPinned: Bool,
-        providerIsLive: Bool,
-        isJumpingToLatest: Bool,
-        isSilentlyFollowingLive: Bool,
-        paintedTailEventID: String?
-    ) -> Bool {
-        isPinned
-            && providerIsLive == false
-            && isJumpingToLatest == false
-            && isSilentlyFollowingLive == false
-            && isValidPaintedTail(paintedTailEventID)
-    }
-
-    static func isValidPaintedTail(_ eventID: String?) -> Bool {
-        guard let eventID, eventID.count > 1 else {
-            return false
-        }
-        return eventID.hasPrefix("$")
-    }
-}
-
 enum RoomTimelineReadMarkerQueuePolicy {
     static func delayNanoseconds(
         firstQueuedAt: Date,
@@ -335,7 +307,6 @@ struct RoomTimelineView: View {
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
     @State private var isJumpingToLatest = false
-    @State private var isSilentlyFollowingLive = false
     @State private var isComposerFocused = false
     @State private var isTimelineBottomVisible = false
     @State private var timelineBottomAnchorGeneration: UInt64 = 0
@@ -2614,67 +2585,10 @@ struct RoomTimelineView: View {
             if let newestEventID {
                 scheduleMarkFullyRead(eventID: newestEventID)
             }
-        } else if isPinned {
-            // A room opened at an unread/focused position keeps a non-live
-            // provider no matter how far the user scrolls, so bottom
-            // visibility alone can never acknowledge. Silently re-anchor to
-            // live (one-shot per non-live episode); success flows into the
-            // live schedule path above, failure keeps Jump to latest visible.
-            cancelMarkFullyRead()
-            showJumpToLatest = loadedTimelineItems.isEmpty == false
-            silentlyFollowLive()
         } else {
             cancelMarkFullyRead()
             if timelineProviderIsLive == false || timelinePosition == .readingHistory {
                 showJumpToLatest = loadedTimelineItems.isEmpty == false
-            }
-        }
-    }
-
-    /// Re-anchor a non-live provider to the live tail without the jump
-    /// affordance. Reuses the exact transition Jump to latest uses; unlike an
-    /// explicit jump it never scrolls, never flags jumping state, and yields
-    /// to an in-flight explicit jump.
-    private func silentlyFollowLive() {
-        let paintedTailEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first
-        guard RoomTimelineSilentFollowPolicy.shouldFollow(
-            isPinned: isTimelineBottomVisible,
-            providerIsLive: timelineProviderIsLive,
-            isJumpingToLatest: isJumpingToLatest,
-            isSilentlyFollowingLive: isSilentlyFollowingLive,
-            paintedTailEventID: paintedTailEventID
-        ), let timelineSession
-        else {
-            return
-        }
-        isSilentlyFollowingLive = true
-        Task {
-            let transition = await timelineSession.transitionToLive()
-            await MainActor.run {
-                isSilentlyFollowingLive = false
-                // An explicit jump owns the feed now; never clobber it.
-                guard isJumpingToLatest == false else {
-                    return
-                }
-                switch transition {
-                case let .succeeded(feed):
-                    initialReadMarkerEventID = nil
-                    timelinePosition = .followingLive
-                    applySessionFeed(feed)
-                    showJumpToLatest = false
-                    // The replaced feed resets bottom visibility; the bottom
-                    // anchor re-appears and the live branch above schedules.
-                    // Pin it directly as well in case the anchor is already
-                    // mounted: the schedule coalesces duplicates.
-                    isTimelineBottomVisible = true
-                    if let newestEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first {
-                        scheduleMarkFullyRead(eventID: newestEventID)
-                    }
-                case .empty, .failed, .superseded:
-                    // Keep the explicit Jump to latest path visible; it
-                    // surfaces errors with rows preserved when the user acts.
-                    showJumpToLatest = loadedTimelineItems.isEmpty == false
-                }
             }
         }
     }

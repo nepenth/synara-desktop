@@ -181,3 +181,118 @@ fn retire_generation() {
     assert!(idx.is_empty());
     assert!(idx.focused_room().is_none());
 }
+
+#[test]
+fn rejected_collision_preserves_pending_and_allows_event_retry() {
+    let mut idx = NotificationIndex::new(1);
+    for i in 0..MAX_PENDING_CANDIDATES {
+        idx.enqueue(candidate(
+            &format!("c{i}"),
+            "!r:example.org",
+            Some(&format!("${i}")),
+            NotificationKind::Message,
+            false,
+        ))
+        .unwrap();
+    }
+    assert!(idx
+        .enqueue(candidate(
+            "c1",
+            "!r:example.org",
+            Some("$retry"),
+            NotificationKind::Message,
+            false
+        ))
+        .is_err());
+    assert_eq!(idx.len(), MAX_PENDING_CANDIDATES);
+    assert!(idx.get("c0").is_some());
+    assert!(!idx.is_duplicate("!r:example.org", "$retry"));
+    assert!(idx
+        .enqueue(candidate(
+            "retry",
+            "!r:example.org",
+            Some("$retry"),
+            NotificationKind::Message,
+            false
+        ))
+        .unwrap()
+        .is_some());
+}
+
+#[test]
+fn recent_event_history_is_bounded_independently_of_pending() {
+    let mut idx = NotificationIndex::new(1);
+    for i in 0..super::index::MAX_SEEN_EVENTS + 1 {
+        let id = idx
+            .enqueue(candidate(
+                "",
+                "!r:example.org",
+                Some(&format!("${i}")),
+                NotificationKind::Message,
+                false,
+            ))
+            .unwrap()
+            .unwrap();
+        assert!(idx.dismiss(&id));
+    }
+    assert!(idx.is_empty());
+    assert!(!idx.is_duplicate("!r:example.org", "$0"));
+    assert!(idx.is_duplicate("!r:example.org", "$1"));
+    assert!(idx.is_duplicate(
+        "!r:example.org",
+        &format!("${}", super::index::MAX_SEEN_EVENTS)
+    ));
+    idx.retire_generation(2);
+    assert!(!idx.is_duplicate("!r:example.org", "$1"));
+    assert!(idx
+        .enqueue(candidate(
+            "",
+            "!r:example.org",
+            Some("$1"),
+            NotificationKind::Message,
+            false
+        ))
+        .unwrap()
+        .is_some());
+}
+
+#[test]
+fn retained_identifiers_have_byte_bounds() {
+    let mut idx = NotificationIndex::new(1);
+    let oversized_event = format!("${}", "x".repeat(512));
+    assert!(idx
+        .enqueue(candidate(
+            "",
+            "!r:example.org",
+            Some(&oversized_event),
+            NotificationKind::Message,
+            false
+        ))
+        .is_err());
+    let oversized_room = format!("!{}:example.org", "x".repeat(512));
+    assert!(idx
+        .enqueue(candidate(
+            "",
+            &oversized_room,
+            Some("$e"),
+            NotificationKind::Message,
+            false
+        ))
+        .is_err());
+    assert!(idx.is_empty());
+}
+
+#[test]
+fn identical_candidate_resubmission_remains_a_suppressed_duplicate() {
+    let mut idx = NotificationIndex::new(1);
+    let item = candidate(
+        "same",
+        "!r:example.org",
+        Some("$same"),
+        NotificationKind::Message,
+        false,
+    );
+    assert!(idx.enqueue(item.clone()).unwrap().is_some());
+    assert!(idx.enqueue(item).unwrap().is_none());
+    assert_eq!(idx.len(), 1);
+}
