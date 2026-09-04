@@ -8,7 +8,8 @@ final class RoomTimelineSilentFollowTests: XCTestCase {
                 isPinned: true,
                 providerIsLive: false,
                 isJumpingToLatest: false,
-                isSilentlyFollowingLive: false
+                isSilentlyFollowingLive: false,
+                paintedTailEventID: "$tail:example.org"
             )
         )
     }
@@ -19,7 +20,8 @@ final class RoomTimelineSilentFollowTests: XCTestCase {
                 isPinned: true,
                 providerIsLive: true,
                 isJumpingToLatest: false,
-                isSilentlyFollowingLive: false
+                isSilentlyFollowingLive: false,
+                paintedTailEventID: "$tail:example.org"
             )
         )
     }
@@ -30,7 +32,8 @@ final class RoomTimelineSilentFollowTests: XCTestCase {
                 isPinned: false,
                 providerIsLive: false,
                 isJumpingToLatest: false,
-                isSilentlyFollowingLive: false
+                isSilentlyFollowingLive: false,
+                paintedTailEventID: "$tail:example.org"
             )
         )
     }
@@ -41,7 +44,8 @@ final class RoomTimelineSilentFollowTests: XCTestCase {
                 isPinned: true,
                 providerIsLive: false,
                 isJumpingToLatest: true,
-                isSilentlyFollowingLive: false
+                isSilentlyFollowingLive: false,
+                paintedTailEventID: "$tail:example.org"
             )
         )
     }
@@ -52,7 +56,29 @@ final class RoomTimelineSilentFollowTests: XCTestCase {
                 isPinned: true,
                 providerIsLive: false,
                 isJumpingToLatest: false,
-                isSilentlyFollowingLive: true
+                isSilentlyFollowingLive: true,
+                paintedTailEventID: "$tail:example.org"
+            )
+        )
+    }
+
+    func testMissingPaintedTailFailsClosed() {
+        XCTAssertFalse(
+            RoomTimelineSilentFollowPolicy.shouldFollow(
+                isPinned: true,
+                providerIsLive: false,
+                isJumpingToLatest: false,
+                isSilentlyFollowingLive: false,
+                paintedTailEventID: nil
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineSilentFollowPolicy.shouldFollow(
+                isPinned: true,
+                providerIsLive: false,
+                isJumpingToLatest: false,
+                isSilentlyFollowingLive: false,
+                paintedTailEventID: "not-an-event"
             )
         )
     }

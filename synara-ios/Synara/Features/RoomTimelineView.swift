@@ -160,16 +160,27 @@ enum RoomTimelineSilentFollowPolicy {
     /// Whether a pinned bottom on a non-live provider should silently
     /// re-anchor to live. One-shot per non-live episode: explicit jumps and
     /// in-flight follows take precedence, and a live provider never follows.
+    /// A missing painted server tail fails closed — Jump to latest stays
+    /// visible instead of loading a live window the user has not reached.
     static func shouldFollow(
         isPinned: Bool,
         providerIsLive: Bool,
         isJumpingToLatest: Bool,
-        isSilentlyFollowingLive: Bool
+        isSilentlyFollowingLive: Bool,
+        paintedTailEventID: String?
     ) -> Bool {
         isPinned
             && providerIsLive == false
             && isJumpingToLatest == false
             && isSilentlyFollowingLive == false
+            && isValidPaintedTail(paintedTailEventID)
+    }
+
+    static func isValidPaintedTail(_ eventID: String?) -> Bool {
+        guard let eventID, eventID.count > 1 else {
+            return false
+        }
+        return eventID.hasPrefix("$")
     }
 }
 
@@ -2625,11 +2636,13 @@ struct RoomTimelineView: View {
     /// explicit jump it never scrolls, never flags jumping state, and yields
     /// to an in-flight explicit jump.
     private func silentlyFollowLive() {
+        let paintedTailEventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first
         guard RoomTimelineSilentFollowPolicy.shouldFollow(
             isPinned: isTimelineBottomVisible,
             providerIsLive: timelineProviderIsLive,
             isJumpingToLatest: isJumpingToLatest,
-            isSilentlyFollowingLive: isSilentlyFollowingLive
+            isSilentlyFollowingLive: isSilentlyFollowingLive,
+            paintedTailEventID: paintedTailEventID
         ), let timelineSession
         else {
             return

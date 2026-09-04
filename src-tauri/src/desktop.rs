@@ -143,11 +143,11 @@ pub fn desktop_window_toggle_maximize(app: AppHandle) -> Result<bool, String> {
     }
 }
 
+/// Linux in-app Close must match native chrome: hide to tray.
+/// `Window::close()` can skip `CloseRequested` on some backends and quit.
 #[tauri::command]
 pub fn desktop_window_close(app: AppHandle) -> Result<(), String> {
-    main_window(&app)
-        .ok_or_else(|| "No native main window is active.".to_owned())
-        .and_then(|window| window.close().map_err(|error| error.to_string()))
+    hide_main_window(&app).map_err(|error| error.to_string())
 }
 
 #[tauri::command]

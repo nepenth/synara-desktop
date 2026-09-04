@@ -41,6 +41,18 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.match(lib, /desktop::desktop_window_toggle_maximize/);
   assert.match(lib, /desktop::desktop_window_close/);
   assert.match(lib, /matrix::auth::product::matrix_timeline_follow_live/);
+  const build = source('../src-tauri/build.rs');
+  assert.match(build, /"desktop_window_minimize"/);
+  assert.match(build, /"desktop_window_toggle_maximize"/);
+  assert.match(build, /"desktop_window_close"/);
+  assert.match(build, /"matrix_timeline_follow_live"/);
+  const desktop = source('../src-tauri/src/desktop.rs');
+  assert.match(desktop, /pub fn desktop_window_close/);
+  assert.match(desktop, /hide_main_window/);
+  assert.doesNotMatch(
+    desktop.split('pub fn desktop_window_close')[1]?.split('pub fn desktop_navigate')[0] ?? '',
+    /window\.close\(\)/
+  );
   for (const permission of [
     'allow-desktop-window-minimize',
     'allow-desktop-window-toggle-maximize',
@@ -51,6 +63,15 @@ test('native window chrome matches the in-app titlebar contract', () => {
       capabilities.permissions.includes(permission),
       `${permission} must be granted to the main webview`
     );
+  }
+  const linuxSchema = source('../src-tauri/gen/schemas/linux-schema.json');
+  for (const command of [
+    'desktop_window_minimize',
+    'desktop_window_toggle_maximize',
+    'desktop_window_close',
+    'matrix_timeline_follow_live',
+  ]) {
+    assert.match(linuxSchema, new RegExp(`allow-${command.replaceAll('_', '-')}`));
   }
 });
 

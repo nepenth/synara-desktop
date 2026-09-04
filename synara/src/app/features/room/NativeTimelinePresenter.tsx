@@ -2186,6 +2186,24 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     scrollEl.addEventListener('scroll', scheduleAttempt, { passive: true });
     window.addEventListener('focus', scheduleAttempt);
     document.addEventListener('visibilitychange', scheduleAttempt);
+    const resizeObserver =
+      typeof ResizeObserver === 'undefined' ? undefined : new ResizeObserver(scheduleAttempt);
+    resizeObserver?.observe(scrollEl);
+    const observeContentSize = () => {
+      Array.from(scrollEl.children).forEach((child) => resizeObserver?.observe(child));
+    };
+    observeContentSize();
+    const mutationObserver =
+      typeof MutationObserver === 'undefined'
+        ? undefined
+        : new MutationObserver(() => {
+            observeContentSize();
+            scheduleAttempt();
+          });
+    mutationObserver?.observe(scrollEl, {
+      childList: true,
+      subtree: true,
+    });
     scheduleAttempt();
     return () => {
       cancelled = true;
@@ -2193,6 +2211,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       scrollEl.removeEventListener('scroll', scheduleAttempt);
       window.removeEventListener('focus', scheduleAttempt);
       document.removeEventListener('visibilitychange', scheduleAttempt);
+      resizeObserver?.disconnect();
+      mutationObserver?.disconnect();
     };
   }, [followLiveKey, followLiveTarget, followLive, roomId]);
 
