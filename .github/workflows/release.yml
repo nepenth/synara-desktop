@@ -89,7 +89,7 @@ jobs:
 
       - name: Cache Rust build artifacts
         if: steps.reuse.outputs.reuse != 'true'
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
@@ -182,7 +182,7 @@ jobs:
 
       - name: Cache Apple SynaraCore build
         if: steps.reuse.outputs.reuse != 'true'
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ". -> target/synara-core-apple"
           shared-key: ci-synara-core-apple-simulator-arm64
@@ -256,7 +256,7 @@ jobs:
           toolchain: 1.93
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
           shared-key: release-linux-deb
@@ -389,7 +389,7 @@ jobs:
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
       - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
           shared-key: release-macos
@@ -661,7 +661,7 @@ jobs:
           targets: aarch64-apple-ios
 
       - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@779680da715d629ac1d338a641029a2f4372abb5 # v2.8.2
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ". -> target/synara-core-apple"
           shared-key: release-synara-core-apple-device
@@ -1026,7 +1026,7 @@ jobs:
         run: node scripts/assert-release-version.mjs
 
       - name: Create GitHub Release with all client artifacts
-        uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ github.ref_name }}
           name: Synara ${{ github.ref_name }}
