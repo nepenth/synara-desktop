@@ -106,7 +106,7 @@ final class LocalWipeServiceTests: XCTestCase {
 
         XCTAssertEqual(session.currentState, .signedIn(persistedSession))
         XCTAssertEqual(matrix.stopCallCount, 0)
-        XCTAssertTrue(matrix.revokedSessions.isEmpty)
+        XCTAssertEqual(matrix.revokedSessions.count, 1)
         XCTAssertEqual(matrix.resetCallCount, 0)
         XCTAssertEqual(push.clearCallCount, 1)
         XCTAssertEqual(push.cancelRegistrationTeardownCallCount, 1)
@@ -144,9 +144,9 @@ final class LocalWipeServiceTests: XCTestCase {
             recorder.events,
             [
                 "push-clear",
+                "server-revoke",
                 "session-delete",
                 "push-finish",
-                "server-revoke",
                 "matrix-stop",
                 "matrix-reset"
             ]
@@ -158,41 +158,26 @@ final class LocalWipeServiceTests: XCTestCase {
         )
     }
 
-    func testFailedPusherCleanupBlocksSessionDeletionAndCanRetry() async throws {
+    func testFailedRestoreAndRemoteCleanupStillSignOutOnFirstAttemptAndColdLaunch() async throws {
         let persistedSession = try makeSession()
         let secureStore = InMemorySecureSessionStore(session: persistedSession)
         let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
-        let matrix = MockMatrixClientService(syncStatus: .syncing)
+        let matrix = MockMatrixClientService(syncStatus: .restoreFailed)
+        matrix.serverRevocationResult = false
         let push = MockPushService()
         push.clearRegistrationResult = false
         let wipe = AppLocalWipeService(
-            session: session,
-            matrix: matrix,
-            roomList: MockRoomListService(),
-            timeline: MockTimelineService(),
-            drafts: DraftStore(),
-            push: push,
-            router: AppRouter()
+            session: session, matrix: matrix,
+            roomList: MockRoomListService(), timeline: MockTimelineService(),
+            drafts: DraftStore(), push: push, router: AppRouter()
         )
-
-        do {
-            try await wipe.logoutAndWipe()
-            XCTFail("Expected pusher cleanup to fail")
-        } catch {
-            XCTAssertEqual(error as? LocalWipeError, .pusherCleanupFailed)
-        }
-        XCTAssertEqual(session.currentState, .signedIn(persistedSession))
-        XCTAssertEqual(secureStore.deleteCallCount, 0)
-        XCTAssertTrue(matrix.revokedSessions.isEmpty)
-
-        push.clearRegistrationResult = true
         try await wipe.logoutAndWipe()
-
-        XCTAssertEqual(push.clearCallCount, 2)
+        XCTAssertEqual(push.clearCallCount, 1)
         XCTAssertEqual(push.completeRegistrationTeardownCallCount, 1)
         XCTAssertEqual(session.currentState, .signedOut)
-        XCTAssertEqual(secureStore.deleteCallCount, 1)
-        XCTAssertEqual(matrix.revokedSessions.map(\.userID), [persistedSession.userID])
+        XCTAssertNil(try secureStore.load())
+        let relaunched = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
+        XCTAssertEqual(relaunched.currentState, .signedOut)
     }
 
     func testProductResetLocalStateDoesNotWipePersistedStores() throws {

@@ -66,7 +66,7 @@ enum SharedCoreTimelineSignalBatch {
 final class SharedCoreLivePoller: @unchecked Sendable {
     private let core: SharedCore
     private let lock = NSLock()
-    private var waiters: [UUID: (roomId: String, continuation: AsyncStream<TimelineViewUpdateDto>.Continuation)] = [:]
+    private var waiters: [UUID: (roomId: String, continuation: AsyncStream<Void>.Continuation)] = [:]
     private var roomListWaiters: [UUID: AsyncStream<Void>.Continuation] = [:]
     private var ownerWaiters: [UUID: (families: Set<String>, continuation: AsyncStream<OwnerUpdateDto>.Continuation)] = [:]
     private var pollTask: Task<Void, Never>?
@@ -75,7 +75,7 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         self.core = core
     }
 
-    func timelineSignals(roomId: String) -> AsyncStream<TimelineViewUpdateDto> {
+    func timelineSignals(roomId: String) -> AsyncStream<Void> {
         AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
             let id = UUID()
             lock.lock()
@@ -166,7 +166,7 @@ final class SharedCoreLivePoller: @unchecked Sendable {
                     ? ((try? await SharedCoreOwnerUpdates.poll(core: core)) ?? [])
                     : []
                 if updates.isEmpty == false {
-                    self?.dispatch(SharedCoreTimelineSignalBatch.coalesced(updates))
+                    self?.receiveTimelineUpdates(SharedCoreTimelineSignalBatch.coalesced(updates))
                 }
                 if rooms.isEmpty == false {
                     self?.dispatchRoomList()
@@ -196,14 +196,16 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         return ownerWaiters.isEmpty == false
     }
 
-    private func dispatch(_ updates: [TimelineViewUpdateDto]) {
+    func receiveTimelineUpdates(_ updates: [TimelineViewUpdateDto]) {
         lock.lock()
         let waiters = self.waiters
         lock.unlock()
-        for update in updates {
-            for waiter in waiters.values where waiter.roomId == update.roomId {
-                waiter.continuation.yield(update)
-            }
+        // A room may have live, focused and transient read-marker streams.
+        // Coalesce at the same scope as the bounded subscription; retaining a
+        // single DTO and filtering its stream afterwards can lose an update.
+        let changedRooms = Set(updates.map(\.roomId))
+        for waiter in waiters.values where changedRooms.contains(waiter.roomId) {
+            waiter.continuation.yield(())
         }
     }
 

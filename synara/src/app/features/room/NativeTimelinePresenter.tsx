@@ -26,6 +26,7 @@ import { AgentApprovalCard } from '../../components/agent-approval/AgentApproval
 import { setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
 import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
+import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
 import {
   editTextWithNativeTimelineAction,
   forwardMediaWithNativeTimelineAction,
@@ -1942,6 +1943,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
+  const timelineReady = readyState !== undefined;
+  useEffect(() => {
+    const element = scrollRef.current;
+    if (!timelineReady || !element) return undefined;
+    return observeNativeTimelineBottom(element, setAtLiveBottom);
+  }, [roomId, timelineReady]);
   useEffect(() => {
     if (activeSessionGeneration === undefined) return;
     bindNativeTimelineActionSession(activeSessionGeneration);

@@ -2157,6 +2157,12 @@ interface SharedCore {
   LeftoverAckDto logout();
 
   [Async, Throws=LeftoverCommandError]
+  boolean revoke_server_session(string user_id, string device_id, string homeserver_url);
+
+  [Async, Throws=LeftoverCommandError]
+  LeftoverAckDto forget_session(string user_id, string homeserver_url);
+
+  [Async, Throws=LeftoverCommandError]
   LeftoverAckDto recover(string recovery_key);
 
   [Async, Throws=LeftoverCommandError]

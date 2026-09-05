@@ -48,17 +48,17 @@ struct AppLocalWipeService: LocalWiping {
             return nil
         }
 
-        // Remove the remote pusher first, through its retained account-bound
-        // Core owner. If cleanup fails, preserve both the owner and local
-        // session so a later sign-out attempt can retry with valid credentials.
-        guard await push.clearRegistrationState() else {
-            throw LocalWipeError.pusherCleanupFailed
+        // Attempt account-bound remote cleanup while credentials are usable.
+        // Offline cleanup must not prevent durable local sign-out.
+        _ = await push.clearRegistrationState()
+        if let activeSession {
+            _ = await matrix.revokeServerSession(activeSession)
         }
 
-        // Only after remote pusher cleanup succeeds may the persisted Matrix
-        // device session be deleted. If Keychain deletion fails, the running
-        // Core session remains available and no destructive local cleanup runs.
         do {
+            if let activeSession {
+                try await matrix.forgetPersistedSession(activeSession)
+            }
             try await MainActor.run {
                 try session.signOut()
             }
@@ -68,10 +68,6 @@ struct AppLocalWipeService: LocalWiping {
         }
         push.completeRegistrationTeardown()
 
-        // Server logout remains best effort after durable local sign-out.
-        if let activeSession {
-            _ = await matrix.revokeServerSession(activeSession)
-        }
         await matrix.stop()
         await matrix.resetLocalState(for: activeSession)
         roomList.clearCache()

@@ -6969,9 +6969,113 @@ impl SharedCore {
         })
     }
 
+    /// Best-effort remote revocation on the already-loaded, exact device.
+    /// No store restore or new client is permitted on the logout route.
+    pub async fn revoke_server_session(
+        &self,
+        user_id: String,
+        device_id: String,
+        homeserver_url: String,
+    ) -> Result<bool, LeftoverCommandError> {
+        let identity = AccountIdentity::new(&user_id, &homeserver_url)
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        let Ok(client) = self.retained_client() else {
+            return Ok(false);
+        };
+        let matches = client.user_id().map(|id| id.as_str()) == Some(identity.user_id())
+            && client.device_id().map(|id| id.as_str()) == Some(device_id.as_str())
+            && AccountIdentity::new(&user_id, client.homeserver().as_str())
+                .ok()
+                .as_ref()
+                == Some(&identity);
+        if !matches || self.is_nse_read_only() {
+            return Err(leftover_failed(
+                LEFTOVER_FAILED_CODE,
+                LEFTOVER_FAILED_DESCRIPTION,
+            ));
+        }
+        Ok(matches!(
+            tokio::time::timeout(
+                std::time::Duration::from_secs(5),
+                client.matrix_auth().logout()
+            )
+            .await,
+            Ok(Ok(_))
+        ))
+    }
+
+    /// Remove account authentication even when its SDK store cannot restore.
+    /// The encrypted history/key are retained for a later password login.
+    pub async fn forget_session(
+        &self,
+        user_id: String,
+        homeserver_url: String,
+    ) -> Result<LeftoverAckDto, LeftoverCommandError> {
+        let identity = AccountIdentity::new(&user_id, &homeserver_url)
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        if self.is_nse_read_only() {
+            return Err(leftover_failed(
+                LEFTOVER_FAILED_CODE,
+                LEFTOVER_FAILED_DESCRIPTION,
+            ));
+        }
+        if let Some(snapshot) = self
+            .core
+            .session_snapshot()
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?
+        {
+            if AccountIdentity::new(&snapshot.user_id, &snapshot.homeserver_url)
+                .ok()
+                .as_ref()
+                != Some(&identity)
+            {
+                return Err(leftover_failed(
+                    LEFTOVER_FAILED_CODE,
+                    LEFTOVER_FAILED_DESCRIPTION,
+                ));
+            }
+        }
+        self.logout().await?;
+        self.secret_store
+            .delete(SessionMaterialId::from_identity(&identity).account())
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        Ok(LeftoverAckDto {
+            status: "forgotten".to_owned(),
+        })
+    }
+
     pub async fn logout(&self) -> Result<LeftoverAckDto, LeftoverCommandError> {
-        // Keyring/Keychain wipe stays in the shell. This leftover FFI only
-        // drops the retained Client. It does not hit a homeserver.
+        // Serialize teardown with foreground resume and release every store
+        // before dropping ownership. This operation performs no remote logout.
+        let _lifecycle = self.sync_lifecycle.lock().await;
+        if self.owners_attached() {
+            self.core
+                .stop_attached_sync()
+                .await
+                .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        }
+        if let Ok(client) = self.retained_client() {
+            client
+                .pause()
+                .await
+                .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        }
+        self.core
+            .close()
+            .await
+            .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
+        if let Ok(mut live) = self.room_list_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut updates) = self.timeline_view_updates.lock() {
+            updates.clear();
+        }
+        if let Ok(mut updates) = self.room_list_updates.lock() {
+            updates.clear();
+        }
+        if let Ok(mut updates) = self.owner_updates.lock() {
+            updates.clear();
+        }
         let mut guard = self
             .restored_client
             .lock()
@@ -9446,17 +9550,21 @@ impl HttpPusherOwner {
         http_pusher_reject_oversize(gateway_url.len())?;
         http_pusher_reject_oversize(app_display_name.len())?;
         http_pusher_reject_oversize(lang.len())?;
-        let result = self
-            .owner
-            .register(&push_key, &app_id, &gateway_url, &app_display_name, &lang)
-            .await
-            .map_err(|error| {
-                map_http_pusher_core_error(
-                    REGISTER_HTTP_PUSHER_NO_SESSION_CODE,
-                    MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
-                        .with_diagnostic(error),
-                )
-            })?;
+        // UniFFI 0.28 does not propagate Swift Task cancellation into this
+        // future. Logout awaits reconciliation, so bound the entire write.
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            self.owner
+                .register(&push_key, &app_id, &gateway_url, &app_display_name, &lang),
+        )
+        .await
+        .unwrap_or(Err("pusher-registration-timeout"))
+        .map_err(|error| {
+            map_http_pusher_core_error(
+                REGISTER_HTTP_PUSHER_NO_SESSION_CODE,
+                MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(error),
+            )
+        })?;
         Ok(PusherWriteDto {
             status: result.status.to_owned(),
         })
@@ -9469,17 +9577,18 @@ impl HttpPusherOwner {
     ) -> Result<PusherWriteDto, PusherCommandError> {
         http_pusher_reject_oversize(push_key.len())?;
         http_pusher_reject_oversize(app_id.len())?;
-        let result = self
-            .owner
-            .delete(&push_key, &app_id)
-            .await
-            .map_err(|error| {
-                map_http_pusher_core_error(
-                    DELETE_HTTP_PUSHER_NO_SESSION_CODE,
-                    MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
-                        .with_diagnostic(error),
-                )
-            })?;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            self.owner.delete(&push_key, &app_id),
+        )
+        .await
+        .unwrap_or(Err("pusher-deletion-timeout"))
+        .map_err(|error| {
+            map_http_pusher_core_error(
+                DELETE_HTTP_PUSHER_NO_SESSION_CODE,
+                MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(error),
+            )
+        })?;
         Ok(PusherWriteDto {
             status: result.status.to_owned(),
         })
@@ -9494,17 +9603,19 @@ impl HttpPusherOwner {
         if let Some(push_key) = last_push_key.as_ref() {
             http_pusher_reject_oversize(push_key.len())?;
         }
-        let result = self
-            .owner
-            .delete_for_device(&app_id, last_push_key.as_deref())
-            .await
-            .map_err(|error| {
-                map_http_pusher_core_error(
-                    DELETE_HTTP_PUSHER_NO_SESSION_CODE,
-                    MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
-                        .with_diagnostic(error),
-                )
-            })?;
+        let result = tokio::time::timeout(
+            std::time::Duration::from_secs(5),
+            self.owner
+                .delete_for_device(&app_id, last_push_key.as_deref()),
+        )
+        .await
+        .unwrap_or(Err("pusher-cleanup-timeout"))
+        .map_err(|error| {
+            map_http_pusher_core_error(
+                DELETE_HTTP_PUSHER_NO_SESSION_CODE,
+                MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(error),
+            )
+        })?;
         Ok(PusherWriteDto {
             status: result.status.to_owned(),
         })
@@ -13480,6 +13591,111 @@ mod tests {
             self.0.lock().expect("vault").remove(&key);
             Ok(())
         }
+    }
+
+    #[tokio::test]
+    async fn session_logout_forgets_credentials_when_restore_is_unavailable() {
+        let entries = Arc::new(Mutex::new(HashMap::new()));
+        let shared =
+            SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+        let identity = alice();
+        let credential_key = SessionMaterialId::from_identity(&identity)
+            .account()
+            .to_owned();
+        let history_key = StoreKeyId::from_identity(&identity).account().to_owned();
+        {
+            let mut vault = entries.lock().unwrap();
+            vault.insert(credential_key.clone(), b"unrestorable-session".to_vec());
+            vault.insert(history_key.clone(), vec![7; 32]);
+            vault.insert("other-account".into(), b"other-credential".to_vec());
+        }
+        assert!(!shared
+            .revoke_server_session(
+                identity.user_id().into(),
+                "DEVICE".into(),
+                identity.homeserver_url().into()
+            )
+            .await
+            .unwrap());
+        let result = shared
+            .forget_session(identity.user_id().into(), identity.homeserver_url().into())
+            .await
+            .unwrap();
+        assert_eq!(result.status, "forgotten");
+        let vault = entries.lock().unwrap();
+        assert!(!vault.contains_key(&credential_key));
+        assert_eq!(vault.get(&history_key), Some(&vec![7; 32]));
+        assert!(vault.contains_key("other-account"));
+    }
+
+    #[tokio::test]
+    async fn session_logout_revokes_exact_device_and_cannot_restore_after_forget() {
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        let server = MatrixMockServer::new().await;
+        server.mock_versions().ok().mount().await;
+        server
+            .mock_logout()
+            .expect_access_token("fixture-token")
+            .ok()
+            .expect(1)
+            .mount()
+            .await;
+        let entries = Arc::new(Mutex::new(HashMap::new()));
+        let shared =
+            SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries.clone())));
+        let root = temp_root("logout");
+        let root_path = root.to_string_lossy().into_owned();
+        shared
+            .persist_planted_session_for_test(
+                "@alice:example.org".into(),
+                server.server().uri(),
+                root_path.clone(),
+                "DEVICE".into(),
+                "fixture-token".into(),
+                None,
+            )
+            .await
+            .unwrap();
+        assert!(shared
+            .revoke_server_session(
+                "@alice:example.org".into(),
+                "OTHER".into(),
+                server.server().uri()
+            )
+            .await
+            .is_err());
+        assert!(shared
+            .forget_session("@bob:example.org".into(), server.server().uri())
+            .await
+            .is_err());
+        assert!(shared
+            .revoke_server_session(
+                "@alice:example.org".into(),
+                "DEVICE".into(),
+                server.server().uri()
+            )
+            .await
+            .unwrap());
+        shared
+            .forget_session("@alice:example.org".into(), server.server().uri())
+            .await
+            .unwrap();
+        assert!(shared.core.session_snapshot().unwrap().is_none());
+        assert!(shared.retained_client().is_err());
+        let relaunched = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(entries)));
+        let error = relaunched
+            .restore_persisted_session(
+                "@alice:example.org".into(),
+                server.server().uri(),
+                root_path,
+            )
+            .await
+            .unwrap_err();
+        assert!(
+            matches!(error, SessionRestoreError::Failed { code, .. } if code == MATERIAL_MISSING_CODE)
+        );
+        server.verify_and_reset().await;
+        fs::remove_dir_all(root).unwrap();
     }
 
     fn alice() -> AccountIdentity {

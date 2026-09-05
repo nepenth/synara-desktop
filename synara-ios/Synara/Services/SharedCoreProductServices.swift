@@ -202,13 +202,23 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func revokeServerSession(_ session: AuthenticatedSession) async -> Bool {
-        _ = session
         do {
-            _ = try await SharedCoreLeftovers.logout(core: host.core)
-            return true
+            return try await host.core.revokeServerSession(
+                userId: session.userID,
+                deviceId: session.deviceID,
+                homeserverUrl: session.homeserverURL.absoluteString
+            )
         } catch {
             return false
         }
+    }
+
+    func forgetPersistedSession(_ session: AuthenticatedSession) async throws {
+        await stop()
+        _ = try await host.core.forgetSession(
+            userId: session.userID,
+            homeserverUrl: session.homeserverURL.absoluteString
+        )
     }
 
     func stop() async {
@@ -963,18 +973,9 @@ final class SharedCoreTimelineService: TimelineServicing {
                         await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)
                     )
                 }
-                for await update in signals {
+                for await _ in signals {
                     guard Task.isCancelled == false else {
                         break
-                    }
-                    let watchingStreamId = stream(for: roomID)?.streamID
-                    guard SharedCoreTimelineLiveRefresh.shouldRefresh(
-                        watchingRoomID: roomID,
-                        watchingStreamId: watchingStreamId,
-                        updateRoomId: update.roomId,
-                        updateStreamId: update.streamId
-                    ) else {
-                        continue
                     }
                     continuation.yield(
                         await refreshOpenTimeline(roomID: roomID, focusedEventID: focusedEventID)

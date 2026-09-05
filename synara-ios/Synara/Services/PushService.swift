@@ -349,9 +349,7 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                     .pusherUnregistrationFailed,
                     runID: diagnosticRunID
                 )
-                abortRegistrationTeardown(
-                    statusDescription: "Pusher owner unavailable; retry sign out"
-                )
+                registrationStateDescription = "Push cleanup unavailable; finishing local sign out"
                 return false
             }
         }
@@ -380,13 +378,9 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
                     runID: diagnosticRunID
                 )
                 isRegistered = false
-                // Retain the account-bound owner, token, and binding. Local
-                // sign-out is blocked while this returns false, so a later
-                // sign-out attempt can retry before the Matrix credential is
-                // deleted or revoked.
-                abortRegistrationTeardown(
-                    statusDescription: "Pusher cleanup failed; retry sign out"
-                )
+                // Keep registration quiescent while local credentials are
+                // removed. Only a failed local deletion may resume this owner.
+                registrationStateDescription = "Push cleanup failed; finishing local sign out"
                 return false
             }
         }
@@ -399,6 +393,8 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
 
     func completeRegistrationTeardown() {
         guard isRegistrationTeardownInProgress else { return }
+        registeredBinding = nil
+        isRegistered = false
         currentSessionSignature = nil
         currentSession = nil
         currentPusherOwner = nil
