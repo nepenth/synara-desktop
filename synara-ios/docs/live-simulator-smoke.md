@@ -99,6 +99,26 @@ but it is required for the invite leg of the Phase 8 acceptance smoke.
 
 ## Evidence To Capture
 
+### Automatic read acknowledgement
+
+`testLiveAutomaticReadWhenConfigured` is a gated two-account proof. Set
+`TEST_RUNNER_SYNARA_LIVE_READ_SMOKE=1` and provide the live homeserver, primary
+username/password, and `SYNARA_LIVE_SECOND_USERNAME` / `SYNARA_LIVE_SECOND_PASSWORD`
+through the local test environment (use the `TEST_RUNNER_` prefix when launching
+with `xcodebuild`). Select only
+`SynaraUITests/SynaraUITests/testLiveAutomaticReadWhenConfigured` on a signed
+simulator. When explicitly enabling signing on the test bundles, also pass
+`GENERATE_INFOPLIST_FILE=YES` so their generated bundle metadata can be signed.
+
+The test creates a private room, invites the second account, sends bounded
+fixture messages, and leaves the room/logs out the API fixture devices afterward.
+It opens the room through the app, checks read state for initial/live messages
+and foreground return, and checks that background/offscreen events stay unread.
+Readback uses `m.fully_read`, the private receipt in `/sync`, the notification
+count, and the room row. The harness never submits a receipt or Mark read command.
+
+### Runtime record
+
 - Build mode: signed simulator, unsigned simulator, device, or archive.
 - Simulator model and OS version.
 - App version and git commit.

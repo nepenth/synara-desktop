@@ -1112,6 +1112,88 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(waitForTimelineElement(app.staticTexts[message], app: app, timeout: 90))
     }
 
+    func testLiveAutomaticReadWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_READ_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Set SYNARA_LIVE_READ_SMOKE=1 for signed live read acknowledgement proof.")
+        }
+        guard let homeserver = liveEnvironmentValue("SYNARA_LIVE_HOMESERVER", in: environment),
+              let username = liveEnvironmentValue("SYNARA_LIVE_USERNAME", in: environment),
+              let password = liveEnvironmentValue("SYNARA_LIVE_PASSWORD", in: environment),
+              let secondUsername = liveEnvironmentValue("SYNARA_LIVE_SECOND_USERNAME", in: environment),
+              let secondPassword = liveEnvironmentValue("SYNARA_LIVE_SECOND_PASSWORD", in: environment)
+        else {
+            throw XCTSkip("Two dedicated live test accounts are required.")
+        }
+        let reader = try MatrixLiveTestClient.login(homeserver: homeserver, username: username, password: password)
+        defer { try? reader.logout() }
+        let writer = try MatrixLiveTestClient.login(homeserver: homeserver, username: secondUsername, password: secondPassword)
+        defer { try? writer.logout() }
+        let roomID = try reader.createPrivateRoom(name: "Synara read proof \(UUID().uuidString.prefix(8))")
+        defer {
+            try? writer.leaveRoom(roomID: roomID)
+            try? reader.leaveRoom(roomID: roomID)
+        }
+        try reader.invite(writer, roomID: roomID)
+        try writer.joinRoom(roomID: roomID)
+        let initialBody = "Read proof initial \(UUID().uuidString.prefix(8))"
+        let initialEvent = try writer.sendRoomMessage(roomID: roomID, body: initialBody)
+        XCTAssertNotEqual(try reader.fullyReadEventID(roomID: roomID), initialEvent)
+
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launch()
+        loginLive(app: app, homeserver: homeserver, username: username, password: password)
+        dismissPasswordSavePromptIfPresent(app: app)
+        let roomRow = app.buttons["RoomRow-\(roomID)"]
+        XCTAssertTrue(roomRow.waitForExistence(timeout: 60))
+        roomRow.tap()
+        let initialRow = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(initialEvent)").firstMatch
+        XCTAssertTrue(initialRow.waitForExistence(timeout: 30))
+        XCTAssertTrue(initialRow.isHittable)
+        XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: initialEvent, timeout: 20),
+                      "Opening a short unread room must acknowledge its visible tail through the app.")
+
+        let liveBody = "Read proof live \(UUID().uuidString.prefix(8))"
+        let liveEvent = try writer.sendRoomMessage(roomID: roomID, body: liveBody)
+        let liveRow = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(liveEvent)").firstMatch
+        XCTAssertTrue(liveRow.waitForExistence(timeout: 30))
+        XCTAssertTrue(liveRow.isHittable)
+        XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: liveEvent, timeout: 20),
+                      "A new visible live event must be acknowledged without another gesture.")
+
+        XCUIDevice.shared.press(.home)
+        let backgroundBody = "Read proof background \(UUID().uuidString.prefix(8))"
+        let backgroundEvent = try writer.sendRoomMessage(roomID: roomID, body: backgroundBody)
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertEqual(try reader.fullyReadEventID(roomID: roomID), liveEvent,
+                       "An event received while the app is backgrounded must stay unread.")
+        app.activate()
+        let backgroundRow = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(backgroundEvent)").firstMatch
+        XCTAssertTrue(backgroundRow.waitForExistence(timeout: 30))
+        XCTAssertTrue(backgroundRow.isHittable)
+        XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: backgroundEvent, timeout: 20),
+                      "Returning to the visible live tail must acknowledge the background event.")
+
+        tap(app.buttons["Back"])
+        XCTAssertTrue(roomRow.waitForExistence(timeout: 10))
+        let cleared = NSPredicate { _, _ in !roomRow.label.localizedCaseInsensitiveContains("unread") }
+        XCTAssertEqual(XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: cleared, object: nil)], timeout: 15), .completed)
+        XCTAssertTrue(try reader.hasPrivateReadReceipt(roomID: roomID, eventID: backgroundEvent),
+                      "The server must retain the app's private read receipt and clear its notification count.")
+
+        let offscreenEvent = try writer.sendRoomMessage(roomID: roomID, body: "Read proof offscreen \(UUID().uuidString.prefix(8))")
+        RunLoop.current.run(until: Date().addingTimeInterval(3))
+        XCTAssertEqual(try reader.fullyReadEventID(roomID: roomID), backgroundEvent,
+                       "Being active in the room list must not acknowledge an unopened room's new event.")
+        roomRow.tap()
+        let offscreenRow = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(offscreenEvent)").firstMatch
+        XCTAssertTrue(offscreenRow.waitForExistence(timeout: 30))
+        XCTAssertTrue(offscreenRow.isHittable)
+        XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: offscreenEvent, timeout: 20))
+        XCTAssertTrue(try reader.hasPrivateReadReceipt(roomID: roomID, eventID: offscreenEvent))
+    }
+
     func testLiveSmokeWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_LIVE_SMOKE", in: environment) == "1" else {
@@ -2932,6 +3014,62 @@ private final class MatrixLiveTestClient {
             throw LiveMatrixError.invalidResponse
         }
         return eventID
+    }
+
+    func invite(_ member: MatrixLiveTestClient, roomID: String) throws {
+        _ = try authenticatedRequest(method: "POST", path: ["client", "v3", "rooms", roomID, "invite"], body: ["user_id": member.userID])
+    }
+
+    func joinRoom(roomID: String) throws {
+        _ = try authenticatedRequest(method: "POST", path: ["client", "v3", "join", roomID], body: [:])
+    }
+
+    func fullyReadEventID(roomID: String) throws -> String? {
+        do {
+            let response = try authenticatedRequest(method: "GET", path: ["client", "v3", "user", userID, "rooms", roomID, "account_data", "m.fully_read"], body: nil)
+            let content = try JSONSerialization.jsonObject(with: response.data) as? [String: Any]
+            return content?["event_id"] as? String
+        } catch LiveMatrixError.httpStatus(404) {
+            return nil
+        }
+    }
+
+    func waitForFullyRead(roomID: String, eventID: String, timeout: TimeInterval) -> Bool {
+        let deadline = Date().addingTimeInterval(timeout)
+        while Date() < deadline {
+            if (try? fullyReadEventID(roomID: roomID)) == eventID { return true }
+            RunLoop.current.run(until: Date().addingTimeInterval(0.5))
+        }
+        return (try? fullyReadEventID(roomID: roomID)) == eventID
+    }
+
+    func hasPrivateReadReceipt(roomID: String, eventID: String) throws -> Bool {
+        let filter: [String: Any] = [
+            "room": ["rooms": [roomID], "timeline": ["limit": 0], "ephemeral": ["types": ["m.receipt"]]],
+            "presence": ["types": [String]()],
+        ]
+        let filterData = try JSONSerialization.data(withJSONObject: filter)
+        let response = try authenticatedRequest(
+            method: "GET", path: ["client", "v3", "sync"],
+            queryItems: [URLQueryItem(name: "timeout", value: "0"), URLQueryItem(name: "filter", value: String(decoding: filterData, as: UTF8.self))],
+            body: nil
+        )
+        let sync = try JSONSerialization.jsonObject(with: response.data) as? [String: Any]
+        let rooms = sync?["rooms"] as? [String: Any]
+        let joined = rooms?["join"] as? [String: Any]
+        let room = joined?[roomID] as? [String: Any]
+        let notifications = room?["unread_notifications"] as? [String: Any]
+        guard notifications?["notification_count"] as? Int == 0 else { return false }
+        let ephemeral = room?["ephemeral"] as? [String: Any]
+        let events = ephemeral?["events"] as? [[String: Any]] ?? []
+        return events.contains { event in
+            guard event["type"] as? String == "m.receipt",
+                  let content = event["content"] as? [String: Any],
+                  let receipts = content[eventID] as? [String: Any],
+                  let privateReceipt = receipts["m.read.private"] as? [String: Any]
+            else { return false }
+            return privateReceipt[userID] != nil
+        }
     }
 
     func createPrivateRoom(name: String) throws -> String {
