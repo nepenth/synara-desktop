@@ -1,0 +1,1 @@
+Fixes timeline movement during unchanged updates, prevents temporary read-marker streams from losing live room updates, and repairs sign-out when session restoration or remote push cleanup fails. Sign-out now removes persisted authentication and attempts real server revocation. Please test incoming messages, stationary timeline rows, and sign-out followed by relaunch.

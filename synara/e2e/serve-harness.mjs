@@ -1,5 +1,6 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+import ts from 'typescript';
 import { createServer } from 'node:http';
 import { extname, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -16,6 +17,20 @@ const server = createServer(async (request, response) => {
   if (pathname === '/health') {
     response.writeHead(200, { 'content-type': 'text/plain' });
     response.end('ok');
+    return;
+  }
+
+  if (pathname === '/nativeTimelineVisibility.js') {
+    const source = await readFile(
+      resolve(root, '../src/app/features/room/nativeTimelineVisibility.ts'),
+      'utf8'
+    );
+    response.writeHead(200, { 'content-type': 'text/javascript' });
+    response.end(
+      ts.transpileModule(source, {
+        compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 },
+      }).outputText
+    );
     return;
   }
 

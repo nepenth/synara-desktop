@@ -105,7 +105,7 @@ struct SettingsView: View {
                     .accessibilityIdentifier("ConfirmLogoutButton")
                     Button("Cancel", role: .cancel) {}
                 } message: {
-                    Text("This clears local session data, sync state, cached rooms, and push registration on this device.")
+                    Text("This clears local sign-in data and cached rooms. Synara also attempts to revoke this session and remove its push registration; remote cleanup requires a connection.")
                 }
             }
 

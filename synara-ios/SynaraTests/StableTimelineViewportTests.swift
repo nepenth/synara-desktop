@@ -1,7 +1,54 @@
 @testable import Synara
 import XCTest
+import SwiftUI
+import UIKit
 
 final class StableTimelineViewportTests: XCTestCase {
+    @MainActor
+    func testUnchangedTimelineUpdatesDoNotWriteScrollOffset() async throws {
+        let rows = TimelineFixtures.largeTimeline(count: 60).map { item in
+            StableTimelineViewportRow(id: .event(item.id), content: .event(.init(
+                item: item, isGroupedWithPrevious: false, isTimestampRevealed: false,
+                animateSend: false, replyPreview: nil, replyCount: 0,
+                availability: .init(canReply: false, canEdit: false, canRedact: false, canReact: false)
+            )))
+        }
+        let viewport = StableTimelineViewport(
+            routeID: "fixture", sessionGeneration: 1, rows: rows, command: nil,
+            isLive: false, isPaginating: false, backgroundColor: .black,
+            rowContent: { row in AnyView(Text(row.eventID ?? "").frame(height: 70)) },
+            onBottomPinnedChanged: { _, _, _, _ in },
+            onUserInteractionChanged: { _, _, _ in },
+            onPaginationThresholdReached: { _, _, _ in false },
+            onTimestampRevealRequested: { _, _, _ in },
+            onCommandCompleted: { _, _, _, _, _ in }
+        )
+        let controller = StableTimelineViewController(coordinator: viewport.makeCoordinator())
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true }
+        let configuration = StableTimelineViewController.Configuration(
+            routeID: "fixture", sessionGeneration: 1, rows: rows, command: nil,
+            isLive: false, isPaginating: false, backgroundColor: .black
+        )
+        controller.update(configuration: configuration)
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let table = try XCTUnwrap(controller.view.subviews.first { $0 is UITableView } as? UITableView)
+        XCTAssertEqual(table.numberOfRows(inSection: 0), 60)
+        table.setContentOffset(CGPoint(x: 0, y: 700), animated: false)
+        table.layoutIfNeeded()
+        try await Task.sleep(nanoseconds: 100_000_000)
+        let initialOffset = table.contentOffset
+        var offsetWrites = 0
+        let observation = table.observe(\.contentOffset, options: [.new]) { _, _ in offsetWrites += 1 }
+        defer { observation.invalidate() }
+        for _ in 0..<20 { controller.update(configuration: configuration) }
+        try await Task.sleep(nanoseconds: 100_000_000)
+        XCTAssertEqual(offsetWrites, 0, "Unchanged rows must not run anchor restoration")
+        XCTAssertEqual(table.contentOffset.y, initialOffset.y, accuracy: 0.5)
+    }
+
     func testTimestampRevealGestureWaitsUntilDirectionIsKnown() {
         XCTAssertEqual(
             TimelineTimestampRevealGesturePolicy.intent(translation: CGPoint(x: -8, y: 7)),

@@ -193,3 +193,58 @@ test('rapid room changes invalidate late Jump Latest completions from the previo
     result.state.scrollWrites.some((write: any) => write.reason === 'jump-latest-live-tail')
   ).toBe(false);
 });
+
+test('measures a short unread room without a scroll event, then tracks content and window resizing', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page.evaluate(async () => {
+    const { observeNativeTimelineBottom } = await import('/nativeTimelineVisibility.js');
+    document.body.innerHTML =
+      '<div id="room" style="height:400px;overflow:auto"><div style="height:80px">Unread message</div></div>';
+    const room = document.getElementById('room')!;
+    const state = { atBottom: false, scrollEvents: 0, reports: 0 };
+    room.addEventListener('scroll', () => {
+      state.scrollEvents += 1;
+    });
+    const stop = observeNativeTimelineBottom(room, (atBottom: boolean) => {
+      state.atBottom = atBottom;
+      state.reports += 1;
+    });
+    Object.assign(window, { visibilityTest: { state, stop } });
+  });
+  const atBottom = () => page.evaluate(() => (window as any).visibilityTest.state.atBottom);
+  await expect.poll(atBottom).toBe(true);
+  expect(await page.evaluate(() => (window as any).visibilityTest.state.scrollEvents)).toBe(0);
+  await page.locator('#room > div').evaluate((element) => {
+    (element as HTMLElement).style.height = '800px';
+  });
+  await expect.poll(atBottom).toBe(false);
+  await page.locator('#room').evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+  });
+  await expect.poll(atBottom).toBe(true);
+  await page.locator('#room').evaluate((element) => {
+    (element as HTMLElement).style.height = '200px';
+  });
+  await expect.poll(atBottom).toBe(false);
+  await page.locator('#room').evaluate((element) => {
+    element.innerHTML = '<div style="height:20px">Replacement</div>';
+  });
+  await expect.poll(atBottom).toBe(true);
+  const reports = await page.evaluate(() => {
+    const t = (window as any).visibilityTest;
+    t.stop();
+    return t.state.reports;
+  });
+  await page.locator('#room').evaluate((element) => {
+    element.innerHTML = '<div style="height:900px">Unseen</div>';
+  });
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+  );
+  expect(await page.evaluate(() => (window as any).visibilityTest.state.reports)).toBe(reports);
+});

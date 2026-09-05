@@ -7,6 +7,7 @@ import {
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   isNativeTimelineReadbackStale,
+  canAcceptNativeTimelineFollowReadback,
   nativeThreadFocusEventId,
   nativeTimelineCommandError,
   editedFormattedBodyForSubmit,
@@ -265,6 +266,25 @@ test('timeline open is not aborted when event listen is unavailable', () => {
   assert.match(source, /matrix_timeline_open/);
   assert.match(source, /matrix_timeline_snapshot/);
   assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
+});
+
+test('follow-live accepts a placement change at the same SDK revision', () => {
+  const unread: NativeTimelineViewSnapshot = {
+    ...baseSnapshot(),
+    position: { kind: 'unread', anchor_event_id: '$older:example.org' },
+  };
+  const followed: NativeTimelineViewSnapshot = { ...unread, position: { kind: 'live_bottom' } };
+  assert.equal(canAcceptNativeTimelineFollowReadback(unread, followed), true);
+  assert.equal(canAcceptNativeTimelineFollowReadback(unread, { ...followed, revision: 2 }), false);
+  assert.equal(
+    canAcceptNativeTimelineFollowReadback(unread, { ...followed, roomId: '!other:example.org' }),
+    false
+  );
+  assert.equal(
+    canAcceptNativeTimelineFollowReadback(unread, { ...followed, sessionGeneration: 3 }),
+    false
+  );
+  assert.equal(canAcceptNativeTimelineFollowReadback(unread, unread), false);
 });
 
 test('equal-or-older readbacks are stale for the same stream, not a lost stream', () => {

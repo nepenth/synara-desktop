@@ -928,6 +928,31 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
     }
 
+    func testRoomInvalidationSurvivesTransientReadMarkerStreamInSameBatch() async {
+        let poller = SharedCoreLivePoller(core: SharedCore())
+        let signals = poller.timelineSignals(roomId: "!room:example.org")
+        var iterator = signals.makeAsyncIterator()
+        poller.receiveTimelineUpdates([
+            TimelineViewUpdateDto(schemaVersion: 1, sessionGeneration: 1,
+                                  streamId: "live-view", roomId: "!room:example.org",
+                                  revision: 2, opCount: 1),
+            TimelineViewUpdateDto(schemaVersion: 1, sessionGeneration: 1,
+                                  streamId: "temporary-read-marker", roomId: "!room:example.org",
+                                  revision: 3, opCount: 1),
+        ])
+        let first = await iterator.next()
+        XCTAssertNotNil(first)
+        // Consuming a transient stream's invalidation must not prevent the
+        // next real message from invalidating this room's own snapshot.
+        poller.receiveTimelineUpdates([
+            TimelineViewUpdateDto(schemaVersion: 1, sessionGeneration: 1,
+                                  streamId: "live-view", roomId: "!room:example.org",
+                                  revision: 4, opCount: 1),
+        ])
+        let next = await iterator.next()
+        XCTAssertNotNil(next)
+    }
+
     func testTimelineSignalBatchKeepsOnlyNewestInvalidationPerStream() {
         let updates = [
             TimelineViewUpdateDto(

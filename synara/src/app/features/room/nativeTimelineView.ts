@@ -301,6 +301,20 @@ export const isNativeTimelineReadbackStale = (
       next.revision <= current.revision
   );
 
+/** Follow changes placement even when the SDK has emitted no new row revision. */
+export const canAcceptNativeTimelineFollowReadback = (
+  current: NativeTimelineViewSnapshot | undefined,
+  next: NativeTimelineViewSnapshot
+): boolean =>
+  Boolean(
+    current &&
+      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+      next.sessionGeneration === current.sessionGeneration &&
+      next.roomId === current.roomId &&
+      next.revision >= current.revision &&
+      next.position.kind === 'live_bottom'
+  );
+
 /**
  * Applies one exact native stream update. Invalid operations and revision gaps
  * are rejected rather than guessed at or repaired with a JS timeline fetch.
@@ -709,7 +723,7 @@ export const useNativeTimelineView = (
       if (
         streamIdRef.current !== streamId ||
         snapshotRef.current?.sessionGeneration !== snapshot.sessionGeneration ||
-        isNativeTimelineReadbackStale(snapshotRef.current, next)
+        !canAcceptNativeTimelineFollowReadback(snapshotRef.current, next)
       ) {
         return;
       }

@@ -552,7 +552,7 @@ final class PushServiceTests: XCTestCase {
         XCTAssertFalse(cleanupSucceeded)
         XCTAssertEqual(
             service.registrationStateDescription,
-            "Pusher owner unavailable; retry sign out"
+            "Push cleanup unavailable; finishing local sign out"
         )
     }
 
@@ -678,7 +678,7 @@ final class PushServiceTests: XCTestCase {
         XCTAssertEqual(service.tokenSnippet, "aa5500")
     }
 
-    func testTokenRotatedDuringFailedRemoteCleanupIsAppliedAndReconciled() async {
+    func testTokenRotatedDuringFailedRemoteCleanupStaysQuiescentUntilLocalOutcome() async {
         let pusher = StubPusherService(unregisterDelayNanoseconds: 150_000_000)
         let service = SynaraPushService(
             logger: MockLoggingService(),
@@ -695,17 +695,15 @@ final class PushServiceTests: XCTestCase {
         service.handleDeviceToken(Data([0xAA, 0x55, 0x00]))
 
         let cleanupSucceeded = await cleanup.value
-        await waitUntil {
-            service.isRegistered
-                && pusher.unregisterCount == 1
-                && pusher.registerCount == 2
-        }
-
         XCTAssertFalse(cleanupSucceeded)
         XCTAssertEqual(pusher.unregisterAllCount, 1)
-        XCTAssertEqual(pusher.lastUnregisterPushKey, "7ab13c")
-        XCTAssertEqual(pusher.lastPushKey, "aa5500")
-        XCTAssertEqual(service.tokenSnippet, "aa5500")
+        XCTAssertEqual(pusher.registerCount, 1)
+        XCTAssertEqual(service.tokenSnippet, "7ab13c")
+        service.completeRegistrationTeardown()
+        XCTAssertNil(service.tokenSnippet)
+        XCTAssertFalse(service.isRegistered)
+        XCTAssertEqual(pusher.registerCount, 1)
+
     }
 
     func testPushServiceLogoutEnumeratesDeviceWhenRegistrationIsInFlight() async {

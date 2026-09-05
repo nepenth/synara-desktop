@@ -59,6 +59,7 @@ protocol MatrixClientServicing: AnyObject {
     /// Best-effort authenticated homeserver logout using an already-loaded
     /// client. Must not create or repair a crypto store during local wipe.
     func revokeServerSession(_ session: AuthenticatedSession) async -> Bool
+    func forgetPersistedSession(_ session: AuthenticatedSession) async throws
     func stop() async
     /// Synchronously records UIKit's foreground authority before any queued
     /// startup or shutdown task can touch the native stores.
@@ -109,6 +110,10 @@ struct SynaraPushRulesSnapshot {
 }
 
 extension MatrixClientServicing {
+    func forgetPersistedSession(_ session: AuthenticatedSession) async throws {
+        _ = session
+    }
+
     func coreSessionIdentity() async -> CoreSessionIdentity? {
         nil
     }

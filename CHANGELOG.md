@@ -1,5 +1,15 @@
 # Changelog
 
+## [2.1.27] - 2026-09-05
+
+- Fix desktop automatic read acknowledgement when Core changes placement at
+  the same message revision or an unread room fits without scrolling.
+- Avoid redundant iOS timeline snapshots and unnecessary anchor repositioning.
+- Preserve iOS room invalidations across temporary read-marker streams.
+- Allow local iOS sign-out after failed restore or remote push cleanup; revoke
+  the current server session when reachable and remove persisted authentication.
+
+
 ## Unreleased
 
 ## 2.1.26 - 2026-09-04

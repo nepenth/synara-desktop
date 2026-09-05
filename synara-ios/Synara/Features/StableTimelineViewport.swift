@@ -828,6 +828,22 @@ import SwiftUI
         }
 
         private func scheduleSnapshot(configuration: Configuration, resetPosition: Bool) {
+            // SwiftUI also updates this controller for typing, connection and
+            // command state. An unchanged table must not remeasure estimated
+            // heights or move its anchor on those updates.
+            if snapshotApplyGate.isApplying == false,
+               resetPosition == false,
+               timestampRevealAppliedRouteID == configuration.routeID,
+               timestampRevealAppliedGeneration == configuration.sessionGeneration,
+               visualRows == configuration.rows
+            {
+                if executeCommandIfNeeded(configuration.command) == false {
+                    reportBottomPinnedIfChanged()
+                    requestPaginationIfNeeded()
+                }
+                updateDiagnostics()
+                return
+            }
             guard let request = snapshotApplyGate.schedule(
                 value: configuration,
                 resetPosition: resetPosition
@@ -1304,8 +1320,13 @@ import SwiftUI
                 return
             }
 
-            tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
-            tableView.layoutIfNeeded()
+            // Most retained anchors are still visible. Repositioning them
+            // first makes UIKit replace measured heights with estimates and
+            // creates a visible jump before the correction below.
+            if frame(for: anchor.id) == nil {
+                tableView.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                tableView.layoutIfNeeded()
+            }
             guard let newFrame = frame(for: anchor.id) else {
                 return
             }
@@ -1314,7 +1335,8 @@ import SwiftUI
                 previousAnchorMinY: anchor.frame.minY,
                 updatedAnchorMinY: newFrame.minY
             )
-            if abs(restoredOffset - tableView.contentOffset.y) > .ulpOfOne {
+            let pixel = 1 / (view.window?.screen.scale ?? UIScreen.main.scale)
+            if abs(restoredOffset - tableView.contentOffset.y) >= pixel {
                 tableView.contentOffset.y = restoredOffset
                 tableView.layoutIfNeeded()
             }
