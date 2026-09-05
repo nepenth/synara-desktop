@@ -1,0 +1,1 @@
+Fixes rooms remaining unread after returning to the app. Messages at the visible live edge are acknowledged when the app becomes active; background and unopened-room messages remain unread until viewed. Validated with a signed simulator and live homeserver readback.

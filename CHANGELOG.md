@@ -1,5 +1,14 @@
 # Changelog
 
+## [2.1.28] - 2026-09-05
+
+- Resume iOS automatic read acknowledgement when returning to a visible room.
+  Track the delivered scene activity state so an older SwiftUI environment
+  snapshot cannot suppress the write. Background and offscreen events remain
+  unread until viewed.
+- Add a live, two-account simulator probe with server read-marker, private
+  receipt, notification-count, and room-list readback.
+
 ## [2.1.27] - 2026-09-05
 
 - Fix desktop automatic read acknowledgement when Core changes placement at

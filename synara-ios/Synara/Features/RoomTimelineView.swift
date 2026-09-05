@@ -270,6 +270,7 @@ struct RoomTimelineView: View {
     @Environment(\.synaraThemeBaseHex) private var themeBaseHex
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
+    @State private var isReadSceneActive = false
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
     @State private var replyTarget: ComposerRelationTarget?
@@ -540,7 +541,11 @@ struct RoomTimelineView: View {
             await ownAvatarLoad
             _ = await loadCryptoStatus()
         }
+        .onAppear {
+            isReadSceneActive = scenePhase == .active
+        }
         .onDisappear {
+            isReadSceneActive = false
             dismissKeyboard()
             stopTimelineUpdates(reason: "view-disappeared")
             stopTypingUpdates()
@@ -552,7 +557,17 @@ struct RoomTimelineView: View {
             cancelTimestampReveal()
         }
         .onChange(of: scenePhase) { phase in
-            if phase != .active {
+            // iOS 16 onChange closures can still capture the old environment
+            // value. Store the delivered phase for callbacks and pending work.
+            isReadSceneActive = phase == .active
+            if phase == .active {
+                // The viewport may already have painted a new tail while the
+                // scene was inactive. Becoming active does not change its
+                // geometry, so it need not emit another pinned callback.
+                if let eventID = loadedTimelineItems.reversed().compactMap(\.serverEventID).first {
+                    scheduleMarkFullyRead(eventID: eventID)
+                }
+            } else {
                 cancelMarkFullyRead()
             }
         }
@@ -2311,7 +2326,7 @@ struct RoomTimelineView: View {
 
     private func scheduleMarkFullyRead(eventID: String) {
         guard RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
-            isApplicationActive: scenePhase == .active
+            isApplicationActive: isReadSceneActive
                 && UIApplication.shared.applicationState == .active,
             allowsReadReceipts: SynaraSharedConstants.boolSetting(
                 SynaraSharedConstants.hideActivityKey
@@ -2351,7 +2366,7 @@ struct RoomTimelineView: View {
         markFullyReadTask = Task {
             try? await Task.sleep(nanoseconds: delay)
             guard Task.isCancelled == false,
-                  scenePhase == .active,
+                  isReadSceneActive,
                   UIApplication.shared.applicationState == .active,
                   SynaraSharedConstants.boolSetting(
                       SynaraSharedConstants.hideActivityKey
