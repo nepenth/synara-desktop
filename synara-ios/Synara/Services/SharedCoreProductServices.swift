@@ -935,7 +935,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                     direction: "backwards"
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
-                let items = SharedCoreTimelineRows.items(from: snapshot.rows)
+                let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
                 let itemIDs = Self.stableItemIDs(items)
                 let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
                 knownItemIDs.formUnion(itemIDs)
@@ -1074,7 +1074,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         var paginationProgress = SharedCoreTimelinePaginationProgress()
         paginationProgress.observeInitial(rowIDs: Self.nativeRowIDs(snapshot.rows))
         while Task.isCancelled == false {
-            let items = SharedCoreTimelineRows.items(from: snapshot.rows)
+            let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
             updateVisibleItemIDs(
                 Self.stableItemIDs(items),
                 roomID: roomID,
@@ -1082,7 +1082,9 @@ final class SharedCoreTimelineService: TimelineServicing {
             )
             if let outcome = SharedCoreTimelineRows.authoritativeOutcome(
                 from: snapshot.rows,
-                paginationBackward: snapshot.paginationBackward
+                paginationBackward: snapshot.paginationBackward,
+                visibleTailEventID: snapshot.visibleTailEventId,
+                receiptTailEventID: snapshot.receiptTailEventId
             ) {
                 return outcome
             }
@@ -1964,20 +1966,11 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionDeviceUpdates() -> AsyncStream<Void> {
-        AsyncStream { continuation in
-            let task = Task {
-                for await _ in host.livePoller.ownerSignals(families: ["devices"]) {
-                    guard Task.isCancelled == false else {
-                        break
-                    }
-                    continuation.yield(())
-                }
-                continuation.finish()
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
-        }
+        let updates = host.livePoller.ownerSignals(
+            families: ["devices", "verification"],
+            bufferingPolicy: .bufferingNewest(1)
+        )
+        return SharedCoreSessionDeviceInvalidations.stream(updates)
     }
 
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult {
@@ -2654,7 +2647,7 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
     func fullyReadEventID(roomID: String) async -> String? {
         await withOpenLive(roomID: roomID) { opened in
             SharedCoreReadMarkers.acknowledgedEventID(
-                ownReadEventID: opened.snapshot.ownReadEventId,
+                ownReadEventID: opened.snapshot.unreadAnchorEventId ?? opened.snapshot.ownReadEventId,
                 rowEventIDs: opened.snapshot.rows.map(\.eventId)
             )
         }
@@ -2711,5 +2704,23 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
         let result = await body(opened)
         _ = try? await SharedCoreTimeline.timelineClose(core: host.core, streamId: opened.streamId)
         return result
+    }
+}
+
+
+/// Device updates invalidate the entire session snapshot, so only one pending
+/// wakeup is useful while a consumer awaits its authority readback.
+enum SharedCoreSessionDeviceInvalidations {
+    static func stream<Element>(_ updates: AsyncStream<Element>) -> AsyncStream<Void> {
+        AsyncStream(bufferingPolicy: .bufferingNewest(1)) { continuation in
+            let task = Task {
+                for await _ in updates {
+                    guard Task.isCancelled == false else { break }
+                    continuation.yield(())
+                }
+                continuation.finish()
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 }

@@ -264,6 +264,7 @@ jobs:
             scripts/generate-synara-nse-core-swift.sh \
             synara-ios/scripts/check-notification-service-archive.sh \
             scripts/check-synara-nse-core-isolation.mjs \
+            scripts/check-synara-nse-core-production-features.mjs \
             scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
@@ -588,6 +589,10 @@ jobs:
 
       - name: Test real-layout timeline scrolling
         run: npm run test:browser:timeline
+        working-directory: synara
+
+      - name: Test native timeline navigation in Chromium
+        run: npm run test:browser:native-timeline
         working-directory: synara
 
       - name: Check production dependency advisories
