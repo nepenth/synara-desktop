@@ -120,3 +120,12 @@ Local execution records are retained in private Xcode result bundles and private
 runner logs. The live fixture credential values, actual room/event identifiers,
 private homeserver and decrypted fixture output are intentionally absent from
 this document. No physical-device or production-account proof is claimed.
+
+Fresh review tightened the fixture runner's completion boundary: a successful
+XCTest exit now requires both phase confirmation markers and successful cleanup
+of every API fixture session. Teardown attempts continue after an individual
+leave/logout failure, and any cleanup failure prevents a zero exit. Four mocked
+runner regressions passed, including successful UI plus failed logout, skipped
+XCTest, missing cold readback, and full success. This reporting-only correction
+preserves the prior live run, whose two readbacks and complete cleanup were
+independently observed; no new production or notification routing behavior changed.

@@ -71,6 +71,7 @@ def main():
             "-parallel-testing-enabled", "NO", "GENERATE_INFOPLIST_FILE=YES", "CODE_SIGNING_ALLOWED=YES", "CODE_SIGNING_REQUIRED=YES",
             "DEVELOPMENT_TEAM=" + env["SYNARA_QA_DEVELOPMENT_TEAM"], "CODE_SIGN_IDENTITY=Apple Development", "ARCHS=arm64", "ONLY_ACTIVE_ARCH=YES"]
         sent = set()
+        confirmed = set()
         with (proof / "xcode.log").open("w") as log:
             process = subprocess.Popen(args, cwd=Path(__file__).resolve().parents[1], env=env,
                                        stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
@@ -82,9 +83,9 @@ def main():
                         subprocess.run(["xcrun", "simctl", "push", env["SYNARA_QA_SIMULATOR_ID"],
                             "com.whylandcreative.synara", str(payload)], check=True, stdout=log, stderr=log)
                         sent.add(phase)
+                    if line.strip() == "synara_notification_tap phase=" + phase + "-confirmed" and phase in sent:
+                        confirmed.add(phase)
             code = process.wait()
-        print("Notification tap proof exit", code, "phases delivered", len(sent), "private results", proof)
-        return code
     finally:
         cleanup_ok = True
         for token in reversed(tokens):
@@ -98,6 +99,14 @@ def main():
             except Exception:
                 cleanup_ok = False
         print("Notification fixture cleanup", "complete" if cleanup_ok else "needs attention")
+
+    # A skipped gated XCTest can exit zero without exercising either route.
+    # Completion requires both UI readbacks and successful fixture teardown.
+    complete = cleanup_ok and sent == {"warm", "cold"} and confirmed == sent
+    result = code if code != 0 else (0 if complete else 1)
+    print("Notification tap proof exit", result, "phases delivered", len(sent),
+          "phases confirmed", len(confirmed), "private results", proof)
+    return result
 
 
 if __name__ == "__main__":
