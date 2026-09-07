@@ -159,7 +159,13 @@ done
 # the same normal/build feature graph used by the generated shipping archive.
 node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"
 while IFS= read -r nse_archive; do
-  if nm -gU "$nse_archive" 2>/dev/null | grep -q '_uniffi_synara_core_'; then
+  # Capture completed nm output. A grep -q pipeline can SIGPIPE nm and treat a
+  # failed inspection as a clean archive.
+  if ! nse_nm_output="$(nm -gU "$nse_archive")"; then
+    echo "SynaraNseCore archive symbol inspection failed: $nse_archive" >&2
+    exit 1
+  fi
+  if [[ "$nse_nm_output" == *'_uniffi_synara_core_'* ]]; then
     echo "SynaraNseCore archive contains forbidden full Core exports: $nse_archive" >&2
     exit 1
   fi

@@ -1,9 +1,9 @@
 # Client reliability remediation and review plan
 
-Status: implementation, independent review and bounded runtime validation in progress.
-Read-frontier, edit policy, window/depth, notification context, and verification work are integrated. Navigation and final CI corrections remain under review; combined client acceptance remains pending.
+Status: isolated workstreams are integrated; combined client PR and remaining live proofs are pending.
+Read-frontier, edit policy, window/depth, notification context, verification, last-read navigation, live-read cleanup, NSE production-feature CI guard, and CI coverage wiring are on `cursor/client-reliability-integration-d7fa`. Combined client acceptance and Grok review of the combined PR remain pending.
 Base: `0695da32c77bc1a56ca22c9ec383f8fd006e6a24` (v2.1.28).
-Integration branch: `feature/client-reliability-2026-09-06`.
+Integration branch: `feature/client-reliability-2026-09-06` (local tip plus remaining CI/NSE commits on `cursor/client-reliability-integration-d7fa`).
 
 ## Requested behavior
 
@@ -22,13 +22,14 @@ Implementation agents diagnose, create their own branches/worktrees, implement a
 
 | Workstream | Implementation | Fresh review | Grok review | Integration |
 | --- | --- | --- | --- | --- |
-| Visible-tail read acknowledgement | `e56f333a`; test follow-up `13578624` | Accepted | Accepted, including cleanup correction | Product merged; follow-up awaits navigation integration |
-| Last-read navigation and sparse history | `ddda4f3f` | Accepted after stream-adoption and stale-response corrections | Follow-up in progress | Pending |
+| Visible-tail read acknowledgement | `e56f333a`; test follow-up `13578624` | Accepted | Accepted, including cleanup correction | Merged |
+| Last-read navigation and sparse history | `ddda4f3f`; pagination follow-up `7a348762` | Accepted after stream-adoption and stale-response corrections | Accepted after pagination consistency correction | Merged |
 | Edit push policy | `32efeb4e` | Accepted | Accepted | Merged; branch CI passed |
 | Verification observation and diagnosis | `8f6e90df` | Accepted after authority/cleanup/refresh corrections | Accepted | Merged |
 | iOS notification context and preview diagnosis | Production `cb745886`; proof record `76ab6cdb` | Accepted | Accepted | Merged |
 | Window drag and visual depth | `9e69a7d8` | Accepted | Accepted after maximize synchronization correction | Merged; branch CI passed |
-| NSE production-feature CI guard | `e440c353` | Accepted after Apple target coverage correction | In progress | Pending |
+| NSE production-feature CI guard | `e440c353`; archive/wiring P2s on this PR | Accepted after Apple target coverage correction | Accepted; P2 archive/wiring/fixtures applied | Merged |
+| Combined CI coverage wiring | `fe206671` | Coverage-only | Not required | Merged |
 
 Branch review records are in this directory. Grok verdicts are source reviews;
 reported limits remain gates for the corresponding runtime claims. An ACCEPT

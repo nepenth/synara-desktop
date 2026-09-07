@@ -64,6 +64,7 @@ const required = [
   "scripts/__tests__/xcode-local-package-graph.test.mjs",
   "scripts/lib/publish-generated-apple-pair.sh",
   "scripts/__tests__/apple-pair-publication.test.mjs",
+  "scripts/check-synara-nse-core-production-features.mjs",
   "synara-ios/scripts/ci-build.sh",
   ".github/workflows/ci.yml",
 ];
@@ -1674,6 +1675,14 @@ if (
   ciBuildCheckerIndex > ciBuildXcodebuildIndex
 ) {
   throw new Error("P4-4 iOS CI build must retain the Core Swift scaffold guard before xcodebuild");
+}
+const nseProductionFeatureInvocation =
+  'node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"';
+const nseProductionFeatureIndex = iosCiBuild.indexOf(nseProductionFeatureInvocation);
+if (nseProductionFeatureIndex < 0 || nseProductionFeatureIndex > ciBuildXcodebuildIndex) {
+  throw new Error(
+    "P4-4 iOS CI build must retain the NSE production feature graph guard before xcodebuild"
+  );
 }
 if (!iosCiBuild.includes("test-without-building")) {
   throw new Error("iOS CI must test the exact build-for-testing artifacts");
