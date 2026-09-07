@@ -591,6 +591,10 @@ jobs:
         run: npm run test:browser:timeline
         working-directory: synara
 
+      - name: Test native timeline navigation in Chromium
+        run: npm run test:browser:native-timeline
+        working-directory: synara
+
       - name: Check production dependency advisories
         run: npm run check:security
         working-directory: synara

@@ -97,6 +97,10 @@ timeline_and_composer=(
   testUnreadRoomRoutePositionsAfterSharedReadMarker
   testMissingLastReadOffersExplicitRecoveryWithoutMovingToUnknownHistory
   testSendingFromUnreadHistoryReturnsToLatestWithoutAnotherGesture
+  testStableViewportThreeMessageScrollJumpLatestAndFiveThousandEventBoundedness
+  testStableViewportPreservesAnchorAcrossVariableHeightReplacement
+  testStableViewportPreservesAnchorAcrossPrependSnapshot
+  testStableViewportRapidRoomSwitchingRejectsStaleRouteUpdates
   testRoomDetailsInviteAndLeaveMockFlow
   testRoomDetailsProfileEditMockFlow
   testLargeRoomFixtureRendersAndScrolls
@@ -125,6 +129,8 @@ settings_and_workflows=(
 live_and_visual=(
   testLiveNotificationTapContextWhenConfigured
   testLiveAutomaticReadWhenConfigured
+  testLiveReadCleanupAttemptsAllOperationsBeforeReportingFailure
+  testLiveReadCleanupRetainsHandlesFromPartialSetup
   testLiveStaleCacheSmokeWhenConfigured
   testLiveSmokeWhenConfigured
   testLiveRichFormattingSmokeWhenConfigured
