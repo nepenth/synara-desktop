@@ -86,7 +86,10 @@ async fn accept_http_request(listener: &TcpListener, pushers_response: Option<&s
     } else if is_get_pushrules {
         // This fixture starts with the product edit policy already installed;
         // dedicated policy tests cover installation, ordering and failures.
-        ("200 OK", r#"{"global":{"override":[{"rule_id":"com.whylandcreative.synara.suppress_edits","default":false,"enabled":true,"conditions":[{"kind":"event_property_is","key":"content.m\\.relates_to.rel_type","value":"m.replace"}],"actions":[]}]}}"#)
+        (
+            "200 OK",
+            r#"{"global":{"override":[{"rule_id":"com.whylandcreative.synara.suppress_edits","default":false,"enabled":true,"conditions":[{"kind":"event_property_is","key":"content.m\\.relates_to.rel_type","value":"m.replace"}],"actions":[]}]}}"#,
+        )
     } else if is_get_pushers {
         ("200 OK", pushers_response.unwrap_or(r#"{"pushers":[]}"#))
     } else if is_pusher_write {

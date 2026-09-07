@@ -41,10 +41,9 @@ The homeserver can match the replacement rule only when `m.relates_to.rel_type` 
 
 ## Validation
 
-- `git diff --check`, Rust formatting of new files, and Matrix boundary checks passed.
+- Matrix boundary checks and documentation hygiene passed. Initial CI rejected formatting of an updated existing pusher fixture; the full workspace was subsequently formatted with the Rust 1.93.0 toolchain, and root/Tauri formatting checks plus the complete branch diff whitespace check passed.
 - Added real pinned-Ruma rule evaluation tests for new messages, edits with mentions, threaded replies, exact relation matching, and exposed encrypted relations; unrelated action sets remain unchanged.
 - Added production Core pusher-route HTTP tests for install → readback → registration, repeated registration without policy writes, disabled-rule repair, priority repair, authoritative-read failures, policy-write rejection and unconfirmed readback.
 - Updated the existing account-bound pusher rotation fixture to serve an already-established policy.
-- Rust execution is pending remote CI: the orchestrator paused local native builds because disk space is critically low. No live account push rules were modified by the diagnostic API probe.
+- Rust test execution is pending a new remote CI run after the formatter correction: the orchestrator paused local native builds because disk space is critically low. No live account push rules were modified by the diagnostic API probe.
 - Physical APNs delivery: **Not confirmed**. The server probes establish rule availability and healthy key-query responses, not actual notification delivery.
-
