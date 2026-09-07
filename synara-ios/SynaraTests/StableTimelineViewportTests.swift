@@ -726,6 +726,7 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertTrue(
             RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
                 providerIsLive: true,
+                isLiveMode: true,
                 isFollowingLive: true,
                 isConfirmedPinned: false
             )
@@ -733,6 +734,7 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertTrue(
             RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
                 providerIsLive: true,
+                isLiveMode: false,
                 isFollowingLive: false,
                 isConfirmedPinned: true
             )
@@ -740,6 +742,16 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertFalse(
             RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
                 providerIsLive: true,
+                isLiveMode: false,
+                isFollowingLive: true,
+                isConfirmedPinned: false
+            ),
+            "Unread restore can reuse a live provider and flicker pinned; remount instead."
+        )
+        XCTAssertFalse(
+            RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+                providerIsLive: true,
+                isLiveMode: true,
                 isFollowingLive: false,
                 isConfirmedPinned: false
             )
@@ -747,10 +759,15 @@ final class StableTimelineViewportTests: XCTestCase {
         XCTAssertFalse(
             RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
                 providerIsLive: false,
+                isLiveMode: true,
                 isFollowingLive: true,
                 isConfirmedPinned: true
             )
         )
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .readingHistory))
+        XCTAssertFalse(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .focusedEvent))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .placingInitial))
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(position: .followingLive))
     }
 
     func testFiveThousandEventInputAndVisibleCellsRemainBounded() {

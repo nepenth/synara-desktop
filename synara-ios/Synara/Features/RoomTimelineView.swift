@@ -271,16 +271,20 @@ enum RoomTimelineJumpLatestPolicy {
         hasItems && (isLive == false || isConfirmedPinned == false)
     }
 
-    /// Pin the current live rows only when the viewport is already following
-    /// the live tail. Unread restore reuses the live provider while sitting
-    /// on the last-read marker; remounting is what actually returns send and
-    /// Jump to Latest to the newest messages.
+    /// Pin the current live rows only when this session is already on the live
+    /// tail. Unread restore reuses the live provider while sitting on last-read;
+    /// a brief inverted-table pin must not count as live-follow.
     static func shouldPinCurrentLiveWindow(
         providerIsLive: Bool,
+        isLiveMode: Bool,
         isFollowingLive: Bool,
         isConfirmedPinned: Bool
     ) -> Bool {
-        providerIsLive && (isFollowingLive || isConfirmedPinned)
+        providerIsLive && (isConfirmedPinned || (isFollowingLive && isLiveMode))
+    }
+
+    static func shouldAdoptLiveFollowOnPin(position: RoomTimelinePositionState) -> Bool {
+        position != .readingHistory && position != .focusedEvent
     }
 }
 
@@ -2646,6 +2650,7 @@ struct RoomTimelineView: View {
         // provider still remounts so send returns to newest.
         if RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
             providerIsLive: timelineProviderIsLive,
+            isLiveMode: activeTimelineMode.isLive,
             isFollowingLive: timelinePosition == .followingLive,
             isConfirmedPinned: isTimelineBottomVisible
         ) {
@@ -2771,6 +2776,11 @@ struct RoomTimelineView: View {
     private func handleStableBottomPinnedChanged(isPinned: Bool, newestEventID: String?) {
         isTimelineBottomVisible = isPinned
         if isPinned, timelineProviderIsLive {
+            guard RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+                position: timelinePosition
+            ) else {
+                return
+            }
             resumeLivePresentationAtBottom()
             timelinePosition = .followingLive
             showJumpToLatest = false

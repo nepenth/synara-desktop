@@ -272,7 +272,7 @@ jobs:
 
   package-gate:
     name: Desktop package gate
-    if: always()
+    if: always() && !cancelled()
     needs: [changes, linux-deb, linux-arch, macos-app]
     runs-on: ubuntu-22.04
     timeout-minutes: 5

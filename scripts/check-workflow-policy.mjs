@@ -177,7 +177,8 @@ export function inspectWorkflowPolicy({
   }
   if (
     jobScalar(packageGate, "name") !== "Desktop package gate" ||
-    jobScalar(packageGate, "if") !== "always()" ||
+    (jobScalar(packageGate, "if") !== "always()"
+      && jobScalar(packageGate, "if") !== "always() && !cancelled()") ||
     !packageGate
       .join("\n")
       .includes("needs: [changes, linux-deb, linux-arch, macos-app]")
