@@ -227,6 +227,10 @@ pub async fn register_http_pusher(
         device_display_name,
         lang,
     )?;
+    // Install and independently confirm the account-owned replacement policy
+    // before making this device eligible for APNs delivery. Existing generic
+    // notification content must never be used as an edit-suppression fallback.
+    super::edit_policy::ensure_edit_notification_policy(client).await?;
     client
         .pusher()
         .set(pusher, APPEND_NEW_PUSHER)
