@@ -1,8 +1,129 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
+import { observeNativeMaximizedState } from '../nativeMaximizedState';
 
 const source = (path: string) => readFileSync(path, 'utf8');
+const settle = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+test('native maximize and restore update titlebar state without a custom button command', async () => {
+  let maximized = true;
+  let resize: (() => void) | undefined;
+  let removed = 0;
+  const states: boolean[] = [];
+  const observer = observeNativeMaximizedState(
+    {
+      isMaximized: async () => maximized,
+      onResized: async (handler) => {
+        resize = handler;
+        return () => {
+          removed += 1;
+          resize = undefined;
+        };
+      },
+    },
+    (state) => states.push(state)
+  );
+  await settle();
+  assert.deepEqual(states, [true], 'initially maximized windows must show Restore');
+  maximized = false;
+  resize?.();
+  await settle();
+  maximized = true;
+  resize?.();
+  await settle();
+  assert.deepEqual(states, [true, false, true]);
+  observer.dispose();
+  assert.equal(removed, 1);
+  assert.equal(resize, undefined);
+});
+
+test('late native readbacks cannot overwrite a newer resize or a disposed titlebar', async () => {
+  const pending: ((value: boolean) => void)[] = [];
+  let resize: (() => void) | undefined;
+  const states: boolean[] = [];
+  const observer = observeNativeMaximizedState(
+    {
+      isMaximized: () => new Promise<boolean>((resolve) => pending.push(resolve)),
+      onResized: async (handler) => {
+        resize = handler;
+        return () => {
+          resize = undefined;
+        };
+      },
+    },
+    (state) => states.push(state)
+  );
+  await settle();
+  resize?.();
+  pending[1](true);
+  await settle();
+  pending[0](false);
+  await settle();
+  assert.deepEqual(states, [true]);
+  resize?.();
+  observer.dispose();
+  pending[2](false);
+  await settle();
+  await observer.refresh();
+  assert.deepEqual(states, [true]);
+  assert.equal(pending.length, 3, 'disposed observations must not issue more queries');
+});
+
+test('unmount during native listener registration removes the late subscription', async () => {
+  let finishRegistration: ((stop: () => void) => void) | undefined;
+  let removed = 0;
+  let reads = 0;
+  const observer = observeNativeMaximizedState(
+    {
+      isMaximized: async () => {
+        reads += 1;
+        return true;
+      },
+      onResized: () =>
+        new Promise((resolve) => {
+          finishRegistration = resolve;
+        }),
+    },
+    () => assert.fail('a disposed titlebar must not receive a result')
+  );
+  observer.dispose();
+  finishRegistration?.(() => {
+    removed += 1;
+  });
+  await settle();
+  assert.equal(removed, 1);
+  assert.equal(reads, 0);
+});
+
+test('failed native queries preserve confirmation and a later resize can refresh', async () => {
+  let fail = false;
+  let resize: (() => void) | undefined;
+  const states: boolean[] = [];
+  const observer = observeNativeMaximizedState(
+    {
+      isMaximized: async () => {
+        if (fail) throw new Error('native window unavailable');
+        return true;
+      },
+      onResized: async (handler) => {
+        resize = handler;
+        return () => undefined;
+      },
+    },
+    (state) => states.push(state)
+  );
+  await settle();
+  fail = true;
+  resize?.();
+  await settle();
+  assert.deepEqual(states, [true]);
+  fail = false;
+  resize?.();
+  await settle();
+  assert.deepEqual(states, [true, true]);
+  observer.dispose();
+});
 
 test('custom titlebar renders only on Linux desktop', () => {
   const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');

@@ -1,4 +1,5 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { Box, Icon, IconButton, Icons } from 'folds';
 import classNames from 'classnames';
 
@@ -7,6 +8,7 @@ import * as depthCss from '../../styles/Depth.css';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { isLinuxOS } from '../../utils/user-agent';
 import * as css from './DesktopTitleBar.css';
+import { observeNativeMaximizedState } from './nativeMaximizedState';
 
 /** A persistent drag strip and window controls for the borderless Linux shell.
  * macOS and Windows use their native titlebars.
@@ -38,11 +40,21 @@ function MaximizeIcon({ maximized }: { maximized: boolean }) {
 export function DesktopTitleBar() {
   const [maximized, setMaximized] = useState(false);
   const visible = useDesktopTitleBarVisible();
+  const observation = useRef<ReturnType<typeof observeNativeMaximizedState> | undefined>(undefined);
+  useEffect(() => {
+    if (!visible) return undefined;
+    const current = observeNativeMaximizedState(getCurrentWindow(), setMaximized);
+    observation.current = current;
+    return () => {
+      current.dispose();
+      observation.current = undefined;
+    };
+  }, [visible]);
   const toggleMaximize = useCallback(() => {
-    void invokeDesktopWithAvailability<boolean>('desktop_window_toggle_maximize').then((result) => {
-      if (result.available && typeof result.value === 'boolean') {
-        setMaximized(result.value);
-      }
+    const current = observation.current;
+    void invokeDesktopWithAvailability<boolean>('desktop_window_toggle_maximize').then(() => {
+      // Read current authority; the command result may predate another native resize.
+      void current?.refresh();
     });
   }, []);
 

@@ -10,6 +10,13 @@ capability now grants `core:window:allow-start-dragging`, which is absent from
 Tauri's default window permissions. Tauri owns strip double-click handling;
 React no longer duplicates that operation.
 
+The Linux maximize/restore label and icon now follow the native window state.
+A resize-event subscription is installed before the initial `isMaximized` read,
+so Tauri-owned double-clicks and window-manager maximize changes refresh the
+control. Button completion also requests current state instead of applying a
+possibly stale command result. Newer queries supersede older results, and
+unmount disposes both active and asynchronously registered listeners.
+
 The Linux strip remains available while client configuration loads or fails.
 SplashScreen consumes the remaining flex height, with a zero minimum and
 vertical overflow for oversized content, so the strip cannot clip its footer
@@ -79,6 +86,12 @@ interaction. Increased Contrast rendering was also inspected.
 - Signed iOS theme tests: 27 passed, zero failures, including collection and accessibility metrics.
 - Existing signed simulator mock-room visual smoke passed in Light and Dark Modes; both room-list screenshots were inspected and shows restrained row edges without repeated drop shadows.
 - Documentation hygiene and diff whitespace checks passed.
+- Follow-up maximize-state repair: full frontend TypeScript check and focused
+  ESLint passed. Four behavioral observer tests passed for external maximize/
+  restore, out-of-order readbacks, unmount during registration, and failed-query
+  recovery; four existing titlebar checks also passed. These use a mocked native
+  window interface and establish subscription/state behavior, not native drag
+  or Linux window-manager execution.
 
 The iOS visual fixture is mock data in the dedicated test simulator. It does
 not establish live Matrix behavior, encryption, or the user's physical-device
