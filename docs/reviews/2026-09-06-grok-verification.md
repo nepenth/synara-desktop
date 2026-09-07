@@ -50,3 +50,32 @@ The ignored test can show fresh/restored snapshots with one current device and `
 - The new native test proves the observer now follows `sessionDeviceUpdates` with an empty verification inbox. It does not prove cancellation, session-generation filtering, or retention of a wakeup that arrives *during* `sessionStatus()`.
 - Diagnostics are observation only; they are not a verification mechanism and do not replace affected-device evidence.
 - No desktop change, as intended.
+
+## Required corrections review
+
+I'll read the full review prompt and the repaired files at this head, then independently check the three prior P2s against the current source.I'll read the repaired test, stream, and logout/vault contracts next so the three prior P2s can be challenged against the current code.**ACCEPT**
+
+The three prior P2s are repaired in source. I found no remaining P1/P2 on this delta.
+
+## Prior P2s
+
+**Raw authority (not DTO `Some(false)`).**  
+`authoritative_results` at `crates/synara-core/tests/live_device_eligibility.rs:72` accepts only the exact records `authority=eligible|none sessions=available crypto=available`, and requires exactly two of them. Timeout/store/transport/server/`other` fail even next to a DTO `Some(false)` (`line 330`). The parent at `line 292` runs the fixture in a same-binary child with `SYNARA_VERIFICATION_DIAGNOSTICS=1`, then asserts those two records after child success. Fallback in `crates/synara-core/src/app/devices/live.rs:517` is unchanged and cannot green this proof.
+
+**Cleanup.**  
+Post-login paths join `cleanup` at `live_device_eligibility.rs:262` with both Core handles and the vault still alive. It loads fixture identity/device/session material first (`line 158`), tries `revoke_server_session` on restored then fresh (`line 162`), and only then may POST `/_matrix/client/v3/logout` with the vault’s latest token for that created device (`line 116`, `line 185`). `run_live_fixture` still returns `Err` unless `revoked_by_core` (`line 281`), so emergency logout cannot green the proof. Failed remote cleanup leaves the store (`line 197`). Mock tests at `line 344` and `line 396` lock those contracts. Local `logout` does not delete vault material (`shared_core_ffi.rs:7047`).
+
+**Invalidation coalescing.**  
+`sessionDeviceUpdates` at `SharedCoreProductServices.swift:1967` subscribes to `devices`+`verification` with `.bufferingNewest(1)` before wrapping. `SharedCoreSessionDeviceInvalidations.stream` at `line 2711` is also `.bufferingNewest(1)`, still starts the forwarder immediately, and still cancels on termination. Other `ownerSignals` callers stay default unbounded (`SharedCoreTimelineLive.swift:106`, typing/`verificationUpdates`). `SessionCryptoStatusObserver.start` at `SettingsView.swift:1194` still subscribes before the first read. The burst test at `MatrixLifecycleTests.swift:426` drives 200 wakeups through that production forwarder during a suspended first read and requires `readCount == 2`.
+
+No production Rust trust, eligibility predicate, fallback, or DTO change in this delta.
+
+## Limits (not defects)
+
+- This review did not execute the live accounts, the 3 Rust tests, or the 26 signed Swift tests. The two-account `eligible`/`none` table and “cleanup_core=true twice” remain operator claims for head `8f6e90df`.
+- The committed Swift test locks bounded behavior (2 reads). The “unbounded baseline 201 vs 2” contrast is not an assertion in tree.
+- `testSessionDeviceBurstDuringInitialReadRetainsOneRefresh` exercises `SharedCoreSessionDeviceInvalidations.stream`, not `ownerSignals(..., bufferingNewest(1))` itself.
+- Signed Swift used the matched baseline Apple Core pair; it does not prove this branch’s native Rust diagnostics. That is stated in `docs/reviews/2026-09-06-verification-eligibility-path.md:153`.
+- Parent isolation is skipped if `SYNARA_ELIGIBILITY_PROOF_CHILD=1` is already set (`live_device_eligibility.rs:294`). The documented cargo command does not set it.
+- Child `assert!(run_live_fixture().await.is_ok())` at `line 295` drops the `&'static str`. Cleanup booleans are still eprinted and echoed.
+- iOS `sessionStatus()` `try?`, Core local fallback, and the unreproduced desktop “could not check” path are unchanged product limits.
