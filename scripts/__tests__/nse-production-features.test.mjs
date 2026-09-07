@@ -9,6 +9,9 @@ import { fileURLToPath } from "node:url";
 const checker = resolve(dirname(fileURLToPath(import.meta.url)), "../check-synara-nse-core-production-features.mjs");
 
 function fixture(t, leak) {
+  const appleTarget = leak === "ios-only"
+    ? "'cfg(target_os = \"ios\")'"
+    : leak?.startsWith("target:") ? JSON.stringify(leak.slice(7)) : undefined;
   const root = mkdtempSync(join(tmpdir(), "synara-nse-feature-check-"));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   writeFileSync(join(root, "Cargo.toml"), '[workspace]\nmembers = ["core", "nse"]\nresolver = "2"\n');
@@ -33,7 +36,8 @@ edition = "2021"
 synara-core = { path = "../core", default-features = false, features = ["nse-preview"${leak === "normal" ? ', "full-uniffi"' : ""}] }
 [dev-dependencies]
 synara-core = { path = "../core", features = ["full-uniffi"] }
-${leak === "build" ? '[build-dependencies]\nsynara-core = { path = "../core" }\n' : ""}`);
+${leak === "build" ? '[build-dependencies]\nsynara-core = { path = "../core" }\n' : ""}
+${appleTarget ? `[target.${appleTarget}.dependencies]\nsynara-core = { path = "../core", features = ["full-uniffi"] }\n` : ""}`);
   const lock = spawnSync("cargo", ["generate-lockfile", "--offline", "--manifest-path", join(root, "Cargo.toml")], { encoding: "utf8" });
   assert.equal(lock.status, 0, lock.stderr);
   return join(root, "Cargo.toml");
@@ -71,3 +75,18 @@ test("a failed Cargo query cannot pass isolation", (t) => {
   assert.equal(result.status, 1);
   assert.match(result.stderr, /production feature query failed/);
 });
+
+
+for (const target of ["ios-only", "aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
+  test(`${target} production leakage is rejected even when the macOS graph is narrow`, (t) => {
+    const manifest = fixture(t, target === "ios-only" ? target : `target:${target}`);
+    const macOS = spawnSync("cargo", ["tree", "--offline", "--manifest-path", manifest,
+      "-p", "synara-nse-core", "-e", "normal,build,features", "-i", "synara-core",
+      "--target", "aarch64-apple-darwin"], { encoding: "utf8" });
+    assert.equal(macOS.status, 0, macOS.stderr);
+    assert.doesNotMatch(macOS.stdout, /synara-core feature "full-uniffi"/);
+    const result = check(manifest);
+    assert.equal(result.status, 1);
+    assert.match(result.stderr, /must not enable the full Core UniFFI feature/);
+  });
+}
