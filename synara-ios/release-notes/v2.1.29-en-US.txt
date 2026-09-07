@@ -1,0 +1,1 @@
+Restores last-read when you open a room, follows new messages at the live bottom, and clears unread only after you actually see the newest messages. Replacement edits no longer send alerts; notification taps open the real room and event. Room list depth is quieter.
