@@ -200,6 +200,8 @@ export type NativeTimelineViewSnapshot = {
     forward: NativeTimelinePageState;
   };
   readState: {
+    visibleTailEventId?: string;
+    receiptTailEventId?: string;
     ownReadEventId?: string;
     unreadAnchorEventId?: string;
     isMarkedUnread: boolean;

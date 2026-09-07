@@ -266,6 +266,25 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testReceiptFrontierOnlyChangeReconfiguresTheSameVisibleRow() throws {
+        let original = try XCTUnwrap(TimelineFixtures.largeTimeline(count: 1).first)
+        var edited = original
+        edited.readReceiptEventID = "$edit:example.org"
+        let changed = StableTimelineViewportPolicy.changedIdentifiers(
+            currentIDs: Set([original.id]), currentValues: [original.id: original],
+            incomingValues: [(id: edited.id, value: edited)]
+        )
+        XCTAssertEqual(changed, [original.id])
+        XCTAssertEqual(edited.eventID, original.eventID)
+        XCTAssertEqual(edited.withSenderAvatarURL(nil).readReceiptEventID, "$edit:example.org")
+        XCTAssertEqual(edited.withDeliveryStatus(nil).readReceiptEventID, "$edit:example.org")
+        XCTAssertTrue(RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+            isApplicationActive: true, allowsReadReceipts: true, isLive: true,
+            isConfirmedPinned: true, isJumpingToLatest: false, isUserInteracting: false,
+            eventID: try XCTUnwrap(edited.readReceiptEventID), lastMarkedEventID: original.eventID
+        ))
+    }
+
     func testContentOnlyRowChangesAreReconfiguredForStableIdentifiers() {
         let changed = StableTimelineViewportPolicy.changedIdentifiers(
             currentIDs: Set(["message", "unchanged", "removed"]),

@@ -935,7 +935,7 @@ final class SharedCoreTimelineService: TimelineServicing {
                     direction: "backwards"
                 )
                 paginationProgress.recordPage(rowIDs: Self.nativeRowIDs(snapshot.rows))
-                let items = SharedCoreTimelineRows.items(from: snapshot.rows)
+                let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
                 let itemIDs = Self.stableItemIDs(items)
                 let containsNewItems = itemIDs.isSubset(of: knownItemIDs) == false
                 knownItemIDs.formUnion(itemIDs)
@@ -1074,7 +1074,7 @@ final class SharedCoreTimelineService: TimelineServicing {
         var paginationProgress = SharedCoreTimelinePaginationProgress()
         paginationProgress.observeInitial(rowIDs: Self.nativeRowIDs(snapshot.rows))
         while Task.isCancelled == false {
-            let items = SharedCoreTimelineRows.items(from: snapshot.rows)
+            let items = SharedCoreTimelineRows.items(from: snapshot.rows, visibleTailEventID: snapshot.visibleTailEventId, receiptTailEventID: snapshot.receiptTailEventId)
             updateVisibleItemIDs(
                 Self.stableItemIDs(items),
                 roomID: roomID,
@@ -1082,7 +1082,9 @@ final class SharedCoreTimelineService: TimelineServicing {
             )
             if let outcome = SharedCoreTimelineRows.authoritativeOutcome(
                 from: snapshot.rows,
-                paginationBackward: snapshot.paginationBackward
+                paginationBackward: snapshot.paginationBackward,
+                visibleTailEventID: snapshot.visibleTailEventId,
+                receiptTailEventID: snapshot.receiptTailEventId
             ) {
                 return outcome
             }

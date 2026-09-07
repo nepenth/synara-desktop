@@ -2820,7 +2820,10 @@ fn spawn_view_update_owner(
                     if ops.is_empty() {
                         continue;
                     }
-                    emitter.emit(ops, None, None, None);
+                    let read_state =
+                        project_live_read_state(&timeline, &position, own_user_id.as_deref()).await;
+                    last_read_state = read_state.clone();
+                    emitter.emit(ops, Some(read_state), None, None);
                 }
                 Some(_) = room_info.next() => {
                     let read_state =
@@ -2988,7 +2991,19 @@ async fn project_live_read_state(
             None => None,
         },
     };
+    // Capture the receipt frontier BEFORE observing displayed items. If a new
+    // message races between these reads, its displayed tail will be paired with
+    // an older receipt target, which the exact-target write rejects. Reversing
+    // these reads could pair an unseen new message with an old displayed row.
+    let receipt_tail_event_id = timeline.latest_event_id().await.map(|id| id.to_string());
+    let visible_tail_event_id = timeline.items().await.iter().rev().find_map(|item| {
+        item.as_event()
+            .filter(|event| !event.is_local_echo())
+            .and_then(|event| event.event_id().map(ToString::to_string))
+    });
     TimelineReadState {
+        visible_tail_event_id,
+        receipt_tail_event_id,
         own_read_event_id,
         unread_anchor_event_id,
         is_marked_unread: timeline.room().is_marked_unread(),
@@ -4136,6 +4151,8 @@ mod tests {
             revision: 4,
             ops: Vec::new(),
             read_state: Some(TimelineReadState {
+                visible_tail_event_id: None,
+                receipt_tail_event_id: None,
                 own_read_event_id: Some("$read:example.org".into()),
                 unread_anchor_event_id: None,
                 is_marked_unread: false,
@@ -4257,6 +4274,33 @@ mod tests {
             ),
             Ok(LiveReadTargetPlan::NoOp)
         );
+    }
+
+    #[test]
+    fn folded_event_frontier_targets_the_receipt_event_and_rejects_later_arrivals() {
+        // matrix-sdk-ui 0.18 latest_event_id includes folded edits/reactions;
+        // the displayed message ID deliberately remains unchanged. Platforms
+        // echo the Core-projected receipt identity, never the message row ID.
+        for frontier in ["$edit:example.org", "$reaction:example.org"] {
+            let receipt_id = OwnedEventId::try_from(frontier).unwrap();
+            assert_eq!(
+                plan_live_read_target(
+                    Some(receipt_id.clone()),
+                    NativeTimelineReadIntent::AutomaticVisibility,
+                    Some(frontier)
+                ),
+                Ok(LiveReadTargetPlan::Send(receipt_id))
+            );
+            assert_eq!(
+                plan_live_read_target(
+                    Some(OwnedEventId::try_from("$new-message:example.org").unwrap()),
+                    NativeTimelineReadIntent::AutomaticVisibility,
+                    Some(frontier)
+                ),
+                Ok(LiveReadTargetPlan::NoOp),
+                "new message after paired snapshot must never be marked unseen"
+            );
+        }
     }
 
     #[test]

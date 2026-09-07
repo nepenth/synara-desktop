@@ -81,6 +81,7 @@ import {
   nativeFollowLiveTarget,
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
+  nativeVisibleReadFrontier,
   latestNativeReadEventId,
   shouldShowJumpToLatest,
 } from './nativeTimelineViewportPolicy';
@@ -1965,6 +1966,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     () => latestNativeReadEventId(readyState?.snapshot.rows.map(rowEventId) ?? []),
     [readyState?.snapshot.rows]
   );
+  const receiptTailEventId = nativeVisibleReadFrontier(
+    latestRemoteTailEventId,
+    readyState?.snapshot.readState
+  );
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
     getScrollElement: useCallback(() => scrollRef.current, []),
@@ -2041,7 +2046,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         atLiveBottom,
         positionKind: readyState.selectedPosition.kind,
         canMarkRead: readyState.snapshot.capabilities.markRead,
-        latestVisibleEventId: latestRemoteTailEventId,
+        latestVisibleEventId: receiptTailEventId,
         ownReadEventId: readyState.snapshot.readState.ownReadEventId,
         isMarkedUnread: readyState.snapshot.readState.isMarkedUnread,
       })
@@ -2056,8 +2061,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       : undefined;
   const liveTailAlreadyRead = Boolean(
     readyState &&
-      latestRemoteTailEventId &&
-      readyState.snapshot.readState.ownReadEventId === latestRemoteTailEventId &&
+      receiptTailEventId &&
+      readyState.snapshot.readState.ownReadEventId === receiptTailEventId &&
       !readyState.snapshot.readState.isMarkedUnread
   );
   useEffect(() => {
@@ -2152,7 +2157,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           roomId,
           atLiveBottom,
           positionKind: readyState.selectedPosition.kind,
-          latestVisibleEventId: latestRemoteTailEventId,
+          latestVisibleEventId: receiptTailEventId,
         })
       : undefined;
   const followLiveKey =

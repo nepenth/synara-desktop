@@ -2324,7 +2324,10 @@ struct RoomTimelineView: View {
         return true
     }
 
-    private func scheduleMarkFullyRead(eventID: String) {
+    private func scheduleMarkFullyRead(eventID visibleEventID: String) {
+        guard let tail = loadedTimelineItems.last(where: { $0.serverEventID != nil }),
+              tail.serverEventID == visibleEventID else { return }
+        let eventID = tail.readReceiptEventID ?? visibleEventID
         guard RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
             isApplicationActive: isReadSceneActive
                 && UIApplication.shared.applicationState == .active,
@@ -2409,11 +2412,11 @@ struct RoomTimelineView: View {
                 markFullyReadTask = nil
                 if didAcknowledge {
                     lastMarkedFullyReadEventID = observedEventID
-                    initialReadMarkerEventID = observedEventID
+                    initialReadMarkerEventID = visibleEventID
                     showJumpToLatest = false
                 }
                 if pendingMarkFullyReadEventID != nil,
-                   let nextEventID = pendingMarkFullyReadEventID
+                   let nextEventID = loadedTimelineItems.last(where: { $0.serverEventID != nil })?.serverEventID
                 {
                     scheduleMarkFullyRead(eventID: nextEventID)
                 }
