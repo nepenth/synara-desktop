@@ -1,6 +1,7 @@
 # Client reliability remediation and review plan
 
-Status: diagnosis and implementation in progress. No runtime acceptance claimed.
+Status: implementation, independent review and bounded runtime validation in progress.
+Read-frontier work is integrated; combined client acceptance remains pending.
 Base: `0695da32c77bc1a56ca22c9ec383f8fd006e6a24` (v2.1.28).
 Integration branch: `feature/client-reliability-2026-09-06`.
 
@@ -21,9 +22,16 @@ Implementation agents diagnose, create their own branches/worktrees, implement a
 
 | Workstream | Implementation | Fresh review | Grok review | Integration |
 | --- | --- | --- | --- | --- |
-| Read state and timeline positioning | Diagnosis | Pending | Pending | Pending |
-| Notification eligibility, routing, crypto and verification | Diagnosis | Pending | Pending | Pending |
-| Window drag and visual depth | In progress | Pending | Pending | Pending |
+| Visible-tail read acknowledgement | `e56f333a` | Accepted after paired-queue repair | Accepted | Merged; iOS/live client proof pending |
+| Last-read navigation and sparse history | `fec30148` | In progress | Pending | Pending |
+| Edit push policy | `96ccf6a9`; fixture correction underway | Accepted source | Accepted source | Pending corrected route-test execution |
+| Verification observation and diagnosis | `e486ce16` | Pending | Pending | Pending |
+| iOS notification context and preview diagnosis | In progress | Pending | Pending | Pending |
+| Window drag and visual depth | `0a895fce`; maximize synchronization correction pending | Accepted source | P2 requires correction | Pending |
+
+Branch review records are in this directory. Grok verdicts are source reviews;
+reported limits remain gates for the corresponding runtime claims. An ACCEPT
+heading does not waive an actionable finding in its body.
 
 ## Operating paths and acceptance
 
