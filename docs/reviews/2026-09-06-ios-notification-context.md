@@ -140,5 +140,7 @@ allowlist now maps the actual arriving Core code to `core-store-unavailable`,
 while preserving the existing Swift code mapping. Added a focused regression
 for the Core adapter code; arbitrary error descriptions still map to the fixed
 generic stage. No preview content, crypto ownership, privacy or notification
-routing behavior changes. Focused signed native validation is pending behind
-the active live-read run.
+routing behavior changes. Focused signed native validation passed all 14 NotificationPreviewSupportTests,
+including the actual Core adapter-code regression, with zero failures and no
+skips. Evidence: `/tmp/synara-notification-vault-map.log` and
+`/private/tmp/synara-notification-vault-map.xcresult`.
