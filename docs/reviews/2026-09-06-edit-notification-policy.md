@@ -45,5 +45,6 @@ The homeserver can match the replacement rule only when `m.relates_to.rel_type` 
 - Added real pinned-Ruma rule evaluation tests for new messages, edits with mentions, threaded replies, exact relation matching, and exposed encrypted relations; unrelated action sets remain unchanged.
 - Added production Core pusher-route HTTP tests for install → readback → registration, repeated registration without policy writes, disabled-rule repair, priority repair, authoritative-read failures, policy-write rejection and unconfirmed readback.
 - Updated the existing account-bound pusher rotation fixture to serve an already-established policy.
-- Rust test execution is pending a new remote CI run after the formatter correction: the orchestrator paused local native builds because disk space is critically low. No live account push rules were modified by the diagnostic API probe.
+- A subsequent CI compile found that the test compared Ruma `Action` values directly, although that type has no `PartialEq`. The test now compares complete serialized action arrays, including ordering and all tweaks. Production policy code was unchanged by this correction.
+- Rust test execution is pending a new remote CI run after the test comparison correction: the orchestrator paused local native builds because disk space is critically low. No live account push rules were modified by the diagnostic API probe.
 - Physical APNs delivery: **Not confirmed**. The server probes establish rule availability and healthy key-query responses, not actual notification delivery.

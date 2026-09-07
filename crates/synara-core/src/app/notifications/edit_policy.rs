@@ -205,7 +205,13 @@ mod tests {
                 if relation == Some("m.replace") {
                     assert!(after.is_empty());
                 } else {
-                    assert_eq!(after, before);
+                    // Ruma Action deliberately lacks PartialEq. Compare the
+                    // complete wire values, preserving action order and every
+                    // sound/highlight tweak rather than only notification count.
+                    assert_eq!(
+                        serde_json::to_value(after).unwrap(),
+                        serde_json::to_value(before).unwrap()
+                    );
                 }
             }
         }
