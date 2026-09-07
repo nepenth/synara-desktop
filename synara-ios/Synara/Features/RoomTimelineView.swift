@@ -156,6 +156,34 @@ enum RoomTimelineReadAcknowledgementPolicy {
     }
 }
 
+/// A debounce replacement must replace the displayed anchor and receipt
+/// target together. The task that drains this queue retains that exact pair
+/// across the asynchronous write, even when another observation arrives.
+struct RoomTimelineReadObservation: Equatable {
+    let visibleEventID: String
+    let receiptEventID: String
+}
+
+struct RoomTimelineReadMarkerQueue {
+    private(set) var pending: RoomTimelineReadObservation?
+    private(set) var firstQueuedAt: Date?
+
+    mutating func enqueue(_ observation: RoomTimelineReadObservation, now: Date) {
+        pending = observation
+        if firstQueuedAt == nil { firstQueuedAt = now }
+    }
+
+    mutating func dequeue() -> RoomTimelineReadObservation? {
+        defer { clear() }
+        return pending
+    }
+
+    mutating func clear() {
+        pending = nil
+        firstQueuedAt = nil
+    }
+}
+
 enum RoomTimelineReadMarkerQueuePolicy {
     static func delayNanoseconds(
         firstQueuedAt: Date,
@@ -314,8 +342,7 @@ struct RoomTimelineView: View {
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
     @State private var markFullyReadTaskGeneration: UInt64 = 0
-    @State private var pendingMarkFullyReadEventID: String?
-    @State private var firstPendingMarkFullyReadAt: Date?
+    @State private var readMarkerQueue = RoomTimelineReadMarkerQueue()
     @State private var timelineUpdatesTask: Task<Void, Never>?
     @State private var timelineSession: RoomTimelineSession?
     @State private var activeTimelineMode: RoomTimelineMode = .live
@@ -2348,15 +2375,15 @@ struct RoomTimelineView: View {
             return
         }
 
-        pendingMarkFullyReadEventID = eventID
-        if firstPendingMarkFullyReadAt == nil {
-            firstPendingMarkFullyReadAt = Date()
-        }
+        readMarkerQueue.enqueue(
+            RoomTimelineReadObservation(visibleEventID: visibleEventID, receiptEventID: eventID),
+            now: Date()
+        )
         guard markFullyReadTask == nil else {
             return
         }
 
-        let firstQueuedAt = firstPendingMarkFullyReadAt ?? Date()
+        let firstQueuedAt = readMarkerQueue.firstQueuedAt ?? Date()
         let delay = RoomTimelineReadMarkerQueuePolicy.delayNanoseconds(
             firstQueuedAt: firstQueuedAt,
             now: Date(),
@@ -2378,7 +2405,7 @@ struct RoomTimelineView: View {
                   isTimelineBottomVisible,
                   isJumpingToLatest == false,
                   isUserDraggingTimeline == false,
-                  pendingMarkFullyReadEventID != nil
+                  readMarkerQueue.pending != nil
             else {
                 await MainActor.run {
                     clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
@@ -2386,17 +2413,15 @@ struct RoomTimelineView: View {
                 return
             }
 
-            guard let observedEventID = pendingMarkFullyReadEventID else {
+            guard let observation = readMarkerQueue.dequeue() else {
                 await MainActor.run {
                     clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
                 }
                 return
             }
-            pendingMarkFullyReadEventID = nil
-            firstPendingMarkFullyReadAt = nil
             let didAcknowledge = await environment.readMarkers.markFullyRead(
                 roomID: roomID,
-                eventID: observedEventID
+                eventID: observation.receiptEventID
             )
             guard Task.isCancelled == false else {
                 return
@@ -2411,14 +2436,12 @@ struct RoomTimelineView: View {
                 }
                 markFullyReadTask = nil
                 if didAcknowledge {
-                    lastMarkedFullyReadEventID = observedEventID
-                    initialReadMarkerEventID = visibleEventID
+                    lastMarkedFullyReadEventID = observation.receiptEventID
+                    initialReadMarkerEventID = observation.visibleEventID
                     showJumpToLatest = false
                 }
-                if pendingMarkFullyReadEventID != nil,
-                   let nextEventID = loadedTimelineItems.last(where: { $0.serverEventID != nil })?.serverEventID
-                {
-                    scheduleMarkFullyRead(eventID: nextEventID)
+                if let nextObservation = readMarkerQueue.pending {
+                    scheduleMarkFullyRead(eventID: nextObservation.visibleEventID)
                 }
             }
         }
@@ -2428,8 +2451,7 @@ struct RoomTimelineView: View {
         markFullyReadTaskGeneration &+= 1
         markFullyReadTask?.cancel()
         markFullyReadTask = nil
-        pendingMarkFullyReadEventID = nil
-        firstPendingMarkFullyReadAt = nil
+        readMarkerQueue.clear()
     }
 
     private func clearMarkFullyReadTask(ifGenerationMatches installedGeneration: UInt64) {

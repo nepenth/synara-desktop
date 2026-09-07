@@ -478,6 +478,33 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testReadMarkerDebounceReplacesVisibleAndReceiptIdentityTogether() throws {
+        let firstQueuedAt = Date(timeIntervalSince1970: 100)
+        let first = RoomTimelineReadObservation(
+            visibleEventID: "$message-a", receiptEventID: "$edit-a"
+        )
+        let newer = RoomTimelineReadObservation(
+            visibleEventID: "$message-b", receiptEventID: "$edit-b"
+        )
+        var queue = RoomTimelineReadMarkerQueue()
+        queue.enqueue(first, now: firstQueuedAt)
+        // B replaces A while the original delayed task is still installed.
+        queue.enqueue(newer, now: firstQueuedAt.addingTimeInterval(0.5))
+        XCTAssertEqual(queue.firstQueuedAt, firstQueuedAt)
+        let write = try XCTUnwrap(queue.dequeue())
+        XCTAssertEqual(write.receiptEventID, "$edit-b")
+        XCTAssertEqual(write.visibleEventID, "$message-b")
+        XCTAssertNil(queue.pending)
+        XCTAssertNil(queue.firstQueuedAt)
+        // A later observation cannot change the pair retained by B's write.
+        queue.enqueue(first, now: firstQueuedAt.addingTimeInterval(1))
+        XCTAssertEqual(write, newer)
+        XCTAssertEqual(queue.pending, first)
+        queue.clear()
+        XCTAssertNil(queue.pending)
+        XCTAssertNil(queue.firstQueuedAt)
+    }
+
     func testReadMarkerQueueHasMaximumLatencyAndCancelsSupersededTask() {
         let firstQueuedAt = Date(timeIntervalSince1970: 100)
 

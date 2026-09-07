@@ -48,3 +48,11 @@ The reported user path is Failed because it requires manual acknowledgement. Sou
 3. Desktop initial placement lets saved `atBottom` override a selected unread anchor. Geometric bottom observation and following-live intent can diverge after short unread-room promotion. Jump-to-latest sets bottom optimistically before Core/layout confirmation.
 4. iOS bootstrap stops after any displayable row, including an undecryptable placeholder. A one-row non-scrollable cache cannot satisfy the stable viewport's pagination condition requiring content larger than its viewport. Validate provider underfill independently from missing encryption keys.
 5. Both clients intentionally suppress automatic receipts under Hide Typing & Read Receipts, as their existing UI wording states. This branch preserves that policy; any change needs an explicit product decision and matching explanation.
+
+## Independent review correction
+
+The first review identified a debounce race: observation B replaced A's pending receipt ID, but the already-installed task still captured A's displayed ID for the unread divider. The queue now stores and drains one immutable `(visibleEventID, receiptEventID)` observation. The completed write uses both fields from that drained observation; later queued observations cannot change it. A regression covers A → B replacement before dequeue and a further arrival while B's pair is retained.
+
+Full branch whitespace validation against the v2.1.28 base and exact `cargo +1.93.0 fmt --all --check` passed in both workspace roots. Native execution remains pending the orchestrator's build slot.
+
+For the subsequent last-read navigation work, keep the raw receipt frontier separate from its displayed anchor. Existing read markers may name folded events. Core must resolve them to the nearest displayed event at or before their **stream position**, which may differ from the edited target when an edit updates an older row. Do not attempt to repair existing transport markers by moving `m.fully_read` backwards; the SDK may reject that regression. Missing resolution must preserve the user's navigation intent and expose the requested last-read action.
