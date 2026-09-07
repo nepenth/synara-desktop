@@ -1964,9 +1964,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionDeviceUpdates() -> AsyncStream<Void> {
-        AsyncStream { continuation in
+        let updates = host.livePoller.ownerSignals(families: ["devices", "verification"])
+        return AsyncStream { continuation in
             let task = Task {
-                for await _ in host.livePoller.ownerSignals(families: ["devices"]) {
+                for await _ in updates {
                     guard Task.isCancelled == false else {
                         break
                     }

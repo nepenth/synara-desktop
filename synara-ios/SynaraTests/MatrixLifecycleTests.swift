@@ -403,6 +403,25 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertFalse(observer.showsVerifyThisDevice)
     }
 
+    @MainActor
+    func testSessionCryptoStatusRefreshesDeviceAuthorityWithoutVerificationFlow() async {
+        let eligible = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: true,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible])
+        let observer = SessionCryptoStatusObserver()
+
+        await observer.start(crypto: crypto)
+
+        XCTAssertEqual(observer.status, eligible)
+        XCTAssertTrue(observer.enablesVerifyThisDevice)
+    }
+
     func testVerificationContinuationCancellationBeforeRegistrationUsesTombstone() {
         var tracker = MatrixVerificationContinuationRegistrationTracker()
         let id = UUID()
@@ -524,8 +543,13 @@ private final class SequencingCryptoStatusService: CryptoStatusServicing {
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+        // No active or completed verification request exists in this fixture.
+        AsyncStream { $0.finish() }
+    }
+
+    func sessionDeviceUpdates() -> AsyncStream<Void> {
         AsyncStream { continuation in
-            continuation.yield(.finished)
+            continuation.yield(())
             continuation.finish()
         }
     }
