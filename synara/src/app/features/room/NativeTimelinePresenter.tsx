@@ -1,3 +1,4 @@
+import { observeRoomLatestAfterSend } from './nativeTimelineNavigation';
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useFocusWithin, useHover } from 'react-aria';
@@ -1917,12 +1918,22 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [focusEventId, openingViewport, roomId]
   );
   const controller = useNativeTimelineView(input);
-  const { setReadState, followLive } = controller;
+  const { setReadState, followLive, jumpLatest: loadLatest, restoreLastRead } = controller;
   const timelineState = controller.state;
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const activeSessionGeneration = readyState?.snapshot.sessionGeneration;
   const [actionError, setActionError] = useState<string>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
+  const [pendingLastRead, setPendingLastRead] = useState<string>();
+  const [latestPlacementRequest, setLatestPlacementRequest] = useState(0);
+  const appliedLatestPlacementRef = useRef(0);
+  const [lastReadPlacementRequest, setLastReadPlacementRequest] = useState(0);
+  const appliedLastReadPlacementRef = useRef(0);
+  const firstRenderedRowRef = useRef<string | undefined>(undefined);
+  const mountedRoomRef = useRef(roomId);
+  mountedRoomRef.current = roomId;
+  const mountedNavigationRef = useRef(input);
+  mountedNavigationRef.current = input;
   const [documentActive, setDocumentActive] = useState(
     () =>
       typeof document !== 'undefined' &&
@@ -1948,8 +1959,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   useEffect(() => {
     const element = scrollRef.current;
     if (!timelineReady || !element) return undefined;
-    return observeNativeTimelineBottom(element, setAtLiveBottom);
-  }, [roomId, timelineReady]);
+    return observeNativeTimelineBottom(element, (atBottom) => {
+      setAtLiveBottom(atBottom);
+      if (atBottom && readyState?.selectedPosition.kind === 'live_bottom') {
+        followingLiveRef.current = true;
+      }
+    });
+  }, [roomId, timelineReady, readyState?.selectedPosition.kind]);
   useEffect(() => {
     if (activeSessionGeneration === undefined) return;
     bindNativeTimelineActionSession(activeSessionGeneration);
@@ -2034,6 +2050,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     pendingBackwardGrowRef.current = false;
     liveTailSubmittedKeyRef.current = undefined;
     followLiveSubmittedKeyRef.current = undefined;
+    setPendingLastRead(undefined);
     setAtLiveBottom(false);
   }, [roomId]);
 
@@ -2267,16 +2284,28 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       saveViewport();
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
-      followingLiveRef.current = readyState.selectedPosition.kind === 'live_bottom' && atBottom;
       setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
       if (performance.now() < programmaticScrollUntilRef.current) return;
+      followingLiveRef.current = readyState.selectedPosition.kind === 'live_bottom' && atBottom;
       userInitiatedScrollRef.current = true;
       paginateAtEdge();
     };
+    const onUserInput = () => {
+      programmaticScrollUntilRef.current = 0;
+      userInitiatedScrollRef.current = true;
+      // A click is not a departure from the live tail. Actual scrolling below
+      // recomputes ownership from geometry, including during drag/scroll input.
+    };
+    scrollEl.addEventListener('wheel', onUserInput, { passive: true });
+    scrollEl.addEventListener('pointerdown', onUserInput, { passive: true });
+    scrollEl.addEventListener('keydown', onUserInput);
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     saveViewport();
     return () => {
       scrollEl.removeEventListener('scroll', onScroll);
+      scrollEl.removeEventListener('wheel', onUserInput);
+      scrollEl.removeEventListener('pointerdown', onUserInput);
+      scrollEl.removeEventListener('keydown', onUserInput);
       saveViewport();
     };
   }, [controller, readyState, saveViewport]);
@@ -2299,17 +2328,42 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       selectedAnchor?.eventId ?? ''
     }`;
     const initialPlacement = initialPlacementRef.current !== placementKey;
-    const savedViewport = nativeTimelineViewports.get(roomId);
+    const savedViewport = initialPlacement
+      ? openingViewport ?? nativeTimelineViewports.get(roomId)
+      : nativeTimelineViewports.get(roomId);
+    const firstRow = rowKey(rows[0]);
+    const prepended =
+      firstRenderedRowRef.current !== undefined && firstRenderedRowRef.current !== firstRow;
+    firstRenderedRowRef.current = firstRow;
+    const explicitLatest = latestPlacementRequest !== appliedLatestPlacementRef.current;
+    appliedLatestPlacementRef.current = latestPlacementRequest;
+    const explicitLastRead = lastReadPlacementRequest !== appliedLastReadPlacementRef.current;
+    appliedLastReadPlacementRef.current = lastReadPlacementRequest;
     const totalSize = virtualizer.getTotalSize();
     const previousTotalSize = lastTotalSizeRef.current;
     lastTotalSizeRef.current = totalSize;
 
-    if (initialPlacement) {
-      const anchor = selectedAnchor ?? savedViewport?.anchor;
+    if (initialPlacement || explicitLatest || explicitLastRead) {
+      const missingLastRead =
+        selectedPosition.kind === 'unread' &&
+        selectedAnchor &&
+        findAnchorIndex(rows, selectedAnchor) < 0;
+      // An unavailable marker is an action target, not a viewport. Retain a
+      // saved history location when possible; a new room starts at its live tail.
+      const anchor = missingLastRead
+        ? savedViewport?.atBottom
+          ? undefined
+          : savedViewport?.anchor
+        : selectedAnchor ?? savedViewport?.anchor;
       const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
-      if (selectedPosition.kind === 'live_bottom' || savedViewport?.atBottom) {
+      if (missingLastRead) setPendingLastRead(selectedPosition.anchor_event_id);
+      // Passive live promotion must preserve an unresolved last-read action.
+      if (
+        selectedPosition.kind === 'live_bottom' ||
+        explicitLatest ||
+        (missingLastRead && anchorIndex < 0)
+      ) {
         followingLiveRef.current = true;
-        setAtLiveBottom(true);
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
       } else if (anchorIndex >= 0) {
@@ -2317,7 +2371,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         setAtLiveBottom(false);
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
-        const offsetPx = selectedAnchor ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+        const offsetPx =
+          selectedAnchor && !missingLastRead ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+        if (selectedAnchor && !missingLastRead) {
+          setPendingLastRead((pending) =>
+            selectedAnchor.eventId === pending ? undefined : pending
+          );
+        }
         const animationFrame = window.requestAnimationFrame(() => {
           if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
         });
@@ -2334,13 +2394,44 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       return undefined;
     }
 
+    if (prepended && savedViewport?.anchor) {
+      const anchor = savedViewport.anchor;
+      const index = findAnchorIndex(rows, anchor);
+      if (index >= 0) {
+        programmaticScrollUntilRef.current = performance.now() + 250;
+        virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+        const frame = requestAnimationFrame(() => {
+          const scrollEl = scrollRef.current;
+          if (!scrollEl) return;
+          const element = Array.from(
+            scrollEl.querySelectorAll<HTMLElement>('[data-native-timeline-event-id]')
+          ).find((node) => node.dataset.nativeTimelineEventId === anchor.eventId);
+          if (element)
+            scrollEl.scrollTop +=
+              element.getBoundingClientRect().top -
+              scrollEl.getBoundingClientRect().top +
+              anchor.offsetPx;
+        });
+        pendingBackwardGrowRef.current = false;
+        return () => cancelAnimationFrame(frame);
+      }
+    }
+
     if (pendingBackwardGrowRef.current && previousTotalSize > 0 && totalSize > previousTotalSize) {
       pendingBackwardGrowRef.current = false;
       const scrollEl = scrollRef.current;
       if (scrollEl) scrollEl.scrollTop += totalSize - previousTotalSize;
     }
     return undefined;
-  }, [readyState, roomId, rows, virtualizer]);
+  }, [
+    readyState,
+    roomId,
+    rows,
+    virtualizer,
+    latestPlacementRequest,
+    lastReadPlacementRequest,
+    openingViewport,
+  ]);
 
   const onFocusEvent = useCallback(
     (targetEventId: string) => {
@@ -2354,6 +2445,47 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     },
     [rows, virtualizer]
   );
+
+  const jumpToLatest = useCallback(() => {
+    setActionError(undefined);
+    setPendingLastRead(undefined);
+    // The new provider's layout effect places the tail. Until its geometry
+    // confirms the bottom, preserve the control and do not claim visibility.
+    const navigation = input;
+    void loadLatest()
+      .then((accepted) => {
+        // A stale native result resolves without adoption. A newer focused
+        // navigation in the same room also supersedes this placement intent.
+        if (accepted && mountedNavigationRef.current === navigation)
+          setLatestPlacementRequest((request) => request + 1);
+      })
+      .catch((error) => {
+        if (mountedNavigationRef.current === navigation)
+          setActionError(
+            error instanceof Error ? error.message : 'Could not open latest messages.'
+          );
+      });
+  }, [input, loadLatest]);
+  useEffect(() => observeRoomLatestAfterSend(roomId, jumpToLatest), [roomId, jumpToLatest]);
+
+  const jumpToLastRead = useCallback(() => {
+    if (!pendingLastRead) return;
+    const navigation = input;
+    setActionError(undefined);
+    void restoreLastRead(pendingLastRead)
+      .then((accepted) => {
+        if (accepted && mountedNavigationRef.current === navigation) {
+          setLastReadPlacementRequest((request) => request + 1);
+        }
+      })
+      .catch((error) => {
+        if (mountedNavigationRef.current === navigation) {
+          setActionError(
+            error instanceof Error ? error.message : 'Could not open last-read messages.'
+          );
+        }
+      });
+  }, [input, pendingLastRead, restoreLastRead]);
 
   if (timelineState.status === 'unavailable') {
     return (
@@ -2394,32 +2526,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
 
   if (!readyState) return null;
   const { snapshot } = readyState;
-  const runAction = (action: () => Promise<void>) => {
-    setActionError(undefined);
-    void action().catch((error) => {
-      setActionError(error instanceof Error ? error.message : 'Native timeline action failed.');
-    });
-  };
-
-  const jumpToLatest = () => {
-    followingLiveRef.current = true;
-    programmaticScrollUntilRef.current = performance.now() + 500;
-    setAtLiveBottom(true);
-    if (rows.length > 0) {
-      virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
-    }
-    runAction(async () => {
-      await controller.jumpLatest();
-      followingLiveRef.current = true;
-      programmaticScrollUntilRef.current = performance.now() + 500;
-      if (rows.length > 0) {
-        virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
-      }
-      // The painted-tail effect performs the conditional acknowledgement once
-      // the newly returned live tail is actually visible. Do not resolve a
-      // newer SDK tail from this navigation callback.
-    });
-  };
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
@@ -2487,6 +2593,30 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             </Box>
           )}
         </Scroll>
+        <Box
+          direction="Column"
+          gap="200"
+          alignItems="Start"
+          style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}
+        >
+          {rows.filter((row) => rowEventId(row)).length <= 1 &&
+            snapshot.pagination.backward === 'available' && (
+              <Button
+                onClick={() => {
+                  void controller
+                    .paginate('backwards')
+                    .catch((error) => setActionError(String(error)));
+                }}
+              >
+                <Text>Load older messages</Text>
+              </Button>
+            )}
+          {pendingLastRead && (
+            <Button onClick={jumpToLastRead}>
+              <Text>Jump to Last Read</Text>
+            </Button>
+          )}
+        </Box>
         {shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom) && (
           <Box
             style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}

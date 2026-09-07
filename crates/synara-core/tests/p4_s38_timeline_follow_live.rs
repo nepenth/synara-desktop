@@ -430,3 +430,199 @@ async fn visible_frontier_reads_folded_edits_and_reactions_but_not_unseen_new_me
         );
     }
 }
+
+#[tokio::test]
+async fn last_read_hidden_edit_resolves_at_its_stream_position_not_the_edited_old_row() {
+    use ruma::events::room::message::RoomMessageEventContent;
+    let (server, client, owner, room, older, newer) = focused_owner().await;
+    let room_id = room_id!("!follow-live:example.org");
+    let old_id = ruma::EventId::parse(&older).unwrap();
+    let edit_id = event_id!("$edit-of-old-row");
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(
+                    f.text_msg("* edited old message")
+                        .sender(*BOB)
+                        .event_id(edit_id)
+                        .edit(
+                            &old_id,
+                            RoomMessageEventContent::text_plain("edited old message").into(),
+                        ),
+                )
+                .add_account_data(
+                    Raw::<AnyRoomAccountDataEvent>::from_json_string(
+                        serde_json::json!({
+                            "type": "m.fully_read", "content": { "event_id": edit_id }
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+                ),
+        )
+        .await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room,
+            position: NativeTimelineOpenPosition::Normal {
+                viewport: Default::default(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        opened.snapshot.read_state.own_read_event_id.as_deref(),
+        Some(edit_id.as_str())
+    );
+    assert_eq!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+    assert_ne!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(older.as_str())
+    );
+}
+
+#[tokio::test]
+async fn newer_comparable_receipt_wins_over_fully_read_for_restoration() {
+    use ruma::events::receipt::{ReceiptThread, ReceiptType};
+    let (server, client, owner, room, _older, newer) = focused_owner().await;
+    let room_id = room_id!("!follow-live:example.org");
+    let newer_id = ruma::EventId::parse(&newer).unwrap();
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_receipt(
+                f.read_receipts()
+                    .add(
+                        &newer_id,
+                        client.user_id().unwrap(),
+                        ReceiptType::ReadPrivate,
+                        ReceiptThread::Unthreaded,
+                    )
+                    .into_event(),
+            ),
+        )
+        .await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room,
+            position: NativeTimelineOpenPosition::Normal {
+                viewport: Default::default(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        opened.snapshot.read_state.own_read_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+    assert_eq!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+}
+
+#[tokio::test]
+async fn missing_last_read_retains_live_rows_and_an_explicit_navigation_target() {
+    let (server, client, owner, room, _older, newer) = focused_owner().await;
+    let room_id = room_id!("!follow-live:example.org");
+    let missing = event_id!("$unavailable-read-location");
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_account_data(
+                Raw::<AnyRoomAccountDataEvent>::from_json_string(
+                    serde_json::json!({
+                        "type": "m.fully_read", "content": { "event_id": missing }
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            ),
+        )
+        .await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room,
+            position: NativeTimelineOpenPosition::Normal {
+                viewport: Default::default(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        opened.position,
+        TimelineViewPosition::Unread {
+            anchor_event_id: missing.to_string()
+        }
+    );
+    assert_eq!(
+        opened.snapshot.read_state.visible_tail_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+    assert_eq!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(missing.as_str())
+    );
+    assert!(
+        !server
+            .server()
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .any(|request| request.url.path().contains("/context/")),
+        "normal missing-anchor open must not replace live rows with a focused history request"
+    );
+}
+
+#[tokio::test]
+async fn one_cached_event_bootstraps_one_bounded_older_page_through_the_sdk() {
+    use matrix_sdk::test_utils::mocks::RoomMessagesResponseTemplate;
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!sparse-history:example.org");
+    let f = EventFactory::new().room(room_id);
+    let newest = event_id!("$sparse-newest");
+    let older = event_id!("$sparse-older");
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                .set_timeline_prev_batch("older-page")
+                .add_timeline_event(f.text_msg("cached message").sender(*BOB).event_id(newest)),
+        )
+        .await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default().events(vec![f
+            .text_msg("older context")
+            .sender(*BOB)
+            .event_id(older)
+            .into_raw_timeline()]))
+        .expect(1)
+        .mount()
+        .await;
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 1);
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room_id.to_string(),
+            position: NativeTimelineOpenPosition::LiveBottom,
+        })
+        .await
+        .unwrap();
+    assert!(opened.snapshot.rows.iter().any(|row| matches!(row,
+        synara_core::app::timeline::TimelineViewRow::Message(item)
+            if item.event.event_id.as_deref() == Some(older.as_str()))));
+    assert_eq!(
+        opened.snapshot.read_state.visible_tail_event_id.as_deref(),
+        Some(newest.as_str())
+    );
+}

@@ -716,6 +716,12 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testUnpinnedLiveTimelineOffersLatestWithoutASeparatePresentationRequest() {
+        XCTAssertTrue(RoomTimelineJumpLatestPolicy.shouldShow(
+            isLive: true, isConfirmedPinned: false, hasItems: true, requested: false
+        ))
+    }
+
     func testFiveThousandEventInputAndVisibleCellsRemainBounded() {
         let bounded = TimelineWindowPolicy.replacingServerWindow(TimelineFixtures.largeTimeline(count: 5000))
         XCTAssertEqual(bounded.count, TimelineWindowPolicy.stableEventLimit)

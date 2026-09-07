@@ -578,6 +578,18 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testRoomTimelineRestoresComparableLastReadEvenWhenUnreadCountHasNotArrived() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: false,
+                fullyReadEventID: "$synthetic-0:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .unread(markerEventID: "$synthetic-0:matrix.org")
+        )
+    }
+
     func testRoomTimelineFocusPolicyUsesNewerReceiptInsteadOfOlderFullyReadMarker() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(

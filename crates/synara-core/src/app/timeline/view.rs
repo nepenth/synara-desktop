@@ -76,6 +76,9 @@ pub struct TimelineReadState {
     pub receipt_tail_event_id: Option<EventId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_read_event_id: Option<EventId>,
+    /// Last-read navigation anchor: nearest visible stream predecessor of the
+    /// raw marker, or its unavailable ID for explicit navigation. This value
+    /// does not authorize receipt writes or post-mount viewport movement.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub unread_anchor_event_id: Option<EventId>,
     pub is_marked_unread: bool,

@@ -20,7 +20,8 @@
     "typecheck:modernization": "tsc --noEmit -p tsconfig.modernization.json",
     "fix:prettier": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:browser:native-timeline": "playwright test --config e2e/native-timeline-harness/playwright.config.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": "eslint",

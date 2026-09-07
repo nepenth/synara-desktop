@@ -1140,7 +1140,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 ownReadEventID: "$pending-1",
                 rowEventIDs: ["$local-1", "$s24-row:example.org"]
             ),
-            "$s24-row:example.org"
+            nil
         )
         let publicError = String(describing: acknowledged)
         for forbidden in ["password", "syt_", "token"] {

@@ -243,6 +243,38 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.buttons["JumpToLatestButton"].waitForExistence(timeout: 5))
     }
 
+    func testMissingLastReadOffersExplicitRecoveryWithoutMovingToUnknownHistory() {
+        let app = launchRoomApp(
+            readMarkerEventID: "$unavailable-last-read:matrix.org",
+            largeTimelineCount: 60
+        )
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["JumpToLastRead"].waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 5))
+        XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
+        XCTAssertTrue(app.staticTexts["Synthetic message 59"].exists)
+    }
+
+    func testSendingFromUnreadHistoryReturnsToLatestWithoutAnotherGesture() {
+        let app = launchRoomApp(
+            readMarkerEventID: "$synthetic-30:matrix.org",
+            largeTimelineCount: 60
+        )
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        let composer = composerField(in: app)
+        composer.tap()
+        composer.typeText("Sent from history to the live bottom")
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 10))
+        let sent = app.staticTexts["Sent from history to the live bottom"]
+        XCTAssertTrue(sent.waitForExistence(timeout: 5))
+        XCTAssertTrue(sent.isHittable)
+        XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
+    }
+
     func testRoomDetailsInviteAndLeaveMockFlow() {
         let app = launchRoomApp()
 
