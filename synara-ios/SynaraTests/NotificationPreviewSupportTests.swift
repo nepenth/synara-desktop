@@ -9,6 +9,15 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertEqual(SynaraNotificationDiagnostics.previewFailureStage(coreCode: "secret-token @user:example.org event-body"), .coreResolutionFailed)
     }
 
+    func testPreviewFailureDiagnosticsRecognizeNseCoreVaultAdapterCode() {
+        // NseSecretVault translates the Swift vault error before it crosses
+        // the Core FFI boundary; classify the code that actually arrives.
+        XCTAssertEqual(
+            SynaraNotificationDiagnostics.previewFailureStage(coreCode: "nse-secret-vault-unavailable"),
+            .coreStoreUnavailable
+        )
+    }
+
     func testPreviewPayloadParserReadsFlatAndNestedRouteFields() throws {
         let payload = try XCTUnwrap(
             SynaraNotificationPreviewPayloadParser.payload(

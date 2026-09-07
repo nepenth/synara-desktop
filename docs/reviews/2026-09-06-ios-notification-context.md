@@ -129,3 +129,16 @@ runner regressions passed, including successful UI plus failed logout, skipped
 XCTest, missing cold readback, and full success. This reporting-only correction
 preserves the prior live run, whose two readbacks and complete cleanup were
 independently observed; no new production or notification routing behavior changed.
+
+### Grok diagnostic mapping correction
+
+Grok found that the Core NSE vault adapter converts vault failures to
+`nse-secret-vault-unavailable` before returning across FFI. The diagnostic
+allowlist previously recognized only the originating Swift vault code and
+therefore recorded the generic failure stage for this Core error. The fixed
+allowlist now maps the actual arriving Core code to `core-store-unavailable`,
+while preserving the existing Swift code mapping. Added a focused regression
+for the Core adapter code; arbitrary error descriptions still map to the fixed
+generic stage. No preview content, crypto ownership, privacy or notification
+routing behavior changes. Focused signed native validation is pending behind
+the active live-read run.

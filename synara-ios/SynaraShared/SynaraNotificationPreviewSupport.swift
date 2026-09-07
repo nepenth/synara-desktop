@@ -117,7 +117,7 @@ enum SynaraNotificationDiagnostics {
         switch coreCode {
         case "p4-s3b-material-missing": return .coreSessionUnavailable
         case "p4-s3b-restore-failed": return .coreRestoreFailed
-        case "p4-s3-secret-vault-unavailable": return .coreStoreUnavailable
+        case "nse-secret-vault-unavailable", "p4-s3-secret-vault-unavailable": return .coreStoreUnavailable
         case "p4-s11-nse-event-fetch-failed", "p4-s11-nse-client-init-failed": return .coreFetchFailed
         case "p4-s11-nse-resolution-timeout": return .coreResolutionTimedOut
         case "p4-s11-nse-event-filtered": return .coreEventFiltered
