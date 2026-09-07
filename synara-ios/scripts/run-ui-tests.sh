@@ -94,6 +94,9 @@ auth_and_rooms=(
 
 timeline_and_composer=(
   testRoomRouteShowsTimeline
+  testUnreadRoomRoutePositionsAfterSharedReadMarker
+  testMissingLastReadOffersExplicitRecoveryWithoutMovingToUnknownHistory
+  testSendingFromUnreadHistoryReturnsToLatestWithoutAnotherGesture
   testRoomDetailsInviteAndLeaveMockFlow
   testRoomDetailsProfileEditMockFlow
   testLargeRoomFixtureRendersAndScrolls

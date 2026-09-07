@@ -749,6 +749,7 @@ export const useNativeTimelineView = (
       'matrix_timeline_jump_latest',
       { request: { streamId } }
     );
+    if (streamIdRef.current !== streamId) return;
     if (!result.available || !result.value) {
       setState({
         status: 'error',

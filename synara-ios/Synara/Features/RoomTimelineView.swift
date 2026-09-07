@@ -15,7 +15,7 @@ enum RoomTimelineFocusPolicy {
         if let focusedEventID, focusedEventID.isEmpty == false {
             return .focused(eventID: focusedEventID)
         }
-        guard hasUnreadMessages, liveItems.isEmpty == false else {
+        guard liveItems.isEmpty == false else {
             return .live
         }
 
@@ -246,7 +246,9 @@ enum RoomTimelineOwnAvatarPolicy {
 
 enum RoomTimelineJumpLatestPolicy {
     static func shouldShow(isLive: Bool, isConfirmedPinned: Bool, hasItems: Bool, requested: Bool) -> Bool {
-        hasItems && (isLive == false || (requested && isConfirmedPinned == false))
+        // Geometry and provider identity are authoritative even if an earlier
+        // command cleared the presentation request before layout settled.
+        hasItems && (isLive == false || isConfirmedPinned == false)
     }
 }
 
@@ -332,6 +334,8 @@ struct RoomTimelineView: View {
     /// Used only for unread-divider presentation after the user has reached a live event.
     /// Must never drive post-load scroll restore (v1.2.28 open-at-live-end policy).
     @State private var initialReadMarkerEventID: String?
+    @State private var pendingLastReadEventID: String?
+    @State private var sendLatestRequest = 0
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
@@ -811,7 +815,10 @@ struct RoomTimelineView: View {
                                 finishTimelineUserDrag()
                             }
                     )
-                    .overlay(alignment: .bottomTrailing) {
+                    .overlay(alignment: .topLeading) {
+            timelineNavigationRecovery
+        }
+        .overlay(alignment: .bottomTrailing) {
                         if RoomTimelineJumpLatestPolicy.shouldShow(
                             isLive: timelineProviderIsLive,
                             isConfirmedPinned: isTimelineBottomVisible,
@@ -825,6 +832,10 @@ struct RoomTimelineView: View {
                             .padding(.bottom, SynaraSpacing.medium)
                             .transition(.scale.combined(with: .opacity))
                         }
+                    }
+                    .overlay(alignment: .topLeading) { timelineNavigationRecovery }
+                    .onChange(of: sendLatestRequest) { _ in
+                        jumpToLatest(proxy: proxy, currentItems: loadedTimelineItems)
                     }
                     .onAppear {
                         lastRenderedTimelineCount = items.count
@@ -1629,9 +1640,11 @@ struct RoomTimelineView: View {
                 return
             }
             let hasUnreadMessages = environment.roomList.hasUnreadMessages(roomID: roomID)
-            let fullyReadEventID = hasUnreadMessages
-                ? await environment.readMarkers.fullyReadEventID(roomID: roomID)
-                : nil
+            let fullyReadEventID = await environment.readMarkers.fullyReadEventID(roomID: roomID)
+            let initialItems = timelineItems(from: liveFeed.initialOutcome)
+            pendingLastReadEventID = fullyReadEventID.flatMap { marker in
+                initialItems.contains(where: { $0.serverEventID == marker }) ? nil : marker
+            }
             let initialMode = RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
                 hasUnreadMessages: hasUnreadMessages,
@@ -1935,6 +1948,11 @@ struct RoomTimelineView: View {
                         draft = ""
                         environment.drafts.clearDraft(roomID: roomID)
                         completeComposerRelation()
+                        if StableScrollAnchoringFeatureFlag.isEnabled {
+                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+                        } else {
+                            sendLatestRequest &+= 1
+                        }
                     }
                 }
             }
@@ -2017,6 +2035,11 @@ struct RoomTimelineView: View {
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
+        if StableScrollAnchoringFeatureFlag.isEnabled {
+            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+        } else {
+            sendLatestRequest &+= 1
+        }
 
         draft = ""
         environment.drafts.clearDraft(roomID: roomID)
@@ -2479,6 +2502,7 @@ struct RoomTimelineView: View {
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
         isJumpingToLatest = true
+        pendingLastReadEventID = nil
         showJumpToLatest = true
 
         Task {
@@ -2488,6 +2512,7 @@ struct RoomTimelineView: View {
             }
             let transition = await timelineSession.transitionToLive()
             await MainActor.run {
+                guard self.timelineSession === timelineSession else { return }
                 switch transition {
                 case let .succeeded(feed):
                     initialReadMarkerEventID = nil
@@ -2531,21 +2556,24 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func jumpToLatestStable(currentItems: [TimelineItem]) {
+    private func jumpToLatestStable(currentItems: [TimelineItem], dismissComposer: Bool = true) {
         guard isJumpingToLatest == false,
               let timelineSession
         else {
             return
         }
 
-        dismissKeyboard()
-        isComposerFocused = false
+        if dismissComposer {
+            dismissKeyboard()
+            isComposerFocused = false
+        }
         cancelTimelineScroll()
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
         isJumpingToLatest = true
+        pendingLastReadEventID = nil
         showJumpToLatest = true
 
         Task {
@@ -2553,6 +2581,7 @@ struct RoomTimelineView: View {
             defer { PerformanceTrace.end("TimelineJumpToLatest", id: signpostID) }
             let transition = await timelineSession.transitionToLive()
             await MainActor.run {
+                guard self.timelineSession === timelineSession else { return }
                 switch transition {
                 case let .succeeded(feed):
                     initialReadMarkerEventID = nil
@@ -2583,6 +2612,45 @@ struct RoomTimelineView: View {
                     showJumpToLatest = timelineProviderIsLive == false
                     logTimelineEvent("jump-latest-superseded")
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timelineNavigationRecovery: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            if let marker = pendingLastReadEventID {
+                Button("Jump to Last Read") { jumpToLastRead(eventID: marker) }
+                    .accessibilityIdentifier("JumpToLastRead")
+            }
+            if loadedTimelineItems.count <= 1, hasReachedOldestMessages == false,
+               let oldest = loadedTimelineItems.first?.eventID {
+                Button("Load older messages") {
+                    hasUserInteractedWithTimeline = true
+                    hasPositionedInitialTimeline = true
+                    _ = loadOlderTimeline(before: oldest, scrollAnchorID: oldest)
+                }
+                .accessibilityIdentifier("LoadOlderMessages")
+            }
+        }
+        .buttonStyle(.bordered)
+        .padding(SynaraSpacing.medium)
+    }
+
+    private func jumpToLastRead(eventID: String) {
+        guard let timelineSession else { return }
+        let routeID = stableViewportRouteID
+        cancelMarkFullyRead()
+        Task {
+            guard let feed = await timelineSession.open(mode: .unread(markerEventID: eventID)) else { return }
+            await MainActor.run {
+                guard self.timelineSession === timelineSession, stableViewportRouteID == routeID else { return }
+                let hasAnchor = timelineItems(from: feed.initialOutcome).contains(where: { $0.serverEventID == eventID })
+                pendingLastReadEventID = hasAnchor ? nil : eventID
+                hasPositionedInitialTimeline = false
+                // Bind the returned generation even on failure; applying a
+                // failed outcome preserves the last nonempty rendered window.
+                applySessionFeed(feed)
             }
         }
     }
@@ -2706,7 +2774,8 @@ struct RoomTimelineView: View {
                     success: success
                 )
             }
-        case .readMarker:
+        case let .readMarker(eventID):
+            if success == false { pendingLastReadEventID = eventID }
             hasPositionedInitialTimeline = true
             timelinePosition = .readingHistory
             showJumpToLatest = true

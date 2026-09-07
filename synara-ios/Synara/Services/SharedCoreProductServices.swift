@@ -2656,7 +2656,7 @@ final class SharedCoreRoomReadMarkerService: RoomReadMarkerServicing {
     func fullyReadEventID(roomID: String) async -> String? {
         await withOpenLive(roomID: roomID) { opened in
             SharedCoreReadMarkers.acknowledgedEventID(
-                ownReadEventID: opened.snapshot.ownReadEventId,
+                ownReadEventID: opened.snapshot.unreadAnchorEventId ?? opened.snapshot.ownReadEventId,
                 rowEventIDs: opened.snapshot.rows.map(\.eventId)
             )
         }

@@ -16,7 +16,6 @@ use matrix_sdk::{
     ruma::{
         events::{
             reaction::ReactionEventContent,
-            receipt::{ReceiptThread, ReceiptType as EventReceiptType},
             relation::Annotation,
             room::message::{
                 MessageFormat, MessageType, Relation, RoomMessageEventContent,
@@ -1344,12 +1343,35 @@ impl NativeTimelineRegistry {
                 .build()
                 .await
                 .map_err(|_| "d0.3-timeline-open-failed")?;
+            // A sparse restored cache must not require a scrollable viewport
+            // to fetch history. One bounded SDK page serves both native clients;
+            // a network failure retains the cached row and explicit pagination.
+            let sparse = timeline
+                .items()
+                .await
+                .iter()
+                .filter(|item| item.as_event().is_some())
+                .take(2)
+                .count()
+                <= 1;
+            let hit_start = if sparse {
+                tokio::time::timeout(
+                    std::time::Duration::from_secs(5),
+                    timeline.paginate_backwards(PAGINATION_BATCH_SIZE),
+                )
+                .await
+                .ok()
+                .and_then(Result::ok)
+                .unwrap_or(false)
+            } else {
+                false
+            };
             self.entries.insert(
                 room_id_string.clone(),
                 LiveTimelineEntry {
                     timeline: Arc::new(timeline),
                     is_encrypted,
-                    hit_start: false,
+                    hit_start,
                 },
             );
         }
@@ -1376,28 +1398,18 @@ impl NativeTimelineRegistry {
                     || room.num_unread_messages() > 0
                     || room.num_unread_notifications() > 0
                     || room.num_unread_mentions() > 0;
-                // Live-tail matching for unread+at_bottom restore needs the
-                // live timeline's current tip before placement is chosen.
-                let current_live_tail = if viewport.at_bottom && has_unread {
-                    self.open(client, &room_id_string).await?;
-                    self.live_tail_event_id(&room_id_string).await
-                } else {
-                    None
-                };
-                // Last-read is the newest of own receipts + `m.fully_read` that
-                // can be ordered without walking history. Unread counts come
-                // from receipts; a stale fully-read marker cannot override them.
-                let unread_plan = if has_unread {
-                    self.open(client, &room_id_string).await?;
-                    self.unread_open_plan(client, &room, &room_id_string).await
-                } else {
-                    UnreadOpenPlan::LiveBottom
-                };
+                self.open(client, &room_id_string).await?;
+                let current_live_tail = self.live_tail_event_id(&room_id_string).await;
+                let unread_plan = self.unread_open_plan(client, &room, &room_id_string).await;
                 let unread_frontier = match &unread_plan {
-                    UnreadOpenPlan::InLive { event_id }
-                    | UnreadOpenPlan::FocusedReceipt { event_id } => Some(event_id.clone()),
-                    UnreadOpenPlan::LiveBottom => None,
+                    LastReadOpenPlan::InLive { event_id }
+                    | LastReadOpenPlan::Unavailable { event_id } => Some(event_id.clone()),
+                    LastReadOpenPlan::LiveBottom => None,
                 };
+                let has_unread = has_unread
+                    || unread_frontier
+                        .as_deref()
+                        .is_some_and(|anchor| Some(anchor) != current_live_tail.as_deref());
                 let now_ms = unix_time_ms();
                 let selected_position = resolve_normal_open_position(
                     has_unread,
@@ -1426,34 +1438,20 @@ impl NativeTimelineRegistry {
                             },
                         )
                     }
-                    TimelineViewPosition::Unread {
-                        ref anchor_event_id,
-                    } => {
-                        // Element opens the live window and places last-read
-                        // inside it. A focused historical provider is only
-                        // for a receipt that is not yet in that live window.
+                    TimelineViewPosition::Unread { .. } => {
+                        // Both available and unavailable markers keep this live
+                        // provider. The presenter restores only an available row;
+                        // an unavailable target remains an explicit user action.
                         self.open(client, &room_id_string).await?;
-                        let live_ids = self.live_event_ids(&room_id_string).await;
-                        if live_ids.iter().any(|id| id == anchor_event_id) {
-                            let entry = self
-                                .entries
-                                .get(&room_id_string)
-                                .expect("live timeline inserted by open");
-                            (
-                                entry.timeline.clone(),
-                                selected_position,
-                                live_pagination_state(entry),
-                            )
-                        } else {
-                            self.open_focused_unread(
-                                &room,
-                                &room_id_string,
-                                anchor_event_id,
-                                "v-timeline-normal-anchor-invalid",
-                                "v-timeline-normal-open-failed",
-                            )
-                            .await?
-                        }
+                        let entry = self
+                            .entries
+                            .get(&room_id_string)
+                            .expect("live timeline inserted by open");
+                        (
+                            entry.timeline.clone(),
+                            selected_position,
+                            live_pagination_state(entry),
+                        )
                     }
                     TimelineViewPosition::Restored {
                         anchor_event_id: Some(ref anchor_event_id),
@@ -1546,7 +1544,7 @@ impl NativeTimelineRegistry {
                 }
                 self.open(client, &room_id_string).await?;
                 match self.unread_open_plan(client, &room, &room_id_string).await {
-                    UnreadOpenPlan::InLive { event_id } => {
+                    LastReadOpenPlan::InLive { event_id } => {
                         let entry = self
                             .entries
                             .get(&room_id_string)
@@ -1559,7 +1557,7 @@ impl NativeTimelineRegistry {
                             live_pagination_state(entry),
                         )
                     }
-                    UnreadOpenPlan::FocusedReceipt { event_id } => {
+                    LastReadOpenPlan::Unavailable { event_id } => {
                         self.open_focused_unread(
                             &room,
                             &room_id_string,
@@ -1569,7 +1567,7 @@ impl NativeTimelineRegistry {
                         )
                         .await?
                     }
-                    UnreadOpenPlan::LiveBottom => {
+                    LastReadOpenPlan::LiveBottom => {
                         let entry = self
                             .entries
                             .get(&room_id_string)
@@ -2004,25 +2002,16 @@ impl NativeTimelineRegistry {
     async fn unread_open_plan(
         &self,
         client: &Client,
-        room: &Room,
+        _room: &Room,
         room_id: &str,
-    ) -> UnreadOpenPlan {
+    ) -> LastReadOpenPlan {
         let live_ids = self.live_event_ids(room_id).await;
-        let signals = own_read_signals(room, client.user_id()).await;
-        let mut receipts = signals.receipts;
-        if let (Some(entry), Some(user_id)) = (self.entries.get(room_id), client.user_id()) {
-            if let Some(event_id) = entry
-                .timeline
-                .latest_user_read_receipt_timeline_event_id(user_id)
-                .await
-            {
-                let event_id = event_id.to_string();
-                if !receipts.iter().any(|(existing, _)| existing == &event_id) {
-                    receipts.push((event_id, None));
-                }
-            }
-        }
-        plan_unread_open(&live_ids, signals.fully_read.as_deref(), &receipts)
+        let Some(entry) = self.entries.get(room_id) else {
+            return LastReadOpenPlan::LiveBottom;
+        };
+        let (raw, anchor) = navigation_read_state(&entry.timeline, client.user_id()).await;
+        let target = anchor.or(raw);
+        plan_unread_open(&live_ids, target.as_deref())
     }
 
     async fn open_focused_unread(
@@ -2545,81 +2534,102 @@ fn newest_frontier_in_live<'a>(
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum UnreadOpenPlan {
+enum LastReadOpenPlan {
     /// Last-read is already in the live window. Stay live and place there.
     InLive { event_id: String },
-    /// Last-read is an own receipt outside the live window. Bounded focus.
-    FocusedReceipt { event_id: String },
+    /// Last-read is outside the live window. Retain it for explicit navigation.
+    Unavailable { event_id: String },
     /// Newest frontier cannot be established without walking history.
     LiveBottom,
 }
 
-struct OwnReadSignals {
-    fully_read: Option<String>,
-    receipts: Vec<(String, Option<u64>)>,
-}
-
-fn newest_receipt_event_id(receipts: &[(String, Option<u64>)]) -> Option<String> {
-    receipts
-        .iter()
-        .max_by(|left, right| match (left.1, right.1) {
-            (Some(left_ts), Some(right_ts)) => left_ts.cmp(&right_ts),
-            (Some(_), None) => std::cmp::Ordering::Greater,
-            (None, Some(_)) => std::cmp::Ordering::Less,
-            (None, None) => std::cmp::Ordering::Equal,
-        })
-        .map(|(event_id, _)| event_id.clone())
-}
-
-fn plan_unread_open(
-    live_event_ids: &[String],
-    fully_read: Option<&str>,
-    receipts: &[(String, Option<u64>)],
-) -> UnreadOpenPlan {
-    let mut live_candidates: Vec<&str> = receipts.iter().map(|(id, _)| id.as_str()).collect();
-    if let Some(event_id) = fully_read {
-        live_candidates.push(event_id);
-    }
-    if let Some(event_id) = newest_frontier_in_live(live_event_ids, live_candidates) {
-        return UnreadOpenPlan::InLive { event_id };
-    }
-    // Unread counts are receipt-based. A receipt we have but have not loaded
-    // into the live window is still last-read; `m.fully_read` outside that
-    // window is not, because it can sit months behind the receipt.
-    if let Some(event_id) = newest_receipt_event_id(receipts) {
-        return UnreadOpenPlan::FocusedReceipt { event_id };
-    }
-    UnreadOpenPlan::LiveBottom
-}
-
-async fn own_read_signals(room: &Room, own_user_id: Option<&UserId>) -> OwnReadSignals {
-    let fully_read = room
-        .fully_read_event_id()
-        .map(|event_id| event_id.to_string());
-    let mut receipts = Vec::new();
-    let Some(user_id) = own_user_id else {
-        return OwnReadSignals {
-            fully_read,
-            receipts,
-        };
-    };
-    for receipt_type in [EventReceiptType::Read, EventReceiptType::ReadPrivate] {
-        if let Ok(Some((event_id, receipt))) = room
-            .load_user_receipt(receipt_type, ReceiptThread::Unthreaded, user_id)
-            .await
-        {
-            let event_id = event_id.to_string();
-            if receipts.iter().any(|(existing, _)| existing == &event_id) {
-                continue;
+// Only the SDK stream graph establishes order. Receipt timestamps describe
+// acknowledgement time, not the order of the acknowledged events.
+fn plan_unread_open(live_event_ids: &[String], candidate: Option<&str>) -> LastReadOpenPlan {
+    match candidate {
+        Some(event_id) if live_event_ids.iter().any(|id| id == event_id) => {
+            LastReadOpenPlan::InLive {
+                event_id: event_id.to_owned(),
             }
-            let ts = receipt.ts.map(|ts| ts.get().into());
-            receipts.push((event_id, ts));
         }
+        Some(event_id) => LastReadOpenPlan::Unavailable {
+            event_id: event_id.to_owned(),
+        },
+        None => LastReadOpenPlan::LiveBottom,
     }
-    OwnReadSignals {
-        fully_read,
-        receipts,
+}
+
+/// Resolve a raw marker to the nearest rendered predecessor in stream order.
+/// An edit of an old message belongs at the edit's position, not its target.
+fn visible_predecessor(raw_ids: &[String], visible_ids: &[String], marker: &str) -> Option<String> {
+    let marker_index = raw_ids.iter().position(|id| id == marker)?;
+    raw_ids[..=marker_index]
+        .iter()
+        .rev()
+        .find(|id| visible_ids.contains(id))
+        .cloned()
+}
+
+async fn navigation_read_state(
+    timeline: &Timeline,
+    own_user_id: Option<&UserId>,
+) -> (Option<String>, Option<String>) {
+    let visible_ids: Vec<String> = timeline
+        .items()
+        .await
+        .iter()
+        .filter_map(|item| {
+            item.as_event()
+                .and_then(|event| event.event_id().map(ToString::to_string))
+        })
+        .collect();
+    // Read at most the bounded live window from the in-memory SDK cache. This
+    // does not page storage or traverse linked history to compare markers.
+    let mut raw_ids = Vec::new();
+    if let Ok((cache, _handles)) = timeline.room().event_cache().await {
+        let mut visited = 0usize;
+        let _ = cache
+            .rfind_map_event_in_memory_by(|event| {
+                visited += 1;
+                if let Some(id) = event.event_id() {
+                    raw_ids.push(id.to_string());
+                }
+                (visited >= 300).then_some(())
+            })
+            .await;
+        raw_ids.reverse();
     }
+    if raw_ids.is_empty() {
+        raw_ids.clone_from(&visible_ids);
+    }
+    let fully_read = timeline
+        .room()
+        .fully_read_event_id()
+        .map(|id| id.to_string());
+    let (receipt, receipt_anchor) = match own_user_id {
+        Some(user) => (
+            timeline
+                .latest_user_read_receipt(user)
+                .await
+                .map(|(id, _)| id.to_string()),
+            timeline
+                .latest_user_read_receipt_timeline_event_id(user)
+                .await
+                .map(|id| id.to_string()),
+        ),
+        None => (None, None),
+    };
+    let raw = newest_frontier_in_live(
+        &raw_ids,
+        fully_read.iter().chain(receipt.iter()).map(String::as_str),
+    )
+    .or_else(|| receipt.clone())
+    .or(fully_read);
+    let anchor = raw
+        .as_deref()
+        .and_then(|marker| visible_predecessor(&raw_ids, &visible_ids, marker))
+        .or_else(|| (raw == receipt).then_some(receipt_anchor).flatten());
+    (raw, anchor)
 }
 
 fn live_pagination_state(entry: &LiveTimelineEntry) -> TimelinePaginationState {
@@ -2977,20 +2987,11 @@ async fn project_live_read_state(
     position: &TimelineViewPosition,
     own_user_id: Option<&UserId>,
 ) -> TimelineReadState {
-    let unread_anchor_event_id = match position {
+    let (own_read_event_id, visible_anchor) = navigation_read_state(timeline, own_user_id).await;
+    let unread_anchor_event_id = visible_anchor.or_else(|| match position {
         TimelineViewPosition::Unread { anchor_event_id } => Some(anchor_event_id.clone()),
-        _ => None,
-    };
-    let own_read_event_id = match timeline.room().fully_read_event_id() {
-        Some(event_id) => Some(event_id.to_string()),
-        None => match own_user_id {
-            Some(user_id) => timeline
-                .latest_user_read_receipt_timeline_event_id(user_id)
-                .await
-                .map(|event_id| event_id.to_string()),
-            None => None,
-        },
-    };
+        _ => own_read_event_id.clone(),
+    });
     // Capture the receipt frontier BEFORE observing displayed items. If a new
     // message races between these reads, its displayed tail will be paired with
     // an older receipt target, which the exact-target write rejects. Reversing
@@ -4048,62 +4049,41 @@ mod tests {
     }
 
     #[test]
-    fn unread_plan_stays_live_when_the_receipt_is_in_the_live_window() {
-        let live = vec![
-            "$july-fully-read:example.org".into(),
-            "$last-night-receipt:example.org".into(),
-            "$overnight:example.org".into(),
-        ];
+    fn last_read_in_live_is_available_without_focused_provider() {
         assert_eq!(
-            plan_unread_open(
-                &live,
-                Some("$july-fully-read:example.org"),
-                &[("$last-night-receipt:example.org".into(), Some(2))],
-            ),
-            UnreadOpenPlan::InLive {
-                event_id: "$last-night-receipt:example.org".into(),
+            plan_unread_open(&["$a".into(), "$b".into()], Some("$a")),
+            LastReadOpenPlan::InLive {
+                event_id: "$a".into()
             }
         );
     }
 
     #[test]
-    fn unread_plan_ignores_stale_fully_read_outside_live_when_a_receipt_exists() {
-        let live = vec!["$recent:example.org".into(), "$tip:example.org".into()];
+    fn missing_last_read_is_preserved_as_explicit_navigation_target() {
         assert_eq!(
-            plan_unread_open(
-                &live,
-                Some("$july-fully-read:example.org"),
-                &[("$last-night-receipt:example.org".into(), Some(2))],
-            ),
-            UnreadOpenPlan::FocusedReceipt {
-                event_id: "$last-night-receipt:example.org".into(),
+            plan_unread_open(&["$b".into()], Some("$old")),
+            LastReadOpenPlan::Unavailable {
+                event_id: "$old".into()
             }
         );
     }
 
     #[test]
-    fn unread_plan_does_not_focus_a_stale_fully_read_without_a_receipt() {
-        let live = vec!["$recent:example.org".into(), "$tip:example.org".into()];
+    fn hidden_frontier_uses_stream_predecessor_not_edited_message() {
+        let raw = ["$old", "$new", "$edit-old", "$reaction"].map(String::from);
+        let visible = ["$old", "$new"].map(String::from);
         assert_eq!(
-            plan_unread_open(&live, Some("$july-fully-read:example.org"), &[]),
-            UnreadOpenPlan::LiveBottom
+            visible_predecessor(&raw, &visible, "$edit-old"),
+            Some("$new".into())
         );
-    }
-
-    #[test]
-    fn unread_plan_picks_the_newer_receipt_by_receipt_timestamp() {
         assert_eq!(
-            plan_unread_open(
-                &[],
-                Some("$july-fully-read:example.org"),
-                &[
-                    ("$old-public:example.org".into(), Some(1)),
-                    ("$new-private:example.org".into(), Some(9)),
-                ],
-            ),
-            UnreadOpenPlan::FocusedReceipt {
-                event_id: "$new-private:example.org".into(),
-            }
+            visible_predecessor(&raw, &visible, "$reaction"),
+            Some("$new".into())
+        );
+        assert_eq!(visible_predecessor(&raw, &visible, "$unknown"), None);
+        assert_eq!(
+            visible_predecessor(&raw, &visible, "$old"),
+            Some("$old".into())
         );
     }
 
