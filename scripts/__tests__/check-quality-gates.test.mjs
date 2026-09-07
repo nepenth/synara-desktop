@@ -105,7 +105,7 @@ ${iosBuildStep}
         run: scripts/synapse-integration.sh reset
   quality-gate:
     name: Quality gate
-    if: always()
+    if: always() && !cancelled()
     needs: [changes, validate, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-latest
     steps:
@@ -470,7 +470,10 @@ test("rejects a no-op exact-tag release aggregate", () => {
 
 test("rejects an aggregate without if always", () => {
   const result = inspect({
-    ciWorkflow: ciWorkflow.replace("    if: always()", "    if: success()"),
+    ciWorkflow: ciWorkflow.replace(
+      "    if: always() && !cancelled()",
+      "    if: success()"
+    ),
   });
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /if: always/);
