@@ -270,6 +270,18 @@ enum RoomTimelineJumpLatestPolicy {
         // command cleared the presentation request before layout settled.
         hasItems && (isLive == false || isConfirmedPinned == false)
     }
+
+    /// Pin the current live rows only when the viewport is already following
+    /// the live tail. Unread restore reuses the live provider while sitting
+    /// on the last-read marker; remounting is what actually returns send and
+    /// Jump to Latest to the newest messages.
+    static func shouldPinCurrentLiveWindow(
+        providerIsLive: Bool,
+        isFollowingLive: Bool,
+        isConfirmedPinned: Bool
+    ) -> Bool {
+        providerIsLive && (isFollowingLive || isConfirmedPinned)
+    }
 }
 
 enum RoomTimelineLatestCommandCompletionPolicy {
@@ -2628,10 +2640,15 @@ struct RoomTimelineView: View {
         hasUserInteractedWithTimeline = false
         pendingLastReadEventID = nil
 
-        // Already on the live provider: pin the current rows. Remounting would
-        // drop local echoes and just-uploaded attachments that the live
-        // fixture has not yet projected.
-        if timelineProviderIsLive {
+        // Already following the live tail: pin the current rows. Remounting
+        // would drop local echoes and just-uploaded attachments that the live
+        // fixture has not yet projected. Unread/history on a reused live
+        // provider still remounts so send returns to newest.
+        if RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+            providerIsLive: timelineProviderIsLive,
+            isFollowingLive: timelinePosition == .followingLive,
+            isConfirmedPinned: isTimelineBottomVisible
+        ) {
             showJumpToLatest = false
             enqueueStableViewportCommand(
                 .latest(animated: true),

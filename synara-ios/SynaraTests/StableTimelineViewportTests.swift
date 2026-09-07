@@ -722,6 +722,37 @@ final class StableTimelineViewportTests: XCTestCase {
         ))
     }
 
+    func testLiveJumpPinsOnlyWhenAlreadyFollowingTheLiveTail() {
+        XCTAssertTrue(
+            RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+                providerIsLive: true,
+                isFollowingLive: true,
+                isConfirmedPinned: false
+            )
+        )
+        XCTAssertTrue(
+            RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+                providerIsLive: true,
+                isFollowingLive: false,
+                isConfirmedPinned: true
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+                providerIsLive: true,
+                isFollowingLive: false,
+                isConfirmedPinned: false
+            )
+        )
+        XCTAssertFalse(
+            RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+                providerIsLive: false,
+                isFollowingLive: true,
+                isConfirmedPinned: true
+            )
+        )
+    }
+
     func testFiveThousandEventInputAndVisibleCellsRemainBounded() {
         let bounded = TimelineWindowPolicy.replacingServerWindow(TimelineFixtures.largeTimeline(count: 5000))
         XCTAssertEqual(bounded.count, TimelineWindowPolicy.stableEventLimit)
