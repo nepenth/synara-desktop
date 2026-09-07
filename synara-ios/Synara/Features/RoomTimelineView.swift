@@ -53,6 +53,26 @@ enum RoomTimelineFocusPolicy {
     }
 }
 
+enum RoomTimelineTitlePolicy {
+    /// Notification routes may omit a title and must hydrate from the room list.
+    /// An explicit route title (room-list tap, UI test) must not be replaced by a
+    /// different cached room-list name.
+    static func displayTitle(
+        resolved: String?,
+        routeTitle: String?,
+        roomListName: String?
+    ) -> String {
+        if let routeTitle, routeTitle.isEmpty == false {
+            return resolved ?? routeTitle
+        }
+        return resolved ?? roomListName ?? "Room"
+    }
+
+    static func shouldAdoptRoomListName(routeTitle: String?) -> Bool {
+        routeTitle == nil || routeTitle?.isEmpty == true
+    }
+}
+
 enum RoomTimelinePaginationPolicy {
     static func shouldLoadOlderHistory(
         rowIndex: Int,
@@ -380,7 +400,11 @@ struct RoomTimelineView: View {
     }
 
     private var displayRoomTitle: String {
-        resolvedRoomTitle ?? environment.roomList.roomDisplayName(roomID: roomID) ?? roomTitle ?? "Room"
+        RoomTimelineTitlePolicy.displayTitle(
+            resolved: resolvedRoomTitle,
+            routeTitle: roomTitle,
+            roomListName: environment.roomList.roomDisplayName(roomID: roomID)
+        )
     }
 
     var body: some View {
@@ -557,8 +581,12 @@ struct RoomTimelineView: View {
         }
         .task(id: "room-title-\(currentUserID)-\(roomID)") {
             // Notification routes carry stable room/event IDs, not room metadata.
-            // Hydrate only presentation from the room-list owner; changing the
-            // title must not replace the focused timeline or its scroll target.
+            // Hydrate presentation from the room-list owner only when the route
+            // omitted a title. An explicit title must keep the current viewport
+            // identity; changing it must not replace the focused timeline.
+            guard RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: roomTitle) else {
+                return
+            }
             resolvedRoomTitle = environment.roomList.roomDisplayName(roomID: roomID)
             for await update in environment.roomList.roomUpdates() {
                 guard !Task.isCancelled else { return }
@@ -2598,8 +2626,21 @@ struct RoomTimelineView: View {
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
-        isJumpingToLatest = true
         pendingLastReadEventID = nil
+
+        // Already on the live provider: pin the current rows. Remounting would
+        // drop local echoes and just-uploaded attachments that the live
+        // fixture has not yet projected.
+        if timelineProviderIsLive {
+            showJumpToLatest = false
+            enqueueStableViewportCommand(
+                .latest(animated: true),
+                generation: timelineBottomAnchorGeneration
+            )
+            return
+        }
+
+        isJumpingToLatest = true
         showJumpToLatest = true
 
         Task {

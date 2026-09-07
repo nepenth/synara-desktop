@@ -566,6 +566,30 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testRoomTimelineTitleKeepsExplicitRouteTitleOverRoomListName() {
+        XCTAssertEqual(
+            RoomTimelineTitlePolicy.displayTitle(
+                resolved: nil,
+                routeTitle: "Project",
+                roomListName: "Product"
+            ),
+            "Project"
+        )
+        XCTAssertFalse(RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: "Project"))
+    }
+
+    func testRoomTimelineTitleHydratesFromRoomListWhenRouteOmitsTitle() {
+        XCTAssertEqual(
+            RoomTimelineTitlePolicy.displayTitle(
+                resolved: nil,
+                routeTitle: nil,
+                roomListName: "Product"
+            ),
+            "Product"
+        )
+        XCTAssertTrue(RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: nil))
+    }
+
     func testRoomTimelineFocusPolicyOpensCaughtUpRoomsLive() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(
