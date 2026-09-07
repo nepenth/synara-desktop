@@ -16,7 +16,8 @@ The owner route is platform session bridge → SharedCore → NativeDeviceOwner 
 Matrix SDK crypto store and authenticated homeserver devices endpoint. Meaningful
 states are authenticated, owners attached, syncing, snapshot returned, closed,
 restored, and snapshot returned. Authoritative readback is the typed snapshot,
-including own-device verification, eligibility, and the current-device row.
+including own-device verification, eligibility, and the current-device row, plus
+asserted raw authority diagnostics from those same snapshot calls.
 
 Side effects are a disposable test-account session, its encrypted local SDK
 store, and normal SDK sync/key traffic. The proof must not bootstrap or replace
@@ -120,3 +121,48 @@ Supply `SYNARA_LIVE_HOMESERVER`, `SYNARA_LIVE_USERNAME`, and
 `SYNARA_LIVE_PASSWORD` through a protected environment, never command-line literals
 or committed files. The test changes only its newly created session and encrypted
 temporary store. A failing cleanup must be treated as a failed proof, not ignored.
+
+
+## Fresh-review corrections and renewed proof
+
+The live proof now executes its fixture in an isolated child of the same test
+binary and asserts exactly two source-owned diagnostic records. Both must report
+raw authority `eligible` or `none`, with sessions and crypto available. A DTO
+containing `Some(false)` after timeout/error cannot pass. The child completes
+cleanup before its status and diagnostic records are checked by the parent;
+arbitrary SDK output is never echoed. A deterministic regression rejects timeout,
+transport, server, store, and other failures even alongside `Some(false)`.
+
+All post-login paths now converge on cleanup without assertion panics. The
+fixture retains both Core handles and its in-memory vault, tries revocation
+through the restored and fresh Core, and only then can use the exact created
+session's retained token for bounded emergency logout. Authentication is retained
+across a failed restore/local logout, and the latest vault rotation is preferred.
+Emergency logout is cleanup only and never turns a failed Core path into a clean
+proof. A remote cleanup failure fails the test and leaves the local store in
+place; both local teardowns are attempted. Mock HTTP regressions establish that
+failed restore still sends the authenticated logout, and failed remote logout
+cannot claim success or remove the store.
+
+Session/device invalidations now keep the newest one at both relevant stream
+boundaries. Other owner signal consumers retain their existing buffering policy.
+A native test suspends the initial authority read and delivers 200 device
+invalidations through the production session forwarder. With unbounded output it
+fails at 201 snapshot reads; the bounded implementation performs exactly two
+reads and publishes the latest eligible status with an empty verification inbox.
+All 26 MatrixLifecycleTests passed with the bounded implementation. These signed
+simulator tests reused the matched baseline Apple Core/binding pairs from
+`client-session-timeline-read-fixes`; they prove the Swift observation behavior,
+not a rebuild or execution of this branch's native Rust diagnostics. Current Rust
+was rebuilt independently after package-only shared-target invalidation.
+
+The renewed authorized live proofs passed through the production host Core:
+
+| Account condition | Fresh raw authority | Restored raw authority | Cleanup |
+| --- | --- | --- | --- |
+| Existing eligible cross-signed peer | eligible | eligible | Core remote revoke, both local closes, store removal confirmed |
+| No eligible cross-signed peer | none | none | Core remote revoke, both local closes, store removal confirmed |
+
+Both phases on each account returned one current unverified device and available
+sessions/crypto. The clean paths required no emergency cleanup. No trust,
+cross-signing, eligibility predicate, DTO, or local-fallback behavior changed.
