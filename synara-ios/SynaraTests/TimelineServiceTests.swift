@@ -572,9 +572,21 @@ final class TimelineServiceTests: XCTestCase {
                 focusedEventID: nil,
                 hasUnreadMessages: false,
                 fullyReadEventID: "$synthetic-1:matrix.org",
-                liveItems: focusPolicyItems(receiptIndex: 2)
+                liveItems: focusPolicyItems(receiptIndex: 3)
             ),
             .live
+        )
+    }
+
+    func testRoomTimelineZeroUnreadCountPreservesNewerComparableReceiptBehindTail() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: false,
+                fullyReadEventID: "$synthetic-1:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: 2)
+            ),
+            .unread(markerEventID: "$synthetic-2:matrix.org")
         )
     }
 
