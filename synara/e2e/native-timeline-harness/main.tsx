@@ -16,6 +16,8 @@ const scenario = params.get('scenario') ?? 'live';
 let sequence = scenario === 'sparse-missing' ? 1 : scenario === 'short' ? 2 : 60;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
+let releaseLastRead: (() => void) | undefined;
+let failLastRead = params.has('failLastRead');
 const commands: { command: string; args?: Record<string, unknown> }[] = [];
 const makeRow = (index: number) => ({
   kind: 'message' as const,
@@ -46,20 +48,23 @@ let position: NativeTimelinePosition =
     ? { kind: 'unread', anchor_event_id: '$2' }
     : { kind: 'live_bottom' };
 let snapshot: NativeTimelineViewSnapshot;
+const snapshots = new Map<string, NativeTimelineViewSnapshot>();
 const update = () => {
   snapshot = {
     schemaVersion: 1,
     sessionGeneration: 1,
     roomId: room,
-    revision: (snapshot?.revision ?? 0) + 1,
+    revision:
+      Math.max(snapshot?.revision ?? 0, ...[...snapshots.values()].map((value) => value.revision)) +
+      1,
     position,
     rows: [...rows],
     pagination: { backward: 'available', forward: 'available' },
     readState: {
       visibleTailEventId: rows.at(-1)?.eventId,
       receiptTailEventId: rows.at(-1)?.eventId,
-      ownReadEventId: '$2',
-      unreadAnchorEventId: '$2',
+      ownReadEventId: position.kind === 'unread' ? position.anchor_event_id : '$2',
+      unreadAnchorEventId: position.kind === 'unread' ? position.anchor_event_id : '$2',
       isMarkedUnread: false,
     },
     capabilities: {
@@ -69,6 +74,32 @@ const update = () => {
       paginateForward: true,
     },
   };
+  for (const [id, current] of snapshots) {
+    const hasMissing = current.rows.some((row) => 'eventId' in row && row.eventId === '$missing');
+    const nextRows =
+      hasMissing && !rows.some((row) => row.eventId === '$missing')
+        ? [{ ...makeRow(0), eventId: '$missing', itemId: '$missing' }, ...rows]
+        : rows;
+    snapshots.set(id, {
+      ...snapshot,
+      position: current.position,
+      rows: [...nextRows],
+      readState: { ...snapshot.readState, ownReadEventId: current.readState.ownReadEventId },
+    });
+  }
+};
+const openSnapshot = (selectedPosition: NativeTimelinePosition, includeLastRead = false) => {
+  const streamId = `fixture-${++stream}`;
+  const result = {
+    ...snapshot,
+    position: selectedPosition,
+    rows:
+      includeLastRead && !rows.some((row) => row.eventId === '$missing')
+        ? [{ ...makeRow(0), eventId: '$missing', itemId: '$missing' }, ...rows]
+        : [...rows],
+  };
+  snapshots.set(streamId, result);
+  return { schemaVersion: 1, streamId, position: selectedPosition, snapshot: result };
 };
 update();
 window.__SYNARA_DESKTOP__ = {
@@ -76,59 +107,77 @@ window.__SYNARA_DESKTOP__ = {
   invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
     commands.push({ command, args });
     const request = args?.request as
-      | { position?: { kind: string; event_id?: string }; observedLiveTailEventId?: string }
+      | {
+          streamId?: string;
+          position?: { kind: string; event_id?: string };
+          observedLiveTailEventId?: string;
+        }
       | undefined;
     if (command === 'matrix_timeline_open') {
-      stream += 1;
+      let selectedPosition = position;
+      let lastRead = false;
       if (request?.position?.kind === 'focused') {
         if (!request.position.event_id) throw new Error('Focused open requires event_id');
-        position = { kind: 'focused', target_event_id: request.position.event_id };
+        selectedPosition = { kind: 'focused', target_event_id: request.position.event_id };
+        lastRead = request.position.event_id === '$missing';
       }
-      update();
-      return { schemaVersion: 1, streamId: `fixture-${stream}`, position, snapshot } as T;
+      if (lastRead && failLastRead) {
+        failLastRead = false;
+        throw new Error('Last-read context is temporarily unavailable');
+      }
+      const opened = openSnapshot(selectedPosition, lastRead && !params.has('omitLastRead'));
+      if (lastRead && params.has('delayLastRead')) {
+        await new Promise<void>((resolve) => {
+          releaseLastRead = resolve;
+        });
+      }
+      return opened as T;
     }
-    if (command === 'matrix_timeline_snapshot') return snapshot as T;
+    if (command === 'matrix_timeline_snapshot') return snapshots.get(args?.streamId as string) as T;
     if (command === 'matrix_timeline_follow_live') {
-      if (scenario === 'sparse-missing') throw new Error('Loaded window is not the live tail');
       if (args?.observedLiveTailEventId !== rows.at(-1)?.eventId) throw new Error('Unseen tail');
-      position = { kind: 'live_bottom' };
-      update();
-      return snapshot as T;
+      const current = snapshots.get(args?.streamId as string);
+      if (!current) throw new Error('Unknown stream');
+      const next = {
+        ...current,
+        revision: current.revision + 1,
+        position: { kind: 'live_bottom' } as const,
+      };
+      snapshots.set(args?.streamId as string, next);
+      return next as T;
     }
     if (command === 'matrix_timeline_set_read_state') {
-      update();
-      snapshot.readState.ownReadEventId = request?.observedLiveTailEventId;
-      return { snapshot, receiptSent: true } as T;
+      const current = snapshots.get(request?.streamId ?? '');
+      if (!current) throw new Error('Unknown stream');
+      const next = {
+        ...current,
+        revision: current.revision + 1,
+        readState: { ...current.readState, ownReadEventId: request?.observedLiveTailEventId },
+      };
+      snapshots.set(request?.streamId ?? '', next);
+      return { snapshot: next, receiptSent: true } as T;
     }
     if (command === 'matrix_timeline_jump_latest') {
-      const originalStream = stream;
+      const opened = openSnapshot({ kind: 'live_bottom' });
       if (params.has('delayJump'))
         await new Promise<void>((resolve) => {
           releaseJump = resolve;
         });
-      if (stream !== originalStream) {
-        // A delayed result belongs to its original native provider. It must not
-        // mutate the newer focused provider served by subsequent snapshot polls.
-        const latestPosition = { kind: 'live_bottom' } as const;
-        return {
-          schemaVersion: 1,
-          streamId: `fixture-${originalStream}-latest`,
-          position: latestPosition,
-          snapshot: { ...snapshot, position: latestPosition },
-        } as T;
-      }
-      position = { kind: 'live_bottom' };
-      update();
-      return { schemaVersion: 1, streamId: `fixture-${stream}`, position, snapshot } as T;
+      snapshots.delete(request?.streamId ?? '');
+      return opened as T;
     }
-    if (command === 'matrix_timeline_close') return undefined as T;
-    if (command === 'matrix_timeline_paginate') return snapshot as T;
+    if (command === 'matrix_timeline_close') {
+      snapshots.delete(request?.streamId ?? '');
+      return undefined as T;
+    }
+    if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
     return undefined as T;
   },
 };
 
 const api = {
   commands,
+  activeStreamCount: () => snapshots.size,
   append() {
     rows.push(makeRow(++sequence));
     update();
@@ -146,6 +195,13 @@ const api = {
   unread() {
     position = { kind: 'unread', anchor_event_id: '$2' };
     update();
+  },
+  missing() {
+    position = { kind: 'unread', anchor_event_id: '$missing' };
+    update();
+  },
+  releaseLastRead() {
+    releaseLastRead?.();
   },
   releaseJump() {
     releaseJump?.();

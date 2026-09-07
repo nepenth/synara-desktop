@@ -277,6 +277,8 @@ export type NativeTimelineViewController = {
   followLive: (request: { observedLiveTailEventId: string }) => Promise<void>;
   /** True only when this controller adopted the returned live provider. */
   jumpLatest: () => Promise<boolean>;
+  /** Keep the current provider until a focused snapshot contains this read target. */
+  restoreLastRead: (eventId: string) => Promise<boolean>;
 };
 
 type NativeTimelineReadStateReadback = {
@@ -620,6 +622,9 @@ export const useNativeTimelineView = (
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
   const earlyBatchesRef = useRef<NativeTimelineViewDeltaBatch[]>([]);
+  const navigationRevisionRef = useRef(0);
+  const navigationRequestRef = useRef(nativeRequest);
+  navigationRequestRef.current = nativeRequest;
 
   const acceptSnapshot = useCallback((next: NativeTimelineViewSnapshot): boolean => {
     const current = snapshotRef.current;
@@ -746,11 +751,34 @@ export const useNativeTimelineView = (
     if (!streamId) {
       throw new Error('Native timeline jump-to-latest is unavailable.');
     }
-    const result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
-      'matrix_timeline_jump_latest',
-      { request: { streamId } }
-    );
-    if (streamIdRef.current !== streamId) return false;
+    const revision = ++navigationRevisionRef.current;
+    const navigationRequest = navigationRequestRef.current;
+    const superseded = () =>
+      streamIdRef.current !== streamId ||
+      navigationRevisionRef.current !== revision ||
+      navigationRequestRef.current !== navigationRequest;
+    let result: DesktopInvokeResult<NativeTimelineOpenReadback>;
+    try {
+      result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
+        'matrix_timeline_jump_latest',
+        { request: { streamId } }
+      );
+    } catch (error) {
+      if (superseded()) return false;
+      throw error;
+    }
+    if (superseded()) {
+      if (
+        result.available &&
+        result.value?.streamId &&
+        result.value.streamId !== streamIdRef.current
+      ) {
+        void invokeDesktopWithAvailability('matrix_timeline_close', {
+          request: { streamId: result.value.streamId },
+        }).catch(() => undefined);
+      }
+      return false;
+    }
     if (!result.available || !result.value) {
       setState({
         status: 'error',
@@ -769,7 +797,75 @@ export const useNativeTimelineView = (
     return true;
   }, []);
 
+  const restoreLastRead = useCallback(async (eventId: string) => {
+    const streamId = streamIdRef.current;
+    const current = snapshotRef.current;
+    if (!streamId || !current) throw new Error('Last-read navigation is unavailable.');
+    const revision = ++navigationRevisionRef.current;
+    const navigationRequest = navigationRequestRef.current;
+    const superseded = () =>
+      navigationRevisionRef.current !== revision ||
+      navigationRequestRef.current !== navigationRequest ||
+      streamIdRef.current !== streamId;
+    let result: DesktopInvokeResult<NativeTimelineOpenReadback>;
+    try {
+      result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
+        'matrix_timeline_open',
+        {
+          request: toNativeTimelineOpenRequest({
+            roomId: current.roomId,
+            position: { kind: 'focused', eventId },
+          }),
+        }
+      );
+    } catch (error) {
+      if (superseded()) return false;
+      throw error;
+    }
+    const opened = result.available ? result.value : undefined;
+    const discard = () => {
+      if (opened?.streamId && opened.streamId !== streamIdRef.current) {
+        void invokeDesktopWithAvailability('matrix_timeline_close', {
+          request: { streamId: opened.streamId },
+        }).catch(() => undefined);
+      }
+    };
+    if (superseded()) {
+      discard();
+      return false;
+    }
+    if (
+      !result.available ||
+      !opened ||
+      opened.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+      opened.snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+      opened.snapshot.sessionGeneration !== current.sessionGeneration ||
+      opened.snapshot.roomId !== current.roomId ||
+      opened.position.kind !== 'focused' ||
+      opened.position.target_event_id !== eventId ||
+      opened.snapshot.position.kind !== 'focused' ||
+      opened.snapshot.position.target_event_id !== eventId ||
+      !opened.snapshot.rows.some(
+        (row) => (row.kind === 'sticker' ? row.event.eventId : row.eventId) === eventId
+      )
+    ) {
+      discard();
+      throw new Error('The last-read message is not available in this context. Try again.');
+    }
+    // Each Core open owns its own subscription. Retire the previous provider
+    // only after the requested target has been confirmed in its replacement.
+    streamIdRef.current = opened.streamId;
+    snapshotRef.current = opened.snapshot;
+    selectedPositionRef.current = opened.position;
+    setState({ status: 'ready', snapshot: opened.snapshot, selectedPosition: opened.position });
+    void invokeDesktopWithAvailability('matrix_timeline_close', {
+      request: { streamId },
+    }).catch(() => undefined);
+    return true;
+  }, []);
+
   useEffect(() => {
+    navigationRevisionRef.current += 1;
     streamIdRef.current = undefined;
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
@@ -812,7 +908,8 @@ export const useNativeTimelineView = (
         'matrix_timeline_snapshot',
         { streamId }
       );
-      if (disposed || !result.available || !result.value) return;
+      if (disposed || streamIdRef.current !== streamId || !result.available || !result.value)
+        return;
       const snapshot = result.value;
       if (
         snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
@@ -912,6 +1009,7 @@ export const useNativeTimelineView = (
     void open();
     return () => {
       disposed = true;
+      navigationRevisionRef.current += 1;
       const streamId = streamIdRef.current;
       if (streamId) {
         void invokeDesktopWithAvailability('matrix_timeline_close', {
@@ -923,7 +1021,7 @@ export const useNativeTimelineView = (
     };
   }, [acceptSnapshot, nativeRequest]);
 
-  return { state, paginate, setReadState, followLive, jumpLatest };
+  return { state, paginate, setReadState, followLive, jumpLatest, restoreLastRead };
 };
 
 export const nativeTimelineMediaSrc = (handle: NativeTimelineMediaHandle): string | undefined =>

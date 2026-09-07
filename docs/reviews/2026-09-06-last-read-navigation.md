@@ -95,3 +95,37 @@ bounds, and each action's corresponding native command. Full frontend TypeScript
 checking, 954 modernization tests, and focused ESLint passed; the repository ESLint configuration does not
 include the harness TSX file. This does not establish live Matrix or iOS runtime
 behavior.
+
+## Missing-marker and live-follow corrections after Grok review
+
+An unavailable initial marker now preserves a saved history event/pixel location,
+or starts at the live tail when there is no usable saved anchor. The recovery
+target survives passive follow-live promotion and later snapshots. A pointer
+press alone no longer relinquishes live following; actual scrolling still
+updates ownership from viewport geometry.
+
+Jump to Last Read keeps the current Core provider while a new focused provider
+opens. The controller adopts that provider only when its matching account
+generation/room snapshot contains the requested event. Failed or missing-target
+responses retain the old rows and recovery button; superseded responses close
+their unused streams. Successful placement clears the recovery target, as does
+an explicit latest intent. Poll responses from replaced streams are ignored.
+All Matrix context and provider ownership remain in Core; no Core or Swift source
+changed in this correction.
+
+The Chromium fixture now retains distinct snapshots per Core stream and allows
+successful follow-live in the sparse missing-marker case. Seven new regressions
+failed against unchanged `c4379c1f` product source: initial missing-marker entry
+was 3808 px from the tail; saved history re-entry moved from `$38` to `$1`;
+successful sparse promotion lost the recovery action; clicking at the bottom
+left the next message outside the viewport; and failed, absent-target, and
+superseded focused opens lost recovery. The first repaired run also caught a
+36 px saved-offset error caused by canceling a layout adjustment when the button
+appeared. That correction passed the focused case and the full clean rerun.
+
+Final current-source validation: all 15 Chromium presenter/controller cases
+passed, including explicit-latest dismissal and discarded-stream cleanup;
+954 modernization tests, full frontend TypeScript, and focused ESLint passed.
+The harness TSX remains outside the repository ESLint include pattern. This is
+mocked-native browser proof only; it does not extend the separate live Matrix,
+signed iOS, physical-device, or release evidence.
