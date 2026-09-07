@@ -7,6 +7,7 @@ import {
   nativeFollowLiveTarget,
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
+  nativeVisibleReadFrontier,
   latestNativeReadEventId,
   shouldRestoreNativeTimelineViewport,
   shouldShowJumpToLatest,
@@ -168,4 +169,49 @@ test('follow-live attempts are keyed per painted tail', () => {
     nativeFollowLiveAttemptKey('!room:example.org', '$a:example.org'),
     nativeFollowLiveAttemptKey('!room:example.org', '$b:example.org')
   );
+});
+
+test('a folded edit after acknowledgement advances the receipt identity on the same row', () => {
+  const row = '$message:example.org';
+  const first = nativeVisibleReadFrontier(row, {
+    visibleTailEventId: row,
+    receiptTailEventId: row,
+  });
+  const edited = nativeVisibleReadFrontier(row, {
+    visibleTailEventId: row,
+    receiptTailEventId: '$edit:example.org',
+  });
+  const reacted = nativeVisibleReadFrontier(row, {
+    visibleTailEventId: row,
+    receiptTailEventId: '$reaction:example.org',
+  });
+  assert.equal(first, row);
+  assert.equal(edited, '$edit:example.org');
+  assert.equal(reacted, '$reaction:example.org');
+  assert.notEqual(
+    nativeLiveReadAttemptKey('!room:example.org', first!, false),
+    nativeLiveReadAttemptKey('!room:example.org', edited!, false)
+  );
+  assert.notEqual(
+    nativeLiveReadAttemptKey('!room:example.org', edited!, false),
+    nativeLiveReadAttemptKey('!room:example.org', reacted!, false)
+  );
+});
+
+test('frontier metadata ahead of displayed rows cannot acknowledge an unseen new message', () => {
+  assert.equal(
+    nativeVisibleReadFrontier('$old:example.org', {
+      visibleTailEventId: '$new:example.org',
+      receiptTailEventId: '$new:example.org',
+    }),
+    undefined
+  );
+  assert.equal(
+    nativeVisibleReadFrontier(undefined, {
+      visibleTailEventId: '$new:example.org',
+      receiptTailEventId: '$new:example.org',
+    }),
+    undefined
+  );
+  assert.equal(nativeVisibleReadFrontier('$old:example.org', undefined), undefined);
 });

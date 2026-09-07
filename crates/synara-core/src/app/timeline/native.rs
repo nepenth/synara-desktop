@@ -449,6 +449,8 @@ mod tests {
                     forward: TimelinePageState::Available,
                 },
                 read_state: TimelineReadState {
+                    visible_tail_event_id: None,
+                    receipt_tail_event_id: None,
                     own_read_event_id: None,
                     unread_anchor_event_id: None,
                     is_marked_unread: false,

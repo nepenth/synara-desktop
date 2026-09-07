@@ -266,6 +266,25 @@ final class StableTimelineViewportTests: XCTestCase {
         )
     }
 
+    func testReceiptFrontierOnlyChangeReconfiguresTheSameVisibleRow() throws {
+        let original = try XCTUnwrap(TimelineFixtures.largeTimeline(count: 1).first)
+        var edited = original
+        edited.readReceiptEventID = "$edit:example.org"
+        let changed = StableTimelineViewportPolicy.changedIdentifiers(
+            currentIDs: Set([original.id]), currentValues: [original.id: original],
+            incomingValues: [(id: edited.id, value: edited)]
+        )
+        XCTAssertEqual(changed, [original.id])
+        XCTAssertEqual(edited.eventID, original.eventID)
+        XCTAssertEqual(edited.withSenderAvatarURL(nil).readReceiptEventID, "$edit:example.org")
+        XCTAssertEqual(edited.withDeliveryStatus(nil).readReceiptEventID, "$edit:example.org")
+        XCTAssertTrue(RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
+            isApplicationActive: true, allowsReadReceipts: true, isLive: true,
+            isConfirmedPinned: true, isJumpingToLatest: false, isUserInteracting: false,
+            eventID: try XCTUnwrap(edited.readReceiptEventID), lastMarkedEventID: original.eventID
+        ))
+    }
+
     func testContentOnlyRowChangesAreReconfiguredForStableIdentifiers() {
         let changed = StableTimelineViewportPolicy.changedIdentifiers(
             currentIDs: Set(["message", "unchanged", "removed"]),
@@ -457,6 +476,33 @@ final class StableTimelineViewportTests: XCTestCase {
                 lastMarkedEventID: "$old-tail"
             )
         )
+    }
+
+    func testReadMarkerDebounceReplacesVisibleAndReceiptIdentityTogether() throws {
+        let firstQueuedAt = Date(timeIntervalSince1970: 100)
+        let first = RoomTimelineReadObservation(
+            visibleEventID: "$message-a", receiptEventID: "$edit-a"
+        )
+        let newer = RoomTimelineReadObservation(
+            visibleEventID: "$message-b", receiptEventID: "$edit-b"
+        )
+        var queue = RoomTimelineReadMarkerQueue()
+        queue.enqueue(first, now: firstQueuedAt)
+        // B replaces A while the original delayed task is still installed.
+        queue.enqueue(newer, now: firstQueuedAt.addingTimeInterval(0.5))
+        XCTAssertEqual(queue.firstQueuedAt, firstQueuedAt)
+        let write = try XCTUnwrap(queue.dequeue())
+        XCTAssertEqual(write.receiptEventID, "$edit-b")
+        XCTAssertEqual(write.visibleEventID, "$message-b")
+        XCTAssertNil(queue.pending)
+        XCTAssertNil(queue.firstQueuedAt)
+        // A later observation cannot change the pair retained by B's write.
+        queue.enqueue(first, now: firstQueuedAt.addingTimeInterval(1))
+        XCTAssertEqual(write, newer)
+        XCTAssertEqual(queue.pending, first)
+        queue.clear()
+        XCTAssertNil(queue.pending)
+        XCTAssertNil(queue.firstQueuedAt)
     }
 
     func testReadMarkerQueueHasMaximumLatencyAndCancelsSupersededTask() {

@@ -160,3 +160,15 @@ export const latestNativeReadEventId = (
   }
   return undefined;
 };
+
+/** Core pairs the rendered remote tail with its receipt target. A newer metadata
+ * delta arriving before its rows cannot authorize an unseen message. */
+export const nativeVisibleReadFrontier = (
+  renderedTailEventId: string | undefined,
+  frontier: { visibleTailEventId?: string; receiptTailEventId?: string } | undefined
+): string | undefined =>
+  renderedTailEventId &&
+  renderedTailEventId === frontier?.visibleTailEventId &&
+  isValidEventIdHint(frontier.receiptTailEventId)
+    ? frontier.receiptTailEventId
+    : undefined;

@@ -1162,11 +1162,25 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: liveEvent, timeout: 20),
                       "A new visible live event must be acknowledged without another gesture.")
 
+        // Edits/reactions are distinct Matrix receipt targets but retain the
+        // same rendered message row. Each must re-arm after the prior ack.
+        let editEvent = try writer.editRoomMessage(roomID: roomID, eventID: liveEvent,
+                                                  body: "Read proof edited tool status")
+        XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: editEvent, timeout: 20),
+                      "Editing an already-read visible message must advance the private frontier without a gesture.")
+        XCTAssertTrue(liveRow.isHittable)
+        XCTAssertTrue(try reader.hasPrivateReadReceipt(roomID: roomID, eventID: editEvent))
+        let reactionEvent = try writer.reactToRoomMessage(roomID: roomID, eventID: liveEvent)
+        XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: reactionEvent, timeout: 20),
+                      "A folded reaction after the edit was read must re-arm the same visible row.")
+        XCTAssertTrue(liveRow.isHittable)
+        XCTAssertTrue(try reader.hasPrivateReadReceipt(roomID: roomID, eventID: reactionEvent))
+
         XCUIDevice.shared.press(.home)
         let backgroundBody = "Read proof background \(UUID().uuidString.prefix(8))"
         let backgroundEvent = try writer.sendRoomMessage(roomID: roomID, body: backgroundBody)
         RunLoop.current.run(until: Date().addingTimeInterval(3))
-        XCTAssertEqual(try reader.fullyReadEventID(roomID: roomID), liveEvent,
+        XCTAssertEqual(try reader.fullyReadEventID(roomID: roomID), reactionEvent,
                        "An event received while the app is backgrounded must stay unread.")
         app.activate()
         let backgroundRow = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(backgroundEvent)").firstMatch
@@ -3013,6 +3027,28 @@ private final class MatrixLiveTestClient {
         else {
             throw LiveMatrixError.invalidResponse
         }
+        return eventID
+    }
+
+    func editRoomMessage(roomID: String, eventID: String, body: String) throws -> String {
+        try sendFixtureEvent(roomID: roomID, type: "m.room.message", content: [
+            "msgtype": "m.text", "body": "* \(body)",
+            "m.new_content": ["msgtype": "m.text", "body": body],
+            "m.relates_to": ["rel_type": "m.replace", "event_id": eventID],
+        ])
+    }
+
+    func reactToRoomMessage(roomID: String, eventID: String) throws -> String {
+        try sendFixtureEvent(roomID: roomID, type: "m.reaction", content: [
+            "m.relates_to": ["rel_type": "m.annotation", "event_id": eventID, "key": "👍"],
+        ])
+    }
+
+    private func sendFixtureEvent(roomID: String, type: String, content: [String: Any]) throws -> String {
+        let response = try authenticatedRequest(method: "PUT",
+            path: ["client", "v3", "rooms", roomID, "send", type, UUID().uuidString], body: content)
+        guard let object = try JSONSerialization.jsonObject(with: response.data) as? [String: Any],
+              let eventID = object["event_id"] as? String else { throw LiveMatrixError.invalidResponse }
         return eventID
     }
 

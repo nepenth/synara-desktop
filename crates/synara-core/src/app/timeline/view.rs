@@ -68,6 +68,12 @@ pub struct TimelinePaginationState {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct TimelineReadState {
+    /// Pair the displayed remote tail with the SDK receipt frontier. Edits and
+    /// reactions advance the latter without creating a displayed row.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub visible_tail_event_id: Option<EventId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub receipt_tail_event_id: Option<EventId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own_read_event_id: Option<EventId>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1760,6 +1766,8 @@ mod tests {
                 forward: TimelinePageState::Available,
             },
             read_state: TimelineReadState {
+                visible_tail_event_id: None,
+                receipt_tail_event_id: None,
                 own_read_event_id: None,
                 unread_anchor_event_id: None,
                 is_marked_unread: false,
