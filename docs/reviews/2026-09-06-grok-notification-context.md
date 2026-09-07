@@ -31,3 +31,15 @@ The diagnostic allowlist added in this branch does not actually distinguish Keyc
 - I did not run the 92 Swift tests, 3 Core reason tests, live tap, or live NSE fixture. Those remain author-reported.
 
 No P1. Fix the arriving vault code in the allowlist (and a test that uses that code) before this is ACCEPT.
+
+## Arriving vault-code correction
+
+I’ll re-check the mapping fix and the surrounding diagnostic path at the new head, without treating the previous proof notes as runtime facts.**ACCEPT**
+
+The previous P2 is closed in source. `SecretReaderAdapter` still rewrites vault failures to `nse-secret-vault-unavailable` (`crates/synara-nse-core/src/lib.rs:16`, `83-88`). `previewFailureStage` now maps that arriving code, and still maps `p4-s3-secret-vault-unavailable`, to `.coreStoreUnavailable` (`SynaraNotificationPreviewSupport.swift:120`). Unknown strings remain `.coreResolutionFailed` (`128`; covered at `NotificationPreviewSupportTests.swift:9`). The NSE catch still binds `Failed(code, _)` and records only the allowlisted stage (`NotificationService.swift:271-276`); `record` stores `stage.rawValue` only (`SynaraNotificationPreviewSupport.swift:142`). The Swift vault still throws the p4 code (`NotificationService.swift:335-338`); that mapping is retained, not used as the FFI code.
+
+`testPreviewFailureDiagnosticsRecognizeNseCoreVaultAdapterCode` asserts the arriving adapter string (`NotificationPreviewSupportTests.swift:12-19`). No preview body, opt-in, crypto owner, empty-content, or routing change in this delta.
+
+No new P1/P2. I did not run tests. The review note that focused signed native validation is pending is a proof limit, not a pass. Physical APNs remains unclaimed.
+
+Post-review native validation: all 14 signed NotificationPreviewSupportTests passed. Documentation-only commit `76ab6cdb` records that result; production remains identical to reviewed `cb745886`.
