@@ -275,7 +275,8 @@ export type NativeTimelineViewController = {
    * transition and automatic receipts can proceed.
    */
   followLive: (request: { observedLiveTailEventId: string }) => Promise<void>;
-  jumpLatest: () => Promise<void>;
+  /** True only when this controller adopted the returned live provider. */
+  jumpLatest: () => Promise<boolean>;
 };
 
 type NativeTimelineReadStateReadback = {
@@ -749,7 +750,7 @@ export const useNativeTimelineView = (
       'matrix_timeline_jump_latest',
       { request: { streamId } }
     );
-    if (streamIdRef.current !== streamId) return;
+    if (streamIdRef.current !== streamId) return false;
     if (!result.available || !result.value) {
       setState({
         status: 'error',
@@ -765,6 +766,7 @@ export const useNativeTimelineView = (
       snapshot: result.value.snapshot,
       selectedPosition: result.value.position,
     });
+    return true;
   }, []);
 
   useEffect(() => {

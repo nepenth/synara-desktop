@@ -73,3 +73,25 @@ proof with this branch, and physical-device behavior remain **Not confirmed**.
 The added iOS route tests await regenerated bindings for the base branch's read
 frontier fields. No release or broad device-quality claim follows from these
 bounded results.
+
+## Fresh-review corrections
+
+The stable iOS timeline now mounts the same last-read and sparse-history recovery
+controls as the legacy viewport; a duplicate legacy overlay was removed. This is
+source-level correction pending the signed iOS validation described above.
+
+Desktop latest placement now requires both adoption of the returned native
+provider and the same navigation input that requested it. A focus request in the
+same room supersedes an outstanding latest completion. Sparse-history and
+last-read actions share a vertical layout so both remain separately clickable.
+
+Two Chromium regression cases run the shipped presenter/controller against
+mocked native IPC. Against the pre-fix product source at `fec30148`, the delayed
+latest result displaced the focused viewport from `$30` to `$55`, and recovery
+controls overlapped (older action bottom 70 px, last-read action top 30 px).
+With the correction, all seven browser cases passed, including actual focused-row
+viewport visibility, preserved event/pixel geometry, separate recovery-control
+bounds, and each action's corresponding native command. Full frontend TypeScript
+checking, 954 modernization tests, and focused ESLint passed; the repository ESLint configuration does not
+include the harness TSX file. This does not establish live Matrix or iOS runtime
+behavior.

@@ -134,3 +134,74 @@ test('send intent waits for new live provider and layout before hiding latest co
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
   await expect(page.getByRole('button', { name: 'Jump to latest', exact: true })).toBeHidden();
 });
+
+test('delayed latest result cannot scroll a newer focused event in the same room', async ({
+  page,
+}) => {
+  await open(page, 'live&delayJump=1');
+  await scrollToHistory(page);
+  await fixture(page, 'send');
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as { nativeTimelineFixture: Fixture }
+          ).nativeTimelineFixture.commands.filter(
+            (command) => command.command === 'matrix_timeline_jump_latest'
+          ).length
+      )
+    )
+    .toBe(1);
+  await page.getByRole('button', { name: 'Focus middle' }).click();
+  await expect(page.locator('[data-native-timeline-event-id="$30"]')).toBeInViewport();
+  await expect.poll(async () => (await geometry(page)).distance).toBeGreaterThan(500);
+  const before = await geometry(page);
+  await fixture(page, 'releaseJump');
+  await page.waitForTimeout(1000); // include provider return, layout and the next native snapshot poll
+  const after = await geometry(page);
+  expect(after.eventId).toBe(before.eventId);
+  expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+  await expect(page.locator('[data-native-timeline-event-id="$30"]')).toBeInViewport();
+});
+
+test('sparse history and missing last-read recovery controls are separately clickable', async ({
+  page,
+}) => {
+  await open(page, 'sparse-missing');
+  const older = page.getByRole('button', { name: 'Load older messages', exact: true });
+  const lastRead = page.getByRole('button', { name: 'Jump to Last Read', exact: true });
+  await expect(older).toBeVisible();
+  await expect(lastRead).toBeVisible();
+  const olderBox = await older.boundingBox();
+  const lastReadBox = await lastRead.boundingBox();
+  expect(olderBox).not.toBeNull();
+  expect(lastReadBox).not.toBeNull();
+  expect(olderBox!.y + olderBox!.height).toBeLessThanOrEqual(lastReadBox!.y);
+  await older.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as { nativeTimelineFixture: Fixture }
+          ).nativeTimelineFixture.commands.filter(
+            (command) => command.command === 'matrix_timeline_paginate'
+          ).length
+      )
+    )
+    .toBe(1);
+  await lastRead.click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (
+            window as unknown as { nativeTimelineFixture: Fixture }
+          ).nativeTimelineFixture.commands.filter(
+            (command) => command.command === 'matrix_timeline_open'
+          ).length
+      )
+    )
+    .toBe(2);
+});

@@ -815,10 +815,7 @@ struct RoomTimelineView: View {
                                 finishTimelineUserDrag()
                             }
                     )
-                    .overlay(alignment: .topLeading) {
-            timelineNavigationRecovery
-        }
-        .overlay(alignment: .bottomTrailing) {
+                    .overlay(alignment: .bottomTrailing) {
                         if RoomTimelineJumpLatestPolicy.shouldShow(
                             isLive: timelineProviderIsLive,
                             isConfirmedPinned: isTimelineBottomVisible,
@@ -939,6 +936,7 @@ struct RoomTimelineView: View {
         )
         .id(routeID)
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
+        .overlay(alignment: .topLeading) { timelineNavigationRecovery }
         .overlay(alignment: .bottomTrailing) {
             if RoomTimelineJumpLatestPolicy.shouldShow(
                 isLive: timelineProviderIsLive,

@@ -1930,6 +1930,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const firstRenderedRowRef = useRef<string | undefined>(undefined);
   const mountedRoomRef = useRef(roomId);
   mountedRoomRef.current = roomId;
+  const mountedNavigationRef = useRef(input);
+  mountedNavigationRef.current = input;
   const [documentActive, setDocumentActive] = useState(
     () =>
       typeof document !== 'undefined' &&
@@ -2416,19 +2418,21 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     setPendingLastRead(undefined);
     // The new provider's layout effect places the tail. Until its geometry
     // confirms the bottom, preserve the control and do not claim visibility.
-    const navigationRoom = roomId;
+    const navigation = input;
     void loadLatest()
-      .then(() => {
-        if (mountedRoomRef.current === navigationRoom)
+      .then((accepted) => {
+        // A stale native result resolves without adoption. A newer focused
+        // navigation in the same room also supersedes this placement intent.
+        if (accepted && mountedNavigationRef.current === navigation)
           setLatestPlacementRequest((request) => request + 1);
       })
       .catch((error) => {
-        if (mountedRoomRef.current === navigationRoom)
+        if (mountedNavigationRef.current === navigation)
           setActionError(
             error instanceof Error ? error.message : 'Could not open latest messages.'
           );
       });
-  }, [loadLatest, roomId]);
+  }, [input, loadLatest]);
   useEffect(() => observeRoomLatestAfterSend(roomId, jumpToLatest), [roomId, jumpToLatest]);
 
   if (timelineState.status === 'unavailable') {
@@ -2537,9 +2541,14 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             </Box>
           )}
         </Scroll>
-        {rows.filter((row) => rowEventId(row)).length <= 1 &&
-          snapshot.pagination.backward === 'available' && (
-            <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
+        <Box
+          direction="Column"
+          gap="200"
+          alignItems="Start"
+          style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}
+        >
+          {rows.filter((row) => rowEventId(row)).length <= 1 &&
+            snapshot.pagination.backward === 'available' && (
               <Button
                 onClick={() => {
                   void controller
@@ -2549,10 +2558,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               >
                 <Text>Load older messages</Text>
               </Button>
-            </Box>
-          )}
-        {pendingLastRead && (
-          <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
+            )}
+          {pendingLastRead && (
             <Button
               onClick={() => {
                 setFocusEventId(pendingLastRead);
@@ -2561,8 +2568,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             >
               <Text>Jump to Last Read</Text>
             </Button>
-          </Box>
-        )}
+          )}
+        </Box>
         {shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom) && (
           <Box
             style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}

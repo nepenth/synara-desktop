@@ -13,7 +13,7 @@ import type {
 const room = '!navigation:example.test';
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
-let sequence = scenario === 'short' ? 2 : 60;
+let sequence = scenario === 'sparse-missing' ? 1 : scenario === 'short' ? 2 : 60;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
 const commands: { command: string; args?: Record<string, unknown> }[] = [];
@@ -40,7 +40,7 @@ const makeRow = (index: number) => ({
 });
 let rows = Array.from({ length: sequence }, (_, index) => makeRow(index + 1));
 let position: NativeTimelinePosition =
-  scenario === 'missing'
+  scenario === 'missing' || scenario === 'sparse-missing'
     ? { kind: 'unread', anchor_event_id: '$missing' }
     : scenario === 'unread' || scenario === 'short'
     ? { kind: 'unread', anchor_event_id: '$2' }
@@ -76,16 +76,20 @@ window.__SYNARA_DESKTOP__ = {
   invoke: async <T,>(command: string, args?: Record<string, unknown>): Promise<T> => {
     commands.push({ command, args });
     const request = args?.request as
-      | { position?: NativeTimelinePosition; observedLiveTailEventId?: string }
+      | { position?: { kind: string; event_id?: string }; observedLiveTailEventId?: string }
       | undefined;
     if (command === 'matrix_timeline_open') {
       stream += 1;
-      if (request?.position?.kind === 'focused') position = request.position;
+      if (request?.position?.kind === 'focused') {
+        if (!request.position.event_id) throw new Error('Focused open requires event_id');
+        position = { kind: 'focused', target_event_id: request.position.event_id };
+      }
       update();
       return { schemaVersion: 1, streamId: `fixture-${stream}`, position, snapshot } as T;
     }
     if (command === 'matrix_timeline_snapshot') return snapshot as T;
     if (command === 'matrix_timeline_follow_live') {
+      if (scenario === 'sparse-missing') throw new Error('Loaded window is not the live tail');
       if (args?.observedLiveTailEventId !== rows.at(-1)?.eventId) throw new Error('Unseen tail');
       position = { kind: 'live_bottom' };
       update();
@@ -97,10 +101,22 @@ window.__SYNARA_DESKTOP__ = {
       return { snapshot, receiptSent: true } as T;
     }
     if (command === 'matrix_timeline_jump_latest') {
+      const originalStream = stream;
       if (params.has('delayJump'))
         await new Promise<void>((resolve) => {
           releaseJump = resolve;
         });
+      if (stream !== originalStream) {
+        // A delayed result belongs to its original native provider. It must not
+        // mutate the newer focused provider served by subsequent snapshot polls.
+        const latestPosition = { kind: 'live_bottom' } as const;
+        return {
+          schemaVersion: 1,
+          streamId: `fixture-${originalStream}-latest`,
+          position: latestPosition,
+          snapshot: { ...snapshot, position: latestPosition },
+        } as T;
+      }
       position = { kind: 'live_bottom' };
       update();
       return { schemaVersion: 1, streamId: `fixture-${stream}`, position, snapshot } as T;
@@ -142,9 +158,11 @@ Object.assign(window, { nativeTimelineFixture: api });
 
 function App() {
   const [mounted, setMounted] = useState(true);
+  const [focusedEventId, setFocusedEventId] = useState<string>();
   return (
     <>
       <button onClick={() => setMounted((value) => !value)}>Toggle room</button>
+      <button onClick={() => setFocusedEventId('$30')}>Focus middle</button>
       <div
         id="native-timeline"
         style={{
@@ -155,7 +173,7 @@ function App() {
           border: '1px solid gray',
         }}
       >
-        {mounted && <NativeTimelinePresenter roomId={room} />}
+        {mounted && <NativeTimelinePresenter roomId={room} eventId={focusedEventId} />}
       </div>
     </>
   );
