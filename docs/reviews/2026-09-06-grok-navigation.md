@@ -61,3 +61,44 @@ P1.1 and P1.2 are coupled: placing missing last-read at the live tail (the P1.1 
 - Author Core 43 / SDK 9 / Chromium 7 / frontend 954 were not re-run.
 - Signed iOS compile and UI execution are still unconfirmed; iOS findings above are source-only.
 - Harness IPC is mocked. `sparse-missing` forces follow-live to throw, so it does not prove P1.2. This is source review, not runtime proof.
+
+
+## Follow-up review of ddda4f3f
+
+Grok 4.6 High, session `01a0797b-e7a0-7ef2-88d7-5d2fde5c9110`; verdict REQUEST_CHANGES. Exact source head reviewed: `ddda4f3f4bb2dc3a585255d0761e89a1cfd47a5d`.
+
+I'll read the full prompt and then inspect the current-head stream-ownership and last-read paths directly.I’ll read the controller buffer, restore, and presenter navigation paths next so stream ownership can be checked against the contract.**REQUEST_CHANGES**
+
+The four prior desktop defects are fixed in this head: missing last-read uses live tail or a saved event/pixel (`NativeTimelinePresenter.tsx` 2347–2375), `pendingLastRead` survives follow-live and room-local snapshots (2359–2360, 2053), pointer-down no longer drops follow (2293–2298), and `restoreLastRead` keeps the current provider until a focused snapshot contains the target, closing only unused returned streams (`nativeTimelineView.ts` 916–986). Candidate replay is bounded (64 batches / 2048 items), scoped by room and known generation, fail-closed on gap/overflow/removed target, and released on adopt/fail/supersede/cleanup.
+
+One remaining stream-ownership hole can still replace a healthy adopted view.
+
+---
+
+## P1
+
+### Paginate treats a lagging same-stream snapshot as a fatal desync
+
+- **File/line:** `synara/src/app/features/room/nativeTimelineView.ts:739-746`
+- **Route/scenario:** Adopted live (or unread) stream; user loads older messages; a live delta is applied in JS (revision N+1) before `matrix_timeline_paginate` resolves with the snapshot Core copied at revision N. Same room, same `streamId`, navigation revision unchanged, so `superseded()` is false.
+- **Failing invariant:** An adopted provider must not be discarded because an in-flight command readback is older than a delta already applied on that stream. `setReadState` already documents this race (`isNativeTimelineReadbackStale`, 293–307, 791–798) and ignores the lagging readback. Paginate does not: any `acceptSnapshot` failure, including `next.revision < current.revision`, calls `setState({ status: 'error' })` and tears down the working rows. The Chromium delayed-paginate cases only cover an **old** stream after last-read adoption, not this same-stream lag.
+- **Repair:** After the superseded check, if `!result.available || !result.value`, throw to the presenter action error **without** replacing ready state, or keep the current snapshot. If `isNativeTimelineReadbackStale(snapshotRef.current, result.value)`, return (leave current rows; pagination can be retried). Call `setState` error only when the readback is newer/same-generation and still cannot be applied.
+
+---
+
+## Independently confirmed (not defects)
+
+- Buffer cannot grow without bound: overflow sets `invalid` and drops batches (`nativeTimelineView.ts` 611–614). `finishOpen` / effect cleanup / superseded paths cancel it.
+- Unused streams closed are only IDs returned by this controller’s own open/jump (`881–883`, `949–951`, `1086–1089`, `1104–1106`). Adopted `streamIdRef` is closed on effect cleanup or after a successful last-read swap (`983–985`).
+- Missing marker at first entry goes to live tail; re-entry uses saved history offset; Jump to Last Read stays through follow-live and appends (presenter 2353–2368; `pendingLastRead` not cleared on `live_bottom`).
+- Click at the tail only clears the programmatic lock; follow is recomputed from geometry on scroll.
+- Send still issues room-scoped latest; jump adoption still requires `accepted && mountedNavigationRef.current === navigation`. Explicit latest clears the recovery target by intent (`2451`).
+
+---
+
+## Verification limits (not code defects)
+
+- No Shell: HEAD `ddda4f3f` was not re-hashed; this is the worktree source.
+- The 33 Chromium cases, 954 modernization tests, and type/lint runs were not re-executed here.
+- Core/Swift were not in this delta and were not re-reviewed.
+- Signed iOS / observer `2feb` live-app results do not substitute for this desktop source review. Mocked-native browser proof does not establish live Matrix behavior.
