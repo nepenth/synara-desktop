@@ -4,13 +4,14 @@ import test from 'node:test';
 
 const source = (path: string) => readFileSync(path, 'utf8');
 
-test('linux titlebar renders only on the linux desktop shell', () => {
+test('custom titlebar renders on macOS and Linux desktop shells', () => {
   const titlebar = source('src/app/features/desktop-titlebar/DesktopTitleBar.tsx');
 
-  assert.match(titlebar, /isSynaraDesktop\(\) && isLinuxOS\(\)/);
+  assert.match(titlebar, /isSynaraDesktop\(\) && \(isLinuxOS\(\) \|\| isMacOS\(\)\)/);
   assert.match(titlebar, /if \(!visible\) return null/);
   assert.match(titlebar, /data-tauri-drag-region/);
-  assert.match(titlebar, /onDoubleClick=\{toggleMaximize\}/);
+  assert.doesNotMatch(titlebar, /onDoubleClick/);
+  assert.match(titlebar, /!macOS &&/);
 });
 
 test('linux titlebar owns drag and the three window controls', () => {
@@ -54,6 +55,7 @@ test('native window chrome matches the in-app titlebar contract', () => {
     /window\.close\(\)/
   );
   for (const permission of [
+    'core:window:allow-start-dragging',
     'allow-desktop-window-minimize',
     'allow-desktop-window-toggle-maximize',
     'allow-desktop-window-close',
@@ -82,8 +84,9 @@ test('macos overlay keeps headers draggable and traffic lights clear', () => {
   const sidePanel = source('src/app/features/room/RoomSidePanel.tsx');
   const members = source('src/app/features/room/MembersDrawer.tsx');
 
-  assert.match(sidebar, /isSynaraDesktop\(\) && isMacOS\(\)/);
-  assert.match(sidebar, /data-tauri-drag-region/);
+  const chrome = source('src/app/features/desktop-titlebar/DesktopTitleBar.css.ts');
+  assert.match(chrome, /paddingLeft:.*toRem\(80\)/);
+  assert.doesNotMatch(sidebar, /overlaySpacer/);
   for (const [name, component] of Object.entries({ home, header, sidePanel, members })) {
     assert.match(component, /data-tauri-drag-region/, `${name} header must drag the window`);
   }

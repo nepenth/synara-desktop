@@ -32,6 +32,7 @@ import { About } from './about';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { stopPropagation } from '../../utils/keyboard';
 import { LogoutDialog } from '../../components/LogoutDialog';
+import * as depthCss from '../../styles/Depth.css';
 import { isDesktopPlatform } from '../../platform';
 
 export enum SettingsPages {
@@ -153,6 +154,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                 <div style={{ flexGrow: 1 }}>
                   {menuItems.map((item) => (
                     <MenuItem
+                      className={depthCss.quietInteractiveSurface}
                       key={item.name}
                       variant="Surface"
                       radii="400"
@@ -178,6 +180,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                   {(logout, setLogout) => (
                     <>
                       <Button
+                        className={depthCss.quietInteractiveSurface}
                         size="300"
                         variant="Critical"
                         fill="None"

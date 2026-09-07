@@ -651,8 +651,8 @@ pub fn run() {
                 .inner_size(1280.0, 900.0)
                 .min_inner_size(960.0, 720.0);
             // The native titlebar is OS-painted and never matches the app
-            // theme. macOS overlays traffic lights over web content (headers
-            // expose drag regions and clear the lights); Linux drops server
+            // theme. macOS overlays traffic lights over the persistent in-app
+            // drag strip; Linux drops server
             // decorations in favor of the in-app titlebar strip, which owns
             // drag and window controls through the desktop_window_* commands.
             #[cfg(target_os = "macos")]
