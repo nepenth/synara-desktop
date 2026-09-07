@@ -247,7 +247,6 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         router = environment.router
         logger = environment.logger
         agentApprovalDecisions = environment.agentApprovalDecisions
-        UNUserNotificationCenter.current().delegate = self
         backgroundSyncCoordinator.bind(
             application: UIApplication.shared,
             matrix: environment.matrix,
@@ -273,6 +272,10 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
+        // iOS may deliver a cold-launch notification response before SwiftUI
+        // appears. Install the delegate before launch completes; the existing
+        // pending-response queue waits for service binding and foreground.
+        UNUserNotificationCenter.current().delegate = self
         SynaraNotificationActionContract.registerCategories()
 
         if let remotePayload = launchOptions?[.remoteNotification] as? [AnyHashable: Any] {

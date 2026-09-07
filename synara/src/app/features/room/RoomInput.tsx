@@ -44,6 +44,7 @@ import {
   toRem,
 } from 'folds';
 
+import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import * as depthCss from '../../styles/Depth.css';
 import {
@@ -655,6 +656,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
             mentionUserIds: attachmentCaption ? Array.from(mentionData.users) : undefined,
             mentionRoom: attachmentCaption ? mentionData.room : undefined,
           });
+          requestRoomLatestAfterSend(roomId);
           if (!hasTrailingAttachmentText(plan)) {
             attachmentSendPlan.current = undefined;
             resetEditor(editor);
@@ -686,6 +688,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         if (nativeOwner === 'legacy') {
           await mx.sendMessage(roomId, content as any);
         }
+        requestRoomLatestAfterSend(roomId);
         resetEditor(editor);
         resetEditorHistory(editor);
         clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);

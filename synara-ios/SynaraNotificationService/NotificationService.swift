@@ -268,7 +268,12 @@ private struct MatrixNotificationPreviewResolver {
             let peakKB = await memorySampler.peakFootprintKB
             logger.error("preview memory failed_peak_footprint_kb=\(peakKB, privacy: .public)")
             logger.error("preview stage=core-resolution-error")
-            recordStage(.coreResolutionFailed)
+            if let coreError = error as? NseCoreError,
+               case let .Failed(code, _) = coreError {
+                recordStage(SynaraNotificationDiagnostics.previewFailureStage(coreCode: code))
+            } else {
+                recordStage(.coreResolutionFailed)
+            }
             return nil
         }
     }

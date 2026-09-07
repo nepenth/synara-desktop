@@ -13,6 +13,8 @@ const nseManifest = read("crates/synara-nse-core/Cargo.toml");
 const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
+const productionFeatures = read("scripts/check-synara-nse-core-production-features.mjs");
+const iosCiBuild = read("synara-ios/scripts/ci-build.sh");
 const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
 const generatorSyntax = spawnSync(
   "bash",
@@ -66,5 +68,13 @@ requireText(notificationService, "import SynaraNseCore", "NSE-only Swift module 
 requireText(notificationService, "request.cancel()", "NSE deadline cancellation");
 forbidText(notificationService, "import SynaraCore", "full Core import in extension");
 requireText(project, "package: SynaraNseCore", "extension NSE-only package dependency");
+requireText(
+  iosCiBuild,
+  'node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"',
+  "NSE production feature CI invocation",
+);
+for (const triple of ["aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
+  requireText(productionFeatures, `"${triple}"`, `NSE production feature ${triple} query`);
+}
 
 console.log("Synara NSE Core isolation scaffold checks passed.");

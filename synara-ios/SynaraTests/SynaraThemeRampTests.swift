@@ -71,7 +71,7 @@ final class SynaraThemeRampTests: XCTestCase {
     }
 
     func testLightDepthRemainsQuieterThanDarkDepth() {
-        for level in SynaraDepthLevel.allCases where level != .content {
+        for level in SynaraDepthLevel.allCases where level != .content && level != .collection {
             let light = level.metrics(
                 dark: false,
                 increasedContrast: false,
@@ -86,6 +86,28 @@ final class SynaraThemeRampTests: XCTestCase {
             XCTAssertLessThan(light.shadowOpacity, dark.shadowOpacity)
             XCTAssertLessThanOrEqual(light.shadowRadius, dark.shadowRadius)
             XCTAssertLessThanOrEqual(light.shadowOffsetY, dark.shadowOffsetY)
+        }
+    }
+
+    func testCollectionRowsStayOnTheReadingPlane() {
+        for dark in [false, true] {
+            for increasedContrast in [false, true] {
+                let row = SynaraSurfaceDepthRole.roomRow.metrics(
+                    dark: dark,
+                    increasedContrast: increasedContrast,
+                    reduceTransparency: false
+                )
+                XCTAssertEqual(row.shadowOpacity, 0)
+                XCTAssertEqual(row.shadowRadius, 0)
+                XCTAssertGreaterThan(row.boundaryWidth, 0)
+                if increasedContrast {
+                    XCTAssertEqual(row.edgeOpacity, 0)
+                    XCTAssertGreaterThanOrEqual(row.boundaryOpacity, 0.78)
+                } else {
+                    XCTAssertLessThanOrEqual(row.edgeOpacity, 0.035)
+                    XCTAssertLessThanOrEqual(row.boundaryOpacity, 0.20)
+                }
+            }
         }
     }
 
@@ -111,7 +133,7 @@ final class SynaraThemeRampTests: XCTestCase {
     }
 
     func testCoreSurfaceRolesRemainVisiblyDimensional() {
-        XCTAssertEqual(SynaraSurfaceDepthRole.roomRow, .layered)
+        XCTAssertEqual(SynaraSurfaceDepthRole.roomRow, .collection)
         XCTAssertEqual(SynaraSurfaceDepthRole.standardMessage, .layered)
         XCTAssertEqual(SynaraSurfaceDepthRole.emphasizedMessage, .raised)
         XCTAssertTrue(SynaraSurfaceDepthRole.standardMessageShowsBackground)

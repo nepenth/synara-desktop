@@ -1,7 +1,20 @@
 import XCTest
+import UIKit
+import UserNotifications
 @testable import Synara
 
 final class AppRouteTests: XCTestCase {
+    @MainActor
+    func testNotificationDelegateIsInstalledBeforeLaunchReturnsWithoutSwiftUIBinding() {
+        let center = UNUserNotificationCenter.current()
+        let originalDelegate = center.delegate
+        defer { center.delegate = originalDelegate }
+        let delegate = SynaraAppDelegate()
+
+        XCTAssertTrue(delegate.application(UIApplication.shared, didFinishLaunchingWithOptions: nil))
+        XCTAssertTrue(center.delegate === delegate)
+    }
+
     func testTabsExposeExpectedDestinations() {
         XCTAssertEqual(AppTab.allCases.map(\.rawValue), ["rooms", "later", "notifications", "settings"])
     }
