@@ -73,3 +73,35 @@ These do **not** justify REQUEST_CHANGES or INCOMPLETE:
 | Tests vs real owner ops | Pass — production `register_http_pusher` + bound-owner fixture |
 
 No stylistic nits. Do not merge on the assumption of green CI or physical APNs; those are independent of this source verdict.
+
+## Fixture correction review
+
+I’ll re-evaluate head `32efeb4` by reading the HTTP fixture and checking that the bootstrap bypass is exact, bounded, and still fails on unexpected policy routes.**Verdict: ACCEPT** on head `32efeb4eea7255cf5e594315d3d228c89115a892`.
+
+Production policy at `96ccf6a9` is unchanged (`ensure_edit_notification_policy` still gates `register_http_pusher`). This delta is test-fixture and evidence only. No P1/P2.
+
+## Actionable findings
+
+None.
+
+## Fixture does not hide wrong policy traffic
+
+The bypass is an exact request-line match after lowercasing:
+
+`get /_matrix/client/v3/user/@reader:example.org/account_data/m.secret_storage.default_key http/1.1`
+
+Anything else — other account-data types, encoded user ids, query strings, PUT/POST, pushrules, pushers — misses that `if` and hits the new exact `assert_eq!` on method+path (`edit_policy_route_tests.rs:102-106`). That is **stricter** than the previous `starts_with`, which would have accepted `?before=` / `?after=` on the PUT.
+
+Bootstrap handling still requires:
+
+- `authorization: bearer policy-proof-token` (`:92`)
+- empty body (`content_len == 0`, `:93`)
+- at most two such reads (`bootstrap_reads <= 2`, `:95`)
+
+Those reads `continue` without pushing onto `bodies` and without advancing the scripted step, so policy body indices, counts, and order assertions are unchanged. A third default-key GET fails the test instead of being treated as a policy operation.
+
+`wait_for_e2ee_initialization_tasks` is the SDK’s real setup-task join (`matrix-sdk` 0.18 `Encryption::wait_for_e2ee_initialization_tasks`), not a sleep or accept-any fallback. Unexpected owner routes during that wait still fail the exact path assertion.
+
+## What this does not prove
+
+Remote CI on this commit and physical APNs delivery remain unconfirmed. Local Core 882/3 and the six HTTP owner-route cases are evidence that the fixture matches the pinned SDK’s startup GETs; they are not APNs proof. The documented 5s UniFFI deadline is unchanged and still does not authorize a success claim.
