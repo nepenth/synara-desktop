@@ -1,7 +1,7 @@
 # Client reliability remediation and review plan
 
-Status: isolated workstreams are integrated; combined client PR and remaining live proofs are pending.
-Read-frontier, edit policy, window/depth, notification context, verification, last-read navigation, live-read cleanup, NSE production-feature CI guard, and CI coverage wiring are on `cursor/client-reliability-integration-d7fa`. Combined client acceptance and Grok review of the combined PR remain pending.
+Status: combined source reviews of PR #1104 accepted with no P1. Release cut and remaining live proofs are pending.
+Read-frontier, edit policy, window/depth, notification context, verification, last-read navigation, live-read cleanup, NSE production-feature CI guard, and CI coverage wiring are on `cursor/client-reliability-integration-d7fa` at `881e5111`. Combined Grok 4.6 High and three independent workstream reviews accepted; record in `2026-09-06-combined-pr-1104.md`.
 Base: `0695da32c77bc1a56ca22c9ec383f8fd006e6a24` (v2.1.28).
 Integration branch: `feature/client-reliability-2026-09-06` (local tip plus remaining CI/NSE commits on `cursor/client-reliability-integration-d7fa`).
 
