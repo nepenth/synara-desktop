@@ -465,6 +465,8 @@ dictionary TimelineSnapshotDto {
   TimelineViewPositionDto position;
   string pagination_backward;
   string pagination_forward;
+  string? visible_tail_event_id;
+  string? receipt_tail_event_id;
   string? own_read_event_id;
   string? unread_anchor_event_id;
   boolean is_marked_unread;

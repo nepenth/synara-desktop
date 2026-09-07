@@ -403,6 +403,50 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertFalse(observer.showsVerifyThisDevice)
     }
 
+    @MainActor
+    func testSessionCryptoStatusRefreshesDeviceAuthorityWithoutVerificationFlow() async {
+        let eligible = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: true,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible])
+        let observer = SessionCryptoStatusObserver()
+
+        await observer.start(crypto: crypto)
+
+        XCTAssertEqual(observer.status, eligible)
+        XCTAssertTrue(observer.enablesVerifyThisDevice)
+    }
+
+    @MainActor
+    func testSessionDeviceBurstDuringInitialReadRetainsOneRefresh() async throws {
+        let eligible = SessionCryptoStatus(
+            verification: .unverified,
+            recovery: .unknown,
+            backup: .unknown,
+            hasDevicesToVerifyAgainst: true,
+            isLastDevice: false,
+            unableToDecryptCount: 0
+        )
+        let crypto = SequencingCryptoStatusService(statuses: [.unknown, eligible], suspendInitialRead: true)
+        let observer = SessionCryptoStatusObserver()
+        let observing = Task { await observer.start(crypto: crypto) }
+        try await waitUntil { crypto.initialReadIsSuspended }
+        // Exercise the production forwarding boundary while the initial
+        // authority read remains in flight. The inbox is deliberately empty.
+        crypto.sendDeviceBurstAndFinish(count: 200)
+        await crypto.waitForForwardingToFinish()
+        crypto.releaseInitialRead()
+        await observing.value
+        XCTAssertEqual(crypto.readCount, 2, "one initial read and one coalesced wakeup")
+        XCTAssertEqual(observer.status, eligible)
+        XCTAssertTrue(observer.enablesVerifyThisDevice)
+    }
+
     func testVerificationContinuationCancellationBeforeRegistrationUsesTombstone() {
         var tracker = MatrixVerificationContinuationRegistrationTracker()
         let id = UUID()
@@ -505,9 +549,45 @@ private func waitUntil(
 private final class SequencingCryptoStatusService: CryptoStatusServicing {
     private let lock = NSLock()
     private var remaining: [SessionCryptoStatus]
+    private let suspendInitialRead: Bool
+    private var initialRead: CheckedContinuation<Void, Never>?
+    private(set) var readCount = 0
+    private var burstRemaining: Int?
+    private var forwardingFinished = false
 
-    init(statuses: [SessionCryptoStatus]) {
+    init(statuses: [SessionCryptoStatus], suspendInitialRead: Bool = false) {
         remaining = statuses
+        self.suspendInitialRead = suspendInitialRead
+    }
+
+    var initialReadIsSuspended: Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        return initialRead != nil
+    }
+
+    func releaseInitialRead() {
+        lock.lock()
+        let continuation = initialRead
+        initialRead = nil
+        lock.unlock()
+        continuation?.resume()
+    }
+
+    func sendDeviceBurstAndFinish(count: Int) {
+        lock.lock()
+        burstRemaining = count
+        lock.unlock()
+    }
+
+    func waitForForwardingToFinish() async {
+        while true {
+            lock.lock()
+            let finished = forwardingFinished
+            lock.unlock()
+            if finished { return }
+            await Task.yield()
+        }
     }
 
     func roomStatus(roomID: String) async -> RoomCryptoStatus {
@@ -515,6 +595,17 @@ private final class SequencingCryptoStatusService: CryptoStatusServicing {
     }
 
     func sessionStatus() async -> SessionCryptoStatus {
+        lock.lock()
+        readCount += 1
+        let shouldSuspend = suspendInitialRead && readCount == 1
+        lock.unlock()
+        if shouldSuspend {
+            await withCheckedContinuation { continuation in
+                lock.lock()
+                initialRead = continuation
+                lock.unlock()
+            }
+        }
         lock.lock()
         defer { lock.unlock() }
         if remaining.count > 1 {
@@ -524,10 +615,37 @@ private final class SequencingCryptoStatusService: CryptoStatusServicing {
     }
 
     func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
-        AsyncStream { continuation in
-            continuation.yield(.finished)
-            continuation.finish()
+        // No active or completed verification request exists in this fixture.
+        AsyncStream { $0.finish() }
+    }
+
+    func sessionDeviceUpdates() -> AsyncStream<Void> {
+        guard suspendInitialRead else {
+            return AsyncStream { continuation in
+                continuation.yield(())
+                continuation.finish()
+            }
         }
+        let updates = AsyncStream<Void>(unfolding: { [self] in
+            while true {
+                lock.lock()
+                if let remaining = burstRemaining {
+                    if remaining == 0 {
+                        // The production forwarder has already yielded the
+                        // final signal before requesting this next element.
+                        forwardingFinished = true
+                        lock.unlock()
+                        return nil
+                    }
+                    burstRemaining = remaining - 1
+                    lock.unlock()
+                    return ()
+                }
+                lock.unlock()
+                await Task.yield()
+            }
+        })
+        return SharedCoreSessionDeviceInvalidations.stream(updates)
     }
 
     func retryDecryption(roomID: String) async -> CryptoActionResult {

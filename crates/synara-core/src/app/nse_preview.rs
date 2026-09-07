@@ -239,12 +239,34 @@ fn valid_store_root(value: &str) -> Result<&Path, NsePreviewError> {
 }
 
 fn preview_from_status(status: NotificationStatus) -> Result<NseEventPreview, NsePreviewError> {
-    let NotificationStatus::Event(item) = status else {
-        return Err(event_unavailable());
+    let item = match status {
+        NotificationStatus::Event(item) => item,
+        NotificationStatus::EventFilteredOut => {
+            return Err(failed(
+                "p4-s11-nse-event-filtered",
+                "The notification event was filtered by notification policy.",
+            ))
+        }
+        NotificationStatus::EventRedacted => {
+            return Err(failed(
+                "p4-s11-nse-event-redacted",
+                "The notification event was redacted.",
+            ))
+        }
+        NotificationStatus::EventNotFound => return Err(event_unavailable()),
     };
     let NotificationEvent::Timeline(event) = &item.event else {
         return Err(event_unavailable());
     };
+    if matches!(
+        event.as_ref(),
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomEncrypted(_))
+    ) {
+        return Err(failed(
+            "p4-s11-nse-decryption-unavailable",
+            "The notification event could not be decrypted.",
+        ));
+    }
     let AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(message)) =
         event.as_ref()
     else {
@@ -313,6 +335,26 @@ mod tests {
         fn get(&self, key: &str) -> Result<Option<Vec<u8>>, NsePreviewError> {
             self.keys.lock().expect("keys").push(key.to_owned());
             Ok(None)
+        }
+    }
+
+    #[test]
+    fn filtered_redacted_and_missing_events_have_distinct_static_reasons() {
+        for (status, code) in [
+            (
+                NotificationStatus::EventFilteredOut,
+                "p4-s11-nse-event-filtered",
+            ),
+            (
+                NotificationStatus::EventRedacted,
+                "p4-s11-nse-event-redacted",
+            ),
+            (
+                NotificationStatus::EventNotFound,
+                "p4-s11-nse-event-not-in-store",
+            ),
+        ] {
+            assert_eq!(preview_from_status(status).unwrap_err().code(), code);
         }
     }
 

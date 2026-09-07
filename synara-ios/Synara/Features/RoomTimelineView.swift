@@ -15,7 +15,7 @@ enum RoomTimelineFocusPolicy {
         if let focusedEventID, focusedEventID.isEmpty == false {
             return .focused(eventID: focusedEventID)
         }
-        guard hasUnreadMessages, liveItems.isEmpty == false else {
+        guard liveItems.isEmpty == false else {
             return .live
         }
 
@@ -50,6 +50,26 @@ enum RoomTimelineFocusPolicy {
             return .live
         }
         return .unread(markerEventID: markerEventID)
+    }
+}
+
+enum RoomTimelineTitlePolicy {
+    /// Notification routes may omit a title and must hydrate from the room list.
+    /// An explicit route title (room-list tap, UI test) must not be replaced by a
+    /// different cached room-list name.
+    static func displayTitle(
+        resolved: String?,
+        routeTitle: String?,
+        roomListName: String?
+    ) -> String {
+        if let routeTitle, routeTitle.isEmpty == false {
+            return resolved ?? routeTitle
+        }
+        return resolved ?? roomListName ?? "Room"
+    }
+
+    static func shouldAdoptRoomListName(routeTitle: String?) -> Bool {
+        routeTitle == nil || routeTitle?.isEmpty == true
     }
 }
 
@@ -156,6 +176,34 @@ enum RoomTimelineReadAcknowledgementPolicy {
     }
 }
 
+/// A debounce replacement must replace the displayed anchor and receipt
+/// target together. The task that drains this queue retains that exact pair
+/// across the asynchronous write, even when another observation arrives.
+struct RoomTimelineReadObservation: Equatable {
+    let visibleEventID: String
+    let receiptEventID: String
+}
+
+struct RoomTimelineReadMarkerQueue {
+    private(set) var pending: RoomTimelineReadObservation?
+    private(set) var firstQueuedAt: Date?
+
+    mutating func enqueue(_ observation: RoomTimelineReadObservation, now: Date) {
+        pending = observation
+        if firstQueuedAt == nil { firstQueuedAt = now }
+    }
+
+    mutating func dequeue() -> RoomTimelineReadObservation? {
+        defer { clear() }
+        return pending
+    }
+
+    mutating func clear() {
+        pending = nil
+        firstQueuedAt = nil
+    }
+}
+
 enum RoomTimelineReadMarkerQueuePolicy {
     static func delayNanoseconds(
         firstQueuedAt: Date,
@@ -218,7 +266,25 @@ enum RoomTimelineOwnAvatarPolicy {
 
 enum RoomTimelineJumpLatestPolicy {
     static func shouldShow(isLive: Bool, isConfirmedPinned: Bool, hasItems: Bool, requested: Bool) -> Bool {
-        hasItems && (isLive == false || (requested && isConfirmedPinned == false))
+        // Geometry and provider identity are authoritative even if an earlier
+        // command cleared the presentation request before layout settled.
+        hasItems && (isLive == false || isConfirmedPinned == false)
+    }
+
+    /// Pin the current live rows only when this session is already on the live
+    /// tail. Unread restore reuses the live provider while sitting on last-read;
+    /// a brief inverted-table pin must not count as live-follow.
+    static func shouldPinCurrentLiveWindow(
+        providerIsLive: Bool,
+        isLiveMode: Bool,
+        isFollowingLive: Bool,
+        isConfirmedPinned: Bool
+    ) -> Bool {
+        providerIsLive && (isConfirmedPinned || (isFollowingLive && isLiveMode))
+    }
+
+    static func shouldAdoptLiveFollowOnPin(position: RoomTimelinePositionState) -> Bool {
+        position != .readingHistory && position != .focusedEvent
     }
 }
 
@@ -271,6 +337,7 @@ struct RoomTimelineView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @State private var isReadSceneActive = false
+    @State private var resolvedRoomTitle: String?
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
     @State private var replyTarget: ComposerRelationTarget?
@@ -304,6 +371,8 @@ struct RoomTimelineView: View {
     /// Used only for unread-divider presentation after the user has reached a live event.
     /// Must never drive post-load scroll restore (v1.2.28 open-at-live-end policy).
     @State private var initialReadMarkerEventID: String?
+    @State private var pendingLastReadEventID: String?
+    @State private var sendLatestRequest = 0
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
@@ -314,8 +383,7 @@ struct RoomTimelineView: View {
     @State private var lastMarkedFullyReadEventID: String?
     @State private var markFullyReadTask: Task<Void, Never>?
     @State private var markFullyReadTaskGeneration: UInt64 = 0
-    @State private var pendingMarkFullyReadEventID: String?
-    @State private var firstPendingMarkFullyReadAt: Date?
+    @State private var readMarkerQueue = RoomTimelineReadMarkerQueue()
     @State private var timelineUpdatesTask: Task<Void, Never>?
     @State private var timelineSession: RoomTimelineSession?
     @State private var activeTimelineMode: RoomTimelineMode = .live
@@ -347,10 +415,18 @@ struct RoomTimelineView: View {
         self.focusedEventID = focusedEventID
     }
 
+    private var displayRoomTitle: String {
+        RoomTimelineTitlePolicy.displayTitle(
+            resolved: resolvedRoomTitle,
+            routeTitle: roomTitle,
+            roomListName: environment.roomList.roomDisplayName(roomID: roomID)
+        )
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             TimelineHeader(
-                title: roomTitle ?? "Room",
+                title: displayRoomTitle,
                 subtitle: timelineSubtitle,
                 cryptoLabel: cryptoStatus.roomHeaderLabel,
                 cryptoSystemImage: cryptoStatus.roomHeaderSystemImage,
@@ -401,7 +477,7 @@ struct RoomTimelineView: View {
             )
         }
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
-        .navigationTitle(roomTitle ?? "Room")
+        .navigationTitle(displayRoomTitle)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -412,7 +488,7 @@ struct RoomTimelineView: View {
         .sheet(isPresented: $isRoomDetailsPresented) {
             RoomDetailsView(
                 roomID: roomID,
-                fallbackTitle: roomTitle ?? "Room",
+                fallbackTitle: displayRoomTitle,
                 onLeaveRoom: {
                     shouldReturnToListAfterDetailsDismiss = true
                     isRoomDetailsPresented = false
@@ -421,7 +497,7 @@ struct RoomTimelineView: View {
                     isRoomDetailsPresented = false
                     Task { @MainActor in
                         await Task.yield()
-                        environment.router.route(to: .room(id: roomID, eventID: eventID, title: roomTitle))
+                        environment.router.route(to: .room(id: roomID, eventID: eventID, title: displayRoomTitle))
                     }
                 }
             )
@@ -519,10 +595,37 @@ struct RoomTimelineView: View {
         } message: {
             Text(roomNotesActionMessage ?? "")
         }
+        .task(id: "room-title-\(currentUserID)-\(roomID)") {
+            // Notification routes carry stable room/event IDs, not room metadata.
+            // Hydrate presentation from the room-list owner only when the route
+            // omitted a title. An explicit title must keep the current viewport
+            // identity; changing it must not replace the focused timeline.
+            guard RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: roomTitle) else {
+                return
+            }
+            resolvedRoomTitle = environment.roomList.roomDisplayName(roomID: roomID)
+            for await update in environment.roomList.roomUpdates() {
+                guard !Task.isCancelled else { return }
+                if case let .loaded(rooms) = update,
+                   let name = rooms.first(where: { $0.id == roomID })?.name,
+                   name != resolvedRoomTitle {
+                    resolvedRoomTitle = name
+                }
+            }
+        }
         .task(id: timelineTaskID) {
             resetTimelineState()
             let expectedTimelineTaskID = timelineTaskID
             let expectedUserID = currentUserID
+            // Cold notification routes can construct this screen before the
+            // root shell has restored/attached Core. Share the existing startup
+            // gate instead of opening a timeline against an unprepared owner.
+            if case let .signedIn(session) = environment.session.currentState {
+                guard await environment.sessionReadiness.waitUntilPrepared(for: session) else { return }
+            }
+            guard !Task.isCancelled,
+                  expectedTimelineTaskID == timelineTaskID,
+                  expectedUserID == currentUserID else { return }
             let roomOpenSignpostID = PerformanceTrace.begin("RoomOpen")
             defer {
                 PerformanceTrace.end("RoomOpen", id: roomOpenSignpostID)
@@ -799,6 +902,10 @@ struct RoomTimelineView: View {
                             .transition(.scale.combined(with: .opacity))
                         }
                     }
+                    .overlay(alignment: .topLeading) { timelineNavigationRecovery }
+                    .onChange(of: sendLatestRequest) { _ in
+                        jumpToLatest(proxy: proxy, currentItems: loadedTimelineItems)
+                    }
                     .onAppear {
                         lastRenderedTimelineCount = items.count
                         if scrollToInitialPosition(items: items, proxy: proxy) == false {
@@ -901,6 +1008,7 @@ struct RoomTimelineView: View {
         )
         .id(routeID)
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
+        .overlay(alignment: .topLeading) { timelineNavigationRecovery }
         .overlay(alignment: .bottomTrailing) {
             if RoomTimelineJumpLatestPolicy.shouldShow(
                 isLive: timelineProviderIsLive,
@@ -1547,7 +1655,7 @@ struct RoomTimelineView: View {
             to: .thread(
                 roomID: roomID,
                 rootEventID: item.eventID,
-                roomTitle: roomTitle,
+                roomTitle: displayRoomTitle,
                 rootTitle: item.threadTitle
             )
         )
@@ -1602,9 +1710,11 @@ struct RoomTimelineView: View {
                 return
             }
             let hasUnreadMessages = environment.roomList.hasUnreadMessages(roomID: roomID)
-            let fullyReadEventID = hasUnreadMessages
-                ? await environment.readMarkers.fullyReadEventID(roomID: roomID)
-                : nil
+            let fullyReadEventID = await environment.readMarkers.fullyReadEventID(roomID: roomID)
+            let initialItems = timelineItems(from: liveFeed.initialOutcome)
+            pendingLastReadEventID = fullyReadEventID.flatMap { marker in
+                initialItems.contains(where: { $0.serverEventID == marker }) ? nil : marker
+            }
             let initialMode = RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
                 hasUnreadMessages: hasUnreadMessages,
@@ -1908,6 +2018,11 @@ struct RoomTimelineView: View {
                         draft = ""
                         environment.drafts.clearDraft(roomID: roomID)
                         completeComposerRelation()
+                        if StableScrollAnchoringFeatureFlag.isEnabled {
+                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+                        } else {
+                            sendLatestRequest &+= 1
+                        }
                     }
                 }
             }
@@ -1990,6 +2105,11 @@ struct RoomTimelineView: View {
         )
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
+        if StableScrollAnchoringFeatureFlag.isEnabled {
+            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+        } else {
+            sendLatestRequest &+= 1
+        }
 
         draft = ""
         environment.drafts.clearDraft(roomID: roomID)
@@ -2324,7 +2444,10 @@ struct RoomTimelineView: View {
         return true
     }
 
-    private func scheduleMarkFullyRead(eventID: String) {
+    private func scheduleMarkFullyRead(eventID visibleEventID: String) {
+        guard let tail = loadedTimelineItems.last(where: { $0.serverEventID != nil }),
+              tail.serverEventID == visibleEventID else { return }
+        let eventID = tail.readReceiptEventID ?? visibleEventID
         guard RoomTimelineReadAcknowledgementPolicy.shouldSchedule(
             isApplicationActive: isReadSceneActive
                 && UIApplication.shared.applicationState == .active,
@@ -2345,15 +2468,15 @@ struct RoomTimelineView: View {
             return
         }
 
-        pendingMarkFullyReadEventID = eventID
-        if firstPendingMarkFullyReadAt == nil {
-            firstPendingMarkFullyReadAt = Date()
-        }
+        readMarkerQueue.enqueue(
+            RoomTimelineReadObservation(visibleEventID: visibleEventID, receiptEventID: eventID),
+            now: Date()
+        )
         guard markFullyReadTask == nil else {
             return
         }
 
-        let firstQueuedAt = firstPendingMarkFullyReadAt ?? Date()
+        let firstQueuedAt = readMarkerQueue.firstQueuedAt ?? Date()
         let delay = RoomTimelineReadMarkerQueuePolicy.delayNanoseconds(
             firstQueuedAt: firstQueuedAt,
             now: Date(),
@@ -2375,7 +2498,7 @@ struct RoomTimelineView: View {
                   isTimelineBottomVisible,
                   isJumpingToLatest == false,
                   isUserDraggingTimeline == false,
-                  pendingMarkFullyReadEventID != nil
+                  readMarkerQueue.pending != nil
             else {
                 await MainActor.run {
                     clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
@@ -2383,17 +2506,15 @@ struct RoomTimelineView: View {
                 return
             }
 
-            guard let observedEventID = pendingMarkFullyReadEventID else {
+            guard let observation = readMarkerQueue.dequeue() else {
                 await MainActor.run {
                     clearMarkFullyReadTask(ifGenerationMatches: installedGeneration)
                 }
                 return
             }
-            pendingMarkFullyReadEventID = nil
-            firstPendingMarkFullyReadAt = nil
             let didAcknowledge = await environment.readMarkers.markFullyRead(
                 roomID: roomID,
-                eventID: observedEventID
+                eventID: observation.receiptEventID
             )
             guard Task.isCancelled == false else {
                 return
@@ -2408,14 +2529,12 @@ struct RoomTimelineView: View {
                 }
                 markFullyReadTask = nil
                 if didAcknowledge {
-                    lastMarkedFullyReadEventID = observedEventID
-                    initialReadMarkerEventID = observedEventID
+                    lastMarkedFullyReadEventID = observation.receiptEventID
+                    initialReadMarkerEventID = observation.visibleEventID
                     showJumpToLatest = false
                 }
-                if pendingMarkFullyReadEventID != nil,
-                   let nextEventID = pendingMarkFullyReadEventID
-                {
-                    scheduleMarkFullyRead(eventID: nextEventID)
+                if let nextObservation = readMarkerQueue.pending {
+                    scheduleMarkFullyRead(eventID: nextObservation.visibleEventID)
                 }
             }
         }
@@ -2425,8 +2544,7 @@ struct RoomTimelineView: View {
         markFullyReadTaskGeneration &+= 1
         markFullyReadTask?.cancel()
         markFullyReadTask = nil
-        pendingMarkFullyReadEventID = nil
-        firstPendingMarkFullyReadAt = nil
+        readMarkerQueue.clear()
     }
 
     private func clearMarkFullyReadTask(ifGenerationMatches installedGeneration: UInt64) {
@@ -2454,6 +2572,7 @@ struct RoomTimelineView: View {
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
         isJumpingToLatest = true
+        pendingLastReadEventID = nil
         showJumpToLatest = true
 
         Task {
@@ -2463,6 +2582,7 @@ struct RoomTimelineView: View {
             }
             let transition = await timelineSession.transitionToLive()
             await MainActor.run {
+                guard self.timelineSession === timelineSession else { return }
                 switch transition {
                 case let .succeeded(feed):
                     initialReadMarkerEventID = nil
@@ -2506,20 +2626,42 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func jumpToLatestStable(currentItems: [TimelineItem]) {
+    private func jumpToLatestStable(currentItems: [TimelineItem], dismissComposer: Bool = true) {
         guard isJumpingToLatest == false,
               let timelineSession
         else {
             return
         }
 
-        dismissKeyboard()
-        isComposerFocused = false
+        if dismissComposer {
+            dismissKeyboard()
+            isComposerFocused = false
+        }
         cancelTimelineScroll()
         cancelMarkFullyRead()
         paginationScrollAnchorID = nil
         hasReachedOldestMessages = false
         hasUserInteractedWithTimeline = false
+        pendingLastReadEventID = nil
+
+        // Already following the live tail: pin the current rows. Remounting
+        // would drop local echoes and just-uploaded attachments that the live
+        // fixture has not yet projected. Unread/history on a reused live
+        // provider still remounts so send returns to newest.
+        if RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(
+            providerIsLive: timelineProviderIsLive,
+            isLiveMode: activeTimelineMode.isLive,
+            isFollowingLive: timelinePosition == .followingLive,
+            isConfirmedPinned: isTimelineBottomVisible
+        ) {
+            showJumpToLatest = false
+            enqueueStableViewportCommand(
+                .latest(animated: true),
+                generation: timelineBottomAnchorGeneration
+            )
+            return
+        }
+
         isJumpingToLatest = true
         showJumpToLatest = true
 
@@ -2528,6 +2670,7 @@ struct RoomTimelineView: View {
             defer { PerformanceTrace.end("TimelineJumpToLatest", id: signpostID) }
             let transition = await timelineSession.transitionToLive()
             await MainActor.run {
+                guard self.timelineSession === timelineSession else { return }
                 switch transition {
                 case let .succeeded(feed):
                     initialReadMarkerEventID = nil
@@ -2558,6 +2701,45 @@ struct RoomTimelineView: View {
                     showJumpToLatest = timelineProviderIsLive == false
                     logTimelineEvent("jump-latest-superseded")
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var timelineNavigationRecovery: some View {
+        VStack(alignment: .leading, spacing: SynaraSpacing.small) {
+            if let marker = pendingLastReadEventID {
+                Button("Jump to Last Read") { jumpToLastRead(eventID: marker) }
+                    .accessibilityIdentifier("JumpToLastRead")
+            }
+            if loadedTimelineItems.count <= 1, hasReachedOldestMessages == false,
+               let oldest = loadedTimelineItems.first?.eventID {
+                Button("Load older messages") {
+                    hasUserInteractedWithTimeline = true
+                    hasPositionedInitialTimeline = true
+                    _ = loadOlderTimeline(before: oldest, scrollAnchorID: oldest)
+                }
+                .accessibilityIdentifier("LoadOlderMessages")
+            }
+        }
+        .buttonStyle(.bordered)
+        .padding(SynaraSpacing.medium)
+    }
+
+    private func jumpToLastRead(eventID: String) {
+        guard let timelineSession else { return }
+        let routeID = stableViewportRouteID
+        cancelMarkFullyRead()
+        Task {
+            guard let feed = await timelineSession.open(mode: .unread(markerEventID: eventID)) else { return }
+            await MainActor.run {
+                guard self.timelineSession === timelineSession, stableViewportRouteID == routeID else { return }
+                let hasAnchor = timelineItems(from: feed.initialOutcome).contains(where: { $0.serverEventID == eventID })
+                pendingLastReadEventID = hasAnchor ? nil : eventID
+                hasPositionedInitialTimeline = false
+                // Bind the returned generation even on failure; applying a
+                // failed outcome preserves the last nonempty rendered window.
+                applySessionFeed(feed)
             }
         }
     }
@@ -2594,6 +2776,11 @@ struct RoomTimelineView: View {
     private func handleStableBottomPinnedChanged(isPinned: Bool, newestEventID: String?) {
         isTimelineBottomVisible = isPinned
         if isPinned, timelineProviderIsLive {
+            guard RoomTimelineJumpLatestPolicy.shouldAdoptLiveFollowOnPin(
+                position: timelinePosition
+            ) else {
+                return
+            }
             resumeLivePresentationAtBottom()
             timelinePosition = .followingLive
             showJumpToLatest = false
@@ -2681,7 +2868,8 @@ struct RoomTimelineView: View {
                     success: success
                 )
             }
-        case .readMarker:
+        case let .readMarker(eventID):
+            if success == false { pendingLastReadEventID = eventID }
             hasPositionedInitialTimeline = true
             timelinePosition = .readingHistory
             showJumpToLatest = true
@@ -3108,6 +3296,7 @@ private struct TimelineHeader: View {
                     Text("#")
                         .foregroundStyle(SynaraColor.secondaryText)
                     Text(title)
+                        .accessibilityIdentifier("TimelineRoomTitle")
                         .font(SynaraTypography.sectionTitle.weight(.semibold))
                         .foregroundStyle(SynaraColor.headingText)
                         .lineLimit(1)

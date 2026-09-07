@@ -7,8 +7,17 @@ import SynaraCore
 /// other rows use the existing body text. Does not load media bytes or
 /// invent mxc URLs. This is not iOS-on-engine and not P4 acceptance.
 enum SharedCoreTimelineRows {
-    static func items(from rows: [TimelineViewRowDto]) -> [TimelineItem] {
-        rows.compactMap(item(from:))
+    static func items(
+        from rows: [TimelineViewRowDto],
+        visibleTailEventID: String? = nil,
+        receiptTailEventID: String? = nil
+    ) -> [TimelineItem] {
+        var items = rows.compactMap(item(from:))
+        if let index = items.lastIndex(where: { $0.serverEventID != nil }),
+           items[index].serverEventID == visibleTailEventID {
+            items[index].readReceiptEventID = receiptTailEventID
+        }
+        return items
     }
 
     /// Returns an authoritative product outcome only when the native owner has
@@ -17,9 +26,12 @@ enum SharedCoreTimelineRows {
     /// pagination route; it must never be presented as an empty room.
     static func authoritativeOutcome(
         from rows: [TimelineViewRowDto],
-        paginationBackward: String
+        paginationBackward: String,
+        visibleTailEventID: String? = nil,
+        receiptTailEventID: String? = nil
     ) -> TimelineLoadOutcome? {
-        let items = items(from: rows)
+        let items = items(from: rows, visibleTailEventID: visibleTailEventID,
+                          receiptTailEventID: receiptTailEventID)
         if items.isEmpty == false {
             return .loaded(items)
         }

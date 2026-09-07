@@ -200,6 +200,8 @@ struct TimelineItem: Identifiable, Equatable {
     /// read markers. Local echoes and transaction identifiers intentionally leave
     /// this nil while continuing to use `eventID` as their stable presentation ID.
     let serverEventID: String?
+    /// Core's receipt frontier paired with this displayed remote tail.
+    var readReceiptEventID: String? = nil
     let senderID: String
     /// Core-resolved profile display name. Mock/local items leave this nil and
     /// continue through the deterministic sender-ID fallback.
@@ -284,7 +286,7 @@ struct TimelineItem: Identifiable, Equatable {
     }
 
     func withDeliveryStatus(_ deliveryStatus: TimelineDeliveryStatus?) -> TimelineItem {
-        TimelineItem(
+        var item = TimelineItem(
             id: id,
             eventID: eventID,
             serverEventID: serverEventID,
@@ -308,10 +310,12 @@ struct TimelineItem: Identifiable, Equatable {
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
+        item.readReceiptEventID = readReceiptEventID
+        return item
     }
 
     func withSenderAvatarURL(_ senderAvatarURL: URL?) -> TimelineItem {
-        TimelineItem(
+        var item = TimelineItem(
             id: id,
             eventID: eventID,
             serverEventID: serverEventID,
@@ -335,6 +339,8 @@ struct TimelineItem: Identifiable, Equatable {
             deliveryStatus: deliveryStatus,
             hasCurrentUserReadReceipt: hasCurrentUserReadReceipt
         )
+        item.readReceiptEventID = readReceiptEventID
+        return item
     }
 
     static func pendingMessage(

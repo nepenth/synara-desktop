@@ -101,8 +101,11 @@ final class SharedCoreLivePoller: @unchecked Sendable {
         }
     }
 
-    func ownerSignals(families: Set<String>) -> AsyncStream<OwnerUpdateDto> {
-        AsyncStream { continuation in
+    func ownerSignals(
+        families: Set<String>,
+        bufferingPolicy: AsyncStream<OwnerUpdateDto>.Continuation.BufferingPolicy = .unbounded
+    ) -> AsyncStream<OwnerUpdateDto> {
+        AsyncStream(bufferingPolicy: bufferingPolicy) { continuation in
             let id = UUID()
             lock.lock()
             ownerWaiters[id] = (families, continuation)

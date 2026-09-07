@@ -50,10 +50,12 @@ Rules:
    viewport.
 4. A room without unread state restores a valid current-session event/pixel
    viewport when the user deliberately left history; otherwise it opens live.
-5. A candidate that is missing, purged, inaccessible, or outside the bounded
-   live graph cannot make a known-newer receipt appear older. When the newest
-   frontier cannot be established without walking linked history, fall back to
-   live and display a non-blocking "Unread position unavailable" notice.
+5. On room entry, restore the effective last-read visible location when it is
+   available in the bounded snapshot. A hidden edit/reaction marker resolves to
+   its nearest preceding visible event in SDK stream order, never the relation's
+   target message. If the location is unavailable, retain the current viewport
+   and expose "Jump to Last Read". Later streaming must not jump there without
+   that explicit user action. Never invent a read location from the newest row.
 6. A marker or receipt change after mount updates state but never moves the
    viewport.
 7. Viewport state is device-local and is invalidated on leave, purge,
@@ -108,6 +110,14 @@ RoomActivity {
   side of the anchor and paginates only from explicit user demand.
 - Room or mode changes cancel the prior listener and increment a generation.
   Ignore all late snapshots and scroll completions from stale generations.
+- A focused, active viewport already at the true latest bottom keeps following
+  incoming messages. The down-arrow control is visible only while away from that
+  bottom; a historical provider's bottom does not establish latest visibility.
+- Submitting a new message issues an explicit return-to-latest viewport intent.
+  Editing an existing message does not issue that intent.
+- An initial one-event cache, including a decryption placeholder, requests one
+  bounded older page. Available rows survive failure, and short lists retain an
+  explicit older-history control so pagination does not require a scroll gesture.
 - Jump to Latest transitions through `rebindingLive`, replaces the provider with
   a clean bounded live provider, waits for layout and live-tail confirmation, and
   only then hides the control, persists bottom state, or advances read state.

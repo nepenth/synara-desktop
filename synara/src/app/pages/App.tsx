@@ -28,6 +28,7 @@ function App() {
       <PopOutContainerProvider value={portalContainer}>
         <OverlayContainerProvider value={portalContainer}>
           <ScreenSizeProvider value={screenSize}>
+            <DesktopTitleBar />
             <ClientConfigLoader
               fallback={() => <ConfigConfigLoading />}
               error={(err, retry, ignore) => (
@@ -38,7 +39,6 @@ function App() {
                 <ClientConfigProvider value={clientConfig}>
                   <QueryClientProvider client={queryClient}>
                     <JotaiProvider>
-                      <DesktopTitleBar />
                       <RouterProvider router={createRouter(clientConfig, screenSize)} />
                     </JotaiProvider>
                     <ReactQueryDevtools initialIsOpen={false} />

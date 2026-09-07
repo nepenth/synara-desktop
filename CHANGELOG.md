@@ -1,5 +1,20 @@
 # Changelog
 
+## [2.1.29] - 2026-09-06
+
+- Restore last-read on room entry, keep Jump to Last Read when the marker is
+  missing, and follow new messages only at the real live tail. Sending a
+  message returns to latest; later pagination must not jump the viewport.
+- Pair the visible timeline tail with the receipt frontier so focused rooms
+  clear unread automatically when newest messages are actually painted.
+- Suppress iOS alerts for replacement edits, keep notification taps on the
+  real room and event, and classify NSE vault failures separately from
+  preview or verification problems.
+- Restore native macOS titlebar drag, keep Linux maximize chrome in sync, and
+  quiet iOS room-list plus desktop Settings depth.
+- Fail closed on NSE production-feature and archive checks so a dev fixture
+  cannot look like a full-Core leak.
+
 ## [2.1.28] - 2026-09-05
 
 - Resume iOS automatic read acknowledgement when returning to a visible room.

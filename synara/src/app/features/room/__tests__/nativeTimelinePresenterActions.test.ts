@@ -175,7 +175,7 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     presenter,
     /shouldShowJumpToLatest\(readyState\.selectedPosition\.kind, atLiveBottom\)/
   );
-  assert.match(presenter, /const jumpToLatest = \(\) =>/);
+  assert.match(presenter, /const jumpToLatest = useCallback\(\(\) =>/);
   assert.match(presenter, /followingLiveRef\.current = true/);
   assert.match(presenter, /onClick=\{jumpToLatest\}/);
   assert.doesNotMatch(presenter, /snapshot\.position\.kind !== 'live_bottom'/);

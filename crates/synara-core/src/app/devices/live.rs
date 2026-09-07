@@ -435,6 +435,30 @@ fn eligible_local_authority(devices: Option<&UserDevices>) -> bool {
     })
 }
 
+/// Deliberately categorical: SDK Display/Debug can contain URLs, identifiers or
+/// server-provided text and must never be included in verification diagnostics.
+fn lookup_failure_category(error: &matrix_sdk::Error) -> &'static str {
+    use matrix_sdk::Error;
+    match error {
+        Error::AuthenticationRequired => "authentication",
+        Error::NoOlmMachine => "crypto_not_ready",
+        Error::CryptoStoreError(_) | Error::BadCryptoStoreState => "crypto_store",
+        Error::CrossProcessLockError(_) => "store_lock",
+        Error::Http(error) => http_failure_category(error),
+        _ => "other",
+    }
+}
+
+fn http_failure_category(error: &matrix_sdk::HttpError) -> &'static str {
+    use matrix_sdk::HttpError;
+    match error {
+        HttpError::Reqwest(_) => "transport",
+        HttpError::RefreshToken(_) => "refresh_session",
+        HttpError::Api(_) => "server_response",
+        _ => "http_other",
+    }
+}
+
 pub async fn snapshot(
     client: &Client,
     session_generation: u64,
@@ -461,6 +485,25 @@ pub async fn snapshot(
         client.devices(),
         encryption.get_user_devices(user_id),
     );
+    if std::env::var("SYNARA_VERIFICATION_DIAGNOSTICS").as_deref() == Ok("1") {
+        let authority = match &eligibility {
+            Ok(Ok(true)) => "eligible",
+            Ok(Ok(false)) => "none",
+            Ok(Err(error)) => lookup_failure_category(error),
+            Err(_) => "timeout",
+        };
+        let server = server_devices
+            .as_ref()
+            .map(|_| "available")
+            .unwrap_or_else(http_failure_category);
+        let crypto = crypto_devices
+            .as_ref()
+            .map(|_| "available")
+            .unwrap_or_else(lookup_failure_category);
+        eprintln!(
+            "synara_verification_snapshot authority={authority} sessions={server} crypto={crypto}"
+        );
+    }
     let has_devices_to_verify_against = match eligibility {
         Ok(Ok(has_devices)) => Some(has_devices),
         // The authority lookup performs its own `/keys/query`. When it fails
@@ -552,7 +595,26 @@ pub fn supported_delete_authentication(
 mod tests {
     use matrix_sdk::ruma::api::client::uiaa::{AuthFlow, AuthType, UiaaInfo};
 
-    use super::supported_delete_authentication;
+    use super::{lookup_failure_category, supported_delete_authentication};
+
+    #[test]
+    fn snapshot_diagnostics_classify_without_rendering_sdk_errors() {
+        assert_eq!(
+            lookup_failure_category(&matrix_sdk::Error::NoOlmMachine),
+            "crypto_not_ready"
+        );
+        assert_eq!(
+            lookup_failure_category(&matrix_sdk::Error::BadCryptoStoreState),
+            "crypto_store"
+        );
+        assert_eq!(
+            lookup_failure_category(&matrix_sdk::Error::AuthenticationRequired),
+            "authentication"
+        );
+        let error = matrix_sdk::Error::Io(std::io::Error::other("private-server-and-account-data"));
+        assert_eq!(lookup_failure_category(&error), "other");
+    }
+
     use crate::app::devices::NativeDeviceDeleteAuthentication;
 
     #[test]

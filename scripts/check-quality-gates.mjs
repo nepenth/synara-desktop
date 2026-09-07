@@ -240,12 +240,16 @@ function hasRequiredCommandStep(jobLines, command, workingDirectory) {
   });
 }
 
+function isAlwaysRunAggregateGate(ifValue) {
+  return ifValue === "always()" || ifValue === "always() && !cancelled()";
+}
+
 function aggregateGateError(jobLines, expectedName, expectedNeeds) {
   if (!jobLines) return "job is missing";
   if (getScalar(jobLines, "name", 4) !== expectedName) {
     return `job name must be ${expectedName}`;
   }
-  if (getScalar(jobLines, "if", 4) !== "always()") {
+  if (!isAlwaysRunAggregateGate(getScalar(jobLines, "if", 4))) {
     return "job must use if: always()";
   }
   if (!sameList(getList(jobLines, "needs", 4), expectedNeeds)) {
@@ -292,7 +296,7 @@ function pathFilteredCiAggregateError(jobLines) {
   if (getScalar(jobLines, "name", 4) !== "Quality gate") {
     return "job name must be Quality gate";
   }
-  if (getScalar(jobLines, "if", 4) !== "always()") {
+  if (!isAlwaysRunAggregateGate(getScalar(jobLines, "if", 4))) {
     return "job must use if: always()";
   }
   const expectedNeedsMonolith = [

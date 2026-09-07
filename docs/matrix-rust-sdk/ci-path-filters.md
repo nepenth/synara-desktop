@@ -63,7 +63,10 @@ Examples:
 ## Quality gate
 
 `Quality gate` still aggregates results. Acceptable results per heavy job:
-`success` or `skipped`. Fail on `failure` / `cancelled` / missing.
+`success` or `skipped`. Fail on `failure` / `cancelled` / missing. The
+aggregate job uses `if: always() && !cancelled()` so a cancel-in-progress
+superseded run does not report a failed required check; the surviving run
+must still produce a green, non-cancelled Quality gate.
 
 ## Package smoke (2026-07-28 — D0 policy)
 

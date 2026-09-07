@@ -20,3 +20,7 @@ uniffi = { version = "=0.28.3", features = ["build"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "time"] }
+# Live fixture setup alone uses the normal product login/sync owner. The
+# shipping extension dependency above remains explicitly narrow.
+synara-core = { path = "../synara-core", features = ["full-uniffi"] }
+url = "2"

@@ -11,6 +11,6 @@ enum SharedCoreReadMarkers {
         if let ownReadEventID, MatrixServerEventIDPolicy.canAcknowledge(ownReadEventID) {
             return ownReadEventID
         }
-        return rowEventIDs.reversed().first(where: MatrixServerEventIDPolicy.canAcknowledge)
+        return nil
     }
 }

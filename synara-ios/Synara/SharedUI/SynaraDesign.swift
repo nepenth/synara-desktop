@@ -802,6 +802,7 @@ enum SynaraRadius {
 
 enum SynaraDepthLevel: String, CaseIterable {
     case content
+    case collection
     case layered
     case raised
     case floating
@@ -828,7 +829,7 @@ enum SynaraDepthLevel: String, CaseIterable {
             switch self {
             case .content:
                 preconditionFailure("Content depth is handled before increased-contrast metrics")
-            case .layered:
+            case .collection, .layered:
                 return SynaraDepthMetrics(
                     shadowOpacity: 0,
                     shadowRadius: 0,
@@ -872,6 +873,17 @@ enum SynaraDepthLevel: String, CaseIterable {
         switch self {
         case .content:
             preconditionFailure("Content depth is handled before standard metrics")
+        case .collection:
+            // Repeated rows need only a faint boundary. Casting a shadow from
+            // every room makes the list read as a stack of floating cards.
+            return SynaraDepthMetrics(
+                shadowOpacity: 0,
+                shadowRadius: 0,
+                shadowOffsetY: 0,
+                edgeOpacity: dark ? 0.035 : 0.025,
+                boundaryOpacity: (dark ? 0.20 : 0.12) * boundaryScale,
+                boundaryWidth: 0.5
+            )
         case .layered:
             return SynaraDepthMetrics(
                 shadowOpacity: (dark ? 0.24 : 0.055) * transparencyScale,
@@ -923,7 +935,7 @@ enum SynaraDepthLevel: String, CaseIterable {
 
 /// Semantic depth roles keep core surfaces consistent when visual metrics evolve.
 enum SynaraSurfaceDepthRole {
-    static let roomRow: SynaraDepthLevel = .layered
+    static let roomRow: SynaraDepthLevel = .collection
     static let standardMessage: SynaraDepthLevel = .layered
     static let emphasizedMessage: SynaraDepthLevel = .raised
     static let standardMessageShowsBackground = true

@@ -264,6 +264,7 @@ jobs:
             scripts/generate-synara-nse-core-swift.sh \
             synara-ios/scripts/check-notification-service-archive.sh \
             scripts/check-synara-nse-core-isolation.mjs \
+            scripts/check-synara-nse-core-production-features.mjs \
             scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
@@ -590,6 +591,10 @@ jobs:
         run: npm run test:browser:timeline
         working-directory: synara
 
+      - name: Test native timeline navigation in Chromium
+        run: npm run test:browser:native-timeline
+        working-directory: synara
+
       - name: Check production dependency advisories
         run: npm run check:security
         working-directory: synara
@@ -904,7 +909,9 @@ jobs:
 
   quality-gate:
     name: Quality gate
-    if: always()
+    # still runs after job failures; skip when this workflow was cancelled so a
+    # superseded push run cannot fail the required check on the surviving SHA.
+    if: always() && !cancelled()
     needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5

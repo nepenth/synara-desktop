@@ -1,6 +1,6 @@
 {
   "name": "synara",
-  "version": "2.1.28",
+  "version": "2.1.29",
   "description": "Synara app runtime for the native desktop shell",
   "main": "index.js",
   "type": "module",
@@ -20,7 +20,8 @@
     "typecheck:modernization": "tsc --noEmit -p tsconfig.modernization.json",
     "fix:prettier": "prettier --write .",
     "typecheck": "tsc --noEmit",
-    "prepare": "husky"
+    "prepare": "husky",
+    "test:browser:native-timeline": "playwright test --config e2e/native-timeline-harness/playwright.config.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": "eslint",

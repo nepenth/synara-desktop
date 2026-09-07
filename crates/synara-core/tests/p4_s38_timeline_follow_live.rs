@@ -288,3 +288,341 @@ async fn follow_live_promotes_unread_placement_and_keeps_receiving_sync() {
     .await
     .expect("promoted provider must still receive live events");
 }
+
+#[tokio::test]
+async fn visible_frontier_reads_folded_edits_and_reactions_but_not_unseen_new_messages() {
+    use ruma::events::room::message::RoomMessageEventContent;
+    use synara_core::app::timeline::{
+        NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateRequest,
+    };
+
+    let (server, client, owner, room, _, message) = focused_owner().await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room.clone(),
+            position: NativeTimelineOpenPosition::LiveBottom,
+        })
+        .await
+        .unwrap();
+    server.mock_send_read_markers().ok().expect(3).mount().await;
+    let mark = |event: String| NativeTimelineReadStateRequest {
+        stream_id: opened.stream_id.clone(),
+        action: NativeTimelineReadAction::MarkRead,
+        intent: NativeTimelineReadIntent::AutomaticVisibility,
+        observed_live_tail_event_id: Some(event),
+    };
+    let initial = owner.set_read_state(mark(message.clone())).await.unwrap();
+    assert_eq!(
+        initial.acknowledged_event_id.as_deref(),
+        Some(message.as_str())
+    );
+
+    let room_id = room_id!("!follow-live:example.org");
+    let message_id = event_id!("$follow-live-newer");
+    let edit_id = event_id!("$folded-edit");
+    let reaction_id = event_id!("$folded-reaction");
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_timeline_event(
+                f.text_msg("* tool update")
+                    .sender(*BOB)
+                    .event_id(edit_id)
+                    .edit(
+                        message_id,
+                        RoomMessageEventContent::text_plain("tool update").into(),
+                    ),
+            ),
+        )
+        .await;
+    for expected in [edit_id, reaction_id] {
+        if expected == reaction_id {
+            server
+                .sync_room(
+                    &client,
+                    JoinedRoomBuilder::new(room_id).add_timeline_event(
+                        f.reaction(message_id, "👍")
+                            .sender(*BOB)
+                            .event_id(reaction_id),
+                    ),
+                )
+                .await;
+        }
+        let snapshot = timeout(WAIT, async {
+            loop {
+                let snapshot = owner.snapshot(&opened.stream_id).await.unwrap();
+                if snapshot.read_state.receipt_tail_event_id.as_deref() == Some(expected.as_str()) {
+                    break snapshot;
+                }
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("folded event must reach the SDK read frontier");
+        assert_eq!(
+            snapshot.read_state.visible_tail_event_id.as_deref(),
+            Some(message.as_str())
+        );
+        assert!(
+            !snapshot.rows.iter().any(|row| matches!(row,
+            synara_core::app::timeline::TimelineViewRow::Message(item)
+                if item.event.event_id.as_deref() == Some(expected.as_str()))),
+            "the receipt target must not masquerade as a separately displayed message"
+        );
+        let readback = owner
+            .set_read_state(mark(snapshot.read_state.receipt_tail_event_id.unwrap()))
+            .await
+            .unwrap();
+        assert_eq!(readback.receipt_sent, Some(true));
+        assert_eq!(
+            readback.acknowledged_event_id.as_deref(),
+            Some(expected.as_str())
+        );
+    }
+
+    // Capture the old observation, then deliver a real new message before its
+    // automatic write executes. Even though Core now knows that message, the
+    // old visibility token cannot acknowledge it.
+    let unseen = event_id!("$unseen-after-frontier");
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(f.text_msg("not yet painted").sender(*BOB).event_id(unseen)),
+        )
+        .await;
+    timeout(WAIT, async {
+        loop {
+            let snapshot = owner.snapshot(&opened.stream_id).await.unwrap();
+            if snapshot.read_state.receipt_tail_event_id.as_deref() == Some(unseen.as_str()) {
+                assert_eq!(
+                    snapshot.read_state.visible_tail_event_id.as_deref(),
+                    Some(unseen.as_str())
+                );
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let rejected = owner
+        .set_read_state(mark(reaction_id.to_string()))
+        .await
+        .unwrap();
+    assert_eq!(rejected.receipt_sent, Some(false));
+    assert_eq!(rejected.acknowledged_event_id, None);
+
+    let requests = server.server().received_requests().await.unwrap();
+    let markers: Vec<serde_json::Value> = requests
+        .iter()
+        .filter(|request| request.url.path().ends_with("/read_markers"))
+        .map(|request| serde_json::from_slice(&request.body).unwrap())
+        .collect();
+    assert_eq!(markers.len(), 3);
+    for (body, expected) in markers.iter().zip([message_id, edit_id, reaction_id]) {
+        assert_eq!(body["m.fully_read"], expected.as_str());
+        assert_eq!(body["m.read.private"], expected.as_str());
+        assert!(
+            body.get("m.read").is_none(),
+            "automatic acknowledgement must remain private"
+        );
+    }
+}
+
+#[tokio::test]
+async fn last_read_hidden_edit_resolves_at_its_stream_position_not_the_edited_old_row() {
+    use ruma::events::room::message::RoomMessageEventContent;
+    let (server, client, owner, room, older, newer) = focused_owner().await;
+    let room_id = room_id!("!follow-live:example.org");
+    let old_id = ruma::EventId::parse(&older).unwrap();
+    let edit_id = event_id!("$edit-of-old-row");
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_timeline_event(
+                    f.text_msg("* edited old message")
+                        .sender(*BOB)
+                        .event_id(edit_id)
+                        .edit(
+                            &old_id,
+                            RoomMessageEventContent::text_plain("edited old message").into(),
+                        ),
+                )
+                .add_account_data(
+                    Raw::<AnyRoomAccountDataEvent>::from_json_string(
+                        serde_json::json!({
+                            "type": "m.fully_read", "content": { "event_id": edit_id }
+                        })
+                        .to_string(),
+                    )
+                    .unwrap(),
+                ),
+        )
+        .await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room,
+            position: NativeTimelineOpenPosition::Normal {
+                viewport: Default::default(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        opened.snapshot.read_state.own_read_event_id.as_deref(),
+        Some(edit_id.as_str())
+    );
+    assert_eq!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+    assert_ne!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(older.as_str())
+    );
+}
+
+#[tokio::test]
+async fn newer_comparable_receipt_wins_over_fully_read_for_restoration() {
+    use ruma::events::receipt::{ReceiptThread, ReceiptType};
+    let (server, client, owner, room, _older, newer) = focused_owner().await;
+    let room_id = room_id!("!follow-live:example.org");
+    let newer_id = ruma::EventId::parse(&newer).unwrap();
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_receipt(
+                f.read_receipts()
+                    .add(
+                        &newer_id,
+                        client.user_id().unwrap(),
+                        ReceiptType::ReadPrivate,
+                        ReceiptThread::Unthreaded,
+                    )
+                    .into_event(),
+            ),
+        )
+        .await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room,
+            position: NativeTimelineOpenPosition::Normal {
+                viewport: Default::default(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        opened.snapshot.read_state.own_read_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+    assert_eq!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+}
+
+#[tokio::test]
+async fn missing_last_read_retains_live_rows_and_an_explicit_navigation_target() {
+    let (server, client, owner, room, _older, newer) = focused_owner().await;
+    let room_id = room_id!("!follow-live:example.org");
+    let missing = event_id!("$unavailable-read-location");
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_account_data(
+                Raw::<AnyRoomAccountDataEvent>::from_json_string(
+                    serde_json::json!({
+                        "type": "m.fully_read", "content": { "event_id": missing }
+                    })
+                    .to_string(),
+                )
+                .unwrap(),
+            ),
+        )
+        .await;
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room,
+            position: NativeTimelineOpenPosition::Normal {
+                viewport: Default::default(),
+            },
+        })
+        .await
+        .unwrap();
+    assert_eq!(
+        opened.position,
+        TimelineViewPosition::Unread {
+            anchor_event_id: missing.to_string()
+        }
+    );
+    assert_eq!(
+        opened.snapshot.read_state.visible_tail_event_id.as_deref(),
+        Some(newer.as_str())
+    );
+    assert_eq!(
+        opened.snapshot.read_state.unread_anchor_event_id.as_deref(),
+        Some(missing.as_str())
+    );
+    assert!(
+        !server
+            .server()
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .any(|request| request.url.path().contains("/context/")),
+        "normal missing-anchor open must not replace live rows with a focused history request"
+    );
+}
+
+#[tokio::test]
+async fn one_cached_event_bootstraps_one_bounded_older_page_through_the_sdk() {
+    use matrix_sdk::test_utils::mocks::RoomMessagesResponseTemplate;
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!sparse-history:example.org");
+    let f = EventFactory::new().room(room_id);
+    let newest = event_id!("$sparse-newest");
+    let older = event_id!("$sparse-older");
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                .set_timeline_prev_batch("older-page")
+                .add_timeline_event(f.text_msg("cached message").sender(*BOB).event_id(newest)),
+        )
+        .await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default().events(vec![f
+            .text_msg("older context")
+            .sender(*BOB)
+            .event_id(older)
+            .into_raw_timeline()]))
+        .expect(1)
+        .mount()
+        .await;
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 1);
+    let opened = owner
+        .open_at(NativeTimelineOpenRequest {
+            room_id: room_id.to_string(),
+            position: NativeTimelineOpenPosition::LiveBottom,
+        })
+        .await
+        .unwrap();
+    assert!(opened.snapshot.rows.iter().any(|row| matches!(row,
+        synara_core::app::timeline::TimelineViewRow::Message(item)
+            if item.event.event_id.as_deref() == Some(older.as_str()))));
+    assert_eq!(
+        opened.snapshot.read_state.visible_tail_event_id.as_deref(),
+        Some(newest.as_str())
+    );
+}

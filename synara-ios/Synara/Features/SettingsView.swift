@@ -1188,8 +1188,13 @@ final class SessionCryptoStatusObserver: ObservableObject {
     }
 
     func start(crypto: CryptoStatusServicing) async {
+        // Device authority can change without any SAS flow in the inbox.
+        // Subscribe before the initial read so an in-flight key query's update
+        // is retained while that read is being projected.
+        let updates = crypto.sessionDeviceUpdates()
         await refresh(crypto: crypto)
-        for await _ in crypto.verificationUpdates() {
+        for await _ in updates {
+            guard Task.isCancelled == false else { break }
             await refresh(crypto: crypto)
         }
     }

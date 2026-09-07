@@ -18,19 +18,12 @@ import {
   SearchTab,
 } from './sidebar';
 import { CreateTab } from './sidebar/CreateTab';
-import { isSynaraDesktop } from '../../utils/desktop';
-import { isMacOS } from '../../utils/user-agent';
 
 export function SidebarNav() {
   const scrollRef = useRef<HTMLDivElement>(null);
-  // macOS overlay traffic lights float over the top-left corner. Reserve a
-  // draggable strip above the rail so the lights never cover navigation and
-  // the window stays movable. Other platforms keep native decorations.
-  const overlaySpacer = isSynaraDesktop() && isMacOS();
 
   return (
     <Sidebar>
-      {overlaySpacer && <div data-tauri-drag-region style={{ height: 28, flexShrink: 0 }} />}
       <SidebarContent
         scrollable={
           <Scroll ref={scrollRef} variant="Background" size="0">

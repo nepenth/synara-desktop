@@ -566,7 +566,43 @@ final class TimelineServiceTests: XCTestCase {
         )
     }
 
+    func testRoomTimelineTitleKeepsExplicitRouteTitleOverRoomListName() {
+        XCTAssertEqual(
+            RoomTimelineTitlePolicy.displayTitle(
+                resolved: nil,
+                routeTitle: "Project",
+                roomListName: "Product"
+            ),
+            "Project"
+        )
+        XCTAssertFalse(RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: "Project"))
+    }
+
+    func testRoomTimelineTitleHydratesFromRoomListWhenRouteOmitsTitle() {
+        XCTAssertEqual(
+            RoomTimelineTitlePolicy.displayTitle(
+                resolved: nil,
+                routeTitle: nil,
+                roomListName: "Product"
+            ),
+            "Product"
+        )
+        XCTAssertTrue(RoomTimelineTitlePolicy.shouldAdoptRoomListName(routeTitle: nil))
+    }
+
     func testRoomTimelineFocusPolicyOpensCaughtUpRoomsLive() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: false,
+                fullyReadEventID: "$synthetic-1:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: 3)
+            ),
+            .live
+        )
+    }
+
+    func testRoomTimelineZeroUnreadCountPreservesNewerComparableReceiptBehindTail() {
         XCTAssertEqual(
             RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
@@ -574,7 +610,19 @@ final class TimelineServiceTests: XCTestCase {
                 fullyReadEventID: "$synthetic-1:matrix.org",
                 liveItems: focusPolicyItems(receiptIndex: 2)
             ),
-            .live
+            .unread(markerEventID: "$synthetic-2:matrix.org")
+        )
+    }
+
+    func testRoomTimelineRestoresComparableLastReadEvenWhenUnreadCountHasNotArrived() {
+        XCTAssertEqual(
+            RoomTimelineFocusPolicy.initialMode(
+                focusedEventID: nil,
+                hasUnreadMessages: false,
+                fullyReadEventID: "$synthetic-0:matrix.org",
+                liveItems: focusPolicyItems(receiptIndex: nil)
+            ),
+            .unread(markerEventID: "$synthetic-0:matrix.org")
         )
     }
 
