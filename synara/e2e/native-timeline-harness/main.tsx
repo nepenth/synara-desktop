@@ -159,7 +159,7 @@ window.__SYNARA_DESKTOP__ = {
       if (!current) throw new Error('Unknown delayed source stream');
       const oldSnapshot = {
         ...current,
-        revision: current.revision + 10,
+        revision: current.revision + (params.has('sameStream') ? 0 : 10),
         position:
           command === 'matrix_timeline_follow_live'
             ? ({ kind: 'live_bottom' } as const)

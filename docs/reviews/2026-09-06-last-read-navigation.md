@@ -165,3 +165,26 @@ TypeScript, all 954 modernization tests, focused ESLint, and diff whitespace
 checks passed. The harness TSX remains outside the ESLint include pattern.
 No Rust or Swift build was run, and no live Matrix, iOS/device, or release claim
 is added by these mocked-native browser results.
+
+## Same-stream readback correction after Grok v2
+
+A pagination response copied before an already-applied delta now leaves that
+newer snapshot intact. Pagination uses the existing readback-staleness check only
+after confirming stream and navigation ownership. Unavailable pagination and
+read-state actions throw through the existing action handlers while retaining
+the ready provider; they no longer replace working rows with a synchronization
+error. Invalid non-stale snapshots still fail the synchronization check. Follow
+and poll already ignored same-stream lag and required no additional source change.
+
+Twelve new Chromium cases defer a command on the current provider, deliver a
+real Tauri event delta, and then release success, unavailability, or rejection for
+pagination/read-state/follow-live/poll. They assert the delta's rendered text,
+retained recovery control, one active provider, event/pixel geometry, and no
+unhandled error; pagination cases also exercise a retry. Against unchanged
+`ddda4f3f` product source, three failed: stale pagination success and unavailable
+pagination/read-state erased the rows. The other nine passed.
+
+Final validation: all 45 Chromium cases passed in a clean run, with full frontend
+TypeScript, 954 modernization tests, focused ESLint, and diff whitespace checks
+also passing. This correction changes Desktop code only and adds no native/Core
+build, live Matrix, signed iOS/device, or release evidence.

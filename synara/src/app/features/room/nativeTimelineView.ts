@@ -291,8 +291,8 @@ const isValidIndex = (index: number, length: number, allowEnd = false): boolean 
   Number.isInteger(index) && index >= 0 && index < length + (allowEnd ? 1 : 0);
 
 /**
- * A successful `set_read_state` readback can lag a live delta. Equal-or-older
- * snapshots for the same stream are stale, not a lost stream.
+ * Pagination and read-state readbacks can lag a live delta. Callers first
+ * confirm stream ownership; equal-or-older snapshots then keep the newer view.
  */
 export const isNativeTimelineReadbackStale = (
   current: NativeTimelineViewSnapshot | undefined,
@@ -737,7 +737,11 @@ export const useNativeTimelineView = (
         throw error;
       }
       if (superseded()) return;
-      if (!result.available || !result.value || !acceptSnapshot(result.value)) {
+      if (!result.available || !result.value) {
+        throw new Error('Native timeline pagination is unavailable.');
+      }
+      if (isNativeTimelineReadbackStale(snapshotRef.current, result.value)) return;
+      if (!acceptSnapshot(result.value)) {
         setState({
           status: 'error',
           error: new Error('Native timeline pagination lost synchronization.'),
@@ -781,11 +785,7 @@ export const useNativeTimelineView = (
       }
       if (superseded()) return;
       if (!result.available || !result.value) {
-        setState({
-          status: 'error',
-          error: new Error('Native timeline read state lost synchronization.'),
-        });
-        throw new Error('Native timeline read state lost synchronization.');
+        throw new Error('Native timeline read action is unavailable.');
       }
       const next = result.value.snapshot;
       if (isNativeTimelineReadbackStale(snapshotRef.current, next)) {

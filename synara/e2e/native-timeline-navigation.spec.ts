@@ -143,6 +143,49 @@ for (const operation of ['paginate', 'read', 'follow', 'poll']) {
   }
 }
 
+for (const operation of ['paginate', 'read', 'follow', 'poll']) {
+  for (const result of ['success', 'unavailable', 'reject']) {
+    test(`same-stream ${operation} ${result} preserves newer deltas and mounted rows`, async ({
+      page,
+    }) => {
+      const pageErrors: string[] = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+      await open(
+        page,
+        `sparse-missing&nativeEvents=1&earlyOpen=initial&sameStream=1&delayOperation=${operation}&operationResult=${result}`
+      );
+      const command = {
+        read: 'matrix_timeline_set_read_state',
+        paginate: 'matrix_timeline_paginate',
+        follow: 'matrix_timeline_follow_live',
+        poll: 'matrix_timeline_snapshot',
+      }[operation]!;
+      if (operation === 'paginate')
+        await page.getByRole('button', { name: 'Load older messages' }).click();
+      await expect.poll(() => commandCount(page, command)).toBeGreaterThan(0);
+      await fixture(page, 'emitAfterOpen');
+      const changed = page.getByText('Last read changed after adoption', { exact: true });
+      await expect(changed).toBeVisible();
+      const before = await geometry(page);
+      await fixture(page, 'releaseOperation');
+      await page.waitForTimeout(100);
+      await expect(changed).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Jump to Last Read' })).toBeVisible();
+      await expect.poll(() => activeStreamCount(page)).toBe(1);
+      const after = await geometry(page);
+      expect(after.eventId).toBe(before.eventId);
+      expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+      expect(pageErrors).toEqual([]);
+      if (result === 'success') await expect(page.getByText(/lost synchronization/)).toBeHidden();
+      if (operation === 'paginate') {
+        await page.getByRole('button', { name: 'Load older messages' }).click();
+        await expect.poll(() => commandCount(page, command)).toBe(2);
+        await expect(changed).toBeVisible();
+      }
+    });
+  }
+}
+
 test('missing last read opens at the live tail and survives successful live promotion', async ({
   page,
 }) => {
