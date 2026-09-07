@@ -10,6 +10,7 @@
 #![allow(unused_imports)]
 
 mod decision;
+mod edit_policy;
 mod error;
 mod http_pusher;
 mod index;
