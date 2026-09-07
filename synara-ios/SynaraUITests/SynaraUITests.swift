@@ -1157,23 +1157,21 @@ final class SynaraUITests: XCTestCase {
         else {
             throw XCTSkip("Two dedicated live test accounts are required.")
         }
+        let cleanup = LiveReadFixtureCleanup()
+        // XCTest still runs registered teardown when fail-fast assertions abort
+        // the test body. Register before setup and retain each acquired handle.
+        addTeardownBlock {
+            cleanup.run { failures in
+                XCTFail("Live read cleanup failed: \(failures.map(\.rawValue).joined(separator: ", "))")
+            }
+        }
         let reader = try MatrixLiveTestClient.login(homeserver: homeserver, username: username, password: password)
-        defer {
-            do { try reader.logout() }
-            catch { XCTFail("Live read cleanup failed: reader helper logout") }
-        }
+        cleanup.readerLogout = { try reader.logout() }
         let writer = try MatrixLiveTestClient.login(homeserver: homeserver, username: secondUsername, password: secondPassword)
-        defer {
-            do { try writer.logout() }
-            catch { XCTFail("Live read cleanup failed: writer helper logout") }
-        }
+        cleanup.writerLogout = { try writer.logout() }
         let roomID = try reader.createPrivateRoom(name: "Synara read proof \(UUID().uuidString.prefix(8))")
-        defer {
-            do { try writer.leaveRoom(roomID: roomID) }
-            catch { XCTFail("Live read cleanup failed: writer leave") }
-            do { try reader.leaveRoom(roomID: roomID) }
-            catch { XCTFail("Live read cleanup failed: reader leave") }
-        }
+        cleanup.readerLeave = { try reader.leaveRoom(roomID: roomID) }
+        cleanup.writerLeave = { try writer.leaveRoom(roomID: roomID) }
         try reader.invite(writer, roomID: roomID)
         try writer.joinRoom(roomID: roomID)
         let initialBody = "Read proof initial \(UUID().uuidString.prefix(8))"
@@ -1248,6 +1246,43 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(offscreenRow.isHittable)
         XCTAssertTrue(reader.waitForFullyRead(roomID: roomID, eventID: offscreenEvent, timeout: 20))
         try assertServerReadState(reader, roomID: roomID, eventID: offscreenEvent, phase: "reopened")
+    }
+
+    func testLiveReadCleanupAttemptsAllOperationsBeforeReportingFailure() {
+        enum InjectedFailure: Error { case expected }
+        let cleanup = LiveReadFixtureCleanup()
+        var calls: [String] = []
+        cleanup.writerLeave = {
+            calls.append("writer leave")
+            throw InjectedFailure.expected
+        }
+        cleanup.readerLeave = { calls.append("reader leave") }
+        cleanup.writerLogout = {
+            calls.append("writer logout")
+            throw InjectedFailure.expected
+        }
+        cleanup.readerLogout = { calls.append("reader logout") }
+        var reported: [[LiveReadFixtureCleanup.Failure]] = []
+        cleanup.run { failures in
+            calls.append("report failure")
+            reported.append(failures)
+        }
+        XCTAssertEqual(calls, ["writer leave", "reader leave", "writer logout", "reader logout", "report failure"])
+        XCTAssertEqual(reported, [[.writerLeave, .writerLogout]])
+    }
+
+    func testLiveReadCleanupRetainsHandlesFromPartialSetup() {
+        for writerWasCreated in [false, true] {
+            let cleanup = LiveReadFixtureCleanup()
+            var calls: [String] = []
+            cleanup.readerLogout = { calls.append("reader logout") }
+            if writerWasCreated {
+                cleanup.writerLogout = { calls.append("writer logout") }
+            }
+            // Writer login or room creation failed: there is no room handle.
+            cleanup.run { _ in XCTFail("Successful partial cleanup must not report failure") }
+            XCTAssertEqual(calls, writerWasCreated ? ["writer logout", "reader logout"] : ["reader logout"])
+        }
     }
 
     private func assertServerReadState(
@@ -2935,6 +2970,38 @@ final class SynaraUITests: XCTestCase {
         let directoryURL = URL(fileURLWithPath: directory, isDirectory: true)
         try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
         try app.screenshot().pngRepresentation.write(to: directoryURL.appendingPathComponent("\(name).png"))
+    }
+}
+
+/// Test-only cleanup for the live read fixture. No assertion may run until all
+/// known operations have been attempted: this suite uses continueAfterFailure=false.
+private final class LiveReadFixtureCleanup {
+    enum Failure: String {
+        case writerLeave = "writer leave"
+        case readerLeave = "reader leave"
+        case writerLogout = "writer helper logout"
+        case readerLogout = "reader helper logout"
+    }
+
+    var writerLeave: (() throws -> Void)?
+    var readerLeave: (() throws -> Void)?
+    var writerLogout: (() throws -> Void)?
+    var readerLogout: (() throws -> Void)?
+
+    func run(reportFailure: ([Failure]) -> Void) {
+        let operations: [(Failure, (() throws -> Void)?)] = [
+            (.writerLeave, writerLeave),
+            (.readerLeave, readerLeave),
+            (.writerLogout, writerLogout),
+            (.readerLogout, readerLogout),
+        ]
+        var failures: [Failure] = []
+        for (failure, operation) in operations {
+            guard let operation else { continue }
+            do { try operation() }
+            catch { failures.append(failure) }
+        }
+        if failures.isEmpty == false { reportFailure(failures) }
     }
 }
 

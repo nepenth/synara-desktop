@@ -98,3 +98,31 @@ The corrected caught-up fixture and zero-count regression passed among 125
 TimelineServiceTests. The repair contains no product changes. The preserved
 boundary mechanism is the existing single-observation proof, now reading the
 server's advancing stream and asserting receipt/count separately.
+
+
+## Cleanup completion correction
+
+Grok found that the suite sets `continueAfterFailure = false`, so reporting a
+failed leave with `XCTFail` inside a defer could abort the remaining cleanup.
+The fixture now registers one XCTest teardown block before the first login and
+retains each known helper operation as setup progresses. Teardown attempts both
+known room leaves and both known helper logouts, collecting only static failure
+labels, then reports one failure after all operations have been attempted. This
+also retains cleanup for a failed second login or room creation, and lets XCTest
+run it when an earlier fail-fast UI assertion aborts the test body.
+
+A focused failure-injection regression makes the first leave and writer logout
+throw, verifies that the other leave and both logouts still run, and confirms the
+single failure report occurs last with both static labels. A partial-setup
+regression covers a reader-only session and both helper sessions without a room.
+These tests use synthetic closures and create no live sessions or rooms. The
+app-created session remains on the dedicated simulator as documented above.
+The observer, receipt/count assertions, caught-up fixtures, and all production
+code are unchanged by this completion-only correction.
+
+
+Signed focused validation passed: both cleanup regressions, zero failures, in
+`/private/tmp/synara-live-read-cleanup.xcresult` with the matching existing Apple
+artifacts. This compiled the corrected fixture and exercised its cleanup logic
+without live accounts. No live rerun was needed for this completion-only delta;
+the earlier live receipt/navigation evidence retains its stated scope.
