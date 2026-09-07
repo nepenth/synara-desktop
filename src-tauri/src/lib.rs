@@ -650,15 +650,9 @@ pub fn run() {
                 .title("Synara")
                 .inner_size(1280.0, 900.0)
                 .min_inner_size(960.0, 720.0);
-            // The native titlebar is OS-painted and never matches the app
-            // theme. macOS overlays traffic lights over the persistent in-app
-            // drag strip; Linux drops server
-            // decorations in favor of the in-app titlebar strip, which owns
-            // drag and window controls through the desktop_window_* commands.
-            #[cfg(target_os = "macos")]
-            let window_builder = window_builder
-                .title_bar_style(tauri::TitleBarStyle::Overlay)
-                .hidden_title(true);
+            // Keep the native macOS titlebar: the OS owns window movement and
+            // traffic lights without requiring an asynchronous WebView drag.
+            // Linux uses the in-app strip and its explicit window controls.
             #[cfg(target_os = "linux")]
             let window_builder = window_builder.decorations(false);
             let window = window_builder

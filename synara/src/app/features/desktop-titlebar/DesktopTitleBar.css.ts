@@ -13,8 +13,3 @@ export const DragRegion = style({
   minWidth: 0,
   height: '100%',
 });
-
-// Native traffic lights occupy the leading 80 points in overlay mode.
-export const MacTitleBar = style({
-  paddingLeft: toRem(80),
-});
