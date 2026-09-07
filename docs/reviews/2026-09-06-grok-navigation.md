@@ -102,3 +102,29 @@ One remaining stream-ownership hole can still replace a healthy adopted view.
 - The 33 Chromium cases, 954 modernization tests, and type/lint runs were not re-executed here.
 - Core/Swift were not in this delta and were not re-reviewed.
 - Signed iOS / observer `2feb` live-app results do not substitute for this desktop source review. Mocked-native browser proof does not establish live Matrix behavior.
+
+
+## Pagination correction acceptance
+
+Grok 4.6 High; exact head `7a3487622eb09078089f4e34e636accb9641afce`, session `01a0797b-e7a0-7ef2-88d7-5d2fde5c9110`. Independent agent review also accepted this correction.
+
+I'll re-read the paginate/read/follow/poll ownership paths at this head and check for the same stale-readback failure on remaining commands.**ACCEPT**
+
+The same-stream paginate hole is fixed in source: after stream/navigation ownership checks, an equal-or-older snapshot is dropped and the already-applied view stays (`nativeTimelineView.ts` 739–743). Unavailable pagination and read-state no longer swap ready rows for a sync error; they throw to the existing action handlers (740–741, 787–788). Incompatible non-stale snapshots still fail closed (744–749, 800–804).
+
+Analogous commands on the adopted stream:
+
+| Command | Lagging success | Unavailable / reject |
+|---|---|---|
+| Paginate | `isNativeTimelineReadbackStale` then return | throw, ready state kept |
+| Read | stale ignored (791–793) | throw, ready state kept |
+| Follow | `canAcceptNativeTimelineFollowReadback` requires `revision >= current` (835–837); no `setState('error')` on miss | superseded return / throw to presenter catch that keeps the stream |
+| Poll | `acceptSnapshot` false is ignored (1062) | `.catch(() => undefined)` then return (1036–1045) |
+
+`jumpLatest` / `restoreLastRead` still error or discard on a failed **replacement** open; that is a new-stream path, not a lagging snapshot on the current provider. Live subscription gaps still fail sync in `applyBatch` (1012–1018), which is the actual stream, not a stale RPC copy.
+
+Prior last-read/follow/click repairs are unchanged in this delta.
+
+---
+
+**Verification limits (not defects):** HEAD `7a348762` was not re-hashed (no Shell). The 45 Chromium cases, 954 modernization tests, and type/lint runs were not re-executed here. This is Desktop source review only. It is not live Matrix, signed iOS, physical-device, or release proof. Core/Swift were not in this delta. The separate iOS upload/latest CI defect is out of scope.
