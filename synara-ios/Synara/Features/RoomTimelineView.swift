@@ -271,6 +271,7 @@ struct RoomTimelineView: View {
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.scenePhase) private var scenePhase
     @State private var isReadSceneActive = false
+    @State private var resolvedRoomTitle: String?
     @State private var state: TimelineViewState = .idle
     @State private var draft: String = ""
     @State private var replyTarget: ComposerRelationTarget?
@@ -347,10 +348,14 @@ struct RoomTimelineView: View {
         self.focusedEventID = focusedEventID
     }
 
+    private var displayRoomTitle: String {
+        resolvedRoomTitle ?? environment.roomList.roomDisplayName(roomID: roomID) ?? roomTitle ?? "Room"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             TimelineHeader(
-                title: roomTitle ?? "Room",
+                title: displayRoomTitle,
                 subtitle: timelineSubtitle,
                 cryptoLabel: cryptoStatus.roomHeaderLabel,
                 cryptoSystemImage: cryptoStatus.roomHeaderSystemImage,
@@ -401,7 +406,7 @@ struct RoomTimelineView: View {
             )
         }
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
-        .navigationTitle(roomTitle ?? "Room")
+        .navigationTitle(displayRoomTitle)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
@@ -412,7 +417,7 @@ struct RoomTimelineView: View {
         .sheet(isPresented: $isRoomDetailsPresented) {
             RoomDetailsView(
                 roomID: roomID,
-                fallbackTitle: roomTitle ?? "Room",
+                fallbackTitle: displayRoomTitle,
                 onLeaveRoom: {
                     shouldReturnToListAfterDetailsDismiss = true
                     isRoomDetailsPresented = false
@@ -421,7 +426,7 @@ struct RoomTimelineView: View {
                     isRoomDetailsPresented = false
                     Task { @MainActor in
                         await Task.yield()
-                        environment.router.route(to: .room(id: roomID, eventID: eventID, title: roomTitle))
+                        environment.router.route(to: .room(id: roomID, eventID: eventID, title: displayRoomTitle))
                     }
                 }
             )
@@ -519,10 +524,33 @@ struct RoomTimelineView: View {
         } message: {
             Text(roomNotesActionMessage ?? "")
         }
+        .task(id: "room-title-\(currentUserID)-\(roomID)") {
+            // Notification routes carry stable room/event IDs, not room metadata.
+            // Hydrate only presentation from the room-list owner; changing the
+            // title must not replace the focused timeline or its scroll target.
+            resolvedRoomTitle = environment.roomList.roomDisplayName(roomID: roomID)
+            for await update in environment.roomList.roomUpdates() {
+                guard !Task.isCancelled else { return }
+                if case let .loaded(rooms) = update,
+                   let name = rooms.first(where: { $0.id == roomID })?.name,
+                   name != resolvedRoomTitle {
+                    resolvedRoomTitle = name
+                }
+            }
+        }
         .task(id: timelineTaskID) {
             resetTimelineState()
             let expectedTimelineTaskID = timelineTaskID
             let expectedUserID = currentUserID
+            // Cold notification routes can construct this screen before the
+            // root shell has restored/attached Core. Share the existing startup
+            // gate instead of opening a timeline against an unprepared owner.
+            if case let .signedIn(session) = environment.session.currentState {
+                guard await environment.sessionReadiness.waitUntilPrepared(for: session) else { return }
+            }
+            guard !Task.isCancelled,
+                  expectedTimelineTaskID == timelineTaskID,
+                  expectedUserID == currentUserID else { return }
             let roomOpenSignpostID = PerformanceTrace.begin("RoomOpen")
             defer {
                 PerformanceTrace.end("RoomOpen", id: roomOpenSignpostID)
@@ -1547,7 +1575,7 @@ struct RoomTimelineView: View {
             to: .thread(
                 roomID: roomID,
                 rootEventID: item.eventID,
-                roomTitle: roomTitle,
+                roomTitle: displayRoomTitle,
                 rootTitle: item.threadTitle
             )
         )
@@ -3108,6 +3136,7 @@ private struct TimelineHeader: View {
                     Text("#")
                         .foregroundStyle(SynaraColor.secondaryText)
                     Text(title)
+                        .accessibilityIdentifier("TimelineRoomTitle")
                         .font(SynaraTypography.sectionTitle.weight(.semibold))
                         .foregroundStyle(SynaraColor.headingText)
                         .lineLimit(1)

@@ -77,6 +77,15 @@ enum SynaraNotificationDiagnostics {
         case sharedSessionMissing = "shared-session-missing"
         case sharedStoreNotReady = "shared-store-not-ready"
         case coreResolutionFailed = "core-resolution-failed"
+        case coreSessionUnavailable = "core-session-unavailable"
+        case coreStoreUnavailable = "core-store-unavailable"
+        case coreRestoreFailed = "core-restore-failed"
+        case coreFetchFailed = "core-fetch-failed"
+        case coreResolutionTimedOut = "core-resolution-timed-out"
+        case coreEventFiltered = "core-event-filtered"
+        case coreEventRedacted = "core-event-redacted"
+        case coreEventUnavailable = "core-event-unavailable"
+        case coreDecryptionUnavailable = "core-decryption-unavailable"
         case resolvedWithoutPreview = "resolved-without-preview"
         case resolvedPreview = "resolved-preview"
         case resolvedApproval = "resolved-approval"
@@ -100,6 +109,23 @@ enum SynaraNotificationDiagnostics {
         case foregroundReceived = "foreground-received"
         case backgroundReceived = "background-received"
         case responseReceived = "response-received"
+    }
+
+    /// Never persist arbitrary Core/error text. Unknown future or malformed
+    /// codes collapse to the existing fixed generic stage.
+    static func previewFailureStage(coreCode: String) -> Stage {
+        switch coreCode {
+        case "p4-s3b-material-missing": return .coreSessionUnavailable
+        case "p4-s3b-restore-failed": return .coreRestoreFailed
+        case "p4-s3-secret-vault-unavailable": return .coreStoreUnavailable
+        case "p4-s11-nse-event-fetch-failed", "p4-s11-nse-client-init-failed": return .coreFetchFailed
+        case "p4-s11-nse-resolution-timeout": return .coreResolutionTimedOut
+        case "p4-s11-nse-event-filtered": return .coreEventFiltered
+        case "p4-s11-nse-event-redacted": return .coreEventRedacted
+        case "p4-s11-nse-event-not-in-store": return .coreEventUnavailable
+        case "p4-s11-nse-decryption-unavailable": return .coreDecryptionUnavailable
+        default: return .coreResolutionFailed
+        }
     }
 
     static let maximumEntries = 256

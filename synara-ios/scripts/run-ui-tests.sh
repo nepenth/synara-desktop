@@ -120,6 +120,7 @@ settings_and_workflows=(
 )
 
 live_and_visual=(
+  testLiveNotificationTapContextWhenConfigured
   testLiveAutomaticReadWhenConfigured
   testLiveStaleCacheSmokeWhenConfigured
   testLiveSmokeWhenConfigured

@@ -1194,6 +1194,75 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(try reader.hasPrivateReadReceipt(roomID: roomID, eventID: offscreenEvent))
     }
 
+    func testLiveNotificationTapContextWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard liveEnvironmentValue("SYNARA_LIVE_NOTIFICATION_TAP_SMOKE", in: environment) == "1" else {
+            throw XCTSkip("Requires the authorized simulator push fixture runner.")
+        }
+        func required(_ key: String) throws -> String {
+            try XCTUnwrap(liveEnvironmentValue(key, in: environment), "Missing notification fixture input")
+        }
+        let homeserver = try required("SYNARA_LIVE_HOMESERVER")
+        let username = try required("SYNARA_LIVE_USERNAME")
+        let password = try required("SYNARA_LIVE_PASSWORD")
+        let roomID = try required("SYNARA_LIVE_NOTIFICATION_ROOM_ID")
+        let roomName = try required("SYNARA_LIVE_NOTIFICATION_ROOM_NAME")
+        let target = try required("SYNARA_LIVE_NOTIFICATION_EVENT_ID")
+        let previous = try required("SYNARA_LIVE_NOTIFICATION_PREVIOUS_EVENT_ID")
+        let following = try required("SYNARA_LIVE_NOTIFICATION_FOLLOWING_EVENT_ID")
+        let bannerTitle = try required("SYNARA_LIVE_NOTIFICATION_BANNER_TITLE")
+        let app = XCUIApplication()
+        app.launchEnvironment["SYNARA_RESET_SESSION_ON_LAUNCH"] = "1"
+        app.launch()
+        loginLive(app: app, homeserver: homeserver, username: username, password: password)
+        dismissPasswordSavePromptIfPresent(app: app)
+        XCTAssertTrue(app.buttons["RoomRow-\(roomID)"].waitForExistence(timeout: 60))
+        app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
+        tap(app.buttons["SettingsTab"], timeout: 20)
+        tapSettingsElement(app.buttons["NotificationSettingsLink"], app: app, timeout: 10)
+        let permission = app.buttons["NotificationPermissionButton"]
+        XCTAssertTrue(permission.waitForExistence(timeout: 10))
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        if permission.label == "Enable Notifications" {
+            permission.tap()
+            let alert = springboard.alerts.firstMatch
+            if alert.waitForExistence(timeout: 5) { tap(alert.buttons["Allow"]) }
+        }
+        // The external runner delivers an actual simulator remote notification
+        // after each closed-vocabulary readiness marker. No app route is injected.
+        for phase in ["warm", "cold"] {
+            if phase == "cold" {
+                app.terminate()
+                app.launchEnvironment.removeValue(forKey: "SYNARA_RESET_SESSION_ON_LAUNCH")
+            }
+            XCUIDevice.shared.press(.home)
+            print("synara_notification_tap phase=\(phase)-ready")
+            let banner = springboard.descendants(matching: .any)
+                .matching(NSPredicate(format: "label CONTAINS %@", bannerTitle)).firstMatch
+            XCTAssertTrue(banner.waitForExistence(timeout: 45), "Expected simulator notification banner")
+            // SpringBoard's notification accessibility container can report
+            // isHittable=false while the visible banner has a valid frame.
+            XCTAssertFalse(banner.frame.isEmpty)
+            print("synara_notification_tap banner_frame=\(banner.frame)")
+            banner.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+            let roomTitle = app.staticTexts["TimelineRoomTitle"]
+            let titleReady = XCTNSPredicateExpectation(
+                predicate: NSPredicate(format: "exists == true AND label == %@", roomName), object: roomTitle
+            )
+            XCTAssertEqual(XCTWaiter.wait(for: [titleReady], timeout: 60), .completed,
+                           "A notification destination must hydrate the room's real name.")
+            let targetRow = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(target)").firstMatch
+            XCTAssertTrue(targetRow.waitForExistence(timeout: 30))
+            XCTAssertTrue(targetRow.isHittable, "The notified event must remain the focused target.")
+            for neighbor in [previous, following] {
+                let row = app.descendants(matching: .any).matching(identifier: "TimelineItem-\(neighbor)").firstMatch
+                XCTAssertTrue(row.waitForExistence(timeout: 15), "Notification must open surrounding room history.")
+            }
+            XCTAssertTrue(app.buttons["RoomDetailsButton"].exists)
+            print("synara_notification_tap phase=\(phase)-confirmed")
+        }
+    }
+
     func testLiveSmokeWhenConfigured() throws {
         let environment = ProcessInfo.processInfo.environment
         guard liveEnvironmentValue("SYNARA_LIVE_SMOKE", in: environment) == "1" else {
