@@ -159,3 +159,13 @@ test("adding an icon cannot hide a workflow or dependency edit", () => {
     "true"
   );
 });
+
+
+test("NSE production feature guard changes run both iOS gates", () => {
+  const result = scopes(["scripts/check-synara-nse-core-production-features.mjs"], {
+    EVENT_NAME: "push",
+    GITHUB_REF_NAME: "main",
+  });
+  assert.equal(result.ios, "true");
+  assert.equal(result.ios_ui, "true");
+});
