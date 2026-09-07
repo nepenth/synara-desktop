@@ -68,3 +68,23 @@ No claim of macOS/Linux native drag success or iOS visual acceptance is made
 from the browser render or source checks. The separate collection role preserves
 the existing increased-contrast boundary, but device appearance remains for
 visual review.
+
+## Independent review repair
+
+Review found the newly persistent strip exposed an existing splash-screen
+`min-height: 100%`: at a 720-pixel viewport the splash started at y=40 and ended
+at y=760. SplashScreen now owns the remaining flex height (`flex: 1 1 0`, zero
+minimum height, vertical overflow available for unusually large content).
+
+A clean 1280 × 720 component run exercised configuration loading, the real
+configuration error component, and a recovery fixture using the production
+SplashScreen. Each splash measured y=40, height=680, bottom=720; each footer
+measured y=658, height=62, bottom=720. Retry, Continue, and recovery actions were
+clickable. This proves the shared layout and error controls, not a live account
+recovery operation.
+
+Dark-mode evidence was recaptured after the theme class changed and the 140 ms
+control transitions settled (250 ms capture delay). The selected navigation
+foreground was rgb(177,178,179) on rgb(39,40,42); the earlier transient screenshot
+is superseded. Light/dark settled images were inspected and the Settings fixture
+switch remained independently clickable.
