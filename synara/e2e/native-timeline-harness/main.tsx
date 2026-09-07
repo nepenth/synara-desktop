@@ -7,6 +7,7 @@ import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimel
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
 import type {
   NativeTimelinePosition,
+  NativeTimelineViewDeltaBatch,
   NativeTimelineViewSnapshot,
 } from '../../src/app/features/room/nativeTimelineView';
 
@@ -18,6 +19,13 @@ let stream = 0;
 let releaseJump: (() => void) | undefined;
 let releaseLastRead: (() => void) | undefined;
 let failLastRead = params.has('failLastRead');
+let lastCandidateStreamId: string | undefined;
+let releaseOperation: (() => void) | undefined;
+let operationDeferred = false;
+const eventCallbacks = new Map<number, (event: unknown) => void>();
+const eventListeners = new Map<number, { event: string; handler: number }>();
+let callbackSequence = 0;
+let eventSequence = 0;
 const commands: { command: string; args?: Record<string, unknown> }[] = [];
 const makeRow = (index: number) => ({
   kind: 'message' as const,
@@ -49,6 +57,30 @@ let position: NativeTimelinePosition =
     : { kind: 'live_bottom' };
 let snapshot: NativeTimelineViewSnapshot;
 const snapshots = new Map<string, NativeTimelineViewSnapshot>();
+const emitCandidateUpdate = (body: string, skipRevision = false, remove = false) => {
+  if (!lastCandidateStreamId) throw new Error('No candidate stream');
+  const current = snapshots.get(lastCandidateStreamId);
+  if (!current) return;
+  const row = { ...current.rows[0], body };
+  const batch: NativeTimelineViewDeltaBatch = {
+    schemaVersion: 1,
+    sessionGeneration: current.sessionGeneration,
+    roomId: current.roomId,
+    streamId: lastCandidateStreamId,
+    revision: current.revision + (skipRevision ? 2 : 1),
+    ops: remove ? [{ op: 'remove', index: 0 }] : [{ op: 'set', index: 0, row }],
+  };
+  snapshots.set(lastCandidateStreamId, {
+    ...current,
+    revision: batch.revision,
+    rows: remove ? current.rows.slice(1) : [row, ...current.rows.slice(1)],
+  });
+  for (const [id, listener] of eventListeners) {
+    if (listener.event === 'matrix-timeline-view-updated') {
+      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
+    }
+  }
+};
 const update = () => {
   snapshot = {
     schemaVersion: 1,
@@ -92,6 +124,8 @@ const openSnapshot = (selectedPosition: NativeTimelinePosition, includeLastRead 
   const streamId = `fixture-${++stream}`;
   const result = {
     ...snapshot,
+    // Core revisions are independent and start at zero for every opened stream.
+    revision: 0,
     position: selectedPosition,
     rows:
       includeLastRead && !rows.some((row) => row.eventId === '$missing')
@@ -113,6 +147,36 @@ window.__SYNARA_DESKTOP__ = {
           observedLiveTailEventId?: string;
         }
       | undefined;
+    const delayedCommand = {
+      read: 'matrix_timeline_set_read_state',
+      paginate: 'matrix_timeline_paginate',
+      follow: 'matrix_timeline_follow_live',
+      poll: 'matrix_timeline_snapshot',
+    }[params.get('delayOperation') ?? ''];
+    if (params.has('delayOperation') && command === delayedCommand && !operationDeferred) {
+      operationDeferred = true;
+      const current = snapshots.get(request?.streamId ?? (args?.streamId as string));
+      if (!current) throw new Error('Unknown delayed source stream');
+      const oldSnapshot = {
+        ...current,
+        revision: current.revision + 10,
+        position:
+          command === 'matrix_timeline_follow_live'
+            ? ({ kind: 'live_bottom' } as const)
+            : current.position,
+      };
+      await new Promise<void>((resolve) => {
+        releaseOperation = resolve;
+      });
+      if (params.get('operationResult') === 'reject')
+        throw new Error('Superseded operation rejected');
+      if (params.get('operationResult') === 'unavailable') return undefined as T;
+      return (
+        command === 'matrix_timeline_set_read_state'
+          ? { snapshot: oldSnapshot, receiptSent: true }
+          : oldSnapshot
+      ) as T;
+    }
     if (command === 'matrix_timeline_open') {
       let selectedPosition = position;
       let lastRead = false;
@@ -126,6 +190,19 @@ window.__SYNARA_DESKTOP__ = {
         throw new Error('Last-read context is temporarily unavailable');
       }
       const opened = openSnapshot(selectedPosition, lastRead && !params.has('omitLastRead'));
+      if (lastRead || params.get('earlyOpen') === 'initial') {
+        lastCandidateStreamId = opened.streamId;
+        if (params.has('earlyDeltas')) {
+          const count = params.get('earlyDeltas') === 'overflow' ? 65 : 1;
+          for (let index = 0; index < count; index += 1) {
+            emitCandidateUpdate(
+              'Last read changed during open',
+              params.get('earlyDeltas') === 'gap',
+              params.get('earlyDeltas') === 'remove'
+            );
+          }
+        }
+      }
       if (lastRead && params.has('delayLastRead')) {
         await new Promise<void>((resolve) => {
           releaseLastRead = resolve;
@@ -133,7 +210,12 @@ window.__SYNARA_DESKTOP__ = {
       }
       return opened as T;
     }
-    if (command === 'matrix_timeline_snapshot') return snapshots.get(args?.streamId as string) as T;
+    if (command === 'matrix_timeline_snapshot') {
+      // Event-route tests cannot pass by repairing a lost batch with a later poll.
+      return (
+        params.has('nativeEvents') ? undefined : snapshots.get(args?.streamId as string)
+      ) as T;
+    }
     if (command === 'matrix_timeline_follow_live') {
       if (args?.observedLiveTailEventId !== rows.at(-1)?.eventId) throw new Error('Unseen tail');
       const current = snapshots.get(args?.streamId as string);
@@ -159,6 +241,10 @@ window.__SYNARA_DESKTOP__ = {
     }
     if (command === 'matrix_timeline_jump_latest') {
       const opened = openSnapshot({ kind: 'live_bottom' });
+      if (params.get('earlyOpen') === 'latest') {
+        lastCandidateStreamId = opened.streamId;
+        emitCandidateUpdate('Changed during latest');
+      }
       if (params.has('delayJump'))
         await new Promise<void>((resolve) => {
           releaseJump = resolve;
@@ -175,9 +261,42 @@ window.__SYNARA_DESKTOP__ = {
   },
 };
 
+if (params.has('nativeEvents')) {
+  Object.assign(window, {
+    __TAURI_INTERNALS__: {
+      transformCallback: (handler: (event: unknown) => void) => {
+        const id = ++callbackSequence;
+        eventCallbacks.set(id, handler);
+        return id;
+      },
+      invoke: async (command: string, args: Record<string, unknown>) => {
+        if (command === 'plugin:event|listen') {
+          const id = ++eventSequence;
+          eventListeners.set(id, { event: args.event as string, handler: args.handler as number });
+          return id;
+        }
+        if (command === 'plugin:event|unlisten') {
+          eventListeners.delete(args.eventId as number);
+          return undefined;
+        }
+        return window.__SYNARA_DESKTOP__?.invoke?.(command, args);
+      },
+    },
+    __TAURI_EVENT_PLUGIN_INTERNALS__: {
+      unregisterListener: (_event: string, id: number) => {
+        const listener = eventListeners.get(id);
+        if (listener) eventCallbacks.delete(listener.handler);
+        eventListeners.delete(id);
+      },
+    },
+  });
+}
+
 const api = {
   commands,
   activeStreamCount: () => snapshots.size,
+  emitAfterOpen: () => emitCandidateUpdate('Last read changed after adoption'),
+  releaseOperation: () => releaseOperation?.(),
   append() {
     rows.push(makeRow(++sequence));
     update();

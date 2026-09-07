@@ -584,6 +584,57 @@ export async function requestNativeTimelineFollowLive(
   return result.value;
 }
 
+// Core subscribes before returning the open snapshot. Keep the candidate's
+// intervening deltas until its stream ID is known, with a bounded lifetime and
+// size. An incomplete candidate is rejected without replacing the current view.
+const createNativeTimelineOpenBuffer = (roomId: string, sessionGeneration?: number) => {
+  let batches: NativeTimelineViewDeltaBatch[] = [];
+  let retainedItems = 0;
+  let invalid = false;
+  const cancel = () => {
+    batches = [];
+    invalid = true;
+  };
+  return {
+    cancel,
+    add(batch: NativeTimelineViewDeltaBatch) {
+      if (
+        invalid ||
+        batch.roomId !== roomId ||
+        (sessionGeneration !== undefined && batch.sessionGeneration !== sessionGeneration)
+      )
+        return;
+      retainedItems += batch.ops.reduce(
+        (count, op) => count + 1 + ('rows' in op ? op.rows.length : 'row' in op ? 1 : 0),
+        batch.pinnedEventIds?.length ?? 0
+      );
+      if (batches.length >= 64 || retainedItems > 2048) {
+        cancel();
+        return;
+      }
+      batches.push(batch);
+    },
+    reconcile(opened: NativeTimelineOpenReadback): NativeTimelineViewSnapshot | undefined {
+      if (
+        invalid ||
+        opened.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+        opened.snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+        opened.snapshot.roomId !== roomId ||
+        (sessionGeneration !== undefined && opened.snapshot.sessionGeneration !== sessionGeneration)
+      )
+        return undefined;
+      let snapshot = opened.snapshot;
+      for (const batch of batches) {
+        if (batch.streamId !== opened.streamId || batch.revision <= snapshot.revision) continue;
+        const next = applyNativeTimelineViewDelta(snapshot, batch);
+        if (!next) return undefined;
+        snapshot = next;
+      }
+      return snapshot;
+    },
+  };
+};
+
 export const useNativeTimelineView = (
   input: NativeTimelineOpenInput | undefined
 ): NativeTimelineViewController => {
@@ -621,7 +672,19 @@ export const useNativeTimelineView = (
   const streamIdRef = useRef<string | undefined>(undefined);
   const snapshotRef = useRef<NativeTimelineViewSnapshot | undefined>(undefined);
   const selectedPositionRef = useRef<NativeTimelinePosition | undefined>(undefined);
-  const earlyBatchesRef = useRef<NativeTimelineViewDeltaBatch[]>([]);
+  const pendingOpenRef = useRef<ReturnType<typeof createNativeTimelineOpenBuffer> | undefined>(
+    undefined
+  );
+  const beginOpen = useCallback((room: string, generation?: number) => {
+    pendingOpenRef.current?.cancel();
+    const buffer = createNativeTimelineOpenBuffer(room, generation);
+    pendingOpenRef.current = buffer;
+    return buffer;
+  }, []);
+  const finishOpen = useCallback((buffer: ReturnType<typeof createNativeTimelineOpenBuffer>) => {
+    buffer.cancel();
+    if (pendingOpenRef.current === buffer) pendingOpenRef.current = undefined;
+  }, []);
   const navigationRevisionRef = useRef(0);
   const navigationRequestRef = useRef(nativeRequest);
   navigationRequestRef.current = nativeRequest;
@@ -657,10 +720,23 @@ export const useNativeTimelineView = (
       if (!streamId || !snapshot || !permitted) {
         throw new Error('Native timeline pagination is unavailable.');
       }
-      const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
-        'matrix_timeline_paginate',
-        { request: { streamId, direction } }
-      );
+      const revision = navigationRevisionRef.current;
+      const navigationRequest = navigationRequestRef.current;
+      const superseded = () =>
+        streamIdRef.current !== streamId ||
+        navigationRevisionRef.current !== revision ||
+        navigationRequestRef.current !== navigationRequest;
+      let result: DesktopInvokeResult<NativeTimelineViewSnapshot>;
+      try {
+        result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
+          'matrix_timeline_paginate',
+          { request: { streamId, direction } }
+        );
+      } catch (error) {
+        if (superseded()) return;
+        throw error;
+      }
+      if (superseded()) return;
       if (!result.available || !result.value || !acceptSnapshot(result.value)) {
         setState({
           status: 'error',
@@ -687,10 +763,23 @@ export const useNativeTimelineView = (
       if (!streamId || !snapshot || !permitted) {
         throw new Error('Native timeline read action is unavailable.');
       }
-      const result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
-        'matrix_timeline_set_read_state',
-        { request: { streamId, ...request } }
-      );
+      const revision = navigationRevisionRef.current;
+      const navigationRequest = navigationRequestRef.current;
+      const superseded = () =>
+        streamIdRef.current !== streamId ||
+        navigationRevisionRef.current !== revision ||
+        navigationRequestRef.current !== navigationRequest;
+      let result: DesktopInvokeResult<NativeTimelineReadStateReadback>;
+      try {
+        result = await invokeDesktopWithAvailability<NativeTimelineReadStateReadback>(
+          'matrix_timeline_set_read_state',
+          { request: { streamId, ...request } }
+        );
+      } catch (error) {
+        if (superseded()) return;
+        throw error;
+      }
+      if (superseded()) return;
       if (!result.available || !result.value) {
         setState({
           status: 'error',
@@ -724,12 +813,24 @@ export const useNativeTimelineView = (
       if (!streamId || !snapshot) {
         throw new Error('Native timeline follow-live is unavailable.');
       }
-      const next = await requestNativeTimelineFollowLive(
-        { streamId, observedLiveTailEventId: request.observedLiveTailEventId },
-        invokeDesktopWithAvailability
-      );
-      if (
+      const revision = navigationRevisionRef.current;
+      const navigationRequest = navigationRequestRef.current;
+      const superseded = () =>
         streamIdRef.current !== streamId ||
+        navigationRevisionRef.current !== revision ||
+        navigationRequestRef.current !== navigationRequest;
+      let next: NativeTimelineViewSnapshot;
+      try {
+        next = await requestNativeTimelineFollowLive(
+          { streamId, observedLiveTailEventId: request.observedLiveTailEventId },
+          invokeDesktopWithAvailability
+        );
+      } catch (error) {
+        if (superseded()) return;
+        throw error;
+      }
+      if (
+        superseded() ||
         snapshotRef.current?.sessionGeneration !== snapshot.sessionGeneration ||
         !canAcceptNativeTimelineFollowReadback(snapshotRef.current, next)
       ) {
@@ -748,9 +849,11 @@ export const useNativeTimelineView = (
 
   const jumpLatest = useCallback(async () => {
     const streamId = streamIdRef.current;
-    if (!streamId) {
+    const current = snapshotRef.current;
+    if (!streamId || !current) {
       throw new Error('Native timeline jump-to-latest is unavailable.');
     }
+    const buffer = beginOpen(current.roomId, current.sessionGeneration);
     const revision = ++navigationRevisionRef.current;
     const navigationRequest = navigationRequestRef.current;
     const superseded = () =>
@@ -764,10 +867,12 @@ export const useNativeTimelineView = (
         { request: { streamId } }
       );
     } catch (error) {
+      finishOpen(buffer);
       if (superseded()) return false;
       throw error;
     }
     if (superseded()) {
+      finishOpen(buffer);
       if (
         result.available &&
         result.value?.streamId &&
@@ -779,7 +884,18 @@ export const useNativeTimelineView = (
       }
       return false;
     }
-    if (!result.available || !result.value) {
+    const snapshot = result.available && result.value ? buffer.reconcile(result.value) : undefined;
+    finishOpen(buffer);
+    if (!result.available || !result.value || !snapshot) {
+      if (
+        result.available &&
+        result.value?.streamId &&
+        result.value.streamId !== streamIdRef.current
+      ) {
+        void invokeDesktopWithAvailability('matrix_timeline_close', {
+          request: { streamId: result.value.streamId },
+        }).catch(() => undefined);
+      }
       setState({
         status: 'error',
         error: new Error('Native timeline jump-to-latest lost synchronization.'),
@@ -788,88 +904,97 @@ export const useNativeTimelineView = (
     }
     streamIdRef.current = result.value.streamId;
     selectedPositionRef.current = result.value.position;
-    snapshotRef.current = result.value.snapshot;
+    snapshotRef.current = snapshot;
     setState({
       status: 'ready',
-      snapshot: result.value.snapshot,
+      snapshot,
       selectedPosition: result.value.position,
     });
     return true;
-  }, []);
+  }, [beginOpen, finishOpen]);
 
-  const restoreLastRead = useCallback(async (eventId: string) => {
-    const streamId = streamIdRef.current;
-    const current = snapshotRef.current;
-    if (!streamId || !current) throw new Error('Last-read navigation is unavailable.');
-    const revision = ++navigationRevisionRef.current;
-    const navigationRequest = navigationRequestRef.current;
-    const superseded = () =>
-      navigationRevisionRef.current !== revision ||
-      navigationRequestRef.current !== navigationRequest ||
-      streamIdRef.current !== streamId;
-    let result: DesktopInvokeResult<NativeTimelineOpenReadback>;
-    try {
-      result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
-        'matrix_timeline_open',
-        {
-          request: toNativeTimelineOpenRequest({
-            roomId: current.roomId,
-            position: { kind: 'focused', eventId },
-          }),
-        }
-      );
-    } catch (error) {
-      if (superseded()) return false;
-      throw error;
-    }
-    const opened = result.available ? result.value : undefined;
-    const discard = () => {
-      if (opened?.streamId && opened.streamId !== streamIdRef.current) {
-        void invokeDesktopWithAvailability('matrix_timeline_close', {
-          request: { streamId: opened.streamId },
-        }).catch(() => undefined);
+  const restoreLastRead = useCallback(
+    async (eventId: string) => {
+      const streamId = streamIdRef.current;
+      const current = snapshotRef.current;
+      if (!streamId || !current) throw new Error('Last-read navigation is unavailable.');
+      const buffer = beginOpen(current.roomId, current.sessionGeneration);
+      const revision = ++navigationRevisionRef.current;
+      const navigationRequest = navigationRequestRef.current;
+      const superseded = () =>
+        navigationRevisionRef.current !== revision ||
+        navigationRequestRef.current !== navigationRequest ||
+        streamIdRef.current !== streamId;
+      let result: DesktopInvokeResult<NativeTimelineOpenReadback>;
+      try {
+        result = await invokeDesktopWithAvailability<NativeTimelineOpenReadback>(
+          'matrix_timeline_open',
+          {
+            request: toNativeTimelineOpenRequest({
+              roomId: current.roomId,
+              position: { kind: 'focused', eventId },
+            }),
+          }
+        );
+      } catch (error) {
+        finishOpen(buffer);
+        if (superseded()) return false;
+        throw error;
       }
-    };
-    if (superseded()) {
-      discard();
-      return false;
-    }
-    if (
-      !result.available ||
-      !opened ||
-      opened.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
-      opened.snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
-      opened.snapshot.sessionGeneration !== current.sessionGeneration ||
-      opened.snapshot.roomId !== current.roomId ||
-      opened.position.kind !== 'focused' ||
-      opened.position.target_event_id !== eventId ||
-      opened.snapshot.position.kind !== 'focused' ||
-      opened.snapshot.position.target_event_id !== eventId ||
-      !opened.snapshot.rows.some(
-        (row) => (row.kind === 'sticker' ? row.event.eventId : row.eventId) === eventId
-      )
-    ) {
-      discard();
-      throw new Error('The last-read message is not available in this context. Try again.');
-    }
-    // Each Core open owns its own subscription. Retire the previous provider
-    // only after the requested target has been confirmed in its replacement.
-    streamIdRef.current = opened.streamId;
-    snapshotRef.current = opened.snapshot;
-    selectedPositionRef.current = opened.position;
-    setState({ status: 'ready', snapshot: opened.snapshot, selectedPosition: opened.position });
-    void invokeDesktopWithAvailability('matrix_timeline_close', {
-      request: { streamId },
-    }).catch(() => undefined);
-    return true;
-  }, []);
+      const opened = result.available ? result.value : undefined;
+      const snapshot = opened ? buffer.reconcile(opened) : undefined;
+      finishOpen(buffer);
+      const discard = () => {
+        if (opened?.streamId && opened.streamId !== streamIdRef.current) {
+          void invokeDesktopWithAvailability('matrix_timeline_close', {
+            request: { streamId: opened.streamId },
+          }).catch(() => undefined);
+        }
+      };
+      if (superseded()) {
+        discard();
+        return false;
+      }
+      if (
+        !result.available ||
+        !opened ||
+        !snapshot ||
+        opened.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+        snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
+        snapshot.sessionGeneration !== current.sessionGeneration ||
+        snapshot.roomId !== current.roomId ||
+        opened.position.kind !== 'focused' ||
+        opened.position.target_event_id !== eventId ||
+        snapshot.position.kind !== 'focused' ||
+        snapshot.position.target_event_id !== eventId ||
+        !snapshot.rows.some(
+          (row) => (row.kind === 'sticker' ? row.event.eventId : row.eventId) === eventId
+        )
+      ) {
+        discard();
+        throw new Error('The last-read message is not available in this context. Try again.');
+      }
+      // Each Core open owns its own subscription. Retire the previous provider
+      // only after the requested target has been confirmed in its replacement.
+      streamIdRef.current = opened.streamId;
+      snapshotRef.current = snapshot;
+      selectedPositionRef.current = opened.position;
+      setState({ status: 'ready', snapshot, selectedPosition: opened.position });
+      void invokeDesktopWithAvailability('matrix_timeline_close', {
+        request: { streamId },
+      }).catch(() => undefined);
+      return true;
+    },
+    [beginOpen, finishOpen]
+  );
 
   useEffect(() => {
     navigationRevisionRef.current += 1;
     streamIdRef.current = undefined;
     snapshotRef.current = undefined;
     selectedPositionRef.current = undefined;
-    earlyBatchesRef.current = [];
+    pendingOpenRef.current?.cancel();
+    pendingOpenRef.current = undefined;
     if (!nativeRequest || !isSynaraDesktop()) {
       setState({ status: 'unavailable' });
       return undefined;
@@ -880,11 +1005,10 @@ export const useNativeTimelineView = (
     let pollTimer: number | undefined;
     const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {
       if (disposed || batch.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION) return;
-      if (!streamIdRef.current) {
-        earlyBatchesRef.current.push(batch);
+      if (batch.streamId !== streamIdRef.current || !snapshotRef.current) {
+        pendingOpenRef.current?.add(batch);
         return;
       }
-      if (batch.streamId !== streamIdRef.current || !snapshotRef.current) return;
       const next = applyNativeTimelineViewDelta(snapshotRef.current, batch);
       if (!next) {
         setState({
@@ -904,11 +1028,20 @@ export const useNativeTimelineView = (
     const pollSnapshot = async () => {
       const streamId = streamIdRef.current;
       if (!streamId || disposed) return;
+      const revision = navigationRevisionRef.current;
+      const navigationRequest = navigationRequestRef.current;
       const result = await invokeDesktopWithAvailability<NativeTimelineViewSnapshot>(
         'matrix_timeline_snapshot',
         { streamId }
-      );
-      if (disposed || streamIdRef.current !== streamId || !result.available || !result.value)
+      ).catch(() => undefined);
+      if (
+        disposed ||
+        streamIdRef.current !== streamId ||
+        navigationRevisionRef.current !== revision ||
+        navigationRequestRef.current !== navigationRequest ||
+        !result?.available ||
+        !result.value
+      )
         return;
       const snapshot = result.value;
       if (
@@ -930,6 +1063,7 @@ export const useNativeTimelineView = (
     };
 
     const open = async () => {
+      const buffer = beginOpen(nativeRequest.roomId);
       setState({ status: 'loading' });
       try {
         try {
@@ -967,24 +1101,21 @@ export const useNativeTimelineView = (
           readback.snapshot.roomId !== nativeRequest.roomId ||
           readback.position.kind !== readback.snapshot.position.kind
         ) {
+          void invokeDesktopWithAvailability('matrix_timeline_close', {
+            request: { streamId: readback.streamId },
+          }).catch(() => undefined);
           setState({ status: 'error', error: new Error('Unsupported native timeline schema.') });
           return;
         }
-        streamIdRef.current = readback.streamId;
-        let snapshot = readback.snapshot;
-        for (const batch of earlyBatchesRef.current) {
-          if (batch.streamId !== readback.streamId) continue;
-          const next = applyNativeTimelineViewDelta(snapshot, batch);
-          if (!next) {
-            setState({
-              status: 'error',
-              error: new Error('Native timeline stream lost synchronization.'),
-            });
-            return;
-          }
-          snapshot = next;
+        const snapshot = buffer.reconcile(readback);
+        if (!snapshot) {
+          void invokeDesktopWithAvailability('matrix_timeline_close', {
+            request: { streamId: readback.streamId },
+          }).catch(() => undefined);
+          throw new Error('Native timeline stream lost synchronization.');
         }
-        earlyBatchesRef.current = [];
+        finishOpen(buffer);
+        streamIdRef.current = readback.streamId;
         snapshotRef.current = snapshot;
         selectedPositionRef.current = readback.position;
         setState({ status: 'ready', snapshot, selectedPosition: readback.position });
@@ -1003,12 +1134,16 @@ export const useNativeTimelineView = (
             error: nativeTimelineCommandError(error),
           });
         }
+      } finally {
+        finishOpen(buffer);
       }
     };
 
     void open();
     return () => {
       disposed = true;
+      pendingOpenRef.current?.cancel();
+      pendingOpenRef.current = undefined;
       navigationRevisionRef.current += 1;
       const streamId = streamIdRef.current;
       if (streamId) {
@@ -1019,7 +1154,7 @@ export const useNativeTimelineView = (
       if (pollTimer !== undefined) window.clearInterval(pollTimer);
       unlisten?.();
     };
-  }, [acceptSnapshot, nativeRequest]);
+  }, [acceptSnapshot, beginOpen, finishOpen, nativeRequest]);
 
   return { state, paginate, setReadState, followLive, jumpLatest, restoreLastRead };
 };

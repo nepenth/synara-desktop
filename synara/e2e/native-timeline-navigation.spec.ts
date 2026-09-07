@@ -10,6 +10,8 @@ type Fixture = {
   releaseJump(): void;
   send(roomId?: string): void;
   activeStreamCount(): number;
+  emitAfterOpen(): void;
+  releaseOperation(): void;
   commands: { command: string }[];
 };
 const fixture = (page: Page, action: Exclude<keyof Fixture, 'commands' | 'activeStreamCount'>) =>
@@ -59,6 +61,87 @@ const activeStreamCount = (page: Page) =>
       window as unknown as { nativeTimelineFixture: Fixture }
     ).nativeTimelineFixture.activeStreamCount()
   );
+
+test('candidate deltas received before open completion are applied before later deltas', async ({
+  page,
+}) => {
+  await open(page, 'missing&nativeEvents=1&earlyDeltas=1');
+  await page.getByRole('button', { name: 'Jump to Last Read' }).click();
+  const target = page.locator('[data-native-timeline-event-id="$missing"]');
+  await expect(target).toBeInViewport();
+  await fixture(page, 'emitAfterOpen');
+  await expect(target).toContainText('Last read changed after adoption');
+  await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+});
+
+for (const earlyOpen of ['initial', 'latest']) {
+  test(`${earlyOpen} open also replays early candidate deltas`, async ({ page }) => {
+    await open(page, `live&nativeEvents=1&earlyOpen=${earlyOpen}&earlyDeltas=1`);
+    if (earlyOpen === 'latest') {
+      await scrollToHistory(page);
+      await fixture(page, 'send');
+      await expect.poll(() => commandCount(page, 'matrix_timeline_jump_latest')).toBe(1);
+    }
+    await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+    await fixture(page, 'emitAfterOpen');
+    await expect(page.getByText('Native timeline stream lost synchronization.')).toBeHidden();
+    await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  });
+}
+
+for (const earlyDeltas of ['gap', 'overflow', 'remove']) {
+  test(`candidate ${earlyDeltas} preserves the old provider and recovery`, async ({ page }) => {
+    await open(page, `missing&nativeEvents=1&earlyDeltas=${earlyDeltas}`);
+    await scrollToHistory(page);
+    const before = await geometry(page);
+    const recovery = page.getByRole('button', { name: 'Jump to Last Read' });
+    await recovery.click();
+    await expect.poll(() => commandCount(page, 'matrix_timeline_open')).toBe(2);
+    await expect(recovery).toBeVisible();
+    await expect.poll(() => activeStreamCount(page)).toBe(1);
+    const after = await geometry(page);
+    expect(after.eventId).toBe(before.eventId);
+    expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+  });
+}
+
+for (const operation of ['paginate', 'read', 'follow', 'poll']) {
+  for (const result of ['success', 'unavailable', 'reject']) {
+    test(`old ${operation} ${result} cannot change the adopted last-read provider`, async ({
+      page,
+    }) => {
+      const pageErrors: string[] = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+      await open(
+        page,
+        `sparse-missing&nativeEvents=1&delayOperation=${operation}&operationResult=${result}`
+      );
+      const command = {
+        read: 'matrix_timeline_set_read_state',
+        paginate: 'matrix_timeline_paginate',
+        follow: 'matrix_timeline_follow_live',
+        poll: 'matrix_timeline_snapshot',
+      }[operation]!;
+      if (operation === 'paginate')
+        await page.getByRole('button', { name: 'Load older messages' }).click();
+      await expect.poll(() => commandCount(page, command)).toBeGreaterThan(0);
+      await page.getByRole('button', { name: 'Jump to Last Read' }).click();
+      const target = page.locator('[data-native-timeline-event-id="$missing"]');
+      await expect(target).toBeInViewport();
+      const before = await geometry(page);
+      await fixture(page, 'releaseOperation');
+      await page.waitForTimeout(100);
+      await expect(target).toBeInViewport();
+      await expect(
+        page.getByText(/lost synchronization|Superseded operation rejected/)
+      ).toBeHidden();
+      const after = await geometry(page);
+      expect(after.eventId).toBe(before.eventId);
+      expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+      expect(pageErrors).toEqual([]);
+    });
+  }
+}
 
 test('missing last read opens at the live tail and survives successful live promotion', async ({
   page,
@@ -147,7 +230,7 @@ test('last-read context without the target preserves the previous viewport and r
 test('superseded last-read open retains recovery and cannot move the newer focus', async ({
   page,
 }) => {
-  await open(page, 'missing&delayLastRead=1');
+  await open(page, 'missing&delayLastRead=1&nativeEvents=1&earlyDeltas=1');
   await scrollToHistory(page);
   const recovery = page.getByRole('button', { name: 'Jump to Last Read' });
   await recovery.click();

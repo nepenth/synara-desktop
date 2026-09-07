@@ -129,3 +129,39 @@ passed, including explicit-latest dismissal and discarded-stream cleanup;
 The harness TSX remains outside the repository ESLint include pattern. This is
 mocked-native browser proof only; it does not extend the separate live Matrix,
 signed iOS, physical-device, or release evidence.
+
+## Stream-adoption corrections after independent review
+
+Core stream revisions restart for each open. The controller now retains bounded
+candidate updates while the open RPC is pending, replays only the returned
+stream's updates, and validates the last-read target against the reconciled
+snapshot. Initial and latest opens use the same replay boundary. The buffer is
+scoped to the room and known session generation, limited to 64 batches and 2048
+operations/rows/pin IDs, and released on adoption, failure, supersession, or
+cleanup. A gap, overflow, or removed target rejects the last-read candidate while
+preserving the existing provider and recovery control. Only streams returned by
+this controller's own opens are eligible for discarded-candidate closure.
+
+Pagination, read-state, follow-live, and snapshot-poll responses now check the
+captured stream, navigation revision, and navigation request before updating the
+view. Superseded command rejections cannot reach presenter error handlers; poll
+rejections are ignored. These guards prevent independently numbered snapshots
+from an old stream from replacing a newly adopted provider.
+
+Before the correction, eight of nine new Chromium cases failed against
+`6d778914`: candidate revision 1 was lost before adoption, gaps and buffer
+oversizing silently adopted the candidate, delayed pagination success/failure
+replaced or errored the new view, and delayed read success/unavailability did the
+same. Stale read rejection was already benign. The harness now models revision
+zero for every Core open and routes updates through the actual Tauri event
+listener bridge. Polling is disabled in event-route cases so it cannot heal a
+lost update and conceal the failure.
+
+Final correction validation: all 33 Chromium presenter/controller cases passed
+in a clean run, including candidate replay/removal/gap/overflow, cancellation
+with queued updates, initial/latest replay, and delayed success/unavailability/
+rejection for pagination, read-state, follow-live, and polling. Full frontend
+TypeScript, all 954 modernization tests, focused ESLint, and diff whitespace
+checks passed. The harness TSX remains outside the ESLint include pattern.
+No Rust or Swift build was run, and no live Matrix, iOS/device, or release claim
+is added by these mocked-native browser results.
