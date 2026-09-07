@@ -55,49 +55,68 @@ async fn client_and_script(
     let url = format!("http://{}", listener.local_addr().unwrap());
     let server = tokio::spawn(async move {
         let mut bodies = vec![];
+        let mut bootstrap_reads = 0;
         for step in steps {
-            let (mut socket, _) = tokio::time::timeout(Duration::from_secs(10), listener.accept())
-                .await
-                .unwrap()
-                .unwrap();
-            let mut request = vec![];
-            let (header_end, content_len) = loop {
-                let mut bytes = [0u8; 4096];
-                let size = socket.read(&mut bytes).await.unwrap();
-                assert!(size > 0);
-                request.extend_from_slice(&bytes[..size]);
-                if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
-                    let headers = String::from_utf8_lossy(&request[..end]);
-                    let len = headers
-                        .lines()
-                        .find_map(|line| {
-                            let (name, value) = line.split_once(':')?;
-                            name.eq_ignore_ascii_case("content-length")
-                                .then(|| value.trim().parse::<usize>().unwrap())
-                        })
-                        .unwrap_or(0);
-                    if request.len() >= end + 4 + len {
-                        break (end + 4, len);
+            loop {
+                let (mut socket, _) =
+                    tokio::time::timeout(Duration::from_secs(10), listener.accept())
+                        .await
+                        .unwrap()
+                        .unwrap();
+                let mut request = vec![];
+                let (header_end, content_len) = loop {
+                    let mut bytes = [0u8; 4096];
+                    let size = socket.read(&mut bytes).await.unwrap();
+                    assert!(size > 0);
+                    request.extend_from_slice(&bytes[..size]);
+                    if let Some(end) = request.windows(4).position(|bytes| bytes == b"\r\n\r\n") {
+                        let headers = String::from_utf8_lossy(&request[..end]);
+                        let len = headers
+                            .lines()
+                            .find_map(|line| {
+                                let (name, value) = line.split_once(':')?;
+                                name.eq_ignore_ascii_case("content-length")
+                                    .then(|| value.trim().parse::<usize>().unwrap())
+                            })
+                            .unwrap_or(0);
+                        if request.len() >= end + 4 + len {
+                            break (end + 4, len);
+                        }
                     }
-                }
-            };
-            let headers = String::from_utf8_lossy(&request[..header_end]).to_lowercase();
-            assert!(headers.starts_with(&format!(
-                "{} {} http/1.1",
-                step.method.to_lowercase(),
-                step.path
-            )));
-            assert!(headers.contains("authorization: bearer policy-proof-token"));
-            let body = if content_len == 0 {
-                serde_json::Value::Null
-            } else {
-                serde_json::from_slice(&request[header_end..header_end + content_len]).unwrap()
-            };
-            bodies.push(body);
-            let body = step.response.to_string();
-            let response = format!("HTTP/1.1 {} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", step.status, body.len(), body);
-            socket.write_all(response.as_bytes()).await.unwrap();
-            socket.shutdown().await.unwrap();
+                };
+                let headers = String::from_utf8_lossy(&request[..header_end]).to_lowercase();
+                // The SDK's recovery initialization and backup-state observer can
+                // each read the same absent key. Route only that exact ancillary
+                // endpoint without consuming any expected policy operation.
+                if headers.lines().next() == Some("get /_matrix/client/v3/user/@reader:example.org/account_data/m.secret_storage.default_key http/1.1") {
+                assert!(headers.contains("authorization: bearer policy-proof-token"));
+                assert_eq!(content_len, 0);
+                bootstrap_reads += 1;
+                assert!(bootstrap_reads <= 2, "unexpected repeated SDK recovery initialization");
+                let body = r#"{"errcode":"M_NOT_FOUND","error":"No default key"}"#;
+                let response = format!("HTTP/1.1 404 Not Found\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", body.len(), body);
+                socket.write_all(response.as_bytes()).await.unwrap();
+                socket.shutdown().await.unwrap();
+                continue;
+            }
+                assert_eq!(
+                    headers.lines().next().unwrap(),
+                    format!("{} {} http/1.1", step.method.to_lowercase(), step.path),
+                    "loopback fixture received an unexpected Matrix owner route"
+                );
+                assert!(headers.contains("authorization: bearer policy-proof-token"));
+                let body = if content_len == 0 {
+                    serde_json::Value::Null
+                } else {
+                    serde_json::from_slice(&request[header_end..header_end + content_len]).unwrap()
+                };
+                bodies.push(body);
+                let body = step.response.to_string();
+                let response = format!("HTTP/1.1 {} Response\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{}", step.status, body.len(), body);
+                socket.write_all(response.as_bytes()).await.unwrap();
+                socket.shutdown().await.unwrap();
+                break;
+            }
         }
         bodies
     });
@@ -129,6 +148,14 @@ async fn client_and_script(
         )
         .await
         .unwrap();
+    // Use the SDK's actual initialization completion boundary. A delay or an
+    // accept-any-request fallback would hide unrelated owner-route mistakes.
+    tokio::time::timeout(
+        Duration::from_secs(5),
+        client.encryption().wait_for_e2ee_initialization_tasks(),
+    )
+    .await
+    .expect("SDK E2EE initialization must finish before the policy test");
     (client, server)
 }
 async fn register(
