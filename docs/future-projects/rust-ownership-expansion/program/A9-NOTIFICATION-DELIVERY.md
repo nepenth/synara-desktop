@@ -143,16 +143,20 @@ Intended route:
 4. `desktop_notifications.rs` performs only sanitized OS mapping and delivery.
 5. The OS presents the notification and returns an internal route/action.
 
-Current-source result: **Failed at step 1/2**. Product desktop
-`NativeClientEmitter` emits `sync` and `session`, not `Room.timeline`, while
-`MessageNotifications` and the immediate approval path listen for
-`Room.timeline`. The existing `NotificationIndex` is a test harness and is not
-registered with the product Core. A room-list polling delta or restored
-TypeScript mute/mention matcher would be a wrong-owner workaround and is not an
-acceptable repair. The route stays open until Core can emit a complete typed
-decision from authoritative event, notification-mode/highlight, dedup, and
-platform-focus inputs. Desktop tray delivery must then be proven separately on
-macOS and Linux.
+Current-source result: **steps 1–3 implemented deterministically; steps 4–5
+unproven live**. PR #1097 registered the account-bound
+`NativeNotificationDecisionOwner` with the product Core and routed every
+renderer observation through `matrix_notification_decide`. The 2026-09-08
+follow-on ([`docs/reviews/2026-09-08-notification-push-rule-owner.md`](../../../reviews/2026-09-08-notification-push-rule-owner.md))
+completed step 1: Core now loads the exact observed event through the SDK and
+reads its SDK-evaluated push actions, so room mode, account defaults,
+intentional and legacy mentions, keywords, room-mention power levels, the
+suppress-edits override, and rule ordering have one owner. The renderer sends
+identity and product strings only; the wire rejects any renderer-supplied
+mode, highlight, sender, or encryption verdict. A restored TypeScript
+mute/mention matcher remains a wrong-owner workaround and is locked out by a
+source guard. Desktop tray delivery must still be proven separately on macOS
+and Linux.
 
 ## Evidence ledger
 
@@ -197,7 +201,8 @@ the device deadline, or OS notification presentation.
 | encrypted preview, foreground/background/terminated      | physical TestFlight device with shared store and decryptable event                                                                                                                                                                          | **Not confirmed**                                                                                        |
 | preview disabled retains useful generic alert            | physical TestFlight device                                                                                                                                                                                                                  | **Not confirmed**                                                                                        |
 | token rotation and logout remove live homeserver pushers | disposable account/device plus authenticated pusher readback                                                                                                                                                                                | **Not confirmed**                                                                                        |
-| desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                                                                               | **Failed at source; not implemented**                                                                    |
+| desktop decision uses SDK push rules as the single owner | `p4_s39_notification_push_rules` mock-homeserver proof: default rules, `m.mentions`, mentions-only room rule, mute override, own-event, dedup, `/event` fallback, fail-closed diagnostics; source guard locks the renderer out of matching   | passed deterministically on 2026-09-08; not live delivery                                                |
+| desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                                                                               | decision stream implemented; OS delivery readback **Not confirmed**                                      |
 
 ## Clean rerun protocol
 

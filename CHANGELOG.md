@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+- Decide desktop message notifications from the SDK-evaluated push actions of
+  the exact observed event inside Core. Room mode, account defaults, mentions,
+  keywords, room-mention power levels, the suppress-edits override, and rule
+  ordering now have one owner; the renderer submits only room and event
+  identity with privacy-filtered strings and can no longer supply a mode,
+  highlight, sender, or encryption verdict.
+
 ## [2.1.29] - 2026-09-06
 
 - Restore last-read on room entry, keep Jump to Last Read when the marker is
@@ -33,8 +42,6 @@
 - Allow local iOS sign-out after failed restore or remote push cleanup; revoke
   the current server session when reachable and remove persisted authentication.
 
-
-## Unreleased
 
 ## 2.1.26 - 2026-09-04
 
