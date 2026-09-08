@@ -141,12 +141,81 @@ Deterministic, local, on this branch:
 - Desktop modernization suite, TypeScript typecheck, ESLint, Prettier: see the
   pull request for exact counts.
 
+## Second pass: delivery receipt, sound echo, encrypted and focus proof
+
+The same branch closes three more items from the 2026-09-04 follow-on list
+that do not need a macOS host to validate.
+
+### Delivery receipt instead of a blind acknowledgement
+
+Before: the renderer called the OS notification command fire-and-forget,
+swallowed any error with `.catch(() => undefined)`, played the sound, and
+acknowledged the candidate as if it had been delivered. Core could not tell a
+delivered notification from a refused one.
+
+Now: `matrix_notification_dismiss` accepts an optional closed `outcome`
+(`delivered` | `failed`). The renderer awaits the OS answer, reports it with
+the acknowledgement, and omits the outcome only when nothing was attempted
+(system notifications off or no permission). Core keeps an identifier-free
+`NotificationDeliveryLedger { delivered, failed, unreported }` per session
+generation. It advances only when an acknowledgement releases a pending
+candidate, so repeated or unknown acknowledgements cannot inflate it, and it is
+echoed on `matrix_notification_dismiss` and
+`matrix_notification_pending_snapshot` for diagnostics.
+
+Deliberately not added: automatic retries. A `failed` receipt releases the
+candidate and is counted; `(room_id, event_id)` dedup is retained, so a
+flapping OS cannot re-notify the same message. The review asked for the
+receipt/ack design to be tested before retries are considered; the ledger is
+the observable that a future retry policy would have to justify itself
+against.
+
+### Sound follows the SDK tweak
+
+The renderer now plays the local sound only when the local preference is on,
+Core echoed the SDK `sound` tweak for the shown message, and the OS did not
+refuse the delivery. Under server-default rules that means one-to-one rooms,
+mentions, keywords, and any account rule with a sound tweak sound; plain group
+messages notify silently, matching the rules the account's other clients
+already follow. This is the behaviour change flagged as a follow-up in the
+first pass.
+
+### Additional SDK-backed proof
+
+`p4_s39_notification_push_rules` grows from 3 to 5 tests:
+
+- Encrypted room: an undecryptable `m.room.encrypted` event from another member
+  in a three-member room → `show` from `.m.rule.encrypted` with no highlight or
+  sound; `candidate.is_encrypted` is Core's own reading of the room encryption
+  state; an undecryptable event from the session's own user → `own-event`
+  without needing decryption; a second observation of the same id (the shape a
+  late decryption takes) → `duplicate-event`, so late decryption can neither
+  notify twice nor upgrade an already delivered notification.
+- Focus changes through the real SDK path: a focused room suppresses even a
+  mention and consumes no dedup; another room in focus does not shield it; a
+  cleared focus shows the same mention with its highlight and sound; a `failed`
+  receipt releases the candidate, is counted once, and leaves the event a
+  duplicate; malformed focus is rejected and keeps the previous focus.
+
+### Cheap iOS compile gate
+
+`ci.yml` gains an `ios-compile` job that runs only when Swift/FFI/iOS paths
+changed and the existing scheduling policy skipped the simulator lane
+(unlabeled feature PRs into main). It runs the same scaffold and isolation
+checks, generates SynaraCore/SynaraNseCore for the arm64 simulator slice, and
+runs `xcodebuild build-for-testing` without booting a simulator or running a
+test. Labeled, release, and main-push runs keep the full lane and skip it. The
+quality gate aggregates it as success or skipped, `check-quality-gates.mjs`
+requires it in the split layout, and `ci-scopes.test.mjs` executes the real
+workflow shell for the new output. The first run of that job on this branch
+is the macOS evidence for the gate itself; it is not evidence for any iOS
+behaviour claim.
+
 ## Behaviour tradeoffs
 
-- Sound and highlight now come from the account's rules. The renderer still
-  plays the local sound for every shown notification when the user setting is
-  on, so there is no audible change in this PR; a follow-up may switch the
-  renderer to honour the `sound` echo.
+- Sound and highlight now come from the account's rules. The renderer honours
+  the `sound` echo: plain group messages notify without sound; one-to-one
+  rooms, mentions, keywords, and account rules with a sound tweak still sound.
 - Room-mode changes made in another client apply to desktop notifications on
   the next event, exactly as the SDK sees them, without a 30-second snapshot
   poll.
@@ -157,7 +226,9 @@ Deterministic, local, on this branch:
 
 ## Still open (unchanged by this PR)
 
-- Live macOS/Linux tray delivery readback and two-client interoperability.
+- Live macOS/Linux tray delivery readback and two-client interoperability. The
+  delivery ledger makes a refused OS delivery observable but is not itself live
+  evidence.
 - A spontaneous Core→renderer push stream; decide remains request/response.
-- Delivery still swallows OS errors and acknowledges the candidate; a
-  receipt/ack design should be tested before adding automatic retries.
+- Automatic retry of a `failed` delivery; deliberately deferred until the
+  receipt ledger has been observed live.

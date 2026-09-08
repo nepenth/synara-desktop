@@ -155,8 +155,13 @@ suppress-edits override, and rule ordering have one owner. The renderer sends
 identity and product strings only; the wire rejects any renderer-supplied
 mode, highlight, sender, or encryption verdict. A restored TypeScript
 mute/mention matcher remains a wrong-owner workaround and is locked out by a
-source guard. Desktop tray delivery must still be proven separately on macOS
-and Linux.
+source guard. The same record's second pass closes the step-4 receipt: the
+renderer awaits the OS answer and acknowledges with a closed `delivered` /
+`failed` outcome, Core keeps an identifier-free per-session delivery ledger,
+and a failed delivery is counted and released, never retried. Sound follows the
+SDK tweak Core echoes. Desktop tray delivery must still be proven separately on
+macOS and Linux; the ledger makes a refused delivery observable but is not
+that proof.
 
 ## Evidence ledger
 
@@ -202,6 +207,7 @@ the device deadline, or OS notification presentation.
 | preview disabled retains useful generic alert            | physical TestFlight device                                                                                                                                                                                                                  | **Not confirmed**                                                                                        |
 | token rotation and logout remove live homeserver pushers | disposable account/device plus authenticated pusher readback                                                                                                                                                                                | **Not confirmed**                                                                                        |
 | desktop decision uses SDK push rules as the single owner | `p4_s39_notification_push_rules` mock-homeserver proof: default rules, `m.mentions`, mentions-only room rule, mute override, own-event, dedup, `/event` fallback, fail-closed diagnostics; source guard locks the renderer out of matching   | passed deterministically on 2026-09-08; not live delivery                                                |
+| desktop delivery receipt reaches Core                    | `matrix_notification_dismiss` closed `outcome`; per-session ledger counted once per released candidate; renderer awaits the OS answer and never retries; SDK-path proof for undecryptable encrypted-room events and focus changes            | passed deterministically on 2026-09-08; OS delivery itself **Not confirmed**                            |
 | desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                                                                               | decision stream implemented; OS delivery readback **Not confirmed**                                      |
 
 ## Clean rerun protocol

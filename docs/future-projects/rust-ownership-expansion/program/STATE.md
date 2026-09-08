@@ -100,9 +100,14 @@ from live-evidence gates that still cannot honestly be closed.
   IDs, and deadline races complete coordinator-owned fallbacks before recording
   only those request IDs. Physical
   foreground/background/terminated APNs and encrypted/unencrypted NSE proof
-  remains **Not confirmed**. Desktop tray delivery remains **Failed** at its
-  unwired Core candidate/decision source; no room-list polling or JS policy
-  fallback was added. See [A9-NOTIFICATION-DELIVERY.md](A9-NOTIFICATION-DELIVERY.md).
+  remains **Not confirmed**. The desktop decision source is now wired and
+  owned by Core: every renderer observation is decided from the SDK-evaluated
+  push actions of the exact event, the renderer submits identity and product
+  strings only, and the OS delivery receipt returns to Core as a closed
+  outcome counted in a per-session ledger without retries. No room-list
+  polling or JS policy fallback was added. Desktop tray delivery on macOS and
+  Linux remains **Not confirmed** live. See
+  [A9-NOTIFICATION-DELIVERY.md](A9-NOTIFICATION-DELIVERY.md).
 - A10 measures the existing media byte-channel boundary without changing its
   architecture. A loopback Matrix SDK harness proves authenticated client-v1
   routing, exact declared/chunked caps, only the documented 404/405 legacy

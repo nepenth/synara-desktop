@@ -8,6 +8,14 @@
   ordering now have one owner; the renderer submits only room and event
   identity with privacy-filtered strings and can no longer supply a mode,
   highlight, sender, or encryption verdict.
+- Report the desktop OS delivery result back to Core. The renderer waits for
+  the notification call and acknowledges with `delivered` or `failed` instead
+  of swallowing errors; Core counts receipts per session and releases a failed
+  candidate without retrying it. The notification sound now follows the
+  account's push rules (one-to-one rooms, mentions, keywords, and rules with a
+  sound tweak) and stays silent when the OS refuses the notification.
+- Add an iOS compile gate to CI for Swift/FFI changes on feature pull requests
+  that skip the simulator lane; labels and release branches keep the full lane.
 
 ## [2.1.29] - 2026-09-06
 
