@@ -123,6 +123,19 @@ pub async fn matrix_login_password(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
             .map_err(map_presence_error)?,
     );
+    // A9 observation stream: Core pushes each live message-like event to the
+    // renderer, which hands the identity back to the decision owner. The
+    // renderer no longer scans timelines to discover notifiable events.
+    let notification_observations = Arc::new(
+        crate::matrix::notifications::start_notification_observation_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-observation-attach-failed")
+        })?,
+    );
     let join_rules = Arc::new(
         crate::matrix::room_profile::start_join_rule_owner(
             &client,
@@ -179,6 +192,7 @@ pub async fn matrix_login_password(
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
+        notification_observations,
 
         room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
@@ -570,6 +584,19 @@ pub(super) async fn install_session_from_register_secrets(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
             .map_err(map_presence_error)?,
     );
+    // A9 observation stream: Core pushes each live message-like event to the
+    // renderer, which hands the identity back to the decision owner. The
+    // renderer no longer scans timelines to discover notifiable events.
+    let notification_observations = Arc::new(
+        crate::matrix::notifications::start_notification_observation_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-observation-attach-failed")
+        })?,
+    );
     let join_rules = Arc::new(
         crate::matrix::room_profile::start_join_rule_owner(
             &client,
@@ -625,6 +652,7 @@ pub(super) async fn install_session_from_register_secrets(
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
+        notification_observations,
 
         room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,
@@ -731,6 +759,7 @@ pub async fn matrix_logout(
     // user in a locally authenticated state or prevent secure local cleanup.
     let _remote_logout_succeeded = active.client.matrix_auth().logout().await.is_ok();
     active.join_rules.retire();
+    active.notification_observations.retire();
     active
         .sync
         .stop()
@@ -813,6 +842,19 @@ pub async fn matrix_restore_session(
         crate::matrix::presence::start_presence_owner(&client, app.clone(), session_generation)
             .map_err(map_presence_error)?,
     );
+    // A9 observation stream: Core pushes each live message-like event to the
+    // renderer, which hands the identity back to the decision owner. The
+    // renderer no longer scans timelines to discover notifiable events.
+    let notification_observations = Arc::new(
+        crate::matrix::notifications::start_notification_observation_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-notification-observation-attach-failed")
+        })?,
+    );
     let join_rules = Arc::new(
         crate::matrix::room_profile::start_join_rule_owner(
             &client,
@@ -854,6 +896,7 @@ pub async fn matrix_restore_session(
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
+        notification_observations,
 
         room_key_transfer: devices.room_key_transfer(),
         selected_room_key_import: None,

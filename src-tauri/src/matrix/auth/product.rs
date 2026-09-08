@@ -78,6 +78,7 @@ use crate::matrix::lifecycle::{
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
     KeyringSessionMaterialVault, SessionMaterial,
 };
+use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
 use crate::matrix::room_keys::{
     live::{
@@ -255,6 +256,9 @@ struct ManagedMatrixSession {
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
+    /// Core→renderer observation stream; retired on logout, dropped with
+    /// the session.
+    notification_observations: Arc<NativeNotificationObservationOwner>,
     room_key_transfer: Arc<Mutex<RoomKeyTransferFlow>>,
     selected_room_key_import: Option<SelectedRoomKeyImport>,
     next_room_key_import_selection_id: u64,

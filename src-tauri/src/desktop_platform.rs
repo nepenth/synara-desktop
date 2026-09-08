@@ -131,6 +131,10 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
     }
 
     /// Deliver a native notification through the existing desktop path.
+    ///
+    /// The `Platform` seam is synchronous and has no receipt channel, so the
+    /// post is detached; the OS receipt is consumed on the renderer-driven
+    /// `desktop_notify` command path, which acknowledges Core's ledger.
     fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
         let payload = DesktopNotificationPayload {
             title: candidate.title,
@@ -139,11 +143,13 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
             actions: None,
             action_context: None,
         };
-        desktop_notify(self.app.clone(), payload)
-            .map(|_| ())
-            .map_err(|error| {
-                MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(error)
-            })
+        let app = self.app.clone();
+        tauri::async_runtime::spawn(async move {
+            if let Err(error) = desktop_notify(app, payload).await {
+                eprintln!("platform notify failed: {error}");
+            }
+        });
+        Ok(())
     }
 
     /// Update the dock/taskbar badge through the existing tray path.

@@ -14,6 +14,7 @@ mod edit_policy;
 mod error;
 mod http_pusher;
 mod index;
+mod observation;
 mod push_rules;
 mod room_notification;
 
@@ -30,6 +31,11 @@ pub use http_pusher::{
     MAX_APP_ID_BYTES, MAX_PUSH_KEY_BYTES,
 };
 pub use index::{NotificationIndex, MAX_PENDING_CANDIDATES};
+pub use observation::{
+    project_observation, NativeNotificationObservation, NativeNotificationObservationOwner,
+    NotificationObservationEmit, NOTIFICATION_OBSERVATION_BODY_MAX_CHARS,
+    NOTIFICATION_OBSERVATION_WINDOW_MS, NOTIFICATION_OBSERVED_EVENT,
+};
 pub use push_rules::{
     add_keyword, remove_keyword, set_default_room_mode, set_mention_enabled, snapshot_push_rules,
     MatrixPushRuleMentions, MatrixPushRulesSnapshot, MatrixPushRulesWriteResult,

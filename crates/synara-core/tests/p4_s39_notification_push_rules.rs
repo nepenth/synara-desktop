@@ -460,3 +460,118 @@ async fn focus_changes_re_decide_the_same_event_without_consuming_dedup() {
         .expect("dedup still owned by the index");
     assert_eq!(still_clear.reason.as_deref(), Some("duplicate-event"));
 }
+
+/// The observation stream is the live route into the decision owner: every
+/// message-like event the SDK sync delivers for another sender inside the
+/// recency window is pushed once to the shell sink; own events, edits, and
+/// replayed history are not. The renderer never scans timelines for this.
+#[tokio::test]
+async fn synced_messages_reach_the_observation_stream_and_then_the_decision_owner() {
+    use std::sync::{Arc, Mutex};
+    use std::time::{SystemTime, UNIX_EPOCH};
+    use synara_core::app::notifications::{
+        NativeNotificationObservationOwner, NOTIFICATION_OBSERVATION_WINDOW_MS,
+    };
+
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!push-rules:example.org");
+    let own_user_id = client.user_id().unwrap().to_owned();
+    let f = EventFactory::new().room(room_id);
+    let now_ms = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+
+    let observed = Arc::new(Mutex::new(Vec::new()));
+    let sink = observed.clone();
+    let owner = NativeNotificationObservationOwner::start(
+        &client,
+        Arc::new(move |observation| sink.lock().unwrap().push(observation)),
+        7,
+    )
+    .expect("observation owner binds session");
+    assert_eq!(owner.session_generation(), 7);
+
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
+                .add_state_event(f.member(&own_user_id).display_name("Me"))
+                .add_state_event(f.member(*BOB).display_name("Bob"))
+                .add_state_event(f.member(*CAROL).display_name("Carol"))
+                .add_timeline_event(
+                    f.text_msg("replayed history")
+                        .sender(*BOB)
+                        .server_ts(now_ms - NOTIFICATION_OBSERVATION_WINDOW_MS - 60_000)
+                        .event_id(event_id!("$history")),
+                )
+                .add_timeline_event(
+                    f.text_msg("hello everyone")
+                        .sender(*BOB)
+                        .server_ts(now_ms)
+                        .event_id(event_id!("$live")),
+                )
+                .add_timeline_event(
+                    f.text_msg("my own message")
+                        .sender(&own_user_id)
+                        .server_ts(now_ms)
+                        .event_id(event_id!("$own")),
+                )
+                .add_timeline_event(
+                    f.text_msg("* edited")
+                        .sender(*BOB)
+                        .server_ts(now_ms)
+                        .edit(
+                            event_id!("$live"),
+                            ruma::events::room::message::RoomMessageEventContent::text_plain(
+                                "edited",
+                            )
+                            .into(),
+                        )
+                        .event_id(event_id!("$edit")),
+                ),
+        )
+        .await;
+    server.mock_room_state_encryption().plain().mount().await;
+
+    let observations = observed.lock().unwrap().clone();
+    assert_eq!(
+        observations.len(),
+        1,
+        "exactly the live message from another sender is observed"
+    );
+    let live = &observations[0];
+    assert_eq!(live.session_generation, 7);
+    assert_eq!(live.room_id, ROOM_ID);
+    assert_eq!(live.event_id, "$live");
+    assert_eq!(live.sender, BOB.as_str());
+    assert_eq!(live.event_type, "m.room.message");
+    assert_eq!(live.body.as_deref(), Some("hello everyone"));
+
+    // The observation is exactly what the renderer hands back to the
+    // decision owner; the SDK push rules still decide.
+    let decisions = NativeNotificationDecisionOwner::new(&client, 7).expect("owner binds session");
+    let readback = decisions
+        .decide_observed(request(&live.room_id, Some(&live.event_id)))
+        .await
+        .expect("observed event decides");
+    assert_eq!(readback.decision, "show");
+
+    // A retired owner stops emitting before its SDK handler is dropped.
+    owner.retire();
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id).add_timeline_event(
+                f.text_msg("after logout")
+                    .sender(*BOB)
+                    .server_ts(now_ms)
+                    .event_id(event_id!("$after")),
+            ),
+        )
+        .await;
+    assert_eq!(observed.lock().unwrap().len(), 1);
+}
