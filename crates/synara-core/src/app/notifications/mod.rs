@@ -20,9 +20,9 @@ mod room_notification;
 pub use decision::{
     NativeNotificationDecideRequest, NativeNotificationDecisionOwner,
     NativeNotificationDismissRequest, NativeNotificationFocusSetRequest, NotificationDecisionInput,
-    NotificationDecisionKind, NotificationDecisionReadback, NotificationPushEvaluation,
-    NotificationSuppressReason, NOTIFICATION_BODY_MAX_CHARS, NOTIFICATION_ROUTE_MAX_CHARS,
-    NOTIFICATION_TITLE_MAX_CHARS,
+    NotificationDecisionKind, NotificationDecisionReadback, NotificationDeliveryLedger,
+    NotificationDeliveryOutcome, NotificationPushEvaluation, NotificationSuppressReason,
+    NOTIFICATION_BODY_MAX_CHARS, NOTIFICATION_ROUTE_MAX_CHARS, NOTIFICATION_TITLE_MAX_CHARS,
 };
 pub use error::NotificationError;
 pub use http_pusher::{

@@ -113,15 +113,30 @@ export async function setNotificationFocusWithNativeOwner(
   }
 }
 
-/** Acknowledge a delivered or dismissed candidate. Dedup memory is retained. */
+/**
+ * Closed delivery receipt the platform reports back to Core after handing a
+ * shown candidate to the OS. Omit it when nothing was attempted (system
+ * notifications off or no permission).
+ */
+export type NativeNotificationDeliveryOutcome = 'delivered' | 'failed';
+
+/**
+ * Acknowledge a shown candidate with its delivery receipt. Core releases the
+ * pending candidate, records the receipt in an identifier-free ledger, and
+ * retains dedup memory either way: a failed OS delivery is counted, never
+ * retried, so the same event cannot notify twice.
+ */
 export async function dismissNotificationWithNativeOwner(
   candidateId: string,
+  outcome?: NativeNotificationDeliveryOutcome,
   invoke: (
     command: string,
     args?: Record<string, unknown>
   ) => Promise<DesktopInvokeResult<boolean>> = invokeDesktopWithAvailability
 ): Promise<boolean> {
-  const result = await invoke('matrix_notification_dismiss', { candidateId });
+  const args: Record<string, unknown> = { candidateId };
+  if (outcome !== undefined) args.outcome = outcome;
+  const result = await invoke('matrix_notification_dismiss', args);
   if (!result.available || typeof result.value !== 'boolean') {
     throw new Error('Native notification dismiss is unavailable.');
   }

@@ -62,6 +62,7 @@ import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
   setNotificationFocusWithNativeOwner,
+  type NativeNotificationDeliveryOutcome,
 } from '../../features/room/nativeNotificationDecision';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 
@@ -291,7 +292,7 @@ function MessageNotifications() {
   }, []);
 
   const notify = useCallback(
-    ({
+    async ({
       title,
       body,
       roomAvatar,
@@ -305,31 +306,43 @@ function MessageNotifications() {
       roomId: string;
       eventId: string;
       route?: string;
-    }) => {
+    }): Promise<NativeNotificationDeliveryOutcome> => {
+      // The OS answer is the delivery receipt Core records with the
+      // acknowledgement. Errors are reported as `failed`, never swallowed
+      // into a silent success.
       if (supportsPlatformSystemNotifications()) {
-        showPlatformNotification({
-          title,
-          body,
-          route: route ?? buildDesktopNotificationRoomRoute(roomId, eventId),
-        }).catch(() => undefined);
-        return;
+        try {
+          const shown = await showPlatformNotification({
+            title,
+            body,
+            route: route ?? buildDesktopNotificationRoomRoute(roomId, eventId),
+          });
+          return shown ? 'delivered' : 'failed';
+        } catch {
+          return 'failed';
+        }
       }
 
-      const noti = new window.Notification(title, {
-        icon: roomAvatar,
-        badge: roomAvatar,
-        body,
-        silent: true,
-      });
+      try {
+        const noti = new window.Notification(title, {
+          icon: roomAvatar,
+          badge: roomAvatar,
+          body,
+          silent: true,
+        });
 
-      noti.onclick = () => {
-        if (!window.closed) navigateRoom(roomId, eventId);
-        noti.close();
-        notifRef.current = undefined;
-      };
+        noti.onclick = () => {
+          if (!window.closed) navigateRoom(roomId, eventId);
+          noti.close();
+          notifRef.current = undefined;
+        };
 
-      notifRef.current?.close();
-      notifRef.current = noti;
+        notifRef.current?.close();
+        notifRef.current = noti;
+        return 'delivered';
+      } catch {
+        return 'failed';
+      }
     },
     [navigateRoom]
   );
@@ -393,13 +406,17 @@ function MessageNotifications() {
       if (readback.decision !== 'show' || !readback.candidate) return;
       const shownCandidateId = readback.candidate.candidateId;
 
+      // Delivery receipt: undefined when nothing was attempted, otherwise the
+      // OS answer. The candidate stays pending in Core until the OS has
+      // answered, so the acknowledgement carries a real outcome.
+      let outcome: NativeNotificationDeliveryOutcome | undefined;
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
       ) {
         const avatarMxc =
           room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
-        notify({
+        outcome = await notify({
           title: readback.candidate.title,
           body: readback.candidate.body,
           roomAvatar: avatarMxc
@@ -411,14 +428,18 @@ function MessageNotifications() {
         });
       }
 
-      // Sound follows the Core decision: suppressed events stay silent.
-      if (notificationSound) {
+      // Sound follows the SDK push tweak Core echoed (one-to-one rooms,
+      // mentions, keywords, and any account rule that sets a sound), gated by
+      // the local preference. A notification the OS refused stays silent so
+      // sound never claims a delivery that did not happen.
+      if (notificationSound && readback.sound === true && outcome !== 'failed') {
         playSound();
       }
 
-      // Ack delivery to release the pending candidate. Core retains bounded
-      // recent-event dedup independently of the pending queue.
-      void dismissNotificationWithNativeOwner(shownCandidateId).catch(() => undefined);
+      // Ack with the receipt to release the pending candidate. Core retains
+      // bounded recent-event dedup independently of the pending queue and
+      // does not retry a failed delivery.
+      void dismissNotificationWithNativeOwner(shownCandidateId, outcome).catch(() => undefined);
     },
     [
       mx,

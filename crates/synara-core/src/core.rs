@@ -5245,10 +5245,15 @@ fn matrix_notification_dismiss(state: Arc<CoreState>, request: CommandEnvelope) 
         let owner = state.notification_decision_owner()?.ok_or_else(|| {
             notification_decision_owner_error("p2-notification-dismiss-no-session")
         })?;
-        let dismissed = owner.dismiss(&payload.candidate_id).map_err(|error| {
+        let dismissed = owner
+            .dismiss(&payload.candidate_id, payload.outcome)
+            .map_err(|error| {
+                MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
+            })?;
+        let delivery = owner.delivery_ledger().map_err(|error| {
             MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
         })?;
-        serde_json::to_value(serde_json::json!({ "dismissed": dismissed }))
+        serde_json::to_value(serde_json::json!({ "dismissed": dismissed, "delivery": delivery }))
             .map_err(|_| core_state_error("p2-notification-dismiss-serialization-failed"))
     })
 }
@@ -5269,7 +5274,10 @@ fn matrix_notification_pending_snapshot(
         let candidates = owner.list_pending().map_err(|error| {
             MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
         })?;
-        serde_json::to_value(serde_json::json!({ "candidates": candidates }))
+        let delivery = owner.delivery_ledger().map_err(|error| {
+            MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
+        })?;
+        serde_json::to_value(serde_json::json!({ "candidates": candidates, "delivery": delivery }))
             .map_err(|_| core_state_error("p2-notification-pending-snapshot-serialization-failed"))
     })
 }
@@ -8666,17 +8674,42 @@ mod tests {
             .await
             .expect("pending snapshot succeeds");
         assert_eq!(pending.payload["candidates"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            pending.payload["delivery"],
+            serde_json::json!({ "delivered": 0, "failed": 0, "unreported": 0 })
+        );
 
+        // The delivery receipt travels with the acknowledgement; a failed OS
+        // delivery releases the candidate and is counted, never retried.
         let dismissed = core
             .command(CommandEnvelope {
                 command: "matrix_notification_dismiss".into(),
                 session_generation: 0,
                 request_id: None,
-                payload: serde_json::json!({ "candidateId": candidate_id }),
+                payload: serde_json::json!({ "candidateId": candidate_id, "outcome": "failed" }),
             })
             .await
             .expect("dismiss succeeds");
-        assert_eq!(dismissed.payload, serde_json::json!({ "dismissed": true }));
+        assert_eq!(
+            dismissed.payload,
+            serde_json::json!({
+                "dismissed": true,
+                "delivery": { "delivered": 0, "failed": 1, "unreported": 0 },
+            })
+        );
+        let receipt_vocabulary = core
+            .command(CommandEnvelope {
+                command: "matrix_notification_dismiss".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "candidateId": candidate_id, "outcome": "retry" }),
+            })
+            .await
+            .expect_err("delivery receipts use the closed vocabulary");
+        assert_eq!(
+            receipt_vocabulary.diagnostic_id.as_deref(),
+            Some("p2-notification-dismiss-invalid-payload")
+        );
 
         // Unknown kind vocabulary fails closed with a static diagnostic.
         let invalid = core

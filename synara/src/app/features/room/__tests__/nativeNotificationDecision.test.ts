@@ -145,8 +145,12 @@ test('focus and dismiss route through their Core commands with no fallback', asy
   };
 
   await setNotificationFocusWithNativeOwner('!room:example.org', invoke);
-  const dismissed = await dismissNotificationWithNativeOwner('notif-1', invoke);
+  const dismissed = await dismissNotificationWithNativeOwner('notif-1', undefined, invoke);
   assert.equal(dismissed, true);
+  // The delivery receipt travels with the acknowledgement using the closed
+  // vocabulary; a plain acknowledgement sends no outcome key at all.
+  await dismissNotificationWithNativeOwner('notif-2', 'delivered', invoke);
+  await dismissNotificationWithNativeOwner('notif-3', 'failed', invoke);
   assert.deepEqual(calls, [
     {
       command: 'matrix_notification_focus_set',
@@ -156,7 +160,47 @@ test('focus and dismiss route through their Core commands with no fallback', asy
       command: 'matrix_notification_dismiss',
       args: { candidateId: 'notif-1' },
     },
+    {
+      command: 'matrix_notification_dismiss',
+      args: { candidateId: 'notif-2', outcome: 'delivered' },
+    },
+    {
+      command: 'matrix_notification_dismiss',
+      args: { candidateId: 'notif-3', outcome: 'failed' },
+    },
   ]);
+
+  await assert.rejects(
+    dismissNotificationWithNativeOwner('notif-4', 'delivered', async () => ({
+      available: false as const,
+      value: undefined,
+    })),
+    /unavailable/
+  );
+});
+
+test('the renderer acknowledges with the OS receipt after delivery and follows the SDK sound', () => {
+  const root = process.cwd();
+  const source = readFileSync(`${root}/src/app/pages/client/ClientNonUIFeatures.tsx`, 'utf8');
+  const start = source.indexOf('function MessageNotifications()');
+  assert.ok(start > 0);
+  const end = source.indexOf('\nfunction ', start + 1);
+  assert.ok(end > start);
+  const feature = source.slice(start, end);
+
+  // Delivery is awaited and its outcome reaches Core; the old fire-and-forget
+  // `.catch(() => undefined)` around the OS call is gone from this path.
+  assert.match(feature, /outcome = await notify\(/);
+  assert.match(feature, /dismissNotificationWithNativeOwner\(shownCandidateId, outcome\)/);
+  assert.match(feature, /const shown = await showPlatformNotification\(\{/);
+  assert.match(feature, /return shown \? 'delivered' : 'failed'/);
+  assert.doesNotMatch(feature, /\}\)\.catch\(\(\) => undefined\);\s*return;/);
+
+  // Sound is the SDK push tweak Core echoed, gated by the preference, and
+  // never plays for a delivery the OS refused.
+  assert.match(feature, /notificationSound && readback\.sound === true && outcome !== 'failed'/);
+  // No renderer retry loop: a failed receipt is recorded by Core only.
+  assert.doesNotMatch(feature, /retryNotification|setTimeout\([^)]*notify/);
 });
 
 test('the renderer never reconstructs push-rule policy for message notifications', () => {

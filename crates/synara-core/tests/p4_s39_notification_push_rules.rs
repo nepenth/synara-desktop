@@ -16,7 +16,7 @@ use ruma::push::{
 };
 use ruma::{event_id, events::Mentions, room_id, OwnedRoomId, OwnedUserId, RoomVersionId};
 use synara_core::app::notifications::{
-    NativeNotificationDecideRequest, NativeNotificationDecisionOwner,
+    NativeNotificationDecideRequest, NativeNotificationDecisionOwner, NotificationDeliveryOutcome,
 };
 
 const ROOM_ID: &str = "!push-rules:example.org";
@@ -319,4 +319,144 @@ async fn observations_outside_the_synced_state_fail_closed_or_fetch_once() {
         .await
         .expect_err("unfetchable events fail closed");
     assert_eq!(missing.diagnostic_id(), "v-notify.event-unavailable");
+}
+
+#[tokio::test]
+async fn encrypted_room_events_notify_from_the_encrypted_rule_and_flag_encryption() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!encrypted:example.org");
+    let own_user_id = client.user_id().unwrap().to_owned();
+    let f = EventFactory::new().room(room_id);
+    // No Megolm session exists for this ciphertext, so the SDK keeps the
+    // event as `m.room.encrypted` (unable to decrypt). The default
+    // `.m.rule.encrypted` underride is what decides it in a group room.
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
+                .add_state_event(f.room_encryption().sender(&own_user_id))
+                .add_state_event(f.member(&own_user_id).display_name("Me"))
+                .add_state_event(f.member(*BOB).display_name("Bob"))
+                .add_state_event(f.member(*CAROL).display_name("Carol"))
+                .add_timeline_event(
+                    f.encrypted(
+                        "AwgAEnACgAkLmt6qF84IK++J7UDH2Za1YVchHyprqTqsg",
+                        "sender-key",
+                        "BOBDEVICE",
+                        "session-1",
+                    )
+                    .sender(*BOB)
+                    .event_id(event_id!("$utd")),
+                )
+                .add_timeline_event(
+                    f.encrypted(
+                        "AwgAEnACgAkLmt6qF84IK++J7UDH2Za1YVchHyprqTqsh",
+                        "sender-key",
+                        "MYDEVICE",
+                        "session-2",
+                    )
+                    .sender(&own_user_id)
+                    .event_id(event_id!("$utd-own")),
+                ),
+        )
+        .await;
+    server
+        .mock_room_state_encryption()
+        .encrypted()
+        .mount()
+        .await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).expect("owner binds session");
+
+    let utd = owner
+        .decide_observed(request("!encrypted:example.org", Some("$utd")))
+        .await
+        .expect("undecryptable event decides");
+    assert_eq!(utd.decision, "show");
+    assert!(
+        !utd.highlight && !utd.sound,
+        "an undecryptable group event notifies without highlight or sound"
+    );
+    let candidate = utd.candidate.expect("show carries a candidate");
+    assert!(
+        candidate.is_encrypted,
+        "Core reports the room encryption state itself"
+    );
+    assert_eq!(candidate.event_id.as_deref(), Some("$utd"));
+
+    // Sender comparison does not depend on decryption.
+    let own = owner
+        .decide_observed(request("!encrypted:example.org", Some("$utd-own")))
+        .await
+        .expect("own encrypted event decides");
+    assert_eq!(own.reason.as_deref(), Some("own-event"));
+
+    // Late decryption arrives under the same event id, so it can neither
+    // notify twice nor upgrade an already delivered notification.
+    let redelivered = owner
+        .decide_observed(request("!encrypted:example.org", Some("$utd")))
+        .await
+        .expect("re-observation decides");
+    assert_eq!(redelivered.reason.as_deref(), Some("duplicate-event"));
+}
+
+#[tokio::test]
+async fn focus_changes_re_decide_the_same_event_without_consuming_dedup() {
+    let (_server, client, _f, _own) = synced_group_room().await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).expect("owner binds session");
+
+    // The renderer reports focus; Core suppresses even a highlight while the
+    // room is on screen and does not remember the event as seen.
+    owner.set_focused_room(Some(ROOM_ID)).unwrap();
+    let focused = owner
+        .decide_observed(request(ROOM_ID, Some("$mention")))
+        .await
+        .expect("focused decision");
+    assert_eq!(focused.decision, "suppress");
+    assert_eq!(focused.reason.as_deref(), Some("focused-room"));
+    assert_eq!(owner.pending_count().unwrap(), 0);
+
+    // Another room in focus does not shield this one.
+    owner.set_focused_room(Some("!other:example.org")).unwrap();
+    let elsewhere = owner
+        .decide_observed(request(ROOM_ID, Some("$plain")))
+        .await
+        .expect("unfocused decision");
+    assert_eq!(elsewhere.decision, "show");
+    assert!(!elsewhere.highlight);
+
+    // Once focus clears, the same mention the focus suppressed still shows
+    // with the SDK highlight and sound; only the shown outcome consumes dedup.
+    owner.set_focused_room(None).unwrap();
+    let shown = owner
+        .decide_observed(request(ROOM_ID, Some("$mention")))
+        .await
+        .expect("cleared focus decision");
+    assert_eq!(shown.decision, "show");
+    assert!(shown.highlight && shown.sound);
+    let candidate_id = shown.candidate.unwrap().candidate_id;
+    assert_eq!(owner.pending_count().unwrap(), 2);
+
+    // The platform reports the OS receipt with its acknowledgement; a failed
+    // delivery is counted, releases the candidate, and is not retried.
+    assert!(owner
+        .dismiss(&candidate_id, Some(NotificationDeliveryOutcome::Failed))
+        .unwrap());
+    assert_eq!(owner.pending_count().unwrap(), 1);
+    assert_eq!(owner.delivery_ledger().unwrap().failed, 1);
+    let after_failure = owner
+        .decide_observed(request(ROOM_ID, Some("$mention")))
+        .await
+        .expect("post-failure decision");
+    assert_eq!(after_failure.reason.as_deref(), Some("duplicate-event"));
+
+    // Malformed focus is rejected and the previous focus is kept.
+    assert!(owner.set_focused_room(Some("not-a-room")).is_err());
+    let still_clear = owner
+        .decide_observed(request(ROOM_ID, Some("$plain")))
+        .await
+        .expect("dedup still owned by the index");
+    assert_eq!(still_clear.reason.as_deref(), Some("duplicate-event"));
 }

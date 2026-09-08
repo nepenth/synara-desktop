@@ -219,10 +219,61 @@ pub struct NativeNotificationDecideRequest {
 }
 
 /// React/Tauri wire request for `matrix_notification_dismiss`.
+///
+/// `outcome` is the platform's delivery receipt for the shown candidate. It
+/// is optional so a plain acknowledgement (user dismissed, nothing
+/// attempted) keeps working; when present it must use the closed
+/// [`NotificationDeliveryOutcome`] vocabulary.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct NativeNotificationDismissRequest {
     pub candidate_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outcome: Option<NotificationDeliveryOutcome>,
+}
+
+/// Closed delivery-receipt vocabulary reported by the platform after it
+/// handed a shown candidate to the OS. `failed` means the OS call returned
+/// an error; Core records it and releases the candidate without retrying.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum NotificationDeliveryOutcome {
+    Delivered,
+    Failed,
+}
+
+impl NotificationDeliveryOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Delivered => "delivered",
+            Self::Failed => "failed",
+        }
+    }
+}
+
+/// Bounded, identifier-free delivery receipt ledger for the bound session.
+/// Counts advance only when an acknowledgement releases a pending candidate,
+/// so repeated acks for one candidate cannot inflate them. The ledger resets
+/// with the session generation.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationDeliveryLedger {
+    pub delivered: u64,
+    pub failed: u64,
+    /// Acknowledged without a receipt (user dismissal, delivery not
+    /// attempted, or a platform that does not report outcomes).
+    pub unreported: u64,
+}
+
+impl NotificationDeliveryLedger {
+    fn record(&mut self, outcome: Option<NotificationDeliveryOutcome>) {
+        let counter = match outcome {
+            Some(NotificationDeliveryOutcome::Delivered) => &mut self.delivered,
+            Some(NotificationDeliveryOutcome::Failed) => &mut self.failed,
+            None => &mut self.unreported,
+        };
+        *counter = counter.saturating_add(1);
+    }
 }
 
 /// Exact readback for `matrix_notification_decide`. `decision` is the closed
@@ -257,6 +308,7 @@ pub struct NativeNotificationDecisionOwner {
     /// bound and fail closed on message decisions without a client.
     client: Option<Client>,
     index: Mutex<NotificationIndex>,
+    delivery: Mutex<NotificationDeliveryLedger>,
 }
 
 /// Facts Core resolved from the SDK for one observed timeline event.
@@ -282,6 +334,7 @@ impl NativeNotificationDecisionOwner {
             homeserver_url,
             client: Some(client.clone()),
             index: Mutex::new(NotificationIndex::new(session_generation)),
+            delivery: Mutex::new(NotificationDeliveryLedger::default()),
         })
     }
 
@@ -301,6 +354,7 @@ impl NativeNotificationDecisionOwner {
             homeserver_url: "https://example.org".into(),
             client: None,
             index: Mutex::new(NotificationIndex::new(session_generation)),
+            delivery: Mutex::new(NotificationDeliveryLedger::default()),
         }
     }
 
@@ -526,7 +580,16 @@ impl NativeNotificationDecisionOwner {
         Ok(index.list_pending().into_iter().cloned().collect())
     }
 
-    pub fn dismiss(&self, candidate_id: &str) -> Result<bool, NotificationError> {
+    /// Release a pending candidate and record the platform's delivery
+    /// receipt. Returns whether the candidate was still pending; the ledger
+    /// advances only in that case. A `failed` receipt does not re-arm the
+    /// event: `(room_id, event_id)` dedup is retained and no retry is
+    /// scheduled, so a flapping OS cannot re-notify the same message.
+    pub fn dismiss(
+        &self,
+        candidate_id: &str,
+        outcome: Option<NotificationDeliveryOutcome>,
+    ) -> Result<bool, NotificationError> {
         if candidate_id.trim().is_empty() {
             return Err(NotificationError::Invalid {
                 diagnostic_id: "v-notify.invalid-candidate-id",
@@ -535,7 +598,28 @@ impl NativeNotificationDecisionOwner {
         let mut index = self.index.lock().map_err(|_| NotificationError::Invalid {
             diagnostic_id: "v-notify.owner-poisoned",
         })?;
-        Ok(index.dismiss(candidate_id))
+        let dismissed = index.dismiss(candidate_id);
+        if dismissed {
+            let mut ledger = self
+                .delivery
+                .lock()
+                .map_err(|_| NotificationError::Invalid {
+                    diagnostic_id: "v-notify.owner-poisoned",
+                })?;
+            ledger.record(outcome);
+        }
+        Ok(dismissed)
+    }
+
+    /// Identifier-free delivery receipt counts for the bound session.
+    pub fn delivery_ledger(&self) -> Result<NotificationDeliveryLedger, NotificationError> {
+        let ledger = self
+            .delivery
+            .lock()
+            .map_err(|_| NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-poisoned",
+            })?;
+        Ok(*ledger)
     }
 
     pub fn pending_count(&self) -> Result<usize, NotificationError> {
@@ -550,6 +634,9 @@ impl NativeNotificationDecisionOwner {
     pub fn retire_generation(&self, new_generation: u64) {
         if let Ok(mut index) = self.index.lock() {
             index.retire_generation(new_generation);
+        }
+        if let Ok(mut ledger) = self.delivery.lock() {
+            *ledger = NotificationDeliveryLedger::default();
         }
     }
 }
@@ -637,6 +724,7 @@ mod tests {
             homeserver_url: "https://example.org".into(),
             client: None,
             index: Mutex::new(NotificationIndex::new(7)),
+            delivery: Mutex::new(NotificationDeliveryLedger::default()),
         }
     }
 
@@ -799,8 +887,105 @@ mod tests {
             .unwrap();
         assert_eq!(second.decision, "suppress");
         assert_eq!(second.reason.as_deref(), Some("duplicate-event"));
-        assert!(owner.dismiss(&candidate_id).unwrap());
+        assert!(owner.dismiss(&candidate_id, None).unwrap());
         assert_eq!(owner.pending_count().unwrap(), 0);
+    }
+
+    #[test]
+    fn delivery_receipts_count_once_per_released_candidate() {
+        let owner = owner();
+        let mut candidates = Vec::new();
+        for event in ["$d1", "$d2", "$d3"] {
+            let shown = owner
+                .decide(input(
+                    "!r:example.org",
+                    Some(event),
+                    NotificationDecisionKind::Message,
+                    NOTIFY,
+                    false,
+                ))
+                .unwrap();
+            candidates.push(shown.candidate.unwrap().candidate_id);
+        }
+        assert_eq!(
+            owner.delivery_ledger().unwrap(),
+            NotificationDeliveryLedger::default()
+        );
+
+        assert!(owner
+            .dismiss(&candidates[0], Some(NotificationDeliveryOutcome::Delivered))
+            .unwrap());
+        assert!(owner
+            .dismiss(&candidates[1], Some(NotificationDeliveryOutcome::Failed))
+            .unwrap());
+        assert!(owner.dismiss(&candidates[2], None).unwrap());
+        assert_eq!(
+            owner.delivery_ledger().unwrap(),
+            NotificationDeliveryLedger {
+                delivered: 1,
+                failed: 1,
+                unreported: 1,
+            }
+        );
+
+        // A repeated or unknown acknowledgement releases nothing and cannot
+        // inflate the ledger.
+        assert!(!owner
+            .dismiss(&candidates[1], Some(NotificationDeliveryOutcome::Failed))
+            .unwrap());
+        assert!(!owner
+            .dismiss(
+                "notif-unknown",
+                Some(NotificationDeliveryOutcome::Delivered)
+            )
+            .unwrap());
+        assert_eq!(owner.delivery_ledger().unwrap().failed, 1);
+        assert_eq!(owner.delivery_ledger().unwrap().delivered, 1);
+
+        // A failed OS delivery does not re-arm the event: dedup holds and no
+        // retry is scheduled, so the same message never notifies twice.
+        let again = owner
+            .decide(input(
+                "!r:example.org",
+                Some("$d2"),
+                NotificationDecisionKind::Message,
+                NOTIFY,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(again.reason.as_deref(), Some("duplicate-event"));
+        assert_eq!(owner.pending_count().unwrap(), 0);
+
+        owner.retire_generation(8);
+        assert_eq!(
+            owner.delivery_ledger().unwrap(),
+            NotificationDeliveryLedger::default()
+        );
+    }
+
+    #[test]
+    fn dismiss_wire_outcome_is_closed_and_optional() {
+        let plain: NativeNotificationDismissRequest =
+            serde_json::from_value(serde_json::json!({ "candidateId": "notif-1" })).unwrap();
+        assert_eq!(plain.outcome, None);
+        let failed: NativeNotificationDismissRequest = serde_json::from_value(
+            serde_json::json!({ "candidateId": "notif-1", "outcome": "failed" }),
+        )
+        .unwrap();
+        assert_eq!(failed.outcome, Some(NotificationDeliveryOutcome::Failed));
+        assert_eq!(
+            serde_json::to_value(&failed).unwrap(),
+            serde_json::json!({ "candidateId": "notif-1", "outcome": "failed" })
+        );
+        assert!(serde_json::from_value::<NativeNotificationDismissRequest>(
+            serde_json::json!({ "candidateId": "notif-1", "outcome": "retry" })
+        )
+        .is_err());
+        assert!(serde_json::from_value::<NativeNotificationDismissRequest>(
+            serde_json::json!({ "candidateId": "notif-1", "delivered": true })
+        )
+        .is_err());
+        assert_eq!(NotificationDeliveryOutcome::Delivered.as_str(), "delivered");
     }
 
     #[test]

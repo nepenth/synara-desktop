@@ -7,7 +7,7 @@
 
 use synara_core::app::notifications::{
     NativeNotificationDecideRequest, NativeNotificationDismissRequest,
-    NativeNotificationFocusSetRequest, NotificationDecisionReadback,
+    NativeNotificationFocusSetRequest, NotificationDecisionReadback, NotificationDeliveryOutcome,
 };
 use synara_core::dto::NotificationCandidate;
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
@@ -39,8 +39,12 @@ pub(crate) async fn notification_decide(
 pub(crate) async fn notification_dismiss(
     core: &Core,
     candidate_id: String,
+    outcome: Option<NotificationDeliveryOutcome>,
 ) -> Result<bool, MatrixAuthCommandError> {
-    let request = NativeNotificationDismissRequest { candidate_id };
+    let request = NativeNotificationDismissRequest {
+        candidate_id,
+        outcome,
+    };
     let payload = serde_json::to_value(request).map_err(|_| notification_response_error())?;
     let body = dispatch(core, "matrix_notification_dismiss", payload).await?;
     #[derive(serde::Deserialize)]
