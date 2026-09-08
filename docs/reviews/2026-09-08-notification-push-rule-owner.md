@@ -324,6 +324,12 @@ Findings repaired on the feature branch:
   delivery acknowledgements. They now use the explicit agent-approval kind,
   preserve action buttons and focus behavior, and acknowledge the OS outcome.
   Native approvals own their sound; renderer audio no longer duplicates it.
+- Side-by-side signed app testing exposed a localhost asset-port collision:
+  the availability probe checked only IPv4 while an installed app served the
+  same port on IPv6. The WebView could load the other app's frontend. Probe
+  both loopback address families before selecting the packaged asset port;
+  regression tests reserve real IPv4 and IPv6 listeners. Unsupported IPv6
+  loopback remains compatible with IPv4-only hosts.
 
 The five-minute catch-up window remains intentional for this release. Dedup
 is session-local; a fresh login may surface recent messages again. This is
