@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.30] - 2026-09-08
+
 - Decide desktop message notifications from the SDK-evaluated push actions of
   the exact observed event inside Core. Room mode, account defaults, mentions,
   keywords, room-mention power levels, the suppress-edits override, and rule
@@ -28,7 +30,12 @@
   when Notification Center records the notification (or reports that it did
   not within a bounded wait) instead of when the send task is spawned, so a
   refused delivery is acknowledged to Core as `failed`. The click/action wait
-  keeps running in the background.
+  keeps running in the background. macOS checks current authorization before
+  posting, including route-less notifications, and registers the application
+  identity once.
+- Keep late delivery acknowledgements and event-fetch results within their
+  original login session. Approval prompts now use Core decision and receipt
+  accounting while preserving native actions and avoiding duplicate sounds.
 - Add an iOS compile gate to CI for Swift/FFI changes on feature pull requests
   that skip the simulator lane; labels and release branches keep the full lane.
 
