@@ -423,13 +423,23 @@ mod macos_delivery {
             let mut claimed = ClaimedIdentifiers::default();
             let delivered = vec![
                 record("old", "Room", Some("New inbox notification from bob")),
-                record("other", "Other room", Some("New inbox notification from bob")),
+                record(
+                    "other",
+                    "Other room",
+                    Some("New inbox notification from bob"),
+                ),
                 record("fresh", "Room", Some("New inbox notification from bob")),
             ];
 
             // An identifier that pre-dates the send is never a receipt for it.
             assert_eq!(
-                select_new_delivery(&before, &mut claimed, &delivered[..1], "Room", Some("New inbox notification from bob")),
+                select_new_delivery(
+                    &before,
+                    &mut claimed,
+                    &delivered[..1],
+                    "Room",
+                    Some("New inbox notification from bob")
+                ),
                 None
             );
             // Title and body must both match.
@@ -438,12 +448,24 @@ mod macos_delivery {
                 None
             );
             assert_eq!(
-                select_new_delivery(&before, &mut claimed, &delivered, "Room", Some("New inbox notification from bob")),
+                select_new_delivery(
+                    &before,
+                    &mut claimed,
+                    &delivered,
+                    "Room",
+                    Some("New inbox notification from bob")
+                ),
                 Some("fresh".to_owned())
             );
             // The same delivery cannot credit a second caller.
             assert_eq!(
-                select_new_delivery(&before, &mut claimed, &delivered, "Room", Some("New inbox notification from bob")),
+                select_new_delivery(
+                    &before,
+                    &mut claimed,
+                    &delivered,
+                    "Room",
+                    Some("New inbox notification from bob")
+                ),
                 None
             );
             // A body-less notification only matches a body-less record.
