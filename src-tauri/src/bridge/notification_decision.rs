@@ -7,7 +7,8 @@
 
 use synara_core::app::notifications::{
     NativeNotificationDecideRequest, NativeNotificationDismissRequest,
-    NativeNotificationFocusSetRequest, NotificationDecisionReadback, NotificationDeliveryOutcome,
+    NativeNotificationFocusSetRequest, NotificationDecisionReadback, NotificationDeliveryLedger,
+    NotificationDeliveryOutcome,
 };
 use synara_core::dto::NotificationCandidate;
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
@@ -56,21 +57,27 @@ pub(crate) async fn notification_dismiss(
         .map_err(|_| notification_response_error())
 }
 
+/// Typed readback for `matrix_notification_pending_snapshot`: the pending
+/// Core-decided candidates plus the identifier-free per-session delivery
+/// ledger Core echoes alongside them. The ledger is the live observable for
+/// OS delivery receipts; the shell must not drop it on the way out.
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NotificationPendingSnapshot {
+    pub candidates: Vec<NotificationCandidate>,
+    pub delivery: NotificationDeliveryLedger,
+}
+
 pub(crate) async fn notification_pending_snapshot(
     core: &Core,
-) -> Result<Vec<NotificationCandidate>, MatrixAuthCommandError> {
+) -> Result<NotificationPendingSnapshot, MatrixAuthCommandError> {
     let body = dispatch(
         core,
         "matrix_notification_pending_snapshot",
         serde_json::Value::Null,
     )
     .await?;
-    #[derive(serde::Deserialize)]
-    struct Wire {
-        candidates: Vec<NotificationCandidate>,
-    }
-    serde_json::from_value::<Wire>(body)
-        .map(|wire| wire.candidates)
+    serde_json::from_value::<NotificationPendingSnapshot>(body)
         .map_err(|_| notification_response_error())
 }
 
@@ -117,4 +124,41 @@ fn notification_response_error() -> MatrixAuthCommandError {
         "The native notification decision stream is unavailable.",
         "v-notify.failed",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn pending_snapshot_readback_carries_the_delivery_ledger() {
+        // Core echoes `{ candidates, delivery }`; the shell must forward the
+        // ledger unchanged so a live OS receipt is observable through the
+        // Tauri command, not only through `Core::command`.
+        let snapshot: NotificationPendingSnapshot = serde_json::from_value(serde_json::json!({
+            "candidates": [],
+            "delivery": { "delivered": 2, "failed": 1, "unreported": 0 },
+        }))
+        .expect("Core pending snapshot deserializes");
+        assert!(snapshot.candidates.is_empty());
+        assert_eq!(
+            snapshot.delivery,
+            NotificationDeliveryLedger {
+                delivered: 2,
+                failed: 1,
+                unreported: 0,
+            }
+        );
+        let wire = serde_json::to_value(&snapshot).expect("snapshot serializes");
+        assert_eq!(wire["delivery"]["delivered"], 2);
+        assert_eq!(wire["delivery"]["failed"], 1);
+    }
+
+    #[test]
+    fn pending_snapshot_readback_without_ledger_fails_closed() {
+        let result = serde_json::from_value::<NotificationPendingSnapshot>(serde_json::json!({
+            "candidates": [],
+        }));
+        assert!(result.is_err());
+    }
 }

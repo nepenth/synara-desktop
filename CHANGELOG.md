@@ -13,7 +13,10 @@
   of swallowing errors; Core counts receipts per session and releases a failed
   candidate without retrying it. The notification sound now follows the
   account's push rules (one-to-one rooms, mentions, keywords, and rules with a
-  sound tweak) and stays silent when the OS refuses the notification.
+  sound tweak) and stays silent when the OS refuses the notification. The
+  desktop `matrix_notification_pending_snapshot` command now returns the
+  delivery ledger alongside the pending candidates instead of dropping it at
+  the shell boundary.
 - Add an iOS compile gate to CI for Swift/FFI changes on feature pull requests
   that skip the simulator lane; labels and release branches keep the full lane.
 

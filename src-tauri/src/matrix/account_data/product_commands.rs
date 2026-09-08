@@ -386,10 +386,12 @@ pub async fn matrix_notification_dismiss(
     .await
 }
 
-/// A9 decision stream: pending Core-decided candidates in insertion order.
+/// A9 decision stream: pending Core-decided candidates in insertion order plus
+/// the per-session delivery ledger (`delivered` / `failed` / `unreported`).
 #[tauri::command]
 pub async fn matrix_notification_pending_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
-) -> Result<Vec<synara_core::dto::NotificationCandidate>, MatrixAuthCommandError> {
+) -> Result<crate::bridge::notification_decision::NotificationPendingSnapshot, MatrixAuthCommandError>
+{
     crate::bridge::notification_decision::notification_pending_snapshot(core.inner().as_ref()).await
 }
