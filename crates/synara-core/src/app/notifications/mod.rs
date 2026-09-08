@@ -20,7 +20,7 @@ mod room_notification;
 pub use decision::{
     NativeNotificationDecideRequest, NativeNotificationDecisionOwner,
     NativeNotificationDismissRequest, NativeNotificationFocusSetRequest, NotificationDecisionInput,
-    NotificationDecisionKind, NotificationDecisionReadback, NotificationRoomMode,
+    NotificationDecisionKind, NotificationDecisionReadback, NotificationPushEvaluation,
     NotificationSuppressReason, NOTIFICATION_BODY_MAX_CHARS, NOTIFICATION_ROUTE_MAX_CHARS,
     NOTIFICATION_TITLE_MAX_CHARS,
 };

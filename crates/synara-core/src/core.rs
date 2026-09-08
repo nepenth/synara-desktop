@@ -33,8 +33,7 @@ use crate::app::notifications::{
     MatrixRoomNotificationSnapshot, MatrixRoomNotificationWriteResult,
     MatrixRoomNotificationsSnapshot, NativeHttpPusherOwner, NativeNotificationDecideRequest,
     NativeNotificationDecisionOwner, NativeNotificationDismissRequest,
-    NativeNotificationFocusSetRequest, NotificationDecisionInput, NotificationDecisionKind,
-    NotificationDecisionReadback, NotificationRoomMode,
+    NativeNotificationFocusSetRequest, NotificationDecisionReadback,
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
@@ -5228,27 +5227,10 @@ fn matrix_notification_decide(state: Arc<CoreState>, request: CommandEnvelope) -
         let owner = state.notification_decision_owner()?.ok_or_else(|| {
             notification_decision_owner_error("p2-notification-decide-no-session")
         })?;
-        let kind = NotificationDecisionKind::parse(&payload.kind).map_err(|diagnostic| {
-            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(diagnostic)
-        })?;
-        let room_mode = NotificationRoomMode::parse(&payload.room_mode).map_err(|diagnostic| {
-            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(diagnostic)
-        })?;
-        let readback: NotificationDecisionReadback = owner
-            .decide(NotificationDecisionInput {
-                room_id: payload.room_id,
-                event_id: payload.event_id,
-                kind,
-                title: payload.title,
-                body: payload.body,
-                route: payload.route,
-                suppress_if_focused_room: payload.suppress_if_focused_room,
-                is_encrypted: payload.is_encrypted,
-                room_mode,
-                highlight: payload.highlight,
-                is_own_event: payload.is_own_event,
-            })
-            .map_err(|error| {
+        // Core resolves the event, its sender, and the SDK push evaluation
+        // itself; the renderer supplied identity and presentation only.
+        let readback: NotificationDecisionReadback =
+            owner.decide_observed(payload).await.map_err(|error| {
                 MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
             })?;
         serde_json::to_value(readback)
@@ -8607,8 +8589,9 @@ mod tests {
             .expect("focus clear succeeds");
         assert_eq!(response.payload, serde_json::json!({ "status": "ok" }));
 
-        // Muted room suppresses plain messages even with highlight.
-        let muted_message = core
+        // The renderer can no longer hand Core a mode or highlight verdict:
+        // the retired wire fields are rejected before any policy runs.
+        let legacy_payload = core
             .command(CommandEnvelope {
                 command: "matrix_notification_decide".into(),
                 session_generation: 0,
@@ -8624,15 +8607,32 @@ mod tests {
                 }),
             })
             .await
-            .expect("decide succeeds");
+            .expect_err("renderer-supplied policy fields are rejected");
         assert_eq!(
-            muted_message.payload["decision"],
-            serde_json::json!("suppress")
+            legacy_payload.diagnostic_id.as_deref(),
+            Some("p2-notification-decide-invalid-payload")
         );
+
+        // A message decision needs the SDK event; the table-only test owner
+        // has no bound client and must fail closed rather than guess.
+        let unbound_message = core
+            .command(CommandEnvelope {
+                command: "matrix_notification_decide".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId": "!r:example.org",
+                    "eventId": "$m1",
+                    "kind": "message",
+                    "title": "Room",
+                    "body": "Hello",
+                }),
+            })
+            .await
+            .expect_err("message decisions fail closed without a client");
         assert_eq!(
-            muted_message.payload["reason"],
-            serde_json::json!("muted-room"),
-            "mute suppresses plain messages"
+            unbound_message.diagnostic_id.as_deref(),
+            Some("v-notify.no-client")
         );
 
         let shown = core
@@ -8646,7 +8646,6 @@ mod tests {
                     "kind": "invite",
                     "title": "Invitation",
                     "body": "You have 1 new invitation request.",
-                    "roomMode": "mute",
                 }),
             })
             .await
@@ -8679,7 +8678,7 @@ mod tests {
             .expect("dismiss succeeds");
         assert_eq!(dismissed.payload, serde_json::json!({ "dismissed": true }));
 
-        // Unknown room-mode vocabulary fails closed with a static diagnostic.
+        // Unknown kind vocabulary fails closed with a static diagnostic.
         let invalid = core
             .command(CommandEnvelope {
                 command: "matrix_notification_decide".into(),
@@ -8687,15 +8686,18 @@ mod tests {
                 request_id: None,
                 payload: serde_json::json!({
                     "roomId": "!r:example.org",
-                    "kind": "message",
+                    "kind": "loud",
                     "title": "Room",
                     "body": "Hello",
-                    "roomMode": "loud",
                 }),
             })
             .await
-            .expect_err("unknown room mode must fail closed");
+            .expect_err("unknown kind must fail closed");
         assert_eq!(invalid.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            invalid.diagnostic_id.as_deref(),
+            Some("v-notify.invalid-kind")
+        );
     }
 
     #[tokio::test]
@@ -8712,7 +8714,6 @@ mod tests {
                     "kind": "message",
                     "title": "Room",
                     "body": "New message",
-                    "roomMode": "all",
                 }),
             })
             .await
