@@ -231,9 +231,10 @@ behaviour claim.
 - Linux tray delivery readback; macOS is now confirmed through the shipped
   path (below).
 - The live `failed` receipt on macOS under a denied notification permission:
-  the receipt code path is deterministic-tested and the rig is ready, but the
-  System Settings toggle (Terminal identity in debug builds) has not been
-  flipped in a recorded run.
+  deterministic-tested, but not reproduced live because macOS still delivered
+  the unsigned harness bundle's notifications under `authorizationStatus:
+Denied` (below). Needs a signed product build whose Settings switch the OS
+  enforces.
 - Automatic retry of a `failed` delivery; deliberately deferred.
 
 Closed by `466e41e` (was open at `3ace2188`): the Core→renderer push stream
@@ -280,5 +281,14 @@ attempted, DM while another room was focused `show`. The macOS receipt landed
 ledger advanced 1→2→3→4 with `failed 0`. Debug builds present as
 `com.apple.Terminal` because `configure_macos_notification_application`
 chooses that identity under `tauri::is_dev()`; the earlier "crate fallback"
-wording was wrong. Full table and the pending deny-toggle note are in the A9
-record.
+wording was wrong. Placed inside a bundle, the same binary registered under
+the bundle's own identifier.
+
+Deny case: every record carried `authorizationStatus: Denied`, and after the
+operator's System Settings visit set both identities to `allow: NO`, a further
+DM was still logged by `usernoted` as `Delivering … to [.alert .lockScreen
+.notificationCenter]` and the receipt returned `delivered` in 53 ms. The OS
+did not refuse the unsigned harness bundle, so there was no refusal to
+observe; the receipt is truthful to Notification Center's answer. A refused
+delivery under the signed product bundle's own Settings switch remains
+unproven. Full table in the A9 record.
