@@ -6,9 +6,6 @@ import type { EventedRoomReading } from '../../utils/roomEvents';
 
 type NonUIRoomReading = EventedRoomReading & {
   findEventById(eventId: string): MatrixEventReading | undefined;
-  isDirect?: boolean;
-  isEncrypted?: boolean;
-  notificationMode?: 'all' | 'mentions' | 'mute' | 'default';
 };
 type LocalMx = ReturnType<typeof useMatrixClient>;
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
@@ -64,24 +61,8 @@ import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeRe
 import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
-  eventIsHighlightObservation,
-  resolveObservedNotificationRoomMode,
-  roomOverrideMapFromSnapshots,
   setNotificationFocusWithNativeOwner,
 } from '../../features/room/nativeNotificationDecision';
-import {
-  nativeRoomNotificationsSnapshot,
-  subscribeNativeRoomNotifications,
-} from '../../features/settings/notifications/nativeRoomNotification';
-import {
-  nativePushRulesSnapshot,
-  subscribeNativePushRules,
-  type NativePushRulesSnapshot,
-} from '../../features/settings/notifications/nativePushRules';
-import {
-  getOwnProfileNative,
-  OWN_PROFILE_CHANGED_EVENT,
-} from '../../features/settings/account/nativeProfile';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
@@ -300,59 +281,6 @@ function MessageNotifications() {
     };
   }, [selectedRoomId]);
 
-  const snapshotRef = useRef<{
-    roomModes: Map<string, 'all' | 'mentions' | 'mute'>;
-    pushRules: NativePushRulesSnapshot | null;
-    ownDisplayName: string | null;
-  }>({
-    roomModes: new Map(),
-    pushRules: null,
-    ownDisplayName: null,
-  });
-
-  const loadNotificationSnapshots = useCallback(async () => {
-    try {
-      const [rooms, rules, profile] = await Promise.all([
-        nativeRoomNotificationsSnapshot(),
-        nativePushRulesSnapshot(),
-        getOwnProfileNative().catch(() => 'legacy' as const),
-      ]);
-      snapshotRef.current = {
-        roomModes: roomOverrideMapFromSnapshots(rooms),
-        pushRules: rules,
-        ownDisplayName:
-          profile !== 'legacy' && typeof profile.displayName === 'string' && profile.displayName
-            ? profile.displayName
-            : snapshotRef.current.ownDisplayName,
-      };
-    } catch {
-      // Keep the last good cache. decideAndNotify fail-closes without defaults.
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadNotificationSnapshots();
-    const unsubRooms = subscribeNativeRoomNotifications(() => {
-      void loadNotificationSnapshots();
-    });
-    const unsubRules = subscribeNativePushRules(() => {
-      void loadNotificationSnapshots();
-    });
-    const onProfile = () => {
-      void loadNotificationSnapshots();
-    };
-    window.addEventListener(OWN_PROFILE_CHANGED_EVENT, onProfile);
-    const interval = window.setInterval(() => {
-      void loadNotificationSnapshots();
-    }, 30_000);
-    return () => {
-      unsubRooms();
-      unsubRules();
-      window.removeEventListener(OWN_PROFILE_CHANGED_EVENT, onProfile);
-      window.clearInterval(interval);
-    };
-  }, [loadNotificationSnapshots]);
-
   const rememberSubmitted = useCallback((roomId: string, eventId: string) => {
     const submitted = submittedRef.current;
     submitted.add(`${roomId}:${eventId}`);
@@ -423,24 +351,13 @@ function MessageNotifications() {
       const cacheKey = `${room.roomId}:${eventId}`;
       if (submittedRef.current.has(cacheKey)) return;
 
-      const userId = mx.getUserId();
       const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
-      if (!snapshotRef.current.pushRules) {
-        await loadNotificationSnapshots();
-      }
-      const { roomModes, pushRules, ownDisplayName } = snapshotRef.current;
-      const ciphertext = mEvent.getType() === 'm.room.encrypted';
-      const content = mEvent.getContent<Record<string, unknown>>();
-      const plaintextBody = !ciphertext && typeof content.body === 'string' ? content.body : null;
-      const roomMode = resolveObservedNotificationRoomMode({
-        userDefined: roomModes.get(room.roomId),
-        listMode: room.notificationMode,
-        isEncrypted: room.isEncrypted === true || ciphertext,
-        isDirect: room.isDirect === true,
-        defaults: pushRules,
-      });
       let readback;
       try {
+        // Identity and presentation only. Core loads this exact event from
+        // the SDK, compares its sender with the session, and reads the
+        // SDK-evaluated push actions (room mode, mentions, keywords, mute,
+        // suppressed edits). No mode, highlight, or body leaves the renderer.
         readback = await decideNotificationWithNativeOwner({
           roomId: room.roomId,
           eventId,
@@ -453,31 +370,19 @@ function MessageNotifications() {
           }`,
           route: buildDesktopNotificationRoomRoute(room.roomId, openEventId),
           suppressIfFocusedRoom: true,
-          isEncrypted: ciphertext,
-          roomMode,
-          highlight: eventIsHighlightObservation({
-            content,
-            userId,
-            isEncrypted: ciphertext,
-            body: plaintextBody,
-            keywords: pushRules?.keywords,
-            displayName:
-              (userId ? getMemberDisplayName(room, userId) : undefined) ?? ownDisplayName,
-            localpart: userId ? getMxIdLocalPart(userId) : null,
-            flags: pushRules?.mentions,
-          }),
-          isOwnEvent: userId != null && sender === userId,
         });
       } catch {
-        // Core unavailable (no session): fail silent without remembering, so
-        // the next sync scan retries through the same Core owner. There is no
-        // TS policy fallback.
+        // Core unavailable (no session, event not yet loaded, push context
+        // still settling): fail silent without remembering, so the next sync
+        // scan retries through the same Core owner. There is no TS policy
+        // fallback.
         return;
       }
       // Remember only outcomes Core durably recorded: shown candidates and
-      // already-seen or own events. Transient suppressions (focus, mute,
-      // mentions-only) stay resubmittable so a cleared focus or changed mode
-      // can still notify while the event is recent; Core re-decides each time.
+      // already-seen or own events. Transient suppressions (focus, push rules
+      // that currently say no) stay resubmittable so a cleared focus or a
+      // changed rule can still notify while the event is recent; Core
+      // re-decides each time.
       if (
         readback.decision === 'show' ||
         readback.reason === 'duplicate-event' ||
@@ -523,7 +428,6 @@ function MessageNotifications() {
       notify,
       rememberSubmitted,
       useAuthentication,
-      loadNotificationSnapshots,
     ]
   );
 

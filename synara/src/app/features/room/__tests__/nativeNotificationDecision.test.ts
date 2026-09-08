@@ -2,201 +2,25 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 
-import { NotificationType } from '../../../../types/matrix/room';
 import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
-  effectiveNotificationRoomMode,
-  eventIsHighlightObservation,
-  eventMentionsUser,
-  notificationBodyContainsToken,
-  notificationRoomModeForType,
-  resolveObservedNotificationRoomMode,
-  roomOverrideMapFromSnapshots,
   setNotificationFocusWithNativeOwner,
 } from '../nativeNotificationDecision';
 
-test('renderer push-rule readings map to the closed Core mode vocabulary', () => {
-  assert.equal(notificationRoomModeForType(NotificationType.AllMessages), 'all');
-  assert.equal(notificationRoomModeForType(NotificationType.MentionsAndKeywords), 'mentions');
-  assert.equal(notificationRoomModeForType(NotificationType.Mute), 'mute');
-  assert.equal(notificationRoomModeForType(NotificationType.Default), 'default');
-});
-
-test('highlight observation reads explicit user mentions only', () => {
-  assert.equal(
-    eventMentionsUser({ 'm.mentions': { user_ids: ['@u:example.org'] } }, '@u:example.org'),
-    true
-  );
-  assert.equal(
-    eventMentionsUser({ 'm.mentions': { user_ids: ['@other:example.org'] } }, '@u:example.org'),
-    false
-  );
-  assert.equal(eventMentionsUser({}, '@u:example.org'), false);
-  assert.equal(eventMentionsUser(null, '@u:example.org'), false);
-  assert.equal(eventMentionsUser({ 'm.mentions': { user_ids: ['@u:example.org'] } }, null), false);
-});
-
-const ALL_ON_FLAGS = {
-  userMention: true,
-  displayName: true,
-  userName: true,
-  roomMention: true,
-  atRoom: true,
+const SHOWN_CANDIDATE = {
+  candidateId: 'notif-1',
+  roomId: '!room:example.org',
+  eventId: '$event:example.org',
+  kind: 'message' as const,
+  title: 'Room',
+  body: 'New inbox notification from @u:example.org',
+  route: '/home/room/!room:example.org',
+  suppressIfFocusedRoom: true,
+  isEncrypted: false,
 };
 
-test('muted native override resolves to mute, not inherited default', () => {
-  const rooms = roomOverrideMapFromSnapshots([
-    { roomId: '!muted:example.org', mode: 'mute' },
-    { roomId: '!mentions:example.org', mode: 'mentions' },
-    { roomId: '!ignored:example.org', mode: 'default' },
-  ]);
-  assert.equal(rooms.get('!muted:example.org'), 'mute');
-  assert.equal(
-    resolveObservedNotificationRoomMode({
-      userDefined: rooms.get('!muted:example.org'),
-      isEncrypted: false,
-      isDirect: false,
-      defaults: { dm: 'all', dmEncrypted: 'all', group: 'all', groupEncrypted: 'all' },
-    }),
-    'mute'
-  );
-  assert.equal(
-    resolveObservedNotificationRoomMode({
-      userDefined: rooms.get('!mentions:example.org'),
-      isEncrypted: false,
-      isDirect: false,
-      defaults: { dm: 'all', dmEncrypted: 'all', group: 'all', groupEncrypted: 'all' },
-    }),
-    'mentions'
-  );
-});
-
-test('rooms without an override inherit account defaults and fail closed', () => {
-  const defaults = {
-    dm: 'mute',
-    dmEncrypted: 'mentions',
-    group: 'all',
-    groupEncrypted: 'mute',
-  } as const;
-  assert.equal(
-    effectiveNotificationRoomMode({
-      userDefined: 'default',
-      isEncrypted: false,
-      isDirect: true,
-      defaults,
-    }),
-    'mute'
-  );
-  assert.equal(
-    resolveObservedNotificationRoomMode({
-      userDefined: undefined,
-      isEncrypted: true,
-      isDirect: false,
-      defaults,
-    }),
-    'mute'
-  );
-  assert.equal(
-    resolveObservedNotificationRoomMode({
-      userDefined: 'default',
-      listMode: 'all',
-      isEncrypted: false,
-      isDirect: false,
-      defaults: null,
-    }),
-    'all'
-  );
-  assert.equal(
-    resolveObservedNotificationRoomMode({
-      userDefined: 'default',
-      isEncrypted: false,
-      isDirect: false,
-    }),
-    'mentions'
-  );
-});
-
-test('highlight observation covers mentions, @room, keywords, and skips ciphertext', () => {
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { 'm.mentions': { user_ids: ['@u:example.org'] } },
-      userId: '@u:example.org',
-      isEncrypted: false,
-      flags: ALL_ON_FLAGS,
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { 'm.mentions': { room: true } },
-      userId: '@u:example.org',
-      isEncrypted: true,
-      body: 'ciphertext-must-not-match keyword',
-      keywords: ['keyword'],
-      flags: ALL_ON_FLAGS,
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { body: 'please see @room later' },
-      userId: '@u:example.org',
-      isEncrypted: false,
-      body: 'please see @room later',
-      flags: ALL_ON_FLAGS,
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { body: 'ship the launch keyword today' },
-      userId: '@u:example.org',
-      isEncrypted: false,
-      body: 'ship the launch keyword today',
-      keywords: ['keyword'],
-      flags: ALL_ON_FLAGS,
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { body: 'hey Alice Smith' },
-      userId: '@u:example.org',
-      isEncrypted: false,
-      body: 'hey Alice Smith',
-      displayName: 'Alice Smith',
-      flags: ALL_ON_FLAGS,
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { body: 'ping @u later' },
-      userId: '@u:example.org',
-      isEncrypted: false,
-      body: 'ping @u later',
-      localpart: 'u',
-      flags: ALL_ON_FLAGS,
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      content: { ciphertext: 'AAAA', body: 'keyword' },
-      userId: '@u:example.org',
-      isEncrypted: true,
-      body: 'keyword',
-      keywords: ['keyword'],
-      flags: ALL_ON_FLAGS,
-    }),
-    false
-  );
-  assert.equal(notificationBodyContainsToken('this has keyword inside', 'keyword'), true);
-  assert.equal(notificationBodyContainsToken('keywords', 'keyword'), false);
-});
-
-test('decide routes only through matrix_notification_decide with closed observations', async () => {
+test('decide submits identity and presentation only through matrix_notification_decide', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   const readback = await decideNotificationWithNativeOwner(
     {
@@ -207,34 +31,19 @@ test('decide routes only through matrix_notification_decide with closed observat
       body: 'New inbox notification from @u:example.org',
       route: '/home/room/!room:example.org',
       suppressIfFocusedRoom: true,
-      isEncrypted: false,
-      roomMode: 'all',
-      highlight: false,
-      isOwnEvent: false,
     },
     async (command, args) => {
       calls.push({ command, args });
       return {
         available: true,
-        value: {
-          decision: 'show',
-          candidate: {
-            candidateId: 'notif-1',
-            roomId: '!room:example.org',
-            eventId: '$event:example.org',
-            kind: 'message',
-            title: 'Room',
-            body: 'New inbox notification from @u:example.org',
-            route: '/home/room/!room:example.org',
-            suppressIfFocusedRoom: true,
-            isEncrypted: false,
-          },
-        },
+        value: { decision: 'show', candidate: SHOWN_CANDIDATE, highlight: true, sound: true },
       };
     }
   );
 
   assert.equal(readback.decision, 'show');
+  assert.equal(readback.highlight, true);
+  assert.equal(readback.sound, true);
   assert.deepEqual(calls, [
     {
       command: 'matrix_notification_decide',
@@ -247,26 +56,45 @@ test('decide routes only through matrix_notification_decide with closed observat
           body: 'New inbox notification from @u:example.org',
           route: '/home/room/!room:example.org',
           suppressIfFocusedRoom: true,
-          isEncrypted: false,
-          roomMode: 'all',
-          highlight: false,
-          isOwnEvent: false,
         },
       },
     },
   ]);
+  // The wire never carries a renderer verdict: Core resolves these from the SDK.
+  const request = calls[0]?.args?.request as Record<string, unknown>;
+  for (const retired of ['roomMode', 'highlight', 'isOwnEvent', 'isEncrypted']) {
+    assert.equal(retired in request, false, `${retired} must not be sent to Core`);
+  }
+});
+
+test('decide accepts SDK push echoes only as optional booleans', async () => {
+  const suppressed = await decideNotificationWithNativeOwner(
+    { roomId: '!room:example.org', eventId: '$e', kind: 'message', title: 'Room', body: 'Hello' },
+    async () => ({
+      available: true,
+      value: { decision: 'suppress', reason: 'push-rules-no-notify' },
+    })
+  );
+  assert.equal(suppressed.decision, 'suppress');
+  assert.equal(suppressed.reason, 'push-rules-no-notify');
+  assert.equal(suppressed.highlight, undefined);
+
+  await assert.rejects(
+    decideNotificationWithNativeOwner(
+      { roomId: '!room:example.org', kind: 'message', title: 'Room', body: 'Hello' },
+      async () => ({
+        available: true,
+        value: { decision: 'show', candidate: SHOWN_CANDIDATE, highlight: 'yes' } as never,
+      })
+    ),
+    /closed vocabulary/
+  );
 });
 
 test('decide rejects readbacks outside the closed show/suppress vocabulary', async () => {
   await assert.rejects(
     decideNotificationWithNativeOwner(
-      {
-        roomId: '!room:example.org',
-        kind: 'message',
-        title: 'Room',
-        body: 'Hello',
-        roomMode: 'all',
-      },
+      { roomId: '!room:example.org', kind: 'message', title: 'Room', body: 'Hello' },
       async () => ({
         available: true,
         value: { decision: 'maybe', candidate: undefined } as never,
@@ -278,16 +106,31 @@ test('decide rejects readbacks outside the closed show/suppress vocabulary', asy
   // Show without a candidate is not an acceptable readback.
   await assert.rejects(
     decideNotificationWithNativeOwner(
-      {
-        roomId: '!room:example.org',
-        kind: 'message',
-        title: 'Room',
-        body: 'Hello',
-        roomMode: 'all',
-      },
+      { roomId: '!room:example.org', kind: 'message', title: 'Room', body: 'Hello' },
       async () => ({ available: true, value: { decision: 'show' } })
     ),
     /closed vocabulary/
+  );
+
+  // Suppress carrying a candidate is contradictory.
+  await assert.rejects(
+    decideNotificationWithNativeOwner(
+      { roomId: '!room:example.org', kind: 'message', title: 'Room', body: 'Hello' },
+      async () => ({
+        available: true,
+        value: { decision: 'suppress', candidate: SHOWN_CANDIDATE },
+      })
+    ),
+    /closed vocabulary/
+  );
+
+  // Core unavailable is an error, never a TS decision.
+  await assert.rejects(
+    decideNotificationWithNativeOwner(
+      { roomId: '!room:example.org', kind: 'message', title: 'Room', body: 'Hello' },
+      async () => ({ available: false as const, value: undefined })
+    ),
+    /unavailable/
   );
 });
 
@@ -316,61 +159,33 @@ test('focus and dismiss route through their Core commands with no fallback', asy
   ]);
 });
 
-test('message notifications never decide mute policy in TypeScript', () => {
-  const source = readFileSync(
-    `${process.cwd()}/src/app/pages/client/ClientNonUIFeatures.tsx`,
+test('the renderer never reconstructs push-rule policy for message notifications', () => {
+  const root = process.cwd();
+  const feature = readFileSync(`${root}/src/app/pages/client/ClientNonUIFeatures.tsx`, 'utf8');
+  const facade = readFileSync(
+    `${root}/src/app/features/room/nativeNotificationDecision.ts`,
     'utf8'
   );
-  assert.match(source, /decideNotificationWithNativeOwner/);
-  assert.match(source, /setNotificationFocusWithNativeOwner/);
-  assert.match(source, /dismissNotificationWithNativeOwner/);
-  assert.match(source, /resolveObservedNotificationRoomMode/);
-  assert.match(source, /nativeRoomNotificationsSnapshot/);
-  assert.match(source, /nativePushRulesSnapshot/);
-  assert.match(source, /eventIsHighlightObservation/);
-  // The renderer observes Core snapshots and passes a resolved mode; only
-  // Core branches on mute/mentions. No JS push-rule stub, no TS mute matcher.
-  assert.doesNotMatch(source, /getNotificationType\(/);
-  assert.doesNotMatch(source, /notificationRoomModeForType/);
-  assert.doesNotMatch(source, /NotificationType\.Mute/);
-  assert.doesNotMatch(source, /unreadNotificationCache/);
-});
 
-test('explicit mention metadata disables legacy matching but preserves keywords', () => {
-  const input = {
-    content: { 'm.mentions': {} },
-    userId: '@alice:example.org',
-    isEncrypted: false,
-    body: 'Alice alice @alice @room',
-    displayName: 'Alice',
-    localpart: 'alice',
-    flags: ALL_ON_FLAGS,
-  };
-  assert.equal(eventIsHighlightObservation(input), false);
-  assert.equal(eventIsHighlightObservation({ ...input, content: {} }), true);
-  assert.equal(eventIsHighlightObservation({ ...input, keywords: ['Alice'] }), true);
-  assert.equal(
-    eventIsHighlightObservation({
-      ...input,
-      content: { 'm.mentions': { user_ids: ['@alice:example.org'] } },
-    }),
-    true
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      ...input,
-      content: { 'm.mentions': { room: true } },
-      flags: { ...ALL_ON_FLAGS, roomMention: false },
-    }),
-    false
-  );
-  assert.equal(
-    eventIsHighlightObservation({
-      ...input,
-      content: {},
-      body: '@room',
-      flags: { ...ALL_ON_FLAGS, atRoom: false },
-    }),
-    false
-  );
+  assert.match(feature, /decideNotificationWithNativeOwner/);
+  assert.match(feature, /setNotificationFocusWithNativeOwner/);
+  assert.match(feature, /dismissNotificationWithNativeOwner/);
+
+  // No JS push-rule stub, mode resolution, or mention/keyword matcher: Core
+  // reads the SDK-evaluated push actions for the exact observed event.
+  for (const source of [feature, facade]) {
+    assert.doesNotMatch(source, /getNotificationType\(/);
+    assert.doesNotMatch(source, /NotificationType\.Mute/);
+    assert.doesNotMatch(source, /unreadNotificationCache/);
+    assert.doesNotMatch(source, /nativePushRulesSnapshot/);
+    assert.doesNotMatch(source, /nativeRoomNotificationsSnapshot/);
+    assert.doesNotMatch(source, /resolveObservedNotificationRoomMode/);
+    assert.doesNotMatch(source, /eventIsHighlightObservation/);
+    assert.doesNotMatch(source, /notificationBodyContainsToken/);
+    assert.doesNotMatch(source, /'m\.mentions'/);
+    assert.doesNotMatch(source, /@room/);
+    assert.doesNotMatch(source, /roomMode\s*[:=]/);
+    assert.doesNotMatch(source, /highlight\s*:/);
+    assert.doesNotMatch(source, /isOwnEvent/);
+  }
 });
