@@ -220,18 +220,29 @@ behaviour claim.
   the next event, exactly as the SDK sees them, without a 30-second snapshot
   poll.
 - A decision for an event not yet in the SDK event cache makes one bounded
-  `/event` request. The renderer already treats a failed decision as transient
-  and resubmits on its next scan; no event is remembered as decided unless Core
-  returned `show`, `duplicate-event`, or `own-event`.
+  `/event` request. Since `466e41e` the renderer no longer scans, so a decision
+  that fails transiently is dropped for that event (Core observed it once;
+  there is no renderer retry and no TypeScript fallback); no event is
+  remembered as decided unless Core returned `show`, `duplicate-event`, or
+  `own-event`.
 
-## Still open (unchanged by this PR)
+## Still open
 
-- Live macOS/Linux tray delivery readback and two-client interoperability. The
-  delivery ledger makes a refused OS delivery observable but is not itself live
-  evidence.
-- A spontaneous Core→renderer push stream; decide remains request/response.
-- Automatic retry of a `failed` delivery; deliberately deferred until the
-  receipt ledger has been observed live.
+- Linux tray delivery readback; macOS is now confirmed through the shipped
+  path (below).
+- The live `failed` receipt on macOS under a denied notification permission:
+  the receipt code path is deterministic-tested and the rig is ready, but the
+  System Settings toggle (Terminal identity in debug builds) has not been
+  flipped in a recorded run.
+- Automatic retry of a `failed` delivery; deliberately deferred.
+
+Closed by `466e41e` (was open at `3ace2188`): the Core→renderer push stream
+(`NativeNotificationObservationOwner` emitting `matrix-notification-observed`
+per live message-like event; the renderer subscribes and no longer gates on
+`SYNCING`, listens to `Room.timeline`, or scans every 30 s), and the macOS
+route/action receipt (the send returns only after Notification Center reports
+the record delivered, with a send error or 2.5 s silence reported as
+`failed`).
 
 ## Live macOS result (2026-09-08, commit `3ace2188`)
 
@@ -257,3 +268,17 @@ With the observation step injected past the dead gate, Core decided `show`
 with the SDK sound tweak for a DM, a mention (`highlight true`), and a 2-member
 room; `usernoted` delivered each record; the ledger advanced 1→2→3 with
 `failed 0`; a focused room suppressed with no OS record.
+
+## Live macOS rerun (2026-09-08, commit `466e41e`)
+
+Same rig, same accounts, no injection. Each live message from the second
+account reached Core through the shipped observation stream and produced one
+`decide`: 2-member room `show`/`sound true`, DM `show`/`sound true`, mention
+`show`/`highlight true`, focused room `suppress`/`focused-room` with nothing
+attempted, DM while another room was focused `show`. The macOS receipt landed
+52–64 ms after each send, after `usernoted` logged the delivered record; the
+ledger advanced 1→2→3→4 with `failed 0`. Debug builds present as
+`com.apple.Terminal` because `configure_macos_notification_application`
+chooses that identity under `tauri::is_dev()`; the earlier "crate fallback"
+wording was wrong. Full table and the pending deny-toggle note are in the A9
+record.
