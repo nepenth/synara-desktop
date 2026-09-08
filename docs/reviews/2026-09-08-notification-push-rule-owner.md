@@ -292,3 +292,41 @@ did not refuse the unsigned harness bundle, so there was no refusal to
 observe; the receipt is truthful to Notification Center's answer. A refused
 delivery under the signed product bundle's own Settings switch remains
 unproven. Full table in the A9 record.
+
+
+## PR deep review follow-up
+
+The reviewed operating path starts with a fresh test-account message, crosses
+Core observation and SDK push-rule evaluation, and ends with one OS delivery
+receipt acknowledged into the same session's ledger. macOS permission is an
+OS-owned boundary. A denied setting must prevent posting and produce one
+failed receipt without retry; delivery claims alone do not prove permission
+was respected.
+
+Findings repaired on the feature branch:
+
+- macOS legacy delivered records can exist when authorization is denied.
+  Query UserNotifications settings before each send and return a failed
+  receipt when denied. Bound the permission lookup; a lookup failure does not
+  post. Unbundled development executables retain the legacy development path.
+- Route-less macOS notifications bypassed receipt checking. They now use the
+  same delivery function as routed notifications. Normalize the legacy
+  crate's empty informative text when matching a body-less notification.
+- Concurrent first notifications called the one-shot legacy registration
+  more than once. The shell now initializes it once.
+- Candidate IDs were reused across session generations. A late receipt could
+  dismiss a new account's pending candidate. IDs now include the generation;
+  a regression test proves an old receipt cannot change the new ledger.
+- An event fetch could finish after its decision owner was detached. Core
+  rejects that stale result, and the renderer rechecks its generation before
+  delivery.
+- Approval prompts subscribed to observations but bypassed Core decisions and
+  delivery acknowledgements. They now use the explicit agent-approval kind,
+  preserve action buttons and focus behavior, and acknowledge the OS outcome.
+  Native approvals own their sound; renderer audio no longer duplicates it.
+
+The five-minute catch-up window remains intentional for this release. Dedup
+is session-local; a fresh login may surface recent messages again. This is
+not a promise of durable cross-login notification history.
+
+Validation and live proof are recorded below after their runs complete.

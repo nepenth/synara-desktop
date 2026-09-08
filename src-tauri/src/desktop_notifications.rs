@@ -250,16 +250,17 @@ fn show_notification_with_route_click_handler<R: Runtime>(
 #[cfg(target_os = "macos")]
 fn configure_macos_notification_application() {
     use mac_notification_sys::set_application;
-
-    let bundle_identifier = if tauri::is_dev() {
-        "com.apple.Terminal"
-    } else {
-        "com.whylandcreative.synara.desktop"
-    };
-
-    if let Err(error) = set_application(bundle_identifier) {
-        eprintln!("failed to configure macOS notification application: {error}");
-    }
+    static CONFIGURE: std::sync::Once = std::sync::Once::new();
+    CONFIGURE.call_once(|| {
+        let bundle_identifier = if tauri::is_dev() {
+            "com.apple.Terminal"
+        } else {
+            "com.whylandcreative.synara.desktop"
+        };
+        if let Err(error) = set_application(bundle_identifier) {
+            eprintln!("failed to configure macOS notification application: {error}");
+        }
+    });
 }
 
 /// Delivery receipt for the macOS route/action path.
@@ -267,11 +268,11 @@ fn configure_macos_notification_application() {
 /// `mac_notification_sys::Notification::send()` with `wait_for_click(true)`
 /// blocks until the user clicks or the banner is dismissed, and reports a
 /// refused delivery as an ordinary auto-dismiss, so it cannot be awaited for
-/// a receipt without also waiting for the user. Notification Center does keep
-/// a truthful record, though: a notification it accepted appears in
-/// `deliveredNotifications` (the same `didDeliverNotification:` signal the
-/// crate itself waits on), and one the OS refused never does. The receipt is
-/// therefore: the identifier set is snapshotted before the send, and the
+/// a receipt without also waiting for the user. After checking the app's
+/// authorization, a new `deliveredNotifications` record confirms Notification
+/// Center accepted the post (not that a banner was visible under Focus).
+/// Legacy records alone are insufficient: macOS can record a post even while
+/// authorization is denied. The identifier set is snapshotted before the send, and the
 /// caller is credited once a new identifier carrying this notification's
 /// title and body appears, or debited after a bounded wait. Identifiers are
 /// claimed once so two in-flight notifications with identical text cannot
@@ -288,6 +289,47 @@ mod macos_delivery {
     pub const RECEIPT_TIMEOUT: Duration = Duration::from_millis(2_500);
     const POLL_INTERVAL: Duration = Duration::from_millis(50);
     const CLAIMED_IDENTIFIERS_MAX: usize = 256;
+
+    /// Read permission on every send: users can disable the app while it is
+    /// running. Legacy deliveredNotifications can still record a denied post.
+    pub async fn permission_denied() -> Result<bool, String> {
+        use block2::RcBlock;
+        use objc2_foundation::NSBundle;
+        use objc2_user_notifications::{
+            UNAuthorizationStatus, UNNotificationSettings, UNUserNotificationCenter,
+        };
+
+        // UserNotifications raises an ObjC exception outside an app bundle.
+        // Bare development executables use the legacy Terminal identity.
+        // The legacy crate can hook bundleIdentifier; bundlePath remains the
+        // actual bundle path even if another caller initialized it first.
+        if !NSBundle::mainBundle()
+            .bundlePath()
+            .to_string()
+            .ends_with(".app")
+        {
+            return Ok(false);
+        }
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        {
+            let tx = Mutex::new(Some(tx));
+            let completion =
+                RcBlock::new(move |settings: std::ptr::NonNull<UNNotificationSettings>| {
+                    // Apple's completion handler supplies a valid settings object
+                    // for the duration of this callback; no reference escapes.
+                    let status = unsafe { settings.as_ref() }.authorizationStatus();
+                    if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+                        let _ = tx.send(status == UNAuthorizationStatus::Denied);
+                    }
+                });
+            UNUserNotificationCenter::currentNotificationCenter()
+                .getNotificationSettingsWithCompletionHandler(&completion);
+        }
+        tokio::time::timeout(RECEIPT_TIMEOUT, rx)
+            .await
+            .map_err(|_| "macOS notification permission lookup timed out".to_owned())?
+            .map_err(|_| "macOS notification permission lookup failed".to_owned())
+    }
 
     /// One entry of `deliveredNotifications`, reduced to what the receipt
     /// compares.
@@ -340,7 +382,7 @@ mod macos_delivery {
             !before.contains(&record.identifier)
                 && !claimed.contains(&record.identifier)
                 && record.title.as_deref() == Some(title)
-                && record.body.as_deref() == body
+                && record.body.as_deref().unwrap_or_default() == body.unwrap_or_default()
         })?;
         claimed.claim(matched.identifier.clone());
         Some(matched.identifier.clone())
@@ -491,6 +533,21 @@ mod macos_delivery {
             assert!(!claimed.contains("id-0"));
             assert!(claimed.contains(&format!("id-{}", CLAIMED_IDENTIFIERS_MAX + 9)));
         }
+
+        #[test]
+        fn absent_body_matches_the_legacy_crates_empty_message() {
+            let delivered = [record("empty", "Reminder", Some(""))];
+            assert_eq!(
+                select_new_delivery(
+                    &HashSet::new(),
+                    &mut ClaimedIdentifiers::default(),
+                    &delivered,
+                    "Reminder",
+                    None,
+                ),
+                Some("empty".to_owned())
+            );
+        }
     }
 }
 
@@ -508,6 +565,10 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
 ) -> Result<bool, String> {
     use mac_notification_sys::{MainButton, Notification, NotificationResponse, Sound};
 
+    // Check before the legacy crate installs its bundle-identity hook.
+    if macos_delivery::permission_denied().await? {
+        return Ok(false);
+    }
     configure_macos_notification_application();
 
     let title = title.to_owned();
@@ -682,7 +743,7 @@ pub async fn desktop_notify<R: Runtime>(
     let notification = sanitize_notification_payload(notification)?;
     let actions = notification.actions.as_deref().unwrap_or(&[]);
 
-    if notification.route.is_some() || !actions.is_empty() {
+    if cfg!(target_os = "macos") || notification.route.is_some() || !actions.is_empty() {
         return show_notification_with_route_click_handler_receipt(
             &app,
             &notification.title,

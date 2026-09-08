@@ -384,6 +384,7 @@ function MessageNotifications() {
         // fallback.
         return;
       }
+      if (mx.getSyncStateData()?.sessionGeneration !== observation.sessionGeneration) return;
       // Remember only outcomes Core durably recorded: shown candidates and
       // already-seen or own events. Core observes each event once, so this
       // set is a guard against a duplicated observation, not a resubmit
@@ -484,30 +485,28 @@ function AgentApprovalNotifications() {
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
   const notify = useCallback(
-    ({
+    async ({
       roomId,
       eventId,
       approvalEventId,
-      roomName,
       title,
       body,
     }: {
       roomId: string;
       eventId: string;
       approvalEventId: string;
-      roomName: string;
       title: string;
       body: string;
       commandPreview?: string;
-    }) => {
+    }): Promise<NativeNotificationDeliveryOutcome> => {
       // Keep dangerous command text out of OS-level notification surfaces.
       // The exact prompt remains available through the Review route.
       const notificationBody = body;
 
       if (supportsPlatformSystemNotifications()) {
-        showPlatformNotification({
+        const shown = await showPlatformNotification({
           title,
-          body: `${roomName}: ${notificationBody}`,
+          body: notificationBody,
           route: buildDesktopNotificationRoomRoute(roomId, eventId),
           // Approve-always is not offered on native OS notifications.
           actions: AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
@@ -516,14 +515,14 @@ function AgentApprovalNotifications() {
             roomId,
             eventId: approvalEventId,
           },
-        }).catch(() => undefined);
-        return;
+        });
+        return shown ? 'delivered' : 'failed';
       }
 
       const noti = new window.Notification(title, {
         icon: LogoHighlightPNG,
         badge: LogoHighlightPNG,
-        body: `${roomName}: ${notificationBody}`,
+        body: notificationBody,
         silent: true,
       });
 
@@ -531,6 +530,7 @@ function AgentApprovalNotifications() {
         if (!window.closed) navigateRoom(roomId, eventId);
         noti.close();
       };
+      return 'delivered';
     },
     [navigateRoom]
   );
@@ -632,7 +632,7 @@ function AgentApprovalNotifications() {
   }, []);
 
   const notifyApprovalEvent = useCallback(
-    (observation: NativeNotificationObservation) => {
+    async (observation: NativeNotificationObservation) => {
       const { eventId, sender, originServerTs, body } = observation;
       if (body === undefined) return;
       const room = mx.getRoom(observation.roomId);
@@ -645,27 +645,45 @@ function AgentApprovalNotifications() {
       const prompt = detectAgentApprovalPrompt({ body });
       if (!prompt) return;
 
+      let readback;
+      try {
+        readback = await decideNotificationWithNativeOwner({
+          roomId: room.roomId,
+          eventId,
+          kind: 'agent_approval',
+          title: prompt.title,
+          body: `${room.name ?? 'Unknown'}: ${prompt.body}`,
+          route: buildDesktopNotificationRoomRoute(room.roomId, eventId),
+          suppressIfFocusedRoom: false,
+        });
+      } catch {
+        return;
+      }
+      if (mx.getSyncStateData()?.sessionGeneration !== observation.sessionGeneration) return;
+      if (readback.decision !== 'show' || !readback.candidate) return;
       notifiedEventIdsCache.add(eventId);
+      let outcome: NativeNotificationDeliveryOutcome | undefined;
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
       ) {
-        notify({
-          roomId: room.roomId,
-          // Review/default-click must focus the exact approval prompt. The
-          // room router can still expose its thread context after anchoring.
-          eventId,
-          approvalEventId: eventId,
-          roomName: room.name ?? 'Unknown',
-          title: prompt.title,
-          body: prompt.body,
-          commandPreview: prompt.commandPreview,
-        });
+        try {
+          outcome = await notify({
+            roomId: room.roomId,
+            eventId,
+            approvalEventId: eventId,
+            title: readback.candidate.title,
+            body: readback.candidate.body,
+          });
+        } catch {
+          outcome = 'failed';
+        }
       }
-
-      if (showNotifications) {
-        playSound();
-      }
+      // Native approval delivery already owns its time-sensitive sound.
+      if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
+      void dismissNotificationWithNativeOwner(readback.candidate.candidateId, outcome).catch(
+        () => undefined
+      );
     },
     [mx, notify, playSound, showNotifications]
   );

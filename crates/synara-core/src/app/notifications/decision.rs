@@ -53,9 +53,8 @@ pub const NOTIFICATION_BODY_MAX_CHARS: usize = 500;
 /// desktop sanitizer remains the final delivery boundary.
 pub const NOTIFICATION_ROUTE_MAX_CHARS: usize = 512;
 /// Bound for the authenticated `/event` fallback when the observed event is
-/// not in the SDK event cache. The renderer treats a failed decision as
-/// transient and resubmits on its next sync scan, so one short attempt is
-/// enough; retries would only delay other pending decisions.
+/// not in the SDK event cache. A failed decision is dropped; there is no
+/// renderer scan or retry.
 const EVENT_FETCH_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// Closed notification kind vocabulary for the decision table. Mirrors the
@@ -467,7 +466,7 @@ impl NativeNotificationDecisionOwner {
             })?;
         // Synced events are served from the SDK event cache. The `/event`
         // fallback covers an observation that raced ahead of the cache and is
-        // bounded to one short attempt; the renderer resubmits on failure.
+        // bounded to one short attempt; a failure is not retried.
         let event = room
             .load_or_fetch_event(
                 &event_id,
@@ -961,6 +960,44 @@ mod tests {
             owner.delivery_ledger().unwrap(),
             NotificationDeliveryLedger::default()
         );
+    }
+
+    #[test]
+    fn late_receipt_from_previous_session_cannot_dismiss_current_candidate() {
+        let old = NativeNotificationDecisionOwner::for_tests(7);
+        let current = NativeNotificationDecisionOwner::for_tests(8);
+        let request = input(
+            "!r:example.org",
+            Some("$event"),
+            NotificationDecisionKind::Message,
+            NOTIFY,
+            false,
+        );
+        let old_id = old
+            .decide(request.clone())
+            .unwrap()
+            .candidate
+            .unwrap()
+            .candidate_id;
+        let current_id = current
+            .decide(request)
+            .unwrap()
+            .candidate
+            .unwrap()
+            .candidate_id;
+        assert_ne!(old_id, current_id);
+        assert!(!current
+            .dismiss(&old_id, Some(NotificationDeliveryOutcome::Delivered))
+            .unwrap());
+        assert_eq!(current.pending_count().unwrap(), 1);
+        assert_eq!(
+            current.delivery_ledger().unwrap(),
+            NotificationDeliveryLedger::default()
+        );
+        assert!(current
+            .dismiss(&current_id, Some(NotificationDeliveryOutcome::Failed))
+            .unwrap());
+        assert_eq!(current.delivery_ledger().unwrap().failed, 1);
     }
 
     #[test]

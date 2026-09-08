@@ -5233,6 +5233,16 @@ fn matrix_notification_decide(state: Arc<CoreState>, request: CommandEnvelope) -
             owner.decide_observed(payload).await.map_err(|error| {
                 MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
             })?;
+        // Loading the event can span logout or account replacement. A result
+        // from the detached owner must never reach the new session's renderer.
+        if !state
+            .notification_decision_owner()?
+            .is_some_and(|current| Arc::ptr_eq(&current, &owner))
+        {
+            return Err(notification_decision_owner_error(
+                "p2-notification-decide-no-session",
+            ));
+        }
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-notification-decide-serialization-failed"))
     })

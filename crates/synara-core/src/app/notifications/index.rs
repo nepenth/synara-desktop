@@ -106,7 +106,7 @@ impl NotificationIndex {
 
     fn alloc_id(&mut self) -> NotificationCandidateId {
         self.next_seq = self.next_seq.saturating_add(1);
-        format!("notif-{}", self.next_seq)
+        format!("notif-{}-{}", self.session_generation, self.next_seq)
     }
 
     /// Enqueue a candidate. Host must pass privacy-filtered title/body only.
