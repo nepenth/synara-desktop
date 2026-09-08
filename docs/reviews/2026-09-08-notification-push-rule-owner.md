@@ -232,3 +232,28 @@ behaviour claim.
 - A spontaneous Core→renderer push stream; decide remains request/response.
 - Automatic retry of a `failed` delivery; deliberately deferred until the
   receipt ledger has been observed live.
+
+## Live macOS result (2026-09-08, commit `3ace2188`)
+
+Recorded in full in
+[`A9-NOTIFICATION-DELIVERY.md`](../future-projects/rust-ownership-expansion/program/A9-NOTIFICATION-DELIVERY.md).
+Two corrections to the claims above:
+
+- The renderer observation pump never calls Core for a live message on the
+  native client: both pumps in `MessageNotifications` return unless
+  `getSyncState() === 'SYNCING'`, and the facade's highest state is
+  `PREPARED`; `Room.timeline` has no production emitter and facade live
+  timelines read as `[]`. Live: two real messages, zero `decide` calls. The
+  SDK owner is correct but unreached; this predates the PR.
+- "Delivery receipt instead of a blind acknowledgement" holds only for the
+  Linux and no-route paths. On macOS with a `route` or actions,
+  `desktop_notify` returns `Ok(true)` when the send task is spawned, before
+  `notification.send()` runs, and the send error is dropped. Live: three
+  `delivered` acks within ~1 s of the decision while the OS send had not yet
+  returned minutes later. A denied OS delivery is counted as `delivered`, so
+  the `failed` path is unreachable on macOS at this commit.
+
+With the observation step injected past the dead gate, Core decided `show`
+with the SDK sound tweak for a DM, a mention (`highlight true`), and a 2-member
+room; `usernoted` delivered each record; the ledger advanced 1→2→3 with
+`failed 0`; a focused room suppressed with no OS record.

@@ -1,9 +1,11 @@
 # A9 notification-delivery operating-path record
 
 Status: deterministic iOS registration repair implemented; physical APNs/NSE
-and desktop tray delivery are not confirmed.
+and desktop tray delivery are not confirmed. The desktop `failed` delivery
+receipt is unreachable on macOS at the current source (see the 2026-09-08
+desktop findings below).
 
-Last updated: 2026-09-03 on `feature/rust-ownership-follow-ons`.
+Last updated: 2026-09-08 on `cursor/notification-core-push-rules-c25c`.
 
 This record deliberately separates executable contract evidence from external
 delivery evidence. A unit test, simulator run, compiled extension, or valid
@@ -144,7 +146,9 @@ Intended route:
 5. The OS presents the notification and returns an internal route/action.
 
 Current-source result: **steps 1–3 implemented deterministically; steps 4–5
-unproven live**. PR #1097 registered the account-bound
+observed live on macOS only behind an injected observation step; the live
+route into step 1 is broken at the renderer, and the macOS `failed` receipt is
+unreachable** (2026-09-08 run below). PR #1097 registered the account-bound
 `NativeNotificationDecisionOwner` with the product Core and routed every
 renderer observation through `matrix_notification_decide`. The 2026-09-08
 follow-on ([`docs/reviews/2026-09-08-notification-push-rule-owner.md`](../../../reviews/2026-09-08-notification-push-rule-owner.md))
@@ -162,6 +166,96 @@ and a failed delivery is counted and released, never retried. Sound follows the
 SDK tweak Core echoes. Desktop tray delivery must still be proven separately on
 macOS and Linux; the ledger makes a refused delivery observable but is not
 that proof.
+
+### 2026-09-08 live macOS run at commit `3ace2188fd6859a4cc6c5456ad956c0c86d96118`
+
+Rig: macOS 26.6.2, `tauri dev` debug binary of the exact commit above,
+launched through Launch Services inside a throwaway `/tmp` bundle with the
+isolated identifier `com.whylandcreative.synara.desktop.a9qa`, Vite dev server
+for the renderer. Receiver: authorized test account signed in through the
+normal password form. Sender: a second authorized test account on the same
+homeserver posting through the client-server API. Evidence channels:
+identifier-free renderer beacons to a localhost listener (decision, outcome,
+ledger before/after ack), the `matrix_notification_pending_snapshot` ledger,
+and the `usernoted` unified log. Uncommitted local instrumentation only
+(beacons, an auto-login helper, an event-injection command, a Keychain
+service-name suffix, one `eprintln!` of the OS send result); none of it changes
+policy, and none is part of the commit under test. No screenshot or audio
+capture was available; "sound" below means the renderer's `playSound()` call
+was observed, not that audio was heard.
+
+Earliest divergence, **Failed** at commit `3ace2188` — the product path never
+reaches Core for a live message. `MessageNotifications` has two observation
+pumps and both are dead on the native client:
+
+- Both pumps return early unless `mx.getSyncState() === 'SYNCING'`. The native
+  facade maps `running` readiness to `PREPARED` and has no `SYNCING` state
+  (`readinessToSyncState` in `nativeClientFacade.ts`). Live: the focus probe
+  read `syncState: "PREPARED"` while signed in and synced, and 2,872
+  consecutive scan ticks reported `gatePasses: false`.
+- The `Room.timeline` pump has no emitter: no production code emits
+  `Room.timeline` on the facade (only test mocks do). Live: 2 listeners, 0
+  events.
+- The sync-driven scan reads `getLiveTimeline().getEvents()`, which the facade
+  room stubs to a constant `[]`. Live: `loadedLiveEvents: 0` across 11 rooms.
+
+Result: a plain group message and a DM sent by the second account produced
+zero `decide` calls, zero OS notifications, and a ledger of
+`delivered 0 / failed 0 / unreported 0`. The SDK push-rule owner is correct
+but is not invoked by the shipped renderer; this is the wrong-owner residue the
+review did not catch, and it predates this PR (the pumps were already gated on
+`SYNCING`).
+
+Downstream path, proven live by injecting the identity of each real,
+already-synced event past the dead gate (the injection replaces only the
+observation step; Core still loaded the event itself and evaluated the SDK
+push actions):
+
+| Case                                                  | Core decision                           | OS (`usernoted`)                                               | Ledger after ack                        |
+| ----------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------- | --------------------------------------- |
+| (a) message in the 2-member "group" room, app on Home | `show`, `highlight false`, `sound true` | record delivered to `[.alert .lockScreen .notificationCenter]` | `delivered 1 / failed 0 / unreported 0` |
+| (b) DM, app on Home                                   | `show`, `highlight false`, `sound true` | record delivered to `[.alert .lockScreen .notificationCenter]` | `delivered 2 / failed 0 / unreported 0` |
+| (c) `m.mentions` of the receiver, app on Home         | `show`, `highlight true`, `sound true`  | record delivered to `[.alert .lockScreen .notificationCenter]` | `delivered 3 / failed 0 / unreported 0` |
+| (d) mention while that room was selected and focused  | `suppress`, `reason focused-room`       | no record                                                      | unchanged `3 / 0 / 0`, `pending 0`      |
+
+Verdicts against the requested gates:
+
+- OS notification appears for (a), (b), (c): **Confirmed** (via injection; see
+  the caveat below). Ledger `delivery.delivered` advances 1→2→3 with
+  `failed 0` and `pending` returning to 0 after each ack: **Confirmed**.
+  Focused room suppresses with no OS record and no ledger movement:
+  **Confirmed**.
+- Sound only for (b) and (c): **Not tested as specified.** Both authorized test
+  accounts share only 2-member rooms, so case (a) is evaluated by the SDK as
+  `.m.rule.room_one_to_one` and correctly carries `sound true`. A ≥3-member
+  room with no mention is required to observe the silent default; no such room
+  was available to these accounts.
+- Deny notification permission → ack arrives as `failed`, counted once, no
+  repeat: **Failed** at commit `3ace2188` (structural). On macOS, when a
+  notification carries a `route` or actions, `desktop_notify` spawns
+  `show_notification_with_route_click_handler`, which returns `Ok(true)` as
+  soon as the send task is spawned; the actual `notification.send()` (with
+  `wait_for_click(true)`) runs later on a blocking task and any error is
+  dropped by `if let Ok(Ok(response))`. The renderer therefore acknowledges
+  `delivered` before the OS has answered. Live ordering proof: all three
+  `delivered` acks landed within ~1 s of the decision, while the `eprintln!`
+  placed after `notification.send()` had still not fired more than five
+  minutes later. A refused OS delivery on this path is recorded as
+  `delivered`, never `failed`; the review's "delivery receipt instead of a
+  blind acknowledgement" claim holds for the Linux/no-route paths only. System
+  Settings was not toggled for this reason: the receipt cannot change with it.
+- Caveat on the OS evidence: the unbundled debug binary registered with
+  `usernoted` as `com.apple.Terminal` (the `mac-notification-sys` 0.6.15
+  fallback identity when the process has no real bundle), which also triggered
+  a one-time Terminal permission prompt. The signed product bundle would use
+  its own identity; OS presentation was observed, but under the harness's
+  identity, not the product's.
+
+Not done and why: no ≥3-member group (accounts); no Linux run (macOS-only
+scope); no System Settings deny toggle (moot, see above); no live proof of the
+agent-approval kind (out of the requested message cases). No retry was added,
+no TypeScript matcher was restored, and no credential or event payload was
+written into the repository or this record.
 
 ## Evidence ledger
 
@@ -190,25 +284,39 @@ this run. `E2` does not supersede any live gate: it does not read a homeserver's
 pusher fields or exercise a push gateway, physical APNs delivery, an NSE under
 the device deadline, or OS notification presentation.
 
-| Claim                                                    | Evidence required                                                                                                                                                                                                                           | Verdict                                                                                                  |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| HTTP pusher set is sparse and idempotent                 | Core contract tests assert `event_id_only` and `append = false`                                                                                                                                                                             | passed: focused Core unit plus 6-test HTTP-pusher integration target; not live delivery                  |
-| duplicate callbacks create one desired binding           | focused iOS tests repeat session/token both before and during suspended registration                                                                                                                                                        | passed in `E1` deterministic simulator suite; not physical APNs                                          |
-| token rotation removes old token                         | focused iOS test captures delete/set order and key                                                                                                                                                                                          | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
-| session rotation uses the account-bound Core/client      | Core loopback observes old/new bearer credentials on distinct servers; production-adapter tests retain distinct owner capabilities                                                                                                          | passed deterministically; not live homeserver readback                                                   |
-| tokenless and crash-stale logout cleanup                 | Core loopback enumerates and deletes only exact app+device matches; unit coverage proves an exact last-known key is a secondary same-app match; re-instantiation, bind-retry, and APNs-failure tests exercise logout without broad deletion | passed in `E2` deterministic simulator/Core suites; live pusher-field readback remains **Not confirmed** |
-| logout cleanup remains reachable                         | failed remote cleanup blocks Keychain deletion and succeeds on retry; failed Keychain deletion cancels teardown and restores registration                                                                                                   | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
-| teardown rejects reentrant callbacks                     | delayed cleanup test injects token/configuration/failure callbacks both during remote await and before local finalization                                                                                                                   | passed in `E1` deterministic simulator suite; not physical APNs                                          |
-| stale in-flight set cannot become current                | delayed pusher test changes session while set is suspended                                                                                                                                                                                  | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
-| failed cleanup remains retryable                         | focused iOS test proves an old binding is retained and not overwritten                                                                                                                                                                      | passed in `E1` deterministic simulator suite; not live homeserver readback                               |
-| NSE privacy and exactly-once fallback                    | preview, coordinator, cancellation, timeout, deadline-winner, empty-deadline, and diagnostic allowlist tests; deadline completion occurs before one best-effort batched diagnostic write                                                    | passed in `E1` deterministic simulator suite; physical NSE delivery remains **Not confirmed**            |
-| unencrypted preview, foreground/background/terminated    | physical TestFlight device plus gateway/pusher/NSE stage readback                                                                                                                                                                           | **Not confirmed**                                                                                        |
-| encrypted preview, foreground/background/terminated      | physical TestFlight device with shared store and decryptable event                                                                                                                                                                          | **Not confirmed**                                                                                        |
-| preview disabled retains useful generic alert            | physical TestFlight device                                                                                                                                                                                                                  | **Not confirmed**                                                                                        |
-| token rotation and logout remove live homeserver pushers | disposable account/device plus authenticated pusher readback                                                                                                                                                                                | **Not confirmed**                                                                                        |
-| desktop decision uses SDK push rules as the single owner | `p4_s39_notification_push_rules` mock-homeserver proof: default rules, `m.mentions`, mentions-only room rule, mute override, own-event, dedup, `/event` fallback, fail-closed diagnostics; source guard locks the renderer out of matching   | passed deterministically on 2026-09-08; not live delivery                                                |
-| desktop delivery receipt reaches Core                    | `matrix_notification_dismiss` closed `outcome`; per-session ledger counted once per released candidate; renderer awaits the OS answer and never retries; SDK-path proof for undecryptable encrypted-room events and focus changes            | passed deterministically on 2026-09-08; OS delivery itself **Not confirmed**                            |
-| desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                                                                               | decision stream implemented; OS delivery readback **Not confirmed**                                      |
+Executable evidence `E3` (simulator/contract evidence only): on 2026-09-08 at
+commit `3ace2188fd6859a4cc6c5456ad956c0c86d96118`, the local simulator unit
+lane `RUN_IOS_TESTS=1 IOS_TEST_SUITE=unit SYNARA_CORE_APPLE_SLICES=simulator-arm64 scripts/ci-build.sh`
+(run from `synara-ios` with only a result-stamp variable added) passed the
+scaffold and NSE-isolation checks, regenerated the simulator-slice `SynaraCore`
+artifact, and reported `** TEST BUILD SUCCEEDED **` and
+`** TEST EXECUTE SUCCEEDED **` with 720 test cases passed and 0 failed on the
+`iPhone 17` simulator clone. No intermittent failure reproduced in this single
+run; no test named as intermittent could be located in the 2026-09-06 records
+in this repository, so there is nothing further to report against that flag.
+`E3` does not exercise APNs, an NSE under the device deadline, or OS
+presentation.
+
+| Claim                                                    | Evidence required                                                                                                                                                                                                                           | Verdict                                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| HTTP pusher set is sparse and idempotent                 | Core contract tests assert `event_id_only` and `append = false`                                                                                                                                                                             | passed: focused Core unit plus 6-test HTTP-pusher integration target; not live delivery                                                                                       |
+| duplicate callbacks create one desired binding           | focused iOS tests repeat session/token both before and during suspended registration                                                                                                                                                        | passed in `E1` deterministic simulator suite; not physical APNs                                                                                                               |
+| token rotation removes old token                         | focused iOS test captures delete/set order and key                                                                                                                                                                                          | passed in `E1` deterministic simulator suite; not live homeserver readback                                                                                                    |
+| session rotation uses the account-bound Core/client      | Core loopback observes old/new bearer credentials on distinct servers; production-adapter tests retain distinct owner capabilities                                                                                                          | passed deterministically; not live homeserver readback                                                                                                                        |
+| tokenless and crash-stale logout cleanup                 | Core loopback enumerates and deletes only exact app+device matches; unit coverage proves an exact last-known key is a secondary same-app match; re-instantiation, bind-retry, and APNs-failure tests exercise logout without broad deletion | passed in `E2` deterministic simulator/Core suites; live pusher-field readback remains **Not confirmed**                                                                      |
+| logout cleanup remains reachable                         | failed remote cleanup blocks Keychain deletion and succeeds on retry; failed Keychain deletion cancels teardown and restores registration                                                                                                   | passed in `E1` deterministic simulator suite; not live homeserver readback                                                                                                    |
+| teardown rejects reentrant callbacks                     | delayed cleanup test injects token/configuration/failure callbacks both during remote await and before local finalization                                                                                                                   | passed in `E1` deterministic simulator suite; not physical APNs                                                                                                               |
+| stale in-flight set cannot become current                | delayed pusher test changes session while set is suspended                                                                                                                                                                                  | passed in `E1` deterministic simulator suite; not live homeserver readback                                                                                                    |
+| failed cleanup remains retryable                         | focused iOS test proves an old binding is retained and not overwritten                                                                                                                                                                      | passed in `E1` deterministic simulator suite; not live homeserver readback                                                                                                    |
+| NSE privacy and exactly-once fallback                    | preview, coordinator, cancellation, timeout, deadline-winner, empty-deadline, and diagnostic allowlist tests; deadline completion occurs before one best-effort batched diagnostic write                                                    | passed in `E1` deterministic simulator suite; physical NSE delivery remains **Not confirmed**                                                                                 |
+| unencrypted preview, foreground/background/terminated    | physical TestFlight device plus gateway/pusher/NSE stage readback                                                                                                                                                                           | **Not confirmed**                                                                                                                                                             |
+| encrypted preview, foreground/background/terminated      | physical TestFlight device with shared store and decryptable event                                                                                                                                                                          | **Not confirmed**                                                                                                                                                             |
+| preview disabled retains useful generic alert            | physical TestFlight device                                                                                                                                                                                                                  | **Not confirmed**                                                                                                                                                             |
+| token rotation and logout remove live homeserver pushers | disposable account/device plus authenticated pusher readback                                                                                                                                                                                | **Not confirmed**                                                                                                                                                             |
+| desktop decision uses SDK push rules as the single owner | `p4_s39_notification_push_rules` mock-homeserver proof: default rules, `m.mentions`, mentions-only room rule, mute override, own-event, dedup, `/event` fallback, fail-closed diagnostics; source guard locks the renderer out of matching  | passed deterministically on 2026-09-08; not live delivery                                                                                                                     |
+| desktop delivery receipt reaches Core                    | `matrix_notification_dismiss` closed `outcome`; per-session ledger counted once per released candidate; renderer awaits the OS answer and never retries; SDK-path proof for undecryptable encrypted-room events and focus changes           | `delivered` counted live on macOS (1→2→3, `failed 0`) at `3ace2188`; `failed` receipt **Failed** on macOS: the route/action path acknowledges before the OS answers           |
+| desktop live observation reaches Core                    | a message received by the signed-in native client produces one `matrix_notification_decide` call without instrumentation                                                                                                                    | **Failed** at `3ace2188`: both renderer pumps gate on a `SYNCING` state the facade never reports, `Room.timeline` has no emitter, live timelines read as `[]`                 |
+| desktop ordinary and approval tray delivery              | product Core decision stream plus macOS and Linux OS readback                                                                                                                                                                               | macOS OS presentation **Confirmed** for DM, mention, and 2-member room behind injection (harness identity); silent ≥3-member case, Linux, and approval kind **Not confirmed** |
 
 ## Clean rerun protocol
 
