@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { inspectQualityGates } from "../check-quality-gates.mjs";
 
@@ -440,6 +442,34 @@ test("rejects quoted, echoed, and short-circuited aggregate failures", () => {
 function resultOk(result) {
   return result.ok;
 }
+
+test("the split CI layout must aggregate the iOS compile gate", () => {
+  const realCiWorkflow = readFileSync(
+    path.join(import.meta.dirname, "../../.github/workflows/ci.yml"),
+    "utf8"
+  );
+  assert.deepEqual(inspect({ ciWorkflow: realCiWorkflow }), {
+    ok: true,
+    errors: [],
+  });
+
+  const withoutNeed = realCiWorkflow.replace(
+    "ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions",
+    "ios-tests, ios-ui-tests, synapse-native-reactions"
+  );
+  assert.notEqual(withoutNeed, realCiWorkflow);
+  const missingNeed = inspect({ ciWorkflow: withoutNeed });
+  assert.equal(missingNeed.ok, false);
+  assert.match(missingNeed.errors.join("\n"), /needs must be exactly/);
+
+  const withoutResult = realCiWorkflow
+    .replace(/^ *IOS_COMPILE_RESULT: .*\n/m, "")
+    .replace(/^ *ok "iOS compile gate" .*\n/m, "");
+  assert.notEqual(withoutResult, realCiWorkflow);
+  const missingResult = inspect({ ciWorkflow: withoutResult });
+  assert.equal(missingResult.ok, false);
+  assert.match(missingResult.errors.join("\n"), /ios-compile/);
+});
 
 test("rejects an aggregate that drops a native synapse proof", () => {
   // The legacy js-sdk two-client integration is retired (js-sdk fully removed);

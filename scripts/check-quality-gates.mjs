@@ -317,6 +317,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "validate-frontend",
     "ios-tests",
     "ios-ui-tests",
+    "ios-compile",
     "synapse-native-reactions",
     "synapse-native-attachments",
     "synapse-native-polls",
@@ -353,6 +354,9 @@ function pathFilteredCiAggregateError(jobLines) {
     const iosUiVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.ios-ui-tests.result }}"
     )?.[0];
+    const iosCompileVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.ios-compile.result }}"
+    )?.[0];
     const synapseNativeReactionsVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.synapse-native-reactions.result }}"
     )?.[0];
@@ -375,11 +379,15 @@ function pathFilteredCiAggregateError(jobLines) {
     const desktopOk = splitDesktop
       ? Boolean(desktopRustVar && desktopFrontendVar)
       : Boolean(desktopVar);
+    // The compile gate ships with the split layout; the legacy monolith
+    // predates it.
+    const iosCompileOk = splitDesktop ? Boolean(iosCompileVar) : true;
     if (
       !changesVar ||
       !desktopOk ||
       !iosVar ||
       !iosUiVar ||
+      !iosCompileOk ||
       !synapseNativeReactionsVar ||
       !synapseNativeAttachmentsVar ||
       !synapseNativePollsVar ||
@@ -413,8 +421,12 @@ function pathFilteredCiAggregateError(jobLines) {
       ? runText.includes(`"$${desktopRustVar}"`) &&
         runText.includes(`"$${desktopFrontendVar}"`)
       : runText.includes(`"$${desktopVar}"`);
+    const iosCompileRefOk = splitDesktop
+      ? runText.includes(`"$${iosCompileVar}"`)
+      : true;
     if (
       !desktopRefsOk ||
+      !iosCompileRefOk ||
       !runText.includes(`"$${iosVar}"`) ||
       !runText.includes(`"$${iosUiVar}"`) ||
       !runText.includes(`"$${synapseNativeReactionsVar}"`) ||
@@ -448,7 +460,7 @@ function pathFilteredCiAggregateError(jobLines) {
     if (failExit >= 0) return undefined;
   }
 
-  return "job must require changes=success, allow success|skipped for validate/ios/ios-ui/native-synapse, and exit 1 on failure";
+  return "job must require changes=success, allow success|skipped for validate/ios/ios-ui/ios-compile/native-synapse, and exit 1 on failure";
 }
 
 export function inspectQualityGates({

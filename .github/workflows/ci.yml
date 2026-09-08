@@ -34,6 +34,7 @@ jobs:
       validate_frontend: ${{ steps.scope.outputs.validate_frontend }}
       ios: ${{ steps.scope.outputs.ios }}
       ios_ui: ${{ steps.scope.outputs.ios_ui }}
+      ios_compile: ${{ steps.scope.outputs.ios_compile }}
       synapse_native_reactions: ${{ steps.scope.outputs.synapse_native_reactions }}
       synapse_native_attachments: ${{ steps.scope.outputs.synapse_native_attachments }}
       synapse_native_polls: ${{ steps.scope.outputs.synapse_native_polls }}
@@ -66,6 +67,7 @@ jobs:
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
             echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+            echo "ios_compile=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=true" >> "$GITHUB_OUTPUT"
@@ -82,6 +84,7 @@ jobs:
             echo "validate_frontend=false" >> "$GITHUB_OUTPUT"
             echo "ios=false" >> "$GITHUB_OUTPUT"
             echo "ios_ui=false" >> "$GITHUB_OUTPUT"
+            echo "ios_compile=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_polls=false" >> "$GITHUB_OUTPUT"
@@ -269,9 +272,11 @@ jobs:
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
             IOS=false
+            IOS_PATHS_CHANGED=false
           else
             echo "ios=true" >> "$GITHUB_OUTPUT"
             IOS=true
+            IOS_PATHS_CHANGED=true
           fi
 
           # XCUITests stay off the default PR path. Label needs-ios-ui to
@@ -316,6 +321,20 @@ jobs:
             IOS=true
             echo "ios_ui=true" >> "$GITHUB_OUTPUT"
             IOS_UI=true
+          fi
+
+          # Cheap iOS compile gate. When the diff touched Swift/FFI/iOS paths
+          # but the policy above skipped the simulator lane, still prove the
+          # generated SynaraCore/SynaraNseCore packages and the Xcode targets
+          # compile (build-for-testing, no simulator boot, no test run). The
+          # simulator scheduling policy is unchanged: labels and release
+          # branches keep the full lane and skip this one.
+          if [[ "$IOS_PATHS_CHANGED" == "true" && "$IOS" != "true" ]]; then
+            echo "ios_compile=true" >> "$GITHUB_OUTPUT"
+            IOS_COMPILE=true
+          else
+            echo "ios_compile=false" >> "$GITHUB_OUTPUT"
+            IOS_COMPILE=false
           fi
 
           # Two-client Synapse integration (JS runtime scenarios).
@@ -415,7 +434,7 @@ jobs:
             SYNAPSE_NATIVE_RECEIPTS=true
           fi
 
-          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} rust_tests=${VALIDATE_RUST_TESTS:-n/a} rust_audit=${RUST_AUDIT:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} ios_ui=${IOS_UI} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
+          echo "CI scope: validate=${VALIDATE} rust=${VALIDATE_RUST:-n/a} rust_tests=${VALIDATE_RUST_TESTS:-n/a} rust_audit=${RUST_AUDIT:-n/a} frontend=${VALIDATE_FRONTEND:-n/a} ios=${IOS} ios_ui=${IOS_UI} ios_compile=${IOS_COMPILE} synapse=${SYNAPSE} synapse_native_reactions=${SYNAPSE_NATIVE_REACTIONS} synapse_native_attachments=${SYNAPSE_NATIVE_ATTACHMENTS} synapse_native_polls=${SYNAPSE_NATIVE_POLLS} synapse_native_rich_messages=${SYNAPSE_NATIVE_RICH_MESSAGES} synapse_native_threads=${SYNAPSE_NATIVE_THREADS} synapse_native_receipts=${SYNAPSE_NATIVE_RECEIPTS}"
           git diff --name-only "$BASE_SHA" "$HEAD_SHA" | head -80 || true
 
   validate-rust:
@@ -697,6 +716,59 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  ios-compile:
+    name: iOS compile gate
+    needs: [changes]
+    if: needs.changes.outputs.ios_compile == 'true'
+    runs-on: macos-26
+    # Runs only when Swift/FFI/iOS paths changed and the simulator lane was
+    # skipped by policy. Same generators and scaffold checks as ios-tests,
+    # then `build-for-testing` for the arm64 simulator slice: compile and
+    # link proof for the app, the extension, and both test bundles without
+    # booting a simulator or running a test. Keeps ordinary PRs from merging
+    # an FFI or Swift break that only the release cut would have caught.
+    timeout-minutes: 40
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install Rust 1.93 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+        with:
+          toolchain: 1.93
+          targets: aarch64-apple-ios-sim
+
+      - name: Cache Apple SynaraCore build
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target/synara-core-apple"
+          shared-key: ci-synara-core-apple-simulator-arm64
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Check SynaraCore Swift scaffold
+        run: node scripts/check-synara-core-swift-scaffold.mjs
+
+      - name: Check SynaraNseCore isolation
+        run: node scripts/check-synara-nse-core-isolation.mjs
+
+      - name: Build simulator targets for testing without running tests
+        run: scripts/ci-build.sh
+        working-directory: synara-ios
+        env:
+          RUN_IOS_TESTS: "0"
+          SYNARA_CORE_APPLE_SLICES: simulator-arm64
+
+      - name: Upload iOS build result bundles
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-compile-results
+          path: /private/tmp/synara-ios-results/*.xcresult
+          if-no-files-found: warn
+          retention-days: 14
+
   synapse-native-reactions:
     name: Synapse native reaction proof
     needs: [changes]
@@ -912,7 +984,7 @@ jobs:
     # still runs after job failures; skip when this workflow was cancelled so a
     # superseded push run cannot fail the required check on the surviving SHA.
     if: always() && !cancelled()
-    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -922,6 +994,7 @@ jobs:
           DESKTOP_FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
           IOS_RESULT: ${{ needs.ios-tests.result }}
           IOS_UI_RESULT: ${{ needs.ios-ui-tests.result }}
+          IOS_COMPILE_RESULT: ${{ needs.ios-compile.result }}
           SYNAPSE_NATIVE_REACTIONS_RESULT: ${{ needs.synapse-native-reactions.result }}
           SYNAPSE_NATIVE_ATTACHMENTS_RESULT: ${{ needs.synapse-native-attachments.result }}
           SYNAPSE_NATIVE_POLLS_RESULT: ${{ needs.synapse-native-polls.result }}
@@ -953,6 +1026,7 @@ jobs:
           ok "Desktop/runtime Node validation" "$DESKTOP_FRONTEND_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
           ok "iOS simulator UI tests" "$IOS_UI_RESULT" || fail=1
+          ok "iOS compile gate" "$IOS_COMPILE_RESULT" || fail=1
           ok "Synapse native reaction proof" "$SYNAPSE_NATIVE_REACTIONS_RESULT" || fail=1
           ok "Synapse native attachment proof" "$SYNAPSE_NATIVE_ATTACHMENTS_RESULT" || fail=1
           ok "Synapse native poll proof" "$SYNAPSE_NATIVE_POLLS_RESULT" || fail=1
