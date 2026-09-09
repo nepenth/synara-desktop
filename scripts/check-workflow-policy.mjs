@@ -125,11 +125,6 @@ export function inspectWorkflowPolicy({
           `${filename} concurrency must share one cancellable lane per branch for push and pull_request.`
         );
       }
-      if (group.includes("github.event_name")) {
-        errors.push(
-          `${filename} concurrency must not split push and pull_request on the same branch.`
-        );
-      }
       if (!concurrency.includes("cancel-in-progress: true")) {
         errors.push(
           `${filename} must cancel obsolete runs within the same branch lane.`

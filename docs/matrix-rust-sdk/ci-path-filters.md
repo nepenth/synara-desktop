@@ -89,8 +89,9 @@ integration. Run a full package smoke manually before release-candidate builds /
 A `src-tauri`-only integration PR still runs **Validate** (~15–20m). Package
 smoke no longer doubles that by default.
 
-Push and pull_request for the same branch share one cancellable concurrency
-lane. Version/changelog/release-note diffs are **metadata-only** and skip iOS,
+Push and pull_request for the same branch use separate cancellable lanes so a
+later PR run cannot cancel the push run and leave a cancelled required check
+on the SHA. Version/changelog/release-note diffs are **metadata-only** and skip iOS,
 Synapse proofs, Rust tests, and package smoke.
 
 CI iOS simulator jobs build the **arm64** simulator XCFramework slice only.
