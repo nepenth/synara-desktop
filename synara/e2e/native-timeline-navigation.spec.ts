@@ -39,6 +39,23 @@ const geometry = (page: Page) =>
       offset: (visible?.getBoundingClientRect().top ?? top) - top,
     };
   });
+/** Geometry once two consecutive samples 100ms apart agree (placement settled). */
+const settledGeometry = async (page: Page) => {
+  let previous = await geometry(page);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await page.waitForTimeout(100);
+    const current = await geometry(page);
+    if (
+      current.eventId === previous.eventId &&
+      current.top === previous.top &&
+      Math.abs(current.offset - previous.offset) <= 0.5
+    ) {
+      return current;
+    }
+    previous = current;
+  }
+  throw new Error('Native timeline viewport did not settle');
+};
 const scrollToHistory = async (page: Page) => {
   await page.locator('#native-timeline').hover();
   await page.mouse.wheel(0, -1600);
@@ -386,7 +403,11 @@ test('stored bottom never overrides a new unread anchor', async ({ page }) => {
 test('missing last read retains the mounted location when later data arrives', async ({ page }) => {
   await open(page, 'missing');
   await expect(page.getByRole('button', { name: 'Jump to Last Read' })).toBeVisible();
-  const before = await geometry(page);
+  // The missing marker falls back to the live tail, which the virtualizer
+  // reaches through a cascade of correction scrolls as rows are measured under
+  // the real theme. Sample the mounted location only once that has settled.
+  const before = await settledGeometry(page);
+  expect(before.distance).toBeLessThanOrEqual(8);
   await fixture(page, 'prependMissing');
   await page.waitForTimeout(1000);
   const after = await geometry(page);

@@ -2294,7 +2294,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       const atBottom = distanceFromBottom <= 8;
       setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
       if (performance.now() < programmaticScrollUntilRef.current) return;
-      followingLiveRef.current = readyState.selectedPosition.kind === 'live_bottom' && atBottom;
+      // Only leaving the bottom releases follow-live. A scroll that ends at the
+      // bottom (the virtualizer re-measuring rows above the viewport after
+      // fonts or media load, or a late programmatic placement) keeps the
+      // ownership the placement established; a live position re-acquires it.
+      followingLiveRef.current =
+        atBottom &&
+        (readyState.selectedPosition.kind === 'live_bottom' || followingLiveRef.current);
       userInitiatedScrollRef.current = true;
       paginateAtEdge();
     };
