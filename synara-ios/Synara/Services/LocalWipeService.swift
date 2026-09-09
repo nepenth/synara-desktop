@@ -39,6 +39,7 @@ struct AppLocalWipeService: LocalWiping {
     let push: PushServicing
     let router: AppRouter
     var outgoingSends: OutgoingSendCoordinator? = nil
+    var sessionReadiness: SignedInSessionReadinessServicing = ImmediateSignedInSessionReadiness()
 
     func logoutAndWipe() async throws {
         let activeSession = await MainActor.run { () -> AuthenticatedSession? in
@@ -70,6 +71,10 @@ struct AppLocalWipeService: LocalWiping {
 
         await matrix.stop()
         await matrix.resetLocalState(for: activeSession)
+        // Core owners are gone; the startup gate must forget this identity or a
+        // same-device re-login is considered already prepared and never restarts
+        // the Matrix client.
+        await sessionReadiness.resetForSignOut()
         roomList.clearCache()
         timeline.clearSessionCaches()
         drafts.clearAll()

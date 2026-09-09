@@ -140,7 +140,8 @@ struct AppEnvironment {
                 drafts: drafts,
                 push: push,
                 router: router,
-                outgoingSends: outgoingSends
+                outgoingSends: outgoingSends,
+                sessionReadiness: sessionReadiness
             ),
             timeline: timeline,
             later: SharedCoreLaterService(host: host),
@@ -218,7 +219,8 @@ struct AppEnvironment {
                 drafts: drafts,
                 push: push,
                 router: router,
-                outgoingSends: resolvedOutgoingSends
+                outgoingSends: resolvedOutgoingSends,
+                sessionReadiness: sessionReadiness
             ),
             timeline: timeline,
             later: later,

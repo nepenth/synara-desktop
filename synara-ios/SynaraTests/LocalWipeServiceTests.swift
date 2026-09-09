@@ -229,6 +229,69 @@ final class LocalWipeServiceTests: XCTestCase {
         XCTAssertEqual(drafts.draft(roomID: "!room:matrix.org"), "")
     }
 
+    func testLogoutResetsSignedInReadinessSoTheSameDeviceCanStartAgain() async throws {
+        let persistedSession = try makeSession()
+        let secureStore = InMemorySecureSessionStore(session: persistedSession)
+        let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
+        let readiness = SignedInSessionReadiness()
+        let claimed = await readiness.claimPreparation(for: persistedSession)
+        let marked = await readiness.markPrepared(for: persistedSession)
+        XCTAssertTrue(claimed)
+        XCTAssertTrue(marked)
+        let wipe = AppLocalWipeService(
+            session: session,
+            matrix: MockMatrixClientService(syncStatus: .syncing),
+            roomList: MockRoomListService(),
+            timeline: MockTimelineService(),
+            drafts: DraftStore(),
+            push: MockPushService(),
+            router: AppRouter(),
+            sessionReadiness: readiness
+        )
+
+        try await wipe.logoutAndWipe()
+
+        let reclaimed = await readiness.claimPreparation(for: persistedSession)
+        XCTAssertTrue(
+            reclaimed,
+            "A same-device re-login must be able to own startup again, otherwise matrix.start is skipped."
+        )
+    }
+
+    func testFailedLocalSignOutKeepsReadinessPrepared() async throws {
+        let persistedSession = try makeSession()
+        let secureStore = DeleteFailingSecureSessionStore(session: persistedSession)
+        let session = AppSessionStore(secureStore: secureStore, restorePersistedSession: true)
+        let readiness = SignedInSessionReadiness()
+        let claimed = await readiness.claimPreparation(for: persistedSession)
+        let marked = await readiness.markPrepared(for: persistedSession)
+        XCTAssertTrue(claimed)
+        XCTAssertTrue(marked)
+        let wipe = AppLocalWipeService(
+            session: session,
+            matrix: MockMatrixClientService(syncStatus: .syncing),
+            roomList: MockRoomListService(),
+            timeline: MockTimelineService(),
+            drafts: DraftStore(),
+            push: MockPushService(),
+            router: AppRouter(),
+            sessionReadiness: readiness
+        )
+
+        do {
+            try await wipe.logoutAndWipe()
+            XCTFail("expected sessionDeleteFailed")
+        } catch {
+            XCTAssertEqual(error as? LocalWipeError, .sessionDeleteFailed)
+        }
+
+        // The user is still signed in; the running Matrix owner stays prepared.
+        let stillPrepared = await readiness.waitUntilPrepared(for: persistedSession)
+        let claimWhileSignedIn = await readiness.claimPreparation(for: persistedSession)
+        XCTAssertTrue(stillPrepared)
+        XCTAssertFalse(claimWhileSignedIn)
+    }
+
     private func makeSession() throws -> AuthenticatedSession {
         AuthenticatedSession(
             userID: "@alice:matrix.org",
