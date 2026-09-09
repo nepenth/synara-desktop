@@ -26,13 +26,12 @@
   timeline scans, `Room.timeline` listener, and `SYNCING` gate are removed;
   on the native client they never fired, so no live message reached Core's
   decision owner before this change.
-- Make the macOS notification receipt real. `desktop_notify` now resolves
-  when Notification Center records the notification (or reports that it did
-  not within a bounded wait) instead of when the send task is spawned, so a
-  refused delivery is acknowledged to Core as `failed`. The click/action wait
-  keeps running in the background. macOS checks current authorization before
-  posting, including route-less notifications, and registers the application
-  identity once.
+- Use one modern macOS UserNotifications client for bundled-app permission,
+  submission receipts, presentation, and action responses. A denied setting
+  produces one failed receipt without posting or retrying; click handling is
+  independent of OS acceptance. Unbundled development retains its legacy path.
+- Check both IPv4 and IPv6 before selecting the packaged asset port, preventing
+  a second running app from loading the first app's frontend.
 - Keep late delivery acknowledgements and event-fetch results within their
   original login session. Approval prompts now use Core decision and receipt
   accounting while preserving native actions and avoiding duplicate sounds.
