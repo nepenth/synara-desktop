@@ -68,6 +68,23 @@ export const shouldShowJumpToLatest = (
   return scrolledToVisualBottom === false;
 };
 
+/**
+ * Jump-to-last-read is offered for exactly one thing: an unread frontier Core
+ * reported that the presenter has not yet placed in the viewport.
+ *
+ * The pending marker is the single owner of both visibility conditions the
+ * product wants ("the room has unread" and "we are not already at last-read"):
+ * Core only reports an unread anchor when the room has unread relative to it,
+ * and the presenter clears the marker on placement, on an explicit Jump to
+ * latest, or when the room changes. Receipt state must not be consulted here:
+ * arriving at the live tail auto-sends a receipt, which would hide the action
+ * even though the user has not seen the messages between last-read and the
+ * tail. Likewise the marker landing in the loaded window is not "already
+ * there" - rows can be loaded far outside the viewport.
+ */
+export const shouldShowJumpToLastRead = (pendingLastRead: string | undefined): boolean =>
+  pendingLastRead !== undefined && isValidEventIdHint(pendingLastRead);
+
 export type NativeLiveReadTargetInput = {
   selectedRoomId: string;
   snapshotRoomId: string;

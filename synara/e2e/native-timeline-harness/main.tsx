@@ -2,6 +2,7 @@
 // a deterministic fixture. This cannot establish live SDK/Matrix correctness.
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
@@ -330,6 +331,10 @@ const api = {
   },
 };
 Object.assign(window, { nativeTimelineFixture: api });
+// The shipped app applies the folds theme to <body> (src/index.tsx). Overlay
+// offsets like `config.space.S300` compile to CSS variables that only exist
+// under these classes; without them absolute controls collapse to the origin.
+document.body.classList.add(configClass, varsClass);
 
 function App() {
   const [mounted, setMounted] = useState(true);
