@@ -16,6 +16,7 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { General } from './general';
+import { AppearancePage as AppearanceSettings } from './appearance';
 import { PageNav, PageNavContent, PageNavHeader, PageRoot } from '../../components/page';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { Account } from './account';
@@ -37,6 +38,7 @@ import { isDesktopPlatform } from '../../platform';
 
 export enum SettingsPages {
   GeneralPage,
+  AppearancePage,
   AccountPage,
   NotificationPage,
   DevicesPage,
@@ -58,6 +60,11 @@ const useSettingsMenuItems = (): SettingsMenuItem[] =>
         page: SettingsPages.GeneralPage,
         name: 'General',
         icon: Icons.Setting,
+      },
+      {
+        page: SettingsPages.AppearancePage,
+        name: 'Appearance',
+        icon: Icons.Sun,
       },
       {
         page: SettingsPages.AccountPage,
@@ -216,6 +223,9 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
     >
       {activePage === SettingsPages.GeneralPage && (
         <General requestClose={handlePageRequestClose} />
+      )}
+      {activePage === SettingsPages.AppearancePage && (
+        <AppearanceSettings requestClose={handlePageRequestClose} />
       )}
       {activePage === SettingsPages.AccountPage && (
         <Account requestClose={handlePageRequestClose} />

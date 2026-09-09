@@ -32,27 +32,60 @@ test('user Settings avatar uses the native profile mxc instead of an HTTP thumbn
   assert.match(profile, /notifyOwnProfileChanged/);
 });
 
+const appearance = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/appearance/Appearance.tsx'),
+  'utf8'
+);
+const general = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
+  'utf8'
+);
+const about = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/about/About.tsx'),
+  'utf8'
+);
+
 test('appearance does not offer Twitter Emoji and does not advertise unused mint as the current accent', () => {
-  const general = readFileSync(
-    join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
-    'utf8'
-  );
   const accent = readFileSync(join(process.cwd(), 'src/app/utils/themeAccent.ts'), 'utf8');
-  assert.equal(general.includes('Twitter Emoji'), false);
-  assert.equal(general.includes('twitterEmoji'), false);
-  assert.equal(general.includes('#6bdbb8'), false);
+  assert.equal(appearance.includes('Twitter Emoji'), false);
+  assert.equal(appearance.includes('twitterEmoji'), false);
+  assert.equal(appearance.includes('#6bdbb8'), false);
   assert.equal(accent.includes('#6bdbb8'), false);
-  assert.match(general, /themeDefaultAccentColor/);
-  assert.match(general, /Sample/);
+  assert.match(appearance, /themeDefaultAccentColor/);
+  assert.match(appearance, /Sample/);
 });
 
-test('native General does not offer Compact or Bubble layouts that the native timeline ignores', () => {
-  const general = readFileSync(
-    join(process.cwd(), 'src/app/features/settings/general/General.tsx'),
-    'utf8'
-  );
-  assert.match(general, /isNativeMatrixSession\(\)/);
-  assert.match(general, /native timeline uses a single Element-like layout/);
+test('native Appearance does not offer Compact or Bubble layouts that the native timeline ignores', () => {
+  assert.match(appearance, /isNativeMatrixSession\(\)/);
+  assert.match(appearance, /native timeline uses a single Element-like layout/);
+});
+
+test('Appearance is its own Settings page and General no longer hosts theme or layout controls', () => {
+  assert.match(settings, /SettingsPages\.AppearancePage/);
+  assert.match(settings, /name: 'Appearance'/);
+  assert.match(settings, /<AppearanceSettings requestClose=/);
+  assert.equal(general.includes('useTheme'), false);
+  assert.equal(general.includes('Message Layout'), false);
+  assert.equal(general.includes('legacyUsernameColor'), false);
+  assert.match(appearance, /Message Layout/);
+  assert.match(appearance, /Legacy Username Color/);
+});
+
+test('maintenance actions live once, under General > Storage, not duplicated in About', () => {
+  assert.match(general, /<Text size="L400">Storage<\/Text>/);
+  assert.match(general, /Clear Cache & Reload/);
+  assert.match(general, /isDesktopPlatform\(\) && <SecretStoreTile \/>/);
+  assert.equal(about.includes('Clear Cache'), false);
+  assert.equal(about.includes('UpdateSettingsTile'), false);
+  assert.equal(about.includes('Options'), false);
+  // Update checking has exactly one home: General > Software Updates.
+  assert.match(general, /Software Updates/);
+  assert.match(general, /<UpdateSettingsTile \/>/);
+});
+
+test('General settings use positive phrasing for media loading', () => {
+  assert.match(general, /title="Load Media Automatically"/);
+  assert.equal(general.includes('Disable Media Auto Load'), false);
 });
 
 test('native Notifications owns homeserver push rules instead of a unavailable stub', () => {

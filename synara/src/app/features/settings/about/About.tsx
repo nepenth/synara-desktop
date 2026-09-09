@@ -3,24 +3,18 @@ import { Box, Text, IconButton, Icon, Icons, Scroll, Button, config, toRem } fro
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
-import { SettingTile } from '../../../components/setting-tile';
 import SynaraPNG from '../../../../../public/res/png/synara.png';
-import { clearCacheAndReload } from '../../../../client/initMatrix';
-import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
   APP_VERSION,
   SYNARA_PROJECT_URL,
   SYNARA_SOURCE_CODE_URL,
   openExternalUrlFromClick,
 } from '../../../utils/appLinks';
-import { UpdateSettingsTile } from '../../desktop-updater/DesktopUpdaterProvider';
 
 type AboutProps = {
   requestClose: () => void;
 };
 export function About({ requestClose }: AboutProps) {
-  const mx = useMatrixClient();
-
   return (
     <Page>
       <PageHeader outlined={false}>
@@ -89,33 +83,6 @@ export function About({ requestClose }: AboutProps) {
                     </Button>
                   </Box>
                 </Box>
-              </Box>
-              <Box direction="Column" gap="100">
-                <Text size="L400">Options</Text>
-                <SequenceCard
-                  className={SequenceCardStyle}
-                  variant="SurfaceVariant"
-                  direction="Column"
-                  gap="400"
-                >
-                  <UpdateSettingsTile />
-                  <SettingTile
-                    title="Clear Cache & Reload"
-                    description="Clear all your locally stored data and reload from server."
-                    after={
-                      <Button
-                        onClick={() => clearCacheAndReload(mx)}
-                        variant="Secondary"
-                        fill="Soft"
-                        size="300"
-                        radii="300"
-                        outlined
-                      >
-                        <Text size="B300">Clear Cache</Text>
-                      </Button>
-                    }
-                  />
-                </SequenceCard>
               </Box>
               <Box direction="Column" gap="100">
                 <Text size="L400">Credits</Text>
