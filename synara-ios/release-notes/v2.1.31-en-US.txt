@@ -1,0 +1,1 @@
+Jump to Last Read moves to the bottom right beside Jump to Latest and appears only while you have unread messages above you. The Account sheet now shows your signed-in user, homeserver, and device, and its Settings and Log Out buttons work. Logging out and back in on the same device loads your rooms again without relaunching the app.

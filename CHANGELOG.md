@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.31] - 2026-09-09
+
 - Make desktop "Jump to Last Read" work. Core now resolves a last-read marker
   that is not itself a renderable row (reaction, edit, hidden event) to the
   nearest rendered predecessor when opening a focused timeline, and the
@@ -14,8 +16,11 @@
   viewport instead of re-subscribing on every render. The per-render swap
   raced the virtualizer's synchronous re-render at the start of a gesture and
   dropped the first scroll event, so a single wheel step away from the live
-  tail was snapped back by the next snapshot. The e2e harness now applies the
-  folds theme so overlay geometry matches the shipped app.
+  tail was snapped back by the next snapshot. A scroll that ends at the bottom
+  (the virtualizer re-measuring rows above the viewport) no longer releases
+  follow-live for a non-live position; only leaving the bottom does. The e2e
+  harness now applies the folds theme so overlay geometry matches the shipped
+  app.
 - Load the desktop Settings > Devices snapshot whenever a session is present.
   The query was gated on a session-generation marker the desktop session store
   never populates, so verification stayed spinning, Retry was a no-op,
