@@ -114,8 +114,17 @@ final class SynaraUITests: XCTestCase {
         tap(app.buttons["RoomHeaderAccountMenuButton"])
 
         XCTAssertTrue(app.collectionViews["AccountMenuSheet"].waitForExistence(timeout: 5))
+        // The sheet must resolve the live app environment, not the signed-out
+        // default; a mock environment here reads "Not signed in" and routes
+        // Settings / Log Out against a router nobody observes.
+        XCTAssertTrue(app.descendants(matching: .any)["AccountMenuUserRow"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.descendants(matching: .any)["AccountMenuSignedOutText"].exists)
         XCTAssertTrue(app.buttons["AccountMenuSettingsButton"].exists)
         XCTAssertTrue(app.buttons["AccountMenuLogoutButton"].exists)
+
+        tap(app.buttons["AccountMenuSettingsButton"])
+        XCTAssertTrue(app.collectionViews["SettingsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["AccountSettingsLink"].waitForExistence(timeout: 5))
     }
 
     func testRoomManagementCreatesPrivateEncryptedRoom() {

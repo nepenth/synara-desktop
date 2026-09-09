@@ -114,6 +114,87 @@ final class SessionCoordinatorTests: XCTestCase {
         XCTAssertTrue(reclaimed)
     }
 
+    func testSignOutResetReleasesWaitersAndLetsTheSameIdentityClaimStartupAgain() async throws {
+        let readiness = SignedInSessionReadiness()
+        let session = try makeSession()
+
+        let firstClaim = await readiness.claimPreparation(for: session)
+        let firstMark = await readiness.markPrepared(for: session)
+        let claimWhilePrepared = await readiness.claimPreparation(for: session)
+        XCTAssertTrue(firstClaim)
+        XCTAssertTrue(firstMark)
+        XCTAssertFalse(claimWhilePrepared)
+
+        await readiness.resetForSignOut()
+
+        // Re-login reuses the crypto device, so the token is identical. It must
+        // be claimable again, and content that starts waiting before the shell
+        // claims must be allowed to wait rather than fail closed.
+        let earlyWaiter = Task { await readiness.waitUntilPrepared(for: session) }
+        await Task.yield()
+        let reclaim = await readiness.claimPreparation(for: session)
+        let remark = await readiness.markPrepared(for: session)
+        let earlyWaiterResult = await earlyWaiter.value
+        XCTAssertTrue(reclaim)
+        XCTAssertTrue(remark)
+        XCTAssertTrue(earlyWaiterResult)
+    }
+
+    func testSignOutResetFailsInFlightWaitersClosed() async throws {
+        let readiness = SignedInSessionReadiness()
+        let session = try makeSession()
+        let claimed = await readiness.claimPreparation(for: session)
+        let waiter = Task { await readiness.waitUntilPrepared(for: session) }
+        // A waiter that only registers after the reset is, by design, allowed
+        // to wait for the next login of the same identity, so make sure this
+        // one is parked before signing out.
+        var parked = await readiness.pendingWaiterCount()
+        var attempts = 0
+        while parked == 0, attempts < 200 {
+            try await Task.sleep(nanoseconds: 5_000_000)
+            parked = await readiness.pendingWaiterCount()
+            attempts += 1
+        }
+        XCTAssertEqual(parked, 1)
+
+        await readiness.resetForSignOut()
+
+        let waitResult = await waiter.value
+        let reclaimed = await readiness.claimPreparation(for: session)
+        XCTAssertTrue(claimed)
+        XCTAssertFalse(waitResult)
+        XCTAssertTrue(reclaimed)
+    }
+
+    func testReLoginAfterLogoutStartsTheMatrixClientAgain() async throws {
+        // Regression: after Log Out -> Log In on the same device the room list
+        // stayed empty until a force-quit, because the readiness gate still
+        // remembered the identity as prepared and `matrix.start` was skipped.
+        let matrix = MockMatrixClientService()
+        let readiness = SignedInSessionReadiness()
+        let sessionStore = AppSessionStore()
+        let environment = AppEnvironment.mock(
+            session: sessionStore,
+            matrix: matrix,
+            sessionReadiness: readiness
+        )
+        let session = try makeSession()
+
+        try await MainActor.run { try sessionStore.completeLogin(session) }
+        await SessionCoordinator.startSignedInSession(environment: environment, session: session)
+        XCTAssertEqual(matrix.startedSessions, [session])
+
+        try await environment.wipe.logoutAndWipe()
+        let stateAfterLogout = await MainActor.run { sessionStore.currentState }
+        XCTAssertEqual(stateAfterLogout, .signedOut)
+
+        try await MainActor.run { try sessionStore.completeLogin(session) }
+        await SessionCoordinator.startSignedInSession(environment: environment, session: session)
+        let preparedAfterReLogin = await readiness.waitUntilPrepared(for: session)
+        XCTAssertEqual(matrix.startedSessions, [session, session])
+        XCTAssertTrue(preparedAfterReLogin)
+    }
+
     func testPreparingMatrixOwnerDoesNotConfigurePushOrPromptForPermission() async throws {
         let matrix = MockMatrixClientService()
         let push = MockPushService(isRegistrationAvailable: true)

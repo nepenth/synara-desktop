@@ -26,11 +26,17 @@ struct RootShellView: View {
 
     var body: some View {
         content
+            .sheet(item: $router.sheetDestination) { destination in
+                // Sheets are hosted outside the presenting view's subtree, so the
+                // live environment must be injected here explicitly; otherwise the
+                // sheet resolves `AppEnvironmentKey.defaultValue` (a signed-out
+                // mock) and its Settings / Log Out actions target the wrong router.
+                SheetPlaceholderView(destination: destination)
+                    .environment(\.appEnvironment, environment)
+                    .environment(\.synaraThemeBaseHex, themePaint.baseHex)
+            }
             .environment(\.appEnvironment, environment)
             .environment(\.synaraThemeBaseHex, themePaint.baseHex)
-            .sheet(item: $router.sheetDestination) { destination in
-                SheetPlaceholderView(destination: destination)
-            }
             .onOpenURL { url in
                 environment.logger.info("Opening deep link \(url.absoluteString)", category: .routing)
                 let sessionIsSignedIn: Bool

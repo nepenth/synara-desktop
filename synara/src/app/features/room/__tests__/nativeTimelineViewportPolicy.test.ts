@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import test from 'node:test';
 
 import {
@@ -10,6 +12,7 @@ import {
   nativeVisibleReadFrontier,
   latestNativeReadEventId,
   shouldRestoreNativeTimelineViewport,
+  shouldShowJumpToLastRead,
   shouldShowJumpToLatest,
 } from '../nativeTimelineViewportPolicy';
 
@@ -78,6 +81,33 @@ test('jump to latest stays available until the live tail is the loaded window', 
   assert.equal(shouldShowJumpToLatest('live_bottom', true), false);
   assert.equal(shouldShowJumpToLatest(undefined, false), true);
   assert.equal(shouldShowJumpToLatest(undefined, true), false);
+});
+
+test('jump-to-last-read is owned solely by the unplaced pending frontier', () => {
+  assert.equal(shouldShowJumpToLastRead(undefined), false);
+  assert.equal(shouldShowJumpToLastRead('$old:example.org'), true);
+  // Malformed hints never render a control.
+  assert.equal(shouldShowJumpToLastRead('not-an-event'), false);
+});
+
+test('jump-to-last-read visibility is not re-derived from receipts or the loaded window', () => {
+  // The presenter owns the pending marker: Core reports it only when the room
+  // has unread relative to the frontier, and the presenter clears it on
+  // placement, explicit Jump to latest, or room change. Consulting receipt
+  // state or loaded rows here regressed two guarded behaviours: the live-tail
+  // auto receipt hid the action before the user saw the gap, and rows loading
+  // off-screen were treated as "already there".
+  const presenter = readFileSync(
+    join(process.cwd(), 'src/app/features/room/NativeTimelinePresenter.tsx'),
+    'utf8'
+  );
+  assert.match(presenter, /shouldShowJumpToLastRead\(pendingLastRead\)/);
+  assert.doesNotMatch(presenter, /shouldShowJumpToLastRead\(\{/);
+  assert.match(presenter, /setPendingLastRead\(undefined\)/);
+  assert.match(
+    presenter,
+    /if \(missingLastRead\) setPendingLastRead\(selectedPosition\.anchor_event_id\)/
+  );
 });
 
 const liveReadInput = {

@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+- Make desktop "Jump to Last Read" work. Core now resolves a last-read marker
+  that is not itself a renderable row (reaction, edit, hidden event) to the
+  nearest rendered predecessor when opening a focused timeline, and the
+  renderer adopts that anchor instead of failing with "The last-read message
+  is not available in this context". The control moves to the bottom-right
+  cluster beside Jump to latest as a matching pill, and is shown only while
+  Core reported an unread frontier the presenter has not yet placed; it is
+  cleared on placement, on an explicit Jump to latest, or on room change.
+- Bind the desktop timeline's scroll and input listeners once per mounted
+  viewport instead of re-subscribing on every render. The per-render swap
+  raced the virtualizer's synchronous re-render at the start of a gesture and
+  dropped the first scroll event, so a single wheel step away from the live
+  tail was snapped back by the next snapshot. The e2e harness now applies the
+  folds theme so overlay geometry matches the shipped app.
+- Load the desktop Settings > Devices snapshot whenever a session is present.
+  The query was gated on a session-generation marker the desktop session store
+  never populates, so verification stayed spinning, Retry was a no-op,
+  Encryption Backup read Disconnected, and the Current device list was empty.
+  Load failures now render a retryable error instead of a false "could not
+  check eligible verified sessions" prompt.
+- Restyle desktop Settings: remove the gradient fold and inner edge from every
+  settings card so resting surfaces match the rest of the app, move theme,
+  color, text, zoom, and message layout controls to a dedicated Appearance
+  page, add a Storage group in General for the native session store and
+  Clear Cache, drop the duplicate maintenance actions from About, and phrase
+  media loading positively.
+- Inject the live app environment into iOS sheets. The Account sheet resolved
+  the signed-out default environment, so it read "Not signed in" and its
+  Settings and Log Out actions targeted a router nobody observed.
+- Move the iOS "Jump to Last Read" control to the bottom-right cluster above
+  Jump to Latest as a pill, capture the pending marker once at open (only when
+  the room had unread and the marker was outside the opening window), and let
+  that marker alone own visibility.
+- Reset the iOS signed-in startup gate on sign-out. Re-login reuses the crypto
+  device, so the same `user|device` identity was still considered prepared,
+  `matrix.start` was skipped, and the room list stayed empty until the app was
+  force-quit.
+
 ## [2.1.30] - 2026-09-08
 
 - Decide desktop message notifications from the SDK-evaluated push actions of

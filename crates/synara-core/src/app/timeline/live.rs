@@ -1520,11 +1520,11 @@ impl NativeTimelineRegistry {
                     .get(&key)
                     .expect("focused timeline present")
                     .clone();
+                let target_event_id =
+                    resolve_rendered_focus_target(&room, &timeline, &event_id).await;
                 (
                     timeline,
-                    TimelineViewPosition::Focused {
-                        target_event_id: event_id.to_string(),
-                    },
+                    TimelineViewPosition::Focused { target_event_id },
                     TimelinePaginationState {
                         backward: TimelinePageState::Available,
                         forward: TimelinePageState::Available,
@@ -2048,11 +2048,10 @@ impl NativeTimelineRegistry {
             .get(&key)
             .expect("unread frontier timeline present")
             .clone();
+        let anchor_event_id = resolve_rendered_focus_target(room, &timeline, &event_id).await;
         Ok((
             timeline,
-            TimelineViewPosition::Unread {
-                anchor_event_id: event_id.to_string(),
-            },
+            TimelineViewPosition::Unread { anchor_event_id },
             TimelinePaginationState {
                 backward: TimelinePageState::Available,
                 forward: TimelinePageState::Available,
@@ -2557,6 +2556,67 @@ fn plan_unread_open(live_event_ids: &[String], candidate: Option<&str>) -> LastR
         },
         None => LastReadOpenPlan::LiveBottom,
     }
+}
+
+/// Pick the rendered event a focused `/context` window should place on when
+/// its target has no item of its own. Rendered items arrive in stream order;
+/// the newest one at or before the target's timestamp is the nearest visible
+/// predecessor. With no timestamp (the target could not be loaded) fall back
+/// to the newest rendered item, which sits closest to the unread frontier.
+fn rendered_focus_anchor(
+    rendered: &[(String, u64)],
+    target: &str,
+    target_ts_ms: Option<u64>,
+) -> Option<String> {
+    if rendered.iter().any(|(id, _)| id == target) {
+        return Some(target.to_owned());
+    }
+    let chosen = match target_ts_ms {
+        Some(target_ts) => rendered
+            .iter()
+            .rev()
+            .find(|(_, ts)| *ts <= target_ts)
+            .or_else(|| rendered.first()),
+        None => rendered.last(),
+    };
+    chosen.map(|(id, _)| id.clone())
+}
+
+/// A read marker set by another client often names a reaction, edit,
+/// redaction, or hidden event. The SDK still centres the focused window on it
+/// but never renders it as an item, so presenters could not place the
+/// viewport. Resolve to a rendered neighbour instead of failing the open.
+async fn resolve_rendered_focus_target(
+    room: &Room,
+    timeline: &Timeline,
+    target: &matrix_sdk::ruma::EventId,
+) -> String {
+    let rendered: Vec<(String, u64)> = timeline
+        .items()
+        .await
+        .iter()
+        .filter_map(|item| {
+            let event = item.as_event()?;
+            Some((
+                event.event_id()?.to_string(),
+                u64::from(event.timestamp().0),
+            ))
+        })
+        .collect();
+    if rendered.iter().any(|(id, _)| id == target.as_str()) {
+        return target.to_string();
+    }
+    let target_ts_ms = match timeout(
+        Duration::from_secs(5),
+        room.load_or_fetch_event(target, None),
+    )
+    .await
+    {
+        Ok(Ok(event)) => event.timestamp().map(|ts| u64::from(ts.0)),
+        Ok(Err(_)) | Err(_) => None,
+    };
+    rendered_focus_anchor(&rendered, target.as_str(), target_ts_ms)
+        .unwrap_or_else(|| target.to_string())
 }
 
 /// Resolve a raw marker to the nearest rendered predecessor in stream order.
@@ -4085,6 +4145,37 @@ mod tests {
             visible_predecessor(&raw, &visible, "$old"),
             Some("$old".into())
         );
+    }
+
+    #[test]
+    fn focused_open_on_unrendered_marker_resolves_to_rendered_predecessor() {
+        let rendered = vec![
+            ("$a".to_owned(), 100u64),
+            ("$b".to_owned(), 200),
+            ("$c".to_owned(), 300),
+        ];
+        // A rendered target is returned unchanged.
+        assert_eq!(
+            rendered_focus_anchor(&rendered, "$b", Some(200)),
+            Some("$b".into())
+        );
+        // A reaction sent between $b and $c lands on $b.
+        assert_eq!(
+            rendered_focus_anchor(&rendered, "$reaction", Some(250)),
+            Some("$b".into())
+        );
+        // A marker older than the whole window lands on its oldest row.
+        assert_eq!(
+            rendered_focus_anchor(&rendered, "$ancient", Some(5)),
+            Some("$a".into())
+        );
+        // Without a timestamp the newest rendered row is the closest guess.
+        assert_eq!(
+            rendered_focus_anchor(&rendered, "$mystery", None),
+            Some("$c".into())
+        );
+        // An empty window cannot be resolved; the caller keeps the raw target.
+        assert_eq!(rendered_focus_anchor(&[], "$x", Some(1)), None);
     }
 
     #[test]

@@ -8,6 +8,12 @@ protocol SignedInSessionReadinessServicing: Sendable {
     func cancelPreparation(for session: AuthenticatedSession) async
     /// Returns false when another signed-in identity superseded this startup.
     func waitUntilPrepared(for session: AuthenticatedSession) async -> Bool
+    /// Forgets every prepared or in-flight identity. Sign-out must call this:
+    /// the crypto device is reused on re-login, so the next session carries the
+    /// same `user|device` token and would otherwise be treated as already
+    /// prepared, skipping `matrix.start` and leaving the room list without a
+    /// live Core session until the process is relaunched.
+    func resetForSignOut() async
 }
 
 /// Gates room-list loading until `SessionCoordinator` finishes preparing the Matrix client.
@@ -63,6 +69,19 @@ actor SignedInSessionReadiness: SignedInSessionReadinessServicing {
         }
     }
 
+    func resetForSignOut() async {
+        preparingToken = nil
+        preparedToken = nil
+        invalidatedTokens.removeAll()
+        let pending = waiters
+        waiters.removeAll()
+        for continuations in pending.values {
+            for waiter in continuations {
+                waiter.resume(returning: false)
+            }
+        }
+    }
+
     func waitUntilPrepared(for session: AuthenticatedSession) async -> Bool {
         let token = readinessToken(for: session)
         if preparedToken == token {
@@ -80,6 +99,11 @@ actor SignedInSessionReadiness: SignedInSessionReadinessServicing {
         return await withCheckedContinuation { continuation in
             waiters[token, default: []].append(continuation)
         }
+    }
+
+    /// Test hook: number of continuations currently parked in `waitUntilPrepared`.
+    func pendingWaiterCount() -> Int {
+        waiters.values.reduce(0) { $0 + $1.count }
     }
 
     private func readinessToken(for session: AuthenticatedSession) -> String {
@@ -110,4 +134,6 @@ struct ImmediateSignedInSessionReadiness: SignedInSessionReadinessServicing {
         _ = session
         return true
     }
+
+    func resetForSignOut() async {}
 }

@@ -81,11 +81,15 @@ private struct AccountMenuSheet: View {
                     switch environment.session.currentState {
                     case .signedIn(let session):
                         AccountMenuInfoRow(title: "User", value: session.userID)
+                            .accessibilityIdentifier("AccountMenuUserRow")
                         AccountMenuInfoRow(title: "Homeserver", value: session.homeserverURL.host ?? session.homeserverURL.absoluteString)
+                            .accessibilityIdentifier("AccountMenuHomeserverRow")
                         AccountMenuInfoRow(title: "Device", value: session.deviceID)
+                            .accessibilityIdentifier("AccountMenuDeviceRow")
                     case .signedOut:
                         Text("Not signed in")
                             .foregroundStyle(SynaraColor.secondaryText)
+                            .accessibilityIdentifier("AccountMenuSignedOutText")
                     }
                 }
 

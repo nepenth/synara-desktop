@@ -39,6 +39,23 @@ const geometry = (page: Page) =>
       offset: (visible?.getBoundingClientRect().top ?? top) - top,
     };
   });
+/** Geometry once two consecutive samples 100ms apart agree (placement settled). */
+const settledGeometry = async (page: Page) => {
+  let previous = await geometry(page);
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    await page.waitForTimeout(100);
+    const current = await geometry(page);
+    if (
+      current.eventId === previous.eventId &&
+      current.top === previous.top &&
+      Math.abs(current.offset - previous.offset) <= 0.5
+    ) {
+      return current;
+    }
+    previous = current;
+  }
+  throw new Error('Native timeline viewport did not settle');
+};
 const scrollToHistory = async (page: Page) => {
   await page.locator('#native-timeline').hover();
   await page.mouse.wheel(0, -1600);
@@ -305,6 +322,27 @@ test('explicit latest clears a missing last-read action after passive promotion 
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
 });
 
+test('a single wheel step off the live tail releases follow-live before the next snapshot', async ({
+  page,
+}) => {
+  // One wheel event produces exactly one scroll event. If the presenter's
+  // scroll listener is swapped while that event is dispatched (per-render
+  // re-subscription racing the virtualizer's synchronous re-render), the
+  // departure is never observed and the next snapshot poll snaps the viewport
+  // back to the tail.
+  await open(page, 'live');
+  await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  await page.locator('#native-timeline').hover();
+  await page.mouse.wheel(0, -1600);
+  await expect.poll(async () => (await geometry(page)).distance).toBeGreaterThan(200);
+  const before = await geometry(page);
+  await page.waitForTimeout(1200); // spans several native snapshot polls
+  const after = await geometry(page);
+  expect(after.eventId).toBe(before.eventId);
+  expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+  await expect(page.getByRole('button', { name: 'Jump to latest', exact: true })).toBeVisible();
+});
+
 test('live append follows bottom; history, edits and another room send do not move it', async ({
   page,
 }) => {
@@ -365,7 +403,11 @@ test('stored bottom never overrides a new unread anchor', async ({ page }) => {
 test('missing last read retains the mounted location when later data arrives', async ({ page }) => {
   await open(page, 'missing');
   await expect(page.getByRole('button', { name: 'Jump to Last Read' })).toBeVisible();
-  const before = await geometry(page);
+  // The missing marker falls back to the live tail, which the virtualizer
+  // reaches through a cascade of correction scrolls as rows are measured under
+  // the real theme. Sample the mounted location only once that has settled.
+  const before = await settledGeometry(page);
+  expect(before.distance).toBeLessThanOrEqual(8);
   await fixture(page, 'prependMissing');
   await page.waitForTimeout(1000);
   const after = await geometry(page);
@@ -441,7 +483,10 @@ test('sparse history and missing last-read recovery controls are separately clic
   const lastReadBox = await lastRead.boundingBox();
   expect(olderBox).not.toBeNull();
   expect(lastReadBox).not.toBeNull();
+  // Sparse-history recovery stays top-left; last-read recovery shares the
+  // bottom-right cluster with "Jump to latest".
   expect(olderBox!.y + olderBox!.height).toBeLessThanOrEqual(lastReadBox!.y);
+  expect(lastReadBox!.x).toBeGreaterThan(olderBox!.x + olderBox!.width);
   await older.click();
   await expect
     .poll(() =>

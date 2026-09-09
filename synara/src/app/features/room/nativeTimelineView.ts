@@ -277,8 +277,14 @@ export type NativeTimelineViewController = {
   followLive: (request: { observedLiveTailEventId: string }) => Promise<void>;
   /** True only when this controller adopted the returned live provider. */
   jumpLatest: () => Promise<boolean>;
-  /** Keep the current provider until a focused snapshot contains this read target. */
-  restoreLastRead: (eventId: string) => Promise<boolean>;
+  /**
+   * Keep the current provider until a focused snapshot contains the read
+   * target. Core may resolve a marker that has no row of its own (reaction,
+   * edit, redaction) to its nearest rendered neighbour; the adopted anchor is
+   * returned so the caller can retire the pending marker. `undefined` means
+   * the request was superseded and nothing was adopted.
+   */
+  restoreLastRead: (eventId: string) => Promise<string | undefined>;
 };
 
 type NativeTimelineReadStateReadback = {
@@ -938,7 +944,7 @@ export const useNativeTimelineView = (
         );
       } catch (error) {
         finishOpen(buffer);
-        if (superseded()) return false;
+        if (superseded()) return undefined;
         throw error;
       }
       const opened = result.available ? result.value : undefined;
@@ -953,8 +959,10 @@ export const useNativeTimelineView = (
       };
       if (superseded()) {
         discard();
-        return false;
+        return undefined;
       }
+      const openedAnchor =
+        opened?.position.kind === 'focused' ? opened.position.target_event_id : undefined;
       if (
         !result.available ||
         !opened ||
@@ -963,19 +971,22 @@ export const useNativeTimelineView = (
         snapshot.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION ||
         snapshot.sessionGeneration !== current.sessionGeneration ||
         snapshot.roomId !== current.roomId ||
-        opened.position.kind !== 'focused' ||
-        opened.position.target_event_id !== eventId ||
+        openedAnchor === undefined ||
         snapshot.position.kind !== 'focused' ||
-        snapshot.position.target_event_id !== eventId ||
+        snapshot.position.target_event_id !== openedAnchor ||
         !snapshot.rows.some(
-          (row) => (row.kind === 'sticker' ? row.event.eventId : row.eventId) === eventId
+          (row) => (row.kind === 'sticker' ? row.event.eventId : row.eventId) === openedAnchor
         )
       ) {
         discard();
-        throw new Error('The last-read message is not available in this context. Try again.');
+        throw new Error(
+          openedAnchor !== undefined && openedAnchor !== eventId
+            ? 'The last-read position could not be placed. Try again.'
+            : 'The last-read message is not available in this context. Try again.'
+        );
       }
       // Each Core open owns its own subscription. Retire the previous provider
-      // only after the requested target has been confirmed in its replacement.
+      // only after the adopted anchor has been confirmed in its replacement.
       streamIdRef.current = opened.streamId;
       snapshotRef.current = snapshot;
       selectedPositionRef.current = opened.position;
@@ -983,7 +994,7 @@ export const useNativeTimelineView = (
       void invokeDesktopWithAvailability('matrix_timeline_close', {
         request: { streamId },
       }).catch(() => undefined);
-      return true;
+      return openedAnchor;
     },
     [beginOpen, finishOpen]
   );

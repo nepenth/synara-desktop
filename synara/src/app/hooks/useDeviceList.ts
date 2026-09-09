@@ -12,33 +12,61 @@ const DEVICE_LIST_UPDATED_EVENT = 'matrix-device-list-updated';
 
 export type RefreshDeviceList = (snapshot?: NativeDeviceSnapshot) => Promise<void>;
 
-export function useDeviceList(): [undefined | NativeDeviceSnapshot, RefreshDeviceList] {
+export type DeviceListLoadState = {
+  /** True while the first snapshot or a refetch is in flight. */
+  fetching: boolean;
+  /** Set when the most recent snapshot request was rejected. */
+  error?: string;
+};
+
+const describeDeviceListError = (error: unknown): string => {
+  if (error instanceof Error && error.message) return error.message;
+  if (typeof error === 'object' && error !== null && 'message' in error) {
+    const { message } = error as { message?: unknown };
+    if (typeof message === 'string' && message) return message;
+  }
+  return 'Native Matrix device management is unavailable.';
+};
+
+export function useDeviceList(): [
+  undefined | NativeDeviceSnapshot,
+  RefreshDeviceList,
+  DeviceListLoadState
+] {
   const queryClient = useQueryClient();
-  const sessionGeneration = getActiveSession()?.sessionGeneration;
-  const queryKey = useMemo(
-    () => ['native-devices', sessionGeneration] as const,
-    [sessionGeneration]
-  );
-  const { data: snapshot, refetch } = useQuery({
+  // The bootstrap `Session` only carries account identity; the authoritative
+  // numeric generation lives on the native snapshot itself. Gate on the
+  // presence of a session and key the cache on the identity so a re-login
+  // under a different account never reads a stale list.
+  const session = getActiveSession();
+  const sessionKey = session ? `${session.userId}\u0000${session.deviceId}` : undefined;
+  const queryKey = useMemo(() => ['native-devices', sessionKey] as const, [sessionKey]);
+  const {
+    data: snapshot,
+    error,
+    isFetching,
+    refetch,
+  } = useQuery({
     queryKey,
     queryFn: getNativeDeviceSnapshot,
-    enabled: sessionGeneration !== undefined,
+    enabled: sessionKey !== undefined,
     staleTime: 0,
     gcTime: Infinity,
     refetchOnMount: 'always',
     refetchOnWindowFocus: 'always',
+    retry: false,
   });
 
   const refreshDeviceList = useCallback(
     async (authoritativeSnapshot?: NativeDeviceSnapshot) => {
-      if (sessionGeneration === undefined) return;
+      if (sessionKey === undefined) return;
       if (authoritativeSnapshot) {
         queryClient.setQueryData(queryKey, authoritativeSnapshot);
         return;
       }
       await refetch();
     },
-    [queryClient, queryKey, refetch, sessionGeneration]
+    [queryClient, queryKey, refetch, sessionKey]
   );
 
   useEffect(() => {
@@ -70,7 +98,15 @@ export function useDeviceList(): [undefined | NativeDeviceSnapshot, RefreshDevic
     };
   }, [refreshDeviceList, snapshot]);
 
-  return [snapshot, refreshDeviceList];
+  const loadState = useMemo<DeviceListLoadState>(
+    () => ({
+      fetching: isFetching,
+      error: error ? describeDeviceListError(error) : undefined,
+    }),
+    [error, isFetching]
+  );
+
+  return [snapshot, refreshDeviceList, loadState];
 }
 
 export const useSplitCurrentDevice = (

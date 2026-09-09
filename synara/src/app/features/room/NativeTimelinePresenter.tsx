@@ -84,10 +84,12 @@ import {
   nativeLiveReadTarget,
   nativeVisibleReadFrontier,
   latestNativeReadEventId,
+  shouldShowJumpToLastRead,
   shouldShowJumpToLatest,
 } from './nativeTimelineViewportPolicy';
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
 import * as htmlCss from './nativeTimelineHtml.css';
+import * as depthCss from '../../styles/Depth.css';
 
 const HermesAgentCard = React.lazy(() =>
   import('../../components/hermes/HermesAgentCard').then((module) => ({
@@ -2245,8 +2247,14 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     };
   }, [followLiveKey, followLiveTarget, followLive, roomId]);
 
+  const scrollHandlersRef = useRef<{ onScroll: () => void; onUserInput: () => void } | undefined>(
+    undefined
+  );
   useEffect(() => {
-    if (!readyState) return undefined;
+    if (!readyState) {
+      scrollHandlersRef.current = undefined;
+      return undefined;
+    }
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
     const paginateAtEdge = () => {
@@ -2286,7 +2294,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       const atBottom = distanceFromBottom <= 8;
       setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
       if (performance.now() < programmaticScrollUntilRef.current) return;
-      followingLiveRef.current = readyState.selectedPosition.kind === 'live_bottom' && atBottom;
+      // Only leaving the bottom releases follow-live. A scroll that ends at the
+      // bottom (the virtualizer re-measuring rows above the viewport after
+      // fonts or media load, or a late programmatic placement) keeps the
+      // ownership the placement established; a live position re-acquires it.
+      followingLiveRef.current =
+        atBottom &&
+        (readyState.selectedPosition.kind === 'live_bottom' || followingLiveRef.current);
       userInitiatedScrollRef.current = true;
       paginateAtEdge();
     };
@@ -2296,19 +2310,38 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       // A click is not a departure from the live tail. Actual scrolling below
       // recomputes ownership from geometry, including during drag/scroll input.
     };
+    scrollHandlersRef.current = { onScroll, onUserInput };
+    saveViewport();
+    return () => {
+      saveViewport();
+    };
+  }, [controller, readyState, saveViewport]);
+
+  // The DOM listeners are bound once per mounted viewport and delegate to the
+  // latest handlers above. Re-subscribing on every render raced the
+  // virtualizer's own scroll listener, which re-renders synchronously at the
+  // start of a gesture: that swapped our listener mid-dispatch, and a listener
+  // added during dispatch is skipped for the in-flight event. The first scroll
+  // of a gesture was lost, `followingLiveRef` stayed true, and the next
+  // snapshot snapped a single wheel step back to the live tail.
+  const hasReadyState = readyState !== undefined;
+  useEffect(() => {
+    if (!hasReadyState) return undefined;
+    const scrollEl = scrollRef.current;
+    if (!scrollEl) return undefined;
+    const onScroll = () => scrollHandlersRef.current?.onScroll();
+    const onUserInput = () => scrollHandlersRef.current?.onUserInput();
     scrollEl.addEventListener('wheel', onUserInput, { passive: true });
     scrollEl.addEventListener('pointerdown', onUserInput, { passive: true });
     scrollEl.addEventListener('keydown', onUserInput);
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
-    saveViewport();
     return () => {
       scrollEl.removeEventListener('scroll', onScroll);
       scrollEl.removeEventListener('wheel', onUserInput);
       scrollEl.removeEventListener('pointerdown', onUserInput);
       scrollEl.removeEventListener('keydown', onUserInput);
-      saveViewport();
     };
-  }, [controller, readyState, saveViewport]);
+  }, [hasReadyState, roomId]);
 
   useLayoutEffect(() => {
     if (!readyState || rows.length === 0) return undefined;
@@ -2473,8 +2506,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const navigation = input;
     setActionError(undefined);
     void restoreLastRead(pendingLastRead)
-      .then((accepted) => {
-        if (accepted && mountedNavigationRef.current === navigation) {
+      .then((adoptedAnchor) => {
+        if (adoptedAnchor !== undefined && mountedNavigationRef.current === navigation) {
+          // Core may have resolved the marker to a rendered neighbour; either
+          // way the pending frontier is now placed and the action is spent.
+          setPendingLastRead(undefined);
           setLastReadPlacementRequest((request) => request + 1);
         }
       })
@@ -2526,6 +2562,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
 
   if (!readyState) return null;
   const { snapshot } = readyState;
+  const showJumpToLastRead = shouldShowJumpToLastRead(pendingLastRead);
+  const showJumpToLatest = shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom);
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
@@ -2593,14 +2631,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             </Box>
           )}
         </Scroll>
-        <Box
-          direction="Column"
-          gap="200"
-          alignItems="Start"
-          style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}
-        >
-          {rows.filter((row) => rowEventId(row)).length <= 1 &&
-            snapshot.pagination.backward === 'available' && (
+        {rows.filter((row) => rowEventId(row)).length <= 1 &&
+          snapshot.pagination.backward === 'available' && (
+            <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
               <Button
                 onClick={() => {
                   void controller
@@ -2610,40 +2643,55 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               >
                 <Text>Load older messages</Text>
               </Button>
-            )}
-          {pendingLastRead && (
-            <Button onClick={jumpToLastRead}>
-              <Text>Jump to Last Read</Text>
-            </Button>
+            </Box>
           )}
-        </Box>
-        {shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom) && (
+        {(showJumpToLastRead || showJumpToLatest) && (
           <Box
+            direction="Column"
+            gap="200"
+            alignItems="End"
             style={{ position: 'absolute', right: config.space.S400, bottom: config.space.S300 }}
           >
-            <TooltipProvider
-              position="Top"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  <Text>Jump to latest</Text>
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton
-                  ref={triggerRef}
-                  variant="SurfaceVariant"
-                  radii="Pill"
-                  outlined
-                  size="300"
-                  aria-label="Jump to latest"
-                  onClick={jumpToLatest}
-                >
-                  <Icon src={Icons.ChevronBottom} size="300" />
-                </IconButton>
-              )}
-            </TooltipProvider>
+            {showJumpToLastRead && (
+              <Button
+                variant="Secondary"
+                fill="Soft"
+                radii="Pill"
+                outlined
+                size="300"
+                className={depthCss.quietInteractiveSurface}
+                before={<Icon src={Icons.MessageUnread} size="100" />}
+                onClick={jumpToLastRead}
+              >
+                <Text size="B300">Jump to Last Read</Text>
+              </Button>
+            )}
+            {showJumpToLatest && (
+              <TooltipProvider
+                position="Top"
+                offset={4}
+                tooltip={
+                  <Tooltip>
+                    <Text>Jump to latest</Text>
+                  </Tooltip>
+                }
+              >
+                {(triggerRef) => (
+                  <IconButton
+                    ref={triggerRef}
+                    variant="SurfaceVariant"
+                    radii="Pill"
+                    outlined
+                    size="300"
+                    className={depthCss.quietInteractiveSurface}
+                    aria-label="Jump to latest"
+                    onClick={jumpToLatest}
+                  >
+                    <Icon src={Icons.ChevronBottom} size="300" />
+                  </IconButton>
+                )}
+              </TooltipProvider>
+            )}
           </Box>
         )}
       </Box>
