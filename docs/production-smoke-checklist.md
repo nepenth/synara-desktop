@@ -18,6 +18,29 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-08 notification release-candidate review (2.1.30):
+
+- A Developer ID signed local build with the product notification identity and
+  isolated test storage exercised fresh messages through Core observation,
+  SDK policy, native submission, and the same-session delivery ledger. Allowed
+  delivery counted once; disabled permission counted one failure without retry
+  after more than 60 seconds; re-enabled permission delivered the next message
+  without replaying the refused one. An approval-shaped test message produced
+  a native delivered receipt without executing a command.
+- Both test sessions were logged out and all notification settings restored.
+  The final 2.1.30 source also passed signed local startup, displayed the correct
+  packaged frontend version, and read OS notification permission successfully.
+- Candidate `1b1896c0` passed the full Quality gate, iOS simulator unit and UI
+  suites, and macOS, Debian, and Arch package builds. Artifact inspection
+  confirmed macOS 2.1.30/arm64 (expected ad-hoc CI signature, verification
+  passed), Debian 2.1.30/amd64, and Arch 2.1.30-1/x86_64. These builds do not
+  constitute human package-install or final notarized-artifact smoke.
+- iOS validation uses simulators at the user's request. Human candidate-install
+  checks, Linux GUI delivery, notification clicks, audible sound, and a
+  three-member live group remain unverified. Publication requires the remaining
+  install evidence or an explicit release exception. Detailed notification
+  evidence is in [the notification owner review](reviews/2026-09-08-notification-push-rule-owner.md).
+
 2026-08-18 automated interactive macOS smoke:
 
 - A local release app with an isolated bundle/Keychain identity completed fresh
