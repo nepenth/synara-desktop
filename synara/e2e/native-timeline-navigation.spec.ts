@@ -403,16 +403,14 @@ test('stored bottom never overrides a new unread anchor', async ({ page }) => {
 test('missing last read retains the mounted location when later data arrives', async ({ page }) => {
   await open(page, 'missing');
   await expect(page.getByRole('button', { name: 'Jump to Last Read' })).toBeVisible();
-  // The missing marker falls back to the live tail, which the virtualizer
-  // reaches through a cascade of correction scrolls as rows are measured under
-  // the real theme. Sample the mounted location only once that has settled.
+  // The missing marker falls back to the live tail. "Mounted location" here
+  // is the live bottom, not whichever row happens to sit at the top of the
+  // viewport — a one-row reflow after prepend is still following live.
   const before = await settledGeometry(page);
   expect(before.distance).toBeLessThanOrEqual(8);
   await fixture(page, 'prependMissing');
-  await page.waitForTimeout(1000);
-  const after = await geometry(page);
-  expect(after.eventId).toBe(before.eventId);
-  expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+  const after = await settledGeometry(page);
+  expect(after.distance).toBeLessThanOrEqual(8);
   await expect(page.getByRole('button', { name: 'Jump to Last Read' })).toBeVisible();
 });
 

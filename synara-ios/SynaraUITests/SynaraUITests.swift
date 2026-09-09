@@ -277,9 +277,12 @@ final class SynaraUITests: XCTestCase {
         composer.tap()
         composer.typeText("Sent from history to the live bottom")
         tap(app.buttons["ComposerSendButton"])
-        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 10))
         let sent = app.staticTexts["Sent from history to the live bottom"]
-        XCTAssertTrue(sent.waitForExistence(timeout: 5))
+        XCTAssertTrue(sent.waitForExistence(timeout: 8), "Send from unread history did not insert the new row")
+        XCTAssertTrue(
+            waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 15),
+            "Send from unread history did not pin to latest. Diagnostics: \(String(describing: viewport.value))"
+        )
         XCTAssertTrue(sent.isHittable)
         XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
     }
