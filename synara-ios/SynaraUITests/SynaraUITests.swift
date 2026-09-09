@@ -812,7 +812,9 @@ final class SynaraUITests: XCTestCase {
             return control.value as? String != originalValue
         }
         expectation(for: valueChanged, evaluatedWith: finalAction)
-        waitForExpectations(timeout: 3)
+        // Two simulator clones share one CI host; a toggle re-render can trail
+        // the tap by several seconds there without anything being wrong.
+        waitForExpectations(timeout: 10)
     }
 
     func testSettingsShowsNotificationSectionsAndReleaseLinks() {
@@ -2737,7 +2739,12 @@ final class SynaraUITests: XCTestCase {
         }
         for _ in 0..<maxSwipes {
             if clearsFloatingTabBar(element, app: app) {
-                return true
+                // The drags below release with momentum. A tap that lands while
+                // the list is still decelerating is consumed by the scroll view
+                // as "stop scrolling" and never reaches the row, so hand back a
+                // target only once its frame has stopped moving.
+                waitForFrameToSettle(element)
+                return clearsFloatingTabBar(element, app: app)
             }
             let scrollFrame = scrollView.frame
             if element.exists, element.frame.maxY < scrollFrame.minY + 80 {
@@ -2771,6 +2778,19 @@ final class SynaraUITests: XCTestCase {
             scrollView.swipeUp()
         }
         return element.exists
+    }
+
+    private func waitForFrameToSettle(_ element: XCUIElement, timeout: TimeInterval = 3) {
+        let deadline = Date().addingTimeInterval(timeout)
+        var previous = element.frame
+        while Date() < deadline {
+            RunLoop.current.run(until: Date().addingTimeInterval(0.15))
+            let current = element.frame
+            if abs(current.minY - previous.minY) < 0.5, abs(current.minX - previous.minX) < 0.5 {
+                return
+            }
+            previous = current
+        }
     }
 
     private func clearsFloatingTabBar(_ element: XCUIElement, app: XCUIApplication) -> Bool {
