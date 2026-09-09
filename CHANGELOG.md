@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.30] - 2026-09-08
+
 - Decide desktop message notifications from the SDK-evaluated push actions of
   the exact observed event inside Core. Room mode, account defaults, mentions,
   keywords, room-mention power levels, the suppress-edits override, and rule
@@ -24,11 +26,15 @@
   timeline scans, `Room.timeline` listener, and `SYNCING` gate are removed;
   on the native client they never fired, so no live message reached Core's
   decision owner before this change.
-- Make the macOS notification receipt real. `desktop_notify` now resolves
-  when Notification Center records the notification (or reports that it did
-  not within a bounded wait) instead of when the send task is spawned, so a
-  refused delivery is acknowledged to Core as `failed`. The click/action wait
-  keeps running in the background.
+- Use one modern macOS UserNotifications client for bundled-app permission,
+  submission receipts, presentation, and action responses. A denied setting
+  produces one failed receipt without posting or retrying; click handling is
+  independent of OS acceptance. Unbundled development retains its legacy path.
+- Check both IPv4 and IPv6 before selecting the packaged asset port, preventing
+  a second running app from loading the first app's frontend.
+- Keep late delivery acknowledgements and event-fetch results within their
+  original login session. Approval prompts now use Core decision and receipt
+  accounting while preserving native actions and avoiding duplicate sounds.
 - Add an iOS compile gate to CI for Swift/FFI changes on feature pull requests
   that skip the simulator lane; labels and release branches keep the full lane.
 

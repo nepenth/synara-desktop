@@ -1,0 +1,1 @@
+Synara 2.1.30 keeps iOS aligned with the coordinated shared Core release. Please test sign-in, room navigation, messaging, and notification routing.
