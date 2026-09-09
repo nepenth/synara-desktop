@@ -67,15 +67,19 @@ export function VerificationStatusBadge({
 export function VerifyCurrentDeviceTile({
   hasDevicesToVerifyAgainst,
   canStart,
+  refreshing,
   onRetry,
   onVerified,
 }: {
   hasDevicesToVerifyAgainst: boolean | null;
   canStart: boolean;
+  refreshing?: boolean;
   onRetry?: () => void;
   onVerified?: () => void;
 }) {
-  const retry = hasDevicesToVerifyAgainst === null && onRetry;
+  // Both "could not check" (null) and "no eligible session yet" (false) are
+  // recoverable by re-reading the snapshot, so both offer the same action.
+  const retry = hasDevicesToVerifyAgainst !== true && onRetry;
   return (
     <InfoCard
       variant="Critical"
@@ -85,9 +89,15 @@ export function VerifyCurrentDeviceTile({
         canStart ? (
           <NativeStartVerification onExit={() => onVerified?.()} />
         ) : retry ? (
-          <Button size="300" radii="300" onClick={onRetry}>
+          <Button
+            size="300"
+            radii="300"
+            disabled={refreshing}
+            before={refreshing ? <Spinner size="100" variant="Secondary" fill="Soft" /> : undefined}
+            onClick={onRetry}
+          >
             <Text as="span" size="B300">
-              Retry Availability Check
+              {hasDevicesToVerifyAgainst === null ? 'Retry Availability Check' : 'Refresh'}
             </Text>
           </Button>
         ) : undefined

@@ -1,9 +1,10 @@
 import React from 'react';
-import { Box, Text, IconButton, Icon, Icons, Scroll } from 'folds';
+import { Box, Button, Text, IconButton, Icon, Icons, Scroll, Spinner } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
+import { InfoCard } from '../../../components/info-card';
 import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
 import { LocalBackup } from './LocalBackup';
 import { DeviceLogoutBtn, DeviceTile, DeviceTilePlaceholder } from './DeviceTile';
@@ -39,14 +40,20 @@ export function Devices({ requestClose }: DevicesProps) {
   const nativeSession = isNativeMatrixSession();
   const crossSigning = useCrossSigning();
   const crossSigningActive = crossSigning.active;
-  const [deviceSnapshot, refreshDeviceList] = useDeviceList();
+  const [deviceSnapshot, refreshDeviceList, deviceLoadState] = useDeviceList();
   const devices = deviceSnapshot?.devices;
 
   const [currentDevice, otherDevices] = useSplitCurrentDevice(devices);
   const verificationStatus = resolveDeviceVerificationStatus(deviceSnapshot);
   const unverifiedDeviceCount =
     otherDevices?.filter((device) => device.trust === 'unverified').length ?? 0;
+  // The verification prompt needs an authoritative snapshot; before the first
+  // one lands we show the loading placeholder rather than a false "could not
+  // check" failure, and a rejected snapshot gets its own retryable card.
+  const snapshotFailed = deviceSnapshot === undefined && deviceLoadState.error !== undefined;
+  const snapshotPending = deviceSnapshot === undefined && !snapshotFailed;
   const offerCurrentVerification =
+    deviceSnapshot !== undefined &&
     canOfferNativeDeviceVerification(crossSigning.nativeStatus) &&
     verificationStatus !== 'verified';
   const canStartCurrentVerification = canStartCurrentDeviceVerification(deviceSnapshot);
@@ -101,10 +108,35 @@ export function Devices({ requestClose }: DevicesProps) {
                       </>
                     }
                   />
+                  {snapshotFailed && (
+                    <InfoCard
+                      variant="Critical"
+                      title="Device list unavailable"
+                      description={deviceLoadState.error}
+                      after={
+                        <Button
+                          size="300"
+                          radii="300"
+                          disabled={deviceLoadState.fetching}
+                          before={
+                            deviceLoadState.fetching ? (
+                              <Spinner size="100" variant="Secondary" fill="Soft" />
+                            ) : undefined
+                          }
+                          onClick={() => void refreshDeviceList()}
+                        >
+                          <Text as="span" size="B300">
+                            Retry
+                          </Text>
+                        </Button>
+                      }
+                    />
+                  )}
                   {offerCurrentVerification && (
                     <VerifyCurrentDeviceTile
-                      hasDevicesToVerifyAgainst={deviceSnapshot?.hasDevicesToVerifyAgainst ?? null}
+                      hasDevicesToVerifyAgainst={deviceSnapshot.hasDevicesToVerifyAgainst}
                       canStart={canStartCurrentVerification}
+                      refreshing={deviceLoadState.fetching}
                       onRetry={() => void refreshDeviceList()}
                       onVerified={() => void refreshDeviceList()}
                     />
@@ -141,7 +173,7 @@ export function Devices({ requestClose }: DevicesProps) {
                   <DeviceTilePlaceholder />
                 )}
               </Box>
-              {devices === undefined && <DevicesPlaceholder />}
+              {snapshotPending && <DevicesPlaceholder />}
               {otherDevices && (
                 <OtherDevices
                   devices={otherDevices}
