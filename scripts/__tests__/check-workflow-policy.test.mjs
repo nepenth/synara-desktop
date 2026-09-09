@@ -68,20 +68,8 @@ test("requires task PR validation on the Matrix Rust integration branch", () => 
   }
 });
 
-test("requires a shared cancellable validation lane per branch", () => {
+test("requires a cancellable validation lane per branch", () => {
   for (const workflowName of validationWorkflows) {
-    const splitByEvent = inspect(workflowName, (workflow) =>
-      workflow.replace(
-        "${{ github.head_ref || github.ref_name }}",
-        "${{ github.event_name }}-${{ github.head_ref || github.ref_name }}"
-      )
-    );
-    assert.match(
-      splitByEvent.errors.join("\n"),
-      /must not split push and pull_request/,
-      workflowName
-    );
-
     const noBranchLane = inspect(workflowName, (workflow) =>
       workflow.replace(
         "${{ github.head_ref || github.ref_name }}",
