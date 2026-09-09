@@ -722,6 +722,57 @@ final class StableTimelineViewportTests: XCTestCase {
         ))
     }
 
+    func testJumpToLastReadPendingMarkerIsCapturedOnceAtOpen() {
+        let initial = ["$a:matrix.org", "$b:matrix.org", "$c:matrix.org"]
+        XCTAssertEqual(
+            RoomTimelineJumpLastReadPolicy.pendingMarker(
+                fullyReadEventID: "$older:matrix.org",
+                initialEventIDs: initial,
+                hasUnreadMessages: true
+            ),
+            "$older:matrix.org"
+        )
+        XCTAssertNil(
+            RoomTimelineJumpLastReadPolicy.pendingMarker(
+                fullyReadEventID: "$b:matrix.org",
+                initialEventIDs: initial,
+                hasUnreadMessages: true
+            ),
+            "The last-read row is already in the opening window; nothing to jump to."
+        )
+        XCTAssertNil(
+            RoomTimelineJumpLastReadPolicy.pendingMarker(
+                fullyReadEventID: "$older:matrix.org",
+                initialEventIDs: initial,
+                hasUnreadMessages: false
+            ),
+            "A caught-up room with a stale fully-read marker offers no action."
+        )
+        XCTAssertNil(
+            RoomTimelineJumpLastReadPolicy.pendingMarker(
+                fullyReadEventID: nil,
+                initialEventIDs: initial,
+                hasUnreadMessages: true
+            )
+        )
+        XCTAssertNil(
+            RoomTimelineJumpLastReadPolicy.pendingMarker(
+                fullyReadEventID: "",
+                initialEventIDs: initial,
+                hasUnreadMessages: true
+            )
+        )
+    }
+
+    func testJumpToLastReadVisibilityIsOwnedByThePendingMarkerAlone() {
+        // Visibility must not be re-derived from live unread counts: the
+        // timeline auto-advances m.fully_read shortly after the tail is visible,
+        // which would hide the action before the user has seen the gap.
+        XCTAssertTrue(RoomTimelineJumpLastReadPolicy.shouldShow(pendingMarkerEventID: "$older:matrix.org"))
+        XCTAssertFalse(RoomTimelineJumpLastReadPolicy.shouldShow(pendingMarkerEventID: nil))
+        XCTAssertFalse(RoomTimelineJumpLastReadPolicy.shouldShow(pendingMarkerEventID: ""))
+    }
+
     func testLiveJumpPinsOnlyWhenAlreadyFollowingTheLiveTail() {
         XCTAssertTrue(
             RoomTimelineJumpLatestPolicy.shouldPinCurrentLiveWindow(

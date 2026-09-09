@@ -288,6 +288,36 @@ enum RoomTimelineJumpLatestPolicy {
     }
 }
 
+enum RoomTimelineJumpLastReadPolicy {
+    /// Decide, once at open, whether a last-read frontier becomes an action.
+    /// The room must have had unread activity at that moment and the marker must
+    /// not already be in the initially loaded rows. Evaluating unread state
+    /// continuously would be wrong: the timeline auto-advances `m.fully_read`
+    /// about a second after the tail is visible, which would hide the action
+    /// before the user has seen the messages between last-read and the tail.
+    static func pendingMarker(
+        fullyReadEventID: String?,
+        initialEventIDs: [String],
+        hasUnreadMessages: Bool
+    ) -> String? {
+        guard hasUnreadMessages, let marker = fullyReadEventID, marker.isEmpty == false else {
+            return nil
+        }
+        return initialEventIDs.contains(marker) ? nil : marker
+    }
+
+    /// The pending marker is the single owner of visibility, mirroring the
+    /// desktop presenter: it is cleared on successful placement, on an explicit
+    /// Jump to Latest, or when the room changes. Rows loading later off-screen
+    /// do not count as "already there".
+    static func shouldShow(pendingMarkerEventID: String?) -> Bool {
+        guard let marker = pendingMarkerEventID, marker.isEmpty == false else {
+            return false
+        }
+        return true
+    }
+}
+
 enum RoomTimelineLatestCommandCompletionPolicy {
     static func shouldShowRecovery(success: Bool) -> Bool {
         success == false
@@ -888,19 +918,16 @@ struct RoomTimelineView: View {
                             }
                     )
                     .overlay(alignment: .bottomTrailing) {
-                        if RoomTimelineJumpLatestPolicy.shouldShow(
-                            isLive: timelineProviderIsLive,
-                            isConfirmedPinned: isTimelineBottomVisible,
-                            hasItems: items.last != nil,
-                            requested: showJumpToLatest
-                        ) {
-                            JumpToLatestButton(isLoading: isJumpingToLatest) {
-                                jumpToLatest(proxy: proxy, currentItems: items)
-                            }
-                            .padding(.trailing, SynaraSpacing.large)
-                            .padding(.bottom, SynaraSpacing.medium)
-                            .transition(.scale.combined(with: .opacity))
-                        }
+                        timelineJumpControls(
+                            items: items,
+                            showLatest: RoomTimelineJumpLatestPolicy.shouldShow(
+                                isLive: timelineProviderIsLive,
+                                isConfirmedPinned: isTimelineBottomVisible,
+                                hasItems: items.last != nil,
+                                requested: showJumpToLatest
+                            ),
+                            onJumpToLatest: { jumpToLatest(proxy: proxy, currentItems: items) }
+                        )
                     }
                     .overlay(alignment: .topLeading) { timelineNavigationRecovery }
                     .onChange(of: sendLatestRequest) { _ in
@@ -1010,19 +1037,44 @@ struct RoomTimelineView: View {
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
         .overlay(alignment: .topLeading) { timelineNavigationRecovery }
         .overlay(alignment: .bottomTrailing) {
-            if RoomTimelineJumpLatestPolicy.shouldShow(
-                isLive: timelineProviderIsLive,
-                isConfirmedPinned: isTimelineBottomVisible,
-                hasItems: items.isEmpty == false,
-                requested: showJumpToLatest
-            ) {
-                JumpToLatestButton(isLoading: isJumpingToLatest) {
-                    jumpToLatestStable(currentItems: items)
+            timelineJumpControls(
+                items: items,
+                showLatest: RoomTimelineJumpLatestPolicy.shouldShow(
+                    isLive: timelineProviderIsLive,
+                    isConfirmedPinned: isTimelineBottomVisible,
+                    hasItems: items.isEmpty == false,
+                    requested: showJumpToLatest
+                ),
+                onJumpToLatest: { jumpToLatestStable(currentItems: items) }
+            )
+        }
+    }
+
+    /// Bottom-trailing navigation stack shared by both timeline render paths:
+    /// "Jump to Last Read" (when the unread frontier is off screen) sits above
+    /// the "Jump to latest" control so both read as one cluster.
+    @ViewBuilder
+    private func timelineJumpControls(
+        items: [TimelineItem],
+        showLatest: Bool,
+        onJumpToLatest: @escaping () -> Void
+    ) -> some View {
+        let showLastRead = RoomTimelineJumpLastReadPolicy.shouldShow(
+            pendingMarkerEventID: pendingLastReadEventID
+        )
+        if showLastRead || showLatest {
+            VStack(alignment: .trailing, spacing: SynaraSpacing.small) {
+                if showLastRead, let marker = pendingLastReadEventID {
+                    JumpToLastReadButton { jumpToLastRead(eventID: marker) }
+                        .transition(.scale.combined(with: .opacity))
                 }
-                .padding(.trailing, SynaraSpacing.large)
-                .padding(.bottom, SynaraSpacing.medium)
-                .transition(.scale.combined(with: .opacity))
+                if showLatest {
+                    JumpToLatestButton(isLoading: isJumpingToLatest, action: onJumpToLatest)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
+            .padding(.trailing, SynaraSpacing.large)
+            .padding(.bottom, SynaraSpacing.medium)
         }
     }
 
@@ -1712,9 +1764,11 @@ struct RoomTimelineView: View {
             let hasUnreadMessages = environment.roomList.hasUnreadMessages(roomID: roomID)
             let fullyReadEventID = await environment.readMarkers.fullyReadEventID(roomID: roomID)
             let initialItems = timelineItems(from: liveFeed.initialOutcome)
-            pendingLastReadEventID = fullyReadEventID.flatMap { marker in
-                initialItems.contains(where: { $0.serverEventID == marker }) ? nil : marker
-            }
+            pendingLastReadEventID = RoomTimelineJumpLastReadPolicy.pendingMarker(
+                fullyReadEventID: fullyReadEventID,
+                initialEventIDs: initialItems.compactMap(\.serverEventID),
+                hasUnreadMessages: hasUnreadMessages
+            )
             let initialMode = RoomTimelineFocusPolicy.initialMode(
                 focusedEventID: nil,
                 hasUnreadMessages: hasUnreadMessages,
@@ -2708,10 +2762,6 @@ struct RoomTimelineView: View {
     @ViewBuilder
     private var timelineNavigationRecovery: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-            if let marker = pendingLastReadEventID {
-                Button("Jump to Last Read") { jumpToLastRead(eventID: marker) }
-                    .accessibilityIdentifier("JumpToLastRead")
-            }
             if loadedTimelineItems.count <= 1, hasReachedOldestMessages == false,
                let oldest = loadedTimelineItems.first?.eventID {
                 Button("Load older messages") {
@@ -3269,6 +3319,36 @@ private struct JumpToLatestButton: View {
         .accessibilityLabel("Jump to latest")
         .accessibilityValue(isLoading ? "Loading latest messages" : "")
         .accessibilityIdentifier("JumpToLatestButton")
+    }
+}
+
+private struct JumpToLastReadButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: SynaraSpacing.xSmall) {
+                Image(systemName: "arrow.up.to.line")
+                    .font(.system(size: 13, weight: .bold))
+                Text("Jump to Last Read")
+                    .font(SynaraTypography.fineMetaBold)
+            }
+            .padding(.horizontal, SynaraSpacing.medium)
+            .frame(height: 36)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                Capsule()
+                    .stroke(SynaraColor.separator.opacity(0.8), lineWidth: 1)
+            )
+            .foregroundStyle(SynaraColor.accent)
+            .shadow(color: .black.opacity(0.12), radius: 10, x: 0, y: 4)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Jump to last read message")
+        .accessibilityIdentifier("JumpToLastRead")
     }
 }
 
