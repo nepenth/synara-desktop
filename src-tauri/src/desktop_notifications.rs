@@ -7,6 +7,17 @@ use crate::desktop::navigate_main_window;
 use crate::desktop_sanitize::sanitize_route;
 use crate::desktop_sanitize::{sanitize_action_text, sanitize_notification_route};
 
+#[cfg(target_os = "macos")]
+#[path = "desktop_notifications_macos.rs"]
+mod macos_modern;
+
+#[cfg(target_os = "macos")]
+pub fn initialize_macos_notifications<R: Runtime>(app: &AppHandle<R>) {
+    if macos_delivery::is_bundled() {
+        macos_modern::initialize(app);
+    }
+}
+
 const DESKTOP_NOTIFICATION_MAX_TITLE_CHARS: usize = 120;
 const DESKTOP_NOTIFICATION_MAX_BODY_CHARS: usize = 500;
 const DESKTOP_NOTIFICATION_MAX_ACTIONS: usize = 4;
@@ -263,21 +274,11 @@ fn configure_macos_notification_application() {
     });
 }
 
-/// Delivery receipt for the macOS route/action path.
-///
-/// `mac_notification_sys::Notification::send()` with `wait_for_click(true)`
-/// blocks until the user clicks or the banner is dismissed, and reports a
-/// refused delivery as an ordinary auto-dismiss, so it cannot be awaited for
-/// a receipt without also waiting for the user. After checking the app's
-/// authorization, a new `deliveredNotifications` record confirms Notification
-/// Center accepted the post (not that a banner was visible under Focus).
-/// Legacy records alone are insufficient: macOS can record a post even while
-/// authorization is denied. The identifier set is snapshotted before the send, and the
-/// caller is credited once a new identifier carrying this notification's
-/// title and body appears, or debited after a bounded wait. Identifiers are
-/// claimed once so two in-flight notifications with identical text cannot
-/// both be credited by a single delivery. The click wait stays in the
-/// background exactly as before.
+/// Shared permission lookup and legacy receipts for unbundled development.
+/// Bundled applications use UserNotifications exclusively (macos_modern).
+/// The unbundled legacy path credits a new delivered record within a bounded
+/// wait, independently of its background click wait. Identifiers are claimed
+/// once so identical concurrent notifications cannot share one receipt.
 #[cfg(target_os = "macos")]
 mod macos_delivery {
     use std::collections::{HashSet, VecDeque};
@@ -290,11 +291,17 @@ mod macos_delivery {
     const POLL_INTERVAL: Duration = Duration::from_millis(50);
     const CLAIMED_IDENTIFIERS_MAX: usize = 256;
 
-    /// Read permission on every send: users can disable the app while it is
-    /// running. Legacy deliveredNotifications can still record a denied post.
-    pub async fn permission_denied() -> Result<bool, String> {
+    /// Detect a real app bundle without relying on a hooked bundle identifier.
+    pub fn is_bundled() -> bool {
+        objc2_foundation::NSBundle::mainBundle()
+            .bundlePath()
+            .to_string()
+            .ends_with(".app")
+    }
+
+    pub async fn authorization_status(
+    ) -> Result<objc2_user_notifications::UNAuthorizationStatus, String> {
         use block2::RcBlock;
-        use objc2_foundation::NSBundle;
         use objc2_user_notifications::{
             UNAuthorizationStatus, UNNotificationSettings, UNUserNotificationCenter,
         };
@@ -303,12 +310,8 @@ mod macos_delivery {
         // Bare development executables use the legacy Terminal identity.
         // The legacy crate can hook bundleIdentifier; bundlePath remains the
         // actual bundle path even if another caller initialized it first.
-        if !NSBundle::mainBundle()
-            .bundlePath()
-            .to_string()
-            .ends_with(".app")
-        {
-            return Ok(false);
+        if !is_bundled() {
+            return Ok(UNAuthorizationStatus::Authorized);
         }
         let (tx, rx) = tokio::sync::oneshot::channel();
         {
@@ -319,7 +322,7 @@ mod macos_delivery {
                     // for the duration of this callback; no reference escapes.
                     let status = unsafe { settings.as_ref() }.authorizationStatus();
                     if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
-                        let _ = tx.send(status == UNAuthorizationStatus::Denied);
+                        let _ = tx.send(status);
                     }
                 });
             UNUserNotificationCenter::currentNotificationCenter()
@@ -390,11 +393,20 @@ mod macos_delivery {
 
     #[allow(deprecated)]
     fn delivered_records() -> Vec<DeliveredRecord> {
-        use objc2_foundation::NSUserNotificationCenter;
+        use objc2::{msg_send, rc::Retained};
+        use objc2_foundation::{NSArray, NSUserNotification, NSUserNotificationCenter};
 
         let center = NSUserNotificationCenter::defaultUserNotificationCenter();
-        center
-            .deliveredNotifications()
+        // macOS can return nil before this center has delivered anything,
+        // despite the non-null annotation in Foundation's generated binding.
+        // Preserve that actual ABI contract instead of panicking and leaving
+        // the caller's delivery receipt unresolved.
+        let notifications: Option<Retained<NSArray<NSUserNotification>>> =
+            unsafe { msg_send![&*center, deliveredNotifications] };
+        let Some(notifications) = notifications else {
+            return Vec::new();
+        };
+        notifications
             .iter()
             .filter_map(|notification| {
                 Some(DeliveredRecord {
@@ -565,10 +577,11 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
 ) -> Result<bool, String> {
     use mac_notification_sys::{MainButton, Notification, NotificationResponse, Sound};
 
-    // Check before the legacy crate installs its bundle-identity hook.
-    if macos_delivery::permission_denied().await? {
-        return Ok(false);
+    if macos_delivery::is_bundled() {
+        return macos_modern::show(app, title, body, route, actions, action_context).await;
     }
+    // Bare development executables retain their legacy Terminal identity.
+    // Never mix that center with UserNotifications in a bundled application.
     configure_macos_notification_application();
 
     let title = title.to_owned();
@@ -707,9 +720,13 @@ async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
 }
 
 #[tauri::command]
-pub fn desktop_get_notification_permission<R: Runtime>(
+pub async fn desktop_get_notification_permission<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    if macos_delivery::is_bundled() {
+        return macos_modern::permission().await;
+    }
     app.notification()
         .permission_state()
         .map(|permission| permission.to_string())
@@ -717,9 +734,13 @@ pub fn desktop_get_notification_permission<R: Runtime>(
 }
 
 #[tauri::command]
-pub fn desktop_request_notification_permission<R: Runtime>(
+pub async fn desktop_request_notification_permission<R: Runtime>(
     app: AppHandle<R>,
 ) -> Result<String, String> {
+    #[cfg(target_os = "macos")]
+    if macos_delivery::is_bundled() {
+        return macos_modern::request_permission().await;
+    }
     app.notification()
         .request_permission()
         .map(|permission| permission.to_string())
@@ -729,12 +750,13 @@ pub fn desktop_request_notification_permission<R: Runtime>(
 /// Post one desktop notification and return the OS receipt.
 ///
 /// `Ok(true)` means the OS notification server accepted the notification;
-/// `Ok(false)` means it did not record one within the platform's bound;
+/// `Ok(false)` means permission or submission was refused, or no legacy
+/// record appeared within the platform's bound;
 /// `Err` is a post failure. The renderer forwards this verdict unchanged as
 /// the `delivered` / `failed` acknowledgement Core's delivery ledger counts,
 /// so the command resolves only once the answer is real: on macOS the
 /// route/action path awaits Notification Center's acceptance rather than the
-/// spawn of the send task, while the click wait continues in the background.
+/// spawn of the send task. Later clicks never gate the delivery receipt.
 #[tauri::command]
 pub async fn desktop_notify<R: Runtime>(
     app: AppHandle<R>,
