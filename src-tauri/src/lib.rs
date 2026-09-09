@@ -282,7 +282,19 @@ const PREFERRED_LOCALHOST_PORT: u16 = 44548;
 const LOCALHOST_PORT_FALLBACK_COUNT: u16 = 10;
 
 fn is_localhost_port_available(port: u16) -> bool {
-    std::net::TcpListener::bind(("127.0.0.1", port)).is_ok()
+    // The asset server and WebView resolve `localhost` independently. Reserve
+    // both loopback families while probing so an IPv6-only listener cannot
+    // make the WebView load another process's assets on an IPv4-free port.
+    let Ok(_ipv4) = std::net::TcpListener::bind(("127.0.0.1", port)) else {
+        return false;
+    };
+    match std::net::TcpListener::bind(("::1", port)) {
+        Ok(_ipv6) => true,
+        Err(error) => matches!(
+            error.kind(),
+            std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
+        ),
+    }
 }
 
 fn select_localhost_port_with(mut is_available: impl FnMut(u16) -> bool) -> Result<u16, String> {
@@ -687,6 +699,9 @@ pub fn run() {
             window.unminimize()?;
             window.set_focus()?;
 
+            #[cfg(target_os = "macos")]
+            desktop_notifications::initialize_macos_notifications(app.handle());
+
             // One desktop platform allocation is shared by the shell state and
             // the managed Core. P3.1 auth probes therefore retain this
             // platform's established HTTP user-agent injection without giving
@@ -713,8 +728,26 @@ pub fn run() {
 #[cfg(test)]
 mod localhost_port_tests {
     use super::{
-        select_localhost_port_with, timeline_media_content_type, PREFERRED_LOCALHOST_PORT,
+        is_localhost_port_available, select_localhost_port_with, timeline_media_content_type,
+        PREFERRED_LOCALHOST_PORT,
     };
+
+    #[test]
+    fn localhost_port_rejects_an_ipv6_only_listener() {
+        let listener = std::net::TcpListener::bind(("::1", 0))
+            .expect("test host should support IPv6 loopback");
+        let port = listener.local_addr().unwrap().port();
+        drop(std::net::TcpListener::bind(("127.0.0.1", port)).unwrap());
+        assert!(!is_localhost_port_available(port));
+    }
+
+    #[test]
+    fn localhost_port_rejects_an_ipv4_listener() {
+        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        assert!(!is_localhost_port_available(
+            listener.local_addr().unwrap().port()
+        ));
+    }
 
     #[test]
     fn select_localhost_port_returns_first_available_port() {

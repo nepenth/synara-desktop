@@ -1,16 +1,6 @@
 import { useAtomValue } from 'jotai';
 import React, { ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { MatrixEventReading } from '../../utils/room';
-import type { EventedRoomReading } from '../../utils/roomEvents';
-
-type NonUIRoomReading = EventedRoomReading & {
-  findEventById(eventId: string): MatrixEventReading | undefined;
-  isDirect?: boolean;
-  isEncrypted?: boolean;
-  notificationMode?: 'all' | 'mentions' | 'mute' | 'default';
-};
-type LocalMx = ReturnType<typeof useMatrixClient>;
 import { roomToUnreadAtom } from '../../state/room/roomToUnread';
 import LogoPNG from '../../../../public/res/png/synara.png';
 import LogoUnreadPNG from '../../../../public/res/png/synara-unread.png';
@@ -24,7 +14,7 @@ import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/in
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { getInboxInvitesPath } from '../pathUtils';
-import { getMemberDisplayName, getThreadRootEventId, isNotificationEvent } from '../../utils/room';
+import { getMemberDisplayName, getThreadRootEventId } from '../../utils/room';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { useSelectedRoom } from '../../hooks/router/useSelectedRoom';
 import { useInboxNotificationsSelected } from '../../hooks/router/useInbox';
@@ -58,39 +48,23 @@ import {
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
 import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
 import { notifiedEventIdsCache } from '../../notifications/notificationCaches';
-import { getLoadedLiveTimelineEvents } from '../../utils/timelineLifecycle';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
 import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeReactionOwner';
 import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
-  eventIsHighlightObservation,
-  resolveObservedNotificationRoomMode,
-  roomOverrideMapFromSnapshots,
   setNotificationFocusWithNativeOwner,
+  type NativeNotificationDeliveryOutcome,
 } from '../../features/room/nativeNotificationDecision';
-import {
-  nativeRoomNotificationsSnapshot,
-  subscribeNativeRoomNotifications,
-} from '../../features/settings/notifications/nativeRoomNotification';
-import {
-  nativePushRulesSnapshot,
-  subscribeNativePushRules,
-  type NativePushRulesSnapshot,
-} from '../../features/settings/notifications/nativePushRules';
-import {
-  getOwnProfileNative,
-  OWN_PROFILE_CHANGED_EVENT,
-} from '../../features/settings/account/nativeProfile';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
+import {
+  subscribeNativeNotificationObservations,
+  type NativeNotificationObservation,
+} from '../../features/room/nativeNotificationObservation';
 
 const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
-// Only freshly observed timeline events are submitted to the Core decision
-// stream. Older loaded history never notifies; Core dedup is the authority,
-// this bound only keeps startup scans cheap.
-const RECENT_MESSAGE_NOTIFICATION_MS = 5 * 60 * 1000;
 // Local submit-memory bound. Core `(room, event)` dedup is authoritative;
-// this set only avoids resubmitting the same event on every sync tick.
+// this set only guards against a duplicated observation of the same event.
 const NOTIFICATION_SUBMITTED_CACHE_MAX = 500;
 
 const getDurableApprovalStorage = (): Storage | null => {
@@ -271,7 +245,7 @@ function MessageNotifications() {
   const notifRef = useRef<Notification | undefined>(undefined);
   // Submitted `(roomId, eventId)` pairs Core durably recorded (shown,
   // duplicate, or own events). Core dedup is authoritative; this bounded set
-  // only keeps sync scans from resubmitting recorded events on every tick.
+  // only guards against a duplicated observation of the same event.
   // Transient suppressions are deliberately not remembered.
   const submittedRef = useRef<Set<string>>(new Set());
 
@@ -300,59 +274,6 @@ function MessageNotifications() {
     };
   }, [selectedRoomId]);
 
-  const snapshotRef = useRef<{
-    roomModes: Map<string, 'all' | 'mentions' | 'mute'>;
-    pushRules: NativePushRulesSnapshot | null;
-    ownDisplayName: string | null;
-  }>({
-    roomModes: new Map(),
-    pushRules: null,
-    ownDisplayName: null,
-  });
-
-  const loadNotificationSnapshots = useCallback(async () => {
-    try {
-      const [rooms, rules, profile] = await Promise.all([
-        nativeRoomNotificationsSnapshot(),
-        nativePushRulesSnapshot(),
-        getOwnProfileNative().catch(() => 'legacy' as const),
-      ]);
-      snapshotRef.current = {
-        roomModes: roomOverrideMapFromSnapshots(rooms),
-        pushRules: rules,
-        ownDisplayName:
-          profile !== 'legacy' && typeof profile.displayName === 'string' && profile.displayName
-            ? profile.displayName
-            : snapshotRef.current.ownDisplayName,
-      };
-    } catch {
-      // Keep the last good cache. decideAndNotify fail-closes without defaults.
-    }
-  }, []);
-
-  useEffect(() => {
-    void loadNotificationSnapshots();
-    const unsubRooms = subscribeNativeRoomNotifications(() => {
-      void loadNotificationSnapshots();
-    });
-    const unsubRules = subscribeNativePushRules(() => {
-      void loadNotificationSnapshots();
-    });
-    const onProfile = () => {
-      void loadNotificationSnapshots();
-    };
-    window.addEventListener(OWN_PROFILE_CHANGED_EVENT, onProfile);
-    const interval = window.setInterval(() => {
-      void loadNotificationSnapshots();
-    }, 30_000);
-    return () => {
-      unsubRooms();
-      unsubRules();
-      window.removeEventListener(OWN_PROFILE_CHANGED_EVENT, onProfile);
-      window.clearInterval(interval);
-    };
-  }, [loadNotificationSnapshots]);
-
   const rememberSubmitted = useCallback((roomId: string, eventId: string) => {
     const submitted = submittedRef.current;
     submitted.add(`${roomId}:${eventId}`);
@@ -363,7 +284,7 @@ function MessageNotifications() {
   }, []);
 
   const notify = useCallback(
-    ({
+    async ({
       title,
       body,
       roomAvatar,
@@ -377,31 +298,43 @@ function MessageNotifications() {
       roomId: string;
       eventId: string;
       route?: string;
-    }) => {
+    }): Promise<NativeNotificationDeliveryOutcome> => {
+      // The OS answer is the delivery receipt Core records with the
+      // acknowledgement. Errors are reported as `failed`, never swallowed
+      // into a silent success.
       if (supportsPlatformSystemNotifications()) {
-        showPlatformNotification({
-          title,
-          body,
-          route: route ?? buildDesktopNotificationRoomRoute(roomId, eventId),
-        }).catch(() => undefined);
-        return;
+        try {
+          const shown = await showPlatformNotification({
+            title,
+            body,
+            route: route ?? buildDesktopNotificationRoomRoute(roomId, eventId),
+          });
+          return shown ? 'delivered' : 'failed';
+        } catch {
+          return 'failed';
+        }
       }
 
-      const noti = new window.Notification(title, {
-        icon: roomAvatar,
-        badge: roomAvatar,
-        body,
-        silent: true,
-      });
+      try {
+        const noti = new window.Notification(title, {
+          icon: roomAvatar,
+          badge: roomAvatar,
+          body,
+          silent: true,
+        });
 
-      noti.onclick = () => {
-        if (!window.closed) navigateRoom(roomId, eventId);
-        noti.close();
-        notifRef.current = undefined;
-      };
+        noti.onclick = () => {
+          if (!window.closed) navigateRoom(roomId, eventId);
+          noti.close();
+          notifRef.current = undefined;
+        };
 
-      notifRef.current?.close();
-      notifRef.current = noti;
+        notifRef.current?.close();
+        notifRef.current = noti;
+        return 'delivered';
+      } catch {
+        return 'failed';
+      }
     },
     [navigateRoom]
   );
@@ -412,37 +345,27 @@ function MessageNotifications() {
   }, []);
 
   const decideAndNotify = useCallback(
-    async (mEvent: MatrixEventReading, room: NonUIRoomReading) => {
-      const sender = mEvent.getSender();
-      const eventId = mEvent.getId();
-      if (!sender || !eventId) return;
+    async (observation: NativeNotificationObservation) => {
+      const { roomId, eventId, sender } = observation;
       // Agent approvals travel the Core approval-decision path, never the
       // generic message route.
-      if (detectAgentApprovalPrompt(mEvent.getContent<Record<string, unknown>>())) return;
+      if (observation.body !== undefined && detectAgentApprovalPrompt({ body: observation.body })) {
+        return;
+      }
+      const room = mx.getRoom(roomId);
+      if (!room || room.isSpaceRoom()) return;
 
-      const cacheKey = `${room.roomId}:${eventId}`;
+      const cacheKey = `${roomId}:${eventId}`;
       if (submittedRef.current.has(cacheKey)) return;
 
-      const userId = mx.getUserId();
-      const openEventId = getThreadRootEventId(room.findEventById(eventId)) ?? eventId;
-      if (!snapshotRef.current.pushRules) {
-        await loadNotificationSnapshots();
-      }
-      const { roomModes, pushRules, ownDisplayName } = snapshotRef.current;
-      const ciphertext = mEvent.getType() === 'm.room.encrypted';
-      const content = mEvent.getContent<Record<string, unknown>>();
-      const plaintextBody = !ciphertext && typeof content.body === 'string' ? content.body : null;
-      const roomMode = resolveObservedNotificationRoomMode({
-        userDefined: roomModes.get(room.roomId),
-        listMode: room.notificationMode,
-        isEncrypted: room.isEncrypted === true || ciphertext,
-        isDirect: room.isDirect === true,
-        defaults: pushRules,
-      });
       let readback;
       try {
+        // Identity and presentation only. Core loads this exact event from
+        // the SDK, compares its sender with the session, and reads the
+        // SDK-evaluated push actions (room mode, mentions, keywords, mute,
+        // suppressed edits). No mode, highlight, or body leaves the renderer.
         readback = await decideNotificationWithNativeOwner({
-          roomId: room.roomId,
+          roomId,
           eventId,
           kind: 'message',
           // Privacy-filtered product strings only: room name and a fixed
@@ -451,69 +374,65 @@ function MessageNotifications() {
           body: `New inbox notification from ${
             getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender
           }`,
-          route: buildDesktopNotificationRoomRoute(room.roomId, openEventId),
+          route: buildDesktopNotificationRoomRoute(roomId, eventId),
           suppressIfFocusedRoom: true,
-          isEncrypted: ciphertext,
-          roomMode,
-          highlight: eventIsHighlightObservation({
-            content,
-            userId,
-            isEncrypted: ciphertext,
-            body: plaintextBody,
-            keywords: pushRules?.keywords,
-            displayName:
-              (userId ? getMemberDisplayName(room, userId) : undefined) ?? ownDisplayName,
-            localpart: userId ? getMxIdLocalPart(userId) : null,
-            flags: pushRules?.mentions,
-          }),
-          isOwnEvent: userId != null && sender === userId,
         });
       } catch {
-        // Core unavailable (no session): fail silent without remembering, so
-        // the next sync scan retries through the same Core owner. There is no
-        // TS policy fallback.
+        // Core unavailable (no session, event not yet loaded, push context
+        // still settling): fail silent without remembering. Core observed
+        // this event once; there is no renderer retry and no TS policy
+        // fallback.
         return;
       }
+      if (mx.getSyncStateData()?.sessionGeneration !== observation.sessionGeneration) return;
       // Remember only outcomes Core durably recorded: shown candidates and
-      // already-seen or own events. Transient suppressions (focus, mute,
-      // mentions-only) stay resubmittable so a cleared focus or changed mode
-      // can still notify while the event is recent; Core re-decides each time.
+      // already-seen or own events. Core observes each event once, so this
+      // set is a guard against a duplicated observation, not a resubmit
+      // schedule; Core's own dedup remains the authority.
       if (
         readback.decision === 'show' ||
         readback.reason === 'duplicate-event' ||
         readback.reason === 'own-event'
       ) {
-        rememberSubmitted(room.roomId, eventId);
+        rememberSubmitted(roomId, eventId);
       }
       if (readback.decision !== 'show' || !readback.candidate) return;
       const shownCandidateId = readback.candidate.candidateId;
 
+      // Delivery receipt: undefined when nothing was attempted, otherwise the
+      // OS answer. The candidate stays pending in Core until the OS has
+      // answered, so the acknowledgement carries a real outcome.
+      let outcome: NativeNotificationDeliveryOutcome | undefined;
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
       ) {
         const avatarMxc =
           room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
-        notify({
+        outcome = await notify({
           title: readback.candidate.title,
           body: readback.candidate.body,
           roomAvatar: avatarMxc
             ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
             : undefined,
-          roomId: room.roomId,
-          eventId: openEventId,
+          roomId,
+          eventId,
           route: readback.candidate.route,
         });
       }
 
-      // Sound follows the Core decision: suppressed events stay silent.
-      if (notificationSound) {
+      // Sound follows the SDK push tweak Core echoed (one-to-one rooms,
+      // mentions, keywords, and any account rule that sets a sound), gated by
+      // the local preference. A notification the OS refused stays silent so
+      // sound never claims a delivery that did not happen.
+      if (notificationSound && readback.sound === true && outcome !== 'failed') {
         playSound();
       }
 
-      // Ack delivery to release the pending candidate. Core retains bounded
-      // recent-event dedup independently of the pending queue.
-      void dismissNotificationWithNativeOwner(shownCandidateId).catch(() => undefined);
+      // Ack with the receipt to release the pending candidate. Core retains
+      // bounded recent-event dedup independently of the pending queue and
+      // does not retry a failed delivery.
+      void dismissNotificationWithNativeOwner(shownCandidateId, outcome).catch(() => undefined);
     },
     [
       mx,
@@ -523,73 +442,24 @@ function MessageNotifications() {
       notify,
       rememberSubmitted,
       useAuthentication,
-      loadNotificationSnapshots,
     ]
   );
 
+  // Observation pump: Core pushes one observation per live message-like
+  // event the SDK sync delivered (`matrix-notification-observed`). The
+  // renderer no longer scans timelines, listens for `Room.timeline`, or gates
+  // on a sync state; every observation still goes through Core decide.
   useEffect(() => {
-    const handleTimelineEvent = (
-      mEvent: MatrixEventReading,
-      room: NonUIRoomReading | undefined,
-      toStartOfTimeline: boolean,
-      removed: boolean,
-      data: { liveEvent?: boolean; [key: string]: unknown }
-    ) => {
-      if (mx.getSyncState() !== 'SYNCING') return;
-      // The notification inbox triage view suppresses message toasts while
-      // the user is working through notifications.
-      if (notificationSelected) return;
-      if (!room || !data.liveEvent || room.isSpaceRoom() || !isNotificationEvent(mEvent)) {
-        return;
+    const dispose = subscribeNativeNotificationObservations(
+      () => mx.getSyncStateData()?.sessionGeneration,
+      (observation) => {
+        // The notification inbox triage view suppresses message toasts while
+        // the user is working through notifications.
+        if (notificationSelected) return;
+        void decideAndNotify(observation);
       }
-      void decideAndNotify(mEvent, room);
-    };
-    mx.on(
-      'Room.timeline' as unknown as Parameters<LocalMx['on']>[0],
-      handleTimelineEvent as unknown as Parameters<LocalMx['on']>[1]
     );
-    return () => {
-      mx.removeListener(
-        'Room.timeline' as unknown as Parameters<LocalMx['removeListener']>[0],
-        handleTimelineEvent as unknown as Parameters<LocalMx['removeListener']>[1]
-      );
-    };
-  }, [mx, notificationSelected, decideAndNotify]);
-
-  // The native facade emits `sync`, not `Room.timeline`, so live decisions
-  // also flow from sync-driven scans of freshly loaded events. This is an
-  // observation pump, not policy: every event still goes through Core decide.
-  useEffect(() => {
-    const scanRecentMessageEvents = () => {
-      if (mx.getSyncState() !== 'SYNCING') return;
-      if (notificationSelected) return;
-      const now = Date.now();
-      mx.getRooms().forEach((room) => {
-        const candidate = room as unknown as NonUIRoomReading;
-        if (candidate.isSpaceRoom()) return;
-        const events = getLoadedLiveTimelineEvents(candidate);
-        let submitted = 0;
-        for (let index = events.length - 1; index >= 0 && submitted < 20; index -= 1) {
-          const event = events[index] as unknown as MatrixEventReading | undefined;
-          if (!event) continue;
-          if (now - event.getTs() > RECENT_MESSAGE_NOTIFICATION_MS) break;
-          if (!isNotificationEvent(event)) continue;
-          submitted += 1;
-          void decideAndNotify(event, candidate);
-        }
-      });
-    };
-
-    scanRecentMessageEvents();
-    const interval = window.setInterval(scanRecentMessageEvents, 30_000);
-    mx.on('sync' as unknown as Parameters<LocalMx['on']>[0], scanRecentMessageEvents);
-    return () => {
-      window.clearInterval(interval);
-      mx.removeListener(
-        'sync' as unknown as Parameters<LocalMx['removeListener']>[0],
-        scanRecentMessageEvents
-      );
-    };
+    return dispose;
   }, [mx, notificationSelected, decideAndNotify]);
 
   return (
@@ -615,30 +485,28 @@ function AgentApprovalNotifications() {
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
   const notify = useCallback(
-    ({
+    async ({
       roomId,
       eventId,
       approvalEventId,
-      roomName,
       title,
       body,
     }: {
       roomId: string;
       eventId: string;
       approvalEventId: string;
-      roomName: string;
       title: string;
       body: string;
       commandPreview?: string;
-    }) => {
+    }): Promise<NativeNotificationDeliveryOutcome> => {
       // Keep dangerous command text out of OS-level notification surfaces.
       // The exact prompt remains available through the Review route.
       const notificationBody = body;
 
       if (supportsPlatformSystemNotifications()) {
-        showPlatformNotification({
+        const shown = await showPlatformNotification({
           title,
-          body: `${roomName}: ${notificationBody}`,
+          body: notificationBody,
           route: buildDesktopNotificationRoomRoute(roomId, eventId),
           // Approve-always is not offered on native OS notifications.
           actions: AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
@@ -647,14 +515,14 @@ function AgentApprovalNotifications() {
             roomId,
             eventId: approvalEventId,
           },
-        }).catch(() => undefined);
-        return;
+        });
+        return shown ? 'delivered' : 'failed';
       }
 
       const noti = new window.Notification(title, {
         icon: LogoHighlightPNG,
         badge: LogoHighlightPNG,
-        body: `${roomName}: ${notificationBody}`,
+        body: notificationBody,
         silent: true,
       });
 
@@ -662,6 +530,7 @@ function AgentApprovalNotifications() {
         if (!window.closed) navigateRoom(roomId, eventId);
         noti.close();
       };
+      return 'delivered';
     },
     [navigateRoom]
   );
@@ -763,89 +632,70 @@ function AgentApprovalNotifications() {
   }, []);
 
   const notifyApprovalEvent = useCallback(
-    (mEvent: MatrixEventReading, room: NonUIRoomReading) => {
-      if (room.isSpaceRoom()) return;
-      if (mEvent.getSender() === mx.getUserId()) return;
-      if (Date.now() - mEvent.getTs() > RECENT_AGENT_APPROVAL_MS) return;
+    async (observation: NativeNotificationObservation) => {
+      const { eventId, sender, originServerTs, body } = observation;
+      if (body === undefined) return;
+      const room = mx.getRoom(observation.roomId);
+      if (!room || room.isSpaceRoom()) return;
+      if (sender === mx.getUserId()) return;
+      if (Date.now() - originServerTs > RECENT_AGENT_APPROVAL_MS) return;
 
-      const eventId = mEvent.getId();
-      if (!eventId || notifiedEventIdsCache.has(eventId)) return;
+      if (notifiedEventIdsCache.has(eventId)) return;
 
-      const prompt = detectAgentApprovalPrompt(mEvent.getContent<Record<string, unknown>>());
+      const prompt = detectAgentApprovalPrompt({ body });
       if (!prompt) return;
 
+      let readback;
+      try {
+        readback = await decideNotificationWithNativeOwner({
+          roomId: room.roomId,
+          eventId,
+          kind: 'agent_approval',
+          title: prompt.title,
+          body: `${room.name ?? 'Unknown'}: ${prompt.body}`,
+          route: buildDesktopNotificationRoomRoute(room.roomId, eventId),
+          suppressIfFocusedRoom: false,
+        });
+      } catch {
+        return;
+      }
+      if (mx.getSyncStateData()?.sessionGeneration !== observation.sessionGeneration) return;
+      if (readback.decision !== 'show' || !readback.candidate) return;
       notifiedEventIdsCache.add(eventId);
+      let outcome: NativeNotificationDeliveryOutcome | undefined;
       if (
         showNotifications &&
         (supportsPlatformSystemNotifications() || notificationPermission('granted'))
       ) {
-        notify({
-          roomId: room.roomId,
-          // Review/default-click must focus the exact approval prompt. The
-          // room router can still expose its thread context after anchoring.
-          eventId,
-          approvalEventId: eventId,
-          roomName: room.name ?? 'Unknown',
-          title: prompt.title,
-          body: prompt.body,
-          commandPreview: prompt.commandPreview,
-        });
+        try {
+          outcome = await notify({
+            roomId: room.roomId,
+            eventId,
+            approvalEventId: eventId,
+            title: readback.candidate.title,
+            body: readback.candidate.body,
+          });
+        } catch {
+          outcome = 'failed';
+        }
       }
-
-      if (showNotifications) {
-        playSound();
-      }
+      // Native approval delivery already owns its time-sensitive sound.
+      if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
+      void dismissNotificationWithNativeOwner(readback.candidate.candidateId, outcome).catch(
+        () => undefined
+      );
     },
     [mx, notify, playSound, showNotifications]
   );
 
+  // Approval prompts ride the same Core observation stream as messages; the
+  // renderer detects the prompt in the observed body instead of scanning.
   useEffect(() => {
-    const handleTimelineEvent = (
-      mEvent: MatrixEventReading,
-      room: NonUIRoomReading,
-      toStartOfTimeline: boolean,
-      removed: boolean
-    ) => {
-      if (!room || toStartOfTimeline || removed) return;
-      notifyApprovalEvent(mEvent, room);
-    };
-
-    mx.on(
-      'Room.timeline' as unknown as Parameters<LocalMx['on']>[0],
-      handleTimelineEvent as unknown as Parameters<LocalMx['on']>[1]
+    const dispose = subscribeNativeNotificationObservations(
+      () => mx.getSyncStateData()?.sessionGeneration,
+      notifyApprovalEvent
     );
-    return () => {
-      mx.removeListener(
-        'Room.timeline' as unknown as Parameters<LocalMx['removeListener']>[0],
-        handleTimelineEvent as unknown as Parameters<LocalMx['removeListener']>[1]
-      );
-    };
-  }, [mx, notifyApprovalEvent]);
-
-  useEffect(() => {
-    const scanRecentApprovalEvents = () => {
-      mx.getRooms().forEach((room) => {
-        if (room.isSpaceRoom()) return;
-        const events = getLoadedLiveTimelineEvents(room);
-        for (let index = events.length - 1; index >= 0; index -= 1) {
-          const event = events[index];
-          if (!event) continue;
-          if (Date.now() - event.getTs() > RECENT_AGENT_APPROVAL_MS) break;
-          notifyApprovalEvent(event as MatrixEventReading, room);
-        }
-      });
-    };
-
-    scanRecentApprovalEvents();
-    const interval = window.setInterval(scanRecentApprovalEvents, 30_000);
-    mx.on('sync' as unknown as Parameters<LocalMx['on']>[0], scanRecentApprovalEvents);
-    return () => {
-      window.clearInterval(interval);
-      mx.removeListener(
-        'sync' as unknown as Parameters<LocalMx['removeListener']>[0],
-        scanRecentApprovalEvents
-      );
-    };
+    return dispose;
   }, [mx, notifyApprovalEvent]);
 
   return (

@@ -88,6 +88,11 @@ webkit2gtk = { version = "2.0.2", features = ["v2_16"] }
 mac-notification-sys = "0.6.12"
 objc2 = "0.6"
 objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSResponder", "NSWindow"] }
+# Delivery receipt for the legacy NSUserNotificationCenter path that
+# `mac-notification-sys` posts through (see `desktop_notifications.rs`).
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSBundle", "NSDictionary", "NSError", "NSEnumerator", "NSObject", "NSSet", "NSString", "NSUserNotification"] }
+objc2-user-notifications = { version = "0.3", default-features = false, features = ["std", "UNUserNotificationCenter", "UNNotificationSettings", "UNNotification", "UNNotificationAction", "UNNotificationCategory", "UNNotificationContent", "UNNotificationRequest", "UNNotificationResponse", "UNNotificationSound", "UNNotificationTrigger", "block2"] }
+block2 = "0.6"
 security-framework = "3.7"
 
 [lib]

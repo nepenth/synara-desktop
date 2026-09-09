@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+- Decide desktop message notifications from the SDK-evaluated push actions of
+  the exact observed event inside Core. Room mode, account defaults, mentions,
+  keywords, room-mention power levels, the suppress-edits override, and rule
+  ordering now have one owner; the renderer submits only room and event
+  identity with privacy-filtered strings and can no longer supply a mode,
+  highlight, sender, or encryption verdict.
+- Report the desktop OS delivery result back to Core. The renderer waits for
+  the notification call and acknowledges with `delivered` or `failed` instead
+  of swallowing errors; Core counts receipts per session and releases a failed
+  candidate without retrying it. The notification sound now follows the
+  account's push rules (one-to-one rooms, mentions, keywords, and rules with a
+  sound tweak) and stays silent when the OS refuses the notification. The
+  desktop `matrix_notification_pending_snapshot` command now returns the
+  delivery ledger alongside the pending candidates instead of dropping it at
+  the shell boundary.
+- Push desktop notification observations from Core to the renderer. Core now
+  emits one `matrix-notification-observed` event per live message-like event
+  the SDK sync delivers (other senders only, no edits, no replayed history),
+  and the message and agent-approval notifiers subscribe to it. The renderer's
+  timeline scans, `Room.timeline` listener, and `SYNCING` gate are removed;
+  on the native client they never fired, so no live message reached Core's
+  decision owner before this change.
+- Make the macOS notification receipt real. `desktop_notify` now resolves
+  when Notification Center records the notification (or reports that it did
+  not within a bounded wait) instead of when the send task is spawned, so a
+  refused delivery is acknowledged to Core as `failed`. The click/action wait
+  keeps running in the background.
+- Add an iOS compile gate to CI for Swift/FFI changes on feature pull requests
+  that skip the simulator lane; labels and release branches keep the full lane.
+
 ## [2.1.29] - 2026-09-06
 
 - Restore last-read on room entry, keep Jump to Last Read when the marker is
@@ -33,8 +65,6 @@
 - Allow local iOS sign-out after failed restore or remote push cleanup; revoke
   the current server session when reachable and remove persisted authentication.
 
-
-## Unreleased
 
 ## 2.1.26 - 2026-09-04
 

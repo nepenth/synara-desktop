@@ -33,8 +33,7 @@ use crate::app::notifications::{
     MatrixRoomNotificationSnapshot, MatrixRoomNotificationWriteResult,
     MatrixRoomNotificationsSnapshot, NativeHttpPusherOwner, NativeNotificationDecideRequest,
     NativeNotificationDecisionOwner, NativeNotificationDismissRequest,
-    NativeNotificationFocusSetRequest, NotificationDecisionInput, NotificationDecisionKind,
-    NotificationDecisionReadback, NotificationRoomMode,
+    NativeNotificationFocusSetRequest, NotificationDecisionReadback,
 };
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
@@ -5228,29 +5227,22 @@ fn matrix_notification_decide(state: Arc<CoreState>, request: CommandEnvelope) -
         let owner = state.notification_decision_owner()?.ok_or_else(|| {
             notification_decision_owner_error("p2-notification-decide-no-session")
         })?;
-        let kind = NotificationDecisionKind::parse(&payload.kind).map_err(|diagnostic| {
-            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(diagnostic)
-        })?;
-        let room_mode = NotificationRoomMode::parse(&payload.room_mode).map_err(|diagnostic| {
-            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(diagnostic)
-        })?;
-        let readback: NotificationDecisionReadback = owner
-            .decide(NotificationDecisionInput {
-                room_id: payload.room_id,
-                event_id: payload.event_id,
-                kind,
-                title: payload.title,
-                body: payload.body,
-                route: payload.route,
-                suppress_if_focused_room: payload.suppress_if_focused_room,
-                is_encrypted: payload.is_encrypted,
-                room_mode,
-                highlight: payload.highlight,
-                is_own_event: payload.is_own_event,
-            })
-            .map_err(|error| {
+        // Core resolves the event, its sender, and the SDK push evaluation
+        // itself; the renderer supplied identity and presentation only.
+        let readback: NotificationDecisionReadback =
+            owner.decide_observed(payload).await.map_err(|error| {
                 MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
             })?;
+        // Loading the event can span logout or account replacement. A result
+        // from the detached owner must never reach the new session's renderer.
+        if !state
+            .notification_decision_owner()?
+            .is_some_and(|current| Arc::ptr_eq(&current, &owner))
+        {
+            return Err(notification_decision_owner_error(
+                "p2-notification-decide-no-session",
+            ));
+        }
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-notification-decide-serialization-failed"))
     })
@@ -5263,10 +5255,15 @@ fn matrix_notification_dismiss(state: Arc<CoreState>, request: CommandEnvelope) 
         let owner = state.notification_decision_owner()?.ok_or_else(|| {
             notification_decision_owner_error("p2-notification-dismiss-no-session")
         })?;
-        let dismissed = owner.dismiss(&payload.candidate_id).map_err(|error| {
+        let dismissed = owner
+            .dismiss(&payload.candidate_id, payload.outcome)
+            .map_err(|error| {
+                MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
+            })?;
+        let delivery = owner.delivery_ledger().map_err(|error| {
             MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
         })?;
-        serde_json::to_value(serde_json::json!({ "dismissed": dismissed }))
+        serde_json::to_value(serde_json::json!({ "dismissed": dismissed, "delivery": delivery }))
             .map_err(|_| core_state_error("p2-notification-dismiss-serialization-failed"))
     })
 }
@@ -5287,7 +5284,10 @@ fn matrix_notification_pending_snapshot(
         let candidates = owner.list_pending().map_err(|error| {
             MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
         })?;
-        serde_json::to_value(serde_json::json!({ "candidates": candidates }))
+        let delivery = owner.delivery_ledger().map_err(|error| {
+            MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id())
+        })?;
+        serde_json::to_value(serde_json::json!({ "candidates": candidates, "delivery": delivery }))
             .map_err(|_| core_state_error("p2-notification-pending-snapshot-serialization-failed"))
     })
 }
@@ -8607,8 +8607,9 @@ mod tests {
             .expect("focus clear succeeds");
         assert_eq!(response.payload, serde_json::json!({ "status": "ok" }));
 
-        // Muted room suppresses plain messages even with highlight.
-        let muted_message = core
+        // The renderer can no longer hand Core a mode or highlight verdict:
+        // the retired wire fields are rejected before any policy runs.
+        let legacy_payload = core
             .command(CommandEnvelope {
                 command: "matrix_notification_decide".into(),
                 session_generation: 0,
@@ -8624,15 +8625,32 @@ mod tests {
                 }),
             })
             .await
-            .expect("decide succeeds");
+            .expect_err("renderer-supplied policy fields are rejected");
         assert_eq!(
-            muted_message.payload["decision"],
-            serde_json::json!("suppress")
+            legacy_payload.diagnostic_id.as_deref(),
+            Some("p2-notification-decide-invalid-payload")
         );
+
+        // A message decision needs the SDK event; the table-only test owner
+        // has no bound client and must fail closed rather than guess.
+        let unbound_message = core
+            .command(CommandEnvelope {
+                command: "matrix_notification_decide".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId": "!r:example.org",
+                    "eventId": "$m1",
+                    "kind": "message",
+                    "title": "Room",
+                    "body": "Hello",
+                }),
+            })
+            .await
+            .expect_err("message decisions fail closed without a client");
         assert_eq!(
-            muted_message.payload["reason"],
-            serde_json::json!("muted-room"),
-            "mute suppresses plain messages"
+            unbound_message.diagnostic_id.as_deref(),
+            Some("v-notify.no-client")
         );
 
         let shown = core
@@ -8646,7 +8664,6 @@ mod tests {
                     "kind": "invite",
                     "title": "Invitation",
                     "body": "You have 1 new invitation request.",
-                    "roomMode": "mute",
                 }),
             })
             .await
@@ -8667,19 +8684,44 @@ mod tests {
             .await
             .expect("pending snapshot succeeds");
         assert_eq!(pending.payload["candidates"].as_array().unwrap().len(), 1);
+        assert_eq!(
+            pending.payload["delivery"],
+            serde_json::json!({ "delivered": 0, "failed": 0, "unreported": 0 })
+        );
 
+        // The delivery receipt travels with the acknowledgement; a failed OS
+        // delivery releases the candidate and is counted, never retried.
         let dismissed = core
             .command(CommandEnvelope {
                 command: "matrix_notification_dismiss".into(),
                 session_generation: 0,
                 request_id: None,
-                payload: serde_json::json!({ "candidateId": candidate_id }),
+                payload: serde_json::json!({ "candidateId": candidate_id, "outcome": "failed" }),
             })
             .await
             .expect("dismiss succeeds");
-        assert_eq!(dismissed.payload, serde_json::json!({ "dismissed": true }));
+        assert_eq!(
+            dismissed.payload,
+            serde_json::json!({
+                "dismissed": true,
+                "delivery": { "delivered": 0, "failed": 1, "unreported": 0 },
+            })
+        );
+        let receipt_vocabulary = core
+            .command(CommandEnvelope {
+                command: "matrix_notification_dismiss".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "candidateId": candidate_id, "outcome": "retry" }),
+            })
+            .await
+            .expect_err("delivery receipts use the closed vocabulary");
+        assert_eq!(
+            receipt_vocabulary.diagnostic_id.as_deref(),
+            Some("p2-notification-dismiss-invalid-payload")
+        );
 
-        // Unknown room-mode vocabulary fails closed with a static diagnostic.
+        // Unknown kind vocabulary fails closed with a static diagnostic.
         let invalid = core
             .command(CommandEnvelope {
                 command: "matrix_notification_decide".into(),
@@ -8687,15 +8729,18 @@ mod tests {
                 request_id: None,
                 payload: serde_json::json!({
                     "roomId": "!r:example.org",
-                    "kind": "message",
+                    "kind": "loud",
                     "title": "Room",
                     "body": "Hello",
-                    "roomMode": "loud",
                 }),
             })
             .await
-            .expect_err("unknown room mode must fail closed");
+            .expect_err("unknown kind must fail closed");
         assert_eq!(invalid.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            invalid.diagnostic_id.as_deref(),
+            Some("v-notify.invalid-kind")
+        );
     }
 
     #[tokio::test]
@@ -8712,7 +8757,6 @@ mod tests {
                     "kind": "message",
                     "title": "Room",
                     "body": "New message",
-                    "roomMode": "all",
                 }),
             })
             .await

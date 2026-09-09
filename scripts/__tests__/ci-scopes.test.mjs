@@ -161,6 +161,53 @@ test("adding an icon cannot hide a workflow or dependency edit", () => {
 });
 
 
+test("iOS path changes on an unlabeled feature PR run the compile gate only", () => {
+  for (const file of [
+    "synara-ios/Synara/App/SynaraApp.swift",
+    "crates/synara-core/src/synara_core.udl",
+    "crates/synara-core/src/ffi.rs",
+    "scripts/generate-synara-core-swift.sh",
+  ]) {
+    const result = scopes([file]);
+    assert.equal(result.ios, "false", `${file}: simulator lane stays skipped`);
+    assert.equal(result.ios_ui, "false");
+    assert.equal(result.ios_compile, "true", `${file}: compile gate runs`);
+  }
+});
+test("the compile gate never runs alongside or instead of a scheduled simulator lane", () => {
+  // Labeled opt-in: full lane, compile gate redundant.
+  const labeled = scopes(["synara-ios/project.yml"], { PR_LABELS: "needs-ios" });
+  assert.equal(labeled.ios, "true");
+  assert.equal(labeled.ios_compile, "false");
+  // Release PR: full lane.
+  const release = scopes(["synara-ios/project.yml"], {
+    GITHUB_HEAD_REF: "release/v2.1.2",
+  });
+  assert.equal(release.ios, "true");
+  assert.equal(release.ios_compile, "false");
+  // Push to main with iOS paths: unit lane already runs.
+  const mainPush = scopes(["synara-ios/project.yml"], {
+    EVENT_NAME: "push",
+    GITHUB_REF_NAME: "main",
+  });
+  assert.equal(mainPush.ios, "true");
+  assert.equal(mainPush.ios_compile, "false");
+  // No iOS paths at all: nothing Apple-side runs.
+  for (const result of [
+    scopes(["docs/releases/v2.1.2.md"]),
+    scopes(["synara/src/app/pages/auth/AuthFooter.tsx"]),
+    scopes(["crates/synara-core/src/app/notifications/decision.rs"]),
+  ]) {
+    assert.equal(result.ios, "false");
+    assert.equal(result.ios_compile, "false");
+  }
+  // Full-scope events already run everything.
+  assert.equal(
+    scopes(["synara-ios/project.yml"], { EVENT_NAME: "workflow_dispatch" })
+      .ios_compile,
+    "false"
+  );
+});
 test("NSE production feature guard changes run both iOS gates", () => {
   const result = scopes(["scripts/check-synara-nse-core-production-features.mjs"], {
     EVENT_NAME: "push",

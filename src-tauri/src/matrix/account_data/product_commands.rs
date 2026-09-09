@@ -368,21 +368,30 @@ pub async fn matrix_notification_decide(
     crate::bridge::notification_decision::notification_decide(core.inner().as_ref(), request).await
 }
 
-/// A9 decision stream: acknowledge a delivered or dismissed candidate.
-/// Dedup memory is retained so the same event never re-notifies.
+/// A9 decision stream: acknowledge a delivered or dismissed candidate with
+/// the platform's closed delivery receipt (`delivered` / `failed`, or none
+/// when nothing was attempted). Dedup memory is retained so the same event
+/// never re-notifies; a failed receipt is recorded, not retried.
 #[tauri::command]
 pub async fn matrix_notification_dismiss(
     core: State<'_, Arc<synara_core::Core>>,
     candidate_id: String,
+    outcome: Option<synara_core::app::notifications::NotificationDeliveryOutcome>,
 ) -> Result<bool, MatrixAuthCommandError> {
-    crate::bridge::notification_decision::notification_dismiss(core.inner().as_ref(), candidate_id)
-        .await
+    crate::bridge::notification_decision::notification_dismiss(
+        core.inner().as_ref(),
+        candidate_id,
+        outcome,
+    )
+    .await
 }
 
-/// A9 decision stream: pending Core-decided candidates in insertion order.
+/// A9 decision stream: pending Core-decided candidates in insertion order plus
+/// the per-session delivery ledger (`delivered` / `failed` / `unreported`).
 #[tauri::command]
 pub async fn matrix_notification_pending_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
-) -> Result<Vec<synara_core::dto::NotificationCandidate>, MatrixAuthCommandError> {
+) -> Result<crate::bridge::notification_decision::NotificationPendingSnapshot, MatrixAuthCommandError>
+{
     crate::bridge::notification_decision::notification_pending_snapshot(core.inner().as_ref()).await
 }
