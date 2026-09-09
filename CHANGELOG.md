@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-## [2.1.31] - 2026-09-09
+## [2.1.32] - 2026-09-09
 
 - Make desktop "Jump to Last Read" work. Core now resolves a last-read marker
   that is not itself a renderable row (reaction, edit, hidden event) to the
