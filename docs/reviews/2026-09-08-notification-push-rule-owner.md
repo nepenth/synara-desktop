@@ -305,10 +305,16 @@ was respected.
 
 Findings repaired on the feature branch:
 
-- macOS legacy delivered records can exist when authorization is denied.
-  Query UserNotifications settings before each send and return a failed
-  receipt when denied. Bound the permission lookup; a lookup failure does not
-  post. Unbundled development executables retain the legacy development path.
+- Signed testing exposed macOS rejecting legacy posts after the same app
+  queried modern UserNotifications permission. Bundled applications now use
+  UserNotifications for permission, submission callbacks, foreground
+  presentation, and action responses. Denied permission produces one failed
+  receipt without posting; permission errors stop delivery. Unbundled
+  development executables retain the legacy development path.
+- A legacy API returned nil despite its non-null binding, panicking and leaving
+  a receipt unresolved. The development fallback now treats nil as no records.
+- The notification plugin's injected permission query lacked its capability.
+  Add the read-only permission capability so app startup does not reject it.
 - Route-less macOS notifications bypassed receipt checking. They now use the
   same delivery function as routed notifications. Normalize the legacy
   crate's empty informative text when matching a body-less notification.
@@ -335,4 +341,33 @@ The five-minute catch-up window remains intentional for this release. Dedup
 is session-local; a fresh login may surface recent messages again. This is
 not a promise of durable cross-login notification history.
 
-Validation and live proof are recorded below after their runs complete.
+### Signed macOS proof and validation
+
+A locally built feature-source app was Developer ID signed with the product
+bundle identity and isolated test-account storage. It used the packaged
+localhost route alongside the installed app. This was a signed local smoke,
+not the final notarized release artifact. Fresh messages entered through the
+real Core observation stream; no observations or decisions were injected.
+
+| Step | Permission | Delivered | Failed | Pending |
+| --- | --- | ---: | ---: | ---: |
+| Baseline | granted | 0 | 0 | 0 |
+| Fresh ordinary message | granted | 1 | 0 | 0 |
+| Disable app notifications, fresh message | denied | 1 | 1 | 0 |
+| Wait over 60 seconds | denied | 1 | 1 | 0 |
+| Restore permission, fresh message | granted | 2 | 1 | 0 |
+| Harmless approval-shaped test message | granted | 3 | 1 | 0 |
+
+The refused message was not replayed after permission returned. All modified
+notification settings were restored. The approval test exercised the native
+approval delivery receipt, without executing a command. OS acceptance does
+not prove a banner was visible or sound audible. Notification Center action
+buttons and click routing could not be inspected through the UI tool and
+remain unverified live. A three-member live group and Linux GUI install smoke
+also remain unverified. iOS validation uses the simulator at the user's request.
+
+Local validation passed: 57 Core notification tests, six SDK push integration
+tests, 958 renderer tests, renderer typecheck/lint, and 48 CI tooling tests.
+The final native notification change passed all 11 focused notification tests
+and Clippy across all shell targets with warnings denied. Full Rust, simulator,
+and platform package checks run again on the updated PR head.

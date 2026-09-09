@@ -699,6 +699,9 @@ pub fn run() {
             window.unminimize()?;
             window.set_focus()?;
 
+            #[cfg(target_os = "macos")]
+            desktop_notifications::initialize_macos_notifications(app.handle());
+
             // One desktop platform allocation is shared by the shell state and
             // the managed Core. P3.1 auth probes therefore retain this
             // platform's established HTTP user-agent injection without giving
