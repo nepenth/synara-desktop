@@ -11,7 +11,7 @@ release workflow behavior.
 | Lane                | Purpose                                                              |         Client-visible update? |
 | ------------------- | -------------------------------------------------------------------- | -----------------------------: |
 | `main`              | Integration branch. Runs normal CI on push and PR.                   |                             No |
-| `release/vX.Y.Z`    | Release candidate branch. Runs CI and desktop package smoke on push. |                             No |
+| `release/vX.Y.Z`    | Release candidate branch. Runs CI and desktop package smoke on the release PR, not a second time on push. |                             No |
 | Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.           | Yes, after every client passes |
 
 Do not push a release tag until the branch `Quality gate`, desktop package smoke,

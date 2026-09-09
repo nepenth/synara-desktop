@@ -1,24 +1,12 @@
 name: Desktop Package Smoke
 
 on:
-  push:
-    branches: ["release/**"]
-    paths:
-      - ".github/workflows/desktop-package-smoke.yml"
-      - "package.json"
-      - "package-lock.json"
-      - ".node-version"
-      - "config.json"
-      - "scripts/**"
-      - "packaging/arch/**"
-      - "src-tauri/**"
-      - "synara/**"
   pull_request:
     branches: [main, "feature/matrix-rust-sdk-full-replacement", "release/**"]
   workflow_dispatch:
 
 concurrency:
-  group: package-smoke-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: package-smoke-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
