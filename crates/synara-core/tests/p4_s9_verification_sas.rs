@@ -190,8 +190,10 @@ fn verification_sas_without_started_sync_returns_handler_result_without_echo() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 
+    // Publication is checked before selecting a peer or sending a request.
+    // The planted session has no reachable homeserver to confirm its keys.
     assert!(
-        start_text.contains("v-crypto.1-device-request-failed"),
+        start_text.contains("v-crypto.1-own-device-publication-query-failed"),
         "start must return the registered owner diagnostic: {start_text}"
     );
     assert!(

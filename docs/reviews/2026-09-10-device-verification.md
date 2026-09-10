@@ -127,7 +127,7 @@ cache, timer, or inferred ready flag is introduced.
   change; dropping the owner releases its subscriptions.
 - Frontend subscription regression: passed, including callbacks queued during
   asynchronous registration and cleanup after the view is retired.
-- Complete shared-core suite: **896 passed, 4 ignored** (live tests are opt-in).
+- Shared-core library suite: **896 passed, 4 ignored** (live tests are opt-in).
 - Complete frontend modernization suite: **966 passed**. Full TypeScript check,
   Matrix boundary checks, SDK inventory, documentation hygiene, runtime asset
   consistency, and whitespace checks passed.
@@ -185,4 +185,3 @@ subscriptions are shared with iOS, but an iOS UI proof and a Linux desktop UI
 proof were not performed in this change. The Linux Synara device observed in the
 baseline will reconcile its own keys when verification is started in a build
 containing this repair; this macOS run does not modify another device's keys.
-
