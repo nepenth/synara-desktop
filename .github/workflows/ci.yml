@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main, "release/**"]
+    branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
     branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
@@ -11,11 +11,11 @@ on:
     - cron: "17 11 * * *"
   workflow_dispatch:
 
-# push and pull_request both fire for release/** heads; keyed by event so a
-# later PR run cannot cancel the push run and leave a cancelled required check
-# on the SHA branch protection evaluates.
+# One event per SHA: push covers main after merge, pull_request covers
+# candidate and feature branches. A shared lane can cancel stale runs of
+# the same event without leaving a second cancelled required check.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.head_ref || github.ref_name }}
+  group: ci-${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 
 permissions:
