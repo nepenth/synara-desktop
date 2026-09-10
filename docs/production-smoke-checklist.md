@@ -1,6 +1,6 @@
 # Production Smoke Checklist
 
-Reviewed: 2026-08-25
+Reviewed: 2026-09-10
 
 This checklist is the release handoff surface for human-run desktop and iOS
 validation gates. Automated commands and release sequencing live in
@@ -17,6 +17,26 @@ package/install interaction, physical-device iOS checks, and the unexercised
 macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
+
+2026-09-10 verification release-candidate review (2.1.33):
+
+- Feature commit `df41e393` (merged to `main` as `8cde2f19`) passed the
+  required Quality gate, including desktop Rust tests, the complete shared
+  workspace suite, frontend validation, and iOS compilation.
+- A Developer ID signed local macOS build restored the existing personal
+  session and completed matching-emoji verification with Element on the first
+  repaired attempt. The same encrypted store and session remained Verified
+  after restart, with Recovery Ready and Backup Connected. Element independently
+  listed the Synara device as verified. Exact build commands and evidence are
+  in [the verification investigation](reviews/2026-09-10-device-verification.md).
+- Local validation passed 896 shared-core library tests, 3 verification
+  integration tests, and 966 frontend tests, plus live retained-store and
+  durable own-device verification proofs. The release PR runs both iOS
+  simulator suites and all three desktop package builds before tagging.
+- The maintainer explicitly requested merging the feature and triggering this
+  release on September 10. This release proceeds under that authorization;
+  Linux and iOS live UI verification and final artifact install/update smoke
+  were not performed here and are not claimed as passed.
 
 2026-09-08 notification release-candidate review (2.1.30):
 

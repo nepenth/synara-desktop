@@ -1,0 +1,1 @@
+Device verification now restores missing public device keys after signing out and back in. Test verification with another verified session, compare the emoji, and confirm that your device remains verified after restarting. The shared native core also reports recovery and backup state changes when secret sharing completes.

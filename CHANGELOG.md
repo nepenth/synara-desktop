@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [2.1.33] - 2026-09-10
+
+- Repair verification after signing out and back in with a retained encryption
+  store. Publish the device's original signed public keys when missing on the
+  homeserver, verify the readback, and refresh the account identity before
+  requesting verification from another session. Failed or conflicting key
+  checks stop before a verification request is sent.
+- Refresh device trust, recovery, and backup status when Matrix SDK secret
+  sharing completes, so desktop Settings reflects verification completion
+  without reopening the page or restarting. The native repair is shared with iOS.
+
 ## [2.1.32] - 2026-09-09
 
 - Make desktop "Jump to Last Read" work. Core now resolves a last-read marker
