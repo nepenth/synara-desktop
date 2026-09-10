@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
+import { subscribeNativeDeviceUpdates } from '../features/settings/devices/nativeDevices';
 import {
   getNativeSecretStorageStatus,
   NATIVE_SECRET_STORAGE_CHANGED,
@@ -44,7 +45,11 @@ export const useNativeSecretStorage = (): NativeSecretStorageHook => {
 
   useEffect(() => {
     window.addEventListener(NATIVE_SECRET_STORAGE_CHANGED, refresh);
-    return () => window.removeEventListener(NATIVE_SECRET_STORAGE_CHANGED, refresh);
+    const unsubscribe = subscribeNativeDeviceUpdates(refresh);
+    return () => {
+      unsubscribe();
+      window.removeEventListener(NATIVE_SECRET_STORAGE_CHANGED, refresh);
+    };
   }, [refresh]);
 
   return {

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import { subscribeNativeDeviceUpdates } from '../features/settings/devices/nativeDevices';
 import {
   getNativeBackupStatus,
   NATIVE_BACKUP_CHANGED,
@@ -48,7 +49,11 @@ export const useNativeKeyBackup = (): NativeKeyBackupHook => {
   useEffect(() => {
     if (!nativeSession) return undefined;
     window.addEventListener(NATIVE_BACKUP_CHANGED, refresh);
-    return () => window.removeEventListener(NATIVE_BACKUP_CHANGED, refresh);
+    const unsubscribe = subscribeNativeDeviceUpdates(refresh);
+    return () => {
+      unsubscribe();
+      window.removeEventListener(NATIVE_BACKUP_CHANGED, refresh);
+    };
   }, [nativeSession, refresh]);
 
   return {

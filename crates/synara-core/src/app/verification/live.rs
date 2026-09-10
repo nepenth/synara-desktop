@@ -228,6 +228,10 @@ impl NativeVerificationOwner {
             .client
             .user_id()
             .ok_or("v-crypto.1-start-requires-session")?;
+        // Remote peers reject a request from a session whose public device
+        // keys are missing, even though `/devices` lists that session. Restore
+        // retained-store publication before sending any verification event.
+        super::publication::ensure_own_device_keys_published(&self.client).await?;
         let (request, other_device_id) = match device_id {
             Some(device_id) => {
                 let device_id = OwnedDeviceId::from(device_id);
@@ -507,8 +511,12 @@ async fn start_self_verification(
     // SAS, updates the authoritative `Encryption::verification_state()` for
     // this device. A direct `Device::request_verification` only establishes
     // local peer trust and therefore cannot implement this route.
-    let identity = crate::app::cross_signing::query_own_identity(&encryption, user_id)
-        .await?
+    // Refresh through the SDK so the identity and eligible recipient devices
+    // come from the current server key set, including the publication above.
+    let identity = encryption
+        .request_user_identity(user_id)
+        .await
+        .map_err(|_| "v-crypto.1-own-identity-query-failed")?
         .ok_or("v-crypto.1-own-identity-not-found")?;
     let request = identity
         .request_verification_with_methods(vec![VerificationMethod::SasV1])

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { isNativeMatrixSession } from '../features/verification/nativeVerification';
+import { subscribeNativeDeviceUpdates } from '../features/settings/devices/nativeDevices';
 import {
   getNativeCrossSigningStatus,
   isNativeCrossSigningPublished,
@@ -50,7 +51,11 @@ export const useCrossSigning = (): CrossSigningHook => {
   useEffect(() => {
     if (!nativeSession) return undefined;
     window.addEventListener(NATIVE_CROSS_SIGNING_CHANGED, refresh);
-    return () => window.removeEventListener(NATIVE_CROSS_SIGNING_CHANGED, refresh);
+    const unsubscribe = subscribeNativeDeviceUpdates(refresh);
+    return () => {
+      unsubscribe();
+      window.removeEventListener(NATIVE_CROSS_SIGNING_CHANGED, refresh);
+    };
   }, [nativeSession, refresh]);
 
   return {
