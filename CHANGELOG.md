@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Stop Room Settings > Developer Tools from crashing on native rooms. The page
+  assumed a js-sdk `currentState.events` map that native room projections do
+  not provide, so opening the panel threw `undefined is not an object
+  (evaluating 'i.events.forEach')` before Room ID could be copied. Room ID is
+  now always visible on that page. Settings panels and routes also render a
+  closeable error screen instead of React Router's default "Unexpected
+  Application Error" page.
+
 ## [2.1.33] - 2026-09-10
 
 - Repair verification after signing out and back in with a retained encryption

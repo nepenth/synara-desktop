@@ -295,10 +295,14 @@ const parseRoomListSnapshot = (value: unknown): NativeRoomListSnapshot | null =>
 type EmptyStateReading = {
   getStateEvents(eventType: string): MatrixEventReading[];
   getStateEvents(eventType: string, stateKey: string): MatrixEventReading | null;
+  events: Map<string, Map<string, MatrixEventReading>>;
 };
 
+const EMPTY_STATE_EVENTS = new Map<string, Map<string, MatrixEventReading>>();
+
 const EMPTY_STATE: EmptyStateReading = {
-  getStateEvents: (eventType: string, stateKey?: string) => (stateKey === undefined ? [] : null),
+  getStateEvents: (_eventType: string, stateKey?: string) => (stateKey === undefined ? [] : null),
+  events: EMPTY_STATE_EVENTS,
 } as EmptyStateReading;
 
 type FacadeRoomSummaryRef = { current: RoomSummary };
@@ -348,7 +352,7 @@ const toRoomReading = (
       return summary().lastMessagePreview;
     },
     getThreads: () => [],
-    accountData: { get: () => undefined },
+    accountData: new Map(),
     getMyMembership: () => summary().membership,
     getJoinRule: () => summary().joinRule ?? '',
     getJoinedMemberCount: () => 0,
