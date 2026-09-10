@@ -1,5 +1,10 @@
 # Device verification local proof
 
+The September 10 investigation reproduced and repaired the retained-store device
+key publication failure and completed the affected macOS Synara-to-Element flow.
+See [the investigation and validation record](reviews/2026-09-10-device-verification.md)
+for the root cause, repair, live proof, and current platform limits.
+
 The production goal is **current-device verification**, not merely local trust
 between two device rows. The actor starts on an unverified Synara session while
 at least one already cross-signed session is online. Settings reads
@@ -48,7 +53,9 @@ destructive shortcut rather than a verification proof.
 Every run creates a fresh initiator store, proves it is initially `Unverified`
 and sees an eligible authority, starts `NativeVerificationOwner::start(None)`,
 compares the two SDK SAS projections, confirms both sides, waits for `Done`, and
-requires `Encryption::verification_state() == Verified`. It then drops the
+requires `Encryption::verification_state() == Verified`. The proof does not
+pre-query the initiator's keys from the responder or force additional identity
+queries while waiting for trust after confirmation. It then drops the
 initiator client, rebuilds it over the same crypto store, restores the exact
 Matrix session, syncs, and requires both the SDK state and product device
 snapshot to remain `Verified`. The disposable initiator logs out and its store

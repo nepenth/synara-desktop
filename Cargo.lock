@@ -3990,6 +3990,7 @@ dependencies = [
  "tokio",
  "uniffi",
  "url",
+ "wiremock",
  "zeroize",
 ]
 

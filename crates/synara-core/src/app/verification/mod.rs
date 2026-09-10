@@ -13,6 +13,9 @@ mod error;
 mod inbox;
 mod live;
 mod native;
+mod publication;
+#[cfg(test)]
+mod publication_tests;
 
 pub use error::VerificationError;
 pub use inbox::{

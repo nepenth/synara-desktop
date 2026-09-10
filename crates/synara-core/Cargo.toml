@@ -88,3 +88,5 @@ matrix-sdk = { version = "=0.18.0", default-features = false, features = [
   "markdown",
 ] }
 matrix-sdk-test = "=0.18.0"
+# Exercise public device-key publication against the real SDK HTTP transport.
+wiremock = "0.6"

@@ -1,4 +1,25 @@
-import { invokeDesktopWithAvailability } from '../../../utils/desktop';
+import { invokeDesktopWithAvailability, listen } from '../../../utils/desktop';
+
+// The shared native owner observes device lists, verification, recovery and
+// backup state. Signals invalidate status reads; they never carry secrets.
+export const subscribeNativeDeviceUpdates = (
+  onUpdate: (sessionGeneration: number) => void
+): (() => void) => {
+  let disposed = false;
+  let unlisten: (() => void | Promise<void>) | undefined;
+  void listen<{ sessionGeneration: number }>('matrix-device-list-updated', (event) => {
+    if (!disposed) onUpdate(event.payload.sessionGeneration);
+  })
+    .then((cleanup) => {
+      if (disposed) void cleanup?.();
+      else unlisten = cleanup;
+    })
+    .catch(() => undefined);
+  return () => {
+    disposed = true;
+    void unlisten?.();
+  };
+};
 
 export type NativeDeviceTrust = 'verified' | 'unverified' | 'unsupported';
 export type VerificationStatus = NativeDeviceTrust | 'unknown';

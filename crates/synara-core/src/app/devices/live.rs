@@ -30,8 +30,8 @@ use super::{
     NativeOwnDeviceVerification,
 };
 
-/// Shell-supplied sink for device-list wakeups. Desktop maps this to the
-/// existing Tauri event; iOS can map it to a UniFFI callback later.
+/// Shell-supplied sink for device/security status wakeups. Payloads carry only
+/// the generation; each shell re-reads the relevant authoritative SDK status.
 pub type DeviceListUpdateEmit = Arc<dyn Fn(NativeDeviceUpdateSignal) + Send + Sync>;
 
 pub struct PendingDeviceDeletion {
@@ -75,17 +75,28 @@ impl NativeDeviceOwner {
             .user_id()
             .ok_or("v-crypto.7-device-owner-user-missing")?
             .to_owned();
-        let mut updates = client
+        let updates = client
             .encryption()
             .devices_stream()
             .await
             .map_err(|_| "v-crypto.7-device-owner-stream-unavailable")?;
+        // Secret sharing can finish after SAS and device-list updates. Observe
+        // the SDK's own trust, recovery and backup streams too, so a successful
+        // verification does not leave the UI asking for recovery until restart.
+        let encryption = client.encryption();
+        let mut updates = futures_util::stream::select_all([
+            updates
+                .map(move |update| {
+                    update.new.contains_key(&user_id) || update.changed.contains_key(&user_id)
+                })
+                .boxed(),
+            encryption.verification_state().map(|_| true).boxed(),
+            encryption.backups().state_stream().map(|_| true).boxed(),
+            encryption.recovery().state_stream().map(|_| true).boxed(),
+        ]);
         let task = tokio::spawn(async move {
-            while let Some(update) = updates.next().await {
-                // The SDK's supported public stream documents new/changed
-                // devices only. Empty/undocumented deletion wakeups are not
-                // used as an authority signal.
-                if update.new.contains_key(&user_id) || update.changed.contains_key(&user_id) {
+            while let Some(should_refresh) = updates.next().await {
+                if should_refresh {
                     emit(NativeDeviceUpdateSignal { session_generation });
                 }
             }
@@ -616,6 +627,62 @@ mod tests {
     }
 
     use crate::app::devices::NativeDeviceDeleteAuthentication;
+
+    #[tokio::test]
+    async fn backup_completion_emits_status_update_without_device_change_and_stops_on_drop() {
+        use matrix_sdk::{encryption::backups::BackupState, test_utils::mocks::MatrixMockServer};
+        use std::{sync::Arc, time::Duration};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        Mock::given(method("POST"))
+            .and(path_regex(r"^/_matrix/client/.*/room_keys/version$"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"version":"1"})),
+            )
+            .expect(1)
+            .mount(server.server())
+            .await;
+        let (send, mut receive) = tokio::sync::mpsc::unbounded_channel();
+        let observed = client.clone();
+        let owner = super::NativeDeviceOwner::start(
+            &client,
+            Arc::new(move |signal| {
+                let _ = send.send((
+                    signal.session_generation,
+                    observed.encryption().backups().state(),
+                ));
+            }),
+            42,
+        )
+        .await
+        .unwrap();
+
+        client.encryption().backups().create().await.unwrap();
+        assert!(client.encryption().backups().are_enabled().await);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                let (generation, state) = receive.recv().await.expect("owner update");
+                assert_eq!(generation, 42);
+                if state == BackupState::Enabled {
+                    break;
+                }
+            }
+        })
+        .await
+        .expect("SDK backup completion must wake the security UI");
+
+        drop(owner);
+        tokio::time::timeout(Duration::from_secs(2), async {
+            while receive.recv().await.is_some() {}
+        })
+        .await
+        .expect("dropping the owner must release every status subscription");
+    }
 
     #[test]
     fn deletion_auth_projection_supports_password_only_flows() {

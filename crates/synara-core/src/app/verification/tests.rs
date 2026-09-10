@@ -173,13 +173,13 @@ fn retire_generation() {
 fn self_verification_start_uses_the_own_identity_and_never_substitutes_peer_trust() {
     let source = include_str!("live.rs");
     assert!(source.contains("fn start_self_verification"));
-    assert!(source.contains("query_own_identity"));
+    assert!(source.contains("request_user_identity"));
     let helper = source
         .split("async fn start_self_verification")
         .nth(1)
         .and_then(|rest| rest.split("async fn register_incoming_request").next())
         .expect("start_self_verification helper");
-    assert!(helper.contains("query_own_identity"));
+    assert!(helper.contains("request_user_identity"));
     assert!(helper.contains("v-crypto.1-own-identity-not-found"));
     assert!(helper.contains("request_verification_with_methods"));
     assert!(!helper.contains("get_user_devices"));
@@ -471,12 +471,8 @@ async fn live_own_device_verification_is_authoritative_and_durable() {
         .expect("initiator sync build");
     initiator_sync.start().await.expect("initiator sync start");
 
-    let initiator_device_id = initiator
-        .device_id()
-        .expect("fresh initiator device id")
-        .to_string();
-    wait_for_live_device(&initiator, &responder_device_id).await;
-    wait_for_live_device(&responder, &initiator_device_id).await;
+    // Do not pre-query the initiator from the responder: normal product
+    // publication and SDK device-list updates must make it discoverable.
     wait_for_fresh_initiator_authority(&initiator).await;
     eprintln!("synara_own_device_proof checkpoint=fresh_initiator_eligible");
 
@@ -679,9 +675,9 @@ async fn wait_for_fresh_initiator_authority(client: &Client) {
 
 async fn wait_for_live_verification_state(client: &Client, expected: VerificationState) {
     let deadline = tokio::time::Instant::now() + Duration::from_secs(90);
-    let user_id = client.user_id().expect("signed-in user");
     loop {
-        let _ = client.encryption().request_user_identity(user_id).await;
+        // Observe SDK authority without adding a key query the product might
+        // be missing. Done alone is not proof of current-device trust.
         if client.encryption().verification_state().get() == expected {
             return;
         }

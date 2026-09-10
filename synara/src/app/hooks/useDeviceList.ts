@@ -4,11 +4,10 @@ import {
   getNativeDeviceSnapshot,
   NativeDevice,
   NativeDeviceSnapshot,
+  subscribeNativeDeviceUpdates,
 } from '../features/settings/devices/nativeDevices';
 import { subscribeNativeVerificationUpdates } from '../features/verification/nativeVerification';
 import { getActiveSession } from '../state/sessionBootstrap';
-
-const DEVICE_LIST_UPDATED_EVENT = 'matrix-device-list-updated';
 
 export type RefreshDeviceList = (snapshot?: NativeDeviceSnapshot) => Promise<void>;
 
@@ -70,30 +69,16 @@ export function useDeviceList(): [
   );
 
   useEffect(() => {
-    let disposed = false;
-    let unlisten: (() => void) | undefined;
     const unsubscribeVerification = subscribeNativeVerificationUpdates(() => {
       void refreshDeviceList();
     });
-    void import('@tauri-apps/api/event')
-      .then(({ listen }) =>
-        listen<{ sessionGeneration: number }>(DEVICE_LIST_UPDATED_EVENT, (event) => {
-          if (
-            snapshot === undefined ||
-            event.payload.sessionGeneration === snapshot.sessionGeneration
-          ) {
-            void refreshDeviceList();
-          }
-        })
-      )
-      .then((cleanup) => {
-        if (disposed) cleanup();
-        else unlisten = cleanup;
-      })
-      .catch(() => undefined);
+    const unsubscribeDevices = subscribeNativeDeviceUpdates((sessionGeneration) => {
+      if (snapshot === undefined || sessionGeneration === snapshot.sessionGeneration) {
+        void refreshDeviceList();
+      }
+    });
     return () => {
-      disposed = true;
-      unlisten?.();
+      unsubscribeDevices();
       unsubscribeVerification();
     };
   }, [refreshDeviceList, snapshot]);
