@@ -1938,7 +1938,7 @@ struct RoomTimelineView: View {
     private func startVerificationAutoRetry() {
         Task {
             for await update in environment.crypto.verificationUpdates() {
-                if case .finished = update, cryptoStatus.unableToDecryptCount > 0 {
+                if case .finished = update?.state, cryptoStatus.unableToDecryptCount > 0 {
                     // Post-verification success: auto-retry decryption to clear "Retry Decryption" / UTD banners
                     // in this room. This is the strict requirement for the flow after successful SAS.
                     _ = await environment.crypto.retryDecryption(roomID: roomID)

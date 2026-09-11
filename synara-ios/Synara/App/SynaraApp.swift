@@ -703,7 +703,9 @@ private extension AppEnvironment {
             outcome: approvalDecisionOutcome
         )
         let readMarkers = MockRoomReadMarkerService(eventID: processEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"])
-        let crypto = processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
+        let crypto: CryptoStatusServicing = processEnvironment["SYNARA_UI_TEST_VERIFICATION"] != nil
+            ? VerificationUITestService(verified: processEnvironment["SYNARA_UI_TEST_VERIFICATION"] == "verified")
+            : processEnvironment["SYNARA_UI_TEST_ENCRYPTED_TIMELINE"] == "1"
             ? MockCryptoStatusService(
                 roomCryptoStatus: RoomCryptoStatus(
                     encryption: .encrypted,

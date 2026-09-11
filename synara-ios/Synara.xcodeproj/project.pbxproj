@@ -55,9 +55,11 @@
 		3CE8D823E2484CED95DC4E42 /* ComposerAttachmentDraftTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97C5F81470334F2143479A21 /* ComposerAttachmentDraftTests.swift */; };
 		3CF0BDAD36854DC8962393D4 /* LogRedactorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15DF14E92067B54B5BF14404 /* LogRedactorTests.swift */; };
 		3DC5C28A66CD677890F11D51 /* SharedCoreRoomNotification.swift in Sources */ = {isa = PBXBuildFile; fileRef = 97935343FA1DD873AA712230 /* SharedCoreRoomNotification.swift */; };
+		40F30B8E665A65F3FFDA8D9C /* CryptoVerificationPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8499E60EE280EF350D65EF0C /* CryptoVerificationPresentation.swift */; };
 		416DCE40A4B48A841121026B /* SharedCoreTimelinePin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F84F97D77A9A566CA405225 /* SharedCoreTimelinePin.swift */; };
 		4188B91C5108402CD1DFF64D /* SharedCoreImagePackRows.swift in Sources */ = {isa = PBXBuildFile; fileRef = D3137E06580A1581467F3167 /* SharedCoreImagePackRows.swift */; };
 		41FC7B292DE64AD0C485C6E3 /* SynaraMotion.swift in Sources */ = {isa = PBXBuildFile; fileRef = DDBE1E4A32C918309E6AA85A /* SynaraMotion.swift */; };
+		439E6C602CC55DF08520952C /* CryptoVerificationPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D151178FEAF6AA24CF435C4 /* CryptoVerificationPresentationTests.swift */; };
 		45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */; };
 		46D1B37442FA446C39C64390 /* SynaraMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = A250FE1A7BB064F16F28C795 /* SynaraMessageBubble.swift */; };
 		480BE3E7090674BEB4144D36 /* ComposerServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */; };
@@ -125,6 +127,7 @@
 		9E45177E84B77E2D4CC34FBC /* IosSecretVault.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F818AC6C01E58C4E7BACF38 /* IosSecretVault.swift */; };
 		9F74223A8F55C5CF1DBAE27B /* SynaraContracts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 14082967A84F18C386D01EFB /* SynaraContracts.swift */; };
 		A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = CDD7517A55AC0E513E708AA0 /* SecureSessionStore.swift */; };
+		A6210FBA73E214D7B55DF9CA /* VerificationUITestService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E006141963F5A1271E742AD /* VerificationUITestService.swift */; };
 		A72441DA6F04ED38E6AFA5FD /* RoomListService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B6E7399D69CF6418A4206407 /* RoomListService.swift */; };
 		A9F8B2208642E92DDCDFCFA9 /* SharedCoreSessionStatus.swift in Sources */ = {isa = PBXBuildFile; fileRef = A346A6C213E92D2E71A5D4B4 /* SharedCoreSessionStatus.swift */; };
 		AB8734D706993018EE6A43AD /* SharedCoreTimelineMediaTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F5EA675E70455412EE3A3C0 /* SharedCoreTimelineMediaTests.swift */; };
@@ -226,6 +229,7 @@
 		0913C89133240B496A0103CB /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
 		0BF3C056F084434309E1D3F3 /* ConnectionStatusCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusCopyTests.swift; sourceTree = "<group>"; };
 		0CC3097C5F2157B0C1B6E975 /* MatrixStoreLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixStoreLifecycleTests.swift; sourceTree = "<group>"; };
+		0D151178FEAF6AA24CF435C4 /* CryptoVerificationPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoVerificationPresentationTests.swift; sourceTree = "<group>"; };
 		0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListServiceTests.swift; sourceTree = "<group>"; };
 		116AB841E618EC850075543B /* SharedCoreAccountSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreAccountSettings.swift; sourceTree = "<group>"; };
 		12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeserverDiscoveryTests.swift; sourceTree = "<group>"; };
@@ -299,6 +303,7 @@
 		810958B2035C006D97C17F07 /* SynaraThemeRampTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraThemeRampTests.swift; sourceTree = "<group>"; };
 		82059D5929B0DD831A769874 /* SharedCoreBackupRestore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreBackupRestore.swift; sourceTree = "<group>"; };
 		83CCF21D15E845BE04F4BB26 /* SharedCoreDevicesLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreDevicesLive.swift; sourceTree = "<group>"; };
+		8499E60EE280EF350D65EF0C /* CryptoVerificationPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoVerificationPresentation.swift; sourceTree = "<group>"; };
 		86A2688BEAABC5E3684A7C77 /* SynaraCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SynaraCore; path = SynaraCore; sourceTree = SOURCE_ROOT; };
 		8748C7ACF87406A7CABAFF67 /* SharedCoreRoomCreate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreRoomCreate.swift; sourceTree = "<group>"; };
 		8809AE831952D397FC6221F3 /* SynaraNavigation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraNavigation.swift; sourceTree = "<group>"; };
@@ -307,6 +312,7 @@
 		8A5CC96CDA94EE562BDBA416 /* Synara.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = Synara.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8CFA937424129A02D9E070E2 /* SharedCoreLeftovers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreLeftovers.swift; sourceTree = "<group>"; };
 		8D2C16FF0C415193D4A97DE8 /* SynaraNseCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = SynaraNseCore; path = SynaraNseCore; sourceTree = SOURCE_ROOT; };
+		8E006141963F5A1271E742AD /* VerificationUITestService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VerificationUITestService.swift; sourceTree = "<group>"; };
 		90A203B905E3CBD0DC7BD126 /* TimelineReplyPreviewTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineReplyPreviewTests.swift; sourceTree = "<group>"; };
 		9412F741C7E9E08EEA44E0BC /* SharedCoreTypingLive.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreTypingLive.swift; sourceTree = "<group>"; };
 		96EA442C8DDA97FC8AD8DE63 /* TimelineMessageCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimelineMessageCopyTests.swift; sourceTree = "<group>"; };
@@ -542,6 +548,7 @@
 				43B4D9CA1CA01FA1D72EA05F /* BoundedLRUCache.swift */,
 				A7A9908B77A7CB8F4A4CC55A /* ComposerService.swift */,
 				4EEE98F80D158F92EB7D2722 /* ConnectionStatus.swift */,
+				8499E60EE280EF350D65EF0C /* CryptoVerificationPresentation.swift */,
 				A856EC4E030E1E38C04CBE4B /* EventActionService.swift */,
 				B41D9817A0F821E67BCD9C00 /* HomeserverDiscovery.swift */,
 				4F818AC6C01E58C4E7BACF38 /* IosSecretVault.swift */,
@@ -626,6 +633,7 @@
 				CF389D46848BA1444F7035D0 /* SignedInSessionReadiness.swift */,
 				F2F0DA8C678C322C53FF89A0 /* TimelineReplyPreview.swift */,
 				EDFDD334C6EF890B453477E1 /* TimelineService.swift */,
+				8E006141963F5A1271E742AD /* VerificationUITestService.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -674,6 +682,7 @@
 				F236CF25261D2657C9A2FB0F /* ComposerMatrixFormattingTests.swift */,
 				28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */,
 				0BF3C056F084434309E1D3F3 /* ConnectionStatusCopyTests.swift */,
+				0D151178FEAF6AA24CF435C4 /* CryptoVerificationPresentationTests.swift */,
 				E8CE546B97B6AE15795C6E76 /* EventActionServiceTests.swift */,
 				12329DB928DC3AB27731C926 /* HomeserverDiscoveryTests.swift */,
 				C261C2AFA98091E546B19E90 /* LocalWipeServiceTests.swift */,
@@ -872,6 +881,7 @@
 				2A9A7DE188F58BEEE2EE24AC /* ComposerMatrixFormattingTests.swift in Sources */,
 				480BE3E7090674BEB4144D36 /* ComposerServiceTests.swift in Sources */,
 				1A5417BC15B5AC21819DCBD1 /* ConnectionStatusCopyTests.swift in Sources */,
+				439E6C602CC55DF08520952C /* CryptoVerificationPresentationTests.swift in Sources */,
 				6022C473D59F944208C3E79D /* EventActionServiceTests.swift in Sources */,
 				4C0DF38E441C5250941FE911 /* HomeserverDiscoveryTests.swift in Sources */,
 				ECCF8209D63C8A3CD581CF75 /* LocalWipeServiceTests.swift in Sources */,
@@ -924,6 +934,7 @@
 				0B6FED64AA988069902712C4 /* ComposerTextView.swift in Sources */,
 				0DFCC15849478640A3BF3903 /* ConnectionStatus.swift in Sources */,
 				052A93DF2C5AD7E2C75EC162 /* ConnectionStatusBanner.swift in Sources */,
+				40F30B8E665A65F3FFDA8D9C /* CryptoVerificationPresentation.swift in Sources */,
 				E9028170C931CDFE77B89713 /* EventActionService.swift in Sources */,
 				53A86DD39FD62D232711EB70 /* HomeserverDiscovery.swift in Sources */,
 				89761685411B7F9D7FCCD863 /* HomeserverSelectionView.swift in Sources */,
@@ -1028,6 +1039,7 @@
 				919BCCE1F8A9D3525404023E /* SynaraRoomAvatar.swift in Sources */,
 				C8BCA6C5B2041510969B6EBC /* TimelineReplyPreview.swift in Sources */,
 				4A665A8695E281B0E96F0A54 /* TimelineService.swift in Sources */,
+				A6210FBA73E214D7B55DF9CA /* VerificationUITestService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

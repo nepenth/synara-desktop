@@ -12,6 +12,118 @@ final class SynaraUITests: XCTestCase {
         try super.tearDownWithError()
     }
 
+    func testVerificationSheetsFitContentAndDoneStaysDismissed() {
+        let app = launchVerificationApp()
+        let sheet = verificationSheet(in: app)
+        let accept = app.buttons["AcceptDeviceVerificationButton"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 10))
+        XCTAssertLessThan(sheet.frame.height, app.frame.height * 0.75)
+        XCTAssertGreaterThan(accept.frame.width, sheet.frame.width * 0.75)
+        recordVerificationScreenshot(app, name: "verification-request")
+        accept.tap()
+        let confirm = app.buttons["ConfirmDeviceVerificationButton"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        for index in 0..<7 {
+            XCTAssertTrue(identifiedElement(in: app, "VerificationEmoji-\(index)").exists)
+        }
+        XCTAssertLessThan(sheet.frame.height, app.frame.height * 0.75)
+        XCTAssertEqual(confirm.frame.width, app.buttons["They Do Not Match"].frame.width, accuracy: 2)
+        XCTAssertEqual(confirm.frame.height, app.buttons["They Do Not Match"].frame.height, accuracy: 2)
+        XCTAssertTrue(confirm.isHittable)
+        recordVerificationScreenshot(app, name: "verification-comparison")
+        confirm.tap()
+        XCTAssertTrue(app.staticTexts["Device verified"].waitForExistence(timeout: 5))
+        // A result is acknowledged by the user, never by an automatic timer.
+        RunLoop.current.run(until: Date().addingTimeInterval(2))
+        XCTAssertTrue(app.buttons["DismissDeviceVerificationButton"].isHittable)
+        XCTAssertLessThan(sheet.frame.height, app.frame.height * 0.75)
+        recordVerificationScreenshot(app, name: "verification-finished")
+        app.buttons["DismissDeviceVerificationButton"].tap()
+        assertVerificationStaysClosed(in: app)
+        XCUIDevice.shared.press(.home)
+        app.activate()
+        assertVerificationStaysClosed(in: app)
+    }
+
+    func testVerificationSwipeAcknowledgesResultWithoutReopening() {
+        let app = launchVerificationApp()
+        let accept = app.buttons["AcceptDeviceVerificationButton"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 10))
+        accept.tap()
+        app.buttons["ConfirmDeviceVerificationButton"].tap()
+        XCTAssertTrue(app.staticTexts["Device verified"].waitForExistence(timeout: 5))
+        let sheet = verificationSheet(in: app)
+        let start = sheet.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.03))
+        let end = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98))
+        start.press(forDuration: 0.1, thenDragTo: end)
+        assertVerificationStaysClosed(in: app)
+    }
+
+    func testCompletedComparisonDoesNotClaimOwnDeviceTrust() {
+        let app = launchVerificationApp(verified: false)
+        XCTAssertTrue(app.buttons["AcceptDeviceVerificationButton"].waitForExistence(timeout: 10))
+        app.buttons["AcceptDeviceVerificationButton"].tap()
+        app.buttons["ConfirmDeviceVerificationButton"].tap()
+        XCTAssertTrue(app.staticTexts["Verification complete"].waitForExistence(timeout: 5))
+        XCTAssertFalse(app.staticTexts["Device verified"].exists)
+        XCTAssertTrue(app.staticTexts["Unverified"].exists)
+        recordVerificationScreenshot(app, name: "verification-trust-pending")
+        app.buttons["DismissDeviceVerificationButton"].tap()
+        assertVerificationStaysClosed(in: app)
+    }
+
+    func testVerificationLargeTextKeepsComparisonAndActionsReachable() {
+        let app = launchVerificationApp(contentSizeCategory: "UICTContentSizeCategoryAccessibilityXXXL")
+        let accept = app.buttons["AcceptDeviceVerificationButton"]
+        XCTAssertTrue(accept.waitForExistence(timeout: 10))
+        let sheet = verificationSheet(in: app)
+        for _ in 0..<8 where !accept.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(accept.isHittable)
+        accept.tap()
+        let confirm = app.buttons["ConfirmDeviceVerificationButton"]
+        XCTAssertTrue(confirm.waitForExistence(timeout: 5))
+        for index in 0..<7 { XCTAssertTrue(identifiedElement(in: app, "VerificationEmoji-\(index)").exists) }
+        recordVerificationScreenshot(app, name: "verification-large-text-values")
+        for _ in 0..<10 where !confirm.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(confirm.isHittable)
+        let mismatch = app.buttons["They Do Not Match"]
+        for _ in 0..<4 where !mismatch.isHittable { sheet.swipeUp() }
+        XCTAssertTrue(mismatch.isHittable)
+        XCTAssertGreaterThanOrEqual(mismatch.frame.minX, app.frame.minX)
+        XCTAssertLessThanOrEqual(mismatch.frame.maxX, app.frame.maxX)
+        recordVerificationScreenshot(app, name: "verification-large-text-actions")
+        mismatch.tap()
+        XCTAssertTrue(app.staticTexts["Codes did not match"].waitForExistence(timeout: 5))
+    }
+
+    private func launchVerificationApp(verified: Bool = true, contentSizeCategory: String? = nil) -> XCUIApplication {
+        let app = XCUIApplication()
+        app.launchArguments = ["--ui-testing"]
+        app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
+        app.launchEnvironment["SYNARA_UI_TEST_VERIFICATION"] = verified ? "verified" : "unverified"
+        launch(app, contentSizeCategory: contentSizeCategory)
+        return app
+    }
+
+    private func verificationSheet(in app: XCUIApplication) -> XCUIElement {
+        identifiedElement(in: app, "DeviceVerificationSheet")
+    }
+
+    private func assertVerificationStaysClosed(in app: XCUIApplication) {
+        let sheet = verificationSheet(in: app)
+        expectation(for: NSPredicate(format: "exists == false"), evaluatedWith: sheet)
+        waitForExpectations(timeout: 5)
+        RunLoop.current.run(until: Date().addingTimeInterval(1))
+        XCTAssertFalse(sheet.exists, "Buffered terminal updates must not re-present an acknowledged flow")
+    }
+
+    private func recordVerificationScreenshot(_ app: XCUIApplication, name: String) {
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = name
+        attachment.lifetime = .keepAlways
+        add(attachment)
+    }
+
     func testShellShowsHomeserverSelectionWhenSignedOut() {
         let app = launchApp()
 
