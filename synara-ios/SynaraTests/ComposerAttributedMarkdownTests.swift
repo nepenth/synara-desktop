@@ -106,9 +106,6 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             XCTFail("UIKit is required for HTML paste selection mapping")
         #endif
     }
-            XCTFail("UIKit is required for rich paste selection mapping")
-        #endif
-    }
 
     func testBoldItalicAndCodeBecomeMarkdown() {
         #if canImport(UIKit)
