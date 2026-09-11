@@ -134,7 +134,10 @@ struct ComposerTextView: UIViewRepresentable {
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
             } else if textView.isFirstResponder == false,
-                      ComposerAttributedMarkdown.markdown(from: textView.attributedText) != text
+                      ComposerAttributedMarkdown.markdown(
+                          from: textView.attributedText,
+                          baseFont: ComposerAttributedMarkdown.composerBaseFont(for: textView)
+                      ) != text
             {
                 textView.text = text
                 applySelection(to: textView)
@@ -164,7 +167,8 @@ struct ComposerTextView: UIViewRepresentable {
     private func applySelection(to textView: UITextView) {
         let desiredRange = ComposerAttributedMarkdown.visibleRange(
             in: textView.attributedText,
-            markdownSelection: selection
+            markdownSelection: selection,
+            baseFont: ComposerAttributedMarkdown.composerBaseFont(for: textView)
         )
         guard desiredRange.upperBound <= textView.attributedText.length else {
             return
@@ -204,7 +208,10 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func publishContent(from textView: UITextView) {
-            let markdown = ComposerAttributedMarkdown.markdown(from: textView.attributedText)
+            let markdown = ComposerAttributedMarkdown.markdown(
+                from: textView.attributedText,
+                baseFont: ComposerAttributedMarkdown.composerBaseFont(for: textView)
+            )
             if parent.text != markdown {
                 parent.text = markdown
             }
@@ -241,7 +248,10 @@ struct ComposerTextView: UIViewRepresentable {
             if parent.isFocused.wrappedValue {
                 parent.isFocused.wrappedValue = false
             }
-            parent.text = ComposerAttributedMarkdown.markdown(from: textView.attributedText)
+            parent.text = ComposerAttributedMarkdown.markdown(
+                from: textView.attributedText,
+                baseFont: ComposerAttributedMarkdown.composerBaseFont(for: textView)
+            )
             updateSelection(from: textView)
             syncPlaceholder()
             updateHeight(for: textView)
@@ -342,7 +352,8 @@ struct ComposerTextView: UIViewRepresentable {
         private func updateSelection(from textView: UITextView) {
             let selection = ComposerAttributedMarkdown.markdownSelection(
                 from: textView.attributedText,
-                visibleRange: textView.selectedRange
+                visibleRange: textView.selectedRange,
+                baseFont: ComposerAttributedMarkdown.composerBaseFont(for: textView)
             )
             if parent.selection != selection {
                 parent.selection = selection

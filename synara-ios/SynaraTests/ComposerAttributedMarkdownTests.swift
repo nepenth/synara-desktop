@@ -40,19 +40,21 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             attributed.append(NSAttributedString(string: " world"))
 
             XCTAssertEqual(
-                ComposerAttributedMarkdown.markdown(from: attributed),
+                ComposerAttributedMarkdown.markdown(from: attributed, baseFont: .systemFont(ofSize: 17)),
                 "**hello** world"
             )
 
             let markdownSelection = ComposerAttributedMarkdown.markdownSelection(
                 from: attributed,
-                visibleRange: NSRange(location: 6, length: 5)
+                visibleRange: NSRange(location: 6, length: 5),
+                baseFont: .systemFont(ofSize: 17)
             )
             XCTAssertEqual(markdownSelection, ComposerTextSelection(location: 10, length: 5))
             XCTAssertEqual(
                 ComposerAttributedMarkdown.visibleRange(
                     in: attributed,
-                    markdownSelection: markdownSelection
+                    markdownSelection: markdownSelection,
+                    baseFont: .systemFont(ofSize: 17)
                 ),
                 NSRange(location: 6, length: 5)
             )
@@ -73,10 +75,11 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
     func testHTMLPasteThenFormattingALaterWordUsesMarkdownOffsets() throws {
         #if canImport(UIKit)
             let html = "<p><strong>hello</strong> world</p>"
+            let baseFont = UIFont.preferredFont(forTextStyle: .callout)
             let attributed = try XCTUnwrap(
                 ComposerAttributedMarkdown.attributedString(
                     fromHTML: html,
-                    baseFont: .preferredFont(forTextStyle: .callout)
+                    baseFont: baseFont
                 )
             )
             let visible = attributed.string as NSString
@@ -84,10 +87,11 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             XCTAssertNotEqual(world.location, NSNotFound)
             XCTAssertEqual(world.length, 5)
 
-            let markdown = ComposerAttributedMarkdown.markdown(from: attributed)
+            let markdown = ComposerAttributedMarkdown.markdown(from: attributed, baseFont: baseFont)
             let markdownSelection = ComposerAttributedMarkdown.markdownSelection(
                 from: attributed,
-                visibleRange: world
+                visibleRange: world,
+                baseFont: baseFont
             )
             XCTAssertLessThanOrEqual(
                 markdownSelection.upperBound,
@@ -126,7 +130,10 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             )
 
             XCTAssertEqual(
-                ComposerAttributedMarkdown.markdown(from: attributed),
+                ComposerAttributedMarkdown.markdown(
+                    from: attributed,
+                    baseFont: .systemFont(ofSize: 17)
+                ),
                 "hello **bold** `code`"
             )
         #else
@@ -137,10 +144,11 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
     func testHTMLPasteBecomesVisibleTraitsAndMarkdownForSend() throws {
         #if canImport(UIKit)
             let html = "<p><strong>Ship</strong> <em>it</em></p>"
+            let baseFont = UIFont.preferredFont(forTextStyle: .callout)
             let attributed = try XCTUnwrap(
                 ComposerAttributedMarkdown.attributedString(
                     fromHTML: html,
-                    baseFont: .preferredFont(forTextStyle: .callout)
+                    baseFont: baseFont
                 )
             )
 
@@ -149,7 +157,7 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             XCTAssertFalse(attributed.string.contains("<strong>"))
             XCTAssertFalse(attributed.string.contains("**"))
 
-            let markdown = ComposerAttributedMarkdown.markdown(from: attributed)
+            let markdown = ComposerAttributedMarkdown.markdown(from: attributed, baseFont: baseFont)
             XCTAssertTrue(markdown.contains("**Ship**"), markdown)
             XCTAssertTrue(markdown.contains("_it_") || markdown.contains("*it*"), markdown)
         #else
@@ -223,6 +231,65 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             "Unfocused composer updates must not flatten rich paste until the markdown binding diverges"
         )
     }
+
+    func testRegularCalloutRunIsNotProjectedAsBold() {
+        #if canImport(UIKit)
+            let base = UIFont.preferredFont(forTextStyle: .callout)
+            let attributed = NSAttributedString(string: "hello", attributes: [.font: base])
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.markdown(from: attributed, baseFont: base),
+                "hello"
+            )
+        #else
+            XCTFail("UIKit is required for composer font trait projection")
+        #endif
+    }
+
+    func testExplicitBoldTraitWrapsRelativeToComposerBase() {
+        #if canImport(UIKit)
+            let base = UIFont.systemFont(ofSize: 16, weight: .regular)
+            let bold = fontByAddingTraits(.traitBold, to: base)
+            XCTAssertTrue(bold.fontDescriptor.symbolicTraits.contains(.traitBold))
+            let attributed = NSAttributedString(string: "hello", attributes: [.font: bold])
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.markdown(from: attributed, baseFont: base),
+                "**hello**"
+            )
+        #else
+            XCTFail("UIKit is required for composer font trait projection")
+        #endif
+    }
+
+    func testMatchingSemiboldBaseIsNotProjectedAsBold() {
+        #if canImport(UIKit)
+            let base = UIFont.systemFont(ofSize: 16, weight: .semibold)
+            let matching = NSAttributedString(string: "hello", attributes: [.font: base])
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.markdown(from: matching, baseFont: base),
+                "hello"
+            )
+
+            let heavier = UIFont.systemFont(ofSize: 16, weight: .bold)
+            let bold = NSAttributedString(string: "hello", attributes: [.font: heavier])
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.markdown(from: bold, baseFont: base),
+                "**hello**"
+            )
+        #else
+            XCTFail("UIKit is required for composer font trait projection")
+        #endif
+    }
+
+    #if canImport(UIKit)
+        private func fontByAddingTraits(
+            _ traits: UIFontDescriptor.SymbolicTraits,
+            to font: UIFont
+        ) -> UIFont {
+            let combined = font.fontDescriptor.symbolicTraits.union(traits)
+            let descriptor = font.fontDescriptor.withSymbolicTraits(combined) ?? font.fontDescriptor
+            return UIFont(descriptor: descriptor, size: font.pointSize)
+        }
+    #endif
 
     private static func contents(of relativePath: String) throws -> String {
         try String(contentsOfFile: "\(repositoryRoot())/\(relativePath)", encoding: .utf8)

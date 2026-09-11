@@ -25,16 +25,30 @@ enum ComposerPasteboard {
 }
 
 enum ComposerAttributedMarkdown {
-    static func markdown(from attributed: NSAttributedString) -> String {
-        project(attributed).markdown
+    static var composerBaseFont: UIFont {
+        .preferredFont(forTextStyle: .callout)
+    }
+
+    static func composerBaseFont(for textView: UITextView) -> UIFont {
+        textView.font ?? composerBaseFont
+    }
+
+    private static let extraWeightThreshold: CGFloat = 0.1
+
+    static func markdown(
+        from attributed: NSAttributedString,
+        baseFont: UIFont = .preferredFont(forTextStyle: .callout)
+    ) -> String {
+        project(attributed, baseFont: baseFont).markdown
     }
 
     /// Convert a visible UITextView range into UTF-16 offsets in the markdown draft.
     static func markdownSelection(
         from attributed: NSAttributedString,
-        visibleRange: NSRange
+        visibleRange: NSRange,
+        baseFont: UIFont = .preferredFont(forTextStyle: .callout)
     ) -> ComposerTextSelection {
-        let projection = project(attributed)
+        let projection = project(attributed, baseFont: baseFont)
         let start = clamp(visibleRange.location, max: attributed.length)
         let end = clamp(visibleRange.location + visibleRange.length, max: attributed.length)
         let mdStart = projection.attrToMarkdown[start]
@@ -45,9 +59,10 @@ enum ComposerAttributedMarkdown {
     /// Convert a markdown-draft range back into the visible attributed string.
     static func visibleRange(
         in attributed: NSAttributedString,
-        markdownSelection: ComposerTextSelection
+        markdownSelection: ComposerTextSelection,
+        baseFont: UIFont = .preferredFont(forTextStyle: .callout)
     ) -> NSRange {
-        let projection = project(attributed)
+        let projection = project(attributed, baseFont: baseFont)
         let mdLength = projection.attrToMarkdown.last ?? 0
         let mdStart = clamp(markdownSelection.location, max: mdLength)
         let mdEnd = clamp(markdownSelection.location + markdownSelection.length, max: mdLength)
@@ -61,7 +76,10 @@ enum ComposerAttributedMarkdown {
         let attrToMarkdown: [Int]
     }
 
-    private static func project(_ attributed: NSAttributedString) -> MarkdownProjection {
+    private static func project(
+        _ attributed: NSAttributedString,
+        baseFont: UIFont
+    ) -> MarkdownProjection {
         guard attributed.length > 0 else {
             return MarkdownProjection(markdown: "", attrToMarkdown: [0])
         }
@@ -77,7 +95,7 @@ enum ComposerAttributedMarkdown {
         var mdOffset = 0
         for run in runs {
             let substring = (attributed.string as NSString).substring(with: run.range)
-            let piece = wrappedMarkdown(substring, attributes: run.attributes)
+            let piece = wrappedMarkdown(substring, attributes: run.attributes, baseFont: baseFont)
             mapRun(
                 attributedRange: run.range,
                 original: substring,
@@ -222,18 +240,21 @@ enum ComposerAttributedMarkdown {
         }
     #endif
 
-    private static func wrappedMarkdown(_ text: String, attributes: [NSAttributedString.Key: Any]) -> String {
+    private static func wrappedMarkdown(
+        _ text: String,
+        attributes: [NSAttributedString.Key: Any],
+        baseFont: UIFont
+    ) -> String {
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text
         }
 
         let font = attributes[.font] as? UIFont
-        let traits = font?.fontDescriptor.symbolicTraits ?? []
-        let weight = fontWeight(font)
-        let isBold = traits.contains(.traitBold) || weight >= 0.2
+        let isBold = isBoldRelativeToBase(font: font, baseFont: baseFont)
         let obliqueness = (attributes[.obliqueness] as? NSNumber)?.doubleValue ?? 0
-        let isItalic = traits.contains(.traitItalic) || abs(obliqueness) > 0.01
-        let isMono = traits.contains(.traitMonoSpace)
+        let isItalic = isItalicRelativeToBase(font: font, baseFont: baseFont)
+            || abs(obliqueness) > 0.01
+        let isMono = (font?.fontDescriptor.symbolicTraits ?? []).contains(.traitMonoSpace)
         let strikeValue = attributes[.strikethroughStyle] as? Int ?? 0
         let isStrike = strikeValue != 0
 
@@ -263,6 +284,24 @@ enum ComposerAttributedMarkdown {
             inner = "[\(label)](\(href))"
         }
         return inner
+    }
+
+    private static func isBoldRelativeToBase(font: UIFont?, baseFont: UIFont) -> Bool {
+        guard let font else {
+            return false
+        }
+        let traits = font.fontDescriptor.symbolicTraits
+        let baseTraits = baseFont.fontDescriptor.symbolicTraits
+        if traits.contains(.traitBold), baseTraits.contains(.traitBold) == false {
+            return true
+        }
+        return fontWeight(font) - fontWeight(baseFont) >= extraWeightThreshold
+    }
+
+    private static func isItalicRelativeToBase(font: UIFont?, baseFont: UIFont) -> Bool {
+        let traits = font?.fontDescriptor.symbolicTraits ?? []
+        let baseTraits = baseFont.fontDescriptor.symbolicTraits
+        return traits.contains(.traitItalic) && baseTraits.contains(.traitItalic) == false
     }
 
     private static func fontWeight(_ font: UIFont?) -> CGFloat {
