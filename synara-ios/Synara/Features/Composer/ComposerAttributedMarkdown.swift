@@ -14,7 +14,7 @@ enum ComposerPasteboard {
             {
                 return html
             }
-            if let html = pasteboard.string(forPasteboardType: UTType.html.identifier),
+            if let html = pasteboard.value(forPasteboardType: UTType.html.identifier) as? String,
                html.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
             {
                 return html

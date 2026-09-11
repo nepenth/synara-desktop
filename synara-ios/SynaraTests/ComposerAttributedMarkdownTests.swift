@@ -116,6 +116,8 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
         XCTAssertTrue(markdown.contains("deleteCharacters(in: range)"))
         XCTAssertTrue(markdown.contains("0x1F"))
         XCTAssertTrue(markdown.contains("mailto"))
+        XCTAssertTrue(markdown.contains("value(forPasteboardType:"))
+        XCTAssertFalse(markdown.contains("string(forPasteboardType:"))
         XCTAssertTrue(
             source.contains("textView.isFirstResponder == false"),
             "Unfocused composer updates must not flatten rich paste until the markdown binding diverges"
