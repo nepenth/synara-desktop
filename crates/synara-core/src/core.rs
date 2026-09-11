@@ -10504,6 +10504,7 @@ mod tests {
             "matrix_login_password",
             "matrix_register",
             "matrix_register_request_email_token",
+            "matrix_sync_recover",
         ] {
             let error = core
                 .command(CommandEnvelope {

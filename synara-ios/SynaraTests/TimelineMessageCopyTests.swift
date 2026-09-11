@@ -181,6 +181,17 @@ final class TimelineMessageCopyTests: XCTestCase {
         XCTAssertTrue(projection.richText.runs.contains { $0.text == "code" && $0.style.contains(.code) })
     }
 
+    func testSelectionProjectionExposesCodeBlocksForDedicatedCopy() {
+        let projection = MatrixHTMLRenderer.selectionProjection(
+            body: "intro\nprint(1)\noutro",
+            html: "<p>intro</p><pre><code class=\"language-python\">print(1)</code></pre><p>outro</p>",
+            revealingSpoilers: false
+        )
+
+        XCTAssertEqual(projection.codeBlocks.map(\.code), ["print(1)"])
+        XCTAssertEqual(projection.codeBlocks.first?.language, "python")
+    }
+
     func testFailedLocalSendStillHasCopyPayload() {
         let item = TimelineItem.pendingMessage(
             body: "Retry me",
@@ -266,6 +277,7 @@ final class TimelineMessageCopyTests: XCTestCase {
 
     func testTimelineAndThreadMenusUseDismissibleExplicitSelectionPresentation() throws {
         let source = try Self.contents(of: "synara-ios/Synara/Features/RoomTimelineView.swift")
+        let selectionView = try Self.contents(of: "synara-ios/Synara/Features/SelectableMessageTextView.swift")
 
         XCTAssertGreaterThanOrEqual(
             source.components(separatedBy: "Button(\"Select Text\", systemImage: \"text.cursor\")").count - 1,
@@ -274,13 +286,21 @@ final class TimelineMessageCopyTests: XCTestCase {
         )
         XCTAssertTrue(source.contains("MessageTextSelectionSheet(payload: copyPayload)"))
         XCTAssertTrue(source.contains("Button(\"Done\", action: dismiss.callAsFunction)"))
-        XCTAssertTrue(source.contains(".textSelection(.enabled)"))
+        XCTAssertTrue(source.contains("SelectableMessageTextView("))
+        XCTAssertTrue(selectionView.contains("isEditable = false"))
+        XCTAssertTrue(selectionView.contains("isSelectable = true"))
         XCTAssertTrue(source.contains("Button(\"Copy All\", systemImage: \"doc.on.doc\")"))
         XCTAssertTrue(source.contains("includeLinks: false"), "Selection must never activate remote links")
-        XCTAssertTrue(source.contains(".accessibilityLabel(projection.richText.plainText)"))
+        XCTAssertTrue(source.contains("accessibilityLabel: projection.richText.plainText"))
         XCTAssertFalse(source.contains(".accessibilityLabel(\"Selectable message text\")"))
         XCTAssertTrue(source.contains("revealsSpoilers ? \"Hide Spoilers\" : \"Reveal Spoilers\""))
         XCTAssertTrue(source.contains(".disabled(projection.containsSpoilers && revealsSpoilers == false)"))
+        XCTAssertTrue(source.contains("ForEach(Array(projection.codeBlocks.enumerated())"))
+        XCTAssertTrue(source.contains("MatrixCodeBlockView(block: block)"))
+        XCTAssertTrue(source.contains(".contextMenu {"))
+        XCTAssertTrue(source.contains("} preview: {"))
+        XCTAssertTrue(source.contains("bubbleWrappedBodyContent"))
+        XCTAssertTrue(source.contains("accessibilityIdentifier(\"CodeBlockCopyButton\")"))
     }
 
     func testFailedSendRowsKeepContextMenuByUsingRetryChipNotFullRowButton() throws {
@@ -304,10 +324,10 @@ final class TimelineMessageCopyTests: XCTestCase {
         let timeline = try Self.contents(of: "synara-ios/Synara/Features/RoomTimelineView.swift")
 
         // Copy transfers the complete rich/plain payload. Select Text opens a
-        // dedicated sheet where `.textSelection(.enabled)` owns the substring
+        // dedicated sheet where a non-editable UITextView owns the substring
         // gesture without competing with the row's long-press menu.
         XCTAssertTrue(bubble.contains(".textSelection(.enabled)"))
-        XCTAssertTrue(timeline.contains(".textSelection(.enabled)"))
+        XCTAssertTrue(timeline.contains("SelectableMessageTextView("))
         XCTAssertTrue(timeline.contains("TimelineMessageCopy.copyToPasteboard(copyPayload)"))
     }
 

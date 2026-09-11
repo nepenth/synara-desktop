@@ -249,7 +249,9 @@ test('Synara language-python fences preserve source while gutter count matches v
   assert.equal(gutterCount, 2);
   assert.notEqual(gutterCount, visualLinesForPre(block.code));
   assert.equal(formatLineNumbers(gutterCount), '1\n2');
-  assert.equal(formattedBody.includes('{code}'), true);
+  assert.match(formattedBody, /data-native-code-copy="true"/);
+  assert.match(formattedBody, /copyToClipboard\(code\)/);
+  assert.match(formattedBody, /aria-label="Copy code"/);
 
   const withInternalBlank = 'one\n\nthree\n';
   assert.equal(displayCodeText(withInternalBlank), 'one\n\nthree');

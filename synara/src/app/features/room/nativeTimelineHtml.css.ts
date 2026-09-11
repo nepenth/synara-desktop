@@ -327,7 +327,6 @@ const codeMono = {
 export const CodeLanguage = style({
   flex: 'none',
   padding: `${config.space.S100} ${config.space.S300}`,
-  borderBottom: `1px solid var(--synara-rich-text-code-block-border)`,
   color: syntaxMeta,
   fontFamily:
     'ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", monospace',
@@ -335,6 +334,32 @@ export const CodeLanguage = style({
   letterSpacing: '0.02em',
   textTransform: 'lowercase',
   userSelect: 'none',
+});
+
+export const CodeToolbar = style({
+  display: 'flex',
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: config.space.S200,
+  borderBottom: `1px solid var(--synara-rich-text-code-block-border)`,
+});
+
+export const CodeCopyButton = style({
+  flex: 'none',
+  margin: `0 ${config.space.S200} 0 0`,
+  padding: `${config.space.S100} ${config.space.S200}`,
+  border: 0,
+  borderRadius: config.radii.R400,
+  background: 'transparent',
+  color: 'var(--synara-content-secondary)',
+  fontSize: '0.78em',
+  letterSpacing: '0.02em',
+  cursor: 'pointer',
+  userSelect: 'none',
+  ':hover': {
+    color: 'var(--synara-content-primary)',
+  },
 });
 
 export const CodeRow = style({

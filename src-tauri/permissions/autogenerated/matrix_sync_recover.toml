@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-sync-recover"
+description = "Enables the matrix_sync_recover command without any pre-configured scope."
+commands.allow = ["matrix_sync_recover"]
+
+[[permission]]
+identifier = "deny-matrix-sync-recover"
+description = "Denies the matrix_sync_recover command without any pre-configured scope."
+commands.deny = ["matrix_sync_recover"]

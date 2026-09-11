@@ -387,6 +387,7 @@ pub fn run() {
             matrix::auth::product::matrix_session_identity,
             matrix::auth::product::matrix_session_snapshot,
             matrix::auth::product::matrix_sync_status,
+            matrix::auth::product::matrix_sync_recover,
             matrix::auth::product::matrix_crypto_status,
             matrix::auth::product::matrix_cross_signing_status,
             matrix::auth::product::matrix_cross_signing_setup,
@@ -710,6 +711,7 @@ pub fn run() {
                 Arc::new(desktop_platform::TauriPlatform::new(app.handle().clone()));
             app.manage(Arc::clone(&platform));
             app.manage(Arc::new(synara_core::Core::new(platform)));
+            matrix::auth::product::spawn_suspend_resume_watch(app.handle().clone());
             Ok(())
         })
         .build(context)

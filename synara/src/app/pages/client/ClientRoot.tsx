@@ -47,7 +47,12 @@ import { SyncStatus } from './SyncStatus';
 import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
-import { shouldRetrySyncOnResume } from '../../utils/syncLifecycle';
+import {
+  hiddenDurationMs,
+  shouldRecoverSyncOnWake,
+  SYNC_WAKE_RECOVER_COOLDOWN_MS,
+  type SyncWakeReason,
+} from '../../utils/syncLifecycle';
 import {
   formatSyncSplashStatus,
   logSyncStateTransition,
@@ -163,42 +168,71 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
     if (!mx) return undefined;
 
     let retryTimer: number | undefined;
+    let hiddenAtMs: number | null = document.visibilityState === 'hidden' ? Date.now() : null;
+    let lastRecoverAtMs = 0;
 
-    const retrySyncIfNeeded = () => {
+    const retrySyncIfNeeded = (reason: SyncWakeReason, persisted?: boolean) => {
       retryTimer = undefined;
-      if (document.visibilityState === 'hidden' || !mx.clientRunning) return;
+      if (document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastRecoverAtMs < SYNC_WAKE_RECOVER_COOLDOWN_MS) return;
       const state = mx.getSyncState();
-      if (shouldRetrySyncOnResume(state)) {
-        recordClientDiagnostic('session', 'sync.resume-retry', {
-          source: 'resume',
-          syncState: String(state ?? 'null'),
-          documentVisible: document.visibilityState === 'visible',
-          online: navigator.onLine,
-        });
-        mx.retryImmediately();
+      if (
+        !shouldRecoverSyncOnWake({
+          reason,
+          syncState: state,
+          hiddenDurationMs: hiddenDurationMs(hiddenAtMs, now),
+          persisted,
+        })
+      ) {
+        return;
       }
+      lastRecoverAtMs = now;
+      hiddenAtMs = null;
+      recordClientDiagnostic('session', 'sync.resume-retry', {
+        source: 'resume',
+        reason,
+        syncState: String(state ?? 'null'),
+        documentVisible: document.visibilityState === 'visible',
+        online: navigator.onLine,
+      });
+      mx.retryImmediately();
     };
 
-    const scheduleRetry = () => {
+    const scheduleRetry = (reason: SyncWakeReason, persisted?: boolean) => {
       if (retryTimer !== undefined) {
         window.clearTimeout(retryTimer);
       }
-      retryTimer = window.setTimeout(retrySyncIfNeeded, 0);
+      retryTimer = window.setTimeout(() => retrySyncIfNeeded(reason, persisted), 0);
     };
 
-    document.addEventListener('visibilitychange', scheduleRetry);
-    window.addEventListener('focus', scheduleRetry);
-    window.addEventListener('online', scheduleRetry);
-    window.addEventListener('pageshow', scheduleRetry);
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        hiddenAtMs = Date.now();
+        return;
+      }
+      scheduleRetry('visibilitychange');
+    };
+
+    const onFocus = () => scheduleRetry('focus');
+    const onOnline = () => scheduleRetry('online');
+    const onPageShow = (event: PageTransitionEvent) => {
+      scheduleRetry('pageshow', event.persisted);
+    };
+
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('pageshow', onPageShow);
 
     return () => {
       if (retryTimer !== undefined) {
         window.clearTimeout(retryTimer);
       }
-      document.removeEventListener('visibilitychange', scheduleRetry);
-      window.removeEventListener('focus', scheduleRetry);
-      window.removeEventListener('online', scheduleRetry);
-      window.removeEventListener('pageshow', scheduleRetry);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('pageshow', onPageShow);
     };
   }, [mx]);
 };

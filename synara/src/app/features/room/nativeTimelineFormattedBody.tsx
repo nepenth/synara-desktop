@@ -16,6 +16,8 @@ import {
 } from './nativeTimelinePresentationProjection';
 import * as htmlCss from './nativeTimelineHtml.css';
 import { MatrixColorSpan, MatrixColorSurface } from '../../components/message/MatrixColorSpan';
+import { copyToClipboard } from '../../utils/dom';
+import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 
 export function NativeCodeBlock({ code, languageClass }: { code: string; languageClass?: string }) {
   // Chromium does not paint an extra gutter row for a final line terminator,
@@ -28,6 +30,7 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
   const className = inferred ? `language-${inferred}` : undefined;
   const largeCode = code.length > NATIVE_PRISM_CHAR_LIMIT;
   const [highlightedHtml, setHighlightedHtml] = useState<string | undefined>(undefined);
+  const [copied, setCopied] = useTimeoutToggle();
 
   useEffect(() => {
     setHighlightedHtml(undefined);
@@ -59,7 +62,23 @@ export function NativeCodeBlock({ code, languageClass }: { code: string; languag
 
   return (
     <pre className={htmlCss.CodePanel} data-native-code-block="true">
-      <span className={htmlCss.CodeLanguage}>{languageLabel}</span>
+      <div className={htmlCss.CodeToolbar}>
+        <span className={htmlCss.CodeLanguage}>{languageLabel}</span>
+        <button
+          type="button"
+          className={htmlCss.CodeCopyButton}
+          data-native-code-copy="true"
+          aria-label="Copy code"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            copyToClipboard(code);
+            setCopied();
+          }}
+        >
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
       <div className={htmlCss.CodeRow}>
         <span className={htmlCss.CodeLineNumbers} aria-hidden="true">
           {lineNumbers}

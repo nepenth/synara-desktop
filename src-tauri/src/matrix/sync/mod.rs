@@ -23,9 +23,10 @@
 pub use synara_core::app::sync::{
     assert_generation, build_sync_service, decide_reconnect, failure_diagnostic_from_sdk_state,
     is_restartable, matrix_sync_markers, probe_sliding_sync, readiness_from_sdk_state,
-    readiness_of, server_supports_sliding_sync, snapshot_from_sdk_state, unconfigured_snapshot,
-    ReconnectAction, SyncError, SyncIntent, SyncReadiness, SyncReadinessSnapshot,
-    SyncServiceConfig, SyncServiceOwner, MATRIX_SYNC_MARKER,
+    readiness_of, server_supports_sliding_sync, snapshot_from_sdk_state, suspend_detected,
+    unconfigured_snapshot, ReconnectAction, SyncError, SyncIntent, SyncReadiness,
+    SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner, MATRIX_SYNC_MARKER,
+    SUSPEND_WALL_SKEW,
 };
 
 #[cfg(test)]

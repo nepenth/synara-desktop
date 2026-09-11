@@ -41,6 +41,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_threepid_request_email_token",
     "matrix_threepid_snapshot",
     "matrix_store_recovery_confirm",
+    "matrix_sync_recover",
     "matrix_password_reset_request_email_token",
     "matrix_password_reset_complete",
     "matrix_register_flows",

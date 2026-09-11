@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -132,7 +133,9 @@ struct ComposerTextView: UIViewRepresentable {
                 textView.text = text
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
-            } else if textView.isFirstResponder == false, textView.text != text {
+            } else if textView.isFirstResponder == false,
+                      ComposerAttributedMarkdown.markdown(from: textView.attributedText) != text
+            {
                 textView.text = text
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
@@ -198,8 +201,9 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func publishContent(from textView: UITextView) {
-            if parent.text != textView.text {
-                parent.text = textView.text
+            let markdown = ComposerAttributedMarkdown.markdown(from: textView.attributedText)
+            if parent.text != markdown {
+                parent.text = markdown
             }
             updateSelection(from: textView)
             syncPlaceholder()
@@ -234,7 +238,7 @@ struct ComposerTextView: UIViewRepresentable {
             if parent.isFocused.wrappedValue {
                 parent.isFocused.wrappedValue = false
             }
-            parent.text = textView.text
+            parent.text = ComposerAttributedMarkdown.markdown(from: textView.attributedText)
             updateSelection(from: textView)
             syncPlaceholder()
             updateHeight(for: textView)
@@ -360,7 +364,30 @@ final class ComposerPasteTextView: UITextView {
             onPasteImages?(images)
             return
         }
+        if let html = ComposerPasteboard.htmlString(),
+           let attributed = ComposerAttributedMarkdown.attributedString(
+               fromHTML: html,
+               baseFont: font ?? .preferredFont(forTextStyle: .callout)
+           ),
+           attributed.length > 0
+        {
+            insertAttributedText(attributed)
+            delegate?.textViewDidChange?(self)
+            return
+        }
         super.paste(sender)
+    }
+
+    private func insertAttributedText(_ attributed: NSAttributedString) {
+        let mutable = NSMutableAttributedString(attributedString: attributedText)
+        let range = selectedRange
+        mutable.replaceCharacters(in: range, with: attributed)
+        attributedText = mutable
+        selectedRange = NSRange(location: range.location + attributed.length, length: 0)
+        typingAttributes = [
+            .font: font ?? .preferredFont(forTextStyle: .callout),
+            .foregroundColor: textColor ?? .label,
+        ]
     }
 
     private func pasteboardImages() -> [UIImage] {

@@ -1305,6 +1305,12 @@
           "markdownDescription": "Enables the matrix_store_recovery_prepare command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_sync_recover command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-sync-recover",
+          "markdownDescription": "Enables the matrix_sync_recover command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_sync_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-sync-status",
@@ -2479,6 +2485,12 @@
           "type": "string",
           "const": "deny-matrix-store-recovery-prepare",
           "markdownDescription": "Denies the matrix_store_recovery_prepare command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_sync_recover command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-sync-recover",
+          "markdownDescription": "Denies the matrix_sync_recover command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_sync_status command without any pre-configured scope.",

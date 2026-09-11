@@ -181,6 +181,9 @@
 		FFB6A97B5F18519D154EAC9C /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */; };
 		9C7D2E5B8A014F36C1D90E48 /* RoomMemberActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4B8C1A2D739F50E8A14C27 /* RoomMemberActions.swift */; };
 		B4C1E87A0D593F28E6A70B19 /* RoomMemberActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A8F3D16C2E94B07A91D6E50 /* RoomMemberActionsTests.swift */; };
+		A81C04E6B2D94F17C0E5A1B3 /* SelectableMessageTextView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71B8D2E5A3C04F19B6E7C8D0 /* SelectableMessageTextView.swift */; };
+		B92D15F7C3EA5028D1F6B2C4 /* ComposerAttributedMarkdown.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82C9E3F6B4D1502AC7F8D9E1 /* ComposerAttributedMarkdown.swift */; };
+		C03E26A8D4FB6139E2A7C3D5 /* ComposerAttributedMarkdownTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93DAF407C5E2613BD809EAF2 /* ComposerAttributedMarkdownTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -264,6 +267,9 @@
 		3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomNotesView.swift; sourceTree = "<group>"; };
 		6E4B8C1A2D739F50E8A14C27 /* RoomMemberActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomMemberActions.swift; sourceTree = "<group>"; };
 		5A8F3D16C2E94B07A91D6E50 /* RoomMemberActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomMemberActionsTests.swift; sourceTree = "<group>"; };
+		71B8D2E5A3C04F19B6E7C8D0 /* SelectableMessageTextView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SelectableMessageTextView.swift; sourceTree = "<group>"; };
+		82C9E3F6B4D1502AC7F8D9E1 /* ComposerAttributedMarkdown.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttributedMarkdown.swift; sourceTree = "<group>"; };
+		93DAF407C5E2613BD809EAF2 /* ComposerAttributedMarkdownTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerAttributedMarkdownTests.swift; sourceTree = "<group>"; };
 		3BE8F8065D4DBA547D2A074E /* SharedCorePlainMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePlainMedia.swift; sourceTree = "<group>"; };
 		3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogging.swift; sourceTree = "<group>"; };
 		3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
@@ -463,6 +469,7 @@
 				6E4B8C1A2D739F50E8A14C27 /* RoomMemberActions.swift */,
 				3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */,
 				A460B0098799FF6C79F0756E /* RoomTimelineView.swift */,
+				71B8D2E5A3C04F19B6E7C8D0 /* SelectableMessageTextView.swift */,
 				C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */,
 				6D1561F09029D684B9548B0F /* StableTimelineViewport.swift */,
 				8CF673C34A136F23E32F8EFB /* Composer */,
@@ -535,6 +542,7 @@
 			children = (
 				A2B32ACB6B0CEC48C00B0D21 /* CameraImagePicker.swift */,
 				458111DA0AA49916F2D5F2EA /* ComposerAttachmentDraft.swift */,
+				82C9E3F6B4D1502AC7F8D9E1 /* ComposerAttributedMarkdown.swift */,
 				275642FB89913A7B3E8AD14A /* ComposerMarkdown.swift */,
 				3A2EA7250A5E48B4331075A1 /* ComposerMatrixFormatting.swift */,
 				69B679E7F5741D45B587B578 /* ComposerTextView.swift */,
@@ -683,6 +691,7 @@
 				F55BBDF32970A214C2829B1B /* AppRouteTests.swift */,
 				017B2EBED1FF4FF0EC25CB24 /* AuthServiceTests.swift */,
 				97C5F81470334F2143479A21 /* ComposerAttachmentDraftTests.swift */,
+				93DAF407C5E2613BD809EAF2 /* ComposerAttributedMarkdownTests.swift */,
 				72E9B9C1E874AD8B6B90D9C3 /* ComposerMarkdownTests.swift */,
 				F236CF25261D2657C9A2FB0F /* ComposerMatrixFormattingTests.swift */,
 				28004193A008B4EDFF0E6E18 /* ComposerServiceTests.swift */,
@@ -883,6 +892,7 @@
 				7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */,
 				97901F6C1B589C2271A4975D /* AuthServiceTests.swift in Sources */,
 				3CE8D823E2484CED95DC4E42 /* ComposerAttachmentDraftTests.swift in Sources */,
+				C03E26A8D4FB6139E2A7C3D5 /* ComposerAttributedMarkdownTests.swift in Sources */,
 				E41A0F4331E1F46B7474286D /* ComposerMarkdownTests.swift in Sources */,
 				2A9A7DE188F58BEEE2EE24AC /* ComposerMatrixFormattingTests.swift in Sources */,
 				480BE3E7090674BEB4144D36 /* ComposerServiceTests.swift in Sources */,
@@ -935,6 +945,7 @@
 				37E0DABCD7B044B59F2C5545 /* BoundedLRUCache.swift in Sources */,
 				828A1EF26C245C22F21B95EF /* CameraImagePicker.swift in Sources */,
 				28DD56DCBF09B61878F55C36 /* ComposerAttachmentDraft.swift in Sources */,
+				B92D15F7C3EA5028D1F6B2C4 /* ComposerAttributedMarkdown.swift in Sources */,
 				49A35E5B574613614328D6E4 /* ComposerMarkdown.swift in Sources */,
 				D47B51D8E747B028B21D8DD0 /* ComposerMatrixFormatting.swift in Sources */,
 				3AB84959BA0C8A2EB98CF309 /* ComposerService.swift in Sources */,
@@ -965,6 +976,7 @@
 				23D51A50A6F59472FB89F9B7 /* RoomNotesView.swift in Sources */,
 				D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */,
 				652C81E69C2C1B922B4BE789 /* RoomTimelineView.swift in Sources */,
+				A81C04E6B2D94F17C0E5A1B3 /* SelectableMessageTextView.swift in Sources */,
 				9DA561CC126EB87B8410D7C7 /* RootShellView.swift in Sources */,
 				A4B52FFB382C8BD8FFFDF5F9 /* SecureSessionStore.swift in Sources */,
 				901EB2CE7F90AED37B5827E0 /* SessionCoordinator.swift in Sources */,

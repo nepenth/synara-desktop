@@ -702,6 +702,19 @@ pub async fn matrix_sync_status(
     crate::bridge::session_lifecycle::sync_status(core.inner().as_ref()).await
 }
 
+/// Restart the live SyncService after OS sleep / network resume. The SDK can
+/// keep reporting Running on a dead long-poll; this command applies Resume
+/// against the desktop-owned owner rather than only refreshing status.
+#[tauri::command]
+pub async fn matrix_sync_recover(
+    state: State<'_, MatrixAuthState>,
+) -> Result<SyncReadinessSnapshot, MatrixAuthCommandError> {
+    state
+        .recover_sync_after_wake()
+        .await
+        .map_err(|error| map_sync_error(error.diagnostic_id()))
+}
+
 /// SNC-P3.4 — retain the existing zero-argument crypto-status command while
 /// routing envelope validation and exact response serialization through Core.
 /// The desktop Platform still samples the live crypto owner under its auth

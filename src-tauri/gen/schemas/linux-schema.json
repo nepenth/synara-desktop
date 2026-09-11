@@ -135,6 +135,174 @@
           "type": "object",
           "allOf": [
             {
+              "if": {
+                "properties": {
+                  "identifier": {
+                    "anyOf": [
+                      {
+                        "description": "This permission set allows opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application\nas well as reveal file in directories using default file explorer\n#### This default permission set includes:\n\n- `allow-open-url`\n- `allow-reveal-item-in-dir`\n- `allow-default-urls`",
+                        "type": "string",
+                        "const": "opener:default",
+                        "markdownDescription": "This permission set allows opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application\nas well as reveal file in directories using default file explorer\n#### This default permission set includes:\n\n- `allow-open-url`\n- `allow-reveal-item-in-dir`\n- `allow-default-urls`"
+                      },
+                      {
+                        "description": "This enables opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application.",
+                        "type": "string",
+                        "const": "opener:allow-default-urls",
+                        "markdownDescription": "This enables opening `mailto:`, `tel:`, `https://` and `http://` urls using their default application."
+                      },
+                      {
+                        "description": "Enables the open_path command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:allow-open-path",
+                        "markdownDescription": "Enables the open_path command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Enables the open_url command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:allow-open-url",
+                        "markdownDescription": "Enables the open_url command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Enables the reveal_item_in_dir command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:allow-reveal-item-in-dir",
+                        "markdownDescription": "Enables the reveal_item_in_dir command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Denies the open_path command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:deny-open-path",
+                        "markdownDescription": "Denies the open_path command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Denies the open_url command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:deny-open-url",
+                        "markdownDescription": "Denies the open_url command without any pre-configured scope."
+                      },
+                      {
+                        "description": "Denies the reveal_item_in_dir command without any pre-configured scope.",
+                        "type": "string",
+                        "const": "opener:deny-reveal-item-in-dir",
+                        "markdownDescription": "Denies the reveal_item_in_dir command without any pre-configured scope."
+                      }
+                    ]
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "allow": {
+                    "items": {
+                      "title": "OpenerScopeEntry",
+                      "description": "Opener scope entry.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this url with, for example: firefox.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "url": {
+                              "description": "A URL that can be opened by the webview when using the Opener APIs.\n\nWildcards can be used following the UNIX glob pattern.\n\nExamples:\n\n- \"https://*\" : allows all HTTPS origin\n\n- \"https://*.github.com/tauri-apps/tauri\": allows any subdomain of \"github.com\" with the \"tauri-apps/api\" path\n\n- \"https://myapi.service.com/users/*\": allows access to any URLs that begins with \"https://myapi.service.com/users/\"",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "path"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this path with, for example: xdg-open.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "path": {
+                              "description": "A path that can be opened by the webview when using the Opener APIs.\n\nThe pattern can start with a variable that resolves to a system base directory. The variables are: `$AUDIO`, `$CACHE`, `$CONFIG`, `$DATA`, `$LOCALDATA`, `$DESKTOP`, `$DOCUMENT`, `$DOWNLOAD`, `$EXE`, `$FONT`, `$HOME`, `$PICTURE`, `$PUBLIC`, `$RUNTIME`, `$TEMPLATE`, `$VIDEO`, `$RESOURCE`, `$APP`, `$LOG`, `$TEMP`, `$APPCONFIG`, `$APPDATA`, `$APPLOCALDATA`, `$APPCACHE`, `$APPLOG`.",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "deny": {
+                    "items": {
+                      "title": "OpenerScopeEntry",
+                      "description": "Opener scope entry.",
+                      "anyOf": [
+                        {
+                          "type": "object",
+                          "required": [
+                            "url"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this url with, for example: firefox.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "url": {
+                              "description": "A URL that can be opened by the webview when using the Opener APIs.\n\nWildcards can be used following the UNIX glob pattern.\n\nExamples:\n\n- \"https://*\" : allows all HTTPS origin\n\n- \"https://*.github.com/tauri-apps/tauri\": allows any subdomain of \"github.com\" with the \"tauri-apps/api\" path\n\n- \"https://myapi.service.com/users/*\": allows access to any URLs that begins with \"https://myapi.service.com/users/\"",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        {
+                          "type": "object",
+                          "required": [
+                            "path"
+                          ],
+                          "properties": {
+                            "app": {
+                              "description": "An application to open this path with, for example: xdg-open.",
+                              "allOf": [
+                                {
+                                  "$ref": "#/definitions/Application"
+                                }
+                              ]
+                            },
+                            "path": {
+                              "description": "A path that can be opened by the webview when using the Opener APIs.\n\nThe pattern can start with a variable that resolves to a system base directory. The variables are: `$AUDIO`, `$CACHE`, `$CONFIG`, `$DATA`, `$LOCALDATA`, `$DESKTOP`, `$DOCUMENT`, `$DOWNLOAD`, `$EXE`, `$FONT`, `$HOME`, `$PICTURE`, `$PUBLIC`, `$RUNTIME`, `$TEMPLATE`, `$VIDEO`, `$RESOURCE`, `$APP`, `$LOG`, `$TEMP`, `$APPCONFIG`, `$APPDATA`, `$APPLOCALDATA`, `$APPCACHE`, `$APPLOG`.",
+                              "type": "string"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              },
+              "properties": {
+                "identifier": {
+                  "description": "Identifier of the permission or permission set.",
+                  "allOf": [
+                    {
+                      "$ref": "#/definitions/Identifier"
+                    }
+                  ]
+                }
+              }
+            },
+            {
               "properties": {
                 "identifier": {
                   "description": "Identifier of the permission or permission set.",
@@ -367,6 +535,12 @@
           "type": "string",
           "const": "allow-desktop-window-toggle-maximize",
           "markdownDescription": "Enables the desktop_window_toggle_maximize command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_agent_approval_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-approval-decide",
+          "markdownDescription": "Enables the matrix_agent_approval_decide command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
@@ -621,6 +795,12 @@
           "markdownDescription": "Enables the matrix_mdirect_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_media_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-media-config",
+          "markdownDescription": "Enables the matrix_media_config command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_media_download command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-media-download",
@@ -631,6 +811,30 @@
           "type": "string",
           "const": "allow-matrix-message-search",
           "markdownDescription": "Enables the matrix_message_search command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-decide",
+          "markdownDescription": "Enables the matrix_notification_decide command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-dismiss",
+          "markdownDescription": "Enables the matrix_notification_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_focus_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-focus-set",
+          "markdownDescription": "Enables the matrix_notification_focus_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_notification_pending_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-notification-pending-snapshot",
+          "markdownDescription": "Enables the matrix_notification_pending_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_password_reset_complete command without any pre-configured scope.",
@@ -909,6 +1113,12 @@
           "markdownDescription": "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_set_favorite command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-set-favorite",
+          "markdownDescription": "Enables the matrix_room_set_favorite command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_set_join_rule command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-set-join-rule",
@@ -1095,6 +1305,12 @@
           "markdownDescription": "Enables the matrix_store_recovery_prepare command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_sync_recover command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-sync-recover",
+          "markdownDescription": "Enables the matrix_sync_recover command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_sync_status command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-sync-status",
@@ -1225,6 +1441,12 @@
           "type": "string",
           "const": "allow-matrix-timeline-set-read-state",
           "markdownDescription": "Enables the matrix_timeline_set_read_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_timeline_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-snapshot",
+          "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
@@ -1497,6 +1719,12 @@
           "markdownDescription": "Denies the desktop_window_toggle_maximize command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_agent_approval_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-approval-decide",
+          "markdownDescription": "Denies the matrix_agent_approval_decide command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-backup-repair",
@@ -1749,6 +1977,12 @@
           "markdownDescription": "Denies the matrix_mdirect_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_media_config command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-media-config",
+          "markdownDescription": "Denies the matrix_media_config command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_media_download command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-media-download",
@@ -1759,6 +1993,30 @@
           "type": "string",
           "const": "deny-matrix-message-search",
           "markdownDescription": "Denies the matrix_message_search command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_decide command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-decide",
+          "markdownDescription": "Denies the matrix_notification_decide command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_dismiss command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-dismiss",
+          "markdownDescription": "Denies the matrix_notification_dismiss command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_focus_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-focus-set",
+          "markdownDescription": "Denies the matrix_notification_focus_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_notification_pending_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-notification-pending-snapshot",
+          "markdownDescription": "Denies the matrix_notification_pending_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_password_reset_complete command without any pre-configured scope.",
@@ -2037,6 +2295,12 @@
           "markdownDescription": "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_set_favorite command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-set-favorite",
+          "markdownDescription": "Denies the matrix_room_set_favorite command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_set_join_rule command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-set-join-rule",
@@ -2223,6 +2487,12 @@
           "markdownDescription": "Denies the matrix_store_recovery_prepare command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_sync_recover command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-sync-recover",
+          "markdownDescription": "Denies the matrix_sync_recover command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_sync_status command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-sync-status",
@@ -2353,6 +2623,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-set-read-state",
           "markdownDescription": "Denies the matrix_timeline_set_read_state command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-snapshot",
+          "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",
@@ -5057,6 +5333,23 @@
           "enum": [
             "iOS"
           ]
+        }
+      ]
+    },
+    "Application": {
+      "description": "Opener scope application.",
+      "anyOf": [
+        {
+          "description": "Open in default application.",
+          "type": "null"
+        },
+        {
+          "description": "If true, allow open with any application.",
+          "type": "boolean"
+        },
+        {
+          "description": "Allow specific application to open with.",
+          "type": "string"
         }
       ]
     }

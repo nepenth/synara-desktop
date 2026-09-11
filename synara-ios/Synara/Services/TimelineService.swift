@@ -392,8 +392,10 @@ enum TimelineMessageCopy {
             var pasteboardItem: [String: Any] = [
                 UTType.utf8PlainText.identifier: payload.plainText,
             ]
-            if let html = payload.html {
-                pasteboardItem[UTType.html.identifier] = html
+            if let html = payload.html, let htmlData = html.data(using: .utf8) {
+                // UITextView / UIPasteboard treat public.html as UTF-8 data.
+                // Storing the markup as a String makes the tags visible on paste.
+                pasteboardItem[UTType.html.identifier] = htmlData
             }
             UIPasteboard.general.setItems([pasteboardItem])
         #endif
@@ -1708,6 +1710,7 @@ enum MatrixHTMLRenderer {
     struct SelectionProjection: Equatable {
         let richText: RichText
         let containsSpoilers: Bool
+        let codeBlocks: [CodeBlock]
     }
 
     struct CodeBlock: Equatable {
@@ -1959,7 +1962,8 @@ enum MatrixHTMLRenderer {
             }
         }
 
-        for (index, segment) in segments(body: body, html: html).enumerated() {
+        let segments = segments(body: body, html: html)
+        for (index, segment) in segments.enumerated() {
             if index > 0 { appendSeparator() }
             appendSegment(segment)
         }
@@ -1968,8 +1972,27 @@ enum MatrixHTMLRenderer {
         }
         return SelectionProjection(
             richText: RichText(runs: runs),
-            containsSpoilers: containsSpoilers
+            containsSpoilers: containsSpoilers,
+            codeBlocks: collectCodeBlocks(from: segments)
         )
+    }
+
+    private static func collectCodeBlocks(from segments: [Segment]) -> [CodeBlock] {
+        var blocks: [CodeBlock] = []
+        func walk(_ segment: Segment) {
+            switch segment {
+            case let .code(block):
+                if block.code.isEmpty == false {
+                    blocks.append(block)
+                }
+            case let .details(details):
+                details.content.forEach(walk)
+            default:
+                break
+            }
+        }
+        segments.forEach(walk)
+        return blocks
     }
 
     /// Imports the SDK-sanitized Matrix HTML as HTML, never as Markdown. This
