@@ -99,6 +99,7 @@ const tests = [
   'src/app/components/__tests__/nativeRoomJoinOwner.test.ts',
   'src/app/components/__tests__/nativeRoomCreateOwner.test.ts',
   'src/app/components/__tests__/nativeRoomModerationOwner.test.ts',
+  'src/app/components/user-profile/__tests__/memberActions.test.ts',
   'src/app/features/room/__tests__/nativeEditMessageOwner.test.ts',
   'src/app/features/room/__tests__/nativeReactionOwner.test.ts',
   'src/app/features/room/__tests__/nativeNotificationDecision.test.ts',

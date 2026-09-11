@@ -9,11 +9,13 @@ test('member surfaces select the native room-member owner on desktop sessions', 
   const autocomplete = readSource(
     'src/app/components/editor/autocomplete/UserMentionAutocomplete.tsx'
   );
+  const profile = readSource('src/app/components/user-profile/UserRoomProfile.tsx');
   const room = readSource('src/app/features/room/Room.tsx');
   const lobby = readSource('src/app/features/lobby/Lobby.tsx');
 
   assert.match(drawer, /useRoomMembers\(mx, room\.roomId, nativeSession\)/);
   assert.match(autocomplete, /useRoomMembers\(mx, roomId, nativeSession\)/);
+  assert.match(profile, /useRoomMembers\(mx, room\.roomId, nativeSession\)/);
   assert.doesNotMatch(room, /useRoomMembers/);
   assert.doesNotMatch(lobby, /useRoomMembers/);
 });

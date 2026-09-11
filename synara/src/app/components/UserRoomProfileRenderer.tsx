@@ -1,5 +1,5 @@
 import React from 'react';
-import { Menu, PopOut, toRem } from 'folds';
+import { Menu, PopOut, Scroll, toRem } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { useCloseUserRoomProfile, useUserRoomProfileState } from '../state/hooks/userRoomProfile';
 import { UserRoomProfile } from './user-profile';
@@ -34,12 +34,14 @@ function UserRoomProfileContextMenu({ state }: { state: UserRoomProfileState }) 
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Menu style={{ width: toRem(340) }}>
-            <SpaceProvider value={space ?? null}>
-              <RoomProvider value={room}>
-                <UserRoomProfile userId={userId} />
-              </RoomProvider>
-            </SpaceProvider>
+          <Menu style={{ width: toRem(340), maxHeight: '85vh' }}>
+            <Scroll size="300" hideTrack>
+              <SpaceProvider value={space ?? null}>
+                <RoomProvider value={room}>
+                  <UserRoomProfile userId={userId} />
+                </RoomProvider>
+              </SpaceProvider>
+            </Scroll>
           </Menu>
         </FocusTrap>
       }

@@ -5254,7 +5254,15 @@ private struct RoomDetailsView: View {
                         .disabled(isLoading || inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || details?.canInvite == false)
                         .accessibilityIdentifier("RoomInviteUserButton")
                     ForEach(details?.members.prefix(12) ?? []) { member in
-                        RoomMemberPresenceRow(member: member)
+                        RoomMemberPresenceRow(
+                            member: member,
+                            roomID: roomID,
+                            ownUserID: ownUserID,
+                            powerLevels: details?.powerLevels,
+                            onChanged: {
+                                await loadDetails()
+                            }
+                        )
                     }
                 }
 
@@ -5342,6 +5350,13 @@ private struct RoomDetailsView: View {
             return fallbackTitle
         }
         return loadedName
+    }
+
+    private var ownUserID: String? {
+        if case .signedIn(let session) = environment.session.currentState {
+            return session.userID
+        }
+        return nil
     }
 
     private var profileNameChange: String? {
@@ -5549,18 +5564,38 @@ private struct RoomDetailsView: View {
 
 private struct RoomMemberPresenceRow: View {
     let member: RoomMemberSummary
+    let roomID: String
+    let ownUserID: String?
+    let powerLevels: RoomPowerLevelSummary?
+    let onChanged: () async -> Void
     @Environment(\.appEnvironment) private var environment
     @State private var presence: SharedCorePresence?
+    @State private var isActionsPresented = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            Text(member.userID)
-                .font(SynaraTypography.body)
-            Text(presence?.displayName ?? member.membership)
-                .font(SynaraTypography.supporting)
-                .foregroundStyle(SynaraColor.secondaryText)
+        Button {
+            isActionsPresented = true
+        } label: {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                Text(member.title)
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(SynaraColor.primaryText)
+                Text(presence?.displayName ?? member.membership)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityIdentifier("RoomMemberPresenceRow")
+        .accessibilityIdentifier("RoomMemberRow-\(member.userID)")
+        .sheet(isPresented: $isActionsPresented) {
+            RoomMemberActionsView(
+                roomID: roomID,
+                member: member,
+                ownUserID: ownUserID,
+                powerLevels: powerLevels,
+                onChanged: onChanged
+            )
+        }
         .task(id: member.userID) {
             presence = await environment.matrix.presence(userID: member.userID)
         }

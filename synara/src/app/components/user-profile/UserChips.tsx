@@ -1,5 +1,5 @@
 import type { RoomReading } from '../../utils/room';
-import React, { MouseEventHandler, useCallback, useMemo, useState } from 'react';
+import React, { MouseEventHandler, useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import FocusTrap from 'focus-trap-react';
 import { isKeyHotkey } from 'is-hotkey';
@@ -44,6 +44,12 @@ import { useIgnoredUsers } from '../../hooks/useIgnoredUsers';
 import { CutoutCard } from '../cutout-card';
 import { SettingTile } from '../setting-tile';
 import { normalizeRoomJoinRulePresentation } from '../../features/matrix-dto/roomJoinRule';
+import { isNativeMatrixSession } from '../../features/verification/nativeVerification';
+import {
+  nativeIgnoredUsersIgnore,
+  nativeIgnoredUsersSnapshot,
+  nativeIgnoredUsersUnignore,
+} from '../../features/settings/account/nativeIgnoredUsers';
 
 export function ServerChip({ server }: { server: string }) {
   const mx = useMatrixClient();
@@ -432,7 +438,7 @@ export function IgnoredUserAlert() {
       <SettingTile>
         <Box direction="Column" gap="200">
           <Box gap="200" justifyContent="SpaceBetween">
-            <Text size="L400">Blocked User</Text>
+            <Text size="L400">Ignored User</Text>
           </Box>
           <Box direction="Column">
             <Text size="T200">You do not receive any messages or invites from this user.</Text>
@@ -445,7 +451,9 @@ export function IgnoredUserAlert() {
 
 export function OptionsChip({ userId }: { userId: string }) {
   const mx = useMatrixClient();
+  const nativeSession = isNativeMatrixSession();
   const [cords, setCords] = useState<RectCords>();
+  const [nativeIgnoredIds, setNativeIgnoredIds] = useState<string[] | null>(null);
 
   const open: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setCords(evt.currentTarget.getBoundingClientRect());
@@ -454,14 +462,36 @@ export function OptionsChip({ userId }: { userId: string }) {
   const close = () => setCords(undefined);
 
   const ignoredUsers = useIgnoredUsers();
-  const ignored = ignoredUsers.includes(userId);
+  useEffect(() => {
+    if (!nativeSession) return undefined;
+    let disposed = false;
+    void nativeIgnoredUsersSnapshot()
+      .then((ids) => {
+        if (!disposed) setNativeIgnoredIds(ids);
+      })
+      .catch(() => {
+        if (!disposed) setNativeIgnoredIds([]);
+      });
+    return () => {
+      disposed = true;
+    };
+  }, [nativeSession, userId]);
+  const ignored = nativeSession
+    ? (nativeIgnoredIds ?? []).includes(userId)
+    : ignoredUsers.includes(userId);
 
   const [ignoreState, toggleIgnore] = useAsyncCallback(
     useCallback(async () => {
+      if (nativeSession) {
+        if (ignored) await nativeIgnoredUsersUnignore(userId);
+        else await nativeIgnoredUsersIgnore(userId);
+        setNativeIgnoredIds(await nativeIgnoredUsersSnapshot());
+        return;
+      }
       const users = ignoredUsers.filter((u) => u !== userId);
       if (!ignored) users.push(userId);
       await mx.setIgnoredUsers(users);
-    }, [mx, ignoredUsers, userId, ignored])
+    }, [mx, ignoredUsers, userId, ignored, nativeSession])
   );
   const ignoring = ignoreState.status === AsyncStatus.Loading;
 
@@ -502,7 +532,7 @@ export function OptionsChip({ userId }: { userId: string }) {
                 }
                 disabled={ignoring}
               >
-                <Text size="B300">{ignored ? 'Unblock User' : 'Block User'}</Text>
+                <Text size="B300">{ignored ? 'Unignore' : 'Ignore'}</Text>
               </MenuItem>
             </div>
           </Menu>

@@ -641,6 +641,7 @@ struct RoomPowerLevelSummary: Equatable {
     let canEditName: Bool
     let canEditTopic: Bool
     let canEditAvatar: Bool
+    let canEditPowerLevels: Bool
 
     static let fullPower = RoomPowerLevelSummary(
         ownUserLevel: 100,
@@ -660,16 +661,31 @@ struct RoomPowerLevelSummary: Equatable {
         canRedactOther: true,
         canEditName: true,
         canEditTopic: true,
-        canEditAvatar: true
+        canEditAvatar: true,
+        canEditPowerLevels: true
     )
 }
 
 struct RoomMemberSummary: Equatable, Identifiable {
     let userID: String
+    let displayName: String?
     let membership: String
     let powerLevel: Int
 
     var id: String { userID }
+
+    var title: String {
+        let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return name.isEmpty ? userID : name
+    }
+
+    static func previewMembers() -> [RoomMemberSummary] {
+        [
+            RoomMemberSummary(userID: "@alice:matrix.org", displayName: "Alice", membership: "join", powerLevel: 100),
+            RoomMemberSummary(userID: "@bob:matrix.org", displayName: "Bob", membership: "join", powerLevel: 0),
+            RoomMemberSummary(userID: "@carol:matrix.org", displayName: "Carol", membership: "leave", powerLevel: 0),
+        ]
+    }
 }
 
 struct RoomDetails: Equatable {
@@ -734,6 +750,10 @@ protocol RoomManagementServicing {
     func leaveRoom(roomID: String) async throws
     func setRoomFavorite(_ favorite: Bool, roomID: String) async throws
     func inviteUser(roomID: String, userID: String) async throws
+    func kickUser(roomID: String, userID: String, reason: String?) async throws
+    func banUser(roomID: String, userID: String, reason: String?) async throws
+    func unbanUser(roomID: String, userID: String) async throws
+    func setMemberPowerLevel(roomID: String, userID: String, powerLevel: Int) async throws
     func searchPublicRooms(query: String) async throws -> [PublicRoomSummary]
     func roomDetails(roomID: String) async -> RoomDetails?
     func updateRoomProfile(_ request: RoomProfileUpdateRequest) async throws
@@ -979,6 +999,10 @@ final class MockRoomManagementService: RoomManagementServicing {
     private(set) var joinedRooms: [RoomJoinRequest] = []
     private(set) var leftRoomIDs: [String] = []
     private(set) var invitedUsers: [(roomID: String, userID: String)] = []
+    private(set) var kickedUsers: [(roomID: String, userID: String, reason: String?)] = []
+    private(set) var bannedUsers: [(roomID: String, userID: String, reason: String?)] = []
+    private(set) var unbannedUsers: [(roomID: String, userID: String)] = []
+    private(set) var powerLevelChanges: [(roomID: String, userID: String, powerLevel: Int)] = []
 
     init(detailsByRoomID: [String: RoomDetails] = [:]) {
         self.detailsByRoomID = detailsByRoomID
@@ -1047,6 +1071,43 @@ final class MockRoomManagementService: RoomManagementServicing {
             throw RoomManagementError.invalidMatrixID
         }
         invitedUsers.append((roomID: roomID, userID: trimmedUserID))
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: "invite")
+    }
+
+    func kickUser(roomID: String, userID: String, reason: String?) async throws {
+        let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        kickedUsers.append((roomID: roomID, userID: trimmedUserID, reason: reason))
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: "leave")
+    }
+
+    func banUser(roomID: String, userID: String, reason: String?) async throws {
+        let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        bannedUsers.append((roomID: roomID, userID: trimmedUserID, reason: reason))
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: "ban")
+    }
+
+    func unbanUser(roomID: String, userID: String) async throws {
+        let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        unbannedUsers.append((roomID: roomID, userID: trimmedUserID))
+        updateMember(roomID: roomID, userID: trimmedUserID, membership: "leave")
+    }
+
+    func setMemberPowerLevel(roomID: String, userID: String, powerLevel: Int) async throws {
+        let trimmedUserID = userID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.isValidMatrixID(trimmedUserID) else {
+            throw RoomManagementError.invalidMatrixID
+        }
+        powerLevelChanges.append((roomID: roomID, userID: trimmedUserID, powerLevel: powerLevel))
+        updateMember(roomID: roomID, userID: trimmedUserID, powerLevel: powerLevel)
     }
 
     func searchPublicRooms(query: String) async throws -> [PublicRoomSummary] {
@@ -1086,7 +1147,7 @@ final class MockRoomManagementService: RoomManagementServicing {
             powerLevels: .fullPower,
             notificationMode: .default,
             avatarURL: nil,
-            members: []
+            members: RoomMemberSummary.previewMembers()
         )
     }
 
@@ -1152,6 +1213,77 @@ final class MockRoomManagementService: RoomManagementServicing {
         case nil:
             return current
         }
+    }
+
+    private func storedDetails(roomID: String) -> RoomDetails {
+        detailsByRoomID[roomID] ?? RoomDetails(
+            roomID: roomID,
+            name: roomID,
+            topic: "Room details from the current Matrix session.",
+            aliases: [],
+            encryptionStatus: roomID.localizedCaseInsensitiveContains("encrypted")
+                ? .encrypted
+                : .notEncrypted,
+            isPublic: nil,
+            memberCount: 3,
+            canInvite: true,
+            canEditName: true,
+            canEditTopic: true,
+            canEditAvatar: true,
+            canEditAliases: true,
+            powerLevels: .fullPower,
+            notificationMode: .default,
+            avatarURL: nil,
+            members: RoomMemberSummary.previewMembers()
+        )
+    }
+
+    private func updateMember(
+        roomID: String,
+        userID: String,
+        membership: String? = nil,
+        powerLevel: Int? = nil
+    ) {
+        let existing = storedDetails(roomID: roomID)
+        var found = false
+        var members = existing.members.map { member -> RoomMemberSummary in
+            guard member.userID == userID else { return member }
+            found = true
+            return RoomMemberSummary(
+                userID: member.userID,
+                displayName: member.displayName,
+                membership: membership ?? member.membership,
+                powerLevel: powerLevel ?? member.powerLevel
+            )
+        }
+        if found == false {
+            members.append(
+                RoomMemberSummary(
+                    userID: userID,
+                    displayName: nil,
+                    membership: membership ?? "join",
+                    powerLevel: powerLevel ?? 0
+                )
+            )
+        }
+        detailsByRoomID[roomID] = RoomDetails(
+            roomID: existing.roomID,
+            name: existing.name,
+            topic: existing.topic,
+            aliases: existing.aliases,
+            encryptionStatus: existing.encryptionStatus,
+            isPublic: existing.isPublic,
+            memberCount: members.filter { $0.membership == "join" }.count,
+            canInvite: existing.canInvite,
+            canEditName: existing.canEditName,
+            canEditTopic: existing.canEditTopic,
+            canEditAvatar: existing.canEditAvatar,
+            canEditAliases: existing.canEditAliases,
+            powerLevels: existing.powerLevels,
+            notificationMode: existing.notificationMode,
+            avatarURL: existing.avatarURL,
+            members: members
+        )
     }
 
     func setNotificationMode(_ mode: SynaraRoomNotificationMode, roomID: String) async throws {
@@ -1353,6 +1485,24 @@ final class MockMatrixClientService: MatrixClientServicing {
         resetCallCount += 1
         resetSessions.append(session)
         syncStatus = .stopped
+    }
+
+    private var ignoredUserIDsStorage: [String] = []
+
+    func ignoredUserIDs() async -> [String] {
+        ignoredUserIDsStorage
+    }
+
+    func ignoreUser(_ userID: String) async -> Bool {
+        if ignoredUserIDsStorage.contains(userID) == false {
+            ignoredUserIDsStorage.append(userID)
+        }
+        return true
+    }
+
+    func unignoreUser(_ userID: String) async -> Bool {
+        ignoredUserIDsStorage.removeAll { $0 == userID }
+        return true
     }
 }
 

@@ -258,6 +258,24 @@ final class AppEnvironmentTests: XCTestCase {
         }
     }
 
+    func testMockRoomManagementKicksAndBansMembers() async throws {
+        let service = MockRoomManagementService()
+        let details = await service.roomDetails(roomID: "!project:matrix.org")
+        XCTAssertEqual(details?.members.map(\.userID), ["@alice:matrix.org", "@bob:matrix.org", "@carol:matrix.org"])
+
+        try await service.kickUser(roomID: "!project:matrix.org", userID: "@bob:matrix.org", reason: "spam")
+        try await service.banUser(roomID: "!project:matrix.org", userID: "@carol:matrix.org", reason: "abuse")
+        try await service.unbanUser(roomID: "!project:matrix.org", userID: "@carol:matrix.org")
+        try await service.setMemberPowerLevel(roomID: "!project:matrix.org", userID: "@bob:matrix.org", powerLevel: 50)
+
+        let updated = await service.roomDetails(roomID: "!project:matrix.org")
+        XCTAssertEqual(service.kickedUsers.map(\.userID), ["@bob:matrix.org"])
+        XCTAssertEqual(service.bannedUsers.map(\.reason), ["abuse"])
+        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@bob:matrix.org" })?.membership, "leave")
+        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@bob:matrix.org" })?.powerLevel, 50)
+        XCTAssertEqual(updated?.members.first(where: { $0.userID == "@carol:matrix.org" })?.membership, "leave")
+    }
+
     func testMockRoomManagementUpdatesRoomProfile() async throws {
         let service = MockRoomManagementService()
         let result = try await service.createRoom(
