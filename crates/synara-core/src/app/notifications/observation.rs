@@ -28,15 +28,16 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
+use matrix_sdk::config::RequestConfig;
 use matrix_sdk::event_handler::EventHandlerDropGuard;
 use matrix_sdk::ruma::events::room::encrypted::Relation as EncryptedRelation;
 use matrix_sdk::ruma::events::room::message::Relation as MessageRelation;
 use matrix_sdk::ruma::events::{
-    AnySyncMessageLikeEvent, MessageLikeEventType, SyncMessageLikeEvent,
+    AnySyncMessageLikeEvent, AnySyncTimelineEvent, MessageLikeEventType, SyncMessageLikeEvent,
 };
-use matrix_sdk::ruma::UserId;
+use matrix_sdk::ruma::{OwnedUserId, UserId};
 use matrix_sdk::{Client, Room};
 use serde::{Deserialize, Serialize};
 
@@ -100,14 +101,28 @@ impl NativeNotificationObservationOwner {
                     if retired.load(Ordering::Acquire) {
                         return;
                     }
+                    let room_id = room.room_id().to_string();
                     if let Some(observation) = project_observation(
                         &event,
-                        room.room_id().as_str(),
+                        &room_id,
                         &own_user_id,
                         now_ms(),
                         session_generation,
                     ) {
                         emit(observation);
+                    }
+                    if needs_decryption_follow_up(&event) {
+                        tokio::spawn(async move {
+                            follow_up_encrypted_observation(
+                                room,
+                                event,
+                                own_user_id,
+                                emit,
+                                retired,
+                                session_generation,
+                            )
+                            .await;
+                        });
                     }
                 }
             });
@@ -134,6 +149,87 @@ fn now_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_millis() as u64)
         .unwrap_or(0)
+}
+
+const DECRYPT_FOLLOW_UP_DELAYS_MS: [u64; 7] = [150, 300, 500, 800, 1_200, 2_000, 3_000];
+
+fn needs_decryption_follow_up(event: &AnySyncMessageLikeEvent) -> bool {
+    matches!(
+        event,
+        AnySyncMessageLikeEvent::RoomEncrypted(SyncMessageLikeEvent::Original(encrypted))
+            if !matches!(
+                encrypted.content.relates_to,
+                Some(EncryptedRelation::Replacement(_))
+            )
+    )
+}
+
+async fn follow_up_encrypted_observation(
+    room: Room,
+    original_event: AnySyncMessageLikeEvent,
+    own_user_id: OwnedUserId,
+    emit: NotificationObservationEmit,
+    retired: Arc<AtomicBool>,
+    session_generation: u64,
+) {
+    let event_id = original_event.event_id().to_owned();
+    let room_id = room.room_id().to_string();
+    for delay_ms in DECRYPT_FOLLOW_UP_DELAYS_MS {
+        if retired.load(Ordering::Acquire) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
+        if retired.load(Ordering::Acquire) {
+            return;
+        }
+        let Ok(timeline_event) = room
+            .load_or_fetch_event(
+                &event_id,
+                Some(
+                    RequestConfig::new()
+                        .timeout(Duration::from_secs(2))
+                        .disable_retry(),
+                ),
+            )
+            .await
+        else {
+            continue;
+        };
+        let Ok(AnySyncTimelineEvent::MessageLike(message_like)) =
+            timeline_event.raw().deserialize()
+        else {
+            continue;
+        };
+        if matches!(message_like, AnySyncMessageLikeEvent::RoomEncrypted(_)) {
+            continue;
+        }
+        if let Some(observation) = project_observation(
+            &message_like,
+            &room_id,
+            &own_user_id,
+            now_ms(),
+            session_generation,
+        ) {
+            emit(observation);
+            return;
+        }
+    }
+    if retired.load(Ordering::Acquire) {
+        return;
+    }
+    // Decrypt never landed: re-emit the ciphertext observation so the
+    // generic message path can still notify after the renderer skipped the
+    // first encrypted pass (which would otherwise record seen and block a
+    // later approval).
+    if let Some(observation) = project_observation(
+        &original_event,
+        &room_id,
+        &own_user_id,
+        now_ms(),
+        session_generation,
+    ) {
+        emit(observation);
+    }
 }
 
 /// Pure projection of one synced message-like event onto an observation.
@@ -365,5 +461,44 @@ mod tests {
         let me = user_id!("@me:example.org");
         let bob = user_id!("@bob:example.org");
         assert!(project_observation(&text(bob, NOW + 60_000, "hi"), ROOM, me, NOW, 7).is_some());
+    }
+
+    #[test]
+    fn encrypted_messages_retry_after_decrypt_but_encrypted_edits_do_not() {
+        let bob = user_id!("@bob:example.org");
+        let encrypted = message(
+            bob,
+            NOW,
+            "m.room.encrypted",
+            serde_json::json!({
+                "algorithm": "m.megolm.v1.aes-sha2",
+                "ciphertext": "AwgAE...",
+                "sender_key": "abc",
+                "session_id": "def",
+                "device_id": "DEV",
+            }),
+        );
+        assert!(needs_decryption_follow_up(&encrypted));
+        let encrypted_edit = message(
+            bob,
+            NOW,
+            "m.room.encrypted",
+            serde_json::json!({
+                "algorithm": "m.megolm.v1.aes-sha2",
+                "ciphertext": "AwgAE...",
+                "sender_key": "abc",
+                "session_id": "def",
+                "device_id": "DEV",
+                "m.relates_to": { "rel_type": "m.replace", "event_id": "$original" },
+            }),
+        );
+        assert!(!needs_decryption_follow_up(&encrypted_edit));
+        assert!(!needs_decryption_follow_up(&text(bob, NOW, "plain")));
+    }
+
+    #[test]
+    fn encrypted_follow_up_derives_room_id_from_the_room() {
+        let source = include_str!("observation.rs");
+        assert!(source.contains("let room_id = room.room_id().to_string();"));
     }
 }

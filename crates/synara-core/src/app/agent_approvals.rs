@@ -144,7 +144,7 @@ mod tests {
         assert!(is_agent_approval_prompt(PROMPT));
         assert!(is_agent_approval_prompt(HERMES_MATRIX_PROMPT));
         assert!(is_agent_approval_prompt(
-            "⚠️ **Dangerous command requires approval:**\n```\ntrue\n```"
+            "⚠️ Dangerous command requires approval"
         ));
         assert!(!is_agent_approval_prompt(
             "A quoted dangerous command requires approval later in this message"

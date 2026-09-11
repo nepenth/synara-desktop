@@ -312,15 +312,18 @@ test('message surface stays readable against OnContainer in light and dark', () 
   assert.ok(contrastRatio(darkOn, darkHover) >= 7);
 });
 
-test('formatted messages use a readable measure, body size, and layered tables', () => {
+test('formatted messages use the available timeline measure, body size, and layered tables', () => {
   const messageBodyCss = htmlCss.slice(
     htmlCss.indexOf('export const MessageBody'),
     htmlCss.indexOf('export const CodePanel')
   );
 
-  assert.match(messageBodyCss, /maxWidth: toRem\(672\)/);
+  assert.match(messageBodyCss, /maxWidth: '100%'/);
+  assert.match(messageBodyCss, /width: '100%'/);
   assert.match(messageBodyCss, /fontSize: toRem\(16\)/);
   assert.match(messageBodyCss, /lineHeight: 1\.55/);
+  assert.match(htmlCss, /export const ReplySurface = style\(\{[\s\S]*?maxWidth: '100%'/);
+  assert.doesNotMatch(htmlCss, /maxWidth: toRem\(672\)/);
   assert.match(htmlCss, /borderCollapse: 'separate'/);
   assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-even\)'/);
   assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-odd\)'/);

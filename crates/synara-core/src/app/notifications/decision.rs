@@ -1165,4 +1165,39 @@ mod tests {
             .unwrap_err();
         assert_eq!(bad_kind.diagnostic_id(), "v-notify.invalid-kind");
     }
+
+    #[test]
+    fn agent_approval_can_surface_after_a_ciphertext_message_decision() {
+        let owner = owner();
+        let message = owner
+            .decide(input(
+                "!r:example.org",
+                Some("$enc1"),
+                NotificationDecisionKind::Message,
+                NOTIFY,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(message.decision, "show");
+        let approval = owner
+            .decide(input(
+                "!r:example.org",
+                Some("$enc1"),
+                NotificationDecisionKind::AgentApproval,
+                NOTIFY,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(approval.decision, "show");
+        let again = owner
+            .decide(input(
+                "!r:example.org",
+                Some("$enc1"),
+                NotificationDecisionKind::AgentApproval,
+                NOTIFY,
+                false,
+            ))
+            .unwrap();
+        assert_eq!(again.reason.as_deref(), Some("duplicate-event"));
+    }
 }

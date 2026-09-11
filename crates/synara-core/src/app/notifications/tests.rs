@@ -296,3 +296,44 @@ fn identical_candidate_resubmission_remains_a_suppressed_duplicate() {
     assert!(idx.enqueue(item).unwrap().is_none());
     assert_eq!(idx.len(), 1);
 }
+
+#[test]
+fn agent_approval_may_supersede_a_prior_message_for_the_same_event() {
+    let mut idx = NotificationIndex::new(1);
+    assert!(idx
+        .enqueue(candidate(
+            "msg",
+            "!r:example.org",
+            Some("$e1"),
+            NotificationKind::Message,
+            false,
+        ))
+        .unwrap()
+        .is_some());
+    assert_eq!(idx.len(), 1);
+    assert!(idx
+        .enqueue(candidate(
+            "approval",
+            "!r:example.org",
+            Some("$e1"),
+            NotificationKind::AgentApproval,
+            false,
+        ))
+        .unwrap()
+        .is_some());
+    assert_eq!(idx.len(), 1);
+    assert_eq!(
+        idx.get("approval").map(|candidate| candidate.kind),
+        Some(NotificationKind::AgentApproval)
+    );
+    assert!(idx
+        .enqueue(candidate(
+            "again",
+            "!r:example.org",
+            Some("$e1"),
+            NotificationKind::AgentApproval,
+            false,
+        ))
+        .unwrap()
+        .is_none());
+}

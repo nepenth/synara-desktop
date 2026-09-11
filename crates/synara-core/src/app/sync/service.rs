@@ -5,6 +5,7 @@
 //!
 //! **No** production Tauri commands. **No** room-list projection (P4.2).
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use matrix_sdk::Client;
@@ -110,7 +111,7 @@ impl SyncServiceOwner {
     /// so this is coordinated with the active-room subscription below.
     pub async fn subscribe_to_room_list(&self, room_ids: &[OwnedRoomId]) {
         let mut subscriptions = self.room_subscriptions.lock().await;
-        if subscriptions.viewport == room_ids {
+        if viewport_ids_equivalent(&subscriptions.viewport, room_ids) {
             return;
         }
         subscriptions.viewport = room_ids.to_vec();
@@ -137,6 +138,17 @@ impl SyncServiceOwner {
             .subscribe_to_rooms(&room_id_refs)
             .await;
     }
+}
+
+fn viewport_ids_equivalent(current: &[OwnedRoomId], next: &[OwnedRoomId]) -> bool {
+    if current.len() != next.len() {
+        return false;
+    }
+    if current == next {
+        return true;
+    }
+    let current_set: HashSet<&OwnedRoomId> = current.iter().collect();
+    next.iter().all(|room_id| current_set.contains(room_id))
 }
 
 fn coordinated_room_subscriptions(subscriptions: &RoomSubscriptions) -> Vec<OwnedRoomId> {
@@ -250,5 +262,20 @@ mod subscription_tests {
             coordinated_room_subscriptions(&subscriptions),
             vec![active, other]
         );
+    }
+
+    #[test]
+    fn room_list_viewport_equality_ignores_recency_reorder() {
+        let first: OwnedRoomId = "!a:example.org".try_into().unwrap();
+        let second: OwnedRoomId = "!b:example.org".try_into().unwrap();
+        assert!(viewport_ids_equivalent(
+            &[first.clone(), second.clone()],
+            &[second.clone(), first.clone()]
+        ));
+        let third: OwnedRoomId = "!c:example.org".try_into().unwrap();
+        assert!(!viewport_ids_equivalent(
+            &[first.clone(), second],
+            &[first, third]
+        ));
     }
 }

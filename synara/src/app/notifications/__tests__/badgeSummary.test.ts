@@ -29,10 +29,30 @@ test('summarizeBadgeCount combines highlights, unread totals, and Later items', 
       5
     ),
     {
-      count: 10,
+      count: 19,
       laterActiveCount: 5,
       highlightCount: 2,
-      unreadCount: 3,
+      unreadCount: 12,
+    }
+  );
+});
+
+test('summarizeNotifications counts ordinary unreads when highlight is zero', () => {
+  assert.deepEqual(
+    summarizeNotifications({
+      unreadCounts: [
+        { total: 5, highlight: 0 },
+        { total: 2, highlight: 1 },
+      ],
+    }),
+    {
+      appBadgeCount: 6,
+      inboxBadgeCount: 0,
+      laterActiveCount: 0,
+      inviteCount: 0,
+      agentApprovalCount: 0,
+      highlightCount: 1,
+      unreadCount: 5,
     }
   );
 });

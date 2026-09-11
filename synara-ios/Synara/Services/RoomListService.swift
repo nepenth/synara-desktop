@@ -88,7 +88,7 @@ struct RoomSummary: Identifiable, Equatable {
     }
 
     var unreadBadgeCount: Int {
-        isMarkedUnread ? max(1, unreadCount) : unreadCount
+        max(unreadCount, hasHighlight ? 1 : 0, isMarkedUnread ? 1 : 0)
     }
 
     var requiresAgentApproval: Bool {
@@ -588,7 +588,7 @@ enum NotificationBadgeSummary {
         var unreadCount = 0
 
         for unread in input.unreadCounts {
-            if let highlight = unread.highlight {
+            if let highlight = unread.highlight, highlight > 0 {
                 highlightCount += clampCount(highlight)
             } else {
                 unreadCount += clampCount(unread.total)

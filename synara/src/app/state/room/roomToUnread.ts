@@ -102,7 +102,7 @@ export const unreadInfosFromNativeRooms = (rooms: readonly RoomSummary[]): Unrea
     unreadInfos.push({
       roomId: room.roomId,
       highlight: room.highlightCount,
-      total: room.highlightCount > room.unreadCount ? room.highlightCount : room.unreadCount,
+      total: Math.max(room.unreadCount, room.highlightCount, room.markedUnread ? 1 : 0),
     });
   }
   return unreadInfos;
