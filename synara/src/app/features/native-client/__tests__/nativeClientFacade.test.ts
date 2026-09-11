@@ -102,6 +102,21 @@ test('retryImmediately recovers native sync then refreshes status', async () => 
   assert.ok(callLog.includes('matrix_sync_status'));
 });
 
+test('retryImmediately still refreshes status when recover is unavailable', async () => {
+  const { invoke, callLog } = invokingWith({
+    matrix_sync_status: {
+      readiness: 'running',
+      sessionGeneration: 7,
+      offlineModeEnabled: false,
+    },
+    matrix_session_snapshot: { status: 'logged_out' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.retryImmediately();
+  assert.equal(callLog[0], 'matrix_sync_recover');
+  assert.ok(callLog.includes('matrix_sync_status'));
+});
+
 test('slidingSyncCapable tri-state: true/false/null propagate through getSyncStateData', async () => {
   for (const capable of [true, false, null]) {
     const { invoke } = invokingWith({

@@ -375,7 +375,12 @@ final class ComposerPasteTextView: UITextView {
             delegate?.textViewDidChange?(self)
             return
         }
-        super.paste(sender)
+        if let plain = UIPasteboard.general.string,
+           plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        {
+            insertAttributedText(NSAttributedString(string: plain))
+            delegate?.textViewDidChange?(self)
+        }
     }
 
     private func insertAttributedText(_ attributed: NSAttributedString) {

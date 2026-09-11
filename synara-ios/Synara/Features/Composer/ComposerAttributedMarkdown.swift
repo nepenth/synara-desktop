@@ -42,7 +42,9 @@ enum ComposerAttributedMarkdown {
 
     #if canImport(UIKit)
         static func attributedString(fromHTML html: String, baseFont: UIFont) -> NSAttributedString? {
-            guard let data = html.data(using: .utf8) else {
+            guard let sanitized = MatrixHTMLRenderer.sanitizedHTMLForClipboard(html: html),
+                  let data = sanitized.data(using: .utf8)
+            else {
                 return nil
             }
             guard let parsed = try? NSMutableAttributedString(
@@ -85,6 +87,20 @@ enum ComposerAttributedMarkdown {
                 let descriptor = baseFont.fontDescriptor.withSymbolicTraits(traits) ?? baseFont.fontDescriptor
                 parsed.addAttribute(.font, value: UIFont(descriptor: descriptor, size: baseFont.pointSize), range: range)
             }
+            if parsed.length > 0 {
+                var attachmentRanges: [NSRange] = []
+                parsed.enumerateAttribute(
+                    .attachment,
+                    in: NSRange(location: 0, length: parsed.length)
+                ) { value, range, _ in
+                    if value != nil {
+                        attachmentRanges.append(range)
+                    }
+                }
+                for range in attachmentRanges.reversed() {
+                    parsed.deleteCharacters(in: range)
+                }
+            }
             return parsed
         }
     #endif
@@ -125,6 +141,10 @@ enum ComposerAttributedMarkdown {
         if isBold {
             inner = "**\(inner)**"
         }
+        if let href = safeLink(attributes) {
+            let label = inner.replacingOccurrences(of: "]", with: "\\]")
+            inner = "[\(label)](\(href))"
+        }
         return inner
     }
 
@@ -135,6 +155,28 @@ enum ComposerAttributedMarkdown {
         let traits = font.fontDescriptor.object(forKey: UIFontDescriptor.AttributeName.traits)
             as? [UIFontDescriptor.TraitKey: Any]
         return traits?[.weight] as? CGFloat ?? 0
+    }
+
+    private static func safeLink(_ attributes: [NSAttributedString.Key: Any]) -> String? {
+        let raw: String?
+        if let url = attributes[.link] as? URL {
+            raw = url.absoluteString
+        } else {
+            raw = attributes[.link] as? String
+        }
+        guard let href = raw, href.isEmpty == false else {
+            return nil
+        }
+        guard href.unicodeScalars.allSatisfy({ scalar in
+            let value = scalar.value
+            return value > 0x1F && value != 0x7F
+        }) else {
+            return nil
+        }
+        guard let scheme = URLComponents(string: href)?.scheme?.lowercased() else {
+            return nil
+        }
+        return ["https", "http", "ftp", "mailto", "magnet"].contains(scheme) ? href : nil
     }
 
     private static func escapeMarkdown(_ text: String) -> String {

@@ -109,8 +109,9 @@ use crate::matrix::store::{
     KeyringStoreKeyVault, StoreKeyMaterial, StoreKeyVaultError, StoreMigrationError, StorePaths,
 };
 use crate::matrix::sync::{
-    build_sync_service, suspend_detected, unconfigured_snapshot, SyncError, SyncIntent,
-    SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner, SUSPEND_WALL_SKEW,
+    build_sync_service, recover_cooldown_active, suspend_detected, unconfigured_snapshot,
+    SyncError, SyncIntent, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
+    RECOVER_COOLDOWN, SUSPEND_WALL_SKEW,
 };
 use crate::matrix::timeline::{
     format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
@@ -281,10 +282,17 @@ enum StoreRecoveryState {
 }
 
 #[derive(Default)]
+struct RecoverGate {
+    in_flight: bool,
+    last_success_wall: Option<SystemTime>,
+}
+
+#[derive(Default)]
 pub struct MatrixAuthState {
     session: Mutex<Option<ManagedMatrixSession>>,
     store_recovery: Mutex<StoreRecoveryState>,
     next_session_generation: AtomicU64,
+    recover_gate: Mutex<RecoverGate>,
 }
 
 impl MatrixAuthState {
@@ -306,16 +314,54 @@ impl MatrixAuthState {
     }
 
     /// Restart the live SyncService after OS suspend. Clones the owner under
-    /// the session mutex, then releases it before stop/start.
+    /// the session mutex, then releases both locks before stop/start.
+    /// Concurrent renderer and watchdog calls share an in-flight flag so we
+    /// do not stop/start twice on the same wake. Renderer IPC keeps a
+    /// wall-clock cooldown; the native watchdog skips that cooldown after a
+    /// proven suspend because monotonic time does not advance during sleep.
     pub(crate) async fn recover_sync_after_wake(&self) -> Result<SyncReadinessSnapshot, SyncError> {
+        self.recover_live_sync(false).await
+    }
+
+    pub(crate) async fn recover_sync_after_detected_suspend(
+        &self,
+    ) -> Result<SyncReadinessSnapshot, SyncError> {
+        self.recover_live_sync(true).await
+    }
+
+    async fn recover_live_sync(
+        &self,
+        ignore_cooldown: bool,
+    ) -> Result<SyncReadinessSnapshot, SyncError> {
         let owner = {
-            let session = self.session.lock().await;
-            match session.as_ref() {
-                Some(active) => active.sync.clone(),
-                None => return Ok(unconfigured_snapshot(self.current_generation())),
+            let mut gate = self.recover_gate.lock().await;
+            if gate.in_flight
+                || (!ignore_cooldown
+                    && recover_cooldown_active(
+                        gate.last_success_wall,
+                        SystemTime::now(),
+                        RECOVER_COOLDOWN,
+                    ))
+            {
+                drop(gate);
+                return Ok(self.sync_status_snapshot().await);
             }
+            let session = self.session.lock().await;
+            let Some(active) = session.as_ref() else {
+                return Ok(unconfigured_snapshot(self.current_generation()));
+            };
+            let owner = active.sync.clone();
+            drop(session);
+            gate.in_flight = true;
+            owner
         };
-        owner.apply_intent(SyncIntent::Resume).await
+        let result = owner.apply_intent(SyncIntent::Resume).await;
+        let mut gate = self.recover_gate.lock().await;
+        gate.in_flight = false;
+        if result.is_ok() {
+            gate.last_success_wall = Some(SystemTime::now());
+        }
+        result
     }
 
     /// Read the existing crypto-status observation as a closed Core projection.
@@ -597,7 +643,7 @@ pub fn spawn_suspend_resume_watch(app: AppHandle) {
             let Some(state) = app.try_state::<MatrixAuthState>() else {
                 continue;
             };
-            if let Err(error) = state.recover_sync_after_wake().await {
+            if let Err(error) = state.recover_sync_after_detected_suspend().await {
                 eprintln!(
                     "[synara] sync resume after suspend failed: {}",
                     error.diagnostic_id()

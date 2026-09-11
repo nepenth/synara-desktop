@@ -78,7 +78,7 @@ import { stopPropagation } from '../../utils/keyboard';
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import { copyRichTextToClipboard } from '../../utils/dom';
-import { sanitizeCustomHtml } from '../../utils/sanitize';
+import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import {
   nativeFollowLiveAttemptKey,
   nativeFollowLiveTarget,
@@ -379,7 +379,7 @@ const NativeTimelineRowActions = ({
         onClick={() => {
           copyRichTextToClipboard(
             body,
-            formattedBody ? sanitizeCustomHtml(formattedBody) : undefined
+            formattedBody ? prepareNativeFormattedBody(formattedBody) : undefined
           );
           closeAfterOneShotAction();
         }}

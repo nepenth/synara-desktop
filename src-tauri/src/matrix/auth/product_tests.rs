@@ -2514,6 +2514,15 @@ fn v_auth_sync_recover_restarts_live_owner_without_rebuild() {
     assert!(product.contains("SyncIntent::Resume"));
     assert!(product.contains("spawn_suspend_resume_watch"));
     assert!(product.contains("suspend_detected"));
+    assert!(product.contains("recover_gate"));
+    assert!(product.contains("recover_cooldown_active"));
+    assert!(product.contains("last_success_wall"));
+    assert!(product.contains("recover_sync_after_detected_suspend"));
+    assert!(product.contains("RECOVER_COOLDOWN"));
+    assert!(
+        !product.contains("last.elapsed()"),
+        "recover cooldown must use wall time, not Instant::elapsed"
+    );
 
     let lib = include_str!("../../lib.rs");
     let build = include_str!("../../../build.rs");

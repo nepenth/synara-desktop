@@ -29,13 +29,39 @@ struct SelectableMessageTextView: UIViewRepresentable {
         textView.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
         textView.setContentHuggingPriority(.defaultLow, for: .horizontal)
         textView.accessibilityIdentifier = "MessageTextSelectionBody"
+        textView.delegate = context.coordinator
         return textView
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    final class Coordinator: NSObject, UITextViewDelegate {
+        func textView(
+            _: UITextView,
+            shouldInteractWith _: URL,
+            in _: NSRange,
+            interaction _: UITextItemInteraction
+        ) -> Bool {
+            false
+        }
+
+        func textView(
+            _: UITextView,
+            shouldInteractWith _: NSTextAttachment,
+            in _: NSRange,
+            interaction _: UITextItemInteraction
+        ) -> Bool {
+            false
+        }
     }
 
     func updateUIView(_ textView: UITextView, context: Context) {
         if textView.attributedText != attributedText {
             textView.attributedText = attributedText
         }
+        textView.delegate = context.coordinator
         textView.accessibilityLabel = accessibilityLabel
         textView.accessibilityHint = accessibilityHint
     }

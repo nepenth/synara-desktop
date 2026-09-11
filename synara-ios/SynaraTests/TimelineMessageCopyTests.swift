@@ -289,6 +289,8 @@ final class TimelineMessageCopyTests: XCTestCase {
         XCTAssertTrue(source.contains("SelectableMessageTextView("))
         XCTAssertTrue(selectionView.contains("isEditable = false"))
         XCTAssertTrue(selectionView.contains("isSelectable = true"))
+        XCTAssertTrue(selectionView.contains("dataDetectorTypes = []"))
+        XCTAssertTrue(selectionView.contains("shouldInteractWith"))
         XCTAssertTrue(source.contains("Button(\"Copy All\", systemImage: \"doc.on.doc\")"))
         XCTAssertTrue(source.contains("includeLinks: false"), "Selection must never activate remote links")
         XCTAssertTrue(source.contains("accessibilityLabel: projection.richText.plainText"))

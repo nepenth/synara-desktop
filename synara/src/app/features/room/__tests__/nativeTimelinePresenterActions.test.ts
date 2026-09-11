@@ -46,7 +46,8 @@ test('native timeline rows retain hover/focus action access without restoring th
   assert.match(presenter, /data-native-timeline-action-menu="true"/);
 
   assert.match(presenter, /copyRichTextToClipboard/);
-  assert.match(presenter, /sanitizeCustomHtml\(formattedBody\)/);
+  assert.match(presenter, /prepareNativeFormattedBody\(formattedBody\)/);
+  assert.doesNotMatch(presenter, /sanitizeCustomHtml\(formattedBody\)/);
 
   for (const action of [
     'Copy Message',

@@ -127,5 +127,9 @@ test('desktop wake path restarts native sync instead of only rereading status', 
   assert.match(facade, /await invoke\('matrix_sync_recover'\)/);
   assert.match(product, /spawn_suspend_resume_watch/);
   assert.match(product, /suspend_detected/);
+  assert.match(product, /recover_cooldown_active/);
+  assert.match(product, /last_success_wall/);
+  assert.match(product, /recover_sync_after_detected_suspend/);
+  assert.doesNotMatch(product, /last\.elapsed\(\)/);
   assert.match(lib, /spawn_suspend_resume_watch/);
 });

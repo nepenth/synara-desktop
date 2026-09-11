@@ -38,7 +38,7 @@ pub use service::{
     SyncServiceOwner,
 };
 pub use sync_phase::SyncPhase;
-pub use wake::{suspend_detected, SUSPEND_WALL_SKEW};
+pub use wake::{recover_cooldown_active, suspend_detected, RECOVER_COOLDOWN, SUSPEND_WALL_SKEW};
 
 /// Static marker for link / schema smoke (no network, no Client).
 pub const MATRIX_SYNC_MARKER: &str = "matrix-sync-readiness-p4.1";

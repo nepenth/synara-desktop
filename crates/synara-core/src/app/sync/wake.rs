@@ -10,6 +10,28 @@ use std::time::{Duration, Instant, SystemTime};
 /// Wall-clock advance beyond monotonic time that counts as a suspend.
 pub const SUSPEND_WALL_SKEW: Duration = Duration::from_secs(15);
 
+/// Debounce duplicate recover IPC on the same wake. Wall time is required:
+/// `Instant` (CLOCK_MONOTONIC) typically does not advance during OS sleep, so
+/// an 8s monotonic cooldown can still look "hot" after hours of suspend and
+/// skip the watchdog's one-shot resume.
+pub const RECOVER_COOLDOWN: Duration = Duration::from_secs(8);
+
+/// True when a previous successful recover should suppress another restart.
+/// A backward NTP step returns false so recovery is not stuck.
+pub fn recover_cooldown_active(
+    last_success_wall: Option<SystemTime>,
+    now_wall: SystemTime,
+    cooldown: Duration,
+) -> bool {
+    let Some(last) = last_success_wall else {
+        return false;
+    };
+    match now_wall.duration_since(last) {
+        Ok(elapsed) => elapsed < cooldown,
+        Err(_) => false,
+    }
+}
+
 /// True when wall time jumped forward relative to monotonic time by at least
 /// `min_skew`. A backward NTP step returns false.
 pub fn suspend_detected(
@@ -74,5 +96,35 @@ mod tests {
             mono1,
             SUSPEND_WALL_SKEW
         ));
+    }
+
+    #[test]
+    fn hour_sleep_is_outside_recover_cooldown() {
+        let last = UNIX_EPOCH + Duration::from_secs(1_000);
+        let now = last + Duration::from_secs(3_600);
+        assert!(!recover_cooldown_active(Some(last), now, RECOVER_COOLDOWN));
+    }
+
+    #[test]
+    fn same_wake_is_inside_recover_cooldown() {
+        let last = UNIX_EPOCH + Duration::from_secs(1_000);
+        let now = last + Duration::from_secs(2);
+        assert!(recover_cooldown_active(Some(last), now, RECOVER_COOLDOWN));
+    }
+
+    #[test]
+    fn recover_cooldown_inactive_before_first_success() {
+        assert!(!recover_cooldown_active(
+            None,
+            UNIX_EPOCH + Duration::from_secs(1_000),
+            RECOVER_COOLDOWN
+        ));
+    }
+
+    #[test]
+    fn recover_cooldown_inactive_when_clock_steps_backward() {
+        let last = UNIX_EPOCH + Duration::from_secs(1_000);
+        let now = UNIX_EPOCH + Duration::from_secs(900);
+        assert!(!recover_cooldown_active(Some(last), now, RECOVER_COOLDOWN));
     }
 }

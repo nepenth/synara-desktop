@@ -325,6 +325,21 @@ test('native formatted HTML applies the exact Matrix v1.19 presentation profile'
   assert.match(sanitized, /<span>diagram<\/span>/);
 });
 
+test('copy Message HTML uses presentation sanitizer so remote images stay inert', () => {
+  const copied = prepareNativeFormattedBody(
+    '<p><img src="https://evil.example/track" alt="Innocent summary"></p>'
+  );
+  assert.ok(copied);
+  assert.doesNotMatch(copied, /evil\.example/);
+  assert.doesNotMatch(copied, /<a[\s>]/);
+  assert.doesNotMatch(copied, /<img/);
+  assert.match(copied, /Innocent summary/);
+  assert.match(
+    readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8'),
+    /prepareNativeFormattedBody\(formattedBody\)/
+  );
+});
+
 test('native formatted renderer explicitly owns spoilers, image fallback, and plain-body fallback', () => {
   assert.match(formattedBody, /data-mx-spoiler/);
   assert.match(formattedBody, /Reveal spoiler/);
