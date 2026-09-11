@@ -32,6 +32,7 @@ enum SharedCoreRoomListRows {
         let markedUnread: Bool
         let lastActivityTs: UInt64?
         let lastMessagePreview: String?
+        let lastMessageIsAgentApproval: Bool
         let isFavorite: Bool
         let encryptionStatus: SynaraRoomEncryptionStatus
     }
@@ -69,6 +70,7 @@ enum SharedCoreRoomListRows {
                     invite: invite,
                     lastMessagePreview: room.lastMessagePreview
                 ),
+                lastMessageIsAgentApproval: room.lastMessageIsAgentApproval,
                 unreadCount: room.unreadCount,
                 hasHighlight: room.highlightCount > 0,
                 isMarkedUnread: room.markedUnread,

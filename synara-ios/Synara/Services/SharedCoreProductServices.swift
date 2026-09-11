@@ -665,6 +665,7 @@ final class SharedCoreRoomListService: RoomListServicing {
                         markedUnread: $0.markedUnread,
                         lastActivityTs: $0.lastActivityTs,
                         lastMessagePreview: $0.lastMessagePreview,
+                        lastMessageIsAgentApproval: $0.lastMessageIsAgentApproval,
                         isFavorite: $0.isFavorite,
                         encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
                     )

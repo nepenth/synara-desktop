@@ -24,6 +24,7 @@ import { getSortedLaterItems } from '../../utils/later';
 import { laterContentAtom } from '../../state/laterList';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
+import { countJoinedRoomAgentApprovals } from '../../notifications/badgeSummary';
 import {
   getPlatformNotificationSummary,
   registerPlatformAgentActionListener,
@@ -150,13 +151,7 @@ function PlatformBadgeAndTrayUpdater() {
     const activeLaterCount = getSortedLaterItems(laterContent).filter(
       (item) => !item.completedAt
     ).length;
-    const agentApprovalCount = snapshot.rooms.filter(
-      (room) =>
-        room.membership === 'join' &&
-        !room.isSpace &&
-        typeof room.lastMessagePreview === 'string' &&
-        detectAgentApprovalPrompt({ body: room.lastMessagePreview })
-    ).length;
+    const agentApprovalCount = countJoinedRoomAgentApprovals(snapshot.rooms);
     const summary = getPlatformNotificationSummary({
       unreadCounts: roomToUnread.values(),
       laterActiveCount: activeLaterCount,

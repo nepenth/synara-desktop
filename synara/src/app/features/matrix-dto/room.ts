@@ -63,6 +63,8 @@ export type RoomSummary = {
   notificationMode?: NotificationMode;
   lastActivityTs?: number;
   lastMessagePreview?: string;
+  /** Raw last-event approval signal. Do not classify from lastMessagePreview. */
+  lastMessageIsAgentApproval: boolean;
   heroes?: RoomHero[];
   tombstoneSuccessorRoomId?: string;
 };
@@ -93,6 +95,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const markedUnread = reqBoolean(value, 'markedUnread');
   const lastActivityTs = optNumber(value, 'lastActivityTs');
   const lastMessagePreview = optString(value, 'lastMessagePreview');
+  const lastMessageIsAgentApproval = optBoolean(value, 'lastMessageIsAgentApproval');
   const tombstoneSuccessorRoomId = optString(value, 'tombstoneSuccessorRoomId');
   if (
     roomId === null ||
@@ -109,6 +112,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     markedUnread === null ||
     lastActivityTs === null ||
     lastMessagePreview === null ||
+    lastMessageIsAgentApproval === null ||
     tombstoneSuccessorRoomId === null ||
     !isMembership(value.membership)
   ) {
@@ -154,6 +158,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     notificationMode,
     lastActivityTs,
     lastMessagePreview,
+    lastMessageIsAgentApproval: lastMessageIsAgentApproval ?? false,
     heroes,
     tombstoneSuccessorRoomId,
   };

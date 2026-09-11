@@ -14,6 +14,7 @@ const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): Ro
   unreadCount: 0,
   highlightCount: 0,
   markedUnread: false,
+  lastMessageIsAgentApproval: false,
   ...overrides,
 });
 

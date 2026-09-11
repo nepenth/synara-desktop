@@ -115,6 +115,9 @@ pub struct RoomSummary {
     pub last_activity_ts: Option<u64>,
     /// Privacy-safe last-message preview. Never tokens or `mxc://`.
     pub last_message_preview: Option<String>,
+    /// Raw last-event approval classification. Collapsed previews are not
+    /// a substitute; clients must not re-run the prompt matcher on preview text.
+    pub last_message_is_agent_approval: bool,
     /// Bounded hero list for name/avatar fallbacks.
     pub heroes: Option<Vec<RoomHero>>,
     pub tombstone_successor_room_id: Option<RoomId>,
@@ -153,6 +156,7 @@ struct RoomSummarySerialize<'a> {
     last_activity_ts: Option<u64>,
     #[serde(skip_serializing_if = "Option::is_none")]
     last_message_preview: &'a Option<String>,
+    last_message_is_agent_approval: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     heroes: &'a Option<Vec<RoomHero>>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -185,6 +189,7 @@ impl Serialize for RoomSummary {
             notification_mode: self.notification_mode,
             last_activity_ts: self.last_activity_ts,
             last_message_preview: &self.last_message_preview,
+            last_message_is_agent_approval: self.last_message_is_agent_approval,
             heroes: &self.heroes,
             tombstone_successor_room_id: &self.tombstone_successor_room_id,
         }
@@ -228,6 +233,8 @@ struct RoomSummaryWire {
     #[serde(default)]
     last_message_preview: Option<String>,
     #[serde(default)]
+    last_message_is_agent_approval: bool,
+    #[serde(default)]
     heroes: Option<Vec<RoomHero>>,
     #[serde(default)]
     tombstone_successor_room_id: Option<RoomId>,
@@ -264,6 +271,7 @@ impl<'de> Deserialize<'de> for RoomSummary {
             notification_mode: wire.notification_mode,
             last_activity_ts: wire.last_activity_ts,
             last_message_preview: wire.last_message_preview,
+            last_message_is_agent_approval: wire.last_message_is_agent_approval,
             heroes: wire.heroes,
             tombstone_successor_room_id: wire.tombstone_successor_room_id,
         })

@@ -23,6 +23,7 @@ pub struct RoomSummaryBuilder {
     marked_unread: bool,
     last_activity_ts: Option<u64>,
     last_message_preview: Option<String>,
+    last_message_is_agent_approval: bool,
 }
 
 impl RoomSummaryBuilder {
@@ -42,6 +43,7 @@ impl RoomSummaryBuilder {
             marked_unread: false,
             last_activity_ts: None,
             last_message_preview: None,
+            last_message_is_agent_approval: false,
         }
     }
 
@@ -115,6 +117,11 @@ impl RoomSummaryBuilder {
         self
     }
 
+    pub fn last_message_is_agent_approval(mut self, value: bool) -> Self {
+        self.last_message_is_agent_approval = value;
+        self
+    }
+
     pub fn build(self) -> Result<RoomSummary, super::error::RoomListError> {
         let room_id = self.room_id.trim().to_owned();
         if room_id.is_empty() || !room_id.starts_with('!') {
@@ -143,6 +150,7 @@ impl RoomSummaryBuilder {
             notification_mode: None,
             last_activity_ts: self.last_activity_ts,
             last_message_preview: self.last_message_preview,
+            last_message_is_agent_approval: self.last_message_is_agent_approval,
             heroes: None,
             tombstone_successor_room_id: None,
         })

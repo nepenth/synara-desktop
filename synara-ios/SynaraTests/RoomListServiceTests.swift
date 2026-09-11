@@ -1216,6 +1216,7 @@ private extension RoomSummary {
             id: id,
             name: name,
             lastMessagePreview: lastMessagePreview,
+            lastMessageIsAgentApproval: lastMessageIsAgentApproval,
             unreadCount: unreadCount,
             hasHighlight: hasHighlight,
             isMarkedUnread: isMarkedUnread,
