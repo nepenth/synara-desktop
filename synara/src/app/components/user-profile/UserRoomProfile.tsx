@@ -199,7 +199,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
         )}
         {nativeMembersFailed && (
           <Text size="T200" style={{ color: color.Critical.Main }}>
-            Could not load this member's room membership.
+            Could not load room membership for this user.
           </Text>
         )}
         {visibility.showPermissionsLoading && !nativeMembersFailed && (
