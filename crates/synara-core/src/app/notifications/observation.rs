@@ -116,7 +116,6 @@ impl NativeNotificationObservationOwner {
                             follow_up_encrypted_observation(
                                 room,
                                 event,
-                                room_id,
                                 own_user_id,
                                 emit,
                                 retired,
@@ -168,13 +167,13 @@ fn needs_decryption_follow_up(event: &AnySyncMessageLikeEvent) -> bool {
 async fn follow_up_encrypted_observation(
     room: Room,
     original_event: AnySyncMessageLikeEvent,
-    room_id: String,
     own_user_id: OwnedUserId,
     emit: NotificationObservationEmit,
     retired: Arc<AtomicBool>,
     session_generation: u64,
 ) {
     let event_id = original_event.event_id().to_owned();
+    let room_id = room.room_id().to_string();
     for delay_ms in DECRYPT_FOLLOW_UP_DELAYS_MS {
         if retired.load(Ordering::Acquire) {
             return;
@@ -495,5 +494,11 @@ mod tests {
         );
         assert!(!needs_decryption_follow_up(&encrypted_edit));
         assert!(!needs_decryption_follow_up(&text(bob, NOW, "plain")));
+    }
+
+    #[test]
+    fn encrypted_follow_up_derives_room_id_from_the_room() {
+        let source = include_str!("observation.rs");
+        assert!(source.contains("let room_id = room.room_id().to_string();"));
     }
 }
