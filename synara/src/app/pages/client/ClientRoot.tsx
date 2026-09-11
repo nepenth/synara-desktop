@@ -48,7 +48,7 @@ import { AuthMetadataProvider } from '../../hooks/useAuthMetadata';
 import { getActiveSession, getSessionBootstrapResult } from '../../state/sessionBootstrap';
 import { AutoDiscovery } from './AutoDiscovery';
 import {
-  hiddenDurationMs,
+  consumeHiddenDurationMs,
   shouldRecoverSyncOnWake,
   SYNC_WAKE_RECOVER_COOLDOWN_MS,
   type SyncWakeReason,
@@ -175,20 +175,21 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
       retryTimer = undefined;
       if (document.visibilityState === 'hidden') return;
       const now = Date.now();
+      const consumed = consumeHiddenDurationMs(hiddenAtMs, now);
+      hiddenAtMs = consumed.hiddenAtMs;
       if (now - lastRecoverAtMs < SYNC_WAKE_RECOVER_COOLDOWN_MS) return;
       const state = mx.getSyncState();
       if (
         !shouldRecoverSyncOnWake({
           reason,
           syncState: state,
-          hiddenDurationMs: hiddenDurationMs(hiddenAtMs, now),
+          hiddenDurationMs: consumed.hiddenDurationMs,
           persisted,
         })
       ) {
         return;
       }
       lastRecoverAtMs = now;
-      hiddenAtMs = null;
       recordClientDiagnostic('session', 'sync.resume-retry', {
         source: 'resume',
         reason,

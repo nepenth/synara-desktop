@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  consumeHiddenDurationMs,
   hiddenDurationMs,
   shouldRecoverSyncOnWake,
   shouldRetrySyncOnResume,
@@ -115,6 +116,42 @@ test('hidden duration is zero until the window has been hidden', () => {
   assert.equal(hiddenDurationMs(10_000, 25_000), 15_000);
 });
 
+test('a short hide is consumed so a later focus cannot reuse a stale duration', () => {
+  const firstVisible = consumeHiddenDurationMs(10_000, 20_000);
+  assert.equal(firstVisible.hiddenDurationMs, 10_000);
+  assert.equal(firstVisible.hiddenAtMs, null);
+  assert.equal(
+    shouldRecoverSyncOnWake({
+      reason: 'visibilitychange',
+      syncState: 'PREPARED',
+      hiddenDurationMs: firstVisible.hiddenDurationMs,
+    }),
+    false
+  );
+
+  const laterFocus = consumeHiddenDurationMs(firstVisible.hiddenAtMs, 40_000);
+  assert.equal(laterFocus.hiddenDurationMs, 0);
+  assert.equal(
+    shouldRecoverSyncOnWake({
+      reason: 'focus',
+      syncState: 'PREPARED',
+      hiddenDurationMs: laterFocus.hiddenDurationMs,
+    }),
+    false
+  );
+
+  const longHide = consumeHiddenDurationMs(10_000, 10_000 + SYNC_WAKE_HIDDEN_MS);
+  assert.equal(longHide.hiddenDurationMs, SYNC_WAKE_HIDDEN_MS);
+  assert.equal(
+    shouldRecoverSyncOnWake({
+      reason: 'visibilitychange',
+      syncState: 'PREPARED',
+      hiddenDurationMs: longHide.hiddenDurationMs,
+    }),
+    true
+  );
+});
+
 test('desktop wake path restarts native sync instead of only rereading status', () => {
   const clientRoot = readFileSync('src/app/pages/client/ClientRoot.tsx', 'utf8');
   const facade = readFileSync('src/app/features/native-client/nativeClientFacade.ts', 'utf8');
@@ -122,6 +159,7 @@ test('desktop wake path restarts native sync instead of only rereading status', 
   const lib = readFileSync('../src-tauri/src/lib.rs', 'utf8');
 
   assert.match(clientRoot, /shouldRecoverSyncOnWake/);
+  assert.match(clientRoot, /consumeHiddenDurationMs/);
   assert.match(clientRoot, /scheduleRetry\('online'\)/);
   assert.match(facade, /matrix_sync_recover/);
   assert.match(facade, /await invoke\('matrix_sync_recover'\)/);
