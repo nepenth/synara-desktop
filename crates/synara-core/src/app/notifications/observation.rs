@@ -37,7 +37,7 @@ use matrix_sdk::ruma::events::room::message::Relation as MessageRelation;
 use matrix_sdk::ruma::events::{
     AnySyncMessageLikeEvent, AnySyncTimelineEvent, MessageLikeEventType, SyncMessageLikeEvent,
 };
-use matrix_sdk::ruma::{OwnedEventId, OwnedUserId, UserId};
+use matrix_sdk::ruma::{OwnedUserId, UserId};
 use matrix_sdk::{Client, Room};
 use serde::{Deserialize, Serialize};
 
@@ -112,12 +112,10 @@ impl NativeNotificationObservationOwner {
                         emit(observation);
                     }
                     if needs_decryption_follow_up(&event) {
-                        let event_id = event.event_id().to_owned();
                         tokio::spawn(async move {
                             follow_up_encrypted_observation(
                                 room,
                                 event,
-                                event_id,
                                 room_id,
                                 own_user_id,
                                 emit,
@@ -170,13 +168,13 @@ fn needs_decryption_follow_up(event: &AnySyncMessageLikeEvent) -> bool {
 async fn follow_up_encrypted_observation(
     room: Room,
     original_event: AnySyncMessageLikeEvent,
-    event_id: OwnedEventId,
     room_id: String,
     own_user_id: OwnedUserId,
     emit: NotificationObservationEmit,
     retired: Arc<AtomicBool>,
     session_generation: u64,
 ) {
+    let event_id = original_event.event_id().to_owned();
     for delay_ms in DECRYPT_FOLLOW_UP_DELAYS_MS {
         if retired.load(Ordering::Acquire) {
             return;

@@ -44,7 +44,7 @@ export const summarizeNotifications = ({
   let highlightCount = 0;
   let unreadCount = 0;
 
-    Array.from(unreadCounts).forEach((unread) => {
+  Array.from(unreadCounts).forEach((unread) => {
     const highlight = clampCount(unread.highlight);
     if (unread.highlight !== undefined && highlight > 0) {
       highlightCount += highlight;
