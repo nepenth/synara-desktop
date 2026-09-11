@@ -8,7 +8,7 @@ enum SynaraSharedConstants {
     static let lockScreenMessagePreviewsKey = "synara.settings.lockScreenMessagePreviews"
     static let defaultLockScreenMessagePreviews = false
     static let timeSensitiveAgentApprovalsKey = "synara.settings.timeSensitiveAgentApprovals"
-    static let defaultTimeSensitiveAgentApprovals = false
+    static let defaultTimeSensitiveAgentApprovals = true
     static let themeBaseColorKey = "themeBaseColor"
     static let hour24ClockKey = "synara.settings.hour24Clock"
     static let hideActivityKey = "synara.settings.hideActivity"

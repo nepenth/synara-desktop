@@ -224,6 +224,44 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(NotificationsInboxSections.make(from: [marked]).unreadRooms.map(\.id), [marked.id])
     }
 
+    func testUnreadBadgeCountSurfacesHighlightsAndMarkedUnread() {
+        let mentionOnly = RoomSummary(
+            id: "!mention:matrix.org",
+            name: "Mentions",
+            lastMessagePreview: "Hello",
+            unreadCount: 0,
+            hasHighlight: true,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let marked = RoomSummary(
+            id: "!marked-badge:matrix.org",
+            name: "Marked",
+            lastMessagePreview: "Saved",
+            unreadCount: 0,
+            hasHighlight: false,
+            isMarkedUnread: true,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+        let ordinary = RoomSummary(
+            id: "!chat:matrix.org",
+            name: "Chat",
+            lastMessagePreview: "Hi",
+            unreadCount: 4,
+            hasHighlight: false,
+            kind: .room,
+            membership: .joined,
+            lastActivityAt: RoomListFixtures.now
+        )
+
+        XCTAssertEqual(mentionOnly.unreadBadgeCount, 1)
+        XCTAssertEqual(marked.unreadBadgeCount, 1)
+        XCTAssertEqual(ordinary.unreadBadgeCount, 4)
+    }
+
     func testScopeFilterRespectsSelectedSpace() {
         let rooms = RoomListFixtures.small()
 
@@ -402,6 +440,21 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(summary?.inboxBadgeCount, 2)
         XCTAssertEqual(summary?.highlightCount, 0)
         XCTAssertEqual(summary?.unreadCount, 3)
+    }
+
+    func testNotificationBadgeSummaryCountsZeroHighlightAsOrdinaryUnread() {
+        let summary = NotificationBadgeSummary.summarizeNotifications(
+            NotificationSummaryInput(
+                unreadCounts: [
+                    BadgeUnreadSource(total: 5, highlight: 0),
+                    BadgeUnreadSource(total: 2, highlight: 1),
+                ]
+            )
+        )
+
+        XCTAssertEqual(summary?.appBadgeCount, 6)
+        XCTAssertEqual(summary?.highlightCount, 1)
+        XCTAssertEqual(summary?.unreadCount, 5)
     }
 
     func testNotificationsInboxSectionsPartitionRooms() {

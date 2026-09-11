@@ -53,6 +53,7 @@ pub use invites::{
     contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
 };
 pub use last_message::{
+    last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
     last_message_preview_from_invite, sanitize_last_message_preview,
 };

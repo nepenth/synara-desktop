@@ -25,7 +25,7 @@ test('native unread projection keeps joined rooms with counts or marked-unread',
   ]);
   assert.deepEqual(infos, [
     { roomId: '!a:example.org', highlight: 1, total: 2 },
-    { roomId: '!b:example.org', highlight: 0, total: 0 },
+    { roomId: '!b:example.org', highlight: 0, total: 1 },
   ]);
 });
 
@@ -68,4 +68,11 @@ test('nav unread comes from native unreadCount, not a leftover jotai total', () 
     room({ roomId: '!a:example.org', unreadCount: 4, highlightCount: 1 })
   );
   assert.deepEqual(unread, { highlight: 1, total: 4, from: null });
+});
+
+test('native unread projection badges mention and approval highlights at zero messages', () => {
+  const unread = unreadFromNativeRoom(
+    room({ roomId: '!a:example.org', unreadCount: 0, highlightCount: 1 })
+  );
+  assert.deepEqual(unread, { highlight: 1, total: 1, from: null });
 });

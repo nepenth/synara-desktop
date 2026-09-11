@@ -10,6 +10,7 @@ import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -140,6 +141,7 @@ function TrayDoNotDisturbSync() {
 
 function PlatformBadgeAndTrayUpdater() {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
+  const snapshot = useNativeRoomListSnapshot();
   const invites = useAtomValue(allInvitesAtom);
   const laterContent = useAtomValue(laterContentAtom);
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -148,10 +150,18 @@ function PlatformBadgeAndTrayUpdater() {
     const activeLaterCount = getSortedLaterItems(laterContent).filter(
       (item) => !item.completedAt
     ).length;
+    const agentApprovalCount = snapshot.rooms.filter(
+      (room) =>
+        room.membership === 'join' &&
+        !room.isSpace &&
+        typeof room.lastMessagePreview === 'string' &&
+        detectAgentApprovalPrompt({ body: room.lastMessagePreview })
+    ).length;
     const summary = getPlatformNotificationSummary({
       unreadCounts: roomToUnread.values(),
       laterActiveCount: activeLaterCount,
       inviteCount: invites.length,
+      agentApprovalCount,
     });
 
     setPlatformBadgeCount(summary.appBadgeCount);
@@ -164,7 +174,7 @@ function PlatformBadgeAndTrayUpdater() {
         doNotDisturb: !showNotifications,
       }).catch(() => undefined);
     }
-  }, [invites.length, laterContent, roomToUnread, showNotifications]);
+  }, [invites.length, laterContent, roomToUnread, showNotifications, snapshot.rooms]);
 
   return null;
 }
@@ -248,6 +258,7 @@ function MessageNotifications() {
   // only guards against a duplicated observation of the same event.
   // Transient suppressions are deliberately not remembered.
   const submittedRef = useRef<Set<string>>(new Set());
+  const encryptedFallbackRef = useRef<Set<string>>(new Set());
 
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -357,6 +368,20 @@ function MessageNotifications() {
 
       const cacheKey = `${roomId}:${eventId}`;
       if (submittedRef.current.has(cacheKey)) return;
+      // Ciphertext observations get a Core decrypt follow-up. Deciding them
+      // as generic messages records (room, event) seen and then blocks the
+      // critical agent-approval path after plaintext arrives. Skip the first
+      // encrypted pass; a second encrypted observation means decrypt retries
+      // exhausted and the generic message path may notify.
+      if (observation.eventType === 'm.room.encrypted') {
+        if (!encryptedFallbackRef.current.has(cacheKey)) {
+          encryptedFallbackRef.current.add(cacheKey);
+          return;
+        }
+        encryptedFallbackRef.current.delete(cacheKey);
+      } else {
+        encryptedFallbackRef.current.delete(cacheKey);
+      }
 
       let readback;
       try {
