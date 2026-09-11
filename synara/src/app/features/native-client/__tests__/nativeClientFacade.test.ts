@@ -877,6 +877,8 @@ test('F6c-2a evented room cache satisfies EventedRoomReading contract', async ()
   assert.equal(room?.hasEncryptionStateEvent(), false);
   assert.equal(room?.isDirect, false);
   assert.equal(room?.isEncrypted, false);
+  assert.equal(typeof room?.currentState.events?.forEach, 'function');
+  assert.equal(typeof (room?.accountData as { entries?: unknown }).entries, 'function');
 });
 
 test('F6c-2a GAP stub batch (user/pusher/alias/upload/verification)', async () => {

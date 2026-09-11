@@ -13,6 +13,8 @@ const tests = [
   'src/app/utils/__tests__/remoteContent.test.ts',
   'src/app/contracts/__tests__/contractSchemas.test.ts',
   'src/app/hooks/__tests__/useVirtualPaginator.test.ts',
+  'src/app/hooks/__tests__/useRoomState.test.ts',
+  'src/app/components/app-error/__tests__/errorMessage.test.ts',
   'src/app/hooks/__tests__/useAsyncSearchRenderSafety.test.ts',
   'src/app/hooks/__tests__/nativeRoomMembersOwner.test.ts',
   'src/app/hooks/__tests__/nativeRoomPowerReadOwner.test.ts',

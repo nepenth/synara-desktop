@@ -72,6 +72,7 @@ import { SearchModalRenderer } from '../features/search';
 import { getActiveSession } from '../state/sessionBootstrap';
 import { Settings } from '../features/settings';
 import { Modal500 } from '../components/Modal500';
+import { RouteError } from './RouteError';
 
 function SettingsRoute() {
   const navigate = useNavigate();
@@ -89,7 +90,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
   const mobile = screenSize === ScreenSize.Mobile;
 
   const routes = createRoutesFromElements(
-    <Route>
+    <Route errorElement={<RouteError />}>
       <Route
         index
         loader={() => {
