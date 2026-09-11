@@ -157,7 +157,17 @@ async fn project_room(room: &Room) -> RoomSummary {
     };
     let membership = membership(room.state());
     let last_message_preview = last_message_preview(room);
-    let pending_approval = last_message_is_agent_approval(room);
+    // Approval prompts only promote unread/highlight while the SDK still
+    // reports unread. Reading the room does not change the latest body, so
+    // boosting from the last message alone would recreate badges after every
+    // receipt that already zeroed the counters.
+    let has_unread = room.num_unread_messages() > 0
+        || room.num_unread_notifications() > 0
+        || room.num_unread_mentions() > 0
+        || counts.notification_count > 0
+        || counts.highlight_count > 0;
+    let pending_approval =
+        pending_approval_unread_boost(has_unread, last_message_is_agent_approval(room));
     let mention_count = room
         .num_unread_mentions()
         .max(counts.highlight_count)
@@ -233,6 +243,11 @@ fn last_message_preview(room: &Room) -> Option<String> {
             }))
         }
     }
+}
+
+/// Last-message approval must not manufacture unread after receipts clear.
+fn pending_approval_unread_boost(has_unread: bool, last_message_is_approval: bool) -> bool {
+    has_unread && last_message_is_approval
 }
 
 fn last_message_is_agent_approval(room: &Room) -> bool {
@@ -314,6 +329,16 @@ mod tests {
     }
 
     #[test]
+    fn pending_approval_does_not_restore_unread_after_receipts_clear_counts() {
+        // Latest event can still be the approval prompt after a read receipt
+        // zeros every SDK counter; the boost must stay off so badges clear.
+        assert!(!pending_approval_unread_boost(false, true));
+        assert!(pending_approval_unread_boost(true, true));
+        assert!(!pending_approval_unread_boost(true, false));
+        assert!(!pending_approval_unread_boost(false, false));
+    }
+
+    #[test]
     fn encryption_projection_preserves_unknown_and_errors_fail_closed() {
         assert_eq!(
             project_encryption_status::<()>(Ok(EncryptionState::Encrypted)),
@@ -340,6 +365,7 @@ mod tests {
         assert!(source.contains("values.iter().map(|room| room.room_id().to_owned())"));
         assert!(source.contains("MissedTickBehavior::Skip"));
         assert!(source.contains("last_message_is_agent_approval"));
+        assert!(source.contains("pending_approval_unread_boost"));
         let truncated_viewport = concat!("ROOM_LIST_SUBSCRIPTION", "_LIMIT");
         assert_eq!(
             source.matches(truncated_viewport).count(),
