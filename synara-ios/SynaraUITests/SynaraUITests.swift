@@ -446,10 +446,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(revealRoomDetailsElement(bobRow, app: app, timeout: 12))
         tap(bobRow)
         XCTAssertTrue(app.collectionViews["RoomMemberActionsScreen"].waitForExistence(timeout: 5))
-        XCTAssertTrue(app.buttons["RoomMemberRemoveButton"].waitForExistence(timeout: 5))
+        let remove = app.buttons["RoomMemberRemoveButton"]
+        XCTAssertTrue(remove.waitForExistence(timeout: 5))
+        if remove.isHittable == false {
+            app.collectionViews["RoomMemberActionsScreen"].swipeUp()
+        }
         XCTAssertTrue(app.buttons["RoomMemberBanButton"].exists)
-        tap(app.buttons["RoomMemberRemoveButton"])
-        tap(app.buttons["RoomMemberConfirmActionButton"].firstMatch, timeout: 5)
+        tap(remove)
+        confirmMemberDestructiveAction(app: app, title: "Remove from room")
         XCTAssertTrue(app.staticTexts["RoomMemberActionMessage"].waitForExistence(timeout: 8))
         XCTAssertEqual(app.staticTexts["RoomMemberActionMessage"].label, "User removed.")
     }
@@ -3159,6 +3163,23 @@ final class SynaraUITests: XCTestCase {
         }
 
         return element.exists
+    }
+
+    private func confirmMemberDestructiveAction(app: XCUIApplication, title: String) {
+        let identified = identifiedElement(in: app, "RoomMemberConfirmActionButton")
+        let alertButton = app.alerts.buttons[title]
+        let sheetButton = app.sheets.buttons[title]
+        XCTAssertTrue(
+            waitForAnyElement([identified, alertButton, sheetButton], timeout: 5),
+            "Expected a confirm control for \(title)"
+        )
+        if identified.exists {
+            tap(identified)
+        } else if alertButton.exists {
+            tap(alertButton)
+        } else {
+            tap(sheetButton)
+        }
     }
 
     private func waitForAnyElement(_ elements: [XCUIElement], timeout: TimeInterval) -> Bool {
