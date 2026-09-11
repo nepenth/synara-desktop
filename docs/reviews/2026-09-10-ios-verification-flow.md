@@ -56,7 +56,7 @@ four columns at ordinary text sizes and two at accessibility sizes. The result
 observes own-device status from the same SDK device snapshot used in Security;
 protocol completion alone displays “Verification complete,” not “Device verified.”
 
-## Validation in progress
+## Validation
 
 Swift app, extension, and both test targets compile. Matrix boundary, generated
 binding scaffold, documentation, version, and whitespace checks pass. Focused
@@ -64,8 +64,28 @@ regressions cover replayed completion, exact-flow acknowledgement, dismissal
 failure/retry, concurrent dismissal, new requests, and session lifecycle changes.
 UI cases exercise compact layout, Done, swipe, unverified completion, and large text.
 
+The clean CI unit run on iPhone 17 / iOS 26.5 passed: 732 tests passed, three
+skipped, and zero failed. All six new `CryptoVerificationPresentationTests`
+passed. Evidence: [CI run 34544827922](https://github.com/nepenth/synara-desktop/actions/runs/34544827922),
+`ios-test-results/test-20260911-000422-6154.xcresult`.
+
 Local runtime execution was blocked before assertions: a fresh iOS 26.5
 simulator stalled in CoreLocation migration; an isolated clone of an initialized
 QA device booted but application launch/uninstall calls then hung in CoreSimulator.
 No live account verification or trust change was performed for this UI work.
-The draft PR's clean macOS CI runner will supply runtime and visual evidence.
+The clean macOS CI UI job also failed before assertions. Xcode reported
+`Failed to send signal 19 to process ...: 3` while launching Synara, then
+stalled until the 75-minute job timeout. Its test result bundle is incomplete
+(no `Info.plist`), and it contains no completed UI test report or screenshot
+evidence. The UI job was cancelled by timeout and the Quality gate failed.
+
+The tested implementation is commit `27b6e021`. Presentation state transitions
+are confirmed by unit tests. Actual sheet sizing, large-text scrolling, and
+Done/swipe interactions remain **not confirmed** in runtime. The PR stays draft
+pending execution on a functioning simulator or device; no merge or release
+was performed. This does not establish the trust state of the user's historical
+first attempt.
+
+Temporary local DerivedData, failed result bundles, generated frameworks, and
+the isolated QA simulator were removed after handing validation to CI. Other
+active builds and the original QA simulator were left intact.
