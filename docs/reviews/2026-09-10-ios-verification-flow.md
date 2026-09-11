@@ -89,3 +89,34 @@ first attempt.
 Temporary local DerivedData, failed result bundles, generated frameworks, and
 the isolated QA simulator were removed after handing validation to CI. Other
 active builds and the original QA simulator were left intact.
+
+## Release-candidate UI fixture path
+
+- Goal and actor: XCTest exercises the real verification sheet and presenter
+  from a fresh, signed-in fixture session.
+- First action and owner route: launch with `SYNARA_UI_TESTS=1` and the
+  verification scenario; `AppEnvironment.uiTest()` selects the fixture, which
+  supplies updates to the normal presenter and sheet.
+- Transitions: request → comparison → result → user acknowledgement → closed,
+  including a buffered completion event after acknowledgement.
+- Side effects and authority: in-memory fixture events only; the fixture owns
+  simulated protocol/trust data, and the app owns presentation. This path does
+  not send Matrix messages or establish real device trust.
+- Completion and readback: the UI assertions observe sheet geometry, ordered
+  values, reachable controls, truthful status, and durable dismissal.
+- Acceptance: all four cases pass through that route. Opening live sign-in,
+  bypassing the presenter, or replacing UI assertions with fixture state
+  checks disqualifies the run.
+
+Release-candidate run `34551633358` executed the UI suite: 62 passed, 16 were
+skipped, and five failed. All four new verification cases stopped before their
+request appeared. Their accessibility trace shows `HomeserverSelectionScreen`:
+the helper passed `--ui-testing`, but the app selects its test environment only
+through `SYNARA_UI_TESTS=1`. This is a test-entrypoint defect. The helper now uses
+the same environment flag as the existing UI test helpers; a clean full-suite
+rerun is required before claiming the verification UI path is confirmed.
+
+The fifth failure was the existing send-from-unread-history test: its local
+echo appeared, but viewport diagnostics stayed `pinned=false`. That is recorded
+separately; the verification helper correction does not establish its cause or
+claim to repair it.

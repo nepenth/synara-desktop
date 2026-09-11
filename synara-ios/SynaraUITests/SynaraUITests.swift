@@ -98,7 +98,7 @@ final class SynaraUITests: XCTestCase {
 
     private func launchVerificationApp(verified: Bool = true, contentSizeCategory: String? = nil) -> XCUIApplication {
         let app = XCUIApplication()
-        app.launchArguments = ["--ui-testing"]
+        app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_SIGNED_IN"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_VERIFICATION"] = verified ? "verified" : "unverified"
         launch(app, contentSizeCategory: contentSizeCategory)
