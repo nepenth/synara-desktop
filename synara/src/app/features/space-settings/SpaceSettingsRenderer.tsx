@@ -1,6 +1,8 @@
 import React from 'react';
+import { ErrorBoundary } from 'react-error-boundary';
 import { SpaceSettings } from './SpaceSettings';
 import { Modal500 } from '../../components/Modal500';
+import { AppErrorFallback } from '../../components/app-error';
 import { useCloseSpaceSettings, useSpaceSettingsState } from '../../state/hooks/spaceSettings';
 import { useAllJoinedRoomsSet, useGetRoom } from '../../hooks/useGetRoom';
 import { SpaceSettingsState } from '../../state/spaceSettings';
@@ -22,11 +24,22 @@ function RenderSettings({ state }: RenderSettingsProps) {
 
   return (
     <Modal500 requestClose={closeSettings}>
-      <SpaceProvider value={space ?? null}>
-        <RoomProvider value={room}>
-          <SpaceSettings initialPage={page} requestClose={closeSettings} />
-        </RoomProvider>
-      </SpaceProvider>
+      <ErrorBoundary
+        fallbackRender={({ error, resetErrorBoundary }) => (
+          <AppErrorFallback
+            error={error}
+            description="Space settings ran into a problem. You can close this panel and keep using the space."
+            onRetry={resetErrorBoundary}
+            onClose={closeSettings}
+          />
+        )}
+      >
+        <SpaceProvider value={space ?? null}>
+          <RoomProvider value={room}>
+            <SpaceSettings initialPage={page} requestClose={closeSettings} />
+          </RoomProvider>
+        </SpaceProvider>
+      </ErrorBoundary>
     </Modal500>
   );
 }

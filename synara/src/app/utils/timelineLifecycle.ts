@@ -57,11 +57,12 @@ export const shouldRestoreRoomTimelineViewport = (
 };
 
 /** Narrow structural projection of a room state mirroring the js-sdk RoomState
- * surface read by Synara: state-event lookups plus the indexed event map. */
+ * surface read by Synara: state-event lookups plus the optional indexed event
+ * map. Native stubs implement getStateEvents without `events`. */
 type RoomStateReading = {
   getStateEvents(eventType: string): MatrixEventReading[];
   getStateEvents(eventType: string, stateKey: string): MatrixEventReading | null;
-  events: Map<string, Map<string, MatrixEventReading>>;
+  events?: Map<string, Map<string, MatrixEventReading>>;
 };
 
 export const getRoomCurrentState = (room: RoomReading): RoomStateReading | undefined =>

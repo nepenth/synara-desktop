@@ -129,31 +129,29 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                     }
                   />
                 </SequenceCard>
-                {developerTools && (
-                  <SequenceCard
-                    className={SequenceCardStyle}
-                    variant="SurfaceVariant"
-                    direction="Column"
-                    gap="400"
-                  >
-                    <SettingTile
-                      title="Room ID"
-                      description={`Copy room ID to clipboard. ("${room.roomId}")`}
-                      after={
-                        <Button
-                          onClick={() => copyToClipboard(room.roomId ?? '<NO_ROOM_ID_FOUND>')}
-                          variant="Secondary"
-                          fill="Soft"
-                          size="300"
-                          radii="300"
-                          outlined
-                        >
-                          <Text size="B300">Copy</Text>
-                        </Button>
-                      }
-                    />
-                  </SequenceCard>
-                )}
+                <SequenceCard
+                  className={SequenceCardStyle}
+                  variant="SurfaceVariant"
+                  direction="Column"
+                  gap="400"
+                >
+                  <SettingTile
+                    title="Room ID"
+                    description={`Copy room ID to clipboard. ("${room.roomId}")`}
+                    after={
+                      <Button
+                        onClick={() => copyToClipboard(room.roomId ?? '<NO_ROOM_ID_FOUND>')}
+                        variant="Secondary"
+                        fill="Soft"
+                        size="300"
+                        radii="300"
+                        outlined
+                      >
+                        <Text size="B300">Copy</Text>
+                      </Button>
+                    }
+                  />
+                </SequenceCard>
               </Box>
 
               {developerTools && (

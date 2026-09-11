@@ -71,6 +71,8 @@ export type MemberReading = {
 type RoomStateReading = {
   getStateEvents(eventType: string): MatrixEventReading[];
   getStateEvents(eventType: string, stateKey: string): MatrixEventReading | null;
+  /** js-sdk indexed state map; native stubs may omit this. */
+  events?: Map<string, Map<string, MatrixEventReading>>;
 };
 
 /** Narrow structural projection of a room. */
