@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## [2.1.35] - 2026-09-11
+
+- Show Element-like room member options on desktop and iOS using native
+  membership snapshots instead of `room.getMember()`. Kick, ban, unban,
+  invite, knock accept/deny, and power-level writes stay hidden until the native
+  member list is ready, and a failed snapshot shows an error instead of offering
+  moderation.
+- Add timeline Copy All (sanitized HTML), partial text selection on iOS, code
+  block copy, and desktop Copy Message. The composer pastes HTML as attributed
+  text and projects markdown for send, so markup characters are not shown in
+  the compose box.
+- Restart Matrix sync after Linux sleep via `SyncIntent::Resume` when the SDK
+  still reports Running on a dead long-poll. A short hide no longer leaves a
+  stale `hiddenAtMs` that could recover on a later focus.
+- Fix unread badges and agent-approval alerts: subscribe every joined room for
+  client-side unread math, pulse the iOS room list after decrypt/receipts,
+  retry encrypted observations so approvals can fire as Time Sensitive alerts
+  (now on by default), and bump pending-approval unread only while SDK counts
+  are still non-zero.
+- Count desktop tray approvals from Core's raw last-message classifier
+  instead of the collapsed preview, and keep Cancel Invite on the invite alert.
+- Let native timeline message bodies use the available row width instead of a
+  672px cap.
+- Compare iOS composer bold wrapping to the composer base font so Accessibility
+  Bold Text does not wrap every typed run as `**text**`.
+
 ## [2.1.34] - 2026-09-10
 
 - Stop Room Settings > Developer Tools from crashing on native rooms. The page

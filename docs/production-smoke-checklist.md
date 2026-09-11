@@ -18,6 +18,25 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-11 unread, member options, and copy/resume release-candidate review (2.1.35):
+
+- PRs #1119, #1120, and #1121 passed their required Quality gates and merged to
+  main as `f5135bde`, `f4525a34`, and `486fa7ce`. #1121 also passed the iOS
+  compile gate, Node/Rust desktop validation, and macOS plus Debian package
+  builds. iOS simulator unit and UI suites are skipped on ordinary PRs and run
+  on this `release/v2.1.35` candidate.
+- Desktop modernization tests on the Fable remediations passed 997 cases. Core
+  unread/sync unit tests on the merged feature PRs were green before merge. This
+  Linux environment cannot run UIKit or Accessibility Bold Text.
+- Remaining human checks before tagging: Settings → Accessibility → Bold Text
+  then type `hello` and confirm the sent body is not `**hello**`; after a short
+  hide, focusing the desktop app must not restart sync; Linux/macOS unread
+  badges and Time Sensitive approvals should match Element on encrypted rooms.
+- The maintainer authorized merging those remediations and cutting this
+  release. Final signed-artifact install/update, physical-device testing, and
+  live cross-client UI checks were not repeated here. Do not push tag `v2.1.35`
+  until this candidate's Quality gate (including iOS simulator tests) is green.
+
 2026-09-10 Developer Tools and iOS verification release-candidate review (2.1.34):
 
 - PRs #1116 and #1117 passed their required Quality gates and merged to main
