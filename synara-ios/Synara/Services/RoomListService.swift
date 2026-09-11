@@ -15,6 +15,7 @@ struct RoomSummary: Identifiable, Equatable {
     let id: String
     let name: String
     let lastMessagePreview: String
+    let lastMessageIsAgentApproval: Bool
     let unreadCount: Int
     let hasHighlight: Bool
     let isMarkedUnread: Bool
@@ -38,6 +39,7 @@ struct RoomSummary: Identifiable, Equatable {
         id: String,
         name: String,
         lastMessagePreview: String,
+        lastMessageIsAgentApproval: Bool = false,
         unreadCount: Int,
         hasHighlight: Bool,
         isMarkedUnread: Bool = false,
@@ -57,6 +59,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.id = id
         self.name = name
         self.lastMessagePreview = lastMessagePreview
+        self.lastMessageIsAgentApproval = lastMessageIsAgentApproval
         self.unreadCount = unreadCount
         self.hasHighlight = hasHighlight
         self.isMarkedUnread = isMarkedUnread

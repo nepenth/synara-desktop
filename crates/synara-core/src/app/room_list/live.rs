@@ -157,17 +157,21 @@ async fn project_room(room: &Room) -> RoomSummary {
     };
     let membership = membership(room.state());
     let last_message_preview = last_message_preview(room);
+    // Classification uses the raw latest event, not the sanitized preview.
+    let last_message_is_approval = last_message_is_agent_approval(room);
     // Approval prompts only promote unread/highlight while the SDK still
     // reports unread. Reading the room does not change the latest body, so
     // boosting from the last message alone would recreate badges after every
-    // receipt that already zeroed the counters.
-    let has_unread = room.num_unread_messages() > 0
-        || room.num_unread_notifications() > 0
-        || room.num_unread_mentions() > 0
-        || counts.notification_count > 0
-        || counts.highlight_count > 0;
-    let pending_approval =
-        pending_approval_unread_boost(has_unread, last_message_is_agent_approval(room));
+    // receipt that already zeroed the counters. Marked-unread is unread.
+    let has_unread = room_has_unread(
+        room.num_unread_messages(),
+        room.num_unread_notifications(),
+        room.num_unread_mentions(),
+        counts.notification_count,
+        counts.highlight_count,
+        room.is_marked_unread(),
+    );
+    let pending_approval = pending_approval_unread_boost(has_unread, last_message_is_approval);
     let mention_count = room
         .num_unread_mentions()
         .max(counts.highlight_count)
@@ -207,6 +211,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         notification_mode,
         last_activity_ts,
         last_message_preview,
+        last_message_is_agent_approval: last_message_is_approval,
         heroes: None,
         tombstone_successor_room_id: None,
     }
@@ -243,6 +248,22 @@ fn last_message_preview(room: &Room) -> Option<String> {
             }))
         }
     }
+}
+
+fn room_has_unread(
+    unread_messages: u64,
+    unread_notifications: u64,
+    unread_mentions: u64,
+    notification_count: u64,
+    highlight_count: u64,
+    is_marked_unread: bool,
+) -> bool {
+    unread_messages > 0
+        || unread_notifications > 0
+        || unread_mentions > 0
+        || notification_count > 0
+        || highlight_count > 0
+        || is_marked_unread
 }
 
 /// Last-message approval must not manufacture unread after receipts clear.
@@ -339,6 +360,21 @@ mod tests {
     }
 
     #[test]
+    fn marked_unread_counts_as_unread_for_approval_boost() {
+        assert!(!room_has_unread(0, 0, 0, 0, 0, false));
+        assert!(room_has_unread(0, 0, 0, 0, 0, true));
+        assert!(room_has_unread(1, 0, 0, 0, 0, false));
+        assert!(pending_approval_unread_boost(
+            room_has_unread(0, 0, 0, 0, 0, true),
+            true
+        ));
+        assert!(!pending_approval_unread_boost(
+            room_has_unread(0, 0, 0, 0, 0, false),
+            true
+        ));
+    }
+
+    #[test]
     fn encryption_projection_preserves_unknown_and_errors_fail_closed() {
         assert_eq!(
             project_encryption_status::<()>(Ok(EncryptionState::Encrypted)),
@@ -365,7 +401,10 @@ mod tests {
         assert!(source.contains("values.iter().map(|room| room.room_id().to_owned())"));
         assert!(source.contains("MissedTickBehavior::Skip"));
         assert!(source.contains("last_message_is_agent_approval"));
+        assert!(source.contains("last_message_is_agent_approval: last_message_is_approval"));
         assert!(source.contains("pending_approval_unread_boost"));
+        assert!(source.contains("room_has_unread("));
+        assert!(source.contains("room.is_marked_unread()"));
         let truncated_viewport = concat!("ROOM_LIST_SUBSCRIPTION", "_LIMIT");
         assert_eq!(
             source.matches(truncated_viewport).count(),

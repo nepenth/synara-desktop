@@ -1,6 +1,12 @@
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { getBadgeCount, summarizeBadgeCount, summarizeNotifications } from '../badgeSummary';
+import {
+  getBadgeCount,
+  summarizeBadgeCount,
+  summarizeNotifications,
+  countJoinedRoomAgentApprovals,
+} from '../badgeSummary';
 
 test('summarizeNotifications describes app and inbox notification counts', () => {
   assert.deepEqual(
@@ -88,4 +94,38 @@ test('summarizeNotifications clamps invite and agent approval counts', () => {
 
 test('getBadgeCount returns the aggregate count for platform adapters', () => {
   assert.equal(getBadgeCount([{ total: 1 }, { highlight: 4 }], 2), 7);
+});
+
+test('countJoinedRoomAgentApprovals uses the Core raw-event flag, not preview text', () => {
+  assert.equal(
+    countJoinedRoomAgentApprovals([
+      {
+        membership: 'join',
+        lastMessageIsAgentApproval: false,
+      },
+      {
+        membership: 'join',
+        lastMessageIsAgentApproval: true,
+      },
+      {
+        membership: 'join',
+        isSpace: true,
+        lastMessageIsAgentApproval: true,
+      },
+      {
+        membership: 'invite',
+        lastMessageIsAgentApproval: true,
+      },
+      {
+        membership: 'join',
+      },
+    ]),
+    1
+  );
+});
+
+test('desktop inbox approval count is wired to lastMessageIsAgentApproval', () => {
+  const source = readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
+  assert.match(source, /countJoinedRoomAgentApprovals\(snapshot\.rooms\)/);
+  assert.doesNotMatch(source, /detectAgentApprovalPrompt\(\{ body: room\.lastMessagePreview \}\)/);
 });

@@ -110,6 +110,7 @@ fn room_summary_round_trip_and_fixture() {
         notification_mode: Some(NotificationMode::Mentions),
         last_activity_ts: Some(1_720_000_000_000),
         last_message_preview: Some("Hello from Alice".into()),
+        last_message_is_agent_approval: true,
         heroes: Some(vec![RoomHero {
             user_id: "@bob:example.org".into(),
             display_name: Some("Bob".into()),
@@ -120,6 +121,14 @@ fn room_summary_round_trip_and_fixture() {
     let from_fix: RoomSummary = load_fixture_as("valid_room_summary.json");
     assert_eq!(from_fix.room_id, "!room:example.org");
     assert_eq!(from_fix.membership, Membership::Join);
+    assert!(!from_fix.last_message_is_agent_approval);
+    let flagged = RoomSummary {
+        last_message_is_agent_approval: true,
+        ..r.clone()
+    };
+    round_trip_json(&flagged);
+    let encoded = serde_json::to_value(&flagged).expect("serialize");
+    assert_eq!(encoded["lastMessageIsAgentApproval"], true);
 }
 
 #[test]
@@ -379,6 +388,7 @@ fn room_summary_is_call_defaults_and_round_trips() {
         notification_mode: None,
         last_activity_ts: None,
         last_message_preview: None,
+        last_message_is_agent_approval: false,
         heroes: None,
         tombstone_successor_room_id: None,
     };

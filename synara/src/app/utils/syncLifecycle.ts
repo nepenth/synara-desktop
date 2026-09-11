@@ -9,6 +9,15 @@ export type SyncWakeReason = 'visibilitychange' | 'focus' | 'online' | 'pageshow
 export const hiddenDurationMs = (hiddenAtMs: number | null, nowMs: number): number =>
   hiddenAtMs === null ? 0 : Math.max(0, nowMs - hiddenAtMs);
 
+/** Take this hide's duration and clear the stamp so a later focus cannot reuse it. */
+export const consumeHiddenDurationMs = (
+  hiddenAtMs: number | null,
+  nowMs: number
+): { hiddenDurationMs: number; hiddenAtMs: null } => ({
+  hiddenDurationMs: hiddenDurationMs(hiddenAtMs, nowMs),
+  hiddenAtMs: null,
+});
+
 const isLiveSyncState = (state: string | null): boolean =>
   state === 'PREPARED' || state === 'SYNCING' || state === 'CATCHUP';
 

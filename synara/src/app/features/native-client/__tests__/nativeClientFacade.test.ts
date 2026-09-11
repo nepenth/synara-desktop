@@ -31,6 +31,7 @@ const roomSnapshot = (
       unreadCount: 0,
       highlightCount: 0,
       markedUnread: false,
+      lastMessageIsAgentApproval: false,
       ...overrides,
     },
   ],
@@ -319,6 +320,7 @@ test('F2 getRooms proxies matrix_room_list_snapshot and maps summaries', async (
     unreadCount: 2,
     highlightCount: 1,
     markedUnread: false,
+    lastMessageIsAgentApproval: false,
     lastActivityTs: 1234,
   };
   const { invoke } = invokingWith({
@@ -351,6 +353,7 @@ test('F2 getRoom finds a single room by id or null', async () => {
           unreadCount: 0,
           highlightCount: 0,
           markedUnread: false,
+          lastMessageIsAgentApproval: false,
         },
         {
           roomId: '!b:example.org',
@@ -363,6 +366,7 @@ test('F2 getRoom finds a single room by id or null', async () => {
           unreadCount: 0,
           highlightCount: 0,
           markedUnread: false,
+          lastMessageIsAgentApproval: false,
         },
       ],
     },
@@ -896,6 +900,7 @@ test('F6c-2a evented room cache satisfies EventedRoomReading contract', async ()
           unreadCount: 0,
           highlightCount: 0,
           markedUnread: false,
+          lastMessageIsAgentApproval: false,
         },
       ],
     },

@@ -1282,6 +1282,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     markedUnread: true,
                     lastActivityTs: 1_700_000_000_000,
                     lastMessagePreview: nil,
+                    lastMessageIsAgentApproval: false,
                     isFavorite: false,
                     encryptionStatus: .encrypted
                 ),
@@ -1296,6 +1297,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     markedUnread: false,
                     lastActivityTs: 0,
                     lastMessagePreview: "Hello from Alice",
+                    lastMessageIsAgentApproval: true,
                     isFavorite: true,
                     encryptionStatus: .notEncrypted
                 ),
@@ -1318,6 +1320,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(rooms.first?.lastMessagePreview, "Invited by Alex")
         XCTAssertEqual(rooms.last?.lastMessagePreview, "Hello from Alice")
+        XCTAssertEqual(rooms.first?.lastMessageIsAgentApproval, false)
+        XCTAssertEqual(rooms.last?.lastMessageIsAgentApproval, true)
         XCTAssertEqual(rooms.first?.parentSpaces, [SpaceSummary(id: "!space:example.org", name: "Team")])
         XCTAssertEqual(rooms.first?.membership, .invited)
         XCTAssertEqual(rooms.first?.isFavorite, false)

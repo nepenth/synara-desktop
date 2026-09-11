@@ -302,6 +302,8 @@ dictionary RoomListRoomDto {
   boolean marked_unread;
   u64? last_activity_ts;
   string? last_message_preview;
+  // Raw last-event classifier. Collapsed preview text is not this signal.
+  boolean last_message_is_agent_approval;
   // Legacy chrome hint only. Forward-security code consumes the required
   // tri-state value below and must never infer cleartext from this boolean.
   boolean is_encrypted;

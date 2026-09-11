@@ -9,6 +9,7 @@ fn room_list_surface_includes_last_message_preview_and_not_leftovers() {
         .and_then(|rest| rest.split("};").next())
         .expect("RoomListRoomDto");
     assert!(room.contains("string? last_message_preview"));
+    assert!(room.contains("boolean last_message_is_agent_approval"));
     assert!(!udl.contains("matrix_send_attachment"));
     assert!(!udl.contains("matrix_login_password"));
     assert!(!room.contains("mxc://"));

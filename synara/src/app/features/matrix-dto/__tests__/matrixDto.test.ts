@@ -180,6 +180,7 @@ test('valid_room_summary parses', () => {
   assert.equal(r.membership, 'join');
   assert.equal(r.notificationMode, 'mentions');
   assert.equal(r.lastMessagePreview, undefined);
+  assert.equal(r.lastMessageIsAgentApproval, false);
   assert.equal(r.heroes?.length, 1);
   assert.equal(r.isFavorite, false);
   assert.equal(r.encryptionStatus, 'encrypted');
@@ -200,6 +201,16 @@ test('room summary requires a closed authoritative encryption status', () => {
     parseRoomSummary({ ...valid, isEncrypted: false, encryptionStatus: 'encrypted' }),
     null
   );
+});
+
+test('room summary lastMessageIsAgentApproval defaults false and accepts true', () => {
+  const valid = loadFixture('valid_room_summary.json') as Record<string, unknown>;
+  assert.equal(parseRoomSummary(valid)?.lastMessageIsAgentApproval, false);
+  assert.equal(
+    parseRoomSummary({ ...valid, lastMessageIsAgentApproval: true })?.lastMessageIsAgentApproval,
+    true
+  );
+  assert.equal(parseRoomSummary({ ...valid, lastMessageIsAgentApproval: 'yes' }), null);
 });
 
 test('room summary rejects invalid membership', () => {
