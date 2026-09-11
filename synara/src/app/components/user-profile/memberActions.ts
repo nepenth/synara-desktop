@@ -13,6 +13,8 @@ export type MemberActionVisibility = {
   ignore: boolean;
   invite: boolean;
   cancelInvite: boolean;
+  acceptKnock: boolean;
+  denyKnock: boolean;
   removeFromRoom: boolean;
   ban: boolean;
   unban: boolean;
@@ -47,9 +49,10 @@ export function memberActionVisibility(input: {
     ignore: !isSelf,
     invite: ready && known && membership === Membership.Leave && permissions.canInvite,
     cancelInvite: ready && known && membership === Membership.Invite && permissions.canKick,
-    removeFromRoom:
-      ready && permissions.canKick && (membership === Membership.Join || membership === null),
-    ban: ready && permissions.canBan && membership !== Membership.Ban,
+    acceptKnock: ready && known && membership === Membership.Knock && permissions.canInvite,
+    denyKnock: ready && known && membership === Membership.Knock && permissions.canKick,
+    removeFromRoom: ready && known && permissions.canKick && membership === Membership.Join,
+    ban: ready && known && permissions.canBan && membership !== Membership.Ban,
     unban: ready && known && membership === Membership.Ban && permissions.canBan,
     showPermissionsLoading,
   };

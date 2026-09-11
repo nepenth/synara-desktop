@@ -5253,7 +5253,7 @@ private struct RoomDetailsView: View {
                     Button("Invite User", action: inviteUser)
                         .disabled(isLoading || inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || details?.canInvite == false)
                         .accessibilityIdentifier("RoomInviteUserButton")
-                    ForEach(details?.members.prefix(12) ?? []) { member in
+                    ForEach(details?.members ?? []) { member in
                         RoomMemberPresenceRow(
                             member: member,
                             roomID: roomID,

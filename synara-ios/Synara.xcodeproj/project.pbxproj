@@ -179,6 +179,8 @@
 		FBF56C36E9D9A47F51C129D0 /* SharedCoreInvites.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2FD208944F0952872B6F80B /* SharedCoreInvites.swift */; };
 		FC16E5DBC53F5B0897C4903C /* SharedCoreVerificationLive.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7F8019C260DF3717FB9275E3 /* SharedCoreVerificationLive.swift */; };
 		FFB6A97B5F18519D154EAC9C /* AppRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5DE2FB3D6ADFFA295C9B956F /* AppRouter.swift */; };
+		9C7D2E5B8A014F36C1D90E48 /* RoomMemberActions.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6E4B8C1A2D739F50E8A14C27 /* RoomMemberActions.swift */; };
+		B4C1E87A0D593F28E6A70B19 /* RoomMemberActionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A8F3D16C2E94B07A91D6E50 /* RoomMemberActionsTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -260,6 +262,8 @@
 		3823216AA8763374F18EB0D0 /* SynaraRoomAvatar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SynaraRoomAvatar.swift; sourceTree = "<group>"; };
 		3A2EA7250A5E48B4331075A1 /* ComposerMatrixFormatting.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerMatrixFormatting.swift; sourceTree = "<group>"; };
 		3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomNotesView.swift; sourceTree = "<group>"; };
+		6E4B8C1A2D739F50E8A14C27 /* RoomMemberActions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomMemberActions.swift; sourceTree = "<group>"; };
+		5A8F3D16C2E94B07A91D6E50 /* RoomMemberActionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomMemberActionsTests.swift; sourceTree = "<group>"; };
 		3BE8F8065D4DBA547D2A074E /* SharedCorePlainMedia.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCorePlainMedia.swift; sourceTree = "<group>"; };
 		3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLogging.swift; sourceTree = "<group>"; };
 		3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
@@ -456,6 +460,7 @@
 				2515972271FDB4E4717F0CEE /* LoginView.swift */,
 				E23CEDAB04604A54EF7EAF9B /* PlaceholderScreen.swift */,
 				417DD4194803886BB803C6A6 /* RoomListView.swift */,
+				6E4B8C1A2D739F50E8A14C27 /* RoomMemberActions.swift */,
 				3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */,
 				A460B0098799FF6C79F0756E /* RoomTimelineView.swift */,
 				C0FBB16EA6FF93511B2EE8F0 /* SettingsView.swift */,
@@ -697,6 +702,7 @@
 				4697063405B601DC0FE6F086 /* PerformanceFixtureTests.swift */,
 				40037D97F31F787EA20BD7AE /* PushServiceTests.swift */,
 				0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */,
+				5A8F3D16C2E94B07A91D6E50 /* RoomMemberActionsTests.swift */,
 				AA398093E16277847EDB79DB /* RoomReadMarkerServiceTests.swift */,
 				643AFA2D05F02E0DB1C2B849 /* RoomUnreadPresentationTests.swift */,
 				1C0070A890F80B56DD756D02 /* SecureSessionStoreTests.swift */,
@@ -896,6 +902,7 @@
 				195E1F1A887EF41A86A02A3A /* PerformanceFixtureTests.swift in Sources */,
 				88AAAD208C97C1A9EFF8AFE5 /* PushServiceTests.swift in Sources */,
 				76AE72648BA28AFF732BB8F6 /* RoomListServiceTests.swift in Sources */,
+				B4C1E87A0D593F28E6A70B19 /* RoomMemberActionsTests.swift in Sources */,
 				9105AE3CB60343D07B999895 /* RoomReadMarkerServiceTests.swift in Sources */,
 				7D325777FCB71B71B460A30F /* RoomUnreadPresentationTests.swift in Sources */,
 				45DB0A08CF868FFA984A3B0D /* SecureSessionStoreTests.swift in Sources */,
@@ -953,6 +960,7 @@
 				53A96EF2B937BE57AE02A15C /* PushService.swift in Sources */,
 				A72441DA6F04ED38E6AFA5FD /* RoomListService.swift in Sources */,
 				2F7828F754C6D475F5E161B4 /* RoomListView.swift in Sources */,
+				9C7D2E5B8A014F36C1D90E48 /* RoomMemberActions.swift in Sources */,
 				AF87598C71FFE06E711F95B3 /* RoomNotesService.swift in Sources */,
 				23D51A50A6F59472FB89F9B7 /* RoomNotesView.swift in Sources */,
 				D21F2D94FEAEE8E93F3E2A6A /* RoomReadMarkerService.swift in Sources */,

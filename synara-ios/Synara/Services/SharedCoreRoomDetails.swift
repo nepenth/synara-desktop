@@ -134,7 +134,7 @@ enum SharedCoreRoomDetails {
             canEditName: ownUserLevel >= roomName,
             canEditTopic: ownUserLevel >= roomTopic,
             canEditAvatar: ownUserLevel >= roomAvatar,
-            canEditPowerLevels: ownUserLevel >= parsed.stateDefault
+            canEditPowerLevels: ownUserLevel >= (parsed.event("m.room.power_levels") ?? parsed.stateDefault)
         )
     }
 

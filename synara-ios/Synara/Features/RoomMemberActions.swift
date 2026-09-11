@@ -6,6 +6,8 @@ struct RoomMemberActionPlan: Equatable {
     var canIgnore: Bool
     var canInvite: Bool
     var canCancelInvite: Bool
+    var canAcceptKnock: Bool
+    var canDenyKnock: Bool
     var canRemove: Bool
     var canBan: Bool
     var canUnban: Bool
@@ -33,9 +35,11 @@ struct RoomMemberActionPlan: Equatable {
             canIgnore: isSelf == false,
             canInvite: isSelf == false && membership == "leave" && canInvite,
             canCancelInvite: isSelf == false && membership == "invite" && canKick,
-            canRemove: isSelf == false && canKick && (membership == "join" || membership.isEmpty),
+            canAcceptKnock: isSelf == false && membership == "knock" && canInvite,
+            canDenyKnock: isSelf == false && membership == "knock" && canKick,
+            canRemove: isSelf == false && canKick && membership == "join",
             canBan: isSelf == false && canBan && membership != "ban",
-            canUnban: isSelf == false && membership == "ban" && (powerLevels?.canBan ?? false),
+            canUnban: isSelf == false && membership == "ban" && canBan,
             canEditPowerLevel: isSelf == false && canEditPower && membership != "ban",
             assignablePowerLevels: canEditPower ? levels : []
         )
@@ -132,7 +136,7 @@ struct RoomMemberActionsView: View {
                     }
                 }
 
-                if plan.canInvite || plan.canCancelInvite || plan.canRemove || plan.canBan || plan.canUnban {
+                if plan.canInvite || plan.canCancelInvite || plan.canAcceptKnock || plan.canDenyKnock || plan.canRemove || plan.canBan || plan.canUnban {
                     Section("Moderation") {
                         TextField("Reason (optional)", text: $reason, axis: .vertical)
                             .lineLimit(1 ... 3)
@@ -143,12 +147,24 @@ struct RoomMemberActionsView: View {
                                 .disabled(isLoading)
                                 .accessibilityIdentifier("RoomMemberInviteButton")
                         }
+                        if plan.canAcceptKnock {
+                            Button("Accept knock", action: invite)
+                                .disabled(isLoading)
+                                .accessibilityIdentifier("RoomMemberAcceptKnockButton")
+                        }
                         if plan.canCancelInvite {
                             Button("Cancel invite", role: .destructive) {
                                 confirmAction = .cancelInvite
                             }
                             .disabled(isLoading)
                             .accessibilityIdentifier("RoomMemberCancelInviteButton")
+                        }
+                        if plan.canDenyKnock {
+                            Button("Deny knock", role: .destructive) {
+                                confirmAction = .denyKnock
+                            }
+                            .disabled(isLoading)
+                            .accessibilityIdentifier("RoomMemberDenyKnockButton")
                         }
                         if plan.canRemove {
                             Button("Remove from room", role: .destructive) {
@@ -228,6 +244,7 @@ struct RoomMemberActionsView: View {
         case remove
         case ban
         case cancelInvite
+        case denyKnock
     }
 
     private var confirmPresented: Binding<Bool> {
@@ -243,6 +260,8 @@ struct RoomMemberActionsView: View {
             return "Ban from room?"
         case .cancelInvite:
             return "Cancel invite?"
+        case .denyKnock:
+            return "Deny knock?"
         default:
             return "Remove from room?"
         }
@@ -254,6 +273,8 @@ struct RoomMemberActionsView: View {
             return "Ban from room"
         case .cancelInvite:
             return "Cancel invite"
+        case .denyKnock:
+            return "Deny knock"
         default:
             return "Remove from room"
         }
@@ -265,6 +286,8 @@ struct RoomMemberActionsView: View {
             return "They will be removed and cannot rejoin until they are unbanned."
         case .cancelInvite:
             return "This withdraws their pending invitation."
+        case .denyKnock:
+            return "This rejects their request to join this room."
         default:
             return "They will be removed from this room and can rejoin if the room allows it."
         }
@@ -287,7 +310,7 @@ struct RoomMemberActionsView: View {
     }
 
     private func invite() {
-        run("Invitation sent.") {
+        run(plan.canAcceptKnock ? "Knock accepted." : "Invitation sent.") {
             try await environment.roomManagement.inviteUser(roomID: roomID, userID: member.userID)
         }
     }
@@ -338,6 +361,14 @@ struct RoomMemberActionsView: View {
             }
         case .cancelInvite:
             run("Invite cancelled.") {
+                try await environment.roomManagement.kickUser(
+                    roomID: roomID,
+                    userID: member.userID,
+                    reason: trimmedReason()
+                )
+            }
+        case .denyKnock:
+            run("Knock denied.") {
                 try await environment.roomManagement.kickUser(
                     roomID: roomID,
                     userID: member.userID,

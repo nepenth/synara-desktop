@@ -1,4 +1,4 @@
-import { Box, Button, config, Icon, Icons, Spinner, Text } from 'folds';
+import { Box, Button, color, config, Icon, Icons, Spinner, Text } from 'folds';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useSetAtom } from 'jotai';
@@ -75,8 +75,9 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
 
   const myUserId = mx.getSafeUserId();
   const creator = creators.has(userId);
+  const nativeMembersFailed = Boolean(nativeSession && nativeMembers === undefined);
   const permissionsReady =
-    !powerLevels.nativeUnavailable && (!nativeSession || nativeMembers !== null);
+    !powerLevels.nativeUnavailable && (!nativeSession || Array.isArray(nativeMembers));
   const canKickUser = permissions.action('kick', myUserId) && hasMorePower(myUserId, userId);
   const canBanUser = permissions.action('ban', myUserId) && hasMorePower(myUserId, userId);
   const canInvite = permissions.action('invite', myUserId);
@@ -196,7 +197,12 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
             ts={member?.events.member?.getTs()}
           />
         )}
-        {visibility.showPermissionsLoading && (
+        {nativeMembersFailed && (
+          <Text size="T200" style={{ color: color.Critical.Main }}>
+            Could not load this member's room membership.
+          </Text>
+        )}
+        {visibility.showPermissionsLoading && !nativeMembersFailed && (
           <Box alignItems="Center" gap="200">
             <Spinner size="100" variant="Secondary" />
             <Text size="T200">Loading room permissions…</Text>
@@ -224,6 +230,8 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
           canKick={visibility.removeFromRoom}
           canBan={visibility.ban}
           canCancelInvite={visibility.cancelInvite && membership !== Membership.Invite}
+          canAcceptKnock={visibility.acceptKnock}
+          canDenyKnock={visibility.denyKnock}
         />
       </Box>
     </Box>

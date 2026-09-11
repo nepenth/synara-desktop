@@ -241,7 +241,7 @@ export function UserInviteAlert({ userId, reason, canKick, invitedBy, ts }: User
   );
 }
 
-type ConfirmAction = 'remove' | 'ban' | 'cancel-invite';
+type ConfirmAction = 'remove' | 'ban' | 'cancel-invite' | 'deny-knock';
 
 type ModerationConfirmDialogProps = {
   action: ConfirmAction;
@@ -260,6 +260,10 @@ function ModerationConfirmDialog({ action, onCancel, onConfirm }: ModerationConf
     title = 'Cancel invite';
     body = 'This will withdraw their pending invitation to this room.';
     confirm = 'Cancel invite';
+  } else if (action === 'deny-knock') {
+    title = 'Deny knock';
+    body = 'This will reject their request to join this room.';
+    confirm = 'Deny knock';
   }
 
   return (
@@ -305,6 +309,8 @@ type UserModerationProps = {
   canBan: boolean;
   canInvite: boolean;
   canCancelInvite?: boolean;
+  canAcceptKnock?: boolean;
+  canDenyKnock?: boolean;
 };
 export function UserModeration({
   userId,
@@ -312,6 +318,8 @@ export function UserModeration({
   canBan,
   canInvite,
   canCancelInvite = false,
+  canAcceptKnock = false,
+  canDenyKnock = false,
 }: UserModerationProps) {
   const room = useRoom();
   const reasonInputRef = useRef<HTMLInputElement>(null);
@@ -366,7 +374,9 @@ export function UserModeration({
     banState.status === AsyncStatus.Loading ||
     inviteState.status === AsyncStatus.Loading;
 
-  if (!canBan && !canKick && !canInvite && !canCancelInvite) return null;
+  if (!canBan && !canKick && !canInvite && !canCancelInvite && !canAcceptKnock && !canDenyKnock) {
+    return null;
+  }
 
   const confirmCopy = confirmAction;
 
@@ -380,7 +390,9 @@ export function UserModeration({
             const action = confirmAction;
             setConfirmAction(undefined);
             if (action === 'ban') ban();
-            else kick();
+            else if (action === 'deny-knock' || action === 'cancel-invite' || action === 'remove') {
+              kick();
+            }
           }}
         />
       )}
@@ -430,6 +442,48 @@ export function UserModeration({
               disabled={disabled}
             >
               <Text size="B300">Invite</Text>
+            </Button>
+          )}
+          {canAcceptKnock && (
+            <Button
+              style={{ flexGrow: 1 }}
+              size="300"
+              variant="Success"
+              fill="Soft"
+              radii="300"
+              before={
+                inviteState.status === AsyncStatus.Loading ? (
+                  <Spinner size="50" variant="Secondary" fill="Soft" />
+                ) : (
+                  <Icon size="50" src={Icons.ArrowRight} />
+                )
+              }
+              onClick={invite}
+              disabled={disabled}
+              data-testid="member-option-accept-knock"
+            >
+              <Text size="B300">Accept knock</Text>
+            </Button>
+          )}
+          {canDenyKnock && (
+            <Button
+              style={{ flexGrow: 1 }}
+              size="300"
+              variant="Critical"
+              fill="Soft"
+              radii="300"
+              before={
+                kickState.status === AsyncStatus.Loading ? (
+                  <Spinner size="50" variant="Critical" fill="Soft" />
+                ) : (
+                  <Icon size="50" src={Icons.ArrowLeft} />
+                )
+              }
+              onClick={() => setConfirmAction('deny-knock')}
+              disabled={disabled}
+              data-testid="member-option-deny-knock"
+            >
+              <Text size="B300">Deny knock</Text>
             </Button>
           )}
           {canCancelInvite && (

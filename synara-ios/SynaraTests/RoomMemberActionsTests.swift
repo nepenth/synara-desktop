@@ -94,4 +94,42 @@ final class RoomMemberActionsTests: XCTestCase {
         XCTAssertFalse(plan.canInvite)
         XCTAssertFalse(plan.canEditPowerLevel)
     }
+
+    func testEqualPowerBannedMemberCannotBeUnbanned() {
+        let member = RoomMemberSummary(
+            userID: "@bob:matrix.org",
+            displayName: "Bob",
+            membership: "ban",
+            powerLevel: 100
+        )
+        let plan = RoomMemberActionPlan.plan(
+            member: member,
+            ownUserID: "@alice:matrix.org",
+            powerLevels: .fullPower
+        )
+
+        XCTAssertFalse(plan.canUnban)
+        XCTAssertFalse(plan.canRemove)
+        XCTAssertFalse(plan.canBan)
+    }
+
+    func testKnockingMemberCanBeAcceptedOrDenied() {
+        let member = RoomMemberSummary(
+            userID: "@dana:matrix.org",
+            displayName: "Dana",
+            membership: "knock",
+            powerLevel: 0
+        )
+        let plan = RoomMemberActionPlan.plan(
+            member: member,
+            ownUserID: "@alice:matrix.org",
+            powerLevels: .fullPower
+        )
+
+        XCTAssertTrue(plan.canAcceptKnock)
+        XCTAssertTrue(plan.canDenyKnock)
+        XCTAssertFalse(plan.canRemove)
+        XCTAssertFalse(plan.canInvite)
+        XCTAssertFalse(plan.canCancelInvite)
+    }
 }

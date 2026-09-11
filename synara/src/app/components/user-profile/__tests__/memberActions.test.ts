@@ -51,9 +51,9 @@ test('native rooms must not treat a missing JS member as leave', () => {
     permissionsReady: true,
     permissions: moderator,
   });
-  assert.equal(unknown.removeFromRoom, true);
+  assert.equal(unknown.removeFromRoom, false);
   assert.equal(unknown.invite, false);
-  assert.equal(unknown.ban, true);
+  assert.equal(unknown.ban, false);
 });
 
 test('left members can be invited and banned, not kicked', () => {
@@ -68,6 +68,20 @@ test('left members can be invited and banned, not kicked', () => {
   assert.equal(visibility.removeFromRoom, false);
   assert.equal(visibility.ban, true);
   assert.equal(visibility.cancelInvite, false);
+});
+
+test('knocking members can be accepted or denied', () => {
+  const knock = memberActionVisibility({
+    isSelf: false,
+    membership: Membership.Knock,
+    permissionsReady: true,
+    permissions: moderator,
+  });
+  assert.equal(knock.acceptKnock, true);
+  assert.equal(knock.denyKnock, true);
+  assert.equal(knock.removeFromRoom, false);
+  assert.equal(knock.invite, false);
+  assert.equal(knock.cancelInvite, false);
 });
 
 test('invited members expose cancel invite, banned members expose unban', () => {
@@ -144,9 +158,12 @@ test('desktop profile reads native membership instead of room.getMember()', () =
   assert.match(profile, /resolveNativeRoomMembership/);
   assert.match(profile, /memberActionVisibility/);
   assert.match(profile, /nativeIgnoredUsersSnapshot/);
+  assert.match(profile, /Array\.isArray\(nativeMembers\)/);
   assert.match(profile, /visibility\.unban/);
+  assert.match(profile, /visibility\.acceptKnock/);
   assert.match(profile, /\{membership === Membership\.Ban && \(/);
   assert.match(profile, /\{membership === Membership\.Invite && \(/);
   assert.match(moderation, /Remove from room/);
+  assert.match(moderation, /Accept knock/);
   assert.doesNotMatch(profile, /canKick=\{canKickUser && membership === Membership\.Join\}/);
 });
