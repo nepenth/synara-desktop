@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.34] - 2026-09-10
+
 - Stop Room Settings > Developer Tools from crashing on native rooms. The page
   assumed a js-sdk `currentState.events` map that native room projections do
   not provide, so opening the panel threw `undefined is not an object
@@ -9,6 +11,15 @@
   now always visible on that page. Settings panels and routes also render a
   closeable error screen instead of React Router's default "Unexpected
   Application Error" page.
+
+- Make iOS device verification sheets fit their content, with a compact emoji
+  comparison and consistent full-width buttons throughout the flow. Large text
+  layouts remain scrollable.
+- Acknowledge a completed iOS verification flow once so buffered completion
+  updates cannot reopen it after Done or swipe dismissal. Report dismissal
+  failures for retry and keep newer verification requests separate.
+- Show "Device verified" only when the SDK confirms this device's trust;
+  finishing the code comparison alone shows "Verification complete."
 
 ## [2.1.33] - 2026-09-10
 

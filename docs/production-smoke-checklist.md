@@ -18,6 +18,23 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-10 Developer Tools and iOS verification release-candidate review (2.1.34):
+
+- PRs #1116 and #1117 passed their required Quality gates and merged to main
+  as `b8274e0e` and `5829bb12`. The Developer Tools PR also passed all three
+  desktop package builds. The iOS verification implementation passed 732 unit
+  tests, including six new presentation regressions, with three skipped.
+- The initial iOS UI runner failed to launch before assertions, both locally
+  and in CI. No screenshot or interactive layout proof is claimed from that
+  run. The release candidate runs the full iOS suites on the combined source.
+  The limitation and unit evidence are recorded in
+  [the presentation report](reviews/2026-09-10-ios-verification-flow.md).
+- The maintainer explicitly authorized merging both fixes and cutting a new
+  release after receiving that validation limitation. Final signed-artifact
+  install/update checks, physical-device testing, and live cross-client
+  verification were not repeated here. The maintainer will follow the Release
+  workflow after it starts.
+
 2026-09-10 verification release-candidate review (2.1.33):
 
 - Feature commit `df41e393` (merged to `main` as `8cde2f19`) passed the
