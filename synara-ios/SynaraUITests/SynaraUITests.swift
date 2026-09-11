@@ -474,8 +474,9 @@ final class SynaraUITests: XCTestCase {
         dismissKeyboardIfPresent(app: app)
         let aliasField = app.textFields["RoomCanonicalAliasField"]
         XCTAssertTrue(revealRoomDetailsElement(aliasField, app: app, timeout: 10))
+        dismissKeyboardIfPresent(app: app)
         XCTAssertTrue(app.buttons["RoomProfileSaveButton"].isEnabled)
-        tap(app.buttons["Save"])
+        tap(app.buttons["RoomProfileSaveButton"])
 
         let profileMessage = app.staticTexts["RoomDetailsMessage"]
         XCTAssertTrue(revealRoomDetailsElement(profileMessage, app: app, timeout: 10, direction: .down))
@@ -3166,20 +3167,36 @@ final class SynaraUITests: XCTestCase {
     }
 
     private func confirmMemberDestructiveAction(app: XCUIApplication, title: String) {
+        // Nested sheet alerts expose the title ("Remove from room?") and
+        // kAXAlertNotification, but not RoomMemberConfirmActionButton.
+        let alertTitle = "\(title)?"
         let identified = identifiedElement(in: app, "RoomMemberConfirmActionButton")
-        let alertButton = app.alerts.buttons[title]
-        let sheetButton = app.sheets.buttons[title]
+        let namedAlert = app.alerts[alertTitle]
+        let anyAlert = app.alerts.element
+        let descendantAlert = app.descendants(matching: .alert).firstMatch
+        let titledHost = app.otherElements[alertTitle]
+        let titleText = app.staticTexts[alertTitle]
         XCTAssertTrue(
-            waitForAnyElement([identified, alertButton, sheetButton], timeout: 5),
+            waitForAnyElement(
+                [identified, namedAlert, anyAlert, descendantAlert, titledHost, titleText],
+                timeout: 6
+            ),
             "Expected a confirm control for \(title)"
         )
-        if identified.exists {
-            tap(identified)
-        } else if alertButton.exists {
-            tap(alertButton)
-        } else {
-            tap(sheetButton)
+        let confirmButtons = [
+            identified,
+            namedAlert.buttons[title],
+            anyAlert.buttons[title],
+            descendantAlert.buttons[title],
+            app.sheets.buttons[title],
+        ]
+        if let button = confirmButtons.first(where: \.exists) {
+            tap(button)
+            return
         }
+        let labeled = app.buttons.matching(NSPredicate(format: "label == %@", title))
+        let last = max(0, labeled.count - 1)
+        tap(labeled.element(boundBy: last))
     }
 
     private func waitForAnyElement(_ elements: [XCUIElement], timeout: TimeInterval) -> Bool {
