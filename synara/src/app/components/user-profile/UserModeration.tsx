@@ -231,6 +231,7 @@ export function UserInviteAlert({ userId, reason, canKick, invitedBy, ts }: User
               onClick={kick}
               before={kicking && <Spinner size="100" variant="Success" fill="Soft" />}
               disabled={kicking}
+              data-testid="member-option-cancel-invite"
             >
               <Text size="B300">Cancel Invite</Text>
             </Button>

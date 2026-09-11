@@ -224,12 +224,12 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
             </Button>
           </Box>
         )}
+        {/* Cancel Invite is owned by UserInviteAlert for invitees. */}
         <UserModeration
           userId={userId}
           canInvite={visibility.invite}
           canKick={visibility.removeFromRoom}
           canBan={visibility.ban}
-          canCancelInvite={visibility.cancelInvite && membership !== Membership.Invite}
           canAcceptKnock={visibility.acceptKnock}
           canDenyKnock={visibility.denyKnock}
         />

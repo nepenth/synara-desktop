@@ -167,3 +167,23 @@ test('desktop profile reads native membership instead of room.getMember()', () =
   assert.match(moderation, /Accept knock/);
   assert.doesNotMatch(profile, /canKick=\{canKickUser && membership === Membership\.Join\}/);
 });
+
+test('Cancel Invite is wired through UserInviteAlert, not the Moderation section', () => {
+  const profile = readFileSync('src/app/components/user-profile/UserRoomProfile.tsx', 'utf8');
+  const moderation = readFileSync('src/app/components/user-profile/UserModeration.tsx', 'utf8');
+  const inviteAlertCall = profile.slice(
+    profile.indexOf('<UserInviteAlert'),
+    profile.indexOf('/>', profile.indexOf('<UserInviteAlert')) + 2
+  );
+  const inviteAlertFn = moderation.slice(
+    moderation.indexOf('export function UserInviteAlert'),
+    moderation.indexOf('type ConfirmAction')
+  );
+
+  assert.match(inviteAlertCall, /canKick=\{visibility\.cancelInvite\}/);
+  assert.match(inviteAlertFn, /data-testid="member-option-cancel-invite"/);
+  assert.match(inviteAlertFn, /<Text size="B300">Cancel Invite<\/Text>/);
+  assert.match(profile, /Cancel Invite is owned by UserInviteAlert/);
+  assert.doesNotMatch(profile, /canCancelInvite=/);
+  assert.doesNotMatch(profile, /visibility\.cancelInvite && membership !== Membership\.Invite/);
+});
