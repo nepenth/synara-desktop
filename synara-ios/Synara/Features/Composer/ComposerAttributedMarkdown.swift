@@ -290,12 +290,19 @@ enum ComposerAttributedMarkdown {
         guard let font else {
             return false
         }
+        let weightDelta = fontWeight(font) - fontWeight(baseFont)
+        // NSAttributedString may add traitBold to a stored semibold while
+        // leaving weight unchanged. Same-weight runs are the composer base,
+        // including Accessibility Bold Text.
+        if abs(weightDelta) <= extraWeightThreshold {
+            return false
+        }
         let traits = font.fontDescriptor.symbolicTraits
         let baseTraits = baseFont.fontDescriptor.symbolicTraits
         if traits.contains(.traitBold), baseTraits.contains(.traitBold) == false {
             return true
         }
-        return fontWeight(font) - fontWeight(baseFont) >= extraWeightThreshold
+        return weightDelta >= extraWeightThreshold
     }
 
     private static func isItalicRelativeToBase(font: UIFont?, baseFont: UIFont) -> Bool {
