@@ -107,6 +107,11 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             source.contains("super.paste"),
             "Rich RTF/HTML must not enter the composer through UITextView.paste"
         )
+        XCTAssertFalse(
+            source.contains("func insertAttributedText"),
+            "UITextView.insertAttributedText is public on current SDKs; keep a distinct helper name"
+        )
+        XCTAssertTrue(source.contains("insertComposerAttributedText"))
         XCTAssertTrue(markdown.contains("MatrixHTMLRenderer.sanitizedHTMLForClipboard"))
         XCTAssertTrue(markdown.contains("deleteCharacters(in: range)"))
         XCTAssertTrue(markdown.contains("0x1F"))

@@ -371,19 +371,19 @@ final class ComposerPasteTextView: UITextView {
            ),
            attributed.length > 0
         {
-            insertAttributedText(attributed)
+            insertComposerAttributedText(attributed)
             delegate?.textViewDidChange?(self)
             return
         }
         if let plain = UIPasteboard.general.string,
            plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         {
-            insertAttributedText(NSAttributedString(string: plain))
+            insertComposerAttributedText(NSAttributedString(string: plain))
             delegate?.textViewDidChange?(self)
         }
     }
 
-    private func insertAttributedText(_ attributed: NSAttributedString) {
+    private func insertComposerAttributedText(_ attributed: NSAttributedString) {
         let mutable = NSMutableAttributedString(attributedString: attributedText)
         let range = selectedRange
         mutable.replaceCharacters(in: range, with: attributed)
