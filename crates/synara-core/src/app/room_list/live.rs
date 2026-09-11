@@ -17,6 +17,7 @@ use tokio::task::JoinHandle;
 
 use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
 use crate::app::room_list::last_message::{
+    last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
     last_message_preview_from_invite,
 };
@@ -50,11 +51,26 @@ impl NativeRoomListOwner {
                 return;
             }
             futures_util::pin_mut!(entries);
-            while let Some(diffs) = entries.next().await {
-                if diffs.is_empty() {
-                    continue;
+            // Entry diffs fire on join/leave/reorder, not on unread-only
+            // receipt changes. Pulse so iOS (and any snapshot consumer that
+            // waits on this signal) re-reads counts after decrypt/sync.
+            let mut pulse = tokio::time::interval(Duration::from_secs(2));
+            pulse.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+            loop {
+                tokio::select! {
+                    diffs = entries.next() => {
+                        match diffs {
+                            Some(diffs) if !diffs.is_empty() => {
+                                emit(NativeRoomListUpdateSignal { session_generation });
+                            }
+                            Some(_) => {}
+                            None => break,
+                        }
+                    }
+                    _ = pulse.tick() => {
+                        emit(NativeRoomListUpdateSignal { session_generation });
+                    }
                 }
-                emit(NativeRoomListUpdateSignal { session_generation });
             }
             drop(controller);
         });
@@ -69,7 +85,6 @@ impl Drop for NativeRoomListOwner {
 }
 
 const SNAPSHOT_TIMEOUT: Duration = Duration::from_secs(5);
-const ROOM_LIST_SUBSCRIPTION_LIMIT: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -105,12 +120,15 @@ pub async fn snapshot_from_sync_owner(
         })
         .ok_or("d0.2-room-list-reset-missing")?;
 
-    let viewport_room_ids = values
+    // Sliding-sync `subscribe_to_rooms` replaces the previous set and is how
+    // encrypted rooms receive events for client-side unread math. A 20-row
+    // viewport left every other room at server notification_count=0, which
+    // is typically zero for E2EE — Element (full /sync) still showed badges.
+    let subscribed_room_ids = values
         .iter()
-        .take(ROOM_LIST_SUBSCRIPTION_LIMIT)
         .map(|room| room.room_id().to_owned())
         .collect::<Vec<_>>();
-    owner.subscribe_to_room_list(&viewport_room_ids).await;
+    owner.subscribe_to_room_list(&subscribed_room_ids).await;
 
     let mut ordered_room_ids = Vec::with_capacity(values.len());
     let mut rooms = Vec::with_capacity(values.len());
@@ -138,6 +156,22 @@ async fn project_room(room: &Room) -> RoomSummary {
         None => room.notification_mode().await.map(map_notification_mode),
     };
     let membership = membership(room.state());
+    let last_message_preview = last_message_preview(room);
+    // Approval prompts only promote unread/highlight while the SDK still
+    // reports unread. Reading the room does not change the latest body, so
+    // boosting from the last message alone would recreate badges after every
+    // receipt that already zeroed the counters.
+    let has_unread = room.num_unread_messages() > 0
+        || room.num_unread_notifications() > 0
+        || room.num_unread_mentions() > 0
+        || counts.notification_count > 0
+        || counts.highlight_count > 0;
+    let pending_approval =
+        pending_approval_unread_boost(has_unread, last_message_is_agent_approval(room));
+    let mention_count = room
+        .num_unread_mentions()
+        .max(counts.highlight_count)
+        .max(u64::from(pending_approval));
     let unread = room_unread_presentation(
         match membership {
             Membership::Invite => RoomUnreadMembership::Invited,
@@ -145,8 +179,9 @@ async fn project_room(room: &Room) -> RoomSummary {
         },
         room.num_unread_messages(),
         room.num_unread_notifications()
-            .max(counts.notification_count),
-        room.num_unread_mentions().max(counts.highlight_count),
+            .max(counts.notification_count)
+            .max(u64::from(pending_approval)),
+        mention_count,
         room.is_marked_unread(),
     );
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
@@ -167,11 +202,11 @@ async fn project_room(room: &Room) -> RoomSummary {
         encryption_status,
         join_rule: None,
         unread_count: bounded_count(unread.unread_count),
-        highlight_count: bounded_count(room.num_unread_mentions().max(counts.highlight_count)),
+        highlight_count: bounded_count(mention_count),
         marked_unread: room.is_marked_unread(),
         notification_mode,
         last_activity_ts,
-        last_message_preview: last_message_preview(room),
+        last_message_preview,
         heroes: None,
         tombstone_successor_room_id: None,
     }
@@ -207,6 +242,32 @@ fn last_message_preview(room: &Room) -> Option<String> {
                 "content": content,
             }))
         }
+    }
+}
+
+/// Last-message approval must not manufacture unread after receipts clear.
+fn pending_approval_unread_boost(has_unread: bool, last_message_is_approval: bool) -> bool {
+    has_unread && last_message_is_approval
+}
+
+fn last_message_is_agent_approval(room: &Room) -> bool {
+    use matrix_sdk::latest_events::LatestEventValue;
+    match room.latest_event() {
+        LatestEventValue::Remote(event) => {
+            last_message_event_is_agent_approval_str(event.raw().json().get())
+        }
+        LatestEventValue::LocalIsSending(local)
+        | LatestEventValue::LocalHasBeenSent { value: local, .. }
+        | LatestEventValue::LocalCannotBeSent(local) => {
+            let Ok(content) = local.content.deserialize() else {
+                return false;
+            };
+            last_message_event_is_agent_approval(&serde_json::json!({
+                "type": content.event_type().to_string(),
+                "content": content,
+            }))
+        }
+        LatestEventValue::None | LatestEventValue::RemoteInvite { .. } => false,
     }
 }
 
@@ -268,6 +329,16 @@ mod tests {
     }
 
     #[test]
+    fn pending_approval_does_not_restore_unread_after_receipts_clear_counts() {
+        // Latest event can still be the approval prompt after a read receipt
+        // zeros every SDK counter; the boost must stay off so badges clear.
+        assert!(!pending_approval_unread_boost(false, true));
+        assert!(pending_approval_unread_boost(true, true));
+        assert!(!pending_approval_unread_boost(true, false));
+        assert!(!pending_approval_unread_boost(false, false));
+    }
+
+    #[test]
     fn encryption_projection_preserves_unknown_and_errors_fail_closed() {
         assert_eq!(
             project_encryption_status::<()>(Ok(EncryptionState::Encrypted)),
@@ -284,6 +355,22 @@ mod tests {
         assert_eq!(
             project_encryption_status::<()>(Err(())),
             RoomEncryptionStatus::Unknown
+        );
+    }
+
+    #[test]
+    fn room_list_subscriptions_cover_the_full_joined_snapshot() {
+        let source = include_str!("live.rs");
+        assert!(source.contains("subscribed_room_ids"));
+        assert!(source.contains("values.iter().map(|room| room.room_id().to_owned())"));
+        assert!(source.contains("MissedTickBehavior::Skip"));
+        assert!(source.contains("last_message_is_agent_approval"));
+        assert!(source.contains("pending_approval_unread_boost"));
+        let truncated_viewport = concat!("ROOM_LIST_SUBSCRIPTION", "_LIMIT");
+        assert_eq!(
+            source.matches(truncated_viewport).count(),
+            0,
+            "encrypted rooms only get client-side unreads after subscribe_to_rooms"
         );
     }
 }

@@ -51,6 +51,25 @@ pub fn last_message_preview_from_event_json_str(raw: &str) -> Option<String> {
         .and_then(|value| last_message_preview_from_event_json(&value))
 }
 
+/// Classify from the unsanitized event body. The room-list preview collapses
+/// newlines, which would otherwise make the first-line heading matcher fail.
+pub fn last_message_event_is_agent_approval_str(raw: &str) -> bool {
+    serde_json::from_str(raw)
+        .ok()
+        .is_some_and(|value| last_message_event_is_agent_approval(&value))
+}
+
+pub fn last_message_event_is_agent_approval(value: &JsonValue) -> bool {
+    if value.get("type").and_then(JsonValue::as_str) != Some("m.room.message") {
+        return false;
+    }
+    value
+        .get("content")
+        .and_then(|content| content.get("body"))
+        .and_then(JsonValue::as_str)
+        .is_some_and(crate::app::agent_approvals::is_agent_approval_prompt)
+}
+
 pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String> {
     let event_type = value.get("type").and_then(JsonValue::as_str)?;
     let content = value.get("content").unwrap_or(&JsonValue::Null);
@@ -209,6 +228,24 @@ mod tests {
             last_message_preview_from_event_json(&event).as_deref(),
             Some("Hello from Alice")
         );
+    }
+
+    #[test]
+    fn sanitized_approval_heading_still_classifies() {
+        let event = json!({
+            "type": "m.room.message",
+            "content": {
+                "msgtype": "m.text",
+                "body": "⚠️ **Dangerous command requires approval**\n\n```\ncurl evil\n```"
+            }
+        });
+        let preview = last_message_preview_from_event_json(&event).expect("preview");
+        assert!(
+            !crate::app::agent_approvals::is_agent_approval_prompt(&preview),
+            "collapsed previews are not the classifier input"
+        );
+        assert!(last_message_event_is_agent_approval(&event));
+        assert!(last_message_event_is_agent_approval_str(&event.to_string()));
     }
 
     #[test]

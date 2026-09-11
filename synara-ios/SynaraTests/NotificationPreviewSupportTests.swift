@@ -53,14 +53,14 @@ final class NotificationPreviewSupportTests: XCTestCase {
         XCTAssertTrue(SynaraNotificationPreviewPreference.isEnabled(defaults: defaults))
     }
 
-    func testTimeSensitiveApprovalPreferenceDefaultsOffAndPersistsOptIn() {
+    func testTimeSensitiveApprovalPreferenceDefaultsOnAndPersistsOptOut() {
         let suiteName = "synara.agent-approval-alert.test.\(UUID().uuidString)"
         let defaults = UserDefaults(suiteName: suiteName)!
         defer { defaults.removePersistentDomain(forName: suiteName) }
 
-        XCTAssertFalse(SynaraTimeSensitiveAgentApprovalPreference.isEnabled(defaults: defaults))
-        defaults.set(true, forKey: SynaraSharedConstants.timeSensitiveAgentApprovalsKey)
         XCTAssertTrue(SynaraTimeSensitiveAgentApprovalPreference.isEnabled(defaults: defaults))
+        defaults.set(false, forKey: SynaraSharedConstants.timeSensitiveAgentApprovalsKey)
+        XCTAssertFalse(SynaraTimeSensitiveAgentApprovalPreference.isEnabled(defaults: defaults))
     }
 
     func testAgentApprovalFreshnessFailsClosedAtFiveMinuteBoundary() {

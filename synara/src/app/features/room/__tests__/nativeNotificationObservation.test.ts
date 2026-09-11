@@ -113,7 +113,8 @@ test('the renderer observes through the Core stream and no longer scans timeline
   // Both the message and the agent-approval pumps subscribe to the stream.
   const subscriptions = source.match(/subscribeNativeNotificationObservations\(/g) ?? [];
   assert.ok(subscriptions.length >= 2, 'messages and approvals subscribe');
-  assert.match(source, /mx\.getSyncStateData\(\)\?\.sessionGeneration/);
+  assert.match(source, /eventType === 'm\.room\.encrypted'/);
+  assert.match(source, /kind: 'agent_approval'/);
 
   // The dead observation pumps are gone: no sync-state gate the native facade
   // never satisfies, no `Room.timeline` listener the facade never emits, no

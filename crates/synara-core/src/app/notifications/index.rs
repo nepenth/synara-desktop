@@ -4,9 +4,9 @@
 //! in production by the notification decision owner. No OS notification
 //! posting, no dual-backend, no tokens in errors.
 
-use std::collections::{HashMap, HashSet, VecDeque};
+use std::collections::{HashMap, VecDeque};
 
-use crate::dto::{NotificationCandidate, NotificationCandidateId, RoomId};
+use crate::dto::{NotificationCandidate, NotificationCandidateId, NotificationKind, RoomId};
 
 use super::error::NotificationError;
 
@@ -24,8 +24,10 @@ pub struct NotificationIndex {
     /// Insertion order of candidate ids still pending.
     order: VecDeque<NotificationCandidateId>,
     by_id: HashMap<NotificationCandidateId, NotificationCandidate>,
-    /// Dedup keys: (room_id, event_id) when event present.
-    seen_events: HashSet<(RoomId, String)>,
+    /// Dedup keys: (room_id, event_id) when event present, with the kind that
+    /// recorded them so an agent-approval can replace a prior ciphertext
+    /// message decision for the same event.
+    seen_events: HashMap<(RoomId, String), NotificationKind>,
     seen_order: VecDeque<(RoomId, String)>,
     next_seq: u64,
     /// Currently focused room (suppress_if_focused_room honor).
@@ -38,7 +40,7 @@ impl NotificationIndex {
             session_generation,
             order: VecDeque::new(),
             by_id: HashMap::new(),
-            seen_events: HashSet::new(),
+            seen_events: HashMap::new(),
             seen_order: VecDeque::new(),
             next_seq: 0,
             focused_room_id: None,
@@ -70,7 +72,21 @@ impl NotificationIndex {
     /// identifiers. Events without an id are never duplicates.
     pub fn is_duplicate(&self, room_id: &str, event_id: &str) -> bool {
         self.seen_events
-            .contains(&(room_id.to_owned(), event_id.to_owned()))
+            .contains_key(&(room_id.to_owned(), event_id.to_owned()))
+    }
+
+    fn dismiss_matching_event(&mut self, room_id: &str, event_id: &str) {
+        let ids: Vec<NotificationCandidateId> = self
+            .by_id
+            .iter()
+            .filter(|(_, candidate)| {
+                candidate.room_id == room_id && candidate.event_id.as_deref() == Some(event_id)
+            })
+            .map(|(id, _)| id.clone())
+            .collect();
+        for id in ids {
+            let _ = self.dismiss(&id);
+        }
     }
 
     fn validate(c: &NotificationCandidate) -> Result<(), NotificationError> {
@@ -132,11 +148,15 @@ impl NotificationIndex {
             .event_id
             .as_ref()
             .map(|event_id| (candidate.room_id.clone(), event_id.clone()));
-        if event_key
-            .as_ref()
-            .is_some_and(|key| self.seen_events.contains(key))
-        {
-            return Ok(None);
+        if let Some(key) = event_key.as_ref() {
+            if let Some(previous) = self.seen_events.get(key) {
+                let supersede = candidate.kind == NotificationKind::AgentApproval
+                    && *previous != NotificationKind::AgentApproval;
+                if !supersede {
+                    return Ok(None);
+                }
+                self.dismiss_matching_event(&key.0, &key.1);
+            }
         }
 
         // Validate collisions before recording dedup or evicting a pending item.
@@ -149,13 +169,15 @@ impl NotificationIndex {
         }
 
         if let Some(key) = event_key {
-            if self.seen_order.len() == MAX_SEEN_EVENTS {
-                if let Some(old) = self.seen_order.pop_front() {
-                    self.seen_events.remove(&old);
+            if !self.seen_events.contains_key(&key) {
+                if self.seen_order.len() == MAX_SEEN_EVENTS {
+                    if let Some(old) = self.seen_order.pop_front() {
+                        self.seen_events.remove(&old);
+                    }
                 }
+                self.seen_order.push_back(key.clone());
             }
-            self.seen_order.push_back(key.clone());
-            self.seen_events.insert(key);
+            self.seen_events.insert(key, candidate.kind);
         }
 
         if self.by_id.len() >= MAX_PENDING_CANDIDATES {
