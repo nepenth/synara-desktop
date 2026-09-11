@@ -1,0 +1,1 @@
+Device verification now uses compact sheets and consistent buttons. Test an incoming request, compare all seven emoji, then close the result with Done and by swiping; it should stay closed. Check larger text sizes and confirm that "Device verified" agrees with this device's status in Security settings.

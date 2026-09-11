@@ -1,7 +1,7 @@
 import Foundation
 
 /// Drives the real sheet and presenter for local UI tests, without a server or
-/// changes to a user's encryption identity. Only selected by --ui-testing.
+/// changes to a user's encryption identity. Only selected by the UI test environment.
 final class VerificationUITestService: CryptoStatusServicing {
     private let lock = NSLock()
     private var current: CryptoVerificationSnapshot?
