@@ -4184,6 +4184,11 @@ private struct ThreadMessageRow: View {
                     }
 
                     threadBody
+                        .contextMenu {
+                            threadMessageActions
+                        } preview: {
+                            threadBody
+                        }
 
                     if item.reactions.isEmpty == false {
                         HStack(spacing: SynaraSpacing.xSmall) {
@@ -4210,42 +4215,6 @@ private struct ThreadMessageRow: View {
 
             Divider()
                 .padding(.leading, 46)
-        }
-        .contextMenu {
-            if let copyPayload = TimelineMessageCopy.payload(for: item) {
-                Button("Copy", systemImage: "doc.on.doc") {
-                    TimelineMessageCopy.copyToPasteboard(copyPayload)
-                }
-                .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
-                Button("Select Text", systemImage: "text.cursor") {
-                    isSelectingText = true
-                }
-                .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
-            }
-            if TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes {
-                Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
-                    .accessibilityIdentifier("ThreadItemPinToNotes-\(item.eventID)")
-            }
-            if availability.canForward {
-                Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
-                    .accessibilityIdentifier("ThreadItemForward-\(item.eventID)")
-            }
-            if availability.canDeclineCall {
-                Button("Decline Call", systemImage: "phone.down.fill", role: .destructive) {
-                    guard isDeclinePending == false else { return }
-                    isDeclinePending = true
-                    Task { @MainActor in
-                        _ = await onDeclineCall()
-                        isDeclinePending = false
-                    }
-                }
-                .disabled(isDeclinePending)
-                .accessibilityIdentifier("ThreadItemDeclineCall-\(item.eventID)")
-            }
-            if availability.canReport {
-                Button("Report", systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
-                    .accessibilityIdentifier("ThreadItemReport-\(item.eventID)")
-            }
         }
         .accessibilityElement(children: item.poll == nil ? .combine : .contain)
         .accessibilityIdentifier("ThreadItem-\(item.eventID)")
@@ -4294,6 +4263,44 @@ private struct ThreadMessageRow: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var threadMessageActions: some View {
+        if let copyPayload = TimelineMessageCopy.payload(for: item) {
+            Button("Copy", systemImage: "doc.on.doc") {
+                TimelineMessageCopy.copyToPasteboard(copyPayload)
+            }
+            .accessibilityIdentifier("TimelineItemCopy-\(item.eventID)")
+            Button("Select Text", systemImage: "text.cursor") {
+                isSelectingText = true
+            }
+            .accessibilityIdentifier("TimelineItemSelectText-\(item.eventID)")
+        }
+        if TimelinePinActionAvailability.forItem(item).canPinToPrivateNotes {
+            Button("Pin to Notes", systemImage: "note.text.badge.plus", action: onPinToNotes)
+                .accessibilityIdentifier("ThreadItemPinToNotes-\(item.eventID)")
+        }
+        if availability.canForward {
+            Button("Forward", systemImage: "arrowshape.turn.up.right", action: onForward)
+                .accessibilityIdentifier("ThreadItemForward-\(item.eventID)")
+        }
+        if availability.canDeclineCall {
+            Button("Decline Call", systemImage: "phone.down.fill", role: .destructive) {
+                guard isDeclinePending == false else { return }
+                isDeclinePending = true
+                Task { @MainActor in
+                    _ = await onDeclineCall()
+                    isDeclinePending = false
+                }
+            }
+            .disabled(isDeclinePending)
+            .accessibilityIdentifier("ThreadItemDeclineCall-\(item.eventID)")
+        }
+        if availability.canReport {
+            Button("Report", systemImage: "exclamationmark.bubble", role: .destructive, action: onReport)
+                .accessibilityIdentifier("ThreadItemReport-\(item.eventID)")
+        }
+    }
 }
 
 private struct MessageTextSelectionSheet: View {
@@ -4321,15 +4328,29 @@ private struct MessageTextSelectionSheet: View {
                         )
                     }
 
-                    Text(attributedRichText(projection.richText, includeLinks: false))
-                        .font(SynaraTypography.messageBody)
-                        .foregroundStyle(SynaraColor.primaryText)
-                        .lineSpacing(2.5)
-                        .textSelection(.enabled)
+                    #if canImport(UIKit)
+                        SelectableMessageTextView(
+                            attributedText: NSAttributedString(
+                                attributedRichText(projection.richText, includeLinks: false)
+                            ),
+                            accessibilityLabel: projection.richText.plainText
+                        )
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .accessibilityLabel(projection.richText.plainText)
-                        .accessibilityHint("Select and copy any part of this message")
+                    #else
+                        Text(attributedRichText(projection.richText, includeLinks: false))
+                            .font(SynaraTypography.messageBody)
+                            .foregroundStyle(SynaraColor.primaryText)
+                            .lineSpacing(2.5)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .accessibilityLabel(projection.richText.plainText)
+                            .accessibilityHint("Select and copy any part of this message")
+                    #endif
+
+                    ForEach(Array(projection.codeBlocks.enumerated()), id: \.offset) { _, block in
+                        MatrixCodeBlockView(block: block)
+                    }
                 }
                 .padding(SynaraSpacing.large)
             }
@@ -4361,7 +4382,8 @@ private struct MessageTextSelectionSheet: View {
         guard let html = payload.html else {
             return .init(
                 richText: .init(runs: [.init(text: payload.plainText, style: [], link: nil)]),
-                containsSpoilers: false
+                containsSpoilers: false,
+                codeBlocks: []
             )
         }
         return MatrixHTMLRenderer.selectionProjection(
@@ -5007,14 +5029,18 @@ private struct MatrixCodeBlockView: View {
 
                 Spacer()
 
-                Button("Copy") {
+                Button {
                     #if canImport(UIKit)
                         UIPasteboard.general.string = code
                     #endif
+                } label: {
+                    Label("Copy", systemImage: "doc.on.doc")
                 }
                 .font(SynaraTypography.chipLabel)
                 .buttonStyle(.plain)
-                .foregroundStyle(SynaraColor.primaryText)
+                .foregroundStyle(SynaraColor.accent)
+                .accessibilityLabel("Copy code")
+                .accessibilityIdentifier("CodeBlockCopyButton")
             }
             .padding(.horizontal, SynaraSpacing.medium)
             .padding(.vertical, SynaraSpacing.small)
@@ -5253,8 +5279,16 @@ private struct RoomDetailsView: View {
                     Button("Invite User", action: inviteUser)
                         .disabled(isLoading || inviteUserID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || details?.canInvite == false)
                         .accessibilityIdentifier("RoomInviteUserButton")
-                    ForEach(details?.members.prefix(12) ?? []) { member in
-                        RoomMemberPresenceRow(member: member)
+                    ForEach(details?.members ?? []) { member in
+                        RoomMemberPresenceRow(
+                            member: member,
+                            roomID: roomID,
+                            ownUserID: ownUserID,
+                            powerLevels: details?.powerLevels,
+                            onChanged: {
+                                await loadDetails()
+                            }
+                        )
                     }
                 }
 
@@ -5342,6 +5376,13 @@ private struct RoomDetailsView: View {
             return fallbackTitle
         }
         return loadedName
+    }
+
+    private var ownUserID: String? {
+        if case .signedIn(let session) = environment.session.currentState {
+            return session.userID
+        }
+        return nil
     }
 
     private var profileNameChange: String? {
@@ -5549,18 +5590,38 @@ private struct RoomDetailsView: View {
 
 private struct RoomMemberPresenceRow: View {
     let member: RoomMemberSummary
+    let roomID: String
+    let ownUserID: String?
+    let powerLevels: RoomPowerLevelSummary?
+    let onChanged: () async -> Void
     @Environment(\.appEnvironment) private var environment
     @State private var presence: SharedCorePresence?
+    @State private var isActionsPresented = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
-            Text(member.userID)
-                .font(SynaraTypography.body)
-            Text(presence?.displayName ?? member.membership)
-                .font(SynaraTypography.supporting)
-                .foregroundStyle(SynaraColor.secondaryText)
+        Button {
+            isActionsPresented = true
+        } label: {
+            VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                Text(member.title)
+                    .font(SynaraTypography.body)
+                    .foregroundStyle(SynaraColor.primaryText)
+                Text(presence?.displayName ?? member.membership)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .accessibilityIdentifier("RoomMemberPresenceRow")
+        .accessibilityIdentifier("RoomMemberRow-\(member.userID)")
+        .sheet(isPresented: $isActionsPresented) {
+            RoomMemberActionsView(
+                roomID: roomID,
+                member: member,
+                ownUserID: ownUserID,
+                powerLevels: powerLevels,
+                onChanged: onChanged
+            )
+        }
         .task(id: member.userID) {
             presence = await environment.matrix.presence(userID: member.userID)
         }
@@ -5760,9 +5821,6 @@ private struct TimelineRow: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, isGroupedWithPrevious ? 0 : 7)
-        .contextMenu {
-            messageActions
-        }
         .accessibilityElement(children: accessibilityChildBehavior)
         .accessibilityLabel(accessibilitySummary)
         .accessibilityHint(accessibilityHint)
@@ -5894,6 +5952,11 @@ private struct TimelineRow: View {
             }
 
             bubbleWrappedBodyContent
+                .contextMenu {
+                    messageActions
+                } preview: {
+                    bubbleWrappedBodyContent
+                }
 
             if item.reactions.isEmpty == false {
                 HStack(spacing: SynaraSpacing.xSmall) {

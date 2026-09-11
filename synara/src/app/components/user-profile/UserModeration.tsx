@@ -1,6 +1,24 @@
-import { Box, Button, color, config, Icon, Icons, Spinner, Text, Input } from 'folds';
-import React, { useCallback, useRef } from 'react';
+import {
+  Box,
+  Button,
+  color,
+  config,
+  Dialog,
+  Header,
+  Icon,
+  IconButton,
+  Icons,
+  Spinner,
+  Text,
+  Input,
+  Overlay,
+  OverlayBackdrop,
+  OverlayCenter,
+} from 'folds';
+import React, { useCallback, useRef, useState } from 'react';
+import FocusTrap from 'focus-trap-react';
 import { useRoom } from '../../hooks/useRoom';
+import { stopPropagation } from '../../utils/keyboard';
 import { CutoutCard } from '../cutout-card';
 import { SettingTile } from '../setting-tile';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
@@ -223,15 +241,89 @@ export function UserInviteAlert({ userId, reason, canKick, invitedBy, ts }: User
   );
 }
 
+type ConfirmAction = 'remove' | 'ban' | 'cancel-invite' | 'deny-knock';
+
+type ModerationConfirmDialogProps = {
+  action: ConfirmAction;
+  onCancel: () => void;
+  onConfirm: () => void;
+};
+function ModerationConfirmDialog({ action, onCancel, onConfirm }: ModerationConfirmDialogProps) {
+  let title = 'Remove from room';
+  let body = 'They will be removed from this room and can rejoin if the room allows it.';
+  let confirm = 'Remove from room';
+  if (action === 'ban') {
+    title = 'Ban from room';
+    body = 'They will be removed and will not be able to rejoin until they are unbanned.';
+    confirm = 'Ban from room';
+  } else if (action === 'cancel-invite') {
+    title = 'Cancel invite';
+    body = 'This will withdraw their pending invitation to this room.';
+    confirm = 'Cancel invite';
+  } else if (action === 'deny-knock') {
+    title = 'Deny knock';
+    body = 'This will reject their request to join this room.';
+    confirm = 'Deny knock';
+  }
+
+  return (
+    <Overlay open backdrop={<OverlayBackdrop />}>
+      <OverlayCenter>
+        <FocusTrap
+          focusTrapOptions={{
+            initialFocus: false,
+            onDeactivate: onCancel,
+            clickOutsideDeactivates: true,
+            escapeDeactivates: stopPropagation,
+          }}
+        >
+          <Dialog variant="Surface">
+            <Header
+              style={{ padding: `0 ${config.space.S200} 0 ${config.space.S400}` }}
+              variant="Surface"
+              size="500"
+            >
+              <Box grow="Yes">
+                <Text size="H4">{title}</Text>
+              </Box>
+              <IconButton size="300" onClick={onCancel} radii="300">
+                <Icon src={Icons.Cross} />
+              </IconButton>
+            </Header>
+            <Box style={{ padding: config.space.S400, paddingTop: 0 }} direction="Column" gap="400">
+              <Text priority="400">{body}</Text>
+              <Button type="submit" variant="Critical" onClick={onConfirm}>
+                <Text size="B400">{confirm}</Text>
+              </Button>
+            </Box>
+          </Dialog>
+        </FocusTrap>
+      </OverlayCenter>
+    </Overlay>
+  );
+}
+
 type UserModerationProps = {
   userId: string;
   canKick: boolean;
   canBan: boolean;
   canInvite: boolean;
+  canCancelInvite?: boolean;
+  canAcceptKnock?: boolean;
+  canDenyKnock?: boolean;
 };
-export function UserModeration({ userId, canKick, canBan, canInvite }: UserModerationProps) {
+export function UserModeration({
+  userId,
+  canKick,
+  canBan,
+  canInvite,
+  canCancelInvite = false,
+  canAcceptKnock = false,
+  canDenyKnock = false,
+}: UserModerationProps) {
   const room = useRoom();
   const reasonInputRef = useRef<HTMLInputElement>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction>();
 
   const getReason = useCallback((): string | undefined => {
     const reason = reasonInputRef.current?.value.trim() || undefined;
@@ -282,10 +374,28 @@ export function UserModeration({ userId, canKick, canBan, canInvite }: UserModer
     banState.status === AsyncStatus.Loading ||
     inviteState.status === AsyncStatus.Loading;
 
-  if (!canBan && !canKick && !canInvite) return null;
+  if (!canBan && !canKick && !canInvite && !canCancelInvite && !canAcceptKnock && !canDenyKnock) {
+    return null;
+  }
+
+  const confirmCopy = confirmAction;
 
   return (
     <Box direction="Column" gap="400">
+      {confirmCopy && (
+        <ModerationConfirmDialog
+          action={confirmCopy}
+          onCancel={() => setConfirmAction(undefined)}
+          onConfirm={() => {
+            const action = confirmAction;
+            setConfirmAction(undefined);
+            if (action === 'ban') ban();
+            else if (action === 'deny-knock' || action === 'cancel-invite' || action === 'remove') {
+              kick();
+            }
+          }}
+        />
+      )}
       <Box direction="Column" gap="200">
         <Box grow="Yes" direction="Column" gap="100">
           <Text size="L400">Moderation</Text>
@@ -313,7 +423,7 @@ export function UserModeration({ userId, canKick, canBan, canInvite }: UserModer
             </Text>
           )}
         </Box>
-        <Box shrink="No" gap="200">
+        <Box shrink="No" gap="200" wrap="Wrap">
           {canInvite && (
             <Button
               style={{ flexGrow: 1 }}
@@ -334,6 +444,69 @@ export function UserModeration({ userId, canKick, canBan, canInvite }: UserModer
               <Text size="B300">Invite</Text>
             </Button>
           )}
+          {canAcceptKnock && (
+            <Button
+              style={{ flexGrow: 1 }}
+              size="300"
+              variant="Success"
+              fill="Soft"
+              radii="300"
+              before={
+                inviteState.status === AsyncStatus.Loading ? (
+                  <Spinner size="50" variant="Secondary" fill="Soft" />
+                ) : (
+                  <Icon size="50" src={Icons.ArrowRight} />
+                )
+              }
+              onClick={invite}
+              disabled={disabled}
+              data-testid="member-option-accept-knock"
+            >
+              <Text size="B300">Accept knock</Text>
+            </Button>
+          )}
+          {canDenyKnock && (
+            <Button
+              style={{ flexGrow: 1 }}
+              size="300"
+              variant="Critical"
+              fill="Soft"
+              radii="300"
+              before={
+                kickState.status === AsyncStatus.Loading ? (
+                  <Spinner size="50" variant="Critical" fill="Soft" />
+                ) : (
+                  <Icon size="50" src={Icons.ArrowLeft} />
+                )
+              }
+              onClick={() => setConfirmAction('deny-knock')}
+              disabled={disabled}
+              data-testid="member-option-deny-knock"
+            >
+              <Text size="B300">Deny knock</Text>
+            </Button>
+          )}
+          {canCancelInvite && (
+            <Button
+              style={{ flexGrow: 1 }}
+              size="300"
+              variant="Critical"
+              fill="Soft"
+              radii="300"
+              before={
+                kickState.status === AsyncStatus.Loading ? (
+                  <Spinner size="50" variant="Critical" fill="Soft" />
+                ) : (
+                  <Icon size="50" src={Icons.ArrowLeft} />
+                )
+              }
+              onClick={() => setConfirmAction('cancel-invite')}
+              disabled={disabled}
+              data-testid="member-option-cancel-invite"
+            >
+              <Text size="B300">Cancel invite</Text>
+            </Button>
+          )}
           {canKick && (
             <Button
               style={{ flexGrow: 1 }}
@@ -348,10 +521,11 @@ export function UserModeration({ userId, canKick, canBan, canInvite }: UserModer
                   <Icon size="50" src={Icons.ArrowLeft} />
                 )
               }
-              onClick={kick}
+              onClick={() => setConfirmAction('remove')}
               disabled={disabled}
+              data-testid="member-option-remove"
             >
-              <Text size="B300">Kick</Text>
+              <Text size="B300">Remove from room</Text>
             </Button>
           )}
           {canBan && (
@@ -368,10 +542,11 @@ export function UserModeration({ userId, canKick, canBan, canInvite }: UserModer
                   <Icon size="50" src={Icons.Prohibited} />
                 )
               }
-              onClick={ban}
+              onClick={() => setConfirmAction('ban')}
               disabled={disabled}
+              data-testid="member-option-ban"
             >
-              <Text size="B300">Ban</Text>
+              <Text size="B300">Ban from room</Text>
             </Button>
           )}
         </Box>

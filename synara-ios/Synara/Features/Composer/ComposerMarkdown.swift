@@ -1,5 +1,7 @@
 import Foundation
 
+/// UTF-16 range in the composer markdown draft, not the visible attributed
+/// string after a rich paste.
 struct ComposerTextSelection: Equatable {
     var location: Int
     var length: Int

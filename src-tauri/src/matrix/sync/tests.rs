@@ -135,6 +135,28 @@ fn reconnect_bootstrap_and_recover_table() {
         decide_reconnect(SyncReadiness::Running, SyncIntent::Observe),
         ReconnectAction::None
     );
+
+    // Resume restarts a live owner that may be stuck on a dead long-poll.
+    assert_eq!(
+        decide_reconnect(SyncReadiness::Running, SyncIntent::Resume),
+        ReconnectAction::Restart
+    );
+    assert_eq!(
+        decide_reconnect(SyncReadiness::Failed, SyncIntent::Resume),
+        ReconnectAction::Restart
+    );
+    assert_eq!(
+        decide_reconnect(SyncReadiness::Offline, SyncIntent::Resume),
+        ReconnectAction::Start
+    );
+    assert_eq!(
+        decide_reconnect(SyncReadiness::Idle, SyncIntent::Resume),
+        ReconnectAction::Start
+    );
+    assert_eq!(
+        decide_reconnect(SyncReadiness::Unconfigured, SyncIntent::Resume),
+        ReconnectAction::None
+    );
 }
 
 #[test]

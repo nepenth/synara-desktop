@@ -62,6 +62,7 @@ import {
   UserMentionAutocomplete,
   EmoticonAutocomplete,
   createEmoticonElement,
+  createMentionElement,
   moveCursor,
   resetEditorHistory,
   customHtmlEqualsPlainText,
@@ -85,6 +86,7 @@ import {
   roomIdToUploadItemsAtomFamily,
   roomUploadAtomFamily,
 } from '../../state/room/roomInputDrafts';
+import { composerMentionInsertAtom } from '../../state/composerMentionInsert';
 import { UploadCardRenderer } from '../../components/upload-card';
 import {
   UploadBoard,
@@ -187,6 +189,19 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const creators = useRoomCreators(room);
 
     const [msgDraft, setMsgDraft] = useAtom(roomIdToMsgDraftAtomFamily(roomId));
+    const [mentionInsert, setMentionInsert] = useAtom(composerMentionInsertAtom);
+    useEffect(() => {
+      if (!mentionInsert || mentionInsert.roomId !== roomId) return;
+      const mentionEl = createMentionElement(
+        mentionInsert.userId,
+        mentionInsert.name.startsWith('@') ? mentionInsert.name : `@${mentionInsert.name}`,
+        mx.getUserId() === mentionInsert.userId
+      );
+      Transforms.insertNodes(editor, mentionEl);
+      moveCursor(editor, true);
+      ReactEditor.focus(editor);
+      setMentionInsert(undefined);
+    }, [mentionInsert, roomId, editor, mx, setMentionInsert]);
     const replyDraft = useNativeComposerReplyDraft(roomId);
     const clearReplyDraft = useCallback(
       async (expectedDraftRevision: number) => {

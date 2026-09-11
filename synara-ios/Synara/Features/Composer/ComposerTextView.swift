@@ -1,3 +1,4 @@
+import PhotosUI
 import SwiftUI
 #if canImport(UIKit)
 import UIKit
@@ -132,7 +133,9 @@ struct ComposerTextView: UIViewRepresentable {
                 textView.text = text
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
-            } else if textView.isFirstResponder == false, textView.text != text {
+            } else if textView.isFirstResponder == false,
+                      ComposerAttributedMarkdown.markdown(from: textView.attributedText) != text
+            {
                 textView.text = text
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
@@ -159,8 +162,11 @@ struct ComposerTextView: UIViewRepresentable {
     }
 
     private func applySelection(to textView: UITextView) {
-        let desiredRange = NSRange(location: selection.location, length: selection.length)
-        guard desiredRange.upperBound <= (textView.text as NSString).length else {
+        let desiredRange = ComposerAttributedMarkdown.visibleRange(
+            in: textView.attributedText,
+            markdownSelection: selection
+        )
+        guard desiredRange.upperBound <= textView.attributedText.length else {
             return
         }
         textView.selectedRange = desiredRange
@@ -198,8 +204,9 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func publishContent(from textView: UITextView) {
-            if parent.text != textView.text {
-                parent.text = textView.text
+            let markdown = ComposerAttributedMarkdown.markdown(from: textView.attributedText)
+            if parent.text != markdown {
+                parent.text = markdown
             }
             updateSelection(from: textView)
             syncPlaceholder()
@@ -234,7 +241,7 @@ struct ComposerTextView: UIViewRepresentable {
             if parent.isFocused.wrappedValue {
                 parent.isFocused.wrappedValue = false
             }
-            parent.text = textView.text
+            parent.text = ComposerAttributedMarkdown.markdown(from: textView.attributedText)
             updateSelection(from: textView)
             syncPlaceholder()
             updateHeight(for: textView)
@@ -333,9 +340,9 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         private func updateSelection(from textView: UITextView) {
-            let selection = ComposerTextSelection(
-                location: textView.selectedRange.location,
-                length: textView.selectedRange.length
+            let selection = ComposerAttributedMarkdown.markdownSelection(
+                from: textView.attributedText,
+                visibleRange: textView.selectedRange
             )
             if parent.selection != selection {
                 parent.selection = selection
@@ -360,7 +367,35 @@ final class ComposerPasteTextView: UITextView {
             onPasteImages?(images)
             return
         }
-        super.paste(sender)
+        if let html = ComposerPasteboard.htmlString(),
+           let attributed = ComposerAttributedMarkdown.attributedString(
+               fromHTML: html,
+               baseFont: font ?? .preferredFont(forTextStyle: .callout)
+           ),
+           attributed.length > 0
+        {
+            insertComposerAttributedText(attributed)
+            delegate?.textViewDidChange?(self)
+            return
+        }
+        if let plain = UIPasteboard.general.string,
+           plain.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        {
+            insertComposerAttributedText(NSAttributedString(string: plain))
+            delegate?.textViewDidChange?(self)
+        }
+    }
+
+    private func insertComposerAttributedText(_ attributed: NSAttributedString) {
+        let mutable = NSMutableAttributedString(attributedString: attributedText)
+        let range = selectedRange
+        mutable.replaceCharacters(in: range, with: attributed)
+        attributedText = mutable
+        selectedRange = NSRange(location: range.location + attributed.length, length: 0)
+        typingAttributes = [
+            .font: font ?? .preferredFont(forTextStyle: .callout),
+            .foregroundColor: textColor ?? .label,
+        ]
     }
 
     private func pasteboardImages() -> [UIImage] {

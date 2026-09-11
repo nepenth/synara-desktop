@@ -77,6 +77,8 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { stopPropagation } from '../../utils/keyboard';
 import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import { copyRichTextToClipboard } from '../../utils/dom';
+import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import {
   nativeFollowLiveAttemptKey,
   nativeFollowLiveTarget,
@@ -367,6 +369,25 @@ const NativeTimelineRowActions = ({
   if (!eventId || !capabilities) return null;
   const buttons: React.ReactNode[] = [];
   const closeAfterOneShotAction = () => onRequestClose?.();
+  if (body) {
+    buttons.push(
+      <MenuItem
+        key="copy"
+        size="300"
+        fill="Soft"
+        radii="300"
+        onClick={() => {
+          copyRichTextToClipboard(
+            body,
+            formattedBody ? prepareNativeFormattedBody(formattedBody) : undefined
+          );
+          closeAfterOneShotAction();
+        }}
+      >
+        Copy Message
+      </MenuItem>
+    );
+  }
   if (capabilities.reply) {
     buttons.push(
       <MenuItem

@@ -1181,11 +1181,13 @@ final class SynaraCoreBindingsTests: XCTestCase {
             members: [
                 SharedCoreRoomDetails.MemberRow(
                     userId: "@alice:example.org",
+                    displayName: "Alice",
                     membership: "join",
                     powerLevel: 100
                 ),
                 SharedCoreRoomDetails.MemberRow(
                     userId: "@bob:example.org",
+                    displayName: nil,
                     membership: "leave",
                     powerLevel: 0
                 ),
@@ -1201,6 +1203,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(details.avatarURL, "mxc://example.org/roomAvatar")
         XCTAssertEqual(details.memberCount, 1)
         XCTAssertEqual(details.members.map(\.userID), ["@alice:example.org", "@bob:example.org"])
+        XCTAssertEqual(details.members.first?.displayName, "Alice")
         XCTAssertEqual(details.isPublic, true)
         XCTAssertEqual(details.isEncrypted, true)
         XCTAssertEqual(details.encryptionStatus, .encrypted)
@@ -1225,6 +1228,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(details.canEditName, true)
         XCTAssertEqual(details.canEditAliases, true)
         XCTAssertEqual(details.powerLevels?.ownUserLevel, 100)
+        XCTAssertEqual(details.powerLevels?.canEditPowerLevels, true)
         XCTAssertEqual(details.notificationMode, .default)
         let publicError = String(describing: details)
         for forbidden in ["password", "syt_", "token"] {

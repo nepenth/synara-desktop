@@ -828,7 +828,11 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
 
     /** Readiness refresh on demand (still async); keeps sync cache fresh. */
     async retryImmediately(): Promise<void> {
-      await refresh();
+      try {
+        await invoke('matrix_sync_recover');
+      } finally {
+        await refresh();
+      }
     },
     async startClient(): Promise<void> {
       await refresh();

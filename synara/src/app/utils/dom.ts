@@ -270,6 +270,27 @@ export const copyToClipboard = (text: string) => {
   }
 };
 
+export const copyRichTextToClipboard = (plain: string, html?: string) => {
+  if (
+    html &&
+    typeof ClipboardItem !== 'undefined' &&
+    typeof navigator.clipboard?.write === 'function'
+  ) {
+    void navigator.clipboard
+      .write([
+        new ClipboardItem({
+          'text/plain': new Blob([plain], { type: 'text/plain' }),
+          'text/html': new Blob([html], { type: 'text/html' }),
+        }),
+      ])
+      .catch(() => {
+        copyToClipboard(plain);
+      });
+    return;
+  }
+  copyToClipboard(plain);
+};
+
 export const setFavicon = (url: string): void => {
   const favicon = document.querySelector('#favicon');
   if (!favicon) return;

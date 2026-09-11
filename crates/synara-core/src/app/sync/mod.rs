@@ -24,6 +24,7 @@ mod readiness;
 mod reconnect;
 mod service;
 mod sync_phase;
+mod wake;
 
 pub use capability::{probe_sliding_sync, server_supports_sliding_sync};
 pub use error::SyncError;
@@ -37,6 +38,7 @@ pub use service::{
     SyncServiceOwner,
 };
 pub use sync_phase::SyncPhase;
+pub use wake::{recover_cooldown_active, suspend_detected, RECOVER_COOLDOWN, SUSPEND_WALL_SKEW};
 
 /// Static marker for link / schema smoke (no network, no Client).
 pub const MATRIX_SYNC_MARKER: &str = "matrix-sync-readiness-p4.1";

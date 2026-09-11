@@ -17,6 +17,7 @@ enum SharedCoreRoomDetails {
 
     struct MemberRow {
         let userId: String
+        let displayName: String?
         let membership: String
         let powerLevel: Int
     }
@@ -63,6 +64,7 @@ enum SharedCoreRoomDetails {
             members: members.map {
                 RoomMemberSummary(
                     userID: $0.userId,
+                    displayName: $0.displayName,
                     membership: $0.membership,
                     powerLevel: $0.powerLevel
                 )
@@ -131,7 +133,8 @@ enum SharedCoreRoomDetails {
             canRedactOther: ownUserLevel >= parsed.redact,
             canEditName: ownUserLevel >= roomName,
             canEditTopic: ownUserLevel >= roomTopic,
-            canEditAvatar: ownUserLevel >= roomAvatar
+            canEditAvatar: ownUserLevel >= roomAvatar,
+            canEditPowerLevels: ownUserLevel >= (parsed.event("m.room.power_levels") ?? parsed.stateDefault)
         )
     }
 

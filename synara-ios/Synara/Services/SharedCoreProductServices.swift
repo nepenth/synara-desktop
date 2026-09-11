@@ -2219,6 +2219,57 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
         }
     }
 
+    func kickUser(roomID: String, userID: String, reason: String?) async throws {
+        do {
+            _ = try await SharedCoreRoomModeration.roomKick(
+                core: host.core,
+                roomId: roomID,
+                userId: userID,
+                reason: reason
+            )
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func banUser(roomID: String, userID: String, reason: String?) async throws {
+        do {
+            _ = try await SharedCoreRoomModeration.roomBan(
+                core: host.core,
+                roomId: roomID,
+                userId: userID,
+                reason: reason
+            )
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func unbanUser(roomID: String, userID: String) async throws {
+        do {
+            _ = try await SharedCoreRoomModeration.roomUnban(
+                core: host.core,
+                roomId: roomID,
+                userId: userID
+            )
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
+    func setMemberPowerLevel(roomID: String, userID: String, powerLevel: Int) async throws {
+        do {
+            _ = try await SharedCoreRoomPowerLevels.roomSetPowerLevel(
+                core: host.core,
+                roomId: roomID,
+                userId: userID,
+                powerLevel: Int64(powerLevel)
+            )
+        } catch {
+            throw RoomManagementError.failed
+        }
+    }
+
     func searchPublicRooms(query: String) async throws -> [PublicRoomSummary] {
         do {
             let page = try await SharedCoreDirectorySearch.roomDirectorySearch(
@@ -2306,6 +2357,7 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
             members: members?.members.map {
                 SharedCoreRoomDetails.MemberRow(
                     userId: $0.userId,
+                    displayName: $0.displayName,
                     membership: $0.membership,
                     powerLevel: Int($0.powerLevel)
                 )

@@ -435,6 +435,25 @@ final class SynaraUITests: XCTestCase {
         )
     }
 
+    func testRoomDetailsMemberActionsIncludeRemoveFromRoom() {
+        let app = launchRoomApp()
+
+        XCTAssertTrue(app.buttons["RoomDetailsButton"].waitForExistence(timeout: 5))
+        tap(app.buttons["RoomDetailsButton"])
+        XCTAssertTrue(app.collectionViews["RoomDetailsScreen"].waitForExistence(timeout: 5))
+
+        let bobRow = app.buttons["RoomMemberRow-@bob:matrix.org"]
+        XCTAssertTrue(revealRoomDetailsElement(bobRow, app: app, timeout: 12))
+        tap(bobRow)
+        XCTAssertTrue(app.collectionViews["RoomMemberActionsScreen"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["RoomMemberRemoveButton"].waitForExistence(timeout: 5))
+        XCTAssertTrue(app.buttons["RoomMemberBanButton"].exists)
+        tap(app.buttons["RoomMemberRemoveButton"])
+        tap(app.buttons["RoomMemberConfirmActionButton"].firstMatch, timeout: 5)
+        XCTAssertTrue(app.staticTexts["RoomMemberActionMessage"].waitForExistence(timeout: 8))
+        XCTAssertEqual(app.staticTexts["RoomMemberActionMessage"].label, "User removed.")
+    }
+
     func testRoomDetailsProfileEditMockFlow() {
         let app = launchRoomApp()
 

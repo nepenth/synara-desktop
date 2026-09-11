@@ -18,6 +18,9 @@ pub enum SyncIntent {
     Shutdown,
     /// Periodic tick / health observer with no new intent.
     Observe,
+    /// OS / network wake. The SDK can keep reporting Running on a dead
+    /// long-poll after desktop sleep; restart even when already Running.
+    Resume,
 }
 
 /// Next action the owner should take on the SyncService.
@@ -78,6 +81,11 @@ pub fn decide_reconnect(readiness: SyncReadiness, intent: SyncIntent) -> Reconne
             // Hard error: explicit restart path (stop if needed + start).
             R::Failed => A::Restart,
         },
+        I::Resume => match readiness {
+            R::Unconfigured => A::None,
+            R::Running | R::Failed => A::Restart,
+            R::Idle | R::Terminated | R::Offline => A::Start,
+        },
         I::Observe => A::None,
     }
 }
@@ -85,4 +93,42 @@ pub fn decide_reconnect(readiness: SyncReadiness, intent: SyncIntent) -> Reconne
 /// Whether the decision table treats this readiness as restartable without rebuild.
 pub fn is_restartable(readiness: SyncReadiness) -> bool {
     !matches!(readiness, SyncReadiness::Unconfigured)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::sync::readiness::SyncReadiness;
+
+    #[test]
+    fn resume_restarts_a_live_or_failed_owner() {
+        assert_eq!(
+            decide_reconnect(SyncReadiness::Running, SyncIntent::Resume),
+            ReconnectAction::Restart
+        );
+        assert_eq!(
+            decide_reconnect(SyncReadiness::Failed, SyncIntent::Resume),
+            ReconnectAction::Restart
+        );
+        assert_eq!(
+            decide_reconnect(SyncReadiness::Offline, SyncIntent::Resume),
+            ReconnectAction::Start
+        );
+        assert_eq!(
+            decide_reconnect(SyncReadiness::Idle, SyncIntent::Resume),
+            ReconnectAction::Start
+        );
+        assert_eq!(
+            decide_reconnect(SyncReadiness::Unconfigured, SyncIntent::Resume),
+            ReconnectAction::None
+        );
+    }
+
+    #[test]
+    fn recover_does_not_restart_a_live_owner() {
+        assert_eq!(
+            decide_reconnect(SyncReadiness::Running, SyncIntent::Recover),
+            ReconnectAction::None
+        );
+    }
 }
