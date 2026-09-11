@@ -39,11 +39,10 @@ export type AgentApprovalRoomSource = {
 };
 
 /** Inbox approval count uses Core's raw-event flag, never lastMessagePreview. */
-export const countJoinedRoomAgentApprovals = (
-  rooms: Iterable<AgentApprovalRoomSource>
-): number =>
+export const countJoinedRoomAgentApprovals = (rooms: Iterable<AgentApprovalRoomSource>): number =>
   Array.from(rooms).filter(
-    (room) => room.membership === 'join' && !room.isSpace && room.lastMessageIsAgentApproval === true
+    (room) =>
+      room.membership === 'join' && !room.isSpace && room.lastMessageIsAgentApproval === true
   ).length;
 
 export const summarizeNotifications = ({
