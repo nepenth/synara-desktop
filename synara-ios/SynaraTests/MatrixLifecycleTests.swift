@@ -319,26 +319,6 @@ final class MatrixLifecycleTests: XCTestCase {
         XCTAssertTrue(CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(.failed))
     }
 
-    func testClearedNonTerminalVerificationStateIsRestoredFromInbox() {
-        let emojis = CryptoVerificationState.emojis([
-            CryptoVerificationEmoji(symbol: "🐶", description: "Dog")
-        ])
-        XCTAssertEqual(
-            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: nil, latest: emojis),
-            emojis
-        )
-        XCTAssertEqual(
-            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: emojis, latest: .requestSent),
-            emojis
-        )
-        XCTAssertNil(
-            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: nil, latest: .finished)
-        )
-        XCTAssertNil(
-            CryptoVerificationPresentationPolicy.restoredStateIfCleared(presented: nil, latest: nil)
-        )
-    }
-
     @MainActor
     func testSecuritySettingsHidesVerifyButtonAfterFinishedTrustRefresh() async {
         let unverified = SessionCryptoStatus(
@@ -614,7 +594,7 @@ private final class SequencingCryptoStatusService: CryptoStatusServicing {
         return remaining.first ?? .unknown
     }
 
-    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+    func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> {
         // No active or completed verification request exists in this fixture.
         AsyncStream { $0.finish() }
     }

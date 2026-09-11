@@ -113,6 +113,10 @@ timeline_and_composer=(
 )
 
 settings_and_workflows=(
+  testVerificationSheetsFitContentAndDoneStaysDismissed
+  testVerificationSwipeAcknowledgesResultWithoutReopening
+  testCompletedComparisonDoesNotClaimOwnDeviceTrust
+  testVerificationLargeTextKeepsComparisonAndActionsReachable
   testLogoutReturnsToSignedOutShell
   testSettingsShowsNotificationSectionsAndReleaseLinks
   testSettingsShowsEncryptedRecoveryControlsWhenNeeded

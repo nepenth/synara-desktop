@@ -1384,7 +1384,7 @@ private struct SettingsNavigationRow: View {
     }
 }
 
-private extension SynaraCryptoVerificationStatus {
+extension SynaraCryptoVerificationStatus {
     var settingsDisplayName: String {
         switch self {
         case .verified:

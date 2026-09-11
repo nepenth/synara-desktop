@@ -473,6 +473,17 @@ enum CryptoVerificationState: Equatable, Identifiable {
     }
 }
 
+/// Keep the native identity through every phase, including terminal results.
+struct CryptoVerificationSnapshot: Equatable, Identifiable {
+    struct ID: Hashable {
+        let sessionGeneration: UInt64
+        let flowID: String
+    }
+
+    let id: ID
+    let state: CryptoVerificationState
+}
+
 enum CryptoActionResult: Equatable {
     case completed(String)
     case unavailable(String)
@@ -489,8 +500,7 @@ enum CryptoActionResult: Equatable {
 protocol CryptoStatusServicing {
     func roomStatus(roomID: String) async -> RoomCryptoStatus
     func sessionStatus() async -> SessionCryptoStatus
-    func verificationUpdates() -> AsyncStream<CryptoVerificationState>
-    func currentVerificationState() async -> CryptoVerificationState?
+    func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?>
     func retryDecryption(roomID: String) async -> CryptoActionResult
     func requestDeviceVerification(deviceId: String?) async -> CryptoActionResult
     func acceptVerificationRequest() async -> CryptoActionResult
@@ -502,7 +512,7 @@ protocol CryptoStatusServicing {
     func sessionDevices() async -> [SharedCoreSessionDevice]
     func sessionDeviceUpdates() -> AsyncStream<Void>
     func signOutSession(deviceId: String, password: String) async -> CryptoActionResult
-    func dismissVerification() async -> CryptoActionResult
+    func dismissVerification(flowID: String) async -> CryptoActionResult
 }
 
 extension CryptoStatusServicing {
@@ -526,13 +536,10 @@ extension CryptoStatusServicing {
         return .unavailable("Session sign-out is unavailable.")
     }
 
-    func dismissVerification() async -> CryptoActionResult {
+    func dismissVerification(flowID: String) async -> CryptoActionResult {
         .completed("Verification closed.")
     }
 
-    func currentVerificationState() async -> CryptoVerificationState? {
-        nil
-    }
 }
 
 enum SynaraRoomVisibility: String, CaseIterable, Identifiable, Equatable {
@@ -920,7 +927,7 @@ struct MockCryptoStatusService: CryptoStatusServicing {
         sessionCryptoStatus
     }
 
-    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+    func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> {
         AsyncStream { continuation in
             continuation.finish()
         }
@@ -944,7 +951,7 @@ struct MockCryptoStatusService: CryptoStatusServicing {
     }
 
     func approveVerification() async -> CryptoActionResult {
-        .completed("Device verified.")
+        .completed("Codes confirmed. Waiting for the other device.")
     }
 
     func declineVerification() async -> CryptoActionResult {

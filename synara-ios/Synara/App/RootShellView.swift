@@ -10,8 +10,9 @@ struct RootShellView: View {
     @ObservedObject private var connectionStatus: ConnectionStatusStore
     @State private var tabBadgeCounts = TabBadgeCounts()
     @State private var tabBadgeUpdatesTask: Task<Void, Never>?
-    @State private var cryptoVerificationState: CryptoVerificationState?
+    @StateObject private var cryptoVerification = CryptoVerificationPresentation()
     @State private var cryptoVerificationUpdatesTask: Task<Void, Never>?
+    @State private var cryptoVerificationSessionKey: String?
     @State private var cryptoVerificationActionError: String?
     @State private var signOutError: String?
     @State private var tabBarScrollTailHeight: CGFloat = 0
@@ -113,19 +114,19 @@ struct RootShellView: View {
             PerformanceTrace.end("SignedInSessionStart", id: signpostID)
             environment.router.replayPendingDeepLinkIfNeeded(sessionIsSignedIn: true)
             startTabBadgeUpdates()
-            startCryptoVerificationUpdates()
+            startCryptoVerificationUpdates(sessionKey: "\(authenticatedSession.userID)-\(authenticatedSession.deviceID)-\(session.sessionEpoch)")
         }
         .sheet(isPresented: cryptoVerificationSheetBinding) {
             CryptoVerificationSheetHost(
-                state: $cryptoVerificationState,
+                presentation: cryptoVerification,
+                crypto: environment.crypto,
                 onAccept: { runCryptoVerificationAction { await environment.crypto.acceptVerificationRequest() } },
                 onStartSas: { runCryptoVerificationAction { await environment.crypto.startSasVerification() } },
                 onApprove: { runCryptoVerificationAction { await environment.crypto.approveVerification() } },
                 onDecline: { runCryptoVerificationAction { await environment.crypto.declineVerification() } },
                 onCancel: { runCryptoVerificationAction { await environment.crypto.cancelVerification() } },
                 onDismissTerminal: {
-                    runCryptoVerificationAction { await environment.crypto.dismissVerification() }
-                    self.cryptoVerificationState = nil
+                    dismissCryptoVerification()
                 }
             )
         }
@@ -157,14 +158,13 @@ struct RootShellView: View {
 
     private var cryptoVerificationSheetBinding: Binding<Bool> {
         Binding(
-            get: { cryptoVerificationState != nil },
+            get: { cryptoVerification.snapshot != nil },
             set: { isPresented in
                 guard isPresented == false else { return }
-                guard CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(cryptoVerificationState) else {
+                guard CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(cryptoVerification.snapshot?.state) else {
                     return
                 }
-                runCryptoVerificationAction { await environment.crypto.dismissVerification() }
-                cryptoVerificationState = nil
+                dismissCryptoVerification()
             }
         )
     }
@@ -235,64 +235,22 @@ struct RootShellView: View {
         }
     }
 
-    private func startCryptoVerificationUpdates() {
+    private func startCryptoVerificationUpdates(sessionKey: String) {
         cryptoVerificationUpdatesTask?.cancel()
+        if cryptoVerificationSessionKey != sessionKey {
+            cryptoVerification.reset()
+            cryptoVerificationSessionKey = sessionKey
+        }
         cryptoVerificationUpdatesTask = Task {
-            await withTaskGroup(of: Void.self) { group in
-                group.addTask {
-                    await self.consumeCryptoVerificationUpdates()
-                }
-                group.addTask {
-                    await self.pollClearedCryptoVerification()
-                }
+            for await update in environment.crypto.verificationUpdates() {
+                guard !Task.isCancelled else { return }
+                cryptoVerification.receive(update)
             }
         }
     }
 
-    private func consumeCryptoVerificationUpdates() async {
-        for await update in environment.crypto.verificationUpdates() {
-            guard Task.isCancelled == false else {
-                return
-            }
-            await MainActor.run {
-                cryptoVerificationState = update
-            }
-            if update.isTerminal {
-                if case .finished = update {
-                    // Verification succeeded — kick a crypto status refresh.
-                    // Any open timeline that is showing the "Encrypted history" / "Retry Decryption"
-                    // banner will re-compute on its next status poll and should clear or become actionable.
-                    Task {
-                        _ = await environment.crypto.sessionStatus()
-                    }
-                }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                _ = await environment.crypto.dismissVerification()
-                await MainActor.run {
-                    if cryptoVerificationState == update {
-                        cryptoVerificationState = nil
-                    }
-                }
-            }
-        }
-    }
-
-    private func pollClearedCryptoVerification() async {
-        while Task.isCancelled == false {
-            try? await Task.sleep(nanoseconds: 500_000_000)
-            guard Task.isCancelled == false else {
-                return
-            }
-            let latest = await environment.crypto.currentVerificationState()
-            await MainActor.run {
-                if let restored = CryptoVerificationPresentationPolicy.restoredStateIfCleared(
-                    presented: cryptoVerificationState,
-                    latest: latest
-                ), restored != cryptoVerificationState {
-                    cryptoVerificationState = restored
-                }
-            }
-        }
+    private func dismissCryptoVerification() {
+        Task { await cryptoVerification.dismiss(using: environment.crypto) }
     }
 
     private func runCryptoVerificationAction(_ action: @escaping () async -> CryptoActionResult) {
@@ -422,10 +380,11 @@ struct RootShellView_Previews: PreviewProvider {
 /// SwiftUI evaluates an `isPresented` sheet's content closure when the sheet is
 /// presented. Passing the unwrapped state value there freezes that snapshot, so
 /// an in-flight verification can remain visually stuck on "Waiting" even while
-/// the SDK has advanced to `sas_ready`. The binding makes each protocol update
-/// invalidate the presented hierarchy without dismissing the sheet.
+/// the SDK has advanced to `sas_ready`. Observing the presentation owner makes
+/// each protocol update invalidate the hierarchy without dismissing the sheet.
 private struct CryptoVerificationSheetHost: View {
-    @Binding var state: CryptoVerificationState?
+    @ObservedObject var presentation: CryptoVerificationPresentation
+    let crypto: CryptoStatusServicing
     let onAccept: () -> Void
     let onStartSas: () -> Void
     let onApprove: () -> Void
@@ -434,9 +393,12 @@ private struct CryptoVerificationSheetHost: View {
     let onDismissTerminal: () -> Void
 
     var body: some View {
-        if let state {
+        if let snapshot = presentation.snapshot {
             CryptoVerificationSheet(
-                state: state,
+                state: snapshot.state,
+                crypto: crypto,
+                isDismissing: presentation.isDismissing,
+                dismissalError: presentation.error,
                 onAccept: onAccept,
                 onStartSas: onStartSas,
                 onApprove: onApprove,
@@ -445,7 +407,7 @@ private struct CryptoVerificationSheetHost: View {
                 onDismissTerminal: onDismissTerminal
             )
             .interactiveDismissDisabled(
-                CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(state) == false
+                CryptoVerificationPresentationPolicy.allowsInteractiveDismiss(snapshot.state) == false || presentation.isDismissing
             )
         }
     }
@@ -453,6 +415,13 @@ private struct CryptoVerificationSheetHost: View {
 
 private struct CryptoVerificationSheet: View {
     let state: CryptoVerificationState
+    let crypto: CryptoStatusServicing
+    let isDismissing: Bool
+    let dismissalError: String?
+    @StateObject private var sessionCrypto = SessionCryptoStatusObserver()
+    @State private var contentHeight: CGFloat = 360
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+    @ScaledMetric(relativeTo: .title) private var emojiSize: CGFloat = 30
     let onAccept: () -> Void
     let onStartSas: () -> Void
     let onApprove: () -> Void
@@ -461,32 +430,43 @@ private struct CryptoVerificationSheet: View {
     let onDismissTerminal: () -> Void
 
     var body: some View {
-        NavigationStack {
+        ScrollView {
             VStack(alignment: .leading, spacing: SynaraSpacing.large) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: SynaraSpacing.large) {
-                        header
-                        content
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                header
+                content
+                if let dismissalError {
+                    Text(dismissalError)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.critical)
+                        .accessibilityIdentifier("VerificationDismissalError")
                 }
                 actions
+                    .controlSize(.large)
+                    .disabled(isDismissing)
             }
             .padding(SynaraSpacing.xLarge)
+            .padding(.top, SynaraSpacing.small)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .fixedSize(horizontal: false, vertical: true)
+            .background {
+                GeometryReader { geometry in
+                    Color.clear.preference(key: VerificationSheetHeight.self, value: geometry.size.height)
+                }
+            }
         }
-        // Comparison needs the full height so all seven values and both
-        // decisions remain simultaneously readable at larger text sizes.
-        .presentationDetents(comparisonPresentationDetents)
+        .background(Color(uiColor: .systemBackground))
+        .onPreferenceChange(VerificationSheetHeight.self) { height in
+            guard height > 0, abs(contentHeight - height) > 1 else { return }
+            contentHeight = ceil(height)
+        }
+        // Measure the actual content; the system caps the detent on small
+        // screens, where scrolling still exposes every value and action.
+        .presentationDetents([.height(contentHeight)])
+        .presentationDragIndicator(.visible)
+        .task(id: state == .finished) {
+            if state == .finished { await sessionCrypto.start(crypto: crypto) }
+        }
         .accessibilityIdentifier("DeviceVerificationSheet")
-    }
-
-    private var comparisonPresentationDetents: Set<PresentationDetent> {
-        switch state {
-        case .emojis, .decimals:
-            return [.large]
-        default:
-            return [.medium, .large]
-        }
     }
 
     @ViewBuilder
@@ -507,24 +487,34 @@ private struct CryptoVerificationSheet: View {
             VStack(alignment: .leading, spacing: SynaraSpacing.small) {
                 CryptoVerificationInfoRow(title: "User", value: request.displayName ?? request.userID)
                 CryptoVerificationInfoRow(title: "Device", value: request.deviceDisplayName ?? request.deviceID)
+                Text("Only accept if you recognize this request. You’ll compare codes on both devices next.")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
             }
         case .emojis(let emojis):
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 86), spacing: SynaraSpacing.small)], spacing: SynaraSpacing.small) {
-                ForEach(Array(emojis.enumerated()), id: \.offset) { index, emoji in
-                    VStack(spacing: SynaraSpacing.xSmall) {
-                        Text(emoji.symbol)
-                            .font(.system(size: 34))
-                        Text(emoji.description)
-                            .font(SynaraTypography.fineMetaBold)
-                            .multilineTextAlignment(.center)
+            let columns = dynamicTypeSize.isAccessibilitySize ? 2 : 4
+            VStack(spacing: SynaraSpacing.small) {
+                ForEach(Array(stride(from: 0, to: emojis.count, by: columns)), id: \.self) { start in
+                    HStack(alignment: .top, spacing: SynaraSpacing.small) {
+                        ForEach(start..<min(start + columns, emojis.count), id: \.self) { index in
+                            VStack(spacing: SynaraSpacing.xSmall) {
+                                Text(emojis[index].symbol)
+                                    .font(.system(size: emojiSize))
+                                Text(emojis[index].description)
+                                    .font(SynaraTypography.fineMetaBold)
+                                    .multilineTextAlignment(.center)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+                            .padding(.vertical, SynaraSpacing.small)
+                            .frame(maxWidth: .infinity)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityIdentifier("VerificationEmoji-\(index)")
+                        }
                     }
-                    .frame(maxWidth: .infinity, minHeight: 78)
-                    .padding(SynaraSpacing.small)
-                    .synaraCard()
-                    .accessibilityElement(children: .combine)
-                    .accessibilityIdentifier("VerificationEmoji-\(index)")
                 }
             }
+            .padding(SynaraSpacing.small)
+            .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 16))
         case .decimals(let values):
             HStack(spacing: SynaraSpacing.medium) {
                 ForEach(Array(values.enumerated()), id: \.offset) { index, value in
@@ -541,7 +531,18 @@ private struct CryptoVerificationSheet: View {
                 .controlSize(.large)
                 .frame(maxWidth: .infinity, alignment: .center)
                 .padding(.vertical, SynaraSpacing.large)
-        case .finished, .cancelled, .failed, .mismatched:
+        case .finished:
+            VStack(spacing: SynaraSpacing.medium) {
+                Image(systemName: terminalSystemImage)
+                    .font(.system(size: 40, weight: .semibold))
+                    .foregroundStyle(terminalTint)
+                CryptoVerificationInfoRow(
+                    title: "This device",
+                    value: sessionCrypto.status.verification.settingsDisplayName
+                )
+                .accessibilityIdentifier("VerificationOwnDeviceStatus")
+            }
+        case .cancelled, .failed, .mismatched:
             Image(systemName: terminalSystemImage)
                 .font(.system(size: 44, weight: .semibold))
                 .foregroundStyle(terminalTint)
@@ -552,42 +553,40 @@ private struct CryptoVerificationSheet: View {
 
     @ViewBuilder
     private var actions: some View {
-        switch state {
-        case .requestReceived:
-            HStack(spacing: SynaraSpacing.small) {
-                Button("Decline", role: .cancel, action: onDecline)
-                    .buttonStyle(.bordered)
-                Button("Accept", action: onAccept)
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("AcceptDeviceVerificationButton")
+        VStack(spacing: SynaraSpacing.small) {
+            switch state {
+            case .requestReceived:
+                primaryButton("Accept", identifier: "AcceptDeviceVerificationButton", action: onAccept)
+                secondaryButton("Decline", role: .cancel, action: onDecline)
+            case .requestSent, .sasStarted, .keysExchanging, .confirmed:
+                secondaryButton("Cancel Verification", role: .cancel, action: onCancel)
+            case .accepted:
+                primaryButton("Start Comparison", identifier: "StartDeviceVerificationSasButton", action: onStartSas)
+                secondaryButton("Cancel", role: .cancel, action: onCancel)
+            case .emojis, .decimals:
+                primaryButton("They Match", identifier: "ConfirmDeviceVerificationButton", action: onApprove)
+                secondaryButton("They Do Not Match", role: .destructive, action: onDecline)
+            case .finished, .cancelled, .failed, .mismatched:
+                primaryButton(isDismissing ? "Closing…" : "Done", identifier: "DismissDeviceVerificationButton", action: onDismissTerminal)
             }
-        case .requestSent, .sasStarted, .keysExchanging:
-            Button("Cancel Verification", role: .cancel, action: onCancel)
-                .buttonStyle(.bordered)
-        case .accepted:
-            HStack(spacing: SynaraSpacing.small) {
-                Button("Cancel", role: .cancel, action: onCancel)
-                    .buttonStyle(.bordered)
-                Button("Start Comparison", action: onStartSas)
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("StartDeviceVerificationSasButton")
-            }
-        case .emojis, .decimals:
-            VStack(spacing: SynaraSpacing.small) {
-                Button("They Match", action: onApprove)
-                    .buttonStyle(.borderedProminent)
-                    .accessibilityIdentifier("ConfirmDeviceVerificationButton")
-                Button("They Do Not Match", role: .destructive, action: onDecline)
-                    .buttonStyle(.bordered)
-            }
-        case .confirmed:
-            Button("Cancel", role: .cancel, action: onCancel)
-                .buttonStyle(.bordered)
-        case .finished, .cancelled, .failed, .mismatched:
-            Button("Done", action: onDismissTerminal)
-                .buttonStyle(.borderedProminent)
-                .accessibilityIdentifier("DismissDeviceVerificationButton")
         }
+    }
+
+    private func primaryButton(_ title: String, identifier: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Text(title)
+                .frame(maxWidth: .infinity, minHeight: 32)
+        }
+        .buttonStyle(.borderedProminent)
+        .accessibilityIdentifier(identifier)
+    }
+
+    private func secondaryButton(_ title: String, role: ButtonRole, action: @escaping () -> Void) -> some View {
+        Button(role: role, action: action) {
+            Text(title)
+                .frame(maxWidth: .infinity, minHeight: 32)
+        }
+        .buttonStyle(.bordered)
     }
 
     private var title: String {
@@ -607,7 +606,7 @@ private struct CryptoVerificationSheet: View {
         case .confirmed:
             return "Waiting for the other device"
         case .finished:
-            return "Device verified"
+            return sessionCrypto.status.verification == .verified ? "Device verified" : "Verification complete"
         case .cancelled:
             return "Verification cancelled"
         case .failed:
@@ -634,7 +633,9 @@ private struct CryptoVerificationSheet: View {
         case .confirmed:
             return "This device accepted the codes. Wait for the other session to finish."
         case .finished:
-            return "This device is now verified for encrypted Matrix sessions."
+            return sessionCrypto.status.verification == .verified
+                ? "The codes matched on both devices. This device is verified for encrypted conversations."
+                : "The codes matched on both devices. This device’s verified status is not confirmed yet. Check Security settings if it does not update."
         case .cancelled:
             return "The verification flow was cancelled."
         case .failed:
@@ -647,7 +648,7 @@ private struct CryptoVerificationSheet: View {
     private var terminalSystemImage: String {
         switch state {
         case .finished:
-            return "checkmark.seal.fill"
+            return sessionCrypto.status.verification == .verified ? "checkmark.seal.fill" : "checkmark.circle"
         case .cancelled:
             return "xmark.circle.fill"
         case .failed, .mismatched:
@@ -660,7 +661,7 @@ private struct CryptoVerificationSheet: View {
     private var terminalTint: Color {
         switch state {
         case .finished:
-            return .green
+            return sessionCrypto.status.verification == .verified ? .green : SynaraColor.accent
         case .cancelled:
             return SynaraColor.secondaryText
         case .failed, .mismatched:
@@ -684,5 +685,12 @@ private struct CryptoVerificationInfoRow: View {
                 .multilineTextAlignment(.trailing)
         }
         .font(SynaraTypography.body)
+    }
+}
+
+private struct VerificationSheetHeight: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
     }
 }

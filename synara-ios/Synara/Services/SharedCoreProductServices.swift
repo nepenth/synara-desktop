@@ -1801,18 +1801,24 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         )
     }
 
-    func verificationUpdates() -> AsyncStream<CryptoVerificationState> {
+    func verificationUpdates() -> AsyncStream<CryptoVerificationSnapshot?> {
         AsyncStream { continuation in
             let task = Task {
-                if let state = await currentVerificationState() {
-                    continuation.yield(state)
+                let updates = host.livePoller.ownerSignals(families: ["verification", "devices"])
+                do {
+                    continuation.yield(try await currentVerificationSnapshot())
+                } catch {
+                    // Keep the current presentation until an authoritative read succeeds.
                 }
-                for await _ in host.livePoller.ownerSignals(families: ["verification", "devices"]) {
+                for await _ in updates {
                     guard Task.isCancelled == false else {
                         break
                     }
-                    if let state = await currentVerificationState() {
-                        continuation.yield(state)
+                    // A failed read is not evidence that the active flow closed.
+                    do {
+                        continuation.yield(try await currentVerificationSnapshot())
+                    } catch {
+                        // A later owner signal will read again; do not synthesize a close.
                     }
                 }
                 continuation.finish()
@@ -1842,20 +1848,24 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         }
     }
 
-    func dismissVerification() async -> CryptoActionResult {
-        guard let flowId = resolvedFlowId() else {
-            return .completed("Verification closed.")
-        }
+    func dismissVerification(flowID: String) async -> CryptoActionResult {
         do {
             try await SharedCoreVerificationSas.verificationDismiss(
                 core: host.core,
-                flowId: flowId
+                flowId: flowID
             )
-            clearFlow()
+            clearFlow(matching: flowID)
             return .completed("Verification closed.")
+        } catch let error as VerificationSasError {
+            // An already-removed result is acknowledged. Other failures must
+            // remain visible so the UI does not pretend it dismissed the flow.
+            if case let .Failed(code, _) = error, code == "v-crypto.1-flow-not-found" {
+                clearFlow(matching: flowID)
+                return .completed("Verification closed.")
+            }
+            return .failed("Could not close verification. Try Done again.")
         } catch {
-            clearFlow()
-            return .completed("Verification closed.")
+            return .failed("Could not close verification. Try Done again.")
         }
     }
 
@@ -1885,7 +1895,7 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 core: host.core,
                 flowId: flowId
             )
-            return "Device verified."
+            return "Codes confirmed. Waiting for the other device."
         }
     }
 
@@ -2039,10 +2049,8 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         )
     }
 
-    func currentVerificationState() async -> CryptoVerificationState? {
-        guard let inbox = try? await SharedCoreVerificationList.verificationList(core: host.core) else {
-            return nil
-        }
+    private func currentVerificationSnapshot() async throws -> CryptoVerificationSnapshot? {
+        let inbox = try await SharedCoreVerificationList.verificationList(core: host.core)
         guard let request = SharedCoreVerificationLive.selectRequest(
             from: inbox,
             preferring: resolvedFlowId()
@@ -2051,7 +2059,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
             return nil
         }
         storeFlow(request.flowId)
-        return SharedCoreVerificationLive.state(from: request)
+        return CryptoVerificationSnapshot(
+            id: .init(sessionGeneration: inbox.sessionGeneration, flowID: request.flowId),
+            state: SharedCoreVerificationLive.state(from: request)
+        )
     }
 
     private func runVerification(
@@ -2085,9 +2096,11 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
         flowLock.unlock()
     }
 
-    private func clearFlow() {
+    private func clearFlow(matching expectedFlowID: String? = nil) {
         flowLock.lock()
-        flowId = nil
+        if expectedFlowID == nil || flowId == expectedFlowID {
+            flowId = nil
+        }
         flowLock.unlock()
     }
 

@@ -71,20 +71,7 @@ enum CryptoVerificationPresentationPolicy {
         state?.isTerminal == true
     }
 
-    /// Restore a still-active flow if local UI was cleared (swipe / nil) while
-    /// the native inbox still has a non-terminal request.
-    static func restoredStateIfCleared(
-        presented: CryptoVerificationState?,
-        latest: CryptoVerificationState?
-    ) -> CryptoVerificationState? {
-        if let presented {
-            return presented
-        }
-        guard let latest, latest.isTerminal == false else {
-            return nil
-        }
-        return latest
-    }
+
 }
 
 enum SecuritySettingsVerificationPolicy {
