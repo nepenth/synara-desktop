@@ -89,4 +89,15 @@ final class ComposerMarkdownTests: XCTestCase {
         XCTAssertEqual(result.text, "alpha\n1. beta\ngamma")
         XCTAssertEqual(result.selection, ComposerTextSelection(location: 9, length: 4))
     }
+
+    func testItalicOnMappedWordAfterBoldMarkdownKeepsEarlierMarks() {
+        let result = ComposerMarkdown.apply(
+            .italic,
+            to: "**hello** world",
+            selection: ComposerTextSelection(location: 10, length: 5)
+        )
+
+        XCTAssertEqual(result.text, "**hello** _world_")
+        XCTAssertEqual(result.selection, ComposerTextSelection(location: 11, length: 5))
+    }
 }

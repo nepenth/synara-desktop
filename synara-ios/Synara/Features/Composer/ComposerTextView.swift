@@ -162,8 +162,11 @@ struct ComposerTextView: UIViewRepresentable {
     }
 
     private func applySelection(to textView: UITextView) {
-        let desiredRange = NSRange(location: selection.location, length: selection.length)
-        guard desiredRange.upperBound <= (textView.text as NSString).length else {
+        let desiredRange = ComposerAttributedMarkdown.visibleRange(
+            in: textView.attributedText,
+            markdownSelection: selection
+        )
+        guard desiredRange.upperBound <= textView.attributedText.length else {
             return
         }
         textView.selectedRange = desiredRange
@@ -337,9 +340,9 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         private func updateSelection(from textView: UITextView) {
-            let selection = ComposerTextSelection(
-                location: textView.selectedRange.location,
-                length: textView.selectedRange.length
+            let selection = ComposerAttributedMarkdown.markdownSelection(
+                from: textView.attributedText,
+                visibleRange: textView.selectedRange
             )
             if parent.selection != selection {
                 parent.selection = selection

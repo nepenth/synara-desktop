@@ -10,6 +10,106 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
         XCTAssertEqual(ComposerAttributedMarkdown.markdown(from: attributed), "hello world")
     }
 
+    func testPlainVisibleSelectionMatchesMarkdownOffsets() {
+        let attributed = NSAttributedString(string: "hello world")
+        XCTAssertEqual(
+            ComposerAttributedMarkdown.markdownSelection(
+                from: attributed,
+                visibleRange: NSRange(location: 6, length: 5)
+            ),
+            ComposerTextSelection(location: 6, length: 5)
+        )
+        XCTAssertEqual(
+            ComposerAttributedMarkdown.visibleRange(
+                in: attributed,
+                markdownSelection: ComposerTextSelection(location: 6, length: 5)
+            ),
+            NSRange(location: 6, length: 5)
+        )
+    }
+
+    func testRichPasteSelectionFormatsTheVisibleWord() {
+        #if canImport(UIKit)
+            let attributed = NSMutableAttributedString()
+            attributed.append(
+                NSAttributedString(
+                    string: "hello",
+                    attributes: [.font: UIFont.boldSystemFont(ofSize: 17)]
+                )
+            )
+            attributed.append(NSAttributedString(string: " world"))
+
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.markdown(from: attributed),
+                "**hello** world"
+            )
+
+            let markdownSelection = ComposerAttributedMarkdown.markdownSelection(
+                from: attributed,
+                visibleRange: NSRange(location: 6, length: 5)
+            )
+            XCTAssertEqual(markdownSelection, ComposerTextSelection(location: 10, length: 5))
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.visibleRange(
+                    in: attributed,
+                    markdownSelection: markdownSelection
+                ),
+                NSRange(location: 6, length: 5)
+            )
+
+            let result = ComposerMarkdown.apply(
+                .italic,
+                to: "**hello** world",
+                selection: markdownSelection
+            )
+            XCTAssertEqual(result.text, "**hello** _world_")
+            XCTAssertFalse(result.text.contains("hell_o"))
+            XCTAssertFalse(result.text.contains("w_orld"))
+        #else
+            XCTFail("UIKit is required for rich paste selection mapping")
+        #endif
+    }
+
+    func testHTMLPasteThenFormattingALaterWordUsesMarkdownOffsets() throws {
+        #if canImport(UIKit)
+            let html = "<p><strong>hello</strong> world</p>"
+            let attributed = try XCTUnwrap(
+                ComposerAttributedMarkdown.attributedString(
+                    fromHTML: html,
+                    baseFont: .preferredFont(forTextStyle: .callout)
+                )
+            )
+            let visible = attributed.string as NSString
+            let world = visible.range(of: "world")
+            XCTAssertNotEqual(world.location, NSNotFound)
+            XCTAssertEqual(world.length, 5)
+
+            let markdown = ComposerAttributedMarkdown.markdown(from: attributed)
+            let markdownSelection = ComposerAttributedMarkdown.markdownSelection(
+                from: attributed,
+                visibleRange: world
+            )
+            XCTAssertLessThanOrEqual(
+                markdownSelection.upperBound,
+                (markdown as NSString).length
+            )
+            let selected = (markdown as NSString).substring(
+                with: NSRange(location: markdownSelection.location, length: markdownSelection.length)
+            )
+            XCTAssertEqual(selected, "world")
+
+            let result = ComposerMarkdown.apply(.italic, to: markdown, selection: markdownSelection)
+            XCTAssertTrue(result.text.contains("_world_"), result.text)
+            XCTAssertFalse(result.text.contains("hell_o"))
+            XCTAssertFalse(result.text.contains("w_orld"))
+        #else
+            XCTFail("UIKit is required for HTML paste selection mapping")
+        #endif
+    }
+            XCTFail("UIKit is required for rich paste selection mapping")
+        #endif
+    }
+
     func testBoldItalicAndCodeBecomeMarkdown() {
         #if canImport(UIKit)
             let attributed = NSMutableAttributedString()
@@ -112,6 +212,8 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
             "UITextView.insertAttributedText is public on current SDKs; keep a distinct helper name"
         )
         XCTAssertTrue(source.contains("insertComposerAttributedText"))
+        XCTAssertTrue(source.contains("markdownSelection"))
+        XCTAssertTrue(source.contains("visibleRange"))
         XCTAssertTrue(markdown.contains("MatrixHTMLRenderer.sanitizedHTMLForClipboard"))
         XCTAssertTrue(markdown.contains("deleteCharacters(in: range)"))
         XCTAssertTrue(markdown.contains("0x1F"))

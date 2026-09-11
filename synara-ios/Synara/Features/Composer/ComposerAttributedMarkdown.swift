@@ -26,18 +26,135 @@ enum ComposerPasteboard {
 
 enum ComposerAttributedMarkdown {
     static func markdown(from attributed: NSAttributedString) -> String {
+        project(attributed).markdown
+    }
+
+    /// Convert a visible UITextView range into UTF-16 offsets in the markdown draft.
+    static func markdownSelection(
+        from attributed: NSAttributedString,
+        visibleRange: NSRange
+    ) -> ComposerTextSelection {
+        let projection = project(attributed)
+        let start = clamp(visibleRange.location, max: attributed.length)
+        let end = clamp(visibleRange.location + visibleRange.length, max: attributed.length)
+        let mdStart = projection.attrToMarkdown[start]
+        let mdEnd = projection.attrToMarkdown[end]
+        return ComposerTextSelection(location: mdStart, length: max(0, mdEnd - mdStart))
+    }
+
+    /// Convert a markdown-draft range back into the visible attributed string.
+    static func visibleRange(
+        in attributed: NSAttributedString,
+        markdownSelection: ComposerTextSelection
+    ) -> NSRange {
+        let projection = project(attributed)
+        let mdLength = projection.attrToMarkdown.last ?? 0
+        let mdStart = clamp(markdownSelection.location, max: mdLength)
+        let mdEnd = clamp(markdownSelection.location + markdownSelection.length, max: mdLength)
+        let start = attributedIndex(attrToMarkdown: projection.attrToMarkdown, markdownOffset: mdStart)
+        let end = attributedIndex(attrToMarkdown: projection.attrToMarkdown, markdownOffset: mdEnd)
+        return NSRange(location: start, length: max(0, end - start))
+    }
+
+    private struct MarkdownProjection {
+        let markdown: String
+        let attrToMarkdown: [Int]
+    }
+
+    private static func project(_ attributed: NSAttributedString) -> MarkdownProjection {
         guard attributed.length > 0 else {
-            return ""
+            return MarkdownProjection(markdown: "", attrToMarkdown: [0])
         }
-        var output = ""
+        var runs: [(attributes: [NSAttributedString.Key: Any], range: NSRange)] = []
         attributed.enumerateAttributes(
             in: NSRange(location: 0, length: attributed.length),
             options: []
         ) { attributes, range, _ in
-            let substring = (attributed.string as NSString).substring(with: range)
-            output += wrappedMarkdown(substring, attributes: attributes)
+            runs.append((attributes, range))
         }
-        return output
+        var output = ""
+        var attrToMarkdown = Array(repeating: 0, count: attributed.length + 1)
+        var mdOffset = 0
+        for run in runs {
+            let substring = (attributed.string as NSString).substring(with: run.range)
+            let piece = wrappedMarkdown(substring, attributes: run.attributes)
+            mapRun(
+                attributedRange: run.range,
+                original: substring,
+                piece: piece,
+                attrToMarkdown: &attrToMarkdown,
+                mdOffset: &mdOffset
+            )
+            output += piece
+        }
+        attrToMarkdown[attributed.length] = mdOffset
+        return MarkdownProjection(markdown: output, attrToMarkdown: attrToMarkdown)
+    }
+
+    private static func mapRun(
+        attributedRange range: NSRange,
+        original: String,
+        piece: String,
+        attrToMarkdown: inout [Int],
+        mdOffset: inout Int
+    ) {
+        let pieceNS = piece as NSString
+        let originalNS = original as NSString
+        if piece == original {
+            for index in 0 ..< range.length {
+                attrToMarkdown[range.location + index] = mdOffset + index
+            }
+            mdOffset += pieceNS.length
+            return
+        }
+
+        let escaped = escapeMarkdown(original)
+        let escapedRange = pieceNS.range(of: escaped)
+        let originalRange = pieceNS.range(of: original)
+        let inner: String
+        if escaped != original, escapedRange.location != NSNotFound {
+            inner = escaped
+        } else if originalRange.location != NSNotFound {
+            inner = original
+        } else {
+            for index in 0 ..< range.length {
+                attrToMarkdown[range.location + index] = mdOffset
+            }
+            mdOffset += pieceNS.length
+            return
+        }
+
+        let prefixLen = pieceNS.range(of: inner).location
+        if inner == original {
+            for index in 0 ..< range.length {
+                attrToMarkdown[range.location + index] = mdOffset + prefixLen + index
+            }
+        } else {
+            var innerOffset = 0
+            for index in 0 ..< originalNS.length {
+                let character = originalNS.substring(with: NSRange(location: index, length: 1))
+                let escapedCharacter = escapeMarkdown(character)
+                attrToMarkdown[range.location + index] = mdOffset + prefixLen + innerOffset
+                innerOffset += (escapedCharacter as NSString).length
+            }
+        }
+        mdOffset += pieceNS.length
+    }
+
+    private static func attributedIndex(attrToMarkdown: [Int], markdownOffset: Int) -> Int {
+        var result = 0
+        for (index, mapped) in attrToMarkdown.enumerated() {
+            if mapped <= markdownOffset {
+                result = index
+            } else {
+                break
+            }
+        }
+        return result
+    }
+
+    private static func clamp(_ value: Int, max upper: Int) -> Int {
+        max(0, min(value, upper))
     }
 
     #if canImport(UIKit)
