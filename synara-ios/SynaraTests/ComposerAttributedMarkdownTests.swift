@@ -198,7 +198,8 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
         let source = try Self.contents(of: "synara-ios/Synara/Features/Composer/ComposerTextView.swift")
         let markdown = try Self.contents(of: "synara-ios/Synara/Features/Composer/ComposerAttributedMarkdown.swift")
         XCTAssertTrue(source.contains("ComposerPasteboard.htmlString()"))
-        XCTAssertTrue(source.contains("ComposerAttributedMarkdown.attributedString(fromHTML:"))
+        XCTAssertTrue(source.contains("ComposerAttributedMarkdown.attributedString("))
+        XCTAssertTrue(source.contains("fromHTML: html"))
         XCTAssertTrue(source.contains("ComposerAttributedMarkdown.markdown(from:"))
         XCTAssertFalse(
             source.contains("super.paste"),
