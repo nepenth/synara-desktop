@@ -208,7 +208,8 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
         XCTAssertTrue(source.contains("ComposerPasteboard.htmlString()"))
         XCTAssertTrue(source.contains("ComposerAttributedMarkdown.attributedString("))
         XCTAssertTrue(source.contains("fromHTML: html"))
-        XCTAssertTrue(source.contains("ComposerAttributedMarkdown.markdown(from:"))
+        XCTAssertTrue(source.contains("ComposerAttributedMarkdown.markdown("))
+        XCTAssertTrue(source.contains("from: textView.attributedText"))
         XCTAssertFalse(
             source.contains("super.paste"),
             "Rich RTF/HTML must not enter the composer through UITextView.paste"
@@ -269,7 +270,7 @@ final class ComposerAttributedMarkdownTests: XCTestCase {
                 "hello"
             )
 
-            let heavier = UIFont.systemFont(ofSize: 16, weight: .bold)
+            let heavier = UIFont.systemFont(ofSize: 16, weight: .heavy)
             let bold = NSAttributedString(string: "hello", attributes: [.font: heavier])
             XCTAssertEqual(
                 ComposerAttributedMarkdown.markdown(from: bold, baseFont: base),

@@ -209,7 +209,7 @@ struct RoomMemberActionsView: View {
                     Button("Done") { dismiss() }
                 }
             }
-            .confirmationDialog(confirmTitle, isPresented: confirmPresented) {
+            .alert(confirmTitle, isPresented: confirmPresented) {
                 Button(confirmButtonTitle, role: .destructive, action: performConfirmedAction)
                     .accessibilityIdentifier("RoomMemberConfirmActionButton")
                 Button("Cancel", role: .cancel) {}

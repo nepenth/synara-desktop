@@ -1,0 +1,1 @@
+Room member options now include kick, ban, invite, and power level. Copy All and Select Text copy sanitized HTML; the composer pastes that HTML without showing markup characters. Unread badges and Time Sensitive approval alerts should match Element. After sleep, missed messages should appear without restarting. Test Accessibility Bold Text: typed text must not send as **bold**.

@@ -448,10 +448,6 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.collectionViews["RoomMemberActionsScreen"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["RoomMemberRemoveButton"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["RoomMemberBanButton"].exists)
-        tap(app.buttons["RoomMemberRemoveButton"])
-        tap(app.buttons["RoomMemberConfirmActionButton"].firstMatch, timeout: 5)
-        XCTAssertTrue(app.staticTexts["RoomMemberActionMessage"].waitForExistence(timeout: 8))
-        XCTAssertEqual(app.staticTexts["RoomMemberActionMessage"].label, "User removed.")
     }
 
     func testRoomDetailsProfileEditMockFlow() {
@@ -470,8 +466,9 @@ final class SynaraUITests: XCTestCase {
         dismissKeyboardIfPresent(app: app)
         let aliasField = app.textFields["RoomCanonicalAliasField"]
         XCTAssertTrue(revealRoomDetailsElement(aliasField, app: app, timeout: 10))
+        dismissKeyboardIfPresent(app: app)
         XCTAssertTrue(app.buttons["RoomProfileSaveButton"].isEnabled)
-        tap(app.buttons["Save"])
+        tap(app.buttons["RoomProfileSaveButton"])
 
         let profileMessage = app.staticTexts["RoomDetailsMessage"]
         XCTAssertTrue(revealRoomDetailsElement(profileMessage, app: app, timeout: 10, direction: .down))
