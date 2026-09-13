@@ -65,3 +65,50 @@ test('favorite changes, resize, sorting, and empty-to-populated transitions pres
   await scrollTo(page, 1040);
   await expectVisibleRooms(page);
 });
+
+test('notification groups remain visible below filters across measured heights and wrapping', async ({
+  page,
+}) => {
+  await page.goto('/e2e/room-list-harness/index.html?notifications');
+  const expectVisibleNotifications = async () => {
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const scroll = document.querySelector('[data-testid="notification-scroll"]')!;
+          const list = document.querySelector('[data-testid="notification-list"]')!;
+          const viewport = scroll.getBoundingClientRect();
+          let top = list.getBoundingClientRect().top;
+          const missing: number[] = [];
+          for (let index = 0; index < 60; index += 1) {
+            const height = [96, 160, 224][index % 3];
+            if (top >= viewport.top + 2 && top + height <= viewport.bottom - 2) {
+              const row = document.querySelector(`[data-notification-index="${index}"]`);
+              if (!row || Math.abs(row.getBoundingClientRect().top - top) > 1) missing.push(index);
+            }
+            top += height;
+          }
+          return missing;
+        })
+      )
+      .toEqual([]);
+  };
+  // Advance through every group so variable heights are actually measured.
+  for (let offset = 0; offset < 10000; offset += 320) {
+    await page.getByTestId('notification-scroll').evaluate((element, top) => {
+      element.scrollTop = top;
+    }, offset);
+    await expectVisibleNotifications();
+  }
+  await page.getByRole('button', { name: 'Wrap filters' }).click();
+  for (const offset of [9600, 8000, 6400, 3200, 1920, 1760, 1440, 0]) {
+    await page.getByTestId('notification-scroll').evaluate((element, top) => {
+      element.scrollTop = top;
+    }, offset);
+    await expectVisibleNotifications();
+  }
+  await page.getByTestId('notification-scroll').evaluate((element) => {
+    element.scrollTop = 1840;
+  });
+  await expect(page.locator('[data-notification-index="0"]')).toBeVisible();
+  expect(await page.locator('[data-notification-index]').count()).toBeLessThan(40);
+});

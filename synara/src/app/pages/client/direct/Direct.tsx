@@ -22,7 +22,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useNavRoomVirtualizer } from '../../../hooks/useNavRoomVirtualizer';
+import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import FocusTrap from 'focus-trap-react';
 import { useNavigate } from 'react-router-dom';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -196,7 +196,7 @@ export function Direct() {
   }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
 
   const getRoomKey = useCallback((index: number) => sortedDirects[index], [sortedDirects]);
-  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(
+  const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
     scrollRef,
     sortedDirects.length,
     getRoomKey

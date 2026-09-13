@@ -4,7 +4,8 @@ import React, { useCallback, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
-import { useNavRoomVirtualizer } from '../../src/app/hooks/useNavRoomVirtualizer';
+import { useSharedScrollVirtualizer } from '../../src/app/hooks/useSharedScrollVirtualizer';
+import { NotificationsFixture } from './NotificationsFixture';
 import { VirtualTile } from '../../src/app/components/virtualizer/VirtualTile';
 
 function RoomListFixture() {
@@ -16,7 +17,11 @@ function RoomListFixture() {
     (index: number) => `room-${reversed ? 99 - index : index}`,
     [reversed]
   );
-  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(scrollRef, 100, getItemKey);
+  const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
+    scrollRef,
+    100,
+    getItemKey
+  );
   return (
     <main className={`${configClass} ${varsClass}`} style={{ fontFamily: 'sans-serif' }}>
       <h1>Room list scroll proof</h1>
@@ -85,4 +90,10 @@ function RoomListFixture() {
   );
 }
 
-createRoot(document.getElementById('root')!).render(<RoomListFixture />);
+createRoot(document.getElementById('root')!).render(
+  new URLSearchParams(window.location.search).has('notifications') ? (
+    <NotificationsFixture />
+  ) : (
+    <RoomListFixture />
+  )
+);

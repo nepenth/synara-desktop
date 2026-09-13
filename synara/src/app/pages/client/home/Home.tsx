@@ -22,7 +22,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useNavRoomVirtualizer } from '../../../hooks/useNavRoomVirtualizer';
+import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
@@ -361,7 +361,7 @@ export function Home() {
   };
 
   const getRoomKey = useCallback((index: number) => mainRoomIds[index], [mainRoomIds]);
-  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(
+  const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
     scrollRef,
     mainRoomIds.length,
     getRoomKey

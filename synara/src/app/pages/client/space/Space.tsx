@@ -25,7 +25,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useNavRoomVirtualizer } from '../../../hooks/useNavRoomVirtualizer';
+import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 
 type RoomJoinRulesEventContent = {
   join_rule: string;
@@ -439,7 +439,7 @@ export function Space() {
     (index: number) => JSON.stringify([hierarchy[index].parentId, hierarchy[index].roomId]),
     [hierarchy]
   );
-  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(
+  const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
     scrollRef,
     hierarchy.length,
     getRoomKey

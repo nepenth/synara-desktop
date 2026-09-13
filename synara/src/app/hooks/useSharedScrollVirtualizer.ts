@@ -2,14 +2,15 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import { RefObject, useCallback, useLayoutEffect, useState } from 'react';
 
 /**
- * Sidebar lists follow actions, favorites, and category headers inside a shared
+ * Lists follow actions, filters, and category headers inside a shared
  * scroller. TanStack measures scroll offsets from that scroller, so account for
- * the list's actual origin before deciding which rooms can be unmounted.
+ * the list's actual origin before deciding which rows can be unmounted.
  */
-export const useNavRoomVirtualizer = (
+export const useSharedScrollVirtualizer = (
   scrollRef: RefObject<HTMLDivElement | null>,
   count: number,
-  getItemKey: (index: number) => string
+  getItemKey: (index: number) => string,
+  overscan = 10
 ) => {
   const [listElement, listRef] = useState<HTMLDivElement | null>(null);
   const [scrollMargin, setScrollMargin] = useState(0);
@@ -46,7 +47,7 @@ export const useNavRoomVirtualizer = (
     getScrollElement: () => scrollRef.current,
     getItemKey,
     estimateSize: () => 40,
-    overscan: 10,
+    overscan,
     scrollMargin,
   });
 
