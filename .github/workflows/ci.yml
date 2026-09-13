@@ -562,6 +562,10 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: synara
 
+      - name: Install WebKit for desktop navigation and approval tests
+        run: npx playwright install --with-deps webkit
+        working-directory: synara
+
       - name: Check repository layout
         run: npm run check:repo-layout
 
@@ -615,6 +619,10 @@ jobs:
 
       - name: Test native timeline navigation in Chromium
         run: npm run test:browser:native-timeline
+        working-directory: synara
+
+      - name: Test desktop room navigation and approvals in Chromium and WebKit
+        run: npm run test:browser:desktop-polish
         working-directory: synara
 
       - name: Check production dependency advisories

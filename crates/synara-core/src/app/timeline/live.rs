@@ -71,6 +71,12 @@ use super::{
     TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
+mod approval_inbox;
+use approval_inbox::ApprovalInboxOwner;
+pub use approval_inbox::{
+    NativeAgentApprovalInboxItem, NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
+};
+
 const PAGINATION_BATCH_SIZE: u16 = 30;
 const REDACTED_PLACEHOLDER: &str = "Message removed";
 const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
@@ -327,6 +333,7 @@ pub struct NativeTimelineOwner {
     /// Serializes duplicate decisions per exact event without monopolizing the
     /// global timeline registry or blocking unrelated approval prompts.
     approval_decisions: Arc<std::sync::Mutex<ApprovalDecisionRegistry>>,
+    approval_inbox: tokio::sync::Mutex<ApprovalInboxOwner>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
     sends: tokio::sync::Mutex<SendQueue>,
 }
@@ -340,9 +347,21 @@ impl NativeTimelineOwner {
             approval_decisions: Arc::new(
                 std::sync::Mutex::new(ApprovalDecisionRegistry::default()),
             ),
+            approval_inbox: tokio::sync::Mutex::new(ApprovalInboxOwner::new(session_generation)),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
         }
+    }
+
+    pub async fn agent_approvals_list(
+        &self,
+    ) -> Result<NativeAgentApprovalInboxSnapshot, &'static str> {
+        let mut inbox = self.approval_inbox.lock().await;
+        let decisions = self
+            .approval_decisions
+            .lock()
+            .map_err(|_| "agent-approval-decision-state-poisoned")?;
+        inbox.snapshot(&self.client, &decisions)
     }
 
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {

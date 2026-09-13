@@ -6,12 +6,13 @@ import * as css from './style.css';
 
 type VirtualTileProps = {
   virtualItem: VirtualItem;
+  scrollMargin?: number;
 };
 export const VirtualTile = as<'div', VirtualTileProps>(
-  ({ className, virtualItem, style, ...props }, ref) => (
+  ({ className, virtualItem, scrollMargin = 0, style, ...props }, ref) => (
     <div
       className={classNames(css.VirtualTile, className)}
-      style={{ top: virtualItem.start, ...style }}
+      style={{ top: virtualItem.start - scrollMargin, ...style }}
       data-index={virtualItem.index}
       {...props}
       ref={ref}

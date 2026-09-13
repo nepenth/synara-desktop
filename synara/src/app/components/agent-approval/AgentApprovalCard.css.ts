@@ -21,3 +21,9 @@ export const ApprovalDetail = style({
     },
   },
 });
+
+export const InboxApprovalCard = style({
+  borderRadius: config.radii.R400,
+  backgroundColor: color.Surface.Container,
+  overflow: 'hidden',
+});

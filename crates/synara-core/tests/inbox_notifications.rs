@@ -1,0 +1,82 @@
+//! Exercise the same authenticated SDK endpoint used by both desktop clients.
+use matrix_sdk::test_utils::mocks::MatrixMockServer;
+use synara_core::app::notifications::{fetch_inbox_notifications, MatrixInboxNotificationsRequest};
+use wiremock::{
+    matchers::{header_exists, method, path, query_param},
+    Mock, ResponseTemplate,
+};
+
+#[tokio::test]
+async fn native_inbox_fetches_highlight_history_and_empty_next_page() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/notifications"))
+        .and(header_exists("authorization"))
+        .and(query_param("limit", "30"))
+        .and(query_param("only", "highlight"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
+            "next_token": "next/token+1",
+            "notifications": [{
+                "actions": ["notify", {"set_tweak": "highlight", "value": true}],
+                "read": false, "room_id": "!room:example.org", "ts": 123,
+                "event": {"event_id": "$event", "type": "m.room.message", "sender": "@alice:example.org",
+                    "origin_server_ts": 123, "content": {"msgtype": "m.text", "body": "hello"}}
+            }]
+        })))
+        .expect(1).mount(server.server()).await;
+    let first = fetch_inbox_notifications(
+        &client,
+        MatrixInboxNotificationsRequest {
+            from: None,
+            limit: Some(30),
+            only: Some("highlight".into()),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(first.notifications.len(), 1);
+    assert_eq!(first.notifications[0].event.content["body"], "hello");
+    assert_eq!(first.next_token.as_deref(), Some("next/token+1"));
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/notifications"))
+        .and(query_param("from", "next/token+1"))
+        .and(query_param("limit", "50"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(serde_json::json!({"notifications": []})),
+        )
+        .expect(1)
+        .mount(server.server())
+        .await;
+    let next = fetch_inbox_notifications(
+        &client,
+        MatrixInboxNotificationsRequest {
+            from: first.next_token,
+            ..Default::default()
+        },
+    )
+    .await
+    .unwrap();
+    assert!(next.notifications.is_empty());
+    assert!(next.next_token.is_none());
+}
+
+#[tokio::test]
+async fn native_inbox_reports_homeserver_failure_without_false_empty_success() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/notifications"))
+        .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+            "errcode": "M_FORBIDDEN", "error": "private homeserver details"
+        })))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    assert_eq!(
+        fetch_inbox_notifications(&client, MatrixInboxNotificationsRequest::default())
+            .await
+            .unwrap_err(),
+        "inbox-notifications.request-failed"
+    );
+}

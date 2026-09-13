@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button, Chip, Spinner, Text, color, config, toRem } from 'folds';
 import {
   AGENT_APPROVAL_REACTION_APPROVE_ALWAYS,
@@ -23,6 +23,8 @@ export type AgentApprovalTarget = {
 type AgentApprovalCardProps = {
   prompt: AgentApprovalPrompt;
   target?: AgentApprovalTarget;
+  onDecision?: () => void;
+  appearance?: 'timeline' | 'inbox';
 };
 
 type ApprovalAction = {
@@ -68,12 +70,25 @@ const monospacedBlockStyle: React.CSSProperties = {
   lineHeight: 1.45,
 };
 
-export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
+export function AgentApprovalCard({
+  prompt,
+  target,
+  onDecision,
+  appearance = 'timeline',
+}: AgentApprovalCardProps) {
   const [busyKey, setBusyKey] = useState<string>();
   const [sentKey, setSentKey] = useState<string>();
   const [decisionStatus, setDecisionStatus] = useState<'applied' | 'already_decided'>();
   const [error, setError] = useState<string>();
   const [confirmApproveAlways, setConfirmApproveAlways] = useState(false);
+  const confirmRef = useRef<HTMLButtonElement>(null);
+  const approveAlwaysRef = useRef<HTMLButtonElement>(null);
+  const wasConfirming = useRef(false);
+  useEffect(() => {
+    if (confirmApproveAlways) confirmRef.current?.focus();
+    else if (wasConfirming.current) approveAlwaysRef.current?.focus();
+    wasConfirming.current = confirmApproveAlways;
+  }, [confirmApproveAlways]);
   const canReact = Boolean(target && target.canSendReaction !== false);
   const disabled = !canReact || Boolean(busyKey || sentKey);
   const isResolved = Boolean(sentKey);
@@ -93,13 +108,14 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         setDecisionStatus(result.status);
         setSentKey(action.key);
         setConfirmApproveAlways(false);
+        onDecision?.();
       } catch {
         setError('Approval could not be submitted. The request may be invalid or expired.');
       } finally {
         setBusyKey(undefined);
       }
     },
-    [target, busyKey, sentKey]
+    [target, busyKey, sentKey, onDecision]
   );
 
   const handleReact = useCallback(
@@ -132,9 +148,9 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
     <Box
       direction="Column"
       gap="300"
-      className={css.ApprovalCard}
+      className={appearance === 'inbox' ? css.InboxApprovalCard : css.ApprovalCard}
       style={{
-        maxWidth: toRem(760),
+        maxWidth: appearance === 'inbox' ? undefined : toRem(760),
         padding: config.space.S400,
       }}
     >
@@ -143,7 +159,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
           <Text size="H5">{prompt.title}</Text>
           <Text priority="400">{prompt.body}</Text>
         </Box>
-        <Chip variant="Critical" radii="Pill" outlined>
+        <Chip as="span" variant="Critical" radii="Pill" outlined>
           <Text size="L400">Critical</Text>
         </Chip>
       </Box>
@@ -179,7 +195,6 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             borderRadius: config.radii.R300,
             padding: config.space.S300,
           }}
-          open={false}
         >
           <Box as="summary" alignItems="Center" gap="200" style={{ cursor: 'pointer' }}>
             <Text as="span" size="T300">
@@ -227,6 +242,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
             </Text>
             <Box gap="200" wrap="Wrap">
               <Button
+                ref={confirmRef}
                 type="button"
                 size="300"
                 variant="Critical"
@@ -273,6 +289,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
               return (
                 <Button
                   key={action.key}
+                  ref={isAlways ? approveAlwaysRef : undefined}
                   type="button"
                   size="300"
                   variant={action.variant}
@@ -304,8 +321,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
         )}
         {!isResolved && (
           <Text size="T200" priority="300">
-            Session approval is available only by replying <code>!approve session</code>; Hermes
-            does not define a session-approval reaction.
+            To approve for this session, open the message and reply <code>!approve session</code>.
           </Text>
         )}
         {isResolved && (
@@ -332,7 +348,7 @@ export function AgentApprovalCard({ prompt, target }: AgentApprovalCardProps) {
           </Box>
         )}
         {error && (
-          <Text size="T200" style={{ color: color.Critical.Main }}>
+          <Text role="alert" size="T200" style={{ color: color.Critical.Main }}>
             {error}
           </Text>
         )}

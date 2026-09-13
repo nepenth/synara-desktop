@@ -1,56 +1,49 @@
-import { useEffect, useState } from 'react';
-import { createMatrixMediaObjectUrl, isNativeMediaContentUri } from '../matrix/media';
+import { useCallback, useLayoutEffect, useSyncExternalStore } from 'react';
+import { downloadMatrixMedia, isNativeMediaContentUri } from '../matrix/media';
+import { getClientMediaObjectUrlCache } from '../matrix/mediaObjectUrlCache';
 import { useMaybeMatrixClient } from './useMatrixClient';
 
 /**
- * Resolve leftover `mxc://` / handle URIs through native download.
- * Blob, data, and http(s) URLs pass through. Missing client or a failed
- * native download yields undefined so the avatar fallback can render.
+ * Resolve native URIs using a client-scoped URL lease. Warm avatars have a src
+ * on their first render when returning to a room; concurrent avatars share IPC.
+ * Other URL types pass through and are never owned/revoked by this hook.
  */
 export function useNativeMatrixMediaSrc(
   contentUri: string | undefined,
   mimeType = 'image/jpeg'
 ): string | undefined {
   const mx = useMaybeMatrixClient();
-  const [objectUrl, setObjectUrl] = useState<string | undefined>(() =>
-    contentUri && !isNativeMediaContentUri(contentUri) ? contentUri : undefined
+  const native = isNativeMediaContentUri(contentUri);
+  const cache = mx && native ? getClientMediaObjectUrlCache(mx) : undefined;
+  const key = JSON.stringify([contentUri, mimeType]);
+  const subscribe = useCallback(
+    (listener: () => void) => cache?.subscribe(key, listener) ?? (() => undefined),
+    [cache, key]
   );
+  const getSnapshot = useCallback(
+    () => (native ? cache?.peek(key) : contentUri),
+    [cache, key, native, contentUri]
+  );
+  // React rechecks the snapshot before commit, including concurrent renders
+  // whose cached URL expired while rendering. No lease is taken during render.
+  const src = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  useEffect(() => {
-    if (!contentUri) {
-      setObjectUrl(undefined);
-      return undefined;
-    }
-    if (!isNativeMediaContentUri(contentUri)) {
-      setObjectUrl(contentUri);
-      return undefined;
-    }
-    if (!mx) {
-      setObjectUrl(undefined);
-      return undefined;
-    }
+  // A failed entry may be replaced by a later avatar's successful retry. Its
+  // new src snapshot must acquire a lease for this still-mounted avatar too.
+  useLayoutEffect(() => {
+    if (!mx || !cache || !contentUri) return undefined;
+    const lease = cache.acquire(
+      key,
+      () => downloadMatrixMedia(mx, contentUri, { mimeType }),
+      // MXC sources are immutable. Opaque native handles can be rebound or
+      // revoked with their timeline and must resolve again after unmount.
+      contentUri.trim().startsWith('mxc://')
+    );
+    // Successful downloads and eviction notify the external-store snapshot.
+    // Failed downloads keep its undefined fallback and remain retryable.
+    void lease.promise.catch(() => undefined);
+    return lease.release;
+  }, [mx, cache, key, contentUri, mimeType, src]);
 
-    let cancelled = false;
-    let created: string | undefined;
-    setObjectUrl(undefined);
-    void createMatrixMediaObjectUrl(mx, contentUri, { mimeType })
-      .then((url) => {
-        if (cancelled) {
-          URL.revokeObjectURL(url);
-          return;
-        }
-        created = url;
-        setObjectUrl(url);
-      })
-      .catch(() => {
-        if (!cancelled) setObjectUrl(undefined);
-      });
-
-    return () => {
-      cancelled = true;
-      if (created) URL.revokeObjectURL(created);
-    };
-  }, [mx, contentUri, mimeType]);
-
-  return objectUrl;
+  return src;
 }

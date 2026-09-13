@@ -33,7 +33,9 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(nav, /raisedShadow/);
   assert.match(editor, /raisedShadow/);
   assert.match(editor, /EditorFloatingOptions/);
-  assert.match(editor, /floatingShadow/);
+  assert.doesNotMatch(editor, /floatingShadow|quietSurfaceFold|linear-gradient/);
+  assert.match(editor, /backgroundImage: 'none'/);
+  assert.match(editor, /borderLeft:/);
   assert.match(timeline, /MessageActionRail = style\(\[\s*floatingSurface/);
   assert.match(timeline, /MessageBody = style\(\{\s*background: 'transparent'/);
   assert.match(timeline, /MessageActionSurface}:hover/);

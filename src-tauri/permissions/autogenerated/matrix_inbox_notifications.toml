@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-inbox-notifications"
+description = "Enables the matrix_inbox_notifications command without any pre-configured scope."
+commands.allow = ["matrix_inbox_notifications"]
+
+[[permission]]
+identifier = "deny-matrix-inbox-notifications"
+description = "Denies the matrix_inbox_notifications command without any pre-configured scope."
+commands.deny = ["matrix_inbox_notifications"]

@@ -1,4 +1,11 @@
-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  forwardRef,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Avatar,
@@ -15,7 +22,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useNavRoomVirtualizer } from '../../../hooks/useNavRoomVirtualizer';
 import { useAtom, useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
@@ -353,12 +360,12 @@ export function Home() {
     writeRoomListSort(sortStorage, sort, 'rooms');
   };
 
-  const virtualizer = useVirtualizer({
-    count: mainRoomIds.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 40,
-    overscan: 10,
-  });
+  const getRoomKey = useCallback((index: number) => mainRoomIds[index], [mainRoomIds]);
+  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(
+    scrollRef,
+    mainRoomIds.length,
+    getRoomKey
+  );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)
@@ -490,6 +497,7 @@ export function Home() {
                 </Box>
               </NavCategoryHeader>
               <div
+                ref={listRef}
                 style={{
                   position: 'relative',
                   height: virtualizer.getTotalSize(),
@@ -504,7 +512,8 @@ export function Home() {
                   return (
                     <VirtualTile
                       virtualItem={vItem}
-                      key={vItem.index}
+                      scrollMargin={scrollMargin}
+                      key={vItem.key}
                       ref={virtualizer.measureElement}
                     >
                       <RoomNavItem

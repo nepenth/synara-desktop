@@ -15,11 +15,8 @@ import {
   toRem,
 } from 'folds';
 import { useSearchParams } from 'react-router-dom';
-import {
-  normalizeNotificationsResponse,
-  type NotificationEventReading,
-  type NotificationReading,
-} from './notificationResponse';
+import { type NotificationEventReading, type NotificationReading } from './notificationResponse';
+import { fetchNativeInboxNotifications } from './nativeInboxNotifications';
 type NotificationsRoomReading = EventedRoomReading & {
   findEventById(eventId: string): MatrixEventReading | undefined;
 };
@@ -150,7 +147,6 @@ const useNotificationTimeline = (
   paginationLimit: number,
   onlyHighlight?: boolean
 ): [NotificationTimeline, LoadTimeline, SilentReloadTimeline] => {
-  const mx = useMatrixClient();
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
 
@@ -159,17 +155,9 @@ const useNotificationTimeline = (
   });
 
   const fetchNotifications = useCallback(
-    (from?: string, limit?: number, only?: 'highlight') => {
-      const queryParams = { from, limit, only };
-      return mx.http
-        .authedRequest<unknown>(
-          'GET' as unknown as Parameters<typeof mx.http.authedRequest>[0],
-          '/notifications',
-          queryParams
-        )
-        .then(normalizeNotificationsResponse);
-    },
-    [mx]
+    (from?: string, limit?: number, only?: 'highlight') =>
+      fetchNativeInboxNotifications({ from, limit, only }),
+    []
   );
 
   const loadTimeline: LoadTimeline = useCallback(

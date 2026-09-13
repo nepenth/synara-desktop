@@ -13,6 +13,7 @@ import {
   Icons,
   Menu,
   MenuItem,
+  Line,
   PopOut,
   RectCords,
   Scroll,
@@ -368,13 +369,14 @@ const NativeTimelineRowActions = ({
 
   if (!eventId || !capabilities) return null;
   const buttons: React.ReactNode[] = [];
+  const moderationButtons: React.ReactNode[] = [];
   const closeAfterOneShotAction = () => onRequestClose?.();
   if (body) {
     buttons.push(
       <MenuItem
         key="copy"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         onClick={() => {
           copyRichTextToClipboard(
@@ -393,7 +395,7 @@ const NativeTimelineRowActions = ({
       <MenuItem
         key="reply"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         onClick={() => {
           runNativeRowAction(
@@ -416,7 +418,7 @@ const NativeTimelineRowActions = ({
       <MenuItem
         key="reply-thread"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         onClick={() => {
           runNativeRowAction(
@@ -445,7 +447,7 @@ const NativeTimelineRowActions = ({
       <MenuItem
         key="edit"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         onClick={() => {
           setForwarding(false);
@@ -464,7 +466,7 @@ const NativeTimelineRowActions = ({
       <MenuItem
         key="forward"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         disabled={pendingProductAction !== undefined}
         onClick={() => {
@@ -479,12 +481,12 @@ const NativeTimelineRowActions = ({
     );
   }
   if (capabilities.redact) {
-    buttons.push(
+    moderationButtons.push(
       <MenuItem
         key="redact"
         variant="Critical"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         onClick={() => {
           runNativeRowAction(
@@ -502,12 +504,12 @@ const NativeTimelineRowActions = ({
     );
   }
   if (capabilities.report) {
-    buttons.push(
+    moderationButtons.push(
       <MenuItem
         key="report"
         variant="Critical"
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         disabled={pendingProductAction !== undefined}
         onClick={() => {
@@ -526,7 +528,7 @@ const NativeTimelineRowActions = ({
       <MenuItem
         key={pinAction}
         size="300"
-        fill="Soft"
+        fill="None"
         radii="300"
         onClick={() => {
           runNativeRowAction(
@@ -551,7 +553,7 @@ const NativeTimelineRowActions = ({
     <MenuItem
       key="later"
       size="300"
-      fill="Soft"
+      fill="None"
       radii="300"
       onClick={() => {
         runNativeRowAction(
@@ -697,6 +699,14 @@ const NativeTimelineRowActions = ({
       <Box direction="Column" gap="100">
         {buttons}
       </Box>
+      {moderationButtons.length > 0 && (
+        <>
+          <Line size="300" className={htmlCss.MessageActionDivider} />
+          <Box direction="Column" gap="100" role="group" aria-label="Moderation actions">
+            {moderationButtons}
+          </Box>
+        </>
+      )}
       {editing && (
         <Box direction="Column" gap="100">
           <textarea
@@ -931,7 +941,10 @@ const NativeTimelineRowActionSurface = ({
                       escapeDeactivates: stopPropagation,
                     }}
                   >
-                    <Menu data-native-timeline-action-menu="true">
+                    <Menu
+                      className={htmlCss.MessageActionMenu}
+                      data-native-timeline-action-menu="true"
+                    >
                       <NativeTimelineRowActions {...actionProps} onRequestClose={closeMenu} />
                     </Menu>
                   </FocusTrap>

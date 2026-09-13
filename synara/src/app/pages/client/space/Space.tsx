@@ -25,7 +25,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useNavRoomVirtualizer } from '../../../hooks/useNavRoomVirtualizer';
 
 type RoomJoinRulesEventContent = {
   join_rule: string;
@@ -435,12 +435,15 @@ export function Space() {
     )
   );
 
-  const virtualizer = useVirtualizer({
-    count: hierarchy.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 0,
-    overscan: 10,
-  });
+  const getRoomKey = useCallback(
+    (index: number) => JSON.stringify([hierarchy[index].parentId, hierarchy[index].roomId]),
+    [hierarchy]
+  );
+  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(
+    scrollRef,
+    hierarchy.length,
+    getRoomKey
+  );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)
@@ -495,6 +498,7 @@ export function Space() {
             </NavItem>
           </NavCategory>
           <NavCategory
+            ref={listRef}
             style={{
               height: virtualizer.getTotalSize(),
               position: 'relative',
@@ -511,7 +515,8 @@ export function Space() {
                 return (
                   <VirtualTile
                     virtualItem={vItem}
-                    key={vItem.index}
+                    scrollMargin={scrollMargin}
+                    key={vItem.key}
                     ref={virtualizer.measureElement}
                   >
                     <div style={{ paddingTop: vItem.index === 0 ? undefined : config.space.S400 }}>
@@ -530,7 +535,12 @@ export function Space() {
               }
 
               return (
-                <VirtualTile virtualItem={vItem} key={vItem.index} ref={virtualizer.measureElement}>
+                <VirtualTile
+                  virtualItem={vItem}
+                  scrollMargin={scrollMargin}
+                  key={vItem.key}
+                  ref={virtualizer.measureElement}
+                >
                   <RoomNavItem
                     room={room}
                     selected={selectedRoomId === roomId}

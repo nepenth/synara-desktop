@@ -1,4 +1,11 @@
-import React, { MouseEventHandler, forwardRef, useMemo, useRef, useState } from 'react';
+import React, {
+  MouseEventHandler,
+  forwardRef,
+  useCallback,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useAtom, useAtomValue } from 'jotai';
 import {
   Avatar,
@@ -15,7 +22,7 @@ import {
   config,
   toRem,
 } from 'folds';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useNavRoomVirtualizer } from '../../../hooks/useNavRoomVirtualizer';
 import FocusTrap from 'focus-trap-react';
 import { useNavigate } from 'react-router-dom';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
@@ -188,12 +195,12 @@ export function Direct() {
     return items;
   }, [mx, directs, closedCategories, roomToUnread, selectedRoomId]);
 
-  const virtualizer = useVirtualizer({
-    count: sortedDirects.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 40,
-    overscan: 10,
-  });
+  const getRoomKey = useCallback((index: number) => sortedDirects[index], [sortedDirects]);
+  const { virtualizer, listRef, scrollMargin } = useNavRoomVirtualizer(
+    scrollRef,
+    sortedDirects.length,
+    getRoomKey
+  );
 
   const handleCategoryClick = useCategoryHandler(setClosedCategories, (categoryId) =>
     closedCategories.has(categoryId)
@@ -236,6 +243,7 @@ export function Direct() {
                 </RoomNavCategoryButton>
               </NavCategoryHeader>
               <div
+                ref={listRef}
                 style={{
                   position: 'relative',
                   height: virtualizer.getTotalSize(),
@@ -250,7 +258,8 @@ export function Direct() {
                   return (
                     <VirtualTile
                       virtualItem={vItem}
-                      key={vItem.index}
+                      scrollMargin={scrollMargin}
+                      key={vItem.key}
                       ref={virtualizer.measureElement}
                     >
                       <RoomNavItem

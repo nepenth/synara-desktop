@@ -77,6 +77,22 @@ export const MessageActionRail = style([
   },
 ]);
 
+// Popouts use the same floating plane as the reaction picker and action rail.
+export const MessageActionMenu = style([
+  floatingSurface,
+  {
+    borderRadius: config.radii.R400,
+    maxWidth: 'calc(100vw - 24px)',
+    maxHeight: 'calc(100dvh - 24px)',
+    overflowY: 'auto',
+  },
+]);
+
+export const MessageActionDivider = style({
+  margin: `${config.space.S100} ${config.space.S200}`,
+  flexShrink: 0,
+});
+
 export const TimelineAvatar = style([avatarSurface]);
 
 export const MessageRow = recipe({

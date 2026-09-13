@@ -1220,7 +1220,7 @@ export const Message = as<'div', MessageProps>(
                         escapeDeactivates: stopPropagation,
                       }}
                     >
-                      <Menu>
+                      <Menu className={css.MessageActionMenu}>
                         {canSendReaction && (
                           <MessageQuickReactions
                             onReaction={(key, shortcode) => {
@@ -1347,7 +1347,7 @@ export const Message = as<'div', MessageProps>(
                             position="Right"
                             align="Start"
                             content={
-                              <Menu>
+                              <Menu className={css.MessageActionMenu}>
                                 <Box direction="Column" gap="100" className={css.MessageMenuGroup}>
                                   {!hideReadReceipts && (
                                     <MessageReadReceiptItem
@@ -1656,7 +1656,7 @@ export const Event = as<'div', EventProps>(
                         escapeDeactivates: stopPropagation,
                       }}
                     >
-                      <Menu {...props} ref={ref}>
+                      <Menu {...props} className={css.MessageActionMenu} ref={ref}>
                         <Box direction="Column" gap="100" className={css.MessageMenuGroup}>
                           {!hideReadReceipts && (
                             <MessageReadReceiptItem

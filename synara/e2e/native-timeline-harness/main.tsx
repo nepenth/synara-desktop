@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
+import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
 import type {
@@ -15,7 +16,8 @@ import type {
 const room = '!navigation:example.test';
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
-let sequence = scenario === 'sparse-missing' ? 1 : scenario === 'short' ? 2 : 60;
+const polish = params.has('polish');
+let sequence = polish ? 4 : scenario === 'sparse-missing' ? 1 : scenario === 'short' ? 2 : 60;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
 let releaseLastRead: (() => void) | undefined;
@@ -37,14 +39,15 @@ const makeRow = (index: number) => ({
   originServerTs: 1_700_000_000_000 + index * 60_000,
   body: `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
   edited: false,
+  forwardTransport: polish ? ('text' as const) : undefined,
   capabilities: {
-    react: false,
-    reply: false,
+    react: polish,
+    reply: polish,
     edit: false,
-    redact: false,
-    report: false,
-    pin: false,
-    forward: false,
+    redact: polish,
+    report: polish,
+    pin: polish,
+    forward: polish,
     vote: false,
     declineCall: false,
   },
@@ -335,6 +338,12 @@ Object.assign(window, { nativeTimelineFixture: api });
 // offsets like `config.space.S300` compile to CSS variables that only exist
 // under these classes; without them absolute controls collapse to the origin.
 document.body.classList.add(configClass, varsClass);
+if (polish) {
+  void import('../../src/index.css');
+  document.body.classList.add(darkTheme, 'dark-theme');
+  document.body.style.backgroundColor = '#161719';
+  document.body.style.color = '#ededed';
+}
 
 function App() {
   const [mounted, setMounted] = useState(true);
@@ -346,8 +355,8 @@ function App() {
       <div
         id="native-timeline"
         style={{
-          height: 480,
-          width: 700,
+          height: polish ? 640 : 480,
+          width: polish ? 900 : 700,
           display: 'flex',
           flexDirection: 'column',
           border: '1px solid gray',

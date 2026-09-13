@@ -186,6 +186,7 @@ test('desktop leftover avatars resolve through native media src', () => {
   );
   assert.match(roomAvatar, /useNativeMatrixMediaSrc/);
   assert.match(userAvatar, /useNativeMatrixMediaSrc/);
-  assert.match(hook, /createMatrixMediaObjectUrl/);
+  assert.match(hook, /downloadMatrixMedia/);
+  assert.match(hook, /getClientMediaObjectUrlCache/);
   assert.doesNotMatch(hook, /browser-encrypt-attachment|decryptFile/);
 });

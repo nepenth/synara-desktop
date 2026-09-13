@@ -395,3 +395,19 @@ pub async fn matrix_notification_pending_snapshot(
 {
     crate::bridge::notification_decision::notification_pending_snapshot(core.inner().as_ref()).await
 }
+
+#[tauri::command]
+pub async fn matrix_inbox_notifications(
+    core: State<'_, Arc<synara_core::Core>>,
+    from: Option<String>,
+    limit: Option<u16>,
+    only: Option<String>,
+) -> Result<synara_core::app::notifications::MatrixInboxNotificationsPage, MatrixAuthCommandError> {
+    crate::bridge::inbox_notifications::inbox_notifications(
+        core.inner().as_ref(),
+        from,
+        limit,
+        only,
+    )
+    .await
+}

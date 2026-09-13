@@ -73,6 +73,8 @@ export const MessageQuickReaction = style({
   minWidth: toRem(32),
 });
 
+export const MessageActionMenu = style([floatingSurface]);
+
 export const MessageMenuGroup = style({
   padding: config.space.S100,
 });

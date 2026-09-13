@@ -751,6 +751,13 @@ impl NativeImagePackOwner {
         crate::app::notifications::set_room_notification(&self.client, room_id, mode).await
     }
 
+    pub async fn fetch_inbox_notifications(
+        &self,
+        request: crate::app::notifications::MatrixInboxNotificationsRequest,
+    ) -> Result<crate::app::notifications::MatrixInboxNotificationsPage, &'static str> {
+        crate::app::notifications::fetch_inbox_notifications(&self.client, request).await
+    }
+
     pub async fn snapshot_room_notifications(
         &self,
     ) -> Result<crate::app::notifications::MatrixRoomNotificationsSnapshot, &'static str> {

@@ -11,6 +11,7 @@ export type SynaraRouteDestination =
   | { kind: 'spaceLobby'; spaceIdOrAlias: string }
   | { kind: 'inbox'; section?: 'notifications' | 'invites' | 'later' }
   | { kind: 'create' }
+  | { kind: 'approvals' }
   | { kind: 'explore'; server?: string }
   | { kind: 'settings'; section?: string };
 
@@ -26,6 +27,7 @@ const STATIC_ROUTE_DESTINATIONS: Record<string, SynaraRouteDestination> = {
   '/inbox/later/': { kind: 'inbox', section: 'later' },
   '/create': { kind: 'create' },
   '/create/': { kind: 'create' },
+  '/approvals/': { kind: 'approvals' },
   '/explore/': { kind: 'explore' },
   '/settings/': { kind: 'settings' },
 };
@@ -40,6 +42,7 @@ const RESERVED_TOP_LEVEL_SEGMENTS = new Set([
   'direct',
   'inbox',
   'create',
+  'approvals',
   'explore',
   'settings',
 ]);

@@ -1,4 +1,5 @@
 import { clearLegacyRendererSessionCredentials, type Session } from './sessions';
+import { clearMediaObjectUrlCaches } from '../matrix/mediaObjectUrlCache';
 import { recordClientDiagnostic } from '../utils/clientDiagnostics';
 
 export type AsyncSessionStore = {
@@ -74,6 +75,7 @@ export const resolveSessionBootstrap = async ({
 };
 
 const cacheSessionBootstrapResult = (result: SessionBootstrapResult): SessionBootstrapResult => {
+  if (activeSession !== result.session) clearMediaObjectUrlCaches();
   activeSession = result.session;
   activeSessionSource = result.source;
   activeNativeStoreError = result.nativeStoreError;
@@ -120,6 +122,7 @@ export const setSessionBootstrapResult = (
 };
 
 export const clearSessionBootstrap = () => {
+  clearMediaObjectUrlCaches();
   activeSession = undefined;
   activeSessionSource = 'none';
   activeNativeStoreError = undefined;

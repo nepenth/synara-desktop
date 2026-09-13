@@ -52,7 +52,10 @@ pub use error::TimelineError;
 pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
-pub use live::{NativeTimelineOwner, NativeTimelineRegistry};
+pub use live::{
+    NativeAgentApprovalInboxItem, NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
+    NativeTimelineOwner, NativeTimelineRegistry,
+};
 pub use media::{
     is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,
     TIMELINE_MEDIA_HANDLE_PREFIX,
