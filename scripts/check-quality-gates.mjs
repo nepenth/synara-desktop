@@ -514,7 +514,9 @@ export function inspectQualityGates({
     ],
   ]) {
     for (const command of [
-      "npx playwright install --with-deps chromium",
+      label === "Exact-tag desktop validation"
+        ? "npx playwright install --with-deps chromium webkit"
+        : "npx playwright install --with-deps chromium",
       "npm run typecheck",
       "npm run test:browser:timeline",
       "npm run check:security",

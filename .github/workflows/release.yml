@@ -109,14 +109,9 @@ jobs:
         run: npm ci
         working-directory: synara
 
-      - name: Install Chromium for timeline layout tests
+      - name: Install Chromium and WebKit for release browser tests
         if: steps.reuse.outputs.reuse != 'true'
-        run: npx playwright install --with-deps chromium
-        working-directory: synara
-
-      - name: Install WebKit for desktop navigation and approval tests
-        if: steps.reuse.outputs.reuse != 'true'
-        run: npx playwright install --with-deps webkit
+        run: npx playwright install --with-deps chromium webkit
         working-directory: synara
 
       - name: Check repository and release contracts
