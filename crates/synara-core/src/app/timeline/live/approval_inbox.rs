@@ -213,11 +213,19 @@ impl ApprovalInboxOwner {
             if make_room_for_candidate {
                 preempt -= 1;
             }
-            if finished
-                || rotate
-                || make_room_for_candidate
-                || (!discovery_active && !candidates.contains_key(id))
-            {
+            let idle_release = !discovery_active && !candidates.contains_key(id);
+            if idle_release {
+                // Leaving the page stops broad discovery. A leftover gap
+                // is not a rail alarm; only an unproven window loses its
+                // cached Discovery mark.
+                if let Ok(mut state) = entry.state.lock() {
+                    if state.incomplete {
+                        state.checked = false;
+                    }
+                    state.incomplete = false;
+                }
+            }
+            if finished || rotate || make_room_for_candidate || idle_release {
                 if let Some(task) = entry.task.take() {
                     task.abort();
                     released.push(task);
@@ -354,7 +362,10 @@ impl ApprovalInboxOwner {
                 (
                     state.items.clone(),
                     state.loading && !state.deferred,
-                    state.incomplete,
+                    state.incomplete
+                        && (discovery_active
+                            || candidates.contains_key(id)
+                            || entry.task.is_some()),
                     state.can_send_reaction,
                 )
             };

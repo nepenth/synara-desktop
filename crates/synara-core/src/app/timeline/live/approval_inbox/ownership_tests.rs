@@ -493,6 +493,59 @@ async fn cached_coverage_and_permissions_survive_pause_then_update_from_native_s
 }
 
 #[tokio::test]
+async fn idle_list_does_not_keep_a_discovery_gap_as_a_rail_alarm() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let id = room_id!("!idle-gap-alarm:example.org");
+    let user = client.user_id().unwrap().to_owned();
+    let f = EventFactory::new().room(id);
+    let now = agent_approval_now_ms().unwrap();
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(id)
+                .set_timeline_prev_batch("earlier")
+                .add_state_event(f.create(&user, RoomVersionId::V11))
+                .add_timeline_event(f.text_msg("recent only").sender(*BOB).server_ts(now)),
+        )
+        .await;
+    server.mock_room_messages().error500().mount().await;
+    let mut inbox = ApprovalInboxOwner::new(29);
+    inbox
+        .snapshot(&client, &HashSet::new(), true, HashMap::new())
+        .await
+        .unwrap();
+    let state = inbox.rooms.get(id.as_str()).unwrap().state.clone();
+    until(|| {
+        let state = state.lock().unwrap();
+        !state.loading && state.incomplete
+    })
+    .await;
+    for _ in 0..2 {
+        let idle = inbox
+            .snapshot(&client, &HashSet::new(), false, HashMap::new())
+            .await
+            .unwrap();
+        assert!(
+            !idle.incomplete,
+            "idle list must not keep a discovery gap as a rail alarm"
+        );
+        assert_eq!(idle.coverage, NativeAgentApprovalInboxCoverage::LatestEvent);
+        assert!(!idle.loading);
+    }
+    state.lock().unwrap().incomplete = true;
+    let proven = inbox
+        .snapshot(&client, &HashSet::new(), true, HashMap::new())
+        .await
+        .unwrap();
+    assert!(
+        proven.incomplete || proven.loading,
+        "returning to the page must still retry the gapped room"
+    );
+}
+
+#[tokio::test]
 async fn borrowed_boundary_loss_is_neutral_until_owned_discovery_resumes() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
