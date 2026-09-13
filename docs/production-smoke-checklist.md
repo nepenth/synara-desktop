@@ -18,6 +18,25 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-13 approvals center and inbox notifications release-candidate review (2.1.36):
+
+- PR #1125 passed its required Quality gate and merged to main as `414ecf4a`.
+  iOS simulator unit and UI suites are skipped on ordinary PRs and run on this
+  `release/v2.1.36` candidate.
+- Core approval-inbox unit and SDK tests, desktop inbox/approvals schema
+  registration, missing-room NotFound mapping, and quality-gate fixture checks
+  were green on the feature branch before merge. This Linux environment cannot
+  run UIKit or signed desktop installers.
+- Remaining human checks before tagging: open Approvals and confirm the rail
+  and page list pending prompts; open a room from that list while discovery is
+  still paging; leave Approvals and confirm idle rooms do not keep a leftover
+  `!`; on encrypted rooms, a last-message approval should appear after decrypt
+  without farming every joined room.
+- The maintainer authorized merging #1125 and cutting this release. Final
+  signed-artifact install/update, physical-device testing, and live
+  cross-client UI checks were not repeated here. Do not push tag `v2.1.36`
+  until this candidate's Quality gate (including iOS simulator tests) is green.
+
 2026-09-11 unread, member options, and copy/resume release-candidate review (2.1.35):
 
 - PRs #1119, #1120, and #1121 passed their required Quality gates and merged to

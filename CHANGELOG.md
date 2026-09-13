@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+## [2.1.36] - 2026-09-13
+
+- Add an Approvals center (rail and `/approvals/` page) backed by Core
+  `matrix_agent_approvals_list`. Decisions stay on
+  `matrix_agent_approval_decide`.
+- Replace the JavaScript inbox-notification stub with native
+  `matrix_inbox_notifications` on desktop and iOS.
+- Idle room-list approval badges use the latest event only, without farming a
+  timeline per room. Opening Approvals runs bounded discovery (32 observers, 30s
+  lease, spaces skipped). Rail `!` alarms only when a room is incomplete or
+  errored, and leaving Approvals drops leftover discovery gaps.
+- Opening a room waits briefly for inbox pagination, then fail-opens so a stuck
+  inbox page cannot fail the user's room. Encrypted last messages appear on the
+  idle approval list only after a local decrypt succeeds.
+- Polish the desktop room list and composer: virtualizer scroll-margin, avatar
+  object-URL cache, and composer/menu CSS.
+- Keep a missing room as NotFound for both timeline-open diagnostics.
+
 ## [2.1.35] - 2026-09-11
 
 - Show Element-like room member options on desktop and iOS using native
