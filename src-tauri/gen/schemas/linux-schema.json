@@ -543,6 +543,12 @@
           "markdownDescription": "Enables the matrix_agent_approval_decide command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_agent_approvals_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-approvals-list",
+          "markdownDescription": "Enables the matrix_agent_approvals_list command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-backup-repair",
@@ -691,6 +697,12 @@
           "type": "string",
           "const": "allow-matrix-ignored-users-unignore",
           "markdownDescription": "Enables the matrix_ignored_users_unignore command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_inbox_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-inbox-notifications",
+          "markdownDescription": "Enables the matrix_inbox_notifications command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_invites_accept command without any pre-configured scope.",
@@ -1725,6 +1737,12 @@
           "markdownDescription": "Denies the matrix_agent_approval_decide command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_agent_approvals_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-approvals-list",
+          "markdownDescription": "Denies the matrix_agent_approvals_list command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-backup-repair",
@@ -1873,6 +1891,12 @@
           "type": "string",
           "const": "deny-matrix-ignored-users-unignore",
           "markdownDescription": "Denies the matrix_ignored_users_unignore command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_inbox_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-inbox-notifications",
+          "markdownDescription": "Denies the matrix_inbox_notifications command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_invites_accept command without any pre-configured scope.",

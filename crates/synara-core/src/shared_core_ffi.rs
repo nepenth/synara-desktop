@@ -154,6 +154,15 @@
 //! remain fail-closed. Timeline-media handles stay on `timeline_media_bytes`.
 //! This still exposes no generic command FFI or APNs surface.
 
+mod approval_inbox;
+pub use approval_inbox::{
+    AgentApprovalInboxDto, AgentApprovalInboxError, AgentApprovalInboxItemDto,
+};
+mod inbox_notifications;
+pub use inbox_notifications::{
+    InboxNotificationDto, InboxNotificationsError, InboxNotificationsPageDto,
+};
+
 use std::path::{Component, Path};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

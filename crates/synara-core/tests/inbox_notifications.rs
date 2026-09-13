@@ -80,3 +80,29 @@ async fn native_inbox_reports_homeserver_failure_without_false_empty_success() {
         "inbox-notifications.request-failed"
     );
 }
+
+#[test]
+fn inbox_read_commands_are_available_in_every_desktop_capability_schema() {
+    let build = include_str!("../../../src-tauri/build.rs");
+    let capability = include_str!("../../../src-tauri/capabilities/main.json");
+    let lib = include_str!("../../../src-tauri/src/lib.rs");
+    for command in ["matrix_inbox_notifications", "matrix_agent_approvals_list"] {
+        let permission = format!("allow-{}", command.replace('_', "-"));
+        assert!(build.contains(command));
+        assert!(lib.contains(command));
+        assert!(capability.contains(&permission));
+        for schema in [
+            include_str!("../../../src-tauri/gen/schemas/desktop-schema.json"),
+            include_str!("../../../src-tauri/gen/schemas/linux-schema.json"),
+            include_str!("../../../src-tauri/gen/schemas/macOS-schema.json"),
+        ] {
+            assert!(schema.contains(command), "missing command {command}");
+            assert!(
+                schema.contains(&permission),
+                "missing permission {permission}"
+            );
+            let deny = format!("deny-{}", command.replace('_', "-"));
+            assert!(schema.contains(&deny), "missing permission {deny}");
+        }
+    }
+}

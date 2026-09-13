@@ -17,7 +17,10 @@ async fn wait_for(
 ) -> NativeAgentApprovalInboxSnapshot {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
-            let snapshot = owner.agent_approvals_list().await.unwrap();
+            let snapshot = owner
+                .agent_approvals_list_with_discovery(true)
+                .await
+                .unwrap();
             if accept(&snapshot) {
                 return snapshot;
             }
@@ -70,7 +73,10 @@ async fn discovers_unopened_rooms_and_tracks_own_reactions_and_redactions() {
     }
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 7);
     // No timeline open/view command precedes discovery.
-    let initial = owner.agent_approvals_list().await.unwrap();
+    let initial = owner
+        .agent_approvals_list_with_discovery(true)
+        .await
+        .unwrap();
     assert!(initial.loading);
     let ready = wait_for(&owner, |s| !s.loading && s.items.len() == 2).await;
     assert_eq!(ready.session_generation, 7);
@@ -120,7 +126,12 @@ async fn discovers_unopened_rooms_and_tracks_own_reactions_and_redactions() {
     server
         .sync_room(&client, LeftRoomBuilder::new(room_a))
         .await;
-    assert!(owner.agent_approvals_list().await.unwrap().items.is_empty());
+    assert!(owner
+        .agent_approvals_list_with_discovery(true)
+        .await
+        .unwrap()
+        .items
+        .is_empty());
     let requests = server.server().received_requests().await.unwrap();
     assert!(
         requests.iter().all(|request| {
@@ -389,4 +400,120 @@ async fn incomplete_initial_bootstrap_immediately_continues_past_three_hundred_r
     .expect("initially incomplete discovery must not wait for the 30-second retry tick");
     assert_eq!(ready.items.len(), 1);
     assert_eq!(ready.items[0].event_id, "$outside-first-backfill");
+}
+
+#[tokio::test]
+async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_authority() {
+    use matrix_sdk_crypto::{olm::EncryptionSettings, OlmMachine};
+    use ruma::{
+        device_id,
+        events::room::{
+            encrypted::RoomEncryptedEventContent, message::RoomMessageEventContent,
+            power_levels::RoomPowerLevelsEventContent,
+        },
+        UserId,
+    };
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().logged_in_with_oauth().build().await;
+    client.event_cache().subscribe().unwrap();
+    let own_user = client.user_id().unwrap().to_owned();
+    let room_id = room_id!("!encrypted-approval:example.org");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let sender = OlmMachine::new(*BOB, device_id!("HERMES")).await;
+    sender
+        .share_room_key(
+            room_id,
+            std::iter::empty::<&UserId>(),
+            EncryptionSettings::default(),
+        )
+        .await
+        .unwrap();
+    let encrypted = sender
+        .encrypt_room_event(room_id, RoomMessageEventContent::text_plain(PROMPT))
+        .await
+        .unwrap();
+    let content: RoomEncryptedEventContent =
+        serde_json::from_str(encrypted.content.json().get()).unwrap();
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user, RoomVersionId::V11))
+                .add_state_event(
+                    f.event(
+                        serde_json::from_value::<RoomPowerLevelsEventContent>(
+                            serde_json::json!({"events": {"m.reaction": 0}}),
+                        )
+                        .unwrap(),
+                    )
+                    .sender(&own_user)
+                    .state_key(""),
+                )
+                .add_timeline_event(
+                    f.text_msg("covered boundary")
+                        .sender(*BOB)
+                        .server_ts(now - 360_000),
+                )
+                .add_timeline_event(
+                    f.event(content)
+                        .sender(*BOB)
+                        .event_id(event_id!("$encrypted-approval"))
+                        .server_ts(now),
+                ),
+        )
+        .await;
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 19);
+    let badge = owner.agent_approvals_list().await.unwrap();
+    assert!(badge.incomplete);
+    assert!(
+        !badge.loading,
+        "encrypted latest-event hint must not silently scan every encrypted room"
+    );
+    let encrypted = wait_for(&owner, |snapshot| !snapshot.loading).await;
+    assert!(encrypted.incomplete);
+    assert!(encrypted.items.is_empty());
+    let keys = sender
+        .store()
+        .export_room_keys(|session| session.room_id() == room_id)
+        .await
+        .unwrap();
+    assert!(!keys.is_empty());
+    client
+        .olm_machine_for_testing()
+        .await
+        .as_ref()
+        .unwrap()
+        .store()
+        .import_exported_room_keys(keys, |_, _| {})
+        .await
+        .unwrap();
+    let decrypted = wait_for(&owner, |snapshot| snapshot.items.len() == 1).await;
+    assert!(!decrypted.incomplete);
+    assert_eq!(decrypted.items[0].event_id, "$encrypted-approval");
+    assert_eq!(decrypted.items[0].body, PROMPT);
+    assert!(decrypted.items[0].can_send_reaction);
+    let levels: RoomPowerLevelsEventContent = serde_json::from_value(serde_json::json!({
+        "users": {own_user.as_str(): 0}, "events": {"m.reaction": 100}
+    }))
+    .unwrap();
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.event(levels).sender(&own_user).state_key("")),
+        )
+        .await;
+    let forbidden = owner
+        .agent_approvals_list_with_discovery(true)
+        .await
+        .unwrap();
+    assert!(!forbidden.items[0].can_send_reaction);
+    assert_eq!(
+        forbidden.items[0].status,
+        NativeAgentApprovalInboxStatus::Pending
+    );
 }

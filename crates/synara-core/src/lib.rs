@@ -97,13 +97,15 @@ pub use session_projection_ffi::{
 mod shared_core_ffi;
 #[cfg(feature = "full-uniffi")]
 pub use shared_core_ffi::{
-    AgentApprovalDecisionDto, AgentApprovalSendDto, AgentApprovalSendError, BackupStatusDto,
+    AgentApprovalDecisionDto, AgentApprovalInboxDto, AgentApprovalInboxError,
+    AgentApprovalInboxItemDto, AgentApprovalSendDto, AgentApprovalSendError, BackupStatusDto,
     ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto,
     CrossSigningStatusDto, CryptoStatusDto, DeviceCommandError, DeviceDeleteChallengeDto,
     DeviceDeleteDto, DeviceSnapshotDto, DeviceSummaryDto, DirectorySearchCommandError,
     DirectoryVisibilityCommandError, EditMessageDto, EditMessageError, GlobalImagePacksSnapshotDto,
     HttpPusherOwner, IgnoredUsersCommandError, IgnoredUsersSnapshotDto, IgnoredUsersWriteDto,
-    ImagePackCommandError, ImagePackDto, ImagePackWriteDto, InviteActionError, InviteDto,
+    ImagePackCommandError, ImagePackDto, ImagePackWriteDto, InboxNotificationDto,
+    InboxNotificationsError, InboxNotificationsPageDto, InviteActionError, InviteDto,
     InviteSnapshotDto, InviteSnapshotError, IosSecretVault, IosSecretVaultError,
     JoinRuleCommandError, LaterCommandError, LaterItemDto, LaterSnapshotDto, LeftoverAckDto,
     LeftoverBytesDto, LeftoverCommandError, MDirectCommandError, MDirectMutationDto,

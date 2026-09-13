@@ -356,12 +356,42 @@ impl NativeTimelineOwner {
     pub async fn agent_approvals_list(
         &self,
     ) -> Result<NativeAgentApprovalInboxSnapshot, &'static str> {
-        let mut inbox = self.approval_inbox.lock().await;
-        let decisions = self
-            .approval_decisions
+        self.agent_approvals_list_with_discovery(false).await
+    }
+
+    /// Native clients renew discovery only while their approvals page is visible.
+    pub async fn agent_approvals_list_with_discovery(
+        &self,
+        discovery_active: bool,
+    ) -> Result<NativeAgentApprovalInboxSnapshot, &'static str> {
+        let decisions = {
+            let registry = self
+                .approval_decisions
+                .lock()
+                .map_err(|_| "agent-approval-decision-state-poisoned")?;
+            registry.completed.iter().cloned().collect()
+        };
+        // Only borrow live-bottom timelines. Focused history windows do not
+        // certify current cross-room coverage, and registry ownership is unchanged.
+        let reusable = {
+            let registry = self.registry.lock().await;
+            let mut timelines: HashMap<_, _> = registry
+                .entries
+                .iter()
+                .map(|(id, entry)| (id.clone(), Arc::downgrade(&entry.timeline)))
+                .collect();
+            for view in registry.view_streams.values() {
+                if matches!(view.position, TimelineViewPosition::LiveBottom) {
+                    timelines.insert(view.room_id.clone(), Arc::downgrade(&view.timeline));
+                }
+            }
+            timelines
+        };
+        self.approval_inbox
             .lock()
-            .map_err(|_| "agent-approval-decision-state-poisoned")?;
-        inbox.snapshot(&self.client, &decisions)
+            .await
+            .snapshot(&self.client, &decisions, discovery_active, reusable)
+            .await
     }
 
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {

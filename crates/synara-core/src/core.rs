@@ -2790,16 +2790,25 @@ fn matrix_reaction_ensure(state: Arc<CoreState>, request: CommandEnvelope) -> Co
 
 fn matrix_agent_approvals_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
-        if request.payload != serde_json::json!({}) {
-            return Err(core_state_error("agent-approval-inbox-invalid-payload"));
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Request {
+            #[serde(default)]
+            discovery_active: bool,
         }
+        let payload: Request = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("agent-approval-inbox-invalid-payload"))?;
         let owner = state.timeline_owner()?.ok_or_else(|| {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("agent-approval-no-session")
         })?;
-        let result = owner.agent_approvals_list().await.map_err(|diagnostic| {
-            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant).with_diagnostic(diagnostic)
-        })?;
+        let result = owner
+            .agent_approvals_list_with_discovery(payload.discovery_active)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                    .with_diagnostic(diagnostic)
+            })?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("agent-approval-inbox-serialization-failed"))
     })
@@ -7999,6 +8008,14 @@ mod tests {
         let core = Core::new(Arc::new(TestPlatform));
         for (payload, expected) in [
             (serde_json::json!({}), MatrixIpcErrorCategory::Forbidden),
+            (
+                serde_json::json!({"discoveryActive": true}),
+                MatrixIpcErrorCategory::Forbidden,
+            ),
+            (
+                serde_json::json!({"discoveryActive": "yes"}),
+                MatrixIpcErrorCategory::SdkInvariant,
+            ),
             (
                 serde_json::json!({"roomId": "!unexpected:example.org"}),
                 MatrixIpcErrorCategory::SdkInvariant,

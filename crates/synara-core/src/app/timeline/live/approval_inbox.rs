@@ -3,12 +3,16 @@
 //! timeline, read marker, or browser event cache owns the inbox.
 use super::*;
 use crate::app::agent_approvals::{
-    is_eligible_agent_approval_prompt, AGENT_APPROVAL_TERMINAL_REACTIONS, AGENT_APPROVAL_TTL_MS,
+    classify_agent_approval, is_eligible_agent_approval_prompt, AGENT_APPROVAL_TTL_MS,
 };
 use tokio::sync::Semaphore;
 
 const MAX_ROOMS: usize = 512;
 const MAX_ITEMS: usize = 500;
+const MAX_OBSERVERS: usize = 32;
+const PREVIEW_CHARS: usize = 4_000;
+const DISCOVERY_LEASE_MS: u64 = 30_000;
+const DISCOVERY_BATCH_MS: u64 = 5_000;
 const HISTORY_MS: u64 = 60 * 60 * 1000;
 const BOOTSTRAP_TIMEOUT: Duration = Duration::from_secs(10);
 const RETRY_INTERVAL: Duration = Duration::from_secs(30);
@@ -43,6 +47,8 @@ pub struct NativeAgentApprovalInboxItem {
     pub origin_server_ts: u64,
     pub expires_at: u64,
     pub status: NativeAgentApprovalInboxStatus,
+    pub can_send_reaction: bool,
+    pub body_truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -52,6 +58,9 @@ pub struct NativeAgentApprovalInboxSnapshot {
     pub items: Vec<NativeAgentApprovalInboxItem>,
     pub loading: bool,
     pub incomplete: bool,
+    /// Discovery proves only the pending five-minute window. History is retained
+    /// if observed; this is not an exhaustive one-hour history search.
+    pub coverage_window_ms: u64,
 }
 
 #[derive(Default)]
@@ -63,13 +72,15 @@ struct RoomSnapshot {
 
 struct RoomObserver {
     state: Arc<std::sync::Mutex<RoomSnapshot>>,
-    task: JoinHandle<()>,
-    started: tokio::time::Instant,
+    task: Option<JoinHandle<()>>,
+    started_ms: u64,
 }
 
 impl Drop for RoomObserver {
     fn drop(&mut self) {
-        self.task.abort();
+        if let Some(task) = &self.task {
+            task.abort();
+        }
     }
 }
 
@@ -77,6 +88,7 @@ pub(super) struct ApprovalInboxOwner {
     session_generation: u64,
     rooms: HashMap<String, RoomObserver>,
     bootstrap_slots: Arc<Semaphore>,
+    discovery_until: Arc<AtomicU64>,
 }
 
 impl ApprovalInboxOwner {
@@ -85,78 +97,230 @@ impl ApprovalInboxOwner {
             session_generation,
             rooms: HashMap::new(),
             bootstrap_slots: Arc::new(Semaphore::new(4)),
+            discovery_until: Arc::new(AtomicU64::new(0)),
         }
     }
 
-    pub(super) fn snapshot(
+    pub(super) async fn snapshot(
         &mut self,
         client: &Client,
-        decisions: &ApprovalDecisionRegistry,
+        decisions: &HashSet<(String, String)>,
+        discovery_active: bool,
+        reusable: HashMap<String, Weak<Timeline>>,
     ) -> Result<NativeAgentApprovalInboxSnapshot, &'static str> {
         let own_user = client
             .user_id()
             .ok_or("agent-approval-current-user-missing")?;
         let now = agent_approval_now_ms()?;
+        self.discovery_until.store(
+            if discovery_active {
+                now.saturating_add(DISCOVERY_LEASE_MS)
+            } else {
+                0
+            },
+            Ordering::Relaxed,
+        );
         let mut joined = client.joined_rooms();
-        joined.sort_by(|left, right| left.room_id().cmp(right.room_id()));
+        // Matrix spaces are navigation containers, not approval conversations.
+        joined.retain(|room| !room.is_space());
+        joined.sort_by(|a, b| a.room_id().cmp(b.room_id()));
         let truncated_rooms = joined.len() > MAX_ROOMS;
         joined.truncate(MAX_ROOMS);
-        let joined_ids: HashSet<_> = joined
-            .iter()
-            .map(|room| room.room_id().to_string())
-            .collect();
-        // Aborting departed-room observers also prevents cached requests from
-        // another room membership from remaining actionable in this session.
+        let joined_ids: HashSet<_> = joined.iter().map(|r| r.room_id().to_string()).collect();
         self.rooms.retain(|id, _| joined_ids.contains(id));
-        for room in joined {
-            let id = room.room_id().to_string();
-            let restart = self.rooms.get(&id).is_some_and(|observer| {
-                observer.task.is_finished() && observer.started.elapsed() >= RETRY_INTERVAL
-            });
-            if restart {
-                self.rooms.remove(&id);
+
+        // Looking at latest_event is a local cache read: badge polling never
+        // creates a live timeline for every joined room. Known pending requests
+        // remain candidates even after a newer ordinary message becomes latest.
+        let candidates: HashMap<String, u64> = joined
+            .iter()
+            .filter_map(|room| {
+                let id = room.room_id().to_string();
+                let known = self
+                    .rooms
+                    .get(&id)
+                    .and_then(|entry| entry.state.lock().ok())
+                    .map(|state| pending_until(&state, own_user.as_str(), now, decisions, &id))
+                    .unwrap_or_default();
+                let until = known.max(latest_candidate_until(room, own_user.as_str(), now));
+                (until > now).then_some((id, until))
+            })
+            .collect();
+        let running = self
+            .rooms
+            .values()
+            .filter(|entry| entry.task.is_some())
+            .count();
+        let is_new_candidate = |id: &str, started_ms: u64| {
+            candidates
+                .get(id)
+                .is_some_and(|until| until.saturating_sub(AGENT_APPROVAL_TTL_MS) > started_ms)
+        };
+        let waiting_candidates = candidates
+            .keys()
+            .filter(|id| {
+                self.rooms.get(*id).is_none_or(|entry| {
+                    entry.task.is_none() && is_new_candidate(id, entry.started_ms)
+                })
+            })
+            .count();
+        let mut preempt = running
+            .saturating_add(waiting_candidates.min(MAX_OBSERVERS))
+            .saturating_sub(MAX_OBSERVERS);
+        let eligible_rooms = if discovery_active {
+            joined.len()
+        } else {
+            candidates.len()
+        };
+        let mut released = Vec::new();
+        for (id, entry) in &mut self.rooms {
+            let finished = entry.task.as_ref().is_some_and(|task| task.is_finished());
+            // Under pressure every room gets another turn, including ordinary
+            // rooms whose latest message could hide an earlier prompt. The
+            // single index survives rotation; an inactive observer is partial.
+            let rotate = eligible_rooms > MAX_OBSERVERS
+                && now.saturating_sub(entry.started_ms) >= DISCOVERY_BATCH_MS
+                && entry.state.lock().is_ok_and(|state| !state.loading);
+            let make_room_for_candidate =
+                preempt > 0 && !candidates.contains_key(id) && entry.task.is_some();
+            if make_room_for_candidate {
+                preempt -= 1;
             }
-            if self.rooms.contains_key(&id) {
+            if finished
+                || rotate
+                || make_room_for_candidate
+                || (!discovery_active && !candidates.contains_key(id))
+            {
+                if let Some(task) = entry.task.take() {
+                    task.abort();
+                    released.push(task);
+                }
+            }
+        }
+        // Await cancellation before replacing slots so the retention cap
+        // applies to live SDK subscriptions, not merely stored JoinHandles.
+        for task in released {
+            let _ = task.await;
+        }
+        // Truly new candidate activity gets the next slot. Otherwise use oldest
+        // visit first, not permanent candidate priority, so a busy inbox cannot
+        // starve either a 33rd candidate or visible-page broad discovery.
+        joined.sort_by_key(|room| {
+            let id = room.room_id().as_str();
+            let started_ms = self.rooms.get(id).map_or(0, |e| e.started_ms);
+            (
+                !is_new_candidate(id, started_ms),
+                started_ms,
+                !candidates.contains_key(id),
+            )
+        });
+        let mut running = self
+            .rooms
+            .values()
+            .filter(|entry| entry.task.is_some())
+            .count();
+        for room in &joined {
+            let id = room.room_id().to_string();
+            if !discovery_active && !candidates.contains_key(&id) {
                 continue;
             }
-            let state = Arc::new(std::sync::Mutex::new(RoomSnapshot {
-                loading: true,
-                ..RoomSnapshot::default()
-            }));
-            let observer_state = Arc::clone(&state);
+            if running >= MAX_OBSERVERS {
+                break;
+            }
+            let entry = self
+                .rooms
+                .entry(id.clone())
+                .or_insert_with(|| RoomObserver {
+                    state: Arc::new(std::sync::Mutex::new(RoomSnapshot {
+                        loading: true,
+                        incomplete: true,
+                        ..Default::default()
+                    })),
+                    task: None,
+                    started_ms: 0,
+                });
+            if entry.task.is_some() {
+                continue;
+            }
+            // Failed bootstraps retry at a bounded cadence, without losing the
+            // already observed request index while no timeline is retained.
+            if entry.started_ms > 0 && now.saturating_sub(entry.started_ms) < DISCOVERY_BATCH_MS {
+                continue;
+            }
+            let state = Arc::clone(&entry.state);
             let slots = Arc::clone(&self.bootstrap_slots);
+            let discovery_until = Arc::clone(&self.discovery_until);
             let own_user = own_user.to_owned();
-            let task = tokio::spawn(async move {
-                observe_room(room, own_user, observer_state, slots).await;
-            });
-            self.rooms.insert(
-                id,
-                RoomObserver {
-                    state,
-                    task,
-                    started: tokio::time::Instant::now(),
-                },
-            );
+            let room = room.clone();
+            let reusable = reusable.get(&id).cloned();
+            let candidate_until = candidates.get(&id).copied().unwrap_or_default();
+            entry.started_ms = now;
+            entry.task = Some(tokio::spawn(async move {
+                let observer = observe_room(room, own_user, state, slots, reusable);
+                tokio::pin!(observer);
+                let expiry = async {
+                    loop {
+                        let until = discovery_until.load(Ordering::Relaxed).max(candidate_until);
+                        if agent_approval_now_ms().unwrap_or_default() >= until {
+                            break;
+                        }
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                };
+                // Cancellation also drops queued semaphore waits, bootstrap
+                // requests and their SDK timeline when the renderer vanishes.
+                tokio::select! { _ = &mut observer => {}, _ = expiry => {} }
+            }));
+            running += 1;
         }
         let mut snapshot = NativeAgentApprovalInboxSnapshot {
             session_generation: self.session_generation,
             items: Vec::new(),
             loading: false,
-            incomplete: truncated_rooms,
+            // An idle latest-event index cannot prove that no prompt preceded
+            // a newer message. Never claim an authoritative zero from it.
+            incomplete: truncated_rooms || self.rooms.len() < joined.len(),
+            coverage_window_ms: AGENT_APPROVAL_TTL_MS,
         };
-        for (room_id, observer) in &self.rooms {
-            let state = observer
-                .state
-                .lock()
-                .map_err(|_| "agent-approval-inbox-state-poisoned")?;
-            snapshot.loading |= state.loading;
-            snapshot.incomplete |= state.incomplete;
-            snapshot.items.extend(state.items.iter().filter_map(|item| {
-                project_approval(room_id, item, own_user.as_str(), now, decisions)
+        for room in &joined {
+            let id = room.room_id().as_str();
+            let Some(entry) = self.rooms.get(id) else {
+                continue;
+            };
+            let (items, loading, incomplete) = {
+                let mut state = entry
+                    .state
+                    .lock()
+                    .map_err(|_| "agent-approval-inbox-state-poisoned")?;
+                state
+                    .items
+                    .retain(|item| now.saturating_sub(item.origin_server_ts) < HISTORY_MS);
+                (state.items.clone(), state.loading, state.incomplete)
+            };
+            snapshot.loading |= loading && entry.task.is_some();
+            snapshot.incomplete |=
+                incomplete || entry.task.as_ref().is_none_or(|t| t.is_finished());
+            // Power levels are native cached room state; renderer parsing never
+            // decides whether an approval action is permitted.
+            let can_send = if items.is_empty() {
+                false
+            } else {
+                room.power_levels().await.is_ok_and(|levels| {
+                    levels.user_can_send_message(
+                        own_user,
+                        matrix_sdk::ruma::events::MessageLikeEventType::Reaction,
+                    )
+                })
+            };
+            snapshot.items.extend(items.iter().filter_map(|item| {
+                project_approval(id, item, own_user.as_str(), now, decisions).map(|mut item| {
+                    item.can_send_reaction = can_send
+                        && !item.body_truncated
+                        && item.status == NativeAgentApprovalInboxStatus::Pending;
+                    item
+                })
             }));
         }
-        // Pending first preserves every actionable item before recent history
-        // when applying the bounded response limit.
         snapshot.items.sort_by(|left, right| {
             let rank = |item: &NativeAgentApprovalInboxItem| {
                 usize::from(item.status != NativeAgentApprovalInboxStatus::Pending)
@@ -168,8 +332,67 @@ impl ApprovalInboxOwner {
         });
         snapshot.incomplete |= snapshot.items.len() > MAX_ITEMS;
         snapshot.items.truncate(MAX_ITEMS);
+        // Honor the shared Core transport limit even for many multibyte or
+        // escaped previews. Pending rows are already sorted first.
+        let mut bytes = 512;
+        let limit = crate::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES;
+        let mut count = 0;
+        for item in &snapshot.items {
+            let size = serde_json::to_vec(item)
+                .map_err(|_| "agent-approval-inbox-serialization-failed")?
+                .len()
+                + 1;
+            if bytes + size > limit {
+                break;
+            }
+            bytes += size;
+            count += 1;
+        }
+        snapshot.incomplete |= count < snapshot.items.len();
+        snapshot.items.truncate(count);
         Ok(snapshot)
     }
+}
+
+fn latest_candidate_until(room: &Room, own_user: &str, now: u64) -> u64 {
+    use matrix_sdk::latest_events::LatestEventValue;
+    let LatestEventValue::Remote(event) = room.latest_event() else {
+        return 0;
+    };
+    let Ok(event) = serde_json::from_str::<serde_json::Value>(event.raw().json().get()) else {
+        return 0;
+    };
+    let Some(body) = event.pointer("/content/body").and_then(|v| v.as_str()) else {
+        return 0;
+    };
+    classify_agent_approval(
+        body,
+        event["sender"].as_str().unwrap_or_default(),
+        own_user,
+        event["origin_server_ts"].as_u64().unwrap_or_default(),
+        now,
+        [],
+    )
+    .ok()
+    .filter(|c| !c.expired)
+    .map_or(0, |c| c.expires_at)
+}
+
+fn pending_until(
+    state: &RoomSnapshot,
+    own_user: &str,
+    now: u64,
+    decisions: &HashSet<(String, String)>,
+    room_id: &str,
+) -> u64 {
+    state
+        .items
+        .iter()
+        .filter_map(|item| project_approval(room_id, item, own_user, now, decisions))
+        .filter(|item| item.status == NativeAgentApprovalInboxStatus::Pending)
+        .map(|item| item.expires_at)
+        .max()
+        .unwrap_or_default()
 }
 
 fn project_approval(
@@ -177,26 +400,34 @@ fn project_approval(
     item: &NativeTimelineItem,
     own_user: &str,
     now: u64,
-    decisions: &ApprovalDecisionRegistry,
+    decisions: &HashSet<(String, String)>,
 ) -> Option<NativeAgentApprovalInboxItem> {
-    if !is_eligible_agent_approval_prompt(&item.body, &item.sender, own_user)
-        || item.origin_server_ts == 0
-        || item.origin_server_ts > now.saturating_add(60_000)
-        || now.saturating_sub(item.origin_server_ts) >= HISTORY_MS
-        || item.decryption_state.is_some()
-    {
+    let classification = classify_agent_approval(
+        &item.body,
+        &item.sender,
+        own_user,
+        item.origin_server_ts,
+        now,
+        item.reactions
+            .iter()
+            .map(|reaction| (reaction.key.as_str(), reaction.me)),
+    )
+    .ok()?;
+    if now.saturating_sub(item.origin_server_ts) >= HISTORY_MS || item.decryption_state.is_some() {
         return None;
     }
-    let decided = decisions.is_completed(&(room_id.to_owned(), item.event_id.clone()))
-        || item.reactions.iter().any(|reaction| {
-            reaction.me && AGENT_APPROVAL_TERMINAL_REACTIONS.contains(&reaction.key.as_str())
-        });
-    let expires_at = item.origin_server_ts.saturating_add(AGENT_APPROVAL_TTL_MS);
+    let decided =
+        decisions.contains(&(room_id.to_owned(), item.event_id.clone())) || classification.decided;
+    let expires_at = classification.expires_at;
+    let body: String = item.body.chars().take(PREVIEW_CHARS).collect();
+    let body_truncated = body.len() != item.body.len();
     Some(NativeAgentApprovalInboxItem {
         room_id: room_id.to_owned(),
         event_id: item.event_id.clone(),
         sender: item.sender.clone(),
-        body: item.body.clone(),
+        body,
+        body_truncated,
+        can_send_reaction: false,
         origin_server_ts: item.origin_server_ts,
         expires_at,
         status: if decided {
@@ -269,9 +500,19 @@ async fn observe_room(
     own_user: OwnedUserId,
     state: Arc<std::sync::Mutex<RoomSnapshot>>,
     slots: Arc<Semaphore>,
+    reusable: Option<Weak<Timeline>>,
 ) {
     loop {
-        if !observe_room_lease(&room, &own_user, &state, &slots, OBSERVER_BUDGET).await {
+        if !observe_room_lease_with_timeline(
+            &room,
+            &own_user,
+            &state,
+            &slots,
+            OBSERVER_BUDGET,
+            reusable.as_ref().and_then(Weak::upgrade),
+        )
+        .await
+        {
             return;
         }
         // Dropping the entire SDK timeline AND update stream releases its room
@@ -283,21 +524,26 @@ async fn observe_room(
     }
 }
 
-async fn observe_room_lease(
+async fn observe_room_lease_with_timeline(
     room: &Room,
     own_user: &OwnedUserId,
     state: &std::sync::Mutex<RoomSnapshot>,
     slots: &Semaphore,
     budget: ObserverBudget,
+    reusable: Option<Arc<Timeline>>,
 ) -> bool {
     let Ok(permit) = slots.acquire().await else {
         return false;
     };
     let built = timeout(BOOTSTRAP_TIMEOUT, async {
+        if let Some(timeline) = reusable {
+            return Ok(timeline);
+        }
         TimelineBuilder::new(room)
             .track_read_marker_and_receipts(TimelineReadReceiptTracking::Disabled)
             .build()
             .await
+            .map(Arc::new)
     })
     .await;
     let timeline = match built {
@@ -389,13 +635,21 @@ async fn observe_room_lease(
             break;
         }
     }
-    // Retain known requests while queued for rebootstrap, but never present the
-    // paused observer as complete. Decision submission still resolves the exact
-    // event through the existing Core authority before any side effect.
-    if let Ok(mut state) = state.lock() {
-        state.incomplete = true;
-    }
+    // A healthy planned rebuild is not evidence of a gap. Keep the last
+    // projection while replacing the lease; the new subscribed window or an
+    // actual stream error will determine coverage, not this timer.
     true
+}
+
+#[cfg(test)]
+async fn observe_room_lease(
+    room: &Room,
+    own_user: &OwnedUserId,
+    state: &std::sync::Mutex<RoomSnapshot>,
+    slots: &Semaphore,
+    budget: ObserverBudget,
+) -> bool {
+    observe_room_lease_with_timeline(room, own_user, state, slots, budget, None).await
 }
 
 #[cfg(test)]
@@ -427,16 +681,28 @@ mod tests {
         });
         let decisions = ApprovalDecisionRegistry::default();
         assert_eq!(
-            project_approval(ROOM, &item, USER, NOW, &decisions)
-                .unwrap()
-                .status,
+            project_approval(
+                ROOM,
+                &item,
+                USER,
+                NOW,
+                &decisions.completed.iter().cloned().collect()
+            )
+            .unwrap()
+            .status,
             NativeAgentApprovalInboxStatus::Pending
         );
         item.reactions[0].me = true;
         assert_eq!(
-            project_approval(ROOM, &item, USER, NOW, &decisions)
-                .unwrap()
-                .status,
+            project_approval(
+                ROOM,
+                &item,
+                USER,
+                NOW,
+                &decisions.completed.iter().cloned().collect()
+            )
+            .unwrap()
+            .status,
             NativeAgentApprovalInboxStatus::Decided
         );
     }
@@ -446,18 +712,45 @@ mod tests {
         let decisions = ApprovalDecisionRegistry::default();
         item.origin_server_ts = NOW - AGENT_APPROVAL_TTL_MS;
         assert_eq!(
-            project_approval(ROOM, &item, USER, NOW, &decisions)
-                .unwrap()
-                .status,
+            project_approval(
+                ROOM,
+                &item,
+                USER,
+                NOW,
+                &decisions.completed.iter().cloned().collect()
+            )
+            .unwrap()
+            .status,
             NativeAgentApprovalInboxStatus::Expired
         );
         item.sender = USER.into();
-        assert!(project_approval(ROOM, &item, USER, NOW, &decisions).is_none());
+        assert!(project_approval(
+            ROOM,
+            &item,
+            USER,
+            NOW,
+            &decisions.completed.iter().cloned().collect()
+        )
+        .is_none());
         item = prompt();
         item.origin_server_ts = NOW + 60_001;
-        assert!(project_approval(ROOM, &item, USER, NOW, &decisions).is_none());
+        assert!(project_approval(
+            ROOM,
+            &item,
+            USER,
+            NOW,
+            &decisions.completed.iter().cloned().collect()
+        )
+        .is_none());
         item.origin_server_ts = 0;
-        assert!(project_approval(ROOM, &item, USER, NOW, &decisions).is_none());
+        assert!(project_approval(
+            ROOM,
+            &item,
+            USER,
+            NOW,
+            &decisions.completed.iter().cloned().collect()
+        )
+        .is_none());
     }
     #[test]
     fn decision_readback_wins_before_sync_and_redactions_remove_requests() {
@@ -465,13 +758,26 @@ mod tests {
         let mut decisions = ApprovalDecisionRegistry::default();
         decisions.remember((ROOM.into(), item.event_id.clone()));
         assert_eq!(
-            project_approval(ROOM, &item, USER, NOW, &decisions)
-                .unwrap()
-                .status,
+            project_approval(
+                ROOM,
+                &item,
+                USER,
+                NOW,
+                &decisions.completed.iter().cloned().collect()
+            )
+            .unwrap()
+            .status,
             NativeAgentApprovalInboxStatus::Decided
         );
         item.body = "Message removed".into();
-        assert!(project_approval(ROOM, &item, USER, NOW, &decisions).is_none());
+        assert!(project_approval(
+            ROOM,
+            &item,
+            USER,
+            NOW,
+            &decisions.completed.iter().cloned().collect()
+        )
+        .is_none());
     }
     #[test]
     fn incomplete_coverage_and_decryption_do_not_masquerade_as_an_empty_inbox() {
@@ -489,6 +795,262 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn badge_is_cheap_and_visible_page_discovery_is_bounded_and_self_expiring() {
+        use matrix_sdk::ruma::{OwnedRoomId, RoomVersionId};
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        client.event_cache().subscribe().unwrap();
+        let now = agent_approval_now_ms().unwrap();
+        for index in 0..70 {
+            let room_id: OwnedRoomId = format!("!cheap-{index:03}:example.org").parse().unwrap();
+            let f = EventFactory::new().room(&room_id);
+            let create = f.create(client.user_id().unwrap(), RoomVersionId::V11);
+            let create = if index == 1 {
+                create.with_space_type()
+            } else {
+                create
+            };
+            server
+                .sync_room(
+                    &client,
+                    JoinedRoomBuilder::new(&room_id)
+                        .add_state_event(create)
+                        .add_timeline_event(
+                            f.text_msg(if index < 2 {
+                                "Approval required: dangerous command\nold or space"
+                            } else {
+                                "normal activity"
+                            })
+                            .sender(*BOB)
+                            .server_ts(if index == 0 {
+                                now - AGENT_APPROVAL_TTL_MS
+                            } else {
+                                now
+                            }),
+                        ),
+                )
+                .await;
+        }
+        let mut inbox = ApprovalInboxOwner::new(4);
+        let before = server.server().received_requests().await.unwrap().len();
+        let badge = inbox
+            .snapshot(&client, &HashSet::new(), false, HashMap::new())
+            .await
+            .unwrap();
+        assert!(badge.items.is_empty());
+        assert!(
+            badge.incomplete,
+            "latest-event zero cannot certify older pending requests"
+        );
+        assert!(!badge.loading);
+        assert!(
+            inbox.rooms.is_empty(),
+            "idle polling must build zero ordinary-room timelines"
+        );
+        assert_eq!(
+            server.server().received_requests().await.unwrap().len(),
+            before
+        );
+        let page = inbox
+            .snapshot(&client, &HashSet::new(), true, HashMap::new())
+            .await
+            .unwrap();
+        assert!(page.incomplete);
+        assert_eq!(
+            inbox.rooms.values().filter(|e| e.task.is_some()).count(),
+            MAX_OBSERVERS
+        );
+        assert!(
+            !inbox.rooms.contains_key("!cheap-001:example.org"),
+            "spaces never get observers"
+        );
+        // A new candidate must preempt an ordinary observer even if those
+        // rooms are blocked waiting for history and have not proved coverage.
+        let candidate_id: OwnedRoomId = "!cheap-069:example.org".parse().unwrap();
+        let f = EventFactory::new().room(&candidate_id);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(&candidate_id).add_timeline_event(
+                    f.text_msg("Approval required: dangerous command\npriority request")
+                        .sender(*BOB)
+                        .server_ts(now),
+                ),
+            )
+            .await;
+        inbox
+            .snapshot(&client, &HashSet::new(), true, HashMap::new())
+            .await
+            .unwrap();
+        assert!(inbox
+            .rooms
+            .get(candidate_id.as_str())
+            .unwrap()
+            .task
+            .is_some());
+        assert!(inbox.rooms.values().filter(|e| e.task.is_some()).count() <= MAX_OBSERVERS);
+        // Simulate expiry of the renewed wall-clock lease. No subsequent list
+        // request is made: queued and running tasks must cancel themselves.
+        inbox.discovery_until.store(0, Ordering::Relaxed);
+        timeout(Duration::from_secs(2), async {
+            while inbox
+                .rooms
+                .iter()
+                .filter(|(id, _)| id.as_str() != candidate_id.as_str())
+                .any(|(_, entry)| entry.task.as_ref().is_some_and(|task| !task.is_finished()))
+            {
+                tokio::time::sleep(Duration::from_millis(10)).await;
+            }
+        })
+        .await
+        .expect("renderer disappearance must release every broad observer");
+    }
+
+    #[tokio::test]
+    async fn candidate_observers_have_a_retention_cap_and_report_partial() {
+        use matrix_sdk::ruma::{OwnedRoomId, RoomVersionId};
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        client.event_cache().subscribe().unwrap();
+        let now = agent_approval_now_ms().unwrap();
+        for index in 0..40 {
+            let room_id: OwnedRoomId = format!("!candidate-{index:03}:example.org")
+                .parse()
+                .unwrap();
+            let f = EventFactory::new().room(&room_id);
+            server
+                .sync_room(
+                    &client,
+                    JoinedRoomBuilder::new(&room_id)
+                        .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                        .add_timeline_event(
+                            f.text_msg("coverage boundary")
+                                .sender(*BOB)
+                                .server_ts(now - 360_000),
+                        )
+                        .add_timeline_event(
+                            f.text_msg("Approval required: dangerous command\nnew request")
+                                .event_id(
+                                    &format!("$candidate-{index:03}")
+                                        .parse::<matrix_sdk::ruma::OwnedEventId>()
+                                        .unwrap(),
+                                )
+                                .sender(*BOB)
+                                .server_ts(now),
+                        ),
+                )
+                .await;
+        }
+        let mut inbox = ApprovalInboxOwner::new(5);
+        let snapshot = inbox
+            .snapshot(&client, &HashSet::new(), false, HashMap::new())
+            .await
+            .unwrap();
+        assert!(snapshot.incomplete);
+        assert_eq!(
+            inbox.rooms.values().filter(|e| e.task.is_some()).count(),
+            MAX_OBSERVERS
+        );
+        // More than 32 candidates must all get turns while retaining no more
+        // than 32 SDK observers. Their shared index remains visible between turns.
+        timeout(Duration::from_secs(12), async {
+            loop {
+                let snapshot = inbox
+                    .snapshot(&client, &HashSet::new(), false, HashMap::new())
+                    .await
+                    .unwrap();
+                assert!(
+                    inbox
+                        .rooms
+                        .values()
+                        .filter(|entry| entry.task.is_some())
+                        .count()
+                        <= MAX_OBSERVERS
+                );
+                let ids: HashSet<_> = snapshot
+                    .items
+                    .iter()
+                    .map(|item| item.event_id.as_str())
+                    .collect();
+                if (0..40).all(|i| ids.contains(format!("$candidate-{i:03}").as_str())) {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        })
+        .await
+        .expect("every candidate must be discovered well before its five-minute expiry");
+        // Ordinary latest activity can hide a pending prompt. Visible-page
+        // discovery must visit it even while all 40 known candidates are live.
+        let hidden_id: OwnedRoomId = "!hidden-prompt:example.org".parse().unwrap();
+        let f = EventFactory::new().room(&hidden_id);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(&hidden_id)
+                    .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+                    .add_timeline_event(
+                        f.text_msg("coverage boundary")
+                            .sender(*BOB)
+                            .server_ts(now - 360_000),
+                    )
+                    .add_timeline_event(
+                        f.text_msg("Approval required: dangerous command\nhidden request")
+                            .sender(*BOB)
+                            .event_id(matrix_sdk::ruma::event_id!("$hidden-prompt"))
+                            .server_ts(now),
+                    )
+                    .add_timeline_event(
+                        f.text_msg("newer ordinary conversation")
+                            .sender(*BOB)
+                            .server_ts(now + 1),
+                    ),
+            )
+            .await;
+        timeout(Duration::from_secs(12), async {
+            loop {
+                let snapshot = inbox
+                    .snapshot(&client, &HashSet::new(), true, HashMap::new())
+                    .await
+                    .unwrap();
+                assert!(snapshot.incomplete);
+                assert!(
+                    inbox
+                        .rooms
+                        .values()
+                        .filter(|entry| entry.task.is_some())
+                        .count()
+                        <= MAX_OBSERVERS
+                );
+                if snapshot
+                    .items
+                    .iter()
+                    .any(|item| item.event_id == "$hidden-prompt")
+                {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        })
+        .await
+        .expect("known candidates must not starve visible-page discovery of other rooms");
+    }
+
+    #[test]
+    fn preview_is_unicode_bounded_and_truncation_never_grants_actions() {
+        let mut item = prompt();
+        item.body.push_str(&"é".repeat(PREVIEW_CHARS));
+        let preview = project_approval(ROOM, &item, USER, NOW, &HashSet::new()).unwrap();
+        assert_eq!(preview.body.chars().count(), PREVIEW_CHARS);
+        assert!(preview.body_truncated);
+        assert!(!preview.can_send_reaction);
+    }
+
+    #[tokio::test]
     async fn dropping_session_owner_aborts_live_observers() {
         let mut inbox = ApprovalInboxOwner::new(9);
         let task = tokio::spawn(std::future::pending::<()>());
@@ -497,8 +1059,8 @@ mod tests {
             ROOM.into(),
             RoomObserver {
                 state: Arc::new(std::sync::Mutex::new(RoomSnapshot::default())),
-                task,
-                started: tokio::time::Instant::now(),
+                task: Some(task),
+                started_ms: 0,
             },
         );
         drop(inbox);
@@ -563,8 +1125,8 @@ mod tests {
             .await
         );
         assert!(
-            state.lock().unwrap().incomplete,
-            "a released observer is explicitly partial until rebootstrap"
+            !state.lock().unwrap().incomplete,
+            "a healthy lease rotation must not manufacture partial coverage"
         );
         timeout(Duration::from_secs(2), async {
             while cache.events().await.unwrap().len() >= original_count {
@@ -607,7 +1169,7 @@ mod tests {
         let mut decisions = ApprovalDecisionRegistry::default();
         decisions.remember((ROOM.into(), item.event_id.clone()));
         assert_eq!(
-            project_approval(ROOM, &item, USER, NOW, &ApprovalDecisionRegistry::default())
+            project_approval(ROOM, &item, USER, NOW, &HashSet::new())
                 .unwrap()
                 .status,
             NativeAgentApprovalInboxStatus::Pending
