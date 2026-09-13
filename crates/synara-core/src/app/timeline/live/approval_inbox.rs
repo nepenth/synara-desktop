@@ -159,20 +159,20 @@ impl ApprovalInboxOwner {
         // Looking at latest_event is a local cache read: badge polling never
         // creates a live timeline for every joined room. Known pending requests
         // remain candidates even after a newer ordinary message becomes latest.
-        let candidates: HashMap<String, u64> = joined
-            .iter()
-            .filter_map(|room| {
-                let id = room.room_id().to_string();
-                let known = self
-                    .rooms
-                    .get(&id)
-                    .and_then(|entry| entry.state.lock().ok())
-                    .map(|state| pending_until(&state, own_user.as_str(), now, decisions, &id))
-                    .unwrap_or_default();
-                let until = known.max(latest_candidate_until(room, own_user.as_str(), now));
-                (until > now).then_some((id, until))
-            })
-            .collect();
+        let mut candidates = HashMap::new();
+        for room in &joined {
+            let id = room.room_id().to_string();
+            let known = self
+                .rooms
+                .get(&id)
+                .and_then(|entry| entry.state.lock().ok())
+                .map(|state| pending_until(&state, own_user.as_str(), now, decisions, &id))
+                .unwrap_or_default();
+            let until = known.max(latest_candidate_until(room, own_user.as_str(), now).await);
+            if until > now {
+                candidates.insert(id, until);
+            }
+        }
         let running = self
             .rooms
             .values()
@@ -275,10 +275,14 @@ impl ApprovalInboxOwner {
             }
             self.room_monitor
                 .as_ref()
-                .unwrap()
-                .register(room, &entry.state);
-            entry.state.lock().unwrap().observing = true;
-            let history = self.history.room(&id);
+                .ok_or("agent-approval-inbox-monitor-missing")?
+                .register(room, &entry.state)?;
+            entry
+                .state
+                .lock()
+                .map_err(|_| "agent-approval-inbox-state-poisoned")?
+                .observing = true;
+            let history = self.history.room(&id)?;
             let state = Arc::clone(&entry.state);
             let slots = Arc::clone(&self.bootstrap_slots);
             let discovery_until = Arc::clone(&self.discovery_until);
@@ -405,28 +409,53 @@ impl ApprovalInboxOwner {
     }
 }
 
-fn latest_candidate_until(room: &Room, own_user: &str, now: u64) -> u64 {
+async fn latest_candidate_until(room: &Room, own_user: &str, now: u64) -> u64 {
     use matrix_sdk::latest_events::LatestEventValue;
+    use matrix_sdk::ruma::events::room::encrypted::OriginalSyncRoomEncryptedEvent;
     let LatestEventValue::Remote(event) = room.latest_event() else {
         return 0;
     };
-    let Ok(event) = serde_json::from_str::<serde_json::Value>(event.raw().json().get()) else {
+    let Ok(parsed) = serde_json::from_str::<serde_json::Value>(event.raw().json().get()) else {
         return 0;
     };
-    let Some(body) = event.pointer("/content/body").and_then(|v| v.as_str()) else {
+    let sender = parsed["sender"].as_str().unwrap_or_default();
+    let origin_server_ts = parsed["origin_server_ts"].as_u64().unwrap_or_default();
+    if origin_server_ts == 0 || now.saturating_sub(origin_server_ts) >= AGENT_APPROVAL_TTL_MS {
+        return 0;
+    }
+    let body = if let Some(body) = parsed.pointer("/content/body").and_then(|v| v.as_str()) {
+        body.to_owned()
+    } else if parsed["type"].as_str() == Some("m.room.encrypted") {
+        // Ciphertext has no /content/body, so the cheap index cannot classify
+        // it. A local decrypt after keys arrive can, without opening a
+        // timeline or scanning every encrypted room that still lacks keys.
+        let Ok(encrypted) = serde_json::from_str::<
+            matrix_sdk::ruma::serde::Raw<OriginalSyncRoomEncryptedEvent>,
+        >(event.raw().json().get()) else {
+            return 0;
+        };
+        let Ok(decrypted) = room.decrypt_event(&encrypted, None).await else {
+            return 0;
+        };
+        let Ok(decrypted) = serde_json::from_str::<serde_json::Value>(decrypted.raw().json().get())
+        else {
+            return 0;
+        };
+        let Some(body) = decrypted
+            .pointer("/content/body")
+            .and_then(|v| v.as_str())
+            .filter(|body| !body.is_empty())
+        else {
+            return 0;
+        };
+        body.to_owned()
+    } else {
         return 0;
     };
-    classify_agent_approval(
-        body,
-        event["sender"].as_str().unwrap_or_default(),
-        own_user,
-        event["origin_server_ts"].as_u64().unwrap_or_default(),
-        now,
-        [],
-    )
-    .ok()
-    .filter(|c| !c.expired)
-    .map_or(0, |c| c.expires_at)
+    classify_agent_approval(&body, sender, own_user, origin_server_ts, now, [])
+        .ok()
+        .filter(|c| !c.expired)
+        .map_or(0, |c| c.expires_at)
 }
 
 fn pending_until(
@@ -759,7 +788,9 @@ async fn observe_room_lease(
         slots,
         budget,
         None,
-        ApprovalHistory::default().room(room.room_id().as_str()),
+        ApprovalHistory::default()
+            .room(room.room_id().as_str())
+            .expect("fresh approval history"),
     )
     .await
 }

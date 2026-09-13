@@ -15,10 +15,25 @@ async fn wait_for(
     owner: &NativeTimelineOwner,
     accept: impl Fn(&NativeAgentApprovalInboxSnapshot) -> bool,
 ) -> NativeAgentApprovalInboxSnapshot {
+    wait_for_list(owner, true, accept).await
+}
+
+async fn wait_for_idle(
+    owner: &NativeTimelineOwner,
+    accept: impl Fn(&NativeAgentApprovalInboxSnapshot) -> bool,
+) -> NativeAgentApprovalInboxSnapshot {
+    wait_for_list(owner, false, accept).await
+}
+
+async fn wait_for_list(
+    owner: &NativeTimelineOwner,
+    discovery_active: bool,
+    accept: impl Fn(&NativeAgentApprovalInboxSnapshot) -> bool,
+) -> NativeAgentApprovalInboxSnapshot {
     tokio::time::timeout(Duration::from_secs(10), async {
         loop {
             let snapshot = owner
-                .agent_approvals_list_with_discovery(true)
+                .agent_approvals_list_with_discovery(discovery_active)
                 .await
                 .unwrap();
             if accept(&snapshot) {
@@ -523,4 +538,102 @@ async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_
         forbidden.items[0].status,
         NativeAgentApprovalInboxStatus::Pending
     );
+}
+
+#[tokio::test]
+async fn encrypted_latest_event_appears_on_idle_list_after_native_key_arrival() {
+    use matrix_sdk_crypto::{olm::EncryptionSettings, OlmMachine};
+    use ruma::{
+        device_id,
+        events::room::{
+            encrypted::RoomEncryptedEventContent, message::RoomMessageEventContent,
+            power_levels::RoomPowerLevelsEventContent,
+        },
+        UserId,
+    };
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().logged_in_with_oauth().build().await;
+    client.event_cache().subscribe().unwrap();
+    let own_user = client.user_id().unwrap().to_owned();
+    let room_id = room_id!("!encrypted-idle-approval:example.org");
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let sender = OlmMachine::new(*BOB, device_id!("HERMES")).await;
+    sender
+        .share_room_key(
+            room_id,
+            std::iter::empty::<&UserId>(),
+            EncryptionSettings::default(),
+        )
+        .await
+        .unwrap();
+    let encrypted = sender
+        .encrypt_room_event(room_id, RoomMessageEventContent::text_plain(PROMPT))
+        .await
+        .unwrap();
+    let content: RoomEncryptedEventContent =
+        serde_json::from_str(encrypted.content.json().get()).unwrap();
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user, RoomVersionId::V11))
+                .add_state_event(
+                    f.event(
+                        serde_json::from_value::<RoomPowerLevelsEventContent>(
+                            serde_json::json!({"events": {"m.reaction": 0}}),
+                        )
+                        .unwrap(),
+                    )
+                    .sender(&own_user)
+                    .state_key(""),
+                )
+                .add_timeline_event(
+                    f.text_msg("covered boundary")
+                        .sender(*BOB)
+                        .server_ts(now - 360_000),
+                )
+                .add_timeline_event(
+                    f.event(content)
+                        .sender(*BOB)
+                        .event_id(event_id!("$encrypted-idle-approval"))
+                        .server_ts(now),
+                ),
+        )
+        .await;
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 20);
+    let badge = owner.agent_approvals_list().await.unwrap();
+    assert!(!badge.incomplete);
+    assert_eq!(
+        badge.coverage,
+        synara_core::app::timeline::NativeAgentApprovalInboxCoverage::LatestEvent
+    );
+    assert!(
+        !badge.loading,
+        "encrypted latest-event hint must not silently scan every encrypted room"
+    );
+    assert!(badge.items.is_empty());
+    let keys = sender
+        .store()
+        .export_room_keys(|session| session.room_id() == room_id)
+        .await
+        .unwrap();
+    assert!(!keys.is_empty());
+    client
+        .olm_machine_for_testing()
+        .await
+        .as_ref()
+        .unwrap()
+        .store()
+        .import_exported_room_keys(keys, |_, _| {})
+        .await
+        .unwrap();
+    let decrypted = wait_for_idle(&owner, |snapshot| snapshot.items.len() == 1).await;
+    assert!(!decrypted.incomplete);
+    assert_eq!(decrypted.items[0].event_id, "$encrypted-idle-approval");
+    assert_eq!(decrypted.items[0].body, PROMPT);
+    assert!(decrypted.items[0].can_send_reaction);
 }

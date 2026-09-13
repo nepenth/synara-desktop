@@ -78,8 +78,8 @@ async fn borrowed_covered_and_uncovered_windows_are_read_only_until_view_release
                 .collect::<Vec<_>>()
         };
         let before_ids = ids(before.iter().cloned().collect());
-        let history = ApprovalHistory::default().room(id.as_str());
-        let protection = history.protect(&room).await.unwrap();
+        let history = ApprovalHistory::default().room(id.as_str()).unwrap();
+        let protection = history.protect(&room).await;
         let state = Arc::new(std::sync::Mutex::new(RoomSnapshot::default()));
         let task = {
             let (room, user, state, history, borrowed) = (
@@ -262,7 +262,8 @@ async fn view_open_waits_for_detached_sdk_pagination_and_failed_open_releases_pr
         .lock()
         .await
         .approval_history
-        .room(id.as_str());
+        .room(id.as_str())
+        .unwrap();
     assert!(gate.protected());
     owner
         .registry
@@ -281,6 +282,99 @@ async fn view_open_waits_for_detached_sdk_pagination_and_failed_open_releases_pr
         })
         .await;
     assert!(error.is_err());
+    assert!(!gate.protected());
+}
+
+#[tokio::test]
+async fn view_open_succeeds_when_discovery_pagination_exceeds_protect_timeout() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    client.event_cache().subscribe().unwrap();
+    let id = room_id!("!open-after-pagination-timeout:example.org");
+    let f = EventFactory::new().room(id);
+    let now = agent_approval_now_ms().unwrap();
+    let mut joined = JoinedRoomBuilder::new(id)
+        .set_timeline_prev_batch("earlier")
+        .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11));
+    for i in 0..3 {
+        joined = joined.add_timeline_event(
+            f.text_msg(format!("recent {i}"))
+                .sender(*BOB)
+                .server_ts(now),
+        );
+    }
+    let room = server.sync_room(&client, joined).await;
+    server
+        .mock_room_messages()
+        .ok(RoomMessagesResponseTemplate::default()
+            .events(vec![f
+                .text_msg("older boundary")
+                .sender(*BOB)
+                .server_ts(now - 360_000)
+                .into_raw_timeline()])
+            .with_delay(Duration::from_secs(30)))
+        .mount()
+        .await;
+    let owner = Arc::new(NativeTimelineOwner::new(&client, Arc::new(|_| {}), 12));
+    owner
+        .agent_approvals_list_with_discovery(true)
+        .await
+        .unwrap();
+    timeout(Duration::from_secs(3), async {
+        while message_requests(&server).await == 0 {
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+    })
+    .await
+    .unwrap();
+    let opening = {
+        let owner = owner.clone();
+        tokio::spawn(async move {
+            owner
+                .open_at(NativeTimelineOpenRequest {
+                    room_id: id.to_string(),
+                    position: NativeTimelineOpenPosition::LiveBottom,
+                })
+                .await
+        })
+    };
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert!(
+        !opening.is_finished(),
+        "open must still wait for in-flight discovery pagination"
+    );
+    let opened = timeout(Duration::from_secs(12), opening)
+        .await
+        .expect("stuck discovery pagination must not fail the user's room open")
+        .expect("open task")
+        .expect("open_at");
+    assert_eq!(opened.snapshot.room_id, id.as_str());
+    let (cache, _subscription) = room.event_cache().await.unwrap();
+    assert!(
+        matches!(
+            cache.pagination().status().get(),
+            PaginationStatus::Paginating
+        ),
+        "the view must open while the detached inbox page is still in flight"
+    );
+    let gate = owner
+        .registry
+        .lock()
+        .await
+        .approval_history
+        .room(id.as_str())
+        .unwrap();
+    assert!(
+        gate.protected(),
+        "fail-open still holds protection so the inbox defers"
+    );
+    owner
+        .registry
+        .lock()
+        .await
+        .close_view(NativeTimelineCloseRequest {
+            stream_id: opened.stream_id,
+        });
     assert!(!gate.protected());
 }
 

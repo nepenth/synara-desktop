@@ -1,6 +1,7 @@
 //! One cheap session subscription maintains cached permission and invalidates
 //! paused history. It owns no SDK timeline and never performs pagination.
 use super::*;
+use matrix_sdk::ruma::OwnedRoomId;
 use matrix_sdk::sync::State;
 use tokio::sync::{broadcast, mpsc};
 
@@ -35,12 +36,19 @@ impl RoomMonitor {
                             Ok(batch) => batch,
                             Err(broadcast::error::RecvError::Closed) => break,
                             Err(broadcast::error::RecvError::Lagged(_)) => {
-                                let states: Vec<_> = shared.lock().unwrap().iter().map(|(id, state)| (id.clone(), state.clone())).collect();
-                                for (id, weak) in states {
+                                let rooms: Vec<_> = match shared.lock() {
+                                    Ok(states) => states
+                                        .iter()
+                                        .map(|(id, state)| (id.clone(), state.clone()))
+                                        .collect(),
+                                    Err(_) => continue,
+                                };
+                                for (id, weak) in rooms {
                                     if let Some(state) = weak.upgrade() {
-                                        let mut state = state.lock().unwrap();
-                                        state.checked = false;
-                                        state.can_send_reaction = false;
+                                        if let Ok(mut state) = state.lock() {
+                                            state.checked = false;
+                                            state.can_send_reaction = false;
+                                        }
                                     }
                                     if let Ok(id) = id.parse::<OwnedRoomId>() {
                                         if let Some(room) = client.get_room(&id) { refresh_permission(&room, weak).await; }
@@ -50,17 +58,28 @@ impl RoomMonitor {
                             }
                         };
                         for id in batch.left.keys().chain(batch.invited.keys()).chain(batch.knocked.keys()) {
-                            if let Some(state) = shared.lock().unwrap().get(id.as_str()).and_then(Weak::upgrade) {
-                                let mut state = state.lock().unwrap();
+                            let Some(state) = (match shared.lock() {
+                                Ok(states) => states.get(id.as_str()).and_then(Weak::upgrade),
+                                Err(_) => continue,
+                            }) else {
+                                continue;
+                            };
+                            {
+                                let Ok(mut state) = state.lock() else { continue; };
                                 state.can_send_reaction = false;
                                 state.checked = false;
                             }
                         }
                         for (id, update) in batch.joined {
-                            let Some(weak) = shared.lock().unwrap().get(id.as_str()).cloned() else { continue; };
+                            let Some(weak) = (match shared.lock() {
+                                Ok(states) => states.get(id.as_str()).cloned(),
+                                Err(_) => continue,
+                            }) else {
+                                continue;
+                            };
                             let Some(state) = weak.upgrade() else { continue; };
                             {
-                                let mut state = state.lock().unwrap();
+                                let Ok(mut state) = state.lock() else { continue; };
                                 if !state.observing && (update.timeline.limited || !update.timeline.events.is_empty()) {
                                     // Cache invalidation changes coverage, not health.
                                     state.checked = false;
@@ -72,7 +91,9 @@ impl RoomMonitor {
                             if permission_changed {
                                 // Fail closed before awaiting the native store. Refresh is
                                 // outside the inbox-owner and projection locks.
-                                state.lock().unwrap().can_send_reaction = false;
+                                if let Ok(mut snapshot) = state.lock() {
+                                    snapshot.can_send_reaction = false;
+                                }
                                 if let Some(room) = client.get_room(&id) { refresh_permission(&room, weak).await; }
                             }
                         }
@@ -86,9 +107,16 @@ impl RoomMonitor {
             task,
         }
     }
-    pub(super) fn register(&self, room: &Room, state: &Arc<std::sync::Mutex<RoomSnapshot>>) {
+    pub(super) fn register(
+        &self,
+        room: &Room,
+        state: &Arc<std::sync::Mutex<RoomSnapshot>>,
+    ) -> Result<(), &'static str> {
         let weak = Arc::downgrade(state);
-        let mut states = self.states.lock().unwrap();
+        let mut states = self
+            .states
+            .lock()
+            .map_err(|_| "agent-approval-inbox-state-poisoned")?;
         states.retain(|_, state| state.strong_count() > 0);
         if states
             .insert(room.room_id().to_string(), weak.clone())
@@ -96,6 +124,7 @@ impl RoomMonitor {
         {
             let _ = self.initial.send((room.clone(), weak));
         }
+        Ok(())
     }
 }
 fn permission_event(raw: &str) -> bool {
@@ -116,16 +145,20 @@ async fn refresh_permission(room: &Room, state: Weak<std::sync::Mutex<RoomSnapsh
         return;
     };
     let can_send = if room.state() == matrix_sdk::RoomState::Joined {
-        room.power_levels().await.is_ok_and(|levels| {
-            levels.user_can_send_message(
-                room.client()
-                    .user_id()
-                    .expect("session room monitor requires a user"),
+        match (room.power_levels().await, room.client().user_id()) {
+            (Ok(levels), Some(user_id)) => levels.user_can_send_message(
+                user_id,
                 matrix_sdk::ruma::events::MessageLikeEventType::Reaction,
-            )
-        })
+            ),
+            _ => false,
+        }
     } else {
         false
     };
-    state.lock().unwrap().can_send_reaction = can_send;
+    {
+        let Ok(mut state) = state.lock() else {
+            return;
+        };
+        state.can_send_reaction = can_send;
+    }
 }

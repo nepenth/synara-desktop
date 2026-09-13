@@ -1451,9 +1451,9 @@ impl NativeTimelineRegistry {
             .ok_or("d0.3-timeline-room-not-found")?;
         let approval_history = self
             .approval_history
-            .room(&room_id_string)
+            .room(&room_id_string)?
             .protect(&protected_room)
-            .await?;
+            .await;
         let requested_position = request.position;
         let (timeline, view_position, pagination) = match &requested_position {
             NativeTimelineOpenPosition::Normal { viewport } => {

@@ -37,7 +37,7 @@ async fn approval_history_first_view_initializes_a_fresh_clients_event_cache() {
     .expect("the history gate must initialize its SDK cache prerequisite");
     assert_eq!(opened.snapshot.room_id, id.as_str());
     let mut registry = owner.registry.lock().await;
-    let history = registry.approval_history.room(id.as_str());
+    let history = registry.approval_history.room(id.as_str()).unwrap();
     assert!(history.protected());
     assert_eq!(registry.view_streams.len(), 1);
     assert!(registry.close_view(NativeTimelineCloseRequest {
@@ -73,7 +73,8 @@ async fn approval_history_cancelled_open_releases_unpublished_view_ownership() {
         .lock()
         .await
         .approval_history
-        .room(id.as_str());
+        .room(id.as_str())
+        .unwrap();
     let opening = {
         let owner = owner.clone();
         tokio::spawn(async move {
