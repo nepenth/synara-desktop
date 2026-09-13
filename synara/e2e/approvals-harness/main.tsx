@@ -1,4 +1,4 @@
-// Production approval presenter/provider and composer; only the native transport is a fixture.
+// Production presenters and composer layout/styles with fixture data and preview actions.
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
@@ -23,10 +23,13 @@ import {
   SidebarItem,
   SidebarStackSeparator,
 } from '../../src/app/components/sidebar';
-import { CustomEditor, useEditor } from '../../src/app/components/editor/Editor';
+import { useEditor } from '../../src/app/components/editor/Editor';
 import { Toolbar } from '../../src/app/components/editor/Toolbar';
+import { RoomComposer } from '../../src/app/features/room/RoomComposer';
+import * as composerCss from '../../src/app/features/room/RoomComposer.css';
 
 const query = new URLSearchParams(location.search);
+if (query.has('composer')) document.title = 'Synara · Composer review';
 let items: ApprovalInboxItem[] = [];
 let failed = query.has('error');
 let loading = query.has('loading');
@@ -106,11 +109,76 @@ document.body.classList.add(
 document.body.style.background = color.Background.Container;
 document.body.style.color = color.Background.OnContainer;
 
+function ComposerPreview() {
+  const editor = useEditor();
+  const [toolbar, setToolbar] = useState(false);
+  return (
+    <>
+      <Text size="H5">Composer preview</Text>
+      <div data-testid="composer" style={{ marginTop: 16 }}>
+        <RoomComposer
+          editor={editor}
+          placeholder="Send a message..."
+          leadingAction={
+            <IconButton
+              className={composerCss.ComposerAction}
+              fill="None"
+              aria-label="More message actions"
+              variant="Surface"
+              size="300"
+              radii="Pill"
+            >
+              <Icon src={Icons.Plus} size="100" />
+            </IconButton>
+          }
+          floatingActions={
+            <>
+              <IconButton
+                className={composerCss.ComposerAction}
+                fill="None"
+                aria-label="Formatting"
+                variant="SurfaceVariant"
+                size="300"
+                radii="300"
+                aria-pressed={toolbar}
+                aria-expanded={toolbar}
+                onClick={() => setToolbar(!toolbar)}
+              >
+                <Icon src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
+              </IconButton>
+              <IconButton
+                className={composerCss.ComposerAction}
+                fill="None"
+                aria-label="Emoji"
+                variant="SurfaceVariant"
+                size="300"
+                radii="300"
+              >
+                <Icon src={Icons.Smile} />
+              </IconButton>
+              <IconButton
+                className={composerCss.ComposerAction}
+                fill="None"
+                aria-label="Send preview"
+                variant="Primary"
+                size="300"
+                radii="300"
+              >
+                <Icon src={Icons.Send} />
+              </IconButton>
+            </>
+          }
+          toolbarVisible={toolbar}
+          toolbar={<Toolbar />}
+        />
+      </div>
+    </>
+  );
+}
+
 function Fixture() {
   const { refresh, pendingCount } = useApprovalInbox();
   const navigate = useNavigate();
-  const editor = useEditor();
-  const [toolbar, setToolbar] = useState(false);
   const [message, setMessage] = useState('');
   const [, update] = useState(0);
   const change = (run: () => void) => {
@@ -118,6 +186,18 @@ function Fixture() {
     refresh();
     update((value) => value + 1);
   };
+  if (query.has('composer'))
+    return (
+      <main style={{ maxWidth: 1080, margin: '64px auto', padding: '0 24px' }}>
+        <ComposerPreview />
+        <p style={{ marginTop: 20, fontSize: 14, opacity: 0.7 }}>
+          Type a draft or toggle formatting to review the feel. This preview does not send messages.
+        </p>
+        <p style={{ marginTop: 16, fontSize: 14 }}>
+          <a href="?composer">Dark theme</a> · <a href="?composer&light">Light theme</a>
+        </p>
+      </main>
+    );
   return (
     <>
       <div
@@ -276,39 +356,7 @@ function Fixture() {
             </p>
           )}
           <div style={{ padding: 24 }}>
-            <Text size="H5">Composer preview</Text>
-            <div data-testid="composer" style={{ marginTop: 12 }}>
-              <CustomEditor
-                editor={editor}
-                placeholder="Send a message..."
-                before={
-                  <IconButton aria-label="Attach" variant="SurfaceVariant" size="300" radii="300">
-                    <Icon src={Icons.PlusCircle} />
-                  </IconButton>
-                }
-                after={
-                  <>
-                    <IconButton
-                      aria-label="Formatting"
-                      variant="SurfaceVariant"
-                      size="300"
-                      radii="300"
-                      aria-pressed={toolbar}
-                      onClick={() => setToolbar(!toolbar)}
-                    >
-                      <Icon src={Icons.Alphabet} />
-                    </IconButton>
-                    <IconButton aria-label="Emoji" variant="SurfaceVariant" size="300" radii="300">
-                      <Icon src={Icons.Smile} />
-                    </IconButton>
-                    <IconButton aria-label="Send preview" variant="Primary" size="300" radii="300">
-                      <Icon src={Icons.Send} />
-                    </IconButton>
-                  </>
-                }
-                bottom={toolbar ? <Toolbar /> : undefined}
-              />
-            </div>
+            <ComposerPreview />
           </div>
         </main>
       </div>

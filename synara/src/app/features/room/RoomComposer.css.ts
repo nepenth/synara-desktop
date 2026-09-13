@@ -68,3 +68,41 @@ export const ComposerError = style({
   background: color.Critical.Container,
   color: color.Critical.OnContainer,
 });
+
+/** One shared surface: controls gain a soft tint only through interaction. */
+export const ComposerAction = style({
+  transition: 'background-color 140ms ease-out, color 140ms ease-out',
+  selectors: {
+    '&&': {
+      backgroundColor: 'transparent',
+      boxShadow: 'none',
+    },
+    '&&:not(:disabled):hover': {
+      backgroundColor: 'color-mix(in srgb, currentColor 7%, transparent)',
+    },
+    '&&:not(:disabled)[aria-pressed=true], &&:not(:disabled)[aria-expanded=true], &&:not(:disabled):active':
+      {
+        backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)',
+      },
+    '&&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: '-2px',
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
+    '(prefers-contrast: more)': {
+      selectors: {
+        '&&[aria-pressed=true], &&[aria-expanded=true]': {
+          outline: '1px solid currentColor',
+          outlineOffset: '-2px',
+        },
+        '&&:focus-visible': {
+          outlineWidth: '2px',
+        },
+      },
+    },
+  },
+});

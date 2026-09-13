@@ -135,14 +135,8 @@ export const EditorFloatingOptions = style([
     alignItems: 'center',
     gap: toRem(2),
     padding: toRem(3),
-    // Keep tools on the composer's matte plane; the send button supplies emphasis.
-    borderLeft: `${config.borderWidth.B300} solid ${color.Secondary.ContainerLine}`,
+    // Tools share the composer's matte plane without a separate enclosure.
     backgroundColor: color.Secondary.Container,
     pointerEvents: 'auto',
-    '@media': {
-      '(prefers-contrast: more)': {
-        borderColor: color.Secondary.OnContainer,
-      },
-    },
   },
 ]);

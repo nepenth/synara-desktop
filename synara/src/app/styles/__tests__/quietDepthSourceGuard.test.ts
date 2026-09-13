@@ -35,7 +35,6 @@ test('desktop hierarchy uses semantic depth while keeping text itself flat', () 
   assert.match(editor, /EditorFloatingOptions/);
   assert.doesNotMatch(editor, /floatingShadow|quietSurfaceFold|linear-gradient/);
   assert.match(editor, /backgroundImage: 'none'/);
-  assert.match(editor, /borderLeft:/);
   assert.match(timeline, /MessageActionRail = style\(\[\s*floatingSurface/);
   assert.match(timeline, /MessageBody = style\(\{\s*background: 'transparent'/);
   assert.match(timeline, /MessageActionSurface}:hover/);
@@ -83,7 +82,7 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
 
   assert.match(composer, /height: toRem\(50\)/);
   assert.doesNotMatch(composer, /EditorFloatingOptions/);
-  assert.match(input, /className=\{depthCss\.quietInteractiveSurface\}/);
+  assert.match(input, /className=\{css\.ComposerAction\}/);
   assert.match(header, /className=\{depthCss\.quietInteractiveSurface\}/);
   assert.match(home, /className=\{depthCss\.quietInteractiveSurface\}/);
   assert.match(notes, /className=\{css\.KindSwitch\}/);
