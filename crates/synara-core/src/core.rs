@@ -2630,7 +2630,8 @@ fn timeline_open_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.3-timeline-invalid-room-id"
         | "v-timeline-view-not-open"
-        | "v-timeline-normal-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-normal-room-not-found"
+        | "d0.3-timeline-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)

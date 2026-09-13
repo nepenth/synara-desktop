@@ -68,6 +68,11 @@ fn map_timeline_open_core_error(error: MatrixIpcError) -> MatrixAuthCommandError
                 "The native Matrix timeline is not available.",
                 "v-timeline-normal-room-not-found",
             ),
+            Some("d0.3-timeline-room-not-found") => MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix timeline is not available.",
+                "d0.3-timeline-room-not-found",
+            ),
             _ => MatrixAuthCommandError::new(
                 "InvalidRequest",
                 "The native Matrix timeline request is invalid.",
@@ -88,4 +93,24 @@ fn timeline_open_response_error() -> MatrixAuthCommandError {
         "The native Matrix timeline is unavailable.",
         "d0.3-timeline-open-failed",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn missing_room_keeps_not_found_for_both_open_diagnostics() {
+        for diagnostic in [
+            "v-timeline-normal-room-not-found",
+            "d0.3-timeline-room-not-found",
+        ] {
+            let error = map_timeline_open_core_error(
+                MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                    .with_diagnostic(diagnostic),
+            );
+            assert_eq!(error.code, "NotFound");
+            assert_eq!(error.diagnostic_id, diagnostic);
+        }
+    }
 }
