@@ -1,0 +1,1 @@
+Approvals now has a dedicated page and rail backed by native Core. Inbox notifications are native. Idle room-list approval badges use the latest event only and should not scan every room. Opening a room from Approvals should succeed even if discovery is still paging. Encrypted last-message approvals should appear after decrypt.
