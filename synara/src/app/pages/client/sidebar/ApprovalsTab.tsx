@@ -1,5 +1,5 @@
 import React from 'react';
-import { useMatch, useNavigate } from 'react-router-dom';
+import { useMatch } from 'react-router-dom';
 import { Badge, Icon, Icons, Text } from 'folds';
 import {
   SidebarAvatar,
@@ -8,13 +8,14 @@ import {
   SidebarItemTooltip,
 } from '../../../components/sidebar';
 import { UnreadBadge } from '../../../components/unread-badge';
-import { useApprovalInbox } from '../../../features/approvals/ApprovalInboxProvider';
+import { useApprovalInboxSummary } from '../../../features/approvals/ApprovalInboxProvider';
 import { APPROVALS_PATH } from '../../paths';
+import { useNavigateToApprovals } from '../../../hooks/useNavigateToApprovals';
 
 export function ApprovalsTab() {
-  const navigate = useNavigate();
+  const navigateToApprovals = useNavigateToApprovals();
   const selected = Boolean(useMatch({ path: APPROVALS_PATH, end: false }));
-  const { pendingCount, loading, incomplete, error } = useApprovalInbox();
+  const { pendingCount, loading, incomplete, error } = useApprovalInboxSummary();
   const uncertain = loading || incomplete || Boolean(error);
   const coverage = error
     ? 'unavailable'
@@ -36,7 +37,7 @@ export function ApprovalsTab() {
             outlined
             aria-label={label}
             aria-current={selected ? 'page' : undefined}
-            onClick={() => navigate(APPROVALS_PATH)}
+            onClick={navigateToApprovals}
           >
             <Icon src={Icons.Shield} filled={selected} />
           </SidebarAvatar>

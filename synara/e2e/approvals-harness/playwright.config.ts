@@ -2,7 +2,11 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '..',
-  testMatch: 'approvals-center.spec.ts',
+  testMatch: [
+    'approvals-center.spec.ts',
+    'approvals-routing.spec.ts',
+    'approvals-provider-lifecycle.spec.ts',
+  ],
   fullyParallel: true,
   retries: 0,
   timeout: 30000,

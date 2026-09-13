@@ -2,7 +2,6 @@ import { generatePath, Path } from 'react-router-dom';
 import {
   DIRECT_CREATE_PATH,
   DIRECT_PATH,
-  DIRECT_ROOM_PATH,
   EXPLORE_FEATURED_PATH,
   EXPLORE_PATH,
   EXPLORE_SERVER_PATH,
@@ -19,10 +18,6 @@ import {
   RESET_PASSWORD_PATH,
   ROOT_PATH,
   SETTINGS_PATH,
-  SPACE_LOBBY_PATH,
-  SPACE_PATH,
-  SPACE_ROOM_PATH,
-  SPACE_SEARCH_PATH,
   CREATE_PATH,
 } from './paths';
 import { trimLeadingSlash, trimTrailingSlash } from '../utils/common';
@@ -115,45 +110,23 @@ export const getHomeRoomPathWithViaServers = (
 export const getDirectPath = (): string => DIRECT_PATH;
 export const getDirectCreatePath = (): string => DIRECT_CREATE_PATH;
 export const getDirectRoomPath = (roomIdOrAlias: string, eventId?: string): string => {
-  const params = {
-    roomIdOrAlias,
-    eventId: eventId ?? null,
-  };
-
-  return generatePath(DIRECT_ROOM_PATH, params);
+  const roomPath = `${trimTrailingSlash(DIRECT_PATH)}/${encodeURIComponent(roomIdOrAlias)}`;
+  return eventId ? `${roomPath}/${encodeURIComponent(eventId)}` : roomPath;
 };
 
-export const getSpacePath = (spaceIdOrAlias: string): string => {
-  const params = {
-    spaceIdOrAlias,
-  };
-
-  return generatePath(SPACE_PATH, params);
-};
-export const getSpaceLobbyPath = (spaceIdOrAlias: string): string => {
-  const params = {
-    spaceIdOrAlias,
-  };
-  return generatePath(SPACE_LOBBY_PATH, params);
-};
-export const getSpaceSearchPath = (spaceIdOrAlias: string): string => {
-  const params = {
-    spaceIdOrAlias,
-  };
-  return generatePath(SPACE_SEARCH_PATH, params);
-};
+export const getSpacePath = (spaceIdOrAlias: string): string =>
+  `/${encodeURIComponent(spaceIdOrAlias)}`;
+export const getSpaceLobbyPath = (spaceIdOrAlias: string): string =>
+  `${getSpacePath(spaceIdOrAlias)}/lobby`;
+export const getSpaceSearchPath = (spaceIdOrAlias: string): string =>
+  `${getSpacePath(spaceIdOrAlias)}/search`;
 export const getSpaceRoomPath = (
   spaceIdOrAlias: string,
   roomIdOrAlias: string,
   eventId?: string
 ): string => {
-  const params = {
-    spaceIdOrAlias,
-    roomIdOrAlias,
-    eventId: eventId ?? null,
-  };
-
-  return generatePath(SPACE_ROOM_PATH, params);
+  const roomPath = `${getSpacePath(spaceIdOrAlias)}/${encodeURIComponent(roomIdOrAlias)}`;
+  return eventId ? `${roomPath}/${encodeURIComponent(eventId)}` : roomPath;
 };
 
 export const getExplorePath = (): string => EXPLORE_PATH;

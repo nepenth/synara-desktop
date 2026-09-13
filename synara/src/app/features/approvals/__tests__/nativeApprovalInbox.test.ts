@@ -14,11 +14,19 @@ const item: ApprovalInboxItem = {
   eventId: '$request',
   sender: '@hermes:example.org',
   body: 'Dangerous command requires approval',
+  canSendReaction: true,
+  bodyTruncated: false,
   originServerTs: 1000,
   expiresAt: 301000,
   status: 'pending',
 };
-const snapshot = { sessionGeneration: 2, items: [item], loading: false, incomplete: false };
+const snapshot = {
+  coverageWindowMs: 300000,
+  sessionGeneration: 2,
+  items: [item],
+  loading: false,
+  incomplete: false,
+};
 
 test('pending requests expire at the same exact boundary as Core; decisions stay terminal', () => {
   assert.equal(approvalStatus(item, 300999), 'pending');

@@ -76,7 +76,7 @@ import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { stopPropagation } from '../../utils/keyboard';
-import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
+import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import { copyRichTextToClipboard } from '../../utils/dom';
 import { prepareNativeFormattedBody } from './nativeTimelineRichText';
@@ -1537,7 +1537,7 @@ const NativeTimelineRow = ({
       const isEmote = row.messageType === 'emote';
       const agentPayload = parseNativeTimelineAgentCard(row.agentCardJson);
       const approvalPrompt = row.isAgentApproval
-        ? detectAgentApprovalPrompt({ body: row.body, formatted_body: row.formattedBody })
+        ? formatCoreAgentApprovalPrompt(row.body)
         : undefined;
       return (
         <NativeTimelineRowActionSurface

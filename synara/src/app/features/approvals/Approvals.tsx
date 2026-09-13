@@ -2,11 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, Icon, Icons, Scroll, Spinner, Text, config } from 'folds';
 import { Page, PageHeader } from '../../components/page';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
-import { detectAgentApprovalPrompt } from '../../utils/agentApprovals';
+import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { useNavigate } from 'react-router-dom';
-import { getHomePath } from '../../pages/pathUtils';
+import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useApprovalInbox } from './ApprovalInboxProvider';
 import { approvalIdentity, type ApprovalInboxItem } from './nativeApprovalInbox';
@@ -44,7 +43,11 @@ export function ApprovalsView({
   const [filter, setFilter] = useState<Filter>('pending');
   const [search, setSearch] = useState('');
   const [announcement, setAnnouncement] = useState('');
-  useEffect(() => setAnnouncement(''), [mx, sessionGeneration]);
+  useEffect(() => {
+    setAnnouncement('');
+    setSearch('');
+    setFilter('pending');
+  }, [mx, sessionGeneration]);
   const headingRef = useRef<HTMLHeadingElement>(null);
   const recentCount = items.filter((item) => item.status !== 'pending').length;
   const visible = useMemo(() => {
@@ -66,7 +69,7 @@ export function ApprovalsView({
   }, [items, filter, search, roomName, senderName]);
   const handleDecision = (item: ApprovalInboxItem) => {
     if (!decided(item)) return;
-    setAnnouncement(`Request in ${roomName(item.roomId)} resolved. Moved to Recent.`);
+    setAnnouncement(`Request in ${roomName(item.roomId)} resolved. Available in Recent.`);
     headingRef.current?.focus();
   };
 
@@ -145,8 +148,8 @@ export function ApprovalsView({
       )}
       {filter === 'recent' && (
         <Text size="T300" priority="300">
-          Recently observed requests that were decided by your account or whose five-minute approval
-          window has ended.
+          Recently observed requests that were decided by your account or whose approval window has
+          ended.
         </Text>
       )}
       {visible.length === 0 ? (
@@ -176,11 +179,7 @@ export function ApprovalsView({
         </div>
       ) : (
         visible.map((item) => {
-          const prompt = detectAgentApprovalPrompt({ body: item.body }) ?? {
-            title: 'Approval required',
-            body: 'Review the original request before deciding.',
-            sourceContext: item.body,
-          };
+          const prompt = formatCoreAgentApprovalPrompt(item.body);
           return (
             <section
               key={`${sessionGeneration}:${approvalIdentity(item)}`}
@@ -222,11 +221,11 @@ export function ApprovalsView({
                   </Button>
                 </Box>
               </div>
-              {item.status === 'pending' && !prompt.command ? (
+              {item.status === 'pending' && item.bodyTruncated ? (
                 <Box direction="Column" gap="200" style={{ padding: config.space.S400 }}>
                   <Text size="T300">
-                    This request could not be parsed completely. Open the original message to review
-                    it.
+                    This is a shortened preview. Open the original message to review the full
+                    request.
                   </Text>
                   <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', margin: 0 }}>
                     {item.body}
@@ -236,7 +235,12 @@ export function ApprovalsView({
                 <AgentApprovalCard
                   appearance="inbox"
                   prompt={prompt}
-                  target={{ roomId: item.roomId, eventId: item.eventId, coreEligible: true }}
+                  target={{
+                    roomId: item.roomId,
+                    eventId: item.eventId,
+                    coreEligible: true,
+                    canSendReaction: item.canSendReaction,
+                  }}
                   onDecision={() => handleDecision(item)}
                 />
               ) : (
@@ -267,7 +271,6 @@ export function ApprovalsView({
 }
 
 export function Approvals() {
-  const navigate = useNavigate();
   const mx = useMatrixClient();
   const { navigateRoom } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
@@ -276,15 +279,19 @@ export function Approvals() {
       <PageHeader>
         <Box alignItems="Center" gap="300" grow="Yes">
           {screenSize === ScreenSize.Mobile && (
-            <Button
-              size="300"
-              variant="Secondary"
-              fill="None"
-              onClick={() => navigate(getHomePath())}
-              aria-label="Back to rooms"
-            >
-              <Icon src={Icons.ArrowLeft} size="100" />
-            </Button>
+            <BackRouteHandler>
+              {(goBack) => (
+                <Button
+                  size="300"
+                  variant="Secondary"
+                  fill="None"
+                  onClick={goBack}
+                  aria-label="Back"
+                >
+                  <Icon src={Icons.ArrowLeft} size="100" />
+                </Button>
+              )}
+            </BackRouteHandler>
           )}
           <Icon src={Icons.Shield} />
           <Text size="H4">Approvals</Text>

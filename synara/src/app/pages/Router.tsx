@@ -142,8 +142,8 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
               <ClientInitStorageAtom>
                 <ClientRoomsNotificationPreferences>
                   <ClientBindAtoms>
-                    <ClientNonUIFeatures>
-                      <ApprovalInboxProvider>
+                    <ApprovalInboxProvider>
+                      <ClientNonUIFeatures>
                         <ClientLayout
                           nav={
                             <MobileFriendlyClientNav>
@@ -153,15 +153,15 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
                         >
                           <Outlet />
                         </ClientLayout>
-                      </ApprovalInboxProvider>
-                      <SearchModalRenderer />
-                      <UserRoomProfileRenderer />
-                      <CreateRoomModalRenderer />
-                      <CreateSpaceModalRenderer />
-                      <RoomSettingsRenderer />
-                      <SpaceSettingsRenderer />
-                      <NativeVerificationInboxRenderer />
-                    </ClientNonUIFeatures>
+                        <SearchModalRenderer />
+                        <UserRoomProfileRenderer />
+                        <CreateRoomModalRenderer />
+                        <CreateSpaceModalRenderer />
+                        <RoomSettingsRenderer />
+                        <SpaceSettingsRenderer />
+                        <NativeVerificationInboxRenderer />
+                      </ClientNonUIFeatures>
+                    </ApprovalInboxProvider>
                   </ClientBindAtoms>
                 </ClientRoomsNotificationPreferences>
               </ClientInitStorageAtom>

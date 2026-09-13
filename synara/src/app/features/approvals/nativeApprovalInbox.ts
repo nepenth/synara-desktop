@@ -5,6 +5,8 @@ export type ApprovalInboxItem = {
   eventId: string;
   sender: string;
   body: string;
+  canSendReaction: boolean;
+  bodyTruncated: boolean;
   originServerTs: number;
   expiresAt: number;
   status: 'pending' | 'decided' | 'expired';
@@ -12,6 +14,7 @@ export type ApprovalInboxItem = {
 
 export type ApprovalInboxSnapshot = {
   sessionGeneration: number;
+  coverageWindowMs: number;
   items: ApprovalInboxItem[];
   loading: boolean;
   incomplete: boolean;
@@ -29,6 +32,8 @@ export function acceptsApprovalInbox(value: unknown): value is ApprovalInboxSnap
   if (
     !Number.isSafeInteger(snapshot.sessionGeneration) ||
     snapshot.sessionGeneration < 0 ||
+    !Number.isSafeInteger(snapshot.coverageWindowMs) ||
+    snapshot.coverageWindowMs <= 0 ||
     typeof snapshot.loading !== 'boolean' ||
     typeof snapshot.incomplete !== 'boolean' ||
     !Array.isArray(snapshot.items)
@@ -43,6 +48,8 @@ export function acceptsApprovalInbox(value: unknown): value is ApprovalInboxSnap
         (id) => typeof id === 'string' && id.length > 0
       ) ||
       typeof item.body !== 'string' ||
+      typeof item.canSendReaction !== 'boolean' ||
+      typeof item.bodyTruncated !== 'boolean' ||
       !Number.isSafeInteger(item.originServerTs) ||
       item.originServerTs <= 0 ||
       !Number.isSafeInteger(item.expiresAt) ||
@@ -58,9 +65,13 @@ export function acceptsApprovalInbox(value: unknown): value is ApprovalInboxSnap
 }
 
 export async function loadApprovalInbox(
-  invoke: (command: string) => Promise<DesktopInvokeResult<unknown>> = invokeDesktopWithAvailability
+  invoke: (
+    command: string,
+    args?: Record<string, unknown>
+  ) => Promise<DesktopInvokeResult<unknown>> = invokeDesktopWithAvailability,
+  discoveryActive = false
 ): Promise<ApprovalInboxSnapshot> {
-  const result = await invoke('matrix_agent_approvals_list');
+  const result = await invoke('matrix_agent_approvals_list', { discoveryActive });
   if (!result.available || !acceptsApprovalInbox(result.value)) {
     throw new Error('Approval requests could not be loaded.');
   }

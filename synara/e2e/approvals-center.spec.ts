@@ -87,11 +87,9 @@ test('rejected decision leaves request available for review and preserves count'
   await page.goto(`${route}?decisionError`);
   await page.getByRole('button', { name: '✅ Approve once', exact: true }).first().click();
   await expect(
-    page
-      .getByRole('alert')
-      .filter({
-        hasText: 'Approval could not be submitted. The request may be invalid or expired.',
-      })
+    page.getByRole('alert').filter({
+      hasText: 'Approval could not be submitted. The request may be invalid or expired.',
+    })
   ).toBeVisible();
   await expect(page.getByTestId('pending-count')).toHaveText('2 pending');
   await expect(
@@ -108,7 +106,9 @@ test('light theme and narrow viewport keep approval controls usable without hori
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });
 
-test('unparsed requests remain readable without offering blind decisions', async ({ page }) => {
+test('Core-pending unformatted requests show full source and native approval controls', async ({
+  page,
+}) => {
   await page.goto(`${route}?unparsed`);
   await expect(page.getByRole('region')).toHaveCount(2);
   await expect(
@@ -117,7 +117,7 @@ test('unparsed requests remain readable without offering blind decisions', async
   await expect(
     page.getByText('Unrecognized approval request: inspect the original operation', { exact: true })
   ).toBeVisible();
-  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(2);
   await expect(page.getByRole('button', { name: 'Open message', exact: true })).toHaveCount(2);
 });
 
@@ -138,10 +138,10 @@ test('native session generation resets optimistic decisions on the same client f
   await page.goto(route);
   await page.getByRole('button', { name: '✅ Approve once', exact: true }).first().click();
   await expect(page.getByTestId('pending-count')).toHaveText('1 pending');
-  await expect(page.getByText(/resolved. Moved to Recent/)).toBeVisible();
+  await expect(page.getByText(/resolved. Available in Recent/)).toBeVisible();
   await page.getByRole('button', { name: 'Restart native session' }).click();
   await expect(page.getByTestId('pending-count')).toHaveText('2 pending');
-  await expect(page.getByText(/resolved. Moved to Recent/)).toHaveCount(0);
+  await expect(page.getByText(/resolved. Available in Recent/)).toHaveCount(0);
 });
 
 test('late decision completion from an old session cannot resolve the new session request', async ({
@@ -156,7 +156,7 @@ test('late decision completion from an old session cannot resolve the new sessio
   await page.getByRole('button', { name: 'Complete delayed decision' }).click();
   await page.getByRole('button', { name: 'Refresh approval requests' }).click();
   await expect(page.getByTestId('pending-count')).toHaveText('2 pending');
-  await expect(page.getByText(/resolved. Moved to Recent/)).toHaveCount(0);
+  await expect(page.getByText(/resolved. Available in Recent/)).toHaveCount(0);
 });
 
 test('settled partial coverage has a distinct rail status even with no pending items', async ({
@@ -167,4 +167,43 @@ test('settled partial coverage has a distinct rail status even with no pending i
     page.getByRole('button', { name: 'Approvals · partial coverage', exact: true })
   ).toBeVisible();
   await expect(page.getByRole('button', { name: /Approvals.*checking rooms/ })).toHaveCount(0);
+});
+
+test('external shared-native decisions update the badge immediately even when refresh fails', async ({
+  page,
+}) => {
+  await page.goto(route);
+  await expect(page.getByTestId('pending-count')).toHaveText('2 pending');
+  await page.getByRole('button', { name: 'Decide outside inbox while readback fails' }).click();
+  await expect(page.getByRole('alert')).toContainText('could not be refreshed');
+  await expect(page.getByTestId('pending-count')).toHaveText('1 pending');
+  await expect(page.getByRole('button', { name: /Approvals · 1/ })).toBeVisible();
+});
+
+test('discovery is active only while the approvals page is selected', async ({ page }) => {
+  await page.goto(route);
+  await expect(page.getByTestId('discovery-active')).toHaveText('true');
+  await page.getByRole('button', { name: 'Leave approvals' }).click();
+  await expect(page.getByTestId('discovery-active')).toHaveText('false');
+  await page.getByRole('button', { name: 'Show approvals' }).click();
+  await expect(page.getByTestId('discovery-active')).toHaveText('true');
+});
+
+test('Core permissions disable decisions and truncated previews require the source message', async ({
+  page,
+}) => {
+  await page.goto(`${route}?noPermission`);
+  await expect(
+    page.getByRole('button', { name: '✅ Approve once', exact: true }).first()
+  ).toBeDisabled();
+  await expect(
+    page.getByText('You do not have permission to react in this room.').first()
+  ).toBeVisible();
+  await page.goto(`${route}?truncated`);
+  await expect(
+    page.getByText(
+      'This is a shortened preview. Open the original message to review the full request.'
+    )
+  ).toHaveCount(2);
+  await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(0);
 });

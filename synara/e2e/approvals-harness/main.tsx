@@ -1,7 +1,8 @@
 // Production approval presenter/provider and composer; only the native transport is a fixture.
 import React, { useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, useNavigate } from 'react-router-dom';
+import { decideAgentApprovalWithNativeOwner } from '../../src/app/features/room/nativeReactionOwner';
 import { Box, Icon, IconButton, Icons, Text, configClass, varsClass, color } from 'folds';
 import 'folds/dist/style.css';
 import '@fontsource/inter/variable.css';
@@ -35,6 +36,8 @@ let decisions = 0;
 let lastAction = '';
 let sessionGeneration = 1;
 let finishDecision: (() => void) | undefined;
+let lastDiscoveryActive = false;
+let holdReadback = false;
 const makeItem = (
   age: number,
   room = 'book',
@@ -47,6 +50,8 @@ const makeItem = (
   originServerTs: Date.now() - age,
   expiresAt: Date.now() - age + 300000,
   status: 'pending',
+  canSendReaction: !query.has('noPermission'),
+  bodyTruncated: query.has('truncated'),
 });
 if (!query.has('empty')) items = [makeItem(120000), makeItem(30000, 'home', 'Home assistant')];
 if (query.has('expires')) {
@@ -61,9 +66,11 @@ Object.assign(window, {
   __TAURI_INTERNALS__: {
     invoke: async (command: string, args?: Record<string, unknown>) => {
       if (command === 'matrix_agent_approvals_list') {
-        if (failed) throw new Error('Fixture offline');
+        lastDiscoveryActive = args?.discoveryActive === true;
+        if (failed || holdReadback) throw new Error('Fixture offline');
         return {
           sessionGeneration,
+          coverageWindowMs: 300000,
           items: items.map((item) => ({ ...item })),
           loading,
           incomplete,
@@ -101,6 +108,7 @@ document.body.style.color = color.Background.OnContainer;
 
 function Fixture() {
   const { refresh, pendingCount } = useApprovalInbox();
+  const navigate = useNavigate();
   const editor = useEditor();
   const [toolbar, setToolbar] = useState(false);
   const [message, setMessage] = useState('');
@@ -123,6 +131,22 @@ function Fixture() {
         }}
       >
         <span>Local test fixture</span>
+        <button onClick={() => navigate('/home/')}>Leave approvals</button>
+        <button onClick={() => navigate('/approvals/')}>Show approvals</button>
+        <button
+          onClick={() => {
+            holdReadback = true;
+            const item = items[0];
+            void decideAgentApprovalWithNativeOwner({
+              roomId: item.roomId,
+              eventId: item.eventId,
+              actionId: 'agent-approval.deny',
+            });
+          }}
+        >
+          Decide outside inbox while readback fails
+        </button>
+        <output data-testid="discovery-active">{String(lastDiscoveryActive)}</output>
         <button
           onClick={() =>
             change(() => {

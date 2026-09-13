@@ -10,7 +10,6 @@ import InviteSound from '../../../../public/sound/invite.ogg';
 import { notificationPermission, setFavicon } from '../../utils/dom';
 import { useSetting } from '../../state/hooks/settings';
 import { desktopPlatformSettingsAtom, settingsAtom } from '../../state/settings';
-import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { allInvitesAtom, useNativeInviteSyncing } from '../../state/room-list/inviteList';
 import { usePreviousValue } from '../../hooks/usePreviousValue';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -24,7 +23,7 @@ import { getSortedLaterItems } from '../../utils/later';
 import { laterContentAtom } from '../../state/laterList';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { PerformanceDebugOverlay } from '../../components/performance/PerformanceDebugOverlay';
-import { countJoinedRoomAgentApprovals } from '../../notifications/badgeSummary';
+import { useApprovalInboxSummary } from '../../features/approvals/ApprovalInboxProvider';
 import {
   getPlatformNotificationSummary,
   registerPlatformAgentActionListener,
@@ -142,7 +141,7 @@ function TrayDoNotDisturbSync() {
 
 function PlatformBadgeAndTrayUpdater() {
   const roomToUnread = useAtomValue(roomToUnreadAtom);
-  const snapshot = useNativeRoomListSnapshot();
+  const { pendingCount: agentApprovalCount } = useApprovalInboxSummary();
   const invites = useAtomValue(allInvitesAtom);
   const laterContent = useAtomValue(laterContentAtom);
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
@@ -151,7 +150,6 @@ function PlatformBadgeAndTrayUpdater() {
     const activeLaterCount = getSortedLaterItems(laterContent).filter(
       (item) => !item.completedAt
     ).length;
-    const agentApprovalCount = countJoinedRoomAgentApprovals(snapshot.rooms);
     const summary = getPlatformNotificationSummary({
       unreadCounts: roomToUnread.values(),
       laterActiveCount: activeLaterCount,
@@ -169,7 +167,7 @@ function PlatformBadgeAndTrayUpdater() {
         doNotDisturb: !showNotifications,
       }).catch(() => undefined);
     }
-  }, [invites.length, laterContent, roomToUnread, showNotifications, snapshot.rooms]);
+  }, [invites.length, laterContent, roomToUnread, showNotifications, agentApprovalCount]);
 
   return null;
 }

@@ -7,49 +7,61 @@ import React, {
   useRef,
   useState,
 } from 'react';
+import { useMatch } from 'react-router-dom';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
+import { APPROVALS_PATH } from '../../pages/paths';
+import { loadApprovalInbox, type ApprovalInboxItem } from './nativeApprovalInbox';
+import { createApprovalInboxProjection } from './approvalInboxProjection';
 import {
-  approvalIdentity,
-  approvalStatus,
-  loadApprovalInbox,
-  type ApprovalInboxItem,
-  type ApprovalInboxSnapshot,
-} from './nativeApprovalInbox';
+  activateApprovalDecisionScope,
+  subscribeApprovalDecisions,
+} from './approvalDecisionEvents';
 
-export type ApprovalInboxContextValue = {
-  sessionGeneration?: number;
-  items: ApprovalInboxItem[];
+type ApprovalInboxSummary = {
   pendingCount: number;
   loading: boolean;
   incomplete: boolean;
   error?: string;
+};
+export type ApprovalInboxContextValue = ApprovalInboxSummary & {
+  sessionGeneration?: number;
+  items: ApprovalInboxItem[];
   now: number;
   refresh: () => void;
   decided: (item: ApprovalInboxItem) => boolean;
 };
-
 export const ApprovalInboxContext = createContext<ApprovalInboxContextValue | undefined>(undefined);
+const ApprovalInboxSummaryContext = createContext<ApprovalInboxSummary | undefined>(undefined);
 
 export function ApprovalInboxProvider({ children }: { children: React.ReactNode }) {
   const mx = useMatrixClient();
-  const [snapshot, setSnapshot] = useState<ApprovalInboxSnapshot>();
+  const onApprovalsPage = Boolean(useMatch({ path: APPROVALS_PATH, end: false }));
+  const [visible, setVisible] = useState(() => document.visibilityState !== 'hidden');
+  const projection = useMemo(createApprovalInboxProjection, [mx]);
+  const [, setRevision] = useState(0);
   const [error, setError] = useState<string>();
   const [now, setNow] = useState(Date.now);
   const reload = useRef<() => void>(() => undefined);
+  const discoveryActive = useRef(false);
+  const pageActive = useRef(onApprovalsPage);
   const refresh = useCallback(() => reload.current(), []);
-  const completed = useRef(new Set<string>());
-  const generation = useRef<number | undefined>(undefined);
-  const client = useRef(mx);
+  const snapshot = projection.read(now);
+  const scope = projection.scope;
+
+  useEffect(() => {
+    pageActive.current = onApprovalsPage;
+    discoveryActive.current = onApprovalsPage && visible;
+    refresh();
+  }, [onApprovalsPage, visible, refresh]);
 
   useEffect(() => {
     let cancelled = false;
     let busy = false;
     let queued = false;
-    setSnapshot(undefined);
+    let releaseScope: (() => void) | undefined;
+    projection.reset();
+    setRevision((value) => value + 1);
     setError(undefined);
-    completed.current.clear();
-    generation.current = undefined;
-    client.current = mx;
     const load = async () => {
       if (cancelled) return;
       if (busy) {
@@ -58,13 +70,16 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       }
       busy = true;
       try {
-        const next = await loadApprovalInbox();
+        const next = await loadApprovalInbox(undefined, discoveryActive.current);
         if (!cancelled) {
-          if (generation.current !== next.sessionGeneration) {
-            completed.current.clear();
-            generation.current = next.sessionGeneration;
+          const previousScope = projection.scope;
+          projection.receive(next, mx);
+          if (projection.scope !== previousScope) {
+            releaseScope?.();
+            releaseScope = activateApprovalDecisionScope(projection.scope);
           }
-          setSnapshot(next);
+          setRevision((value) => value + 1);
+          setNow(Date.now());
           setError(undefined);
         }
       } catch {
@@ -81,79 +96,91 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     reload.current = () => {
       void load();
     };
+    // Every successful shared-native decision (room, OS, or inbox) updates one
+    // projection immediately. Old-session replies can neither overlay nor refresh it.
+    const unsubscribe = subscribeApprovalDecisions((notice) => {
+      if (cancelled || !projection.complete(notice.scope, notice)) return;
+      setRevision((value) => value + 1);
+      void load();
+    });
     void load();
     const poll = window.setInterval(() => {
       void load();
     }, 5000);
-    const clock = window.setInterval(() => setNow(Date.now()), 1000);
     const focus = () => {
       setNow(Date.now());
       void load();
     };
+    const visibility = () => {
+      const nextVisible = document.visibilityState !== 'hidden';
+      setVisible(nextVisible);
+      // Update before invoking, without waiting for the React effect.
+      discoveryActive.current = pageActive.current && nextVisible;
+      setNow(Date.now());
+      void load();
+    };
     window.addEventListener('focus', focus);
+    document.addEventListener('visibilitychange', visibility);
     return () => {
       cancelled = true;
+      releaseScope?.();
+      unsubscribe();
       reload.current = () => undefined;
       window.clearInterval(poll);
-      window.clearInterval(clock);
       window.removeEventListener('focus', focus);
+      document.removeEventListener('visibilitychange', visibility);
     };
-  }, [mx]);
+    // Route changes adjust the discovery ref, not the account's projection.
+  }, [mx, projection]);
+
+  const hasPending = snapshot?.items.some((item) => item.status === 'pending') ?? false;
+  useEffect(() => {
+    if (!hasPending) return undefined;
+    const clock = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(clock);
+  }, [hasPending]);
 
   const decided = useCallback(
     (item: ApprovalInboxItem) => {
-      if (
-        client.current !== mx ||
-        snapshot?.sessionGeneration === undefined ||
-        generation.current !== snapshot.sessionGeneration
-      )
-        return false;
-      completed.current.add(approvalIdentity(item));
-      setSnapshot((previous) =>
-        previous && previous.sessionGeneration === snapshot.sessionGeneration
-          ? {
-              ...previous,
-              items: previous.items.map((candidate) =>
-                approvalIdentity(candidate) === approvalIdentity(item)
-                  ? { ...candidate, status: 'decided' }
-                  : candidate
-              ),
-            }
-          : previous
-      );
-      refresh();
+      if (!projection.complete(scope, item)) return false;
+      setRevision((value) => value + 1);
       return true;
     },
-    [refresh, mx, snapshot?.sessionGeneration]
+    [projection, scope]
   );
-
-  const value = useMemo<ApprovalInboxContextValue>(() => {
-    const items = (snapshot?.items ?? []).map(
-      (item): ApprovalInboxItem => ({
-        ...item,
-        status: completed.current.has(approvalIdentity(item))
-          ? 'decided'
-          : approvalStatus(item, now),
-      })
-    );
-    return {
+  const pendingCount = snapshot?.items.filter((item) => item.status === 'pending').length ?? 0;
+  const loading = (!snapshot && !error) || Boolean(snapshot?.loading);
+  const incomplete = Boolean(snapshot?.incomplete);
+  const summary = useMemo(
+    () => ({ pendingCount, loading, incomplete, error }),
+    [pendingCount, loading, incomplete, error]
+  );
+  const value = useMemo<ApprovalInboxContextValue>(
+    () => ({
+      ...summary,
       sessionGeneration: snapshot?.sessionGeneration,
-      items,
-      pendingCount: items.filter((item) => item.status === 'pending').length,
-      loading: (!snapshot && !error) || Boolean(snapshot?.loading),
-      incomplete: Boolean(snapshot?.incomplete),
-      error,
+      items: snapshot?.items ?? [],
       now,
       refresh,
       decided,
-    };
-  }, [snapshot, error, now, refresh, decided]);
+    }),
+    [summary, snapshot, now, refresh, decided]
+  );
 
-  return <ApprovalInboxContext.Provider value={value}>{children}</ApprovalInboxContext.Provider>;
+  return (
+    <ApprovalInboxSummaryContext.Provider value={summary}>
+      <ApprovalInboxContext.Provider value={value}>{children}</ApprovalInboxContext.Provider>
+    </ApprovalInboxSummaryContext.Provider>
+  );
 }
 
 export function useApprovalInbox() {
   const value = useContext(ApprovalInboxContext);
+  if (!value) throw new Error('ApprovalInboxProvider is missing.');
+  return value;
+}
+export function useApprovalInboxSummary() {
+  const value = useContext(ApprovalInboxSummaryContext);
   if (!value) throw new Error('ApprovalInboxProvider is missing.');
   return value;
 }

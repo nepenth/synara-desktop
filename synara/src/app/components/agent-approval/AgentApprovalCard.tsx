@@ -89,13 +89,13 @@ export function AgentApprovalCard({
     else if (wasConfirming.current) approveAlwaysRef.current?.focus();
     wasConfirming.current = confirmApproveAlways;
   }, [confirmApproveAlways]);
-  const canReact = Boolean(target && target.canSendReaction !== false);
+  const canReact = Boolean(target?.coreEligible === true && target.canSendReaction !== false);
   const disabled = !canReact || Boolean(busyKey || sentKey);
   const isResolved = Boolean(sentKey);
 
   const submitDecision = useCallback(
     async (action: ApprovalAction) => {
-      if (!target || target.canSendReaction === false || busyKey || sentKey) return;
+      if (!target?.coreEligible || target.canSendReaction === false || busyKey || sentKey) return;
 
       setBusyKey(action.key);
       setError(undefined);
@@ -120,7 +120,7 @@ export function AgentApprovalCard({
 
   const handleReact = useCallback(
     async (action: ApprovalAction) => {
-      if (!target || target.canSendReaction === false || busyKey || sentKey) return;
+      if (!target?.coreEligible || target.canSendReaction === false || busyKey || sentKey) return;
 
       // Permanent approval requires an explicit second confirmation step.
       if (action.key === AGENT_APPROVAL_REACTION_APPROVE_ALWAYS && !confirmApproveAlways) {
@@ -184,7 +184,15 @@ export function AgentApprovalCard({
         </Box>
       )}
 
-      {sourceDetails && !isResolved && (
+      {!prompt.command && prompt.sourceContext && !isResolved && (
+        <Box direction="Column" gap="200">
+          <Text size="L400">Full approval request</Text>
+          <pre style={monospacedBlockStyle}>
+            <code>{prompt.sourceContext}</code>
+          </pre>
+        </Box>
+      )}
+      {prompt.command && sourceDetails && !isResolved && (
         <Box
           as="details"
           direction="Column"

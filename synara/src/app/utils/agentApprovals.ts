@@ -503,18 +503,13 @@ const getApprovalBodyCandidates = (content: Record<string, unknown>): string[] =
   return candidates.filter((candidate) => candidate.length <= MAX_AGENT_APPROVAL_BODY_CHARS);
 };
 
-const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | undefined => {
-  const normalized = normalizeWhitespace(body).toLowerCase();
-  if (!APPROVAL_HEADINGS.some((heading) => normalized.includes(heading))) return undefined;
-
+/** Formatting only: the caller must obtain eligibility from Core. */
+export const formatCoreAgentApprovalPrompt = (body: string): AgentApprovalPrompt => {
   const command = extractCommand(body);
   const commandPreview = extractCommandPreview(command);
   const reason = body.match(/\bReason:\s*([^\n]+)/i)?.[1];
   const reasonBody = reason ? truncate(normalizeWhitespace(reason), 220) : undefined;
-  const sourceContext = truncate(
-    normalizeSourceBody(body),
-    MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS
-  );
+  const sourceContext = normalizeSourceBody(body);
   const replyInstructions = extractReplyInstructions(body);
 
   return {
@@ -524,6 +519,18 @@ const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | unde
     commandPreview,
     sourceContext: sourceContext || undefined,
     replyInstructions,
+  };
+};
+
+const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | undefined => {
+  const normalized = normalizeWhitespace(body).toLowerCase();
+  if (!APPROVAL_HEADINGS.some((heading) => normalized.includes(heading))) return undefined;
+  const prompt = formatCoreAgentApprovalPrompt(body);
+  return {
+    ...prompt,
+    sourceContext:
+      prompt.sourceContext &&
+      truncate(prompt.sourceContext, MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS),
   };
 };
 

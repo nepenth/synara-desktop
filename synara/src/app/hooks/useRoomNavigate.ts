@@ -1,7 +1,7 @@
 import { useCallback, useTransition } from 'react';
-import { NavigateOptions, useNavigate } from 'react-router-dom';
+import { NavigateOptions, useLocation, useNavigate } from 'react-router-dom';
 import { useAtomValue } from 'jotai';
-import { getCanonicalAliasOrRoomId } from '../utils/matrix';
+import { getCanonicalAliasOrRoomId, getCanonicalAliasRoomId, isRoomAlias } from '../utils/matrix';
 import {
   getDirectRoomPath,
   getHomeRoomPath,
@@ -15,6 +15,8 @@ import { mDirectAtom } from '../state/mDirectList';
 import { useSelectedSpace } from './router/useSelectedSpace';
 import { settingsAtom } from '../state/settings';
 import { useSetting } from '../state/hooks/settings';
+import { getApprovalsOriginSpace } from '../routes/approvalsNavigation';
+import { parseSynaraRouteDestination } from '../routes/synaraRoutes';
 
 export const useRoomNavigate = () => {
   const navigate = useNavigate();
@@ -22,7 +24,17 @@ export const useRoomNavigate = () => {
   const mx = useMatrixClient();
   const roomToParents = useAtomValue(roomToParentsAtom);
   const mDirects = useAtomValue(mDirectAtom);
-  const spaceSelectedId = useSelectedSpace();
+  const selectedSpace = useSelectedSpace();
+  const location = useLocation();
+  const originSpace =
+    parseSynaraRouteDestination(location.pathname)?.kind === 'approvals'
+      ? getApprovalsOriginSpace(location.state)
+      : undefined;
+  const spaceSelectedId =
+    selectedSpace ??
+    (originSpace && isRoomAlias(originSpace)
+      ? getCanonicalAliasRoomId(mx, originSpace)
+      : originSpace);
   const [developerTools] = useSetting(settingsAtom, 'developerTools');
 
   const navigateSpace = useCallback(

@@ -31,7 +31,7 @@ import { TextViewer } from './text-viewer';
 import { IImageContent } from '../../types/matrix/common';
 import { parseHermesAgentPayload } from '../utils/hermes';
 import { useClientConfig } from '../hooks/useClientConfig';
-import { detectAgentApprovalPrompt } from '../utils/agentApprovals';
+import { formatCoreAgentApprovalPrompt } from '../utils/agentApprovals';
 import { AgentApprovalCard, type AgentApprovalTarget } from './agent-approval/AgentApprovalCard';
 
 const HermesAgentCard = lazy(() =>
@@ -65,7 +65,10 @@ export function RenderMessageContent({
 }: RenderMessageContentProps) {
   const clientConfig = useClientConfig();
   const content = getContent<Record<string, unknown>>();
-  const approvalPrompt = detectAgentApprovalPrompt(content);
+  const approvalPrompt =
+    agentApprovalTarget?.coreEligible === true && typeof content.body === 'string'
+      ? formatCoreAgentApprovalPrompt(content.body)
+      : undefined;
   if (approvalPrompt && agentApprovalTarget?.coreEligible === true) {
     return <AgentApprovalCard prompt={approvalPrompt} target={agentApprovalTarget} />;
   }

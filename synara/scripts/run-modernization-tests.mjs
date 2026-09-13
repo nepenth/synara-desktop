@@ -37,6 +37,7 @@ const tests = [
   'src/app/routes/__tests__/synaraRoutes.test.ts',
   'src/app/utils/__tests__/agentApprovals.test.ts',
   'src/app/features/approvals/__tests__/nativeApprovalInbox.test.ts',
+  'src/app/features/approvals/__tests__/nativeInboxProjection.test.ts',
   'src/app/utils/__tests__/hermes.test.ts',
   'src/app/agents/__tests__/agentActions.test.ts',
   'src/app/utils/__tests__/drafts.test.ts',
