@@ -34,6 +34,7 @@ export function ApprovalsView({
     pendingCount,
     loading,
     incomplete,
+    coverage,
     error,
     now,
     refresh,
@@ -92,7 +93,7 @@ export function ApprovalsView({
             onClick={() => setFilter('pending')}
           >
             Pending · {pendingCount}
-            {(loading || incomplete || error) && pendingCount > 0 ? '+' : ''}
+            {(incomplete || error) && pendingCount > 0 ? '+' : ''}
           </button>
           <button
             type="button"
@@ -146,6 +147,11 @@ export function ApprovalsView({
           </Text>
         </div>
       )}
+      {coverage === 'latest_event' && !loading && !incomplete && !error && (
+        <Text size="T300" priority="300">
+          Showing requests found in recent room activity.
+        </Text>
+      )}
       {filter === 'recent' && (
         <Text size="T300" priority="300">
           Recently observed requests that were decided by your account or whose approval window has
@@ -166,7 +172,9 @@ export function ApprovalsView({
               : error || incomplete
               ? 'No requests loaded yet'
               : filter === 'pending'
-              ? 'No pending approvals'
+              ? coverage === 'latest_event'
+                ? 'No recent approvals found'
+                : 'No pending approvals'
               : 'No recent requests'}
           </Text>
           <Text priority="300">

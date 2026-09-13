@@ -15,6 +15,7 @@ export type ApprovalInboxItem = {
 export type ApprovalInboxSnapshot = {
   sessionGeneration: number;
   coverageWindowMs: number;
+  coverage: 'latest_event' | 'discovery';
   items: ApprovalInboxItem[];
   loading: boolean;
   incomplete: boolean;
@@ -34,6 +35,7 @@ export function acceptsApprovalInbox(value: unknown): value is ApprovalInboxSnap
     snapshot.sessionGeneration < 0 ||
     !Number.isSafeInteger(snapshot.coverageWindowMs) ||
     snapshot.coverageWindowMs <= 0 ||
+    !['latest_event', 'discovery'].includes(snapshot.coverage) ||
     typeof snapshot.loading !== 'boolean' ||
     typeof snapshot.incomplete !== 'boolean' ||
     !Array.isArray(snapshot.items)

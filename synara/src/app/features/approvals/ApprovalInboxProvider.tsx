@@ -10,7 +10,11 @@ import React, {
 import { useMatch } from 'react-router-dom';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { APPROVALS_PATH } from '../../pages/paths';
-import { loadApprovalInbox, type ApprovalInboxItem } from './nativeApprovalInbox';
+import {
+  loadApprovalInbox,
+  type ApprovalInboxItem,
+  type ApprovalInboxSnapshot,
+} from './nativeApprovalInbox';
 import { createApprovalInboxProjection } from './approvalInboxProjection';
 import {
   activateApprovalDecisionScope,
@@ -18,6 +22,7 @@ import {
 } from './approvalDecisionEvents';
 
 type ApprovalInboxSummary = {
+  coverage: ApprovalInboxSnapshot['coverage'];
   pendingCount: number;
   loading: boolean;
   incomplete: boolean;
@@ -151,9 +156,10 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
   const pendingCount = snapshot?.items.filter((item) => item.status === 'pending').length ?? 0;
   const loading = (!snapshot && !error) || Boolean(snapshot?.loading);
   const incomplete = Boolean(snapshot?.incomplete);
+  const coverage = snapshot?.coverage ?? 'latest_event';
   const summary = useMemo(
-    () => ({ pendingCount, loading, incomplete, error }),
-    [pendingCount, loading, incomplete, error]
+    () => ({ pendingCount, loading, incomplete, coverage, error }),
+    [pendingCount, loading, incomplete, coverage, error]
   );
   const value = useMemo<ApprovalInboxContextValue>(
     () => ({

@@ -468,7 +468,11 @@ async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_
         .await;
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 19);
     let badge = owner.agent_approvals_list().await.unwrap();
-    assert!(badge.incomplete);
+    assert!(!badge.incomplete);
+    assert_eq!(
+        badge.coverage,
+        synara_core::app::timeline::NativeAgentApprovalInboxCoverage::LatestEvent
+    );
     assert!(
         !badge.loading,
         "encrypted latest-event hint must not silently scan every encrypted room"
@@ -507,10 +511,13 @@ async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_
                 .add_state_event(f.event(levels).sender(&own_user).state_key("")),
         )
         .await;
-    let forbidden = owner
-        .agent_approvals_list_with_discovery(true)
-        .await
-        .unwrap();
+    let forbidden = wait_for(&owner, |snapshot| {
+        snapshot
+            .items
+            .first()
+            .is_some_and(|item| !item.can_send_reaction)
+    })
+    .await;
     assert!(!forbidden.items[0].can_send_reaction);
     assert_eq!(
         forbidden.items[0].status,

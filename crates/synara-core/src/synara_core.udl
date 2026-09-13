@@ -576,6 +576,7 @@ dictionary AgentApprovalInboxDto {
   boolean loading;
   boolean incomplete;
   u64 coverage_window_ms;
+  string coverage;
 };
 
 [Error]

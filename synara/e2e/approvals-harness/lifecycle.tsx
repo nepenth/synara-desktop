@@ -28,6 +28,7 @@ function snapshot(generation: number): ApprovalInboxSnapshot {
   return {
     sessionGeneration: generation,
     coverageWindowMs: 300000,
+    coverage: 'discovery',
     loading: false,
     incomplete: false,
     items: [

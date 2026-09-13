@@ -1,11 +1,14 @@
 //! Session-scoped, read-only cross-room approval discovery. Live SDK timelines
 //! supply edits, redactions, reaction aggregation and later decryption; no UI
 //! timeline, read marker, or browser event cache owns the inbox.
+use super::approval_history::{ApprovalHistory, RoomHistory};
 use super::*;
 use crate::app::agent_approvals::{
     classify_agent_approval, is_eligible_agent_approval_prompt, AGENT_APPROVAL_TTL_MS,
 };
 use tokio::sync::Semaphore;
+mod room_monitor;
+use room_monitor::RoomMonitor;
 
 const MAX_ROOMS: usize = 512;
 const MAX_ITEMS: usize = 500;
@@ -51,6 +54,13 @@ pub struct NativeAgentApprovalInboxItem {
     pub body_truncated: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NativeAgentApprovalInboxCoverage {
+    LatestEvent,
+    Discovery,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeAgentApprovalInboxSnapshot {
@@ -61,6 +71,7 @@ pub struct NativeAgentApprovalInboxSnapshot {
     /// Discovery proves only the pending five-minute window. History is retained
     /// if observed; this is not an exhaustive one-hour history search.
     pub coverage_window_ms: u64,
+    pub coverage: NativeAgentApprovalInboxCoverage,
 }
 
 #[derive(Default)]
@@ -68,6 +79,10 @@ struct RoomSnapshot {
     items: Vec<NativeTimelineItem>,
     loading: bool,
     incomplete: bool,
+    checked: bool,
+    deferred: bool,
+    observing: bool,
+    can_send_reaction: bool,
 }
 
 struct RoomObserver {
@@ -89,15 +104,24 @@ pub(super) struct ApprovalInboxOwner {
     rooms: HashMap<String, RoomObserver>,
     bootstrap_slots: Arc<Semaphore>,
     discovery_until: Arc<AtomicU64>,
+    history: Arc<ApprovalHistory>,
+    room_monitor: Option<RoomMonitor>,
 }
 
 impl ApprovalInboxOwner {
+    #[cfg(test)]
     pub(super) fn new(session_generation: u64) -> Self {
+        Self::with_history(session_generation, Arc::new(ApprovalHistory::default()))
+    }
+
+    pub(super) fn with_history(session_generation: u64, history: Arc<ApprovalHistory>) -> Self {
         Self {
             session_generation,
             rooms: HashMap::new(),
             bootstrap_slots: Arc::new(Semaphore::new(4)),
             discovery_until: Arc::new(AtomicU64::new(0)),
+            history,
+            room_monitor: None,
         }
     }
 
@@ -112,6 +136,9 @@ impl ApprovalInboxOwner {
             .user_id()
             .ok_or("agent-approval-current-user-missing")?;
         let now = agent_approval_now_ms()?;
+        if self.room_monitor.is_none() {
+            self.room_monitor = Some(RoomMonitor::new(client));
+        }
         self.discovery_until.store(
             if discovery_active {
                 now.saturating_add(DISCOVERY_LEASE_MS)
@@ -177,7 +204,7 @@ impl ApprovalInboxOwner {
             let finished = entry.task.as_ref().is_some_and(|task| task.is_finished());
             // Under pressure every room gets another turn, including ordinary
             // rooms whose latest message could hide an earlier prompt. The
-            // single index survives rotation; an inactive observer is partial.
+            // single index and successful checks survive normal rotation.
             let rotate = eligible_rooms > MAX_OBSERVERS
                 && now.saturating_sub(entry.started_ms) >= DISCOVERY_BATCH_MS
                 && entry.state.lock().is_ok_and(|state| !state.loading);
@@ -233,7 +260,6 @@ impl ApprovalInboxOwner {
                 .or_insert_with(|| RoomObserver {
                     state: Arc::new(std::sync::Mutex::new(RoomSnapshot {
                         loading: true,
-                        incomplete: true,
                         ..Default::default()
                     })),
                     task: None,
@@ -247,6 +273,12 @@ impl ApprovalInboxOwner {
             if entry.started_ms > 0 && now.saturating_sub(entry.started_ms) < DISCOVERY_BATCH_MS {
                 continue;
             }
+            self.room_monitor
+                .as_ref()
+                .unwrap()
+                .register(room, &entry.state);
+            entry.state.lock().unwrap().observing = true;
+            let history = self.history.room(&id);
             let state = Arc::clone(&entry.state);
             let slots = Arc::clone(&self.bootstrap_slots);
             let discovery_until = Arc::clone(&self.discovery_until);
@@ -255,8 +287,20 @@ impl ApprovalInboxOwner {
             let reusable = reusable.get(&id).cloned();
             let candidate_until = candidates.get(&id).copied().unwrap_or_default();
             entry.started_ms = now;
+            struct Observing(Arc<std::sync::Mutex<RoomSnapshot>>);
+            impl Drop for Observing {
+                fn drop(&mut self) {
+                    if let Ok(mut state) = self.0.lock() {
+                        state.observing = false;
+                    }
+                }
+            }
+            // Capture the guard before spawning so even an unpolled, aborted
+            // future releases observation ownership.
+            let observing = Observing(state.clone());
             entry.task = Some(tokio::spawn(async move {
-                let observer = observe_room(room, own_user, state, slots, reusable);
+                let _observing = observing;
+                let observer = observe_room(room, own_user, state, slots, reusable, history);
                 tokio::pin!(observer);
                 let expiry = async {
                     loop {
@@ -267,8 +311,9 @@ impl ApprovalInboxOwner {
                         tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 };
-                // Cancellation also drops queued semaphore waits, bootstrap
-                // requests and their SDK timeline when the renderer vanishes.
+                // Drop queued waits and SDK timeline subscriptions when the
+                // renderer vanishes. An SDK-owned in-flight pagination may
+                // outlive its waiter; view protection quiesces that SDK status.
                 tokio::select! { _ = &mut observer => {}, _ = expiry => {} }
             }));
             running += 1;
@@ -277,17 +322,20 @@ impl ApprovalInboxOwner {
             session_generation: self.session_generation,
             items: Vec::new(),
             loading: false,
-            // An idle latest-event index cannot prove that no prompt preceded
-            // a newer message. Never claim an authoritative zero from it.
-            incomplete: truncated_rooms || self.rooms.len() < joined.len(),
+            incomplete: truncated_rooms,
             coverage_window_ms: AGENT_APPROVAL_TTL_MS,
+            coverage: NativeAgentApprovalInboxCoverage::LatestEvent,
         };
+        let mut checked_all = true;
+        let mut deferred = false;
         for room in &joined {
             let id = room.room_id().as_str();
             let Some(entry) = self.rooms.get(id) else {
+                checked_all = false;
+                snapshot.loading |= discovery_active;
                 continue;
             };
-            let (items, loading, incomplete) = {
+            let (items, loading, incomplete, can_send) = {
                 let mut state = entry
                     .state
                     .lock()
@@ -295,23 +343,20 @@ impl ApprovalInboxOwner {
                 state
                     .items
                     .retain(|item| now.saturating_sub(item.origin_server_ts) < HISTORY_MS);
-                (state.items.clone(), state.loading, state.incomplete)
+                checked_all &= state.checked;
+                deferred |= state.deferred;
+                snapshot.loading |=
+                    discovery_active && !state.checked && !state.deferred && !state.incomplete;
+                (
+                    state.items.clone(),
+                    state.loading && !state.deferred,
+                    state.incomplete,
+                    state.can_send_reaction,
+                )
             };
-            snapshot.loading |= loading && entry.task.is_some();
-            snapshot.incomplete |=
-                incomplete || entry.task.as_ref().is_none_or(|t| t.is_finished());
-            // Power levels are native cached room state; renderer parsing never
-            // decides whether an approval action is permitted.
-            let can_send = if items.is_empty() {
-                false
-            } else {
-                room.power_levels().await.is_ok_and(|levels| {
-                    levels.user_can_send_message(
-                        own_user,
-                        matrix_sdk::ruma::events::MessageLikeEventType::Reaction,
-                    )
-                })
-            };
+            snapshot.loading |=
+                loading && entry.task.as_ref().is_some_and(|task| !task.is_finished());
+            snapshot.incomplete |= incomplete;
             snapshot.items.extend(items.iter().filter_map(|item| {
                 project_approval(id, item, own_user.as_str(), now, decisions).map(|mut item| {
                     item.can_send_reaction = can_send
@@ -321,6 +366,12 @@ impl ApprovalInboxOwner {
                 })
             }));
         }
+        snapshot.coverage =
+            if !deferred && (discovery_active || (!joined.is_empty() && checked_all)) {
+                NativeAgentApprovalInboxCoverage::Discovery
+            } else {
+                NativeAgentApprovalInboxCoverage::LatestEvent
+            };
         snapshot.items.sort_by(|left, right| {
             let rank = |item: &NativeAgentApprovalInboxItem| {
                 usize::from(item.status != NativeAgentApprovalInboxStatus::Pending)
@@ -467,11 +518,12 @@ async fn bootstrap_history(timeline: &Timeline) {
     }
 }
 
-fn publish_room(
+fn publish_observed(
     state: &std::sync::Mutex<RoomSnapshot>,
     items: impl Iterator<Item = NativeTimelineItem>,
     own_user: &str,
     covered: bool,
+    deferred: bool,
 ) {
     let now = agent_approval_now_ms().unwrap_or_default();
     let mut pending_decryption = false;
@@ -487,12 +539,26 @@ fn publish_room(
         })
         .collect();
     if let Ok(mut state) = state.lock() {
-        *state = RoomSnapshot {
-            items,
-            loading: false,
-            incomplete: !covered || pending_decryption,
+        state.items = items;
+        state.loading = false;
+        state.incomplete = if deferred {
+            state.incomplete || pending_decryption
+        } else {
+            !covered || pending_decryption
         };
+        state.checked = !deferred;
+        state.deferred = deferred;
     }
+}
+
+#[cfg(test)]
+fn publish_room(
+    state: &std::sync::Mutex<RoomSnapshot>,
+    items: impl Iterator<Item = NativeTimelineItem>,
+    own_user: &str,
+    covered: bool,
+) {
+    publish_observed(state, items, own_user, covered, false);
 }
 
 async fn observe_room(
@@ -501,6 +567,7 @@ async fn observe_room(
     state: Arc<std::sync::Mutex<RoomSnapshot>>,
     slots: Arc<Semaphore>,
     reusable: Option<Weak<Timeline>>,
+    history: Arc<RoomHistory>,
 ) {
     loop {
         if !observe_room_lease_with_timeline(
@@ -510,6 +577,7 @@ async fn observe_room(
             &slots,
             OBSERVER_BUDGET,
             reusable.as_ref().and_then(Weak::upgrade),
+            history.clone(),
         )
         .await
         {
@@ -531,10 +599,14 @@ async fn observe_room_lease_with_timeline(
     slots: &Semaphore,
     budget: ObserverBudget,
     reusable: Option<Arc<Timeline>>,
+    history: Arc<RoomHistory>,
 ) -> bool {
+    let mut history_changes = history.subscribe();
     let Ok(permit) = slots.acquire().await else {
         return false;
     };
+    let reusable = reusable.filter(|_| history.protected());
+    let mut borrowed = reusable.is_some();
     let built = timeout(BOOTSTRAP_TIMEOUT, async {
         if let Some(timeline) = reusable {
             return Ok(timeline);
@@ -546,7 +618,7 @@ async fn observe_room_lease_with_timeline(
             .map(Arc::new)
     })
     .await;
-    let timeline = match built {
+    let mut timeline = match built {
         Ok(Ok(timeline)) => timeline,
         _ => {
             if let Ok(mut state) = state.lock() {
@@ -556,17 +628,24 @@ async fn observe_room_lease_with_timeline(
             return false;
         }
     };
-    let _ = timeout(BOOTSTRAP_TIMEOUT, bootstrap_history(&timeline)).await;
+    if !borrowed {
+        history
+            .run(async {
+                let _ = timeout(BOOTSTRAP_TIMEOUT, bootstrap_history(&timeline)).await;
+            })
+            .await;
+    }
     let (mut items, mut updates) = timeline.subscribe().await;
     let initial_item_count = items.len();
     let covered = window_covered(items.iter(), agent_approval_now_ms().unwrap_or_default());
-    publish_room(
+    publish_observed(
         state,
         items
             .iter()
             .filter_map(|item| project_item(item, Some(own_user))),
         own_user.as_str(),
         covered,
+        !covered && (borrowed || history.protected()),
     );
     drop(permit);
     let lease_end = tokio::time::sleep(budget.lifetime);
@@ -598,10 +677,13 @@ async fn observe_room_lease_with_timeline(
             }
             _ = retry.tick() => {
                 if backfill.is_none()
+                    && !borrowed && !history.protected()
                     && !window_covered(items.iter(), agent_approval_now_ms().unwrap_or_default()) {
-                    backfill = Some(Box::pin(async {
+                    let timeline = Arc::clone(&timeline);
+                    let history = Arc::clone(&history);
+                    backfill = Some(Box::pin(async move {
                         let Ok(_permit) = slots.acquire().await else { return; };
-                        let _ = timeout(BOOTSTRAP_TIMEOUT, bootstrap_history(&timeline)).await;
+                        history.run(async { let _ = timeout(BOOTSTRAP_TIMEOUT, bootstrap_history(&timeline)).await; }).await;
                     }));
                 }
             }
@@ -614,6 +696,24 @@ async fn observe_room_lease_with_timeline(
                 // never replay its queued diffs against this new snapshot.
                 (items, updates) = timeline.subscribe().await;
             }
+            _ = history_changes.changed() => {
+                backfill = None;
+                if !history.protected() {
+                    if borrowed {
+                        // The registry's view lease, not Arc counts, establishes
+                        // release: cached registry Arcs may outlive the UI.
+                        let Ok(Ok(owned)) = timeout(BOOTSTRAP_TIMEOUT, TimelineBuilder::new(room)
+                            .track_read_marker_and_receipts(TimelineReadReceiptTracking::Disabled).build()).await else {
+                            if let Ok(mut state) = state.lock() { state.incomplete = true; }
+                            return false;
+                        };
+                        timeline = Arc::new(owned);
+                        borrowed = false;
+                        (items, updates) = timeline.subscribe().await;
+                    }
+                    retry.reset_immediately();
+                }
+            }
             _ = &mut lease_end => break,
         }
         // Recompute coverage after EVERY SDK diff. Clear/Reset, and the Remove
@@ -621,15 +721,18 @@ async fn observe_room_lease_with_timeline(
         // proof as soon as the boundary event/TimelineStart marker disappears.
         let covered = window_covered(items.iter(), agent_approval_now_ms().unwrap_or_default());
         if was_covered && !covered {
+            // Losing a boundary requests a new check. Deliberate deferral
+            // remains neutral; publish_observed preserves any real failure.
             retry.reset_immediately();
         }
-        publish_room(
+        publish_observed(
             state,
             items
                 .iter()
                 .filter_map(|item| project_item(item, Some(own_user))),
             own_user.as_str(),
             covered,
+            !covered && (borrowed || history.protected()),
         );
         if items.len() >= initial_item_count.saturating_add(budget.max_growth) {
             break;
@@ -649,7 +752,16 @@ async fn observe_room_lease(
     slots: &Semaphore,
     budget: ObserverBudget,
 ) -> bool {
-    observe_room_lease_with_timeline(room, own_user, state, slots, budget, None).await
+    observe_room_lease_with_timeline(
+        room,
+        own_user,
+        state,
+        slots,
+        budget,
+        None,
+        ApprovalHistory::default().room(room.room_id().as_str()),
+    )
+    .await
 }
 
 #[cfg(test)]
@@ -840,9 +952,10 @@ mod tests {
             .await
             .unwrap();
         assert!(badge.items.is_empty());
-        assert!(
-            badge.incomplete,
-            "latest-event zero cannot certify older pending requests"
+        assert!(!badge.incomplete);
+        assert_eq!(
+            badge.coverage,
+            NativeAgentApprovalInboxCoverage::LatestEvent
         );
         assert!(!badge.loading);
         assert!(
@@ -857,7 +970,9 @@ mod tests {
             .snapshot(&client, &HashSet::new(), true, HashMap::new())
             .await
             .unwrap();
-        assert!(page.incomplete);
+        assert!(!page.incomplete);
+        assert!(page.loading);
+        assert_eq!(page.coverage, NativeAgentApprovalInboxCoverage::Discovery);
         assert_eq!(
             inbox.rooms.values().filter(|e| e.task.is_some()).count(),
             MAX_OBSERVERS
@@ -950,7 +1065,7 @@ mod tests {
             .snapshot(&client, &HashSet::new(), false, HashMap::new())
             .await
             .unwrap();
-        assert!(snapshot.incomplete);
+        assert!(!snapshot.incomplete);
         assert_eq!(
             inbox.rooms.values().filter(|e| e.task.is_some()).count(),
             MAX_OBSERVERS
@@ -1017,7 +1132,7 @@ mod tests {
                     .snapshot(&client, &HashSet::new(), true, HashMap::new())
                     .await
                     .unwrap();
-                assert!(snapshot.incomplete);
+                assert!(!snapshot.incomplete);
                 assert!(
                     inbox
                         .rooms
@@ -1177,3 +1292,6 @@ mod tests {
         assert!(ApprovalInboxOwner::new(2).rooms.is_empty());
     }
 }
+
+#[cfg(test)]
+mod ownership_tests;

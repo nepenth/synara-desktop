@@ -22,6 +22,7 @@ const item: ApprovalInboxItem = {
 };
 const snapshot = {
   coverageWindowMs: 300000,
+  coverage: 'discovery',
   sessionGeneration: 2,
   items: [item],
   loading: false,
@@ -48,6 +49,15 @@ test('snapshot validation rejects stub, malformed expiry, duplicate identities, 
   ]) {
     assert.equal(acceptsApprovalInbox(value), false);
   }
+});
+
+test('snapshot coverage is required and accepts only discovery or latest-event modes', () => {
+  const withoutCoverage: Record<string, unknown> = { ...snapshot };
+  delete withoutCoverage.coverage;
+  assert.equal(acceptsApprovalInbox(withoutCoverage), false);
+  assert.equal(acceptsApprovalInbox({ ...snapshot, coverage: 'unknown' }), false);
+  assert.equal(acceptsApprovalInbox({ ...snapshot, coverage: 'latest_event' }), true);
+  assert.equal(acceptsApprovalInbox({ ...snapshot, coverage: 'discovery' }), true);
 });
 
 test('approval identities include the room and never collapse equal event labels across rooms', () => {

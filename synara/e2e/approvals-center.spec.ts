@@ -45,7 +45,7 @@ test('search does not change global count and source message navigation retains 
 }) => {
   await page.goto(route);
   await page.getByRole('searchbox', { name: 'Search approval requests' }).fill('Home');
-  await expect(page.getByRole('region')).toHaveCount(1);
+  await expect(page.getByRole('region', { name: /^Approval from / })).toHaveCount(1);
   await expect(page.getByTestId('pending-count')).toHaveText('2 pending');
   await page.getByRole('button', { name: 'Open message', exact: true }).click();
   await expect(page.getByText('Opened !home:example.test / $request-2')).toBeVisible();
@@ -110,7 +110,7 @@ test('Core-pending unformatted requests show full source and native approval con
   page,
 }) => {
   await page.goto(`${route}?unparsed`);
-  await expect(page.getByRole('region')).toHaveCount(2);
+  await expect(page.getByRole('region', { name: /^Approval from / })).toHaveCount(2);
   await expect(
     page.getByText('⚠️ Dangerous command requires approval', { exact: true })
   ).toBeVisible();
@@ -123,7 +123,10 @@ test('Core-pending unformatted requests show full source and native approval con
 
 test('full prompt stays open through clock updates and refreshes', async ({ page }) => {
   await page.goto(route);
-  const details = page.getByRole('region').first().locator('details');
+  const details = page
+    .getByRole('region', { name: /^Approval from / })
+    .first()
+    .locator('details');
   await details.locator('summary').click();
   await expect(details).toHaveAttribute('open', '');
   await page.getByRole('button', { name: 'Refresh approval requests' }).click();
@@ -206,4 +209,85 @@ test('Core permissions disable decisions and truncated previews require the sour
     )
   ).toHaveCount(2);
   await expect(page.getByRole('button', { name: '✅ Approve once', exact: true })).toHaveCount(0);
+});
+
+test('healthy idle latest-event coverage has no alarm badge with zero requests', async ({
+  page,
+}) => {
+  await page.goto(`${route}?idle&latest&empty`);
+  const rail = page.getByRole('button', { name: 'Approvals · recent activity', exact: true });
+  await expect(rail).toBeVisible();
+  await expect(rail.locator('..').locator('span[aria-hidden="true"]')).toHaveCount(0);
+  await expect(page.getByTestId('discovery-active')).toHaveText('false');
+});
+
+test('latest-event pending counts are exact rather than partial-coverage alarms', async ({
+  page,
+}) => {
+  await page.goto(`${route}?idle&latest`);
+  const rail = page.getByRole('button', {
+    name: 'Approvals · 2 pending · recent activity',
+    exact: true,
+  });
+  await expect(rail).toBeVisible();
+  await expect(rail.locator('..').locator('span[aria-hidden="true"]')).toHaveText('2');
+});
+
+test('loading by itself neither displays an alarm nor appends a plus to pending counts', async ({
+  page,
+}) => {
+  await page.goto(`${route}?loading&empty`);
+  const emptyRail = page.getByRole('button', { name: 'Approvals · checking rooms', exact: true });
+  await expect(emptyRail).toBeVisible();
+  await expect(emptyRail.locator('..').locator('span[aria-hidden="true"]')).toHaveCount(0);
+  await page.goto(`${route}?loading`);
+  const pendingRail = page.getByRole('button', {
+    name: 'Approvals · 2 pending · checking rooms',
+    exact: true,
+  });
+  await expect(pendingRail).toBeVisible();
+  await expect(pendingRail.locator('..').locator('span[aria-hidden="true"]')).toHaveText('2');
+});
+
+test('genuine incomplete coverage and refresh failures retain distinct alarm badges', async ({
+  page,
+}) => {
+  await page.goto(`${route}?empty&partial`);
+  const emptyRail = page.getByRole('button', { name: 'Approvals · partial coverage', exact: true });
+  await expect(emptyRail).toBeVisible();
+  await expect(emptyRail.locator('..').locator('span[aria-hidden="true"]')).toHaveText('!');
+  await page.goto(`${route}?partial`);
+  const partialRail = page.getByRole('button', {
+    name: 'Approvals · 2+ pending · partial coverage',
+    exact: true,
+  });
+  await expect(partialRail).toBeVisible();
+  await expect(partialRail.locator('..').locator('span[aria-hidden="true"]')).toHaveText('2+');
+  await page.getByRole('button', { name: 'Toggle partial coverage' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Approvals · 2 pending', exact: true })
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Toggle network failure' }).click();
+  const errorRail = page.getByRole('button', {
+    name: 'Approvals · 2+ pending · unavailable',
+    exact: true,
+  });
+  await expect(errorRail).toBeVisible();
+  await expect(errorRail.locator('..').locator('span[aria-hidden="true"]')).toHaveText('2+');
+  await page.goto(`${route}?empty&error`);
+  const emptyErrorRail = page.getByRole('button', { name: 'Approvals · unavailable', exact: true });
+  await expect(emptyErrorRail).toBeVisible();
+  await expect(emptyErrorRail.locator('..').locator('span[aria-hidden="true"]')).toHaveText('!');
+});
+
+test('leaving healthy discovery switches to neutral recent activity without an alarm', async ({
+  page,
+}) => {
+  await page.goto(`${route}?empty`);
+  await expect(page.getByRole('button', { name: 'Approvals', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Leave approvals' }).click();
+  const rail = page.getByRole('button', { name: 'Approvals · recent activity', exact: true });
+  await expect(rail).toBeVisible();
+  await expect(rail.locator('..').locator('span[aria-hidden="true"]')).toHaveCount(0);
+  await expect(page.getByTestId('discovery-active')).toHaveText('false');
 });

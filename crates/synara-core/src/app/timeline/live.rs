@@ -71,10 +71,15 @@ use super::{
     TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
+mod approval_history;
+#[cfg(test)]
+mod approval_history_tests;
+use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
 use approval_inbox::ApprovalInboxOwner;
 pub use approval_inbox::{
-    NativeAgentApprovalInboxItem, NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
+    NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxItem,
+    NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
 };
 
 const PAGINATION_BATCH_SIZE: u16 = 30;
@@ -306,6 +311,7 @@ struct LiveTimelineEntry {
 }
 
 struct ViewStreamEntry {
+    _approval_history: HistoryProtection,
     room_id: String,
     timeline: Arc<Timeline>,
     position: TimelineViewPosition,
@@ -314,6 +320,7 @@ struct ViewStreamEntry {
 }
 
 pub struct NativeTimelineRegistry {
+    approval_history: Arc<ApprovalHistory>,
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
@@ -340,14 +347,19 @@ pub struct NativeTimelineOwner {
 
 impl NativeTimelineOwner {
     pub fn new(client: &Client, emit: TimelineViewUpdateEmit, session_generation: u64) -> Self {
+        let registry = NativeTimelineRegistry::new(session_generation);
+        let approval_history = registry.approval_history.clone();
         Self {
             client: client.clone(),
             emit,
-            registry: tokio::sync::Mutex::new(NativeTimelineRegistry::new(session_generation)),
+            registry: tokio::sync::Mutex::new(registry),
             approval_decisions: Arc::new(
                 std::sync::Mutex::new(ApprovalDecisionRegistry::default()),
             ),
-            approval_inbox: tokio::sync::Mutex::new(ApprovalInboxOwner::new(session_generation)),
+            approval_inbox: tokio::sync::Mutex::new(ApprovalInboxOwner::with_history(
+                session_generation,
+                approval_history,
+            )),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
         }
@@ -375,11 +387,7 @@ impl NativeTimelineOwner {
         // certify current cross-room coverage, and registry ownership is unchanged.
         let reusable = {
             let registry = self.registry.lock().await;
-            let mut timelines: HashMap<_, _> = registry
-                .entries
-                .iter()
-                .map(|(id, entry)| (id.clone(), Arc::downgrade(&entry.timeline)))
-                .collect();
+            let mut timelines = HashMap::new();
             for view in registry.view_streams.values() {
                 if matches!(view.position, TimelineViewPosition::LiveBottom) {
                     timelines.insert(view.room_id.clone(), Arc::downgrade(&view.timeline));
@@ -1357,6 +1365,7 @@ impl NativeTimelineOwner {
 impl NativeTimelineRegistry {
     pub fn new(session_generation: u64) -> Self {
         Self {
+            approval_history: Arc::new(ApprovalHistory::default()),
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
@@ -1437,6 +1446,14 @@ impl NativeTimelineRegistry {
     ) -> Result<NativeTimelineOpenReadback, &'static str> {
         let room_id = parse_room_id(&request.room_id)?;
         let room_id_string = room_id.to_string();
+        let protected_room = client
+            .get_room(&room_id)
+            .ok_or("d0.3-timeline-room-not-found")?;
+        let approval_history = self
+            .approval_history
+            .room(&room_id_string)
+            .protect(&protected_room)
+            .await?;
         let requested_position = request.position;
         let (timeline, view_position, pagination) = match &requested_position {
             NativeTimelineOpenPosition::Normal { viewport } => {
@@ -1639,31 +1656,14 @@ impl NativeTimelineRegistry {
             self.next_view_stream_id
         );
         let revision = Arc::new(AtomicU64::new(0));
-        self.view_revisions
-            .insert(subscription_key.clone(), revision.clone());
         let hit_start = Arc::new(AtomicBool::new(matches!(
             pagination.backward,
             TimelinePageState::Exhausted
         )));
-        self.view_streams.insert(
+        let media = Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
+            self.session_generation,
             subscription_key.clone(),
-            ViewStreamEntry {
-                room_id: room_id_string.clone(),
-                timeline: timeline.clone(),
-                position: view_position.clone(),
-                hit_start: hit_start.clone(),
-                media: Arc::new(AsyncMutex::new(TimelineMediaRegistry::new(
-                    self.session_generation,
-                    subscription_key.clone(),
-                ))),
-            },
-        );
-        let media = self
-            .view_streams
-            .get(&subscription_key)
-            .expect("view stream inserted before projection")
-            .media
-            .clone();
+        )));
         // Subscribe before materializing the initial rows so no SDK update can
         // fall into a snapshot-to-stream gap. Every open owns a distinct
         // stream, revision counter, update task, and media registry.
@@ -1703,6 +1703,21 @@ impl NativeTimelineRegistry {
             rows,
         )
         .await;
+        // Publish ownership only after all awaited initialization succeeds.
+        // Cancellation before this point drops the local history protection.
+        self.view_revisions
+            .insert(subscription_key.clone(), revision.clone());
+        self.view_streams.insert(
+            subscription_key.clone(),
+            ViewStreamEntry {
+                _approval_history: approval_history,
+                room_id: room_id_string.clone(),
+                timeline: timeline.clone(),
+                position: view_position.clone(),
+                hit_start: hit_start.clone(),
+                media: media.clone(),
+            },
+        );
         self.view_update_tasks.insert(
             subscription_key.clone(),
             spawn_view_update_owner(

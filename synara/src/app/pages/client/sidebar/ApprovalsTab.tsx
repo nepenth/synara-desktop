@@ -15,18 +15,20 @@ import { useNavigateToApprovals } from '../../../hooks/useNavigateToApprovals';
 export function ApprovalsTab() {
   const navigateToApprovals = useNavigateToApprovals();
   const selected = Boolean(useMatch({ path: APPROVALS_PATH, end: false }));
-  const { pendingCount, loading, incomplete, error } = useApprovalInboxSummary();
-  const uncertain = loading || incomplete || Boolean(error);
-  const coverage = error
+  const { pendingCount, loading, incomplete, coverage, error } = useApprovalInboxSummary();
+  const needsAttention = incomplete || Boolean(error);
+  const coverageDescription = error
     ? 'unavailable'
-    : loading
-    ? 'checking rooms'
     : incomplete
     ? 'partial coverage'
+    : loading
+    ? 'checking rooms'
+    : coverage === 'latest_event'
+    ? 'recent activity'
     : '';
   const label = `Approvals${
-    pendingCount ? ` · ${pendingCount}${uncertain ? '+' : ''} pending` : ''
-  }${coverage ? ` · ${coverage}` : ''}`;
+    pendingCount ? ` · ${pendingCount}${needsAttention ? '+' : ''} pending` : ''
+  }${coverageDescription ? ` · ${coverageDescription}` : ''}`;
   return (
     <SidebarItem active={selected}>
       <SidebarItemTooltip tooltip={label}>
@@ -43,10 +45,10 @@ export function ApprovalsTab() {
           </SidebarAvatar>
         )}
       </SidebarItemTooltip>
-      {(pendingCount > 0 || uncertain) && (
-        <SidebarItemBadge hasCount={pendingCount > 0 || (!loading && uncertain)}>
-          <span aria-hidden="true" title={coverage || undefined}>
-            {uncertain && (pendingCount > 0 || !loading) ? (
+      {(pendingCount > 0 || needsAttention) && (
+        <SidebarItemBadge hasCount>
+          <span aria-hidden="true" title={coverageDescription || undefined}>
+            {needsAttention ? (
               <Badge
                 variant={pendingCount > 0 ? 'Success' : 'Warning'}
                 size="400"

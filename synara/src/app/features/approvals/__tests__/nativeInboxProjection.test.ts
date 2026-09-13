@@ -11,6 +11,7 @@ import { decideAgentApprovalWithNativeOwner } from '../../room/nativeReactionOwn
 const snapshot = (sessionGeneration: number): ApprovalInboxSnapshot => ({
   sessionGeneration,
   coverageWindowMs: 300000,
+  coverage: 'discovery',
   loading: false,
   incomplete: false,
   items: [

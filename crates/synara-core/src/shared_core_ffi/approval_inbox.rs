@@ -1,7 +1,10 @@
 //! Apple-shell access to the same session-owned approvals index as desktop.
 //! No platform scanner or eligibility policy exists on this boundary.
 use super::SharedCore;
-use crate::app::timeline::{NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus};
+use crate::app::timeline::{
+    NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxSnapshot,
+    NativeAgentApprovalInboxStatus,
+};
 use crate::transport::{CommandEnvelope, MatrixIpcErrorCategory};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +27,7 @@ pub struct AgentApprovalInboxDto {
     pub loading: bool,
     pub incomplete: bool,
     pub coverage_window_ms: u64,
+    pub coverage: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -81,6 +85,11 @@ impl SharedCore {
             loading: snapshot.loading,
             incomplete: snapshot.incomplete,
             coverage_window_ms: snapshot.coverage_window_ms,
+            coverage: match snapshot.coverage {
+                NativeAgentApprovalInboxCoverage::LatestEvent => "latest_event",
+                NativeAgentApprovalInboxCoverage::Discovery => "discovery",
+            }
+            .to_owned(),
             items: snapshot
                 .items
                 .into_iter()
@@ -117,7 +126,7 @@ mod tests {
         registry.register("matrix_agent_approvals_list", |_state: Arc<CoreState>, request: CommandEnvelope| -> CommandFuture {
             Box::pin(async move {
                 assert_eq!(request.payload, serde_json::json!({ "discoveryActive": true }));
-                Ok(serde_json::json!({"sessionGeneration": 12, "loading": false, "incomplete": true, "coverageWindowMs": 300000,
+                Ok(serde_json::json!({"sessionGeneration": 12, "loading": false, "incomplete": true, "coverageWindowMs": 300000, "coverage": "discovery",
                     "items": [{"roomId":"!room:example.org","eventId":"$prompt","sender":"@hermes:example.org","body":"preview","originServerTs": 1000,"expiresAt":301000,"status":"pending","canSendReaction":false,"bodyTruncated":true}]}))
             })
         }).unwrap();
@@ -129,6 +138,7 @@ mod tests {
         let snapshot = shared.agent_approvals_list(true).await.unwrap();
         assert_eq!(snapshot.session_generation, 12);
         assert_eq!(snapshot.coverage_window_ms, 300000);
+        assert_eq!(snapshot.coverage, "discovery");
         assert!(snapshot.incomplete);
         assert!(snapshot.items[0].body_truncated);
         assert!(!snapshot.items[0].can_send_reaction);

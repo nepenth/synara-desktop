@@ -53,8 +53,9 @@ pub use focus::{
     ContextWindow, FocusOpenOutcome, FocusOpenRequest, NavigationPhase, TimelineFocus, TimelineMode,
 };
 pub use live::{
-    NativeAgentApprovalInboxItem, NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus,
-    NativeTimelineOwner, NativeTimelineRegistry,
+    NativeAgentApprovalInboxCoverage, NativeAgentApprovalInboxItem,
+    NativeAgentApprovalInboxSnapshot, NativeAgentApprovalInboxStatus, NativeTimelineOwner,
+    NativeTimelineRegistry,
 };
 pub use media::{
     is_timeline_media_handle, TimelineMediaRegistry, TimelineMediaSource,

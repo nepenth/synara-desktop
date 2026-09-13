@@ -74,6 +74,7 @@ Object.assign(window, {
         return {
           sessionGeneration,
           coverageWindowMs: 300000,
+          coverage: query.has('latest') || !lastDiscoveryActive ? 'latest_event' : 'discovery',
           items: items.map((item) => ({ ...item })),
           loading,
           incomplete,
@@ -364,7 +365,7 @@ function Fixture() {
   );
 }
 createRoot(document.getElementById('root')!).render(
-  <MemoryRouter initialEntries={['/approvals/']}>
+  <MemoryRouter initialEntries={[query.has('idle') ? '/home/' : '/approvals/']}>
     <MatrixClientProvider value={mx}>
       <ApprovalInboxProvider>
         <Fixture />

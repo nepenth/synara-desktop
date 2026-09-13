@@ -63,6 +63,7 @@ store.set(roomToParentsAtom, {
 const now = Date.now();
 const inbox: ApprovalInboxContextValue = {
   sessionGeneration: 1,
+  coverage: 'discovery',
   pendingCount: 1,
   loading: false,
   incomplete: false,
