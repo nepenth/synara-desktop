@@ -1,3 +1,7 @@
+import {
+  captureApprovalDecisionScope,
+  publishApprovalDecision,
+} from '../approvals/approvalDecisionEvents';
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
 
 export type NativeReactionMutation = 'added' | 'removed' | 'already_present' | 'redacted';
@@ -140,10 +144,19 @@ export async function decideAgentApprovalWithNativeOwner(
   },
   invoke: NativeAgentApprovalInvoke = defaultAgentApprovalInvoke
 ): Promise<NativeAgentApprovalDecisionResult> {
+  const scope = captureApprovalDecisionScope();
   const result = await invoke('matrix_agent_approval_decide', input);
   if (!result.available || !result.value) {
     throw new Error('Native agent approval decisions are unavailable.');
   }
+  if (
+    result.value.roomId !== input.roomId ||
+    result.value.eventId !== input.eventId ||
+    !['applied', 'already_decided'].includes(result.value.status)
+  ) {
+    throw new Error('Native agent approval readback did not match the requested decision.');
+  }
+  publishApprovalDecision({ scope, roomId: input.roomId, eventId: input.eventId });
   return result.value;
 }
 

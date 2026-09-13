@@ -13,6 +13,7 @@ mod decision;
 mod edit_policy;
 mod error;
 mod http_pusher;
+mod inbox;
 mod index;
 mod observation;
 mod push_rules;
@@ -29,6 +30,9 @@ pub use error::NotificationError;
 pub use http_pusher::{
     delete_http_pusher, register_http_pusher, MatrixHttpPusherWriteResult, NativeHttpPusherOwner,
     MAX_APP_ID_BYTES, MAX_PUSH_KEY_BYTES,
+};
+pub use inbox::{
+    fetch_inbox_notifications, MatrixInboxNotificationsPage, MatrixInboxNotificationsRequest,
 };
 pub use index::{NotificationIndex, MAX_PENDING_CANDIDATES};
 pub use observation::{

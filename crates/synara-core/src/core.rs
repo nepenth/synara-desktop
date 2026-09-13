@@ -2023,6 +2023,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_invites_report_spam", matrix_invites_report_spam)
         .expect("built-in matrix_invites_report_spam must remain in the command census");
     registry
+        .register("matrix_inbox_notifications", matrix_inbox_notifications)
+        .expect("built-in matrix_inbox_notifications must remain in the command census");
+    registry
         .register("matrix_invites_snapshot", matrix_invites_snapshot)
         .expect("built-in matrix_invites_snapshot must remain in the command census");
     registry
@@ -2422,6 +2425,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_agent_approval_decide", matrix_agent_approval_decide)
         .expect("built-in matrix_agent_approval_decide must remain in the command census");
     registry
+        .register("matrix_agent_approvals_list", matrix_agent_approvals_list)
+        .expect("built-in matrix_agent_approvals_list must remain in the command census");
+    registry
         .register("matrix_typing_set", matrix_typing_set)
         .expect("built-in matrix_typing_set must remain in the command census");
     registry
@@ -2624,7 +2630,8 @@ fn timeline_open_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.3-timeline-invalid-room-id"
         | "v-timeline-view-not-open"
-        | "v-timeline-normal-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-normal-room-not-found"
+        | "d0.3-timeline-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2779,6 +2786,32 @@ fn matrix_reaction_ensure(state: Arc<CoreState>, request: CommandEnvelope) -> Co
             .map_err(timeline_reaction_owner_error)?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-reaction-ensure-serialization-failed"))
+    })
+}
+
+fn matrix_agent_approvals_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        #[derive(serde::Deserialize)]
+        #[serde(rename_all = "camelCase", deny_unknown_fields)]
+        struct Request {
+            #[serde(default)]
+            discovery_active: bool,
+        }
+        let payload: Request = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("agent-approval-inbox-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("agent-approval-no-session")
+        })?;
+        let result = owner
+            .agent_approvals_list_with_discovery(payload.discovery_active)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                    .with_diagnostic(diagnostic)
+            })?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("agent-approval-inbox-serialization-failed"))
     })
 }
 
@@ -5169,6 +5202,31 @@ fn matrix_room_notification_set(state: Arc<CoreState>, request: CommandEnvelope)
     })
 }
 
+fn matrix_inbox_notifications(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: crate::app::notifications::MatrixInboxNotificationsRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("inbox-notifications.invalid-request"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("inbox-notifications.no-session")
+        })?;
+        let result = owner
+            .fetch_inbox_notifications(payload)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(if diagnostic == "inbox-notifications.invalid-request" {
+                    MatrixIpcErrorCategory::SdkInvariant
+                } else {
+                    MatrixIpcErrorCategory::Unknown
+                })
+                .with_diagnostic(diagnostic)
+            })?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("inbox-notifications.serialization-failed"))
+    })
+}
+
 fn matrix_room_notifications_snapshot(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -6220,6 +6278,7 @@ mod tests {
             core.registered_commands(),
             vec![
                 "matrix_agent_approval_decide",
+                "matrix_agent_approvals_list",
                 "matrix_backup_status",
                 "matrix_composer_clear_reply_draft",
                 "matrix_composer_get_reply_draft",
@@ -6240,6 +6299,7 @@ mod tests {
                 "matrix_ignored_users_ignore",
                 "matrix_ignored_users_snapshot",
                 "matrix_ignored_users_unignore",
+                "matrix_inbox_notifications",
                 "matrix_invites_accept",
                 "matrix_invites_block_sender",
                 "matrix_invites_decline",
@@ -7945,6 +8005,37 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_agent_approvals_list_requires_session_and_rejects_unknown_input() {
+        let core = Core::new(Arc::new(TestPlatform));
+        for (payload, expected) in [
+            (serde_json::json!({}), MatrixIpcErrorCategory::Forbidden),
+            (
+                serde_json::json!({"discoveryActive": true}),
+                MatrixIpcErrorCategory::Forbidden,
+            ),
+            (
+                serde_json::json!({"discoveryActive": "yes"}),
+                MatrixIpcErrorCategory::SdkInvariant,
+            ),
+            (
+                serde_json::json!({"roomId": "!unexpected:example.org"}),
+                MatrixIpcErrorCategory::SdkInvariant,
+            ),
+        ] {
+            let error = core
+                .command(CommandEnvelope {
+                    command: "matrix_agent_approvals_list".into(),
+                    session_generation: 0,
+                    request_id: None,
+                    payload,
+                })
+                .await
+                .expect_err("inbox must reject invalid requests");
+            assert_eq!(error.category, expected);
+        }
+    }
+
+    #[tokio::test]
     async fn matrix_agent_approval_decide_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -8045,6 +8136,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-list-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_inbox_notifications_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let result = core
+            .command(CommandEnvelope {
+                command: "matrix_inbox_notifications".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "limit": 30, "only": "highlight" }),
+            })
+            .await
+            .expect_err("no owner must not return a false empty Inbox");
+        assert_eq!(result.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            result.diagnostic_id.as_deref(),
+            Some("inbox-notifications.no-session")
         );
     }
 

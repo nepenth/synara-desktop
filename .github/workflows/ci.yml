@@ -617,6 +617,10 @@ jobs:
         run: npm run test:browser:native-timeline
         working-directory: synara
 
+      - name: Test desktop room navigation and approvals in Chromium
+        run: npm run test:browser:desktop-polish:ci
+        working-directory: synara
+
       - name: Check production dependency advisories
         run: npm run check:security
         working-directory: synara

@@ -361,6 +361,34 @@ const APPROVAL_HEADINGS = [
   'dangerous command requires approval',
 ];
 
+// Match Rust `str::chars` rather than counting JavaScript UTF-16 code units.
+const isWithinCoreApprovalBodyLimit = (body: string): boolean =>
+  body.length <= MAX_AGENT_APPROVAL_BODY_CHARS ||
+  (body.length <= MAX_AGENT_APPROVAL_BODY_CHARS * 2 &&
+    Array.from(body).length <= MAX_AGENT_APPROVAL_BODY_CHARS);
+
+/**
+ * Syntax prefilter for native notification observations. Keep this identical to
+ * Core's `is_agent_approval_prompt`: the first nonempty line must normalize to
+ * one exact heading. Core still owns sender, expiry, and reaction authority.
+ */
+const hasCoreApprovalHeading = (body: string): boolean => {
+  if (!isWithinCoreApprovalBodyLimit(body)) return false;
+  // Rust `str::lines` splits LF/CRLF, and `split_whitespace` uses Unicode
+  // White_Space (not JS \s, which also treats U+FEFF as whitespace).
+  const firstLine = body.split('\n').find((line) => /[^\p{White_Space}]/u.test(line));
+  if (firstLine === undefined) return false;
+  const heading = firstLine
+    .split(/\p{White_Space}+/u)
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+    .replace(/^(?:⚠|\uFE0F|[ *])+/u, '')
+    .replace(/[ *:]+$/u, '')
+    .replace(/^ +| +$/g, '');
+  return APPROVAL_HEADINGS.includes(heading);
+};
+
 const normalizeWhitespace = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
 const truncate = (value: string, maxChars: number): string =>
@@ -500,21 +528,16 @@ const getApprovalBodyCandidates = (content: Record<string, unknown>): string[] =
 
   if (body) candidates.push(body);
   if (formattedBody && formattedBody !== body) candidates.push(formattedBody);
-  return candidates.filter((candidate) => candidate.length <= MAX_AGENT_APPROVAL_BODY_CHARS);
+  return candidates.filter(isWithinCoreApprovalBodyLimit);
 };
 
-const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | undefined => {
-  const normalized = normalizeWhitespace(body).toLowerCase();
-  if (!APPROVAL_HEADINGS.some((heading) => normalized.includes(heading))) return undefined;
-
+/** Formatting only: the caller must obtain eligibility from Core. */
+export const formatCoreAgentApprovalPrompt = (body: string): AgentApprovalPrompt => {
   const command = extractCommand(body);
   const commandPreview = extractCommandPreview(command);
   const reason = body.match(/\bReason:\s*([^\n]+)/i)?.[1];
   const reasonBody = reason ? truncate(normalizeWhitespace(reason), 220) : undefined;
-  const sourceContext = truncate(
-    normalizeSourceBody(body),
-    MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS
-  );
+  const sourceContext = normalizeSourceBody(body);
   const replyInstructions = extractReplyInstructions(body);
 
   return {
@@ -527,11 +550,25 @@ const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | unde
   };
 };
 
+const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | undefined => {
+  if (!hasCoreApprovalHeading(body)) return undefined;
+  const prompt = formatCoreAgentApprovalPrompt(body);
+  return {
+    ...prompt,
+    sourceContext:
+      prompt.sourceContext &&
+      truncate(prompt.sourceContext, MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS),
+  };
+};
+
 export const detectAgentApprovalPrompt = (
   content: Record<string, unknown>
 ): AgentApprovalPrompt | undefined => {
-  // Prefer the richest matching candidate when both plain body and formatted_body
-  // are present (formatted HTML sometimes strips or truncates command lines).
+  // Core classifies the plain Matrix body. Rich HTML can improve presentation
+  // only after that body passes; it cannot turn an ordinary message or quote
+  // into an approval notification.
+  if (typeof content.body !== 'string' || !hasCoreApprovalHeading(content.body)) return undefined;
+  // Prefer the richest matching presentation (HTML can strip command lines).
   const prompts = getApprovalBodyCandidates(content)
     .map(detectAgentApprovalPromptBody)
     .filter((prompt): prompt is AgentApprovalPrompt => Boolean(prompt));

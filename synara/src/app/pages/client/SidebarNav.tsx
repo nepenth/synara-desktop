@@ -18,6 +18,7 @@ import {
   SearchTab,
 } from './sidebar';
 import { CreateTab } from './sidebar/CreateTab';
+import { ApprovalsTab } from './sidebar/ApprovalsTab';
 
 export function SidebarNav() {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -44,6 +45,7 @@ export function SidebarNav() {
             <SidebarStackSeparator />
             <SidebarStack>
               <SearchTab />
+              <ApprovalsTab />
               <UnverifiedTab />
               <InboxTab />
               <SettingsTab />

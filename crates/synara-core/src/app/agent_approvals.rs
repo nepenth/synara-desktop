@@ -81,6 +81,38 @@ pub struct AgentApprovalPlan<'a> {
     pub reaction: Option<&'a str>,
 }
 
+/// Shared classification for inbox presentation and authoritative submission.
+/// Expired history can remain visible; the planner rejects it before sending.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AgentApprovalClassification {
+    pub expires_at: u64,
+    pub expired: bool,
+    pub decided: bool,
+}
+
+pub fn classify_agent_approval<'a>(
+    body: &str,
+    prompt_sender_id: &str,
+    current_user_id: &str,
+    origin_server_ts: u64,
+    now_ms: u64,
+    existing_reactions: impl IntoIterator<Item = (&'a str, bool)>,
+) -> Result<AgentApprovalClassification, &'static str> {
+    if !is_eligible_agent_approval_prompt(body, prompt_sender_id, current_user_id) {
+        return Err("agent-approval-prompt-invalid");
+    }
+    if origin_server_ts == 0 || origin_server_ts > now_ms.saturating_add(60_000) {
+        return Err("agent-approval-timestamp-invalid");
+    }
+    Ok(AgentApprovalClassification {
+        expires_at: origin_server_ts.saturating_add(AGENT_APPROVAL_TTL_MS),
+        expired: now_ms.saturating_sub(origin_server_ts) >= AGENT_APPROVAL_TTL_MS,
+        decided: existing_reactions
+            .into_iter()
+            .any(|(key, own)| own && AGENT_APPROVAL_TERMINAL_REACTIONS.contains(&key)),
+    })
+}
+
 /// Validate an approval action against authoritative event state.
 ///
 /// `existing_reactions` identifies whether each aggregate belongs to the
@@ -104,21 +136,18 @@ pub fn plan_agent_approval<'a, 'b>(
         AGENT_APPROVAL_ACTION_DENY => AGENT_APPROVAL_REACTION_DENY,
         _ => return Err("agent-approval-action-unsupported"),
     };
-    if !is_eligible_agent_approval_prompt(body, prompt_sender_id, current_user_id) {
-        return Err("agent-approval-prompt-invalid");
-    }
-    if origin_server_ts == 0 || origin_server_ts > now_ms.saturating_add(60_000) {
-        return Err("agent-approval-timestamp-invalid");
-    }
-    if now_ms.saturating_sub(origin_server_ts) >= AGENT_APPROVAL_TTL_MS {
+    let classification = classify_agent_approval(
+        body,
+        prompt_sender_id,
+        current_user_id,
+        origin_server_ts,
+        now_ms,
+        existing_reactions,
+    )?;
+    if classification.expired {
         return Err("agent-approval-expired");
     }
-    if existing_reactions
-        .into_iter()
-        .any(|(key, is_current_account)| {
-            is_current_account && AGENT_APPROVAL_TERMINAL_REACTIONS.contains(&key)
-        })
-    {
+    if classification.decided {
         return Ok(AgentApprovalPlan {
             status: AgentApprovalDecisionStatus::AlreadyDecided,
             reaction: None,

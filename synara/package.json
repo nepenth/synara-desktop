@@ -21,7 +21,9 @@
     "fix:prettier": "prettier --write .",
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
-    "test:browser:native-timeline": "playwright test --config e2e/native-timeline-harness/playwright.config.ts"
+    "test:browser:native-timeline": "playwright test --config e2e/native-timeline-harness/playwright.config.ts",
+    "test:browser:desktop-polish:ci": "playwright test --config e2e/room-list-harness/playwright.config.ts --project=chromium && playwright test --config e2e/approvals-harness/playwright.config.ts --project=chromium",
+    "test:browser:desktop-polish": "playwright test --config e2e/room-list-harness/playwright.config.ts && playwright test --config e2e/approvals-harness/playwright.config.ts"
   },
   "lint-staged": {
     "*.{ts,tsx,js,jsx}": "eslint",

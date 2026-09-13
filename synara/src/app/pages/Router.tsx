@@ -32,6 +32,7 @@ import {
   _SEARCH_PATH,
   _SERVER_PATH,
   CREATE_PATH,
+  APPROVALS_PATH,
 } from './paths';
 import {
   getAppPathFromHref,
@@ -73,6 +74,8 @@ import { getActiveSession } from '../state/sessionBootstrap';
 import { Settings } from '../features/settings';
 import { Modal500 } from '../components/Modal500';
 import { RouteError } from './RouteError';
+import { ApprovalInboxProvider } from '../features/approvals/ApprovalInboxProvider';
+import { Approvals } from '../features/approvals/Approvals';
 
 function SettingsRoute() {
   const navigate = useNavigate();
@@ -139,24 +142,26 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
               <ClientInitStorageAtom>
                 <ClientRoomsNotificationPreferences>
                   <ClientBindAtoms>
-                    <ClientNonUIFeatures>
-                      <ClientLayout
-                        nav={
-                          <MobileFriendlyClientNav>
-                            <SidebarNav />
-                          </MobileFriendlyClientNav>
-                        }
-                      >
-                        <Outlet />
-                      </ClientLayout>
-                      <SearchModalRenderer />
-                      <UserRoomProfileRenderer />
-                      <CreateRoomModalRenderer />
-                      <CreateSpaceModalRenderer />
-                      <RoomSettingsRenderer />
-                      <SpaceSettingsRenderer />
-                      <NativeVerificationInboxRenderer />
-                    </ClientNonUIFeatures>
+                    <ApprovalInboxProvider>
+                      <ClientNonUIFeatures>
+                        <ClientLayout
+                          nav={
+                            <MobileFriendlyClientNav>
+                              <SidebarNav />
+                            </MobileFriendlyClientNav>
+                          }
+                        >
+                          <Outlet />
+                        </ClientLayout>
+                        <SearchModalRenderer />
+                        <UserRoomProfileRenderer />
+                        <CreateRoomModalRenderer />
+                        <CreateSpaceModalRenderer />
+                        <RoomSettingsRenderer />
+                        <SpaceSettingsRenderer />
+                        <NativeVerificationInboxRenderer />
+                      </ClientNonUIFeatures>
+                    </ApprovalInboxProvider>
                   </ClientBindAtoms>
                 </ClientRoomsNotificationPreferences>
               </ClientInitStorageAtom>
@@ -282,6 +287,7 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           <Route path={_SERVER_PATH} element={<PublicRooms />} />
         </Route>
         <Route path={CREATE_PATH} element={<Create />} />
+        <Route path={APPROVALS_PATH} element={<Approvals />} />
         <Route
           path={INBOX_PATH}
           element={

@@ -557,6 +557,33 @@ dictionary TimelineReactionMutationDto {
   TimelineReactionDto? readback;
 };
 
+// Same Core approvals index and discovery lease consumed by desktop.
+dictionary AgentApprovalInboxItemDto {
+  string room_id;
+  string event_id;
+  string sender;
+  string body;
+  u64 origin_server_ts;
+  u64 expires_at;
+  string status;
+  boolean can_send_reaction;
+  boolean body_truncated;
+};
+
+dictionary AgentApprovalInboxDto {
+  u64 session_generation;
+  sequence<AgentApprovalInboxItemDto> items;
+  boolean loading;
+  boolean incomplete;
+  u64 coverage_window_ms;
+  string coverage;
+};
+
+[Error]
+interface AgentApprovalInboxError {
+  Failed(string code, string description);
+};
+
 // Privacy-safe result of a shared-core approval notification decision.
 dictionary AgentApprovalDecisionDto {
   string room_id;
@@ -1244,6 +1271,29 @@ dictionary RoomNotificationsSnapshotDto {
   sequence<RoomNotificationSnapshotDto> rooms;
 };
 
+// Display-only notification events from the shared authenticated history owner.
+dictionary InboxNotificationDto {
+  string room_id;
+  string event_id;
+  string sender;
+  string event_type;
+  u64 origin_server_ts;
+  string content_json;
+  string? unsigned_json;
+  u64 ts;
+  boolean read;
+};
+
+dictionary InboxNotificationsPageDto {
+  sequence<InboxNotificationDto> notifications;
+  string? next_token;
+};
+
+[Error]
+interface InboxNotificationsError {
+  Failed(string code, string description);
+};
+
 dictionary RoomNotificationWriteDto {
   string status;
 };
@@ -1914,6 +1964,9 @@ interface SharedCore {
   [Async, Throws=RoomNotificationCommandError]
   RoomNotificationsSnapshotDto room_notifications_snapshot();
 
+  [Async, Throws=InboxNotificationsError]
+  InboxNotificationsPageDto inbox_notifications(string? from, u16? limit, string? only);
+
   [Async, Throws=ThreepidCommandError]
   ThreepidSnapshotDto threepid_snapshot();
 
@@ -2044,6 +2097,9 @@ interface SharedCore {
 
   [Async, Throws=TimelineReactionError]
   TimelineReactionMutationDto reaction_ensure(string room_id, string event_id, string key);
+
+  [Async, Throws=AgentApprovalInboxError]
+  AgentApprovalInboxDto agent_approvals_list(boolean discovery_active);
 
   [Async, Throws=TimelineReactionError]
   AgentApprovalDecisionDto agent_approval_decide(string room_id, string event_id, string action_id);

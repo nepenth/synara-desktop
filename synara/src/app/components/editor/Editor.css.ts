@@ -1,17 +1,12 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, DefaultReset, toRem } from 'folds';
-import {
-  floatingShadow,
-  quietSurfaceFold,
-  raisedShadow,
-  tactileSurface,
-} from '../../styles/Depth.css';
+import { raisedShadow } from '../../styles/Depth.css';
 
 export const Editor = style([
   DefaultReset,
   {
     backgroundColor: color.Secondary.Container,
-    backgroundImage: quietSurfaceFold,
+    backgroundImage: 'none',
     color: color.Secondary.OnContainer,
     border: `${config.borderWidth.B300} solid ${color.Secondary.ContainerLine}`,
     boxShadow: raisedShadow,
@@ -131,7 +126,6 @@ export const MarkdownBtnBox = style({
 
 export const EditorFloatingOptions = style([
   DefaultReset,
-  tactileSurface,
   {
     position: 'absolute',
     zIndex: 1,
@@ -141,23 +135,8 @@ export const EditorFloatingOptions = style([
     alignItems: 'center',
     gap: toRem(2),
     padding: toRem(3),
-    borderRadius: config.radii.R300,
-    backgroundColor: color.SurfaceVariant.Container,
-    backgroundImage: quietSurfaceFold,
-    border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
-    boxShadow: floatingShadow,
-    backdropFilter: 'blur(18px) saturate(1.08)',
+    // Tools share the composer's matte plane without a separate enclosure.
+    backgroundColor: color.Secondary.Container,
     pointerEvents: 'auto',
-    '@media': {
-      '(prefers-reduced-transparency: reduce)': {
-        backdropFilter: 'none',
-        backgroundColor: color.SurfaceVariant.Container,
-      },
-      '(prefers-contrast: more)': {
-        backgroundImage: 'none',
-        boxShadow: 'none',
-        borderColor: color.SurfaceVariant.OnContainer,
-      },
-    },
   },
 ]);

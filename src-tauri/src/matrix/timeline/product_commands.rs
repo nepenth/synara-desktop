@@ -128,6 +128,18 @@ pub async fn matrix_reaction_ensure(
 }
 
 #[tauri::command]
+pub async fn matrix_agent_approvals_list(
+    discovery_active: Option<bool>,
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<synara_core::app::timeline::NativeAgentApprovalInboxSnapshot, MatrixAuthCommandError> {
+    crate::bridge::timeline_reactions::agent_approvals_list(
+        core.inner().as_ref(),
+        discovery_active.unwrap_or(false),
+    )
+    .await
+}
+
+#[tauri::command]
 pub async fn matrix_agent_approval_decide(
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,

@@ -10,6 +10,7 @@ const REACTION_TOGGLE_COMMAND: &str = "matrix_timeline_reaction_toggle";
 const REACTION_ENSURE_COMMAND: &str = "matrix_reaction_ensure";
 const REACTION_REDACT_COMMAND: &str = "matrix_reaction_redact";
 const AGENT_APPROVAL_DECIDE_COMMAND: &str = "matrix_agent_approval_decide";
+const AGENT_APPROVALS_LIST_COMMAND: &str = "matrix_agent_approvals_list";
 const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
 pub(crate) async fn reaction_toggle(
@@ -28,6 +29,42 @@ pub(crate) async fn reaction_ensure(
     key: String,
 ) -> Result<NativeReactionMutationResult, MatrixAuthCommandError> {
     dispatch_reaction_key(core, REACTION_ENSURE_COMMAND, room_id, event_id, key).await
+}
+
+pub(crate) async fn agent_approvals_list(
+    core: &Core,
+    discovery_active: bool,
+) -> Result<synara_core::app::timeline::NativeAgentApprovalInboxSnapshot, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: AGENT_APPROVALS_LIST_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({ "discoveryActive": discovery_active }),
+        })
+        .await
+        .map_err(map_approval_list_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| approval_list_response_error())
+}
+
+fn map_approval_list_core_error(error: MatrixIpcError) -> MatrixAuthCommandError {
+    if error.category == MatrixIpcErrorCategory::Forbidden {
+        MatrixAuthCommandError::new(
+            "Forbidden",
+            "No native Matrix session is active.",
+            "agent-approval-inbox-no-session",
+        )
+    } else {
+        approval_list_response_error()
+    }
+}
+
+fn approval_list_response_error() -> MatrixAuthCommandError {
+    MatrixAuthCommandError::new(
+        "ApprovalInboxUnavailable",
+        "Approval requests could not be loaded. Try again.",
+        "agent-approval-inbox-unavailable",
+    )
 }
 
 pub(crate) async fn agent_approval_decide(

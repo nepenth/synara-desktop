@@ -1102,7 +1102,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               }
             >
               <IconButton
-                className={depthCss.quietInteractiveSurface}
+                className={css.ComposerAction}
+                fill="None"
                 ref={composerToolsBtnRef}
                 onClick={(event) =>
                   setComposerToolsAnchor(
@@ -1122,7 +1123,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           floatingActions={
             <>
               <IconButton
-                className={depthCss.quietInteractiveSurface}
+                className={css.ComposerAction}
+                fill="None"
                 variant="SurfaceVariant"
                 size="300"
                 radii="300"
@@ -1161,7 +1163,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 }
               >
                 <IconButton
-                  className={depthCss.quietInteractiveSurface}
+                  className={css.ComposerAction}
+                  fill="None"
                   ref={emojiBtnRef}
                   aria-pressed={emojiBoardOpen}
                   aria-label={t('composer.emoji_picker_aria_label', 'Emoji picker')}
@@ -1358,7 +1361,8 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 {null}
               </PopOut>
               <IconButton
-                className={depthCss.quietInteractiveSurface}
+                className={css.ComposerAction}
+                fill="None"
                 onClick={submit}
                 disabled={sendingMessage}
                 variant="Primary"

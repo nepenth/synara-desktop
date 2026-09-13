@@ -15,17 +15,14 @@ import {
   toRem,
 } from 'folds';
 import { useSearchParams } from 'react-router-dom';
-import {
-  normalizeNotificationsResponse,
-  type NotificationEventReading,
-  type NotificationReading,
-} from './notificationResponse';
+import { type NotificationEventReading, type NotificationReading } from './notificationResponse';
+import { fetchNativeInboxNotifications } from './nativeInboxNotifications';
 type NotificationsRoomReading = EventedRoomReading & {
   findEventById(eventId: string): MatrixEventReading | undefined;
 };
 import type { EventedRoomReading } from '../../../utils/roomEvents';
 import type { MatrixEventReading } from '../../../utils/room';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useSharedScrollVirtualizer } from '../../../hooks/useSharedScrollVirtualizer';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { Opts as LinkifyOpts } from 'linkifyjs';
 import { useAtomValue } from 'jotai';
@@ -150,7 +147,6 @@ const useNotificationTimeline = (
   paginationLimit: number,
   onlyHighlight?: boolean
 ): [NotificationTimeline, LoadTimeline, SilentReloadTimeline] => {
-  const mx = useMatrixClient();
   const allRooms = useAtomValue(allRoomsAtom);
   const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
 
@@ -159,17 +155,9 @@ const useNotificationTimeline = (
   });
 
   const fetchNotifications = useCallback(
-    (from?: string, limit?: number, only?: 'highlight') => {
-      const queryParams = { from, limit, only };
-      return mx.http
-        .authedRequest<unknown>(
-          'GET' as unknown as Parameters<typeof mx.http.authedRequest>[0],
-          '/notifications',
-          queryParams
-        )
-        .then(normalizeNotificationsResponse);
-    },
-    [mx]
+    (from?: string, limit?: number, only?: 'highlight') =>
+      fetchNativeInboxNotifications({ from, limit, only }),
+    []
   );
 
   const loadTimeline: LoadTimeline = useCallback(
@@ -642,12 +630,19 @@ export function Notifications() {
     }, [mx, notificationTimeline.groups, silentReloadTimeline])
   );
 
-  const virtualizer = useVirtualizer({
-    count: notificationTimeline.groups.length,
-    getScrollElement: () => scrollRef.current,
-    estimateSize: () => 40,
-    overscan: 4,
-  });
+  const getGroupKey = useCallback(
+    (index: number) => {
+      const group = notificationTimeline.groups[index];
+      return `${group.roomId}:${group.notifications[0].event.event_id}`;
+    },
+    [notificationTimeline.groups]
+  );
+  const { virtualizer, listRef, scrollMargin } = useSharedScrollVirtualizer(
+    scrollRef,
+    notificationTimeline.groups.length,
+    getGroupKey,
+    4
+  );
   const vItems = virtualizer.getVirtualItems();
 
   useInterval(
@@ -765,6 +760,7 @@ export function Notifications() {
                   </IconButton>
                 </ScrollTopContainer>
                 <div
+                  ref={listRef}
                   style={{
                     position: 'relative',
                     height: virtualizer.getTotalSize(),
@@ -779,9 +775,10 @@ export function Notifications() {
                     return (
                       <VirtualTile
                         virtualItem={vItem}
+                        scrollMargin={scrollMargin}
                         style={{ paddingTop: config.space.S500 }}
                         ref={virtualizer.measureElement}
-                        key={vItem.index}
+                        key={vItem.key}
                       >
                         <RoomNotificationsGroupComp
                           room={groupRoom}

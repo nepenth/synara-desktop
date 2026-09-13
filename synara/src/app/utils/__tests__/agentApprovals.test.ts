@@ -177,8 +177,9 @@ test('detectAgentApprovalPrompt recognizes the stable approval title only', () =
   assert.equal(prompt?.body, 'A Hermes Agent command is waiting for approval.');
 });
 
-test('detectAgentApprovalPrompt falls back to formatted_body title text', () => {
+test('detectAgentApprovalPrompt uses formatted text only after a valid plain-body heading', () => {
   const prompt = detectAgentApprovalPrompt({
+    body: 'Approval Required: Dangerous Command',
     formatted_body:
       '<strong>Approval Required: Dangerous Command</strong><p>Code</p><p>Copy</p><pre>npm audit</pre>',
   });
@@ -196,6 +197,59 @@ npm install
   });
 
   assert.equal(prompt?.commandPreview, 'npm install');
+});
+
+test('approval notification detection accepts the same first-line normalization as Core', () => {
+  for (const heading of [
+    'Approval Required: Dangerous Command',
+    'Dangerous command requires approval',
+    '⚠️ **Dangerous command requires approval**',
+    '  ⚠ **APPROVAL REQUIRED: DANGEROUS COMMAND**:  ',
+    '\n \t\r\n⚠️ Dangerous\tcommand   requires approval:\r\n',
+    '\u0085\nDangerous\u0085command requires approval',
+    'Dangerous\u2028command requires approval',
+  ]) {
+    assert.ok(detectAgentApprovalPrompt({ body: `${heading}\nReason: test` }), heading);
+  }
+});
+
+test('approval notification detection rejects quotes, later headings, and heading-like prose', () => {
+  for (const body of [
+    '> ⚠️ **Dangerous command requires approval**\n> quoted prompt',
+    '"Dangerous command requires approval"',
+    'A quoted dangerous command requires approval later in this message',
+    'Status update\n\nApproval Required: Dangerous Command\nCode\nrm file',
+    'Dangerous command\nrequires approval',
+    'Dangerous command requires approval before we continue',
+    'Approval Required: Dangerous Command — example only',
+    '# Dangerous command requires approval',
+    '```\nDangerous command requires approval\n```',
+    'Dangerous **command** requires approval',
+    '\uFEFFDangerous command requires approval',
+    '   \n\t',
+  ]) {
+    assert.equal(detectAgentApprovalPrompt({ body }), undefined, body);
+  }
+});
+
+test('formatted HTML cannot manufacture approval eligibility or bypass the plain-body limit', () => {
+  const formatted_body = '<strong>Approval Required: Dangerous Command</strong><pre>rm file</pre>';
+  for (const body of [
+    undefined,
+    '',
+    'An ordinary message',
+    '> Dangerous command requires approval',
+    `Dangerous command requires approval\n${'x'.repeat(100_000)}`,
+  ]) {
+    assert.equal(detectAgentApprovalPrompt({ body, formatted_body }), undefined);
+  }
+});
+
+test('approval body bound counts Unicode scalar values like Core', () => {
+  const heading = 'Dangerous command requires approval\n';
+  const body = heading + '😀'.repeat(100_000 - heading.length);
+  assert.ok(detectAgentApprovalPrompt({ body }));
+  assert.equal(detectAgentApprovalPrompt({ body: `${body}😀` }), undefined);
 });
 
 test('detectAgentApprovalPrompt ignores ordinary messages mentioning commands', () => {
