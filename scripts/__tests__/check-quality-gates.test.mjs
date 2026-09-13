@@ -175,7 +175,7 @@ jobs:
     steps:
       - id: reuse
         run: node scripts/reuse-proven-quality-gate.mjs
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps chromium webkit
         working-directory: synara
       - run: |
           npm run check:repo-layout
@@ -314,8 +314,12 @@ test("rejects missing real-layout timeline execution", () => {
     ["ciWorkflow", ciWorkflow],
     ["releaseWorkflow", releaseWorkflow],
   ]) {
+    const install =
+      override === "releaseWorkflow"
+        ? "npx playwright install --with-deps chromium webkit"
+        : "npx playwright install --with-deps chromium";
     for (const command of [
-      "npx playwright install --with-deps chromium",
+      install,
       "npm run test:browser:timeline",
       "npm run check:security",
     ]) {
