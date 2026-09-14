@@ -36,7 +36,7 @@ enum SharedCoreDevicesLive {
             return "Verified"
         case "unverified":
             return "Unverified"
-        case "no_encryption", "dehydrated":
+        case "no_encryption", "dehydrated", "unsupported":
             return "Not encrypted"
         default:
             return "Unknown"

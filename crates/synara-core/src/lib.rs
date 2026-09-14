@@ -97,7 +97,8 @@ pub use session_projection_ffi::{
 mod shared_core_ffi;
 #[cfg(feature = "full-uniffi")]
 pub use shared_core_ffi::{
-    AgentApprovalDecisionDto, AgentApprovalInboxDto, AgentApprovalInboxError,
+    AgentApprovalDecisionDto, AgentApprovalHistoryCommandError, AgentApprovalHistoryItemDto,
+    AgentApprovalHistorySnapshotDto, AgentApprovalInboxDto, AgentApprovalInboxError,
     AgentApprovalInboxItemDto, AgentApprovalSendDto, AgentApprovalSendError, BackupStatusDto,
     ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto,
     CrossSigningStatusDto, CryptoStatusDto, DeviceCommandError, DeviceDeleteChallengeDto,

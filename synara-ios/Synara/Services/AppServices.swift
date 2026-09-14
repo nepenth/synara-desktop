@@ -720,6 +720,7 @@ enum RoomManagementError: LocalizedError, Equatable {
     case invalidRoomAlias
     case noProfileChanges
     case failed
+    case directoryFailed(String)
 
     var errorDescription: String? {
         switch self {
@@ -739,6 +740,8 @@ enum RoomManagementError: LocalizedError, Equatable {
             return "Change the room name or topic before saving."
         case .failed:
             return "Room action failed. Try again."
+        case .directoryFailed(let description):
+            return description
         }
     }
 }

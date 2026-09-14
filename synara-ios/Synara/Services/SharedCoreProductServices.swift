@@ -2294,6 +2294,11 @@ final class SharedCoreRoomManagementService: RoomManagementServicing {
                     isWorldReadable: room.worldReadable
                 )
             }
+        } catch let error as DirectorySearchCommandError {
+            switch error {
+            case let .Failed(_, description):
+                throw RoomManagementError.directoryFailed(description)
+            }
         } catch {
             throw RoomManagementError.failed
         }

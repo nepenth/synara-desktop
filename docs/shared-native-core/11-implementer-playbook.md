@@ -461,8 +461,8 @@ P4-S16 product timeline rows          LANDED #1001
        Snapshot DTO keeps privacy-safe row bodies. Product
        SharedCoreTimelineService maps them. No media bytes.
 P4-S17 owner emit poll                LANDED #1001
-       Presence/devices/join_rules/image_packs poll queue.
-       Summaries only. No presence user id. NSE cannot poll.
+       Presence/devices/join_rules/image_packs/agent_approval_history
+       poll queue. Summaries only. No presence user id. NSE cannot poll.
 P4-S18 product timeline live poll     LANDED #1001
        SharedCoreTimelineService.timelineUpdates stays open and
        re-fetches on S14 summaries. One host poller. No room-list
@@ -1172,6 +1172,7 @@ After every product merge:
 | `crates/synara-core/src/synara_core.udl` | UniFFI surface (P4 only) |
 | `crates/synara-core/src/ffi.rs` | UniFFI translation for namespace probes (P4) |
 | `crates/synara-core/src/shared_core_ffi.rs` | `SharedCore` FFI (P4-S3) |
+| `crates/synara-core/src/shared_core_ffi/agent_approval_history.rs` | UniFFI read of Core `matrix_agent_approval_history_snapshot`; owner family `agent_approval_history` (not `image_packs`). iOS Approvals Recent unions inbox decided/expired with account-data history. |
 | `crates/synara-core/src/session_projection_ffi.rs` | Session-projection mirror only |
 | `src-tauri/src/bridge/` | Desktop adapters |
 | `src-tauri/src/matrix/*/product_commands.rs` | Thin Tauri wrappers |

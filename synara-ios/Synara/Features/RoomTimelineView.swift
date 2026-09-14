@@ -6868,7 +6868,6 @@ private struct AgentApprovalPromptTimelineCard: View {
     let eventID: String
     let onReaction: (String) -> Void
     @State private var isCommandExpanded = true
-    @State private var isSourceExpanded = false
     @State private var confirmApproveAlways = false
 
     private var actionColumns: [GridItem] {
@@ -6929,34 +6928,23 @@ private struct AgentApprovalPromptTimelineCard: View {
                 )
             }
 
-            if let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
-                DisclosureGroup(isExpanded: $isSourceExpanded) {
-                    VStack(alignment: .leading, spacing: SynaraSpacing.small) {
-                        if let replyInstructions = prompt.replyInstructions {
-                            Text(replyInstructions)
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(SynaraColor.secondaryText)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        ScrollView(.vertical, showsIndicators: true) {
-                            Text(sourceContext)
-                                .font(.system(.caption2, design: .monospaced))
-                                .foregroundStyle(SynaraColor.secondaryText)
-                                .textSelection(.enabled)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                        }
-                        .frame(maxHeight: 140)
-                    }
-                    .padding(.top, SynaraSpacing.xSmall)
-                } label: {
-                    Text("Full approval prompt")
+            if prompt.command == nil, let sourceContext = prompt.sourceContext, sourceContext.isEmpty == false {
+                VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {
+                    Text("Full approval request")
                         .font(SynaraTypography.messageMeta.weight(.medium))
                         .foregroundStyle(SynaraColor.primaryText)
+                    ScrollView(.vertical, showsIndicators: true) {
+                        Text(sourceContext)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundStyle(SynaraColor.primaryText)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .frame(maxHeight: 160)
                 }
                 .padding(SynaraSpacing.small)
                 .synaraAccessibleSurfaceFill(
-                    SynaraColor.surface.opacity(0.55),
+                    SynaraColor.surface.opacity(0.72),
                     opaqueFill: SynaraColor.surface
                 )
                 .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.control, style: .continuous))

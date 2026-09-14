@@ -21,6 +21,7 @@ final class AppEnvironmentTests: XCTestCase {
 
         XCTAssertTrue(environment.later is MockLaterService)
         XCTAssertTrue(environment.roomNotes is MockRoomNotesService)
+        XCTAssertTrue(environment.agentApprovalHistory is MockAgentApprovalHistoryService)
     }
 
     func testMatrixClientCoreSessionIdentityDefaultsToNilForMock() async {
@@ -47,7 +48,14 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unverified"), "Unverified")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("no_encryption"), "Not encrypted")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("dehydrated"), "Not encrypted")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Unknown")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Not encrypted")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("something_new"), "Unknown")
+        XCTAssertEqual(
+            RoomManagementError.directoryFailed(
+                "The room directory is rate-limited. Try again in a moment."
+            ).errorDescription,
+            "The room directory is rate-limited. Try again in a moment."
+        )
         XCTAssertNil(SharedCoreDevicesLive.lastActivityDisplay(lastSeenTs: nil))
         XCTAssertNotNil(
             SharedCoreDevicesLive.lastActivityDisplay(
@@ -167,6 +175,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.messageSender is SharedCoreMessageSendService)
         XCTAssertTrue(environment.eventActions is SharedCoreEventActionService)
         XCTAssertTrue(environment.agentApprovals is SharedCoreAgentApprovalService)
+        XCTAssertTrue(environment.agentApprovalHistory is SharedCoreAgentApprovalHistoryService)
         XCTAssertTrue(environment.crypto is SharedCoreCryptoStatusService)
         XCTAssertTrue(environment.roomManagement is SharedCoreRoomManagementService)
     }
