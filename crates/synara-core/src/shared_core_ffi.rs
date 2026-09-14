@@ -8111,6 +8111,8 @@ fn parse_verification_sas_request(
 }
 
 /// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
+/// Additive fingerprint/first-seen/cross-sign fields are optional for older
+/// consumers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceSummaryDto {
     pub device_id: String,
@@ -8119,6 +8121,9 @@ pub struct DeviceSummaryDto {
     pub last_seen_ts: Option<u64>,
     pub trust: String,
     pub is_current: bool,
+    pub is_cross_signed_by_owner: Option<bool>,
+    pub first_seen_ts: Option<u64>,
+    pub ed25519_fingerprint: Option<String>,
 }
 
 /// Privacy-safe device inbox. No tokens or password.
@@ -10204,6 +10209,26 @@ fn map_directory_search_core_error(
         Some(code) if code == no_session => {
             directory_search_failed(code, DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION)
         }
+        Some("v-rooms.directory-federation-forbidden") => directory_search_failed(
+            "v-rooms.directory-federation-forbidden",
+            "This server does not allow public room directory queries over federation.",
+        ),
+        Some("v-rooms.directory-server-not-found") => directory_search_failed(
+            "v-rooms.directory-server-not-found",
+            "That Matrix server was not found.",
+        ),
+        Some("v-rooms.directory-network-failed") => directory_search_failed(
+            "v-rooms.directory-network-failed",
+            "Could not reach the room directory.",
+        ),
+        Some("v-rooms.directory-invalid-server") => directory_search_failed(
+            "v-rooms.directory-invalid-server",
+            "That is not a valid Matrix server name.",
+        ),
+        Some("v-rooms.directory-rate-limited") => directory_search_failed(
+            "v-rooms.directory-rate-limited",
+            "The room directory is rate-limited. Try again in a moment.",
+        ),
         Some(code)
             if code.starts_with("v-rooms.directory-")
                 || code == "v-send.r-room-profile-join-rule-requires-session" =>
@@ -13049,8 +13074,10 @@ fn restricted_join_reparent_dto(
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
     match trust {
         NativeDeviceTrust::Verified => "verified",
+        NativeDeviceTrust::VerifiedLocallyOnly => "verified_locally_only",
         NativeDeviceTrust::Unverified => "unverified",
-        NativeDeviceTrust::Unsupported => "unsupported",
+        NativeDeviceTrust::NoEncryption => "no_encryption",
+        NativeDeviceTrust::Dehydrated => "dehydrated",
     }
     .to_owned()
 }
@@ -13075,6 +13102,9 @@ fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnapshotDto {
                 last_seen_ts: device.last_seen_ts,
                 trust: device_trust_as_str(device.trust),
                 is_current: device.is_current,
+                is_cross_signed_by_owner: Some(device.is_cross_signed_by_owner),
+                first_seen_ts: device.first_seen_ts,
+                ed25519_fingerprint: device.ed25519_fingerprint,
             })
             .collect(),
     }

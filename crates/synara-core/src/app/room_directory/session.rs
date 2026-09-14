@@ -262,6 +262,10 @@ impl RoomDirectorySession {
     }
 }
 
+pub fn directory_hit_is_presentable(hit: &DirectoryRoomHit) -> bool {
+    validate_hit(hit).is_ok()
+}
+
 fn validate_hit(hit: &DirectoryRoomHit) -> Result<(), RoomDirectoryError> {
     if hit.room_id.is_empty()
         || !hit.room_id.starts_with('!')

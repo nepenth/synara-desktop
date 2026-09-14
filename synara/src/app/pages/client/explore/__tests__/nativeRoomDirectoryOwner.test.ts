@@ -219,3 +219,35 @@ test('invalid native status, generation, and room data never become a successful
   });
   await assert.rejects(() => owner.search({ serverName: 'example.org', limit: 24 }));
 });
+
+test('directory owner surfaces classified native directory errors instead of unavailable', async () => {
+  const owner = createNativeRoomDirectoryOwner(true, async (command) => {
+    if (command === 'matrix_session_snapshot') return { available: true, value: loggedIn };
+    throw {
+      code: 'Forbidden',
+      message:
+        'This server does not allow public room directory queries over federation. The remote homeserver must enable allow_public_rooms_over_federation.',
+      diagnosticId: 'v-rooms.directory-federation-forbidden',
+    };
+  });
+  await assert.rejects(
+    () => owner.search({ serverName: 'matrix.org', limit: 24 }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.match(error.message, /allow_public_rooms_over_federation/);
+      assert.doesNotMatch(error.message, /unavailable/i);
+      return true;
+    }
+  );
+});
+
+test('directory owner maps invalid-server diagnostics to a user-readable message', async () => {
+  const owner = createNativeRoomDirectoryOwner(true, async (command) => {
+    if (command === 'matrix_session_snapshot') return { available: true, value: loggedIn };
+    throw { diagnosticId: 'v-rooms.directory-invalid-server' };
+  });
+  await assert.rejects(
+    () => owner.search({ serverName: 'matrix.org', limit: 24 }),
+    /not a valid Matrix server name/
+  );
+});

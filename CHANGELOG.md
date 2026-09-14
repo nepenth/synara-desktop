@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+- Make native room-timeline scrolling smoother: cache measured row heights,
+  reserve media space, coalesce view deltas, and stick to the live tail in the
+  same layout pass.
+- Promote the composer action recipe to a shared `quietActionButton` export in
+  `Depth.css.ts` (`RoomComposer.css.ts` re-exports it as `ComposerAction`, no
+  visual change) and restyle the message formatting toolbar and message-editor
+  Aa/emoji buttons to match the composer exactly: transparent at rest,
+  tint + edge light on hover, stronger tint when pressed.
+- Restyle Explore Community controls to the quiet style: transparent filter,
+  protocol, and page-limit chips (selection reads as a quiet raised/pressed
+  state, no green fill), quiet Add Server dialog buttons, floating menus, and
+  flat info/error cards with a Critical border instead of a saturated red block.
+- Fix the Personal Notes tab strip being covered by the textarea: folds `Box`
+  resets `min-height: 0`, so the composer form and tab strip shrank inside the
+  height-constrained panel; they now keep their intrinsic height and only the
+  notes list scrolls. Remove the gradient fold from resting notes cards and
+  quiet the Note/ToDo segmented control and Add action.
+- Sweep desktop Settings controls to the quiet style via a shared
+  `SettingsQuietControl` helper: transparent rests, `aria-pressed` selection
+  states, Soft fill only for each page's primary action, Critical color kept
+  for danger actions at a quiet rest.
+- Add a "Support this project" button (Sponsors page) to the Welcome page and
+  Settings › About, with `.github/FUNDING.yml` for GitHub's Sponsor button.
+- Restore Explore Community browsing of other homeservers: classified
+  federation/network/server errors replace the generic "unavailable"
+  message, unknown public-room types no longer fail the whole page, and
+  keyword search, All/Spaces/Rooms filters, and page limit still pass
+  through to the remote directory.
+- Show richer Settings > Devices session details: per-tile trust chips,
+  a This device marker, and expanded identity-key fingerprint / first-seen
+  fields from the native device snapshot. The trust vocabulary now separates
+  cross-signed (`verified`) from direct-SAS (`verified_locally_only`)
+  sessions; both desktop and iOS render either as Verified.
+
 ## [2.1.36] - 2026-09-13
 
 - Add an Approvals center (rail and `/approvals/` page) backed by Core

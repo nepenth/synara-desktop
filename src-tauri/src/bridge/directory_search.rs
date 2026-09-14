@@ -158,34 +158,123 @@ fn map_directory_search_core_error(error: MatrixIpcError) -> MatrixAuthCommandEr
         .diagnostic_id
         .as_deref()
         .unwrap_or("v-rooms.directory-sdk-failed");
-    match error.category {
-        MatrixIpcErrorCategory::Forbidden => MatrixAuthCommandError::new(
+    let (code, message) = directory_search_user_error(diagnostic, error.category);
+    MatrixAuthCommandError::new(code, message, diagnostic)
+}
+
+fn directory_search_user_error(
+    diagnostic: &str,
+    category: MatrixIpcErrorCategory,
+) -> (&'static str, &'static str) {
+    match diagnostic {
+        "p2-room-directory-search-no-session"
+        | "p2-room-directory-cancel-no-session"
+        | "v-rooms.directory-requires-session"
+        | "v-send.r-room-profile-join-rule-requires-session" => (
             "Forbidden",
-            "The native Matrix room directory is unavailable.",
-            "v-rooms.directory-requires-session",
+            "No native Matrix session is active.",
         ),
-        MatrixIpcErrorCategory::StaleSessionGeneration => MatrixAuthCommandError::new(
-            "StaleSessionGeneration",
-            "The native Matrix room directory is unavailable.",
-            diagnostic,
+        "v-rooms.directory-federation-forbidden" => (
+            "Forbidden",
+            "This server does not allow public room directory queries over federation. The remote homeserver must enable allow_public_rooms_over_federation.",
         ),
-        MatrixIpcErrorCategory::SdkInvariant => MatrixAuthCommandError::new(
+        "v-rooms.directory-server-not-found" => ("NotFound", "That Matrix server was not found."),
+        "v-rooms.directory-network-failed" => (
+            "Connectivity",
+            "Could not reach the room directory. Check your connection and try again.",
+        ),
+        "v-rooms.directory-invalid-server" => {
+            ("InvalidRequest", "That is not a valid Matrix server name.")
+        }
+        "v-rooms.directory-invalid-limit"
+        | "v-rooms.directory-invalid-term"
+        | "v-rooms.directory-invalid-instance"
+        | "v-rooms.directory-invalid-since"
+        | "v-rooms.directory-invalid-correlation" => (
             "InvalidRequest",
-            "The native Matrix room directory is unavailable.",
-            diagnostic,
+            "The room directory request is invalid.",
         ),
-        _ => MatrixAuthCommandError::new(
+        "v-rooms.directory-rate-limited" => (
+            "RateLimited",
+            "The room directory is rate-limited. Try again in a moment.",
+        ),
+        "v-rooms.directory-sdk-failed" => (
             "Unknown",
-            "The native Matrix room directory is unavailable.",
-            diagnostic,
+            "The public room directory could not be loaded.",
         ),
+        _ => match category {
+            MatrixIpcErrorCategory::Forbidden => {
+                ("Forbidden", "No native Matrix session is active.")
+            }
+            MatrixIpcErrorCategory::StaleSessionGeneration => (
+                "StaleSessionGeneration",
+                "Native Matrix room directory is unavailable.",
+            ),
+            MatrixIpcErrorCategory::SdkInvariant => (
+                "InvalidRequest",
+                "The room directory request is invalid.",
+            ),
+            MatrixIpcErrorCategory::Connectivity => (
+                "Connectivity",
+                "Could not reach the room directory. Check your connection and try again.",
+            ),
+            MatrixIpcErrorCategory::RateLimited => (
+                "RateLimited",
+                "The room directory is rate-limited. Try again in a moment.",
+            ),
+            MatrixIpcErrorCategory::HomeserverUnavailable => {
+                ("NotFound", "That Matrix server was not found.")
+            }
+            _ => (
+                "Unknown",
+                "The public room directory could not be loaded.",
+            ),
+        },
     }
 }
 
 fn search_response_error() -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
-        "The native Matrix room directory is unavailable.",
+        "The public room directory could not be loaded.",
         "v-rooms.directory-sdk-failed",
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use synara_core::transport::MatrixIpcError;
+
+    #[test]
+    fn federation_forbidden_is_not_collapsed_to_unavailable() {
+        let error = map_directory_search_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-rooms.directory-federation-forbidden"),
+        );
+        assert_eq!(error.code, "Forbidden");
+        assert!(error.message.contains("allow_public_rooms_over_federation"));
+        assert_eq!(
+            error.diagnostic_id,
+            "v-rooms.directory-federation-forbidden"
+        );
+    }
+
+    #[test]
+    fn invalid_server_name_has_a_specific_message() {
+        let error = map_directory_search_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-rooms.directory-invalid-server"),
+        );
+        assert_eq!(error.message, "That is not a valid Matrix server name.");
+    }
+
+    #[test]
+    fn no_session_does_not_use_the_federation_copy() {
+        let error = map_directory_search_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-directory-search-no-session"),
+        );
+        assert_eq!(error.message, "No native Matrix session is active.");
+    }
 }

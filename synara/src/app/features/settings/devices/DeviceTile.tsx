@@ -26,7 +26,7 @@ import { LogoutDialog } from '../../../components/LogoutDialog';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
-import { NativeDevice, renameNativeDevice } from './nativeDevices';
+import { NativeDevice, NativeDeviceTrust, renameNativeDevice } from './nativeDevices';
 import { RefreshDeviceList } from '../../../hooks/useDeviceList';
 
 export function DeviceTilePlaceholder() {
@@ -41,14 +41,14 @@ export function DeviceTilePlaceholder() {
   );
 }
 
-function DeviceActiveTime({ ts }: { ts: number }) {
+function DeviceTimestamp({ label, ts }: { label: string; ts: number }) {
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
 
   return (
     <Text className={BreakWord} size="T200">
       <Text size="Inherit" as="span" priority="300">
-        {'Last activity: '}
+        {label}
       </Text>
       <>
         {today(ts) && 'Today'}
@@ -60,7 +60,35 @@ function DeviceActiveTime({ ts }: { ts: number }) {
   );
 }
 
+function DeviceActiveTime({ ts }: { ts: number }) {
+  return <DeviceTimestamp label="Last activity: " ts={ts} />;
+}
+
+function deviceTrustChip(trust: NativeDeviceTrust): {
+  variant: 'Success' | 'Critical' | 'Secondary';
+  label: string;
+} {
+  if (trust === 'verified' || trust === 'verified_locally_only') {
+    return { variant: 'Success', label: 'Verified' };
+  }
+  if (trust === 'unverified') {
+    return { variant: 'Critical', label: 'Unverified' };
+  }
+  return { variant: 'Secondary', label: 'Not encrypted' };
+}
+
+function DeviceTrustChip({ trust }: { trust: NativeDeviceTrust }) {
+  const { variant, label } = deviceTrustChip(trust);
+  return (
+    <Chip as="span" variant={variant} radii="Pill" outlined>
+      <Text size="B300">{label}</Text>
+    </Chip>
+  );
+}
+
 function DeviceDetails({ device }: { device: NativeDevice }) {
+  const firstSeenTs = device.firstSeenTs;
+  const lastSeenTs = device.lastSeenTs;
   return (
     <>
       {typeof device.deviceId === 'string' && (
@@ -68,6 +96,13 @@ function DeviceDetails({ device }: { device: NativeDevice }) {
           Device ID: <i>{device.deviceId}</i>
         </Text>
       )}
+      {typeof device.ed25519Fingerprint === 'string' && (
+        <Text className={BreakWord} size="T200" priority="300">
+          Identity key: <i>{device.ed25519Fingerprint}</i>
+        </Text>
+      )}
+      {typeof firstSeenTs === 'number' && <DeviceTimestamp label="First seen: " ts={firstSeenTs} />}
+      {typeof lastSeenTs === 'number' && <DeviceActiveTime ts={lastSeenTs} />}
       {typeof device.lastSeenIp === 'string' && (
         <Text className={BreakWord} size="T200" priority="300">
           IP Address: <i>{device.lastSeenIp}</i>
@@ -286,9 +321,17 @@ export function DeviceTile({
           )
         }
       >
-        <Text size="T300">{device.displayName ?? device.deviceId}</Text>
+        <Box alignItems="Center" gap="200" wrap="Wrap">
+          <Text size="T300">{device.displayName ?? device.deviceId}</Text>
+          {device.isCurrent && (
+            <Chip as="span" variant="Secondary" radii="Pill" outlined>
+              <Text size="B300">This device</Text>
+            </Chip>
+          )}
+          <DeviceTrustChip trust={device.trust} />
+        </Box>
         <Box direction="Column">
-          {typeof activeTs === 'number' && <DeviceActiveTime ts={activeTs} />}
+          {typeof activeTs === 'number' && !details && <DeviceActiveTime ts={activeTs} />}
           {details && (
             <>
               <DeviceDetails device={device} />

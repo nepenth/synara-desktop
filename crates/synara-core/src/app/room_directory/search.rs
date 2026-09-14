@@ -11,9 +11,10 @@ use matrix_sdk::ruma::{
 use matrix_sdk::Client;
 
 use super::{
-    normalize_search_input, DirectoryRoomHit, DirectoryRoomHitDto, DirectoryRoomType,
-    DirectorySearchInput, NativeRoomDirectoryPage, NativeRoomDirectorySearchResponse,
-    NormalizedDirectorySearch, RoomDirectorySession, MAX_DIRECTORY_HITS,
+    directory_hit_is_presentable, normalize_search_input, DirectoryRoomHit, DirectoryRoomHitDto,
+    DirectoryRoomType, DirectorySearchInput, NativeRoomDirectoryPage,
+    NativeRoomDirectorySearchResponse, NormalizedDirectorySearch, RoomDirectorySession,
+    MAX_DIRECTORY_HITS,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -166,6 +167,30 @@ pub fn build_public_rooms_request(
     Ok(request)
 }
 
+pub fn directory_api_error_diagnostic(
+    kind: Option<&matrix_sdk::ruma::api::error::ErrorKind>,
+) -> &'static str {
+    use matrix_sdk::ruma::api::error::ErrorKind;
+    match kind {
+        Some(ErrorKind::Forbidden | ErrorKind::GuestAccessForbidden) => {
+            "v-rooms.directory-federation-forbidden"
+        }
+        Some(ErrorKind::NotFound) => "v-rooms.directory-server-not-found",
+        Some(ErrorKind::LimitExceeded(_)) => "v-rooms.directory-rate-limited",
+        _ => "v-rooms.directory-sdk-failed",
+    }
+}
+
+pub fn directory_http_error_diagnostic(error: &matrix_sdk::HttpError) -> &'static str {
+    use matrix_sdk::HttpError;
+    match error {
+        HttpError::Reqwest(_) => "v-rooms.directory-network-failed",
+        HttpError::Cached(error) => directory_http_error_diagnostic(error),
+        HttpError::Api(_) => directory_api_error_diagnostic(error.client_api_error_kind()),
+        _ => "v-rooms.directory-sdk-failed",
+    }
+}
+
 pub fn project_response(
     session_generation: u64,
     request_id: u64,
@@ -178,8 +203,16 @@ pub fn project_response(
     let hits = response
         .chunk
         .into_iter()
-        .map(project_hit)
-        .collect::<Result<Vec<_>, _>>()?;
+        .filter_map(|hit| match project_hit(hit) {
+            // Custom room types (common on large public directories) are
+            // omitted from the page; every other projection or validation
+            // failure still fails the page closed.
+            Err("v-rooms.directory-unsupported-room-type") => None,
+            Err(diagnostic) => Some(Err(diagnostic)),
+            Ok(hit) if directory_hit_is_presentable(&hit) => Some(Ok(hit)),
+            Ok(_) => Some(Err("v-rooms.directory-invalid-hit")),
+        })
+        .collect::<Result<Vec<_>, &'static str>>()?;
     let mut session = RoomDirectorySession::new(session_generation);
     let internal_request_id = session
         .begin(
@@ -249,7 +282,7 @@ pub async fn search_directory(
     let response = client
         .public_rooms_filtered(request)
         .await
-        .map_err(|_| "v-rooms.directory-sdk-failed")?;
+        .map_err(|error| directory_http_error_diagnostic(&error))?;
     match request_authority(session_generation, request_id) {
         RequestAuthority::Stale => return Ok(stale_response(session_generation, request_id)),
         RequestAuthority::Cancelled => {
@@ -277,6 +310,7 @@ pub fn cancel_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::app::room_directory::session::MAX_TEXT_CHARS;
     use crate::app::room_directory::{DirectoryRoomTypeFilter, DirectorySearchInput};
 
     #[test]
@@ -364,5 +398,122 @@ mod tests {
         .unwrap();
         let request = build_public_rooms_request(&normalized).unwrap();
         assert_eq!(request.filter.room_types[0].as_str(), None);
+        assert!(matches!(request.room_network, RoomNetwork::Matrix));
+    }
+
+    #[test]
+    fn directory_api_errors_classify_federation_not_found_and_rate_limits() {
+        use matrix_sdk::ruma::api::error::ErrorKind;
+        assert_eq!(
+            directory_api_error_diagnostic(Some(&ErrorKind::Forbidden)),
+            "v-rooms.directory-federation-forbidden"
+        );
+        assert_eq!(
+            directory_api_error_diagnostic(Some(&ErrorKind::GuestAccessForbidden)),
+            "v-rooms.directory-federation-forbidden"
+        );
+        assert_eq!(
+            directory_api_error_diagnostic(Some(&ErrorKind::NotFound)),
+            "v-rooms.directory-server-not-found"
+        );
+        assert_eq!(
+            directory_api_error_diagnostic(None),
+            "v-rooms.directory-sdk-failed"
+        );
+    }
+
+    #[test]
+    fn remote_server_is_forwarded_on_the_filtered_public_rooms_request() {
+        let normalized = normalize_search_input(DirectorySearchInput {
+            server_name: Some("https://matrix.org/".into()),
+            term: Some("rust".into()),
+            room_type: Some(DirectoryRoomTypeFilter::Room),
+            third_party_instance_id: None,
+            limit: 24,
+            since: Some("page-2".into()),
+        })
+        .unwrap();
+        let request = build_public_rooms_request(&normalized).unwrap();
+        assert_eq!(request.server.unwrap().as_str(), "matrix.org");
+        assert_eq!(request.filter.generic_search_term.as_deref(), Some("rust"));
+        assert_eq!(request.filter.room_types[0].as_str(), None);
+        assert_eq!(request.since.as_deref(), Some("page-2"));
+        assert_eq!(u64::from(request.limit.unwrap()), 24);
+        assert!(matches!(request.room_network, RoomNetwork::Matrix));
+    }
+
+    #[test]
+    fn project_response_skips_unknown_room_types_instead_of_failing_the_page() {
+        let normalized = normalize_search_input(DirectorySearchInput {
+            server_name: Some("matrix.org".into()),
+            limit: 24,
+            ..DirectorySearchInput::default()
+        })
+        .unwrap();
+        let room: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(3),
+                room_id: matrix_sdk::ruma::room_id!("!room:matrix.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        let mut space: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(8),
+                room_id: matrix_sdk::ruma::room_id!("!space:matrix.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        space.room_type = Some(matrix_sdk::ruma::room::RoomType::Space);
+        let mut custom: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(1),
+                room_id: matrix_sdk::ruma::room_id!("!custom:matrix.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        custom.room_type = Some(matrix_sdk::ruma::room::RoomType::from("org.example.custom"));
+        let mut response =
+            matrix_sdk::ruma::api::client::directory::get_public_rooms_filtered::v3::Response::new(
+            );
+        response.chunk = vec![room, custom, space];
+        response.next_batch = Some("next".into());
+        let page = project_response(7, 3, &normalized, response).unwrap();
+        assert_eq!(page.chunk.len(), 2);
+        assert_eq!(page.chunk[0].room_id, "!room:matrix.org");
+        assert_eq!(page.chunk[0].room_type, "room");
+        assert_eq!(page.chunk[1].room_id, "!space:matrix.org");
+        assert_eq!(page.chunk[1].room_type, "space");
+        assert_eq!(page.next_batch.as_deref(), Some("next"));
+    }
+
+    #[test]
+    fn project_response_still_fails_closed_on_invalid_hits() {
+        let normalized = normalize_search_input(DirectorySearchInput {
+            server_name: Some("matrix.org".into()),
+            limit: 24,
+            ..DirectorySearchInput::default()
+        })
+        .unwrap();
+        let mut oversized: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(3),
+                room_id: matrix_sdk::ruma::room_id!("!room:matrix.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        oversized.name = Some("x".repeat(MAX_TEXT_CHARS + 1));
+        let mut response =
+            matrix_sdk::ruma::api::client::directory::get_public_rooms_filtered::v3::Response::new(
+            );
+        response.chunk = vec![oversized];
+        assert_eq!(
+            project_response(7, 3, &normalized, response).unwrap_err(),
+            "v-rooms.directory-invalid-hit"
+        );
     }
 }

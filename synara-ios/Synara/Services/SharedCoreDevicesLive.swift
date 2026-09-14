@@ -32,10 +32,12 @@ enum SharedCoreDevicesLive {
 
     static func trustDisplayName(_ trust: String) -> String {
         switch trust {
-        case "verified":
+        case "verified", "verified_locally_only":
             return "Verified"
         case "unverified":
             return "Unverified"
+        case "no_encryption", "dehydrated":
+            return "Not encrypted"
         default:
             return "Unknown"
         }

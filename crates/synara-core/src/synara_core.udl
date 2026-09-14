@@ -949,7 +949,8 @@ interface VerificationSasError {
   Failed(string code, string description);
 };
 
-// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
+// Privacy-safe device row. Identity/presentation fields only; no private keys
+// or tokens. Additive fields stay optional so older iOS consumers keep working.
 dictionary DeviceSummaryDto {
   string device_id;
   string? display_name;
@@ -957,6 +958,9 @@ dictionary DeviceSummaryDto {
   u64? last_seen_ts;
   string trust;
   boolean is_current;
+  boolean? is_cross_signed_by_owner;
+  u64? first_seen_ts;
+  string? ed25519_fingerprint;
 };
 
 // Privacy-safe device inbox. No tokens or password.

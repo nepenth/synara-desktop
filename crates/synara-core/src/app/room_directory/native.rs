@@ -2,6 +2,7 @@
 //!
 //! Live protocol listing lives in `live.rs`. Search request mapping stays desktop.
 
+use matrix_sdk::ruma::OwnedServerName;
 use serde::{Deserialize, Serialize};
 
 use super::session::{DirectoryRoomHit, DirectoryRoomType, MAX_BATCH_CHARS, MAX_TEXT_CHARS};
@@ -96,11 +97,7 @@ pub fn normalize_search_input(
     if input.limit == 0 || input.limit > 100 {
         return Err("v-rooms.directory-invalid-limit");
     }
-    let server_name = normalize_optional(
-        input.server_name,
-        MAX_TEXT_CHARS,
-        "v-rooms.directory-invalid-server",
-    )?;
+    let server_name = canonicalize_directory_server_name(input.server_name)?;
     let term = normalize_optional(input.term, MAX_TEXT_CHARS, "v-rooms.directory-invalid-term")?;
     let third_party_instance_id = normalize_optional(
         input.third_party_instance_id,
@@ -141,6 +138,42 @@ fn normalize_optional(
     Ok(Some(value.to_owned()))
 }
 
+/// Accept a Matrix server name, including a pasted `https://host/` form.
+/// Empty input means "this homeserver". Invalid names fail closed.
+pub fn canonicalize_directory_server_name(
+    value: Option<String>,
+) -> Result<Option<String>, &'static str> {
+    let Some(value) = value else { return Ok(None) };
+    let trimmed = value.trim();
+    if trimmed.is_empty() {
+        return Ok(None);
+    }
+    if trimmed.chars().count() > MAX_TEXT_CHARS
+        || trimmed.contains("access_token")
+        || trimmed.contains("refresh_token")
+    {
+        return Err("v-rooms.directory-invalid-server");
+    }
+    // Server names are case-insensitive; a pasted URL may carry any casing.
+    let lowered = trimmed.to_ascii_lowercase();
+    let without_scheme = lowered
+        .strip_prefix("https://")
+        .or_else(|| lowered.strip_prefix("http://"))
+        .unwrap_or(&lowered);
+    let host = without_scheme
+        .split('/')
+        .next()
+        .unwrap_or(without_scheme)
+        .trim()
+        .trim_end_matches('.');
+    if host.is_empty() {
+        return Err("v-rooms.directory-invalid-server");
+    }
+    let server = OwnedServerName::try_from(host.to_owned())
+        .map_err(|_| "v-rooms.directory-invalid-server")?;
+    Ok(Some(server.to_string()))
+}
+
 impl From<&DirectoryRoomHit> for DirectoryRoomHitDto {
     fn from(hit: &DirectoryRoomHit) -> Self {
         Self {
@@ -179,5 +212,51 @@ mod tests {
         assert_eq!(normalized.term, None);
         assert_eq!(normalized.third_party_instance_id, None);
         assert_eq!(normalized.since, None);
+    }
+
+    #[test]
+    fn remote_server_names_are_parsed_as_matrix_server_names() {
+        assert_eq!(
+            canonicalize_directory_server_name(Some("matrix.org".into()))
+                .unwrap()
+                .as_deref(),
+            Some("matrix.org")
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("https://matrix.org/".into()))
+                .unwrap()
+                .as_deref(),
+            Some("matrix.org")
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("example.org:8448".into()))
+                .unwrap()
+                .as_deref(),
+            Some("example.org:8448")
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("HTTPS://Matrix.ORG/#/rooms".into()))
+                .unwrap()
+                .as_deref(),
+            Some("matrix.org")
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("[::1]:8448/".into()))
+                .unwrap()
+                .as_deref(),
+            Some("[::1]:8448")
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("  ".into())).unwrap(),
+            None
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("not a server".into())).unwrap_err(),
+            "v-rooms.directory-invalid-server"
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("https://not a host".into())).unwrap_err(),
+            "v-rooms.directory-invalid-server"
+        );
     }
 }

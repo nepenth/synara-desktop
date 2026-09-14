@@ -3833,6 +3833,10 @@ fn directory_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
             MatrixIpcErrorCategory::StaleSessionGeneration
         }
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-rooms.directory-federation-forbidden" => MatrixIpcErrorCategory::Forbidden,
+        "v-rooms.directory-network-failed" => MatrixIpcErrorCategory::Connectivity,
+        "v-rooms.directory-server-not-found" => MatrixIpcErrorCategory::HomeserverUnavailable,
+        "v-rooms.directory-rate-limited" => MatrixIpcErrorCategory::RateLimited,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)

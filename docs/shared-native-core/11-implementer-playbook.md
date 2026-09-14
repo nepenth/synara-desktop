@@ -249,7 +249,7 @@ them. Missing owner → `Forbidden` with `p2-*-no-session`.
 | Typing | `NativeTypingOwner` | `matrix_typing_snapshot`, `matrix_typing_set` |
 | Presence | `NativePresenceOwner` | snapshot, subscribe, unsubscribe |
 | Verification | `NativeVerificationOwner` | list + SAS flow commands |
-| Devices | `NativeDeviceOwner` | snapshot, rename, delete start/cancel, backup_status, room-key status, cross-signing setup start |
+| Devices | `NativeDeviceOwner` | snapshot, rename, delete start/cancel, backup_status, room-key status, cross-signing setup start. Snapshot rows keep `device_id` / `display_name` / `last_seen_*` / `is_current` and extend them with `trust` (`verified` = cross-signed, `verified_locally_only` = SAS/local, `unverified`, `no_encryption`, `dehydrated`), optional `is_cross_signed_by_owner`, `first_seen_ts`, and grouped `ed25519_fingerprint`. Older clients ignore the additive fields. |
 | Join rules / room profile | `NativeRoomJoinRuleOwner` | join-rule snapshot, name/topic/avatar, directory, leave/join, moderation, power levels, create, members, spaces, **all five invite commands** |
 | Image packs / account data | `NativeImagePackOwner` | image packs, later, m.direct, room notes, own display-name/avatar |
 | Timelines | `NativeTimelineOwner` | open/close/paginate/read/reactions/composer/send text/edit/sticker/poll |
@@ -510,7 +510,10 @@ P4-S31/S32/S33 timeline reactions + media handle LANDED #1001
        SharedCore.timeline_media_bytes is a dedicated UniFFI byte
        channel (ADR 0005). Not Core.command. NSE cannot download.
 P4-S34 product device list              LANDED #1001
-       Settings lists leftover-safe device snapshot rows. No keys.
+       Settings lists leftover-safe device snapshot rows. Presentation
+       fields now include additive trust detail, first-seen, and a
+       grouped ed25519 fingerprint. No private keys. iOS keeps working
+       because the extra DTO fields are optional.
 P4-S35 last-message preview             LANDED #1001
        Core projects a privacy-safe last_message_preview. UniFFI
        room-list DTO and both UIs consume it. No mxc/token.

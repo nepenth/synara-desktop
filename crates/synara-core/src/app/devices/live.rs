@@ -25,8 +25,9 @@ use crate::app::room_keys::{
 };
 
 use super::{
-    sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge,
-    NativeDeviceDeleteResult, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
+    format_ed25519_fingerprint, project_native_device_trust, sort_native_device_summaries,
+    NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge, NativeDeviceDeleteResult,
+    NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrustSignals,
     NativeOwnDeviceVerification,
 };
 
@@ -546,23 +547,41 @@ pub async fn snapshot(
         .devices
         .into_iter()
         .map(|device| {
-            let trust = crypto_devices
+            let crypto_device = crypto_devices
                 .as_ref()
-                .and_then(|devices| devices.get(&device.device_id))
-                .map(|crypto_device| {
-                    // A completed direct SAS marks the peer locally trusted.
-                    // `is_verified()` deliberately includes that SDK-owned
-                    // trust as well as cross-signing trust; limiting this
-                    // projection to cross-signing made a successful SAS appear
-                    // unverified everywhere in the product after the sheet
-                    // reported completion.
-                    if crypto_device.is_verified() {
-                        NativeDeviceTrust::Verified
-                    } else {
-                        NativeDeviceTrust::Unverified
-                    }
-                })
-                .unwrap_or(NativeDeviceTrust::Unsupported);
+                .and_then(|devices| devices.get(&device.device_id));
+            let (trust, is_cross_signed_by_owner, first_seen_ts, ed25519_fingerprint) =
+                match crypto_device {
+                    Some(crypto_device) => (
+                        // Cross-signing is `Verified`. Direct SAS / local trust
+                        // without a signature chain is `VerifiedLocallyOnly` so
+                        // a completed SAS sheet does not render the peer as
+                        // unverified. Missing crypto devices are `NoEncryption`.
+                        project_native_device_trust(NativeDeviceTrustSignals {
+                            has_crypto_device: true,
+                            is_dehydrated: crypto_device.is_dehydrated(),
+                            is_verified_with_cross_signing: crypto_device
+                                .is_verified_with_cross_signing(),
+                            is_verified: crypto_device.is_verified(),
+                        }),
+                        crypto_device.is_cross_signed_by_owner(),
+                        Some(u64::from(crypto_device.first_time_seen_ts().0)),
+                        crypto_device
+                            .ed25519_key()
+                            .and_then(|key| format_ed25519_fingerprint(&key.to_base64())),
+                    ),
+                    None => (
+                        project_native_device_trust(NativeDeviceTrustSignals {
+                            has_crypto_device: false,
+                            is_dehydrated: false,
+                            is_verified_with_cross_signing: false,
+                            is_verified: false,
+                        }),
+                        false,
+                        None,
+                        None,
+                    ),
+                };
             NativeDeviceSummary {
                 is_current: device.device_id == current_device_id,
                 device_id: device.device_id.to_string(),
@@ -570,6 +589,9 @@ pub async fn snapshot(
                 last_seen_ip: device.last_seen_ip,
                 last_seen_ts: device.last_seen_ts.map(|timestamp| u64::from(timestamp.0)),
                 trust,
+                is_cross_signed_by_owner,
+                first_seen_ts,
+                ed25519_fingerprint,
             }
         })
         .collect::<Vec<_>>();
