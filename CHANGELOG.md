@@ -17,7 +17,11 @@
 
 - Make native room-timeline scrolling smoother: cache measured row heights,
   reserve media space, coalesce view deltas, and stick to the live tail in the
-  same layout pass.
+  same layout pass. Follow-live releases on a focus/`scrollIntoView` move away
+  from the tail, prepend anchoring is never overwritten by an in-flight
+  programmatic scroll, a parked history row is held steady when rows above it
+  re-measure, same-frame deltas apply in revision order, and the measured-size
+  cache is keyed by row content so edits do not reuse stale heights.
 - Promote the composer action recipe to a shared `quietActionButton` export in
   `Depth.css.ts` (`RoomComposer.css.ts` re-exports it as `ComposerAction`, no
   visual change) and restyle the message formatting toolbar and message-editor

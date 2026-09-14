@@ -19,7 +19,11 @@ fn overlay_unions_remote_sync_items_instead_of_masking_them() {
     let now = 1_700_000_000_000.0;
     let local = history_item("$local", now);
     let remote = history_item("$remote", now - 1.0);
-    let merged = merge_approval_history_overlay(Some(&[local.clone()]), vec![remote.clone()], now);
+    let merged = merge_approval_history_overlay(
+        Some(std::slice::from_ref(&local)),
+        vec![remote.clone()],
+        now,
+    );
     assert_eq!(merged.len(), 2);
     assert_eq!(merged[0].event_id, "$local");
     assert_eq!(merged[1].event_id, "$remote");
@@ -83,7 +87,8 @@ fn second_local_decision_is_merged_into_the_existing_overlay() {
 fn overlay_survives_an_empty_or_pre_write_cache() {
     let now = 1_700_000_000_000.0;
     let local = history_item("$local", now);
-    let merged = merge_approval_history_overlay(Some(&[local.clone()]), Vec::new(), now);
+    let merged =
+        merge_approval_history_overlay(Some(std::slice::from_ref(&local)), Vec::new(), now);
     assert_eq!(merged, vec![local]);
 }
 

@@ -504,9 +504,9 @@ mod tests {
             "echo visible"
         );
         assert_eq!(
-            agent_approval_history_summary(&format!(
+            agent_approval_history_summary(
                 "Approval Required: Dangerous Command\n```\nls\u{2028}cat /secrets\n```"
-            )),
+            ),
             "ls"
         );
         let spoofed = agent_approval_history_summary(
