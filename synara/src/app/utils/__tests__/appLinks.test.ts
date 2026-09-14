@@ -1,14 +1,45 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { MouseEvent as ReactMouseEvent } from 'react';
 import {
   DESKTOP_EXTERNAL_LINK_CLICK_OPTIONS,
+  SYNARA_SUPPORT_URL,
   openDesktopExternalAnchorFromClick,
   openExternalUrl,
   openExternalUrlFromClick,
 } from '../appLinks';
 
 const waitForAsyncOpen = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+test('support URL points at the project sponsor page over https', () => {
+  assert.equal(SYNARA_SUPPORT_URL, 'https://github.com/sponsors/nepenth');
+  assert.match(SYNARA_SUPPORT_URL, /^https:\/\//);
+});
+
+test('welcome and about surfaces link to the support URL through the external-link path', () => {
+  const welcome = readFileSync(join(process.cwd(), 'src/app/pages/client/WelcomePage.tsx'), 'utf8');
+  const about = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/about/About.tsx'),
+    'utf8'
+  );
+
+  for (const [name, source] of [
+    ['WelcomePage', welcome],
+    ['About', about],
+  ] as const) {
+    assert.match(source, /SYNARA_SUPPORT_URL/, `${name} links to the support URL`);
+    assert.match(
+      source,
+      /openExternalUrlFromClick\(evt, SYNARA_SUPPORT_URL\)/,
+      `${name} opens the support URL through the external-link path`
+    );
+    assert.match(source, /Support this project/, `${name} labels the support button`);
+  }
+  // The heart icon means Support; the Project button uses a neutral icon.
+  assert.match(welcome, /Icons\.Heart/, 'Welcome keeps the heart for Support');
+});
 
 test('desktop link interceptor uses capture phase', () => {
   assert.equal(DESKTOP_EXTERNAL_LINK_CLICK_OPTIONS.capture, true);

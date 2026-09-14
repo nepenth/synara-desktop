@@ -22,7 +22,7 @@ import {
   compactDiagnosticsReport,
   MAX_CLIPBOARD_REPORT_CHARS,
 } from '../../../utils/diagnosticsReport';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 
 const formatBytes = (bytes: number): string => {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 KB';
@@ -182,7 +182,12 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>
@@ -307,6 +312,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
                   )}
                   <Box wrap="Wrap" gap="200">
                     <Button
+                      className={SettingsQuietControl}
                       size="300"
                       variant="Primary"
                       fill="Soft"
@@ -319,9 +325,10 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
                       </Text>
                     </Button>
                     <Button
+                      className={SettingsQuietControl}
                       size="300"
                       variant="Secondary"
-                      fill="Soft"
+                      fill="None"
                       radii="300"
                       disabled={reportActionsDisabled}
                       onClick={handleCopy}
@@ -329,6 +336,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
                       <Text size="B300">{busyAction === 'copy' ? 'Copying…' : 'Copy recent'}</Text>
                     </Button>
                     <Button
+                      className={SettingsQuietControl}
                       size="300"
                       variant="Critical"
                       fill="None"

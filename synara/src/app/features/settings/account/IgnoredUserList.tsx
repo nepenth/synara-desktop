@@ -7,7 +7,7 @@ import React, {
 } from 'react';
 import { Box, Button, Chip, Icon, IconButton, Icons, Input, Spinner, Text, config } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -79,11 +79,13 @@ function IgnoreUserInput({ userList }: { userList: string[] }) {
             userId &&
             !ignoring && (
               <IconButton
+                className={SettingsQuietControl}
                 type="reset"
                 onClick={handleReset}
                 size="300"
                 radii="300"
                 variant="Secondary"
+                fill="None"
               >
                 <Icon src={Icons.Cross} size="100" />
               </IconButton>
@@ -92,6 +94,7 @@ function IgnoreUserInput({ userList }: { userList: string[] }) {
         />
       </Box>
       <Button
+        className={SettingsQuietControl}
         size="400"
         variant="Secondary"
         fill="Soft"
@@ -121,7 +124,9 @@ function IgnoredUserChip({ userId, userList }: { userId: string; userList: strin
   const unIgnoring = unignoreState.status === AsyncStatus.Loading;
   return (
     <Chip
+      className={SettingsQuietControl}
       variant="Secondary"
+      fill="None"
       radii="Pill"
       after={
         unIgnoring ? (
@@ -181,6 +186,7 @@ function NativeIgnoreUserInput({ onIgnore }: { onIgnore: (userId: string) => Pro
         />
       </Box>
       <Button
+        className={SettingsQuietControl}
         size="400"
         variant="Secondary"
         fill="Soft"
@@ -270,7 +276,9 @@ function NativeIgnoredUserChip({
   const unIgnoring = unignoreState.status === AsyncStatus.Loading;
   return (
     <Chip
+      className={SettingsQuietControl}
       variant="Secondary"
+      fill="None"
       radii="Pill"
       after={
         unIgnoring ? (

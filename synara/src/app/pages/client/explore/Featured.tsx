@@ -18,6 +18,7 @@ import * as css from './style.css';
 import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
+import * as depthCss from '../../../styles/Depth.css';
 
 export function FeaturedRooms() {
   const { featuredCommunities } = useClientConfig();
@@ -33,7 +34,12 @@ export function FeaturedRooms() {
           <Box shrink="No">
             <BackRouteHandler>
               {(onBack) => (
-                <IconButton onClick={onBack}>
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  variant="Surface"
+                  fill="None"
+                  onClick={onBack}
+                >
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>
               )}

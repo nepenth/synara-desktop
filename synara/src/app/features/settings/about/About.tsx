@@ -2,12 +2,13 @@ import React from 'react';
 import { Box, Text, IconButton, Icon, Icons, Scroll, Button, config, toRem } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import SynaraPNG from '../../../../../public/res/png/synara.png';
 import {
   APP_VERSION,
   SYNARA_PROJECT_URL,
   SYNARA_SOURCE_CODE_URL,
+  SYNARA_SUPPORT_URL,
   openExternalUrlFromClick,
 } from '../../../utils/appLinks';
 
@@ -25,7 +26,12 @@ export function About({ requestClose }: AboutProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>
@@ -55,12 +61,13 @@ export function About({ requestClose }: AboutProps) {
                   <Box gap="200" wrap="Wrap">
                     <Button
                       as="a"
+                      className={SettingsQuietControl}
                       href={SYNARA_SOURCE_CODE_URL}
                       onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_SOURCE_CODE_URL)}
                       rel="noreferrer noopener"
                       target="_blank"
                       variant="Secondary"
-                      fill="Soft"
+                      fill="None"
                       size="300"
                       radii="300"
                       before={<Icon src={Icons.Code} size="100" filled />}
@@ -69,17 +76,33 @@ export function About({ requestClose }: AboutProps) {
                     </Button>
                     <Button
                       as="a"
+                      className={SettingsQuietControl}
                       href={SYNARA_PROJECT_URL}
                       onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_PROJECT_URL)}
                       rel="noreferrer noopener"
                       target="_blank"
-                      variant="Critical"
+                      variant="Secondary"
+                      fill="None"
+                      size="300"
+                      radii="300"
+                      before={<Icon src={Icons.Info} size="100" />}
+                    >
+                      <Text size="B300">Project</Text>
+                    </Button>
+                    <Button
+                      as="a"
+                      className={SettingsQuietControl}
+                      href={SYNARA_SUPPORT_URL}
+                      onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_SUPPORT_URL)}
+                      rel="noreferrer noopener"
+                      target="_blank"
+                      variant="Primary"
                       fill="Soft"
                       size="300"
                       radii="300"
                       before={<Icon src={Icons.Heart} size="100" filled />}
                     >
-                      <Text size="B300">Project</Text>
+                      <Text size="B300">Support this project</Text>
                     </Button>
                   </Box>
                 </Box>

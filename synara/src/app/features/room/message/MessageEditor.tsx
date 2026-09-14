@@ -53,6 +53,7 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { EmojiBoard } from '../../../components/emoji-board';
+import * as depthCss from '../../../styles/Depth.css';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { editMessageWithNativeDesktopOwner } from '../nativeEditMessage';
@@ -333,10 +334,15 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                 </Box>
                 <Box gap="Inherit">
                   <IconButton
-                    variant="SurfaceVariant"
+                    className={depthCss.quietActionButton}
+                    variant="Surface"
+                    fill="None"
                     size="300"
                     radii="300"
                     onClick={() => setToolbar(!toolbar)}
+                    aria-pressed={toolbar}
+                    aria-expanded={toolbar}
+                    aria-label={toolbar ? 'Hide formatting toolbar' : 'Show formatting toolbar'}
                   >
                     <Icon size="400" src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
                   </IconButton>
@@ -366,14 +372,17 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                         }
                       >
                         <IconButton
+                          className={depthCss.quietActionButton}
                           aria-pressed={anchor !== undefined}
+                          aria-label="Emoji picker"
                           onClick={
                             ((evt) =>
                               setAnchor(
                                 evt.currentTarget.getBoundingClientRect()
                               )) as MouseEventHandler<HTMLButtonElement>
                           }
-                          variant="SurfaceVariant"
+                          variant="Surface"
+                          fill="None"
                           size="300"
                           radii="300"
                         >

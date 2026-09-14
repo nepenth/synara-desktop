@@ -194,7 +194,14 @@ function RoomNoteItem({
         </Box>
         <Box gap="200" justifyContent="End">
           {item.eventId && (
-            <Button className={css.ItemAction} size="300" radii="300" onClick={handleOpenMessage}>
+            <Button
+              className={css.ItemAction}
+              size="300"
+              radii="300"
+              variant="Secondary"
+              fill="None"
+              onClick={handleOpenMessage}
+            >
               <Text size="B300">Open</Text>
             </Button>
           )}
@@ -290,7 +297,15 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             {room.name ?? room.roomId}
           </Text>
         </Box>
-        <IconButton className={css.HeaderAction} size="300" onClick={requestClose} radii="300">
+        <IconButton
+          className={css.HeaderAction}
+          variant="Surface"
+          fill="None"
+          size="300"
+          onClick={requestClose}
+          radii="300"
+          aria-label="Close personal notes"
+        >
           <Icon src={Icons.Cross} />
         </IconButton>
       </Header>
@@ -308,8 +323,8 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             type="button"
             size="300"
             radii="300"
-            variant={kind === 'note' ? 'Primary' : 'Secondary'}
-            fill={kind === 'note' ? 'Solid' : 'None'}
+            variant="Secondary"
+            fill={kind === 'note' ? 'Soft' : 'None'}
             onClick={() => setKind('note')}
             aria-pressed={kind === 'note'}
           >
@@ -320,8 +335,8 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             type="button"
             size="300"
             radii="300"
-            variant={kind === 'todo' ? 'Primary' : 'Secondary'}
-            fill={kind === 'todo' ? 'Solid' : 'None'}
+            variant="Secondary"
+            fill={kind === 'todo' ? 'Soft' : 'None'}
             onClick={() => setKind('todo')}
             aria-pressed={kind === 'todo'}
           >
@@ -357,6 +372,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             className={css.AddAction}
             type="submit"
             variant="Primary"
+            fill="Soft"
             size="300"
             radii="300"
             disabled={saving || body.trim().length === 0}

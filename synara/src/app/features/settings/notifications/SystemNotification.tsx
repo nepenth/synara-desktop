@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Box, Text, Switch, Button, color, Spinner } from 'folds';
 import { IPusherRequest } from '../../../utils/pushRules';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
@@ -157,7 +157,14 @@ export function SystemNotification() {
           }
           after={
             notifPermission === 'prompt' ? (
-              <Button size="300" radii="300" onClick={requestNotificationPermission}>
+              <Button
+                className={SettingsQuietControl}
+                size="300"
+                radii="300"
+                variant="Primary"
+                fill="Soft"
+                onClick={requestNotificationPermission}
+              >
                 <Text size="B300">Enable</Text>
               </Button>
             ) : (

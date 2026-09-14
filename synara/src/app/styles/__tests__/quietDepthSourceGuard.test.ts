@@ -17,6 +17,7 @@ test('quiet depth system preserves accessibility preferences and keeps text flat
   assert.match(depth, /export const avatarSurface/);
   assert.match(depth, /export const avatarMedia/);
   assert.match(depth, /export const quietInteractiveSurface/);
+  assert.match(depth, /export const quietActionButton/);
   assert.match(depth, /:not\(:disabled\):not\(\[aria-disabled=true\]\)/);
   assert.match(depth, /&:disabled, &\[aria-disabled=true\]/);
   assert.doesNotMatch(depth, /textShadow|text-shadow/);
@@ -94,7 +95,13 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   assert.match(sidebar, /interactive && depthCss\.quietInteractiveSurface/);
   assert.match(sidebar, /aria-current=\{interactive && active \? 'page' : undefined\}/);
   assert.match(editorToolbar, /import \* as depthCss from '\.\.\/\.\.\/styles\/Depth\.css'/);
-  assert.match(editorToolbar, /className=\{depthCss\.quietInteractiveSurface\}/);
+  // The formatting toolbar matches the composer exactly through the shared
+  // quiet action recipe (transparent rest, tint + edge on hover, stronger
+  // tint when pressed), which lives in Depth.css.ts next to
+  // quietInteractiveSurface.
+  assert.match(editorToolbar, /className=\{depthCss\.quietActionButton\}/);
+  assert.match(editorToolbar, /fill="None"/);
+  assert.doesNotMatch(editorToolbar, /<IconButton[^>]*variant="SurfaceVariant"/);
 });
 
 test('room menus, members, and message search share quiet interactive depth', () => {

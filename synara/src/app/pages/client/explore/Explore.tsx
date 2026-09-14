@@ -33,6 +33,7 @@ import {
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { stopPropagation } from '../../../utils/keyboard';
+import * as depthCss from '../../../styles/Depth.css';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 import { readNativeRoomDirectorySession } from './nativeRoomDirectoryOwner';
 
@@ -82,7 +83,14 @@ export function AddServer() {
                 <Box grow="Yes">
                   <Text size="H4">Add Server</Text>
                 </Box>
-                <IconButton size="300" onClick={() => setDialog(false)} radii="300">
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  variant="Surface"
+                  fill="None"
+                  size="300"
+                  onClick={() => setDialog(false)}
+                  radii="300"
+                >
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Header>
@@ -99,7 +107,12 @@ export function AddServer() {
                   <Input ref={serverInputRef} name="serverInput" variant="Background" required />
                 </Box>
                 <Box direction="Column" gap="200">
-                  <Button type="submit" variant="Secondary" fill="Soft">
+                  <Button
+                    className={depthCss.quietInteractiveSurface}
+                    type="submit"
+                    variant="Secondary"
+                    fill="Soft"
+                  >
                     <Text size="B400">View</Text>
                   </Button>
                 </Box>
@@ -109,8 +122,9 @@ export function AddServer() {
         </OverlayCenter>
       </Overlay>
       <Button
+        className={depthCss.quietInteractiveSurface}
         variant="Secondary"
-        fill="Soft"
+        fill="None"
         size="300"
         before={<Icon size="100" src={Icons.Plus} />}
         onClick={() => setDialog(true)}

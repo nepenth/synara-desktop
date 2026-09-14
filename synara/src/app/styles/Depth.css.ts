@@ -1,6 +1,5 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-
 /**
  * Synara's depth system is deliberately quiet: edge light establishes the
  * upper plane and soft occlusion separates it from the surface beneath. Text
@@ -176,6 +175,57 @@ export const quietInteractiveSurface = style({
         '&:disabled, &[aria-disabled=true]': {
           boxShadow: 'none',
           outline: 'none',
+        },
+      },
+    },
+  },
+});
+
+/**
+ * Composer-exact quiet action recipe: transparent at rest, a faint
+ * `currentColor` tint plus edge light on hover, a stronger tint while
+ * `aria-pressed`/`aria-expanded`/active, and a primary-colored focus ring.
+ * Pair with `fill="None"` on folds buttons so the resting control sits flat
+ * on the reading plane. Text never receives depth.
+ */
+export const quietActionButton = style({
+  transition: 'background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out',
+  selectors: {
+    '&&': {
+      backgroundColor: 'transparent',
+      boxShadow: 'none',
+    },
+    '&&:not(:disabled):hover': {
+      backgroundColor: 'color-mix(in srgb, currentColor 7%, transparent)',
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}, 0 1px 2px color-mix(in srgb, var(--synara-depth-shadow-near) 45%, transparent)`,
+    },
+    '&&:not(:disabled)[aria-pressed=true], &&:not(:disabled)[aria-expanded=true], &&:not(:disabled):active':
+      {
+        backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)',
+      },
+    '&&:not(:disabled):active': {
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+    },
+    '&&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: '-2px',
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
+    '(prefers-contrast: more)': {
+      selectors: {
+        '&&:not(:disabled):hover, &&:not(:disabled):active': {
+          boxShadow: 'none',
+        },
+        '&&[aria-pressed=true], &&[aria-expanded=true]': {
+          outline: '1px solid currentColor',
+          outlineOffset: '-2px',
+        },
+        '&&:focus-visible': {
+          outlineWidth: '2px',
         },
       },
     },

@@ -35,7 +35,7 @@ import { KeySymbol } from '../../../utils/key-symbol';
 import { isMacOS } from '../../../utils/user-agent';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useDateFormatItems } from '../../../hooks/useDateFormat';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { clearCacheAndReload } from '../../../../client/initMatrix';
@@ -201,10 +201,12 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
     >
       {hasChanges ? (
         <IconButton
+          className={SettingsQuietControl}
           tabIndex={-1}
           onClick={handleReset}
           type="reset"
           variant="Secondary"
+          fill="None"
           size="300"
           radii="300"
         >
@@ -212,10 +214,12 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
         </IconButton>
       ) : (
         <IconButton
+          className={SettingsQuietControl}
           tabIndex={-1}
           onClick={handleOpenMenu}
           type="button"
           variant="Secondary"
+          fill="None"
           size="300"
           radii="300"
           aria-pressed={!!anchor}
@@ -277,9 +281,10 @@ function CustomDateFormat({ value, onChange }: CustomDateFormatProps) {
           />
         </Box>
         <Button
+          className={SettingsQuietControl}
           size="400"
           variant={hasChanges ? 'Success' : 'Secondary'}
-          fill={hasChanges ? 'Solid' : 'Soft'}
+          fill="Soft"
           outlined
           radii="300"
           disabled={!hasChanges}
@@ -315,13 +320,15 @@ function PresetDateFormat({ value, onChange }: PresetDateFormatProps) {
   return (
     <>
       <Button
+        className={SettingsQuietControl}
         size="300"
         variant="Secondary"
         outlined
-        fill="Soft"
+        fill="None"
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={handleMenu}
+        aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">
           {getDisplayDate(dateFormatItems.find((i) => i.format === value)?.format ?? value)}
@@ -350,9 +357,14 @@ function PresetDateFormat({ value, onChange }: PresetDateFormatProps) {
                 {dateFormatItems.map((item) => (
                   <MenuItem
                     key={item.format}
+                    className={SettingsQuietControl}
                     size="300"
-                    variant={value === item.format ? 'Primary' : 'Surface'}
+                    variant="Surface"
                     radii="300"
+                    aria-pressed={value === item.format}
+                    after={
+                      value === item.format ? <Icon size="100" src={Icons.Check} /> : undefined
+                    }
                     onClick={() => handleSelect(item.format)}
                   >
                     <Text size="T300">{getDisplayDate(item.format)}</Text>
@@ -654,9 +666,10 @@ function DesktopShortcutsSection() {
           </Text>
         )}
         <Button
+          className={SettingsQuietControl}
           size="300"
           variant={hasChanges ? 'Primary' : 'Secondary'}
-          fill={hasChanges ? 'Solid' : 'None'}
+          fill={hasChanges ? 'Soft' : 'None'}
           disabled={!shortcutsSupported || saving || !hasChanges || !!applyError}
           type="submit"
         >
@@ -746,9 +759,10 @@ function StorageSection() {
           description="Remove locally cached data and reload everything from the server. You stay signed in."
           after={
             <Button
+              className={SettingsQuietControl}
               onClick={() => clearCacheAndReload(mx)}
-              variant="Secondary"
-              fill="Soft"
+              variant="Critical"
+              fill="None"
               size="300"
               radii="300"
               outlined
@@ -853,7 +867,14 @@ function DesktopIntegrationSection() {
             {status.mediaPortal.message}
           </Text>
         </Box>
-        <Button size="300" variant="Secondary" fill="Soft" radii="300" onClick={copyDiagnostics}>
+        <Button
+          className={SettingsQuietControl}
+          size="300"
+          variant="Secondary"
+          fill="None"
+          radii="300"
+          onClick={copyDiagnostics}
+        >
           <Text size="B300">Copy diagnostics</Text>
         </Button>
         {copyError && <Text size="T200">Clipboard copy failed.</Text>}
@@ -1033,7 +1054,12 @@ export function General({ requestClose }: GeneralProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>

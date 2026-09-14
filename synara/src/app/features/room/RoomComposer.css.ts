@@ -1,7 +1,7 @@
 import { globalStyle, style } from '@vanilla-extract/css';
 import { color, config, DefaultReset, toRem } from 'folds';
 import * as editorCss from '../../components/editor/Editor.css';
-import { quietEdgeLight } from '../../styles/Depth.css';
+import { quietActionButton } from '../../styles/Depth.css';
 
 export const RoomComposer = style([
   DefaultReset,
@@ -71,46 +71,4 @@ export const ComposerError = style({
 });
 
 /** One shared surface with a faint edge and soft contact shadow on hover. */
-export const ComposerAction = style({
-  transition: 'background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out',
-  selectors: {
-    '&&': {
-      backgroundColor: 'transparent',
-      boxShadow: 'none',
-    },
-    '&&:not(:disabled):hover': {
-      backgroundColor: 'color-mix(in srgb, currentColor 7%, transparent)',
-      boxShadow: `inset 0 1px 0 ${quietEdgeLight}, 0 1px 2px color-mix(in srgb, var(--synara-depth-shadow-near) 45%, transparent)`,
-    },
-    '&&:not(:disabled)[aria-pressed=true], &&:not(:disabled)[aria-expanded=true], &&:not(:disabled):active':
-      {
-        backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)',
-      },
-    '&&:not(:disabled):active': {
-      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
-    },
-    '&&:focus-visible': {
-      outline: `2px solid ${color.Primary.Main}`,
-      outlineOffset: '-2px',
-    },
-  },
-  '@media': {
-    '(prefers-reduced-motion: reduce)': {
-      transition: 'none',
-    },
-    '(prefers-contrast: more)': {
-      selectors: {
-        '&&:not(:disabled):hover, &&:not(:disabled):active': {
-          boxShadow: 'none',
-        },
-        '&&[aria-pressed=true], &&[aria-expanded=true]': {
-          outline: '1px solid currentColor',
-          outlineOffset: '-2px',
-        },
-        '&&:focus-visible': {
-          outlineWidth: '2px',
-        },
-      },
-    },
-  },
-});
+export const ComposerAction = quietActionButton;

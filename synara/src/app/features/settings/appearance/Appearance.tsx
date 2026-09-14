@@ -44,7 +44,7 @@ import {
 import { stopPropagation } from '../../../utils/keyboard';
 import { useMessageLayoutItems } from '../../../hooks/useMessageLayout';
 import { useMessageSpacingItems } from '../../../hooks/useMessageSpacing';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
@@ -69,9 +69,12 @@ const ThemeSelector = as<'div', ThemeSelectorProps>(
         {themes.map((theme) => (
           <MenuItem
             key={theme.id}
+            className={SettingsQuietControl}
             size="300"
-            variant={theme.id === selected.id ? 'Primary' : 'Surface'}
+            variant="Surface"
             radii="300"
+            aria-pressed={theme.id === selected.id}
+            after={theme.id === selected.id ? <Icon size="100" src={Icons.Check} /> : undefined}
             onClick={() => onSelect(theme)}
           >
             <Text size="T300">{themeNames[theme.id] ?? theme.id}</Text>
@@ -101,14 +104,16 @@ function SelectTheme({ disabled }: { disabled?: boolean }) {
   return (
     <>
       <Button
+        className={SettingsQuietControl}
         size="300"
-        variant="Primary"
+        variant="Secondary"
         outlined
-        fill="Soft"
+        fill="None"
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={disabled ? undefined : handleThemeMenu}
         aria-disabled={disabled}
+        aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">{themeNames[selectedTheme.id] ?? selectedTheme.id}</Text>
       </Button>
@@ -182,9 +187,15 @@ function SystemThemePreferences() {
         title="Light Theme:"
         after={
           <Chip
-            variant={themeKind === ThemeKind.Light ? 'Primary' : 'Secondary'}
-            outlined={themeKind === ThemeKind.Light}
+            className={SettingsQuietControl}
+            variant="Secondary"
+            fill={themeKind === ThemeKind.Light ? 'Soft' : 'None'}
+            outlined
             radii="Pill"
+            aria-pressed={themeKind === ThemeKind.Light}
+            before={
+              themeKind === ThemeKind.Light ? <Icon size="100" src={Icons.Check} /> : undefined
+            }
             after={<Icon size="200" src={Icons.ChevronBottom} />}
             onClick={handleLightThemeMenu}
           >
@@ -223,9 +234,15 @@ function SystemThemePreferences() {
         title="Dark Theme:"
         after={
           <Chip
-            variant={themeKind === ThemeKind.Dark ? 'Primary' : 'Secondary'}
-            outlined={themeKind === ThemeKind.Dark}
+            className={SettingsQuietControl}
+            variant="Secondary"
+            fill={themeKind === ThemeKind.Dark ? 'Soft' : 'None'}
+            outlined
             radii="Pill"
+            aria-pressed={themeKind === ThemeKind.Dark}
+            before={
+              themeKind === ThemeKind.Dark ? <Icon size="100" src={Icons.Check} /> : undefined
+            }
             after={<Icon size="200" src={Icons.ChevronBottom} />}
             onClick={handleDarkThemeMenu}
           >
@@ -448,10 +465,11 @@ function Appearance() {
                   style={{ width: toRem(108) }}
                 />
                 <Button
+                  className={SettingsQuietControl}
                   size="300"
                   radii="300"
                   variant="Secondary"
-                  fill="Soft"
+                  fill="None"
                   onClick={() => setThemeBaseColor(undefined)}
                   disabled={!themeBaseColor}
                 >
@@ -509,10 +527,11 @@ function Appearance() {
                   style={{ width: toRem(108) }}
                 />
                 <Button
+                  className={SettingsQuietControl}
                   size="300"
                   radii="300"
                   variant="Secondary"
-                  fill="Soft"
+                  fill="None"
                   onClick={() => setCustomAccentColor(undefined)}
                   disabled={!customAccentColor}
                 >
@@ -542,11 +561,15 @@ function TextAndZoom() {
               {MESSAGE_TEXT_TONES.map((tone) => (
                 <Button
                   key={tone}
+                  className={SettingsQuietControl}
                   size="300"
                   radii="300"
-                  variant={messageTextTone === tone ? 'Primary' : 'Secondary'}
-                  fill={messageTextTone === tone ? 'Solid' : 'Soft'}
+                  variant="Secondary"
+                  fill={messageTextTone === tone ? 'Soft' : 'None'}
                   aria-pressed={messageTextTone === tone}
+                  before={
+                    messageTextTone === tone ? <Icon size="100" src={Icons.Check} /> : undefined
+                  }
                   onClick={() => setMessageTextTone(tone as MessageTextTone)}
                 >
                   <Text size="B300">
@@ -587,13 +610,15 @@ function SelectMessageLayout() {
   return (
     <>
       <Button
+        className={SettingsQuietControl}
         size="300"
         variant="Secondary"
         outlined
-        fill="Soft"
+        fill="None"
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={handleMenu}
+        aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">
           {messageLayoutItems.find((i) => i.layout === messageLayout)?.name ?? messageLayout}
@@ -622,9 +647,16 @@ function SelectMessageLayout() {
                 {messageLayoutItems.map((item) => (
                   <MenuItem
                     key={item.layout}
+                    className={SettingsQuietControl}
                     size="300"
-                    variant={messageLayout === item.layout ? 'Primary' : 'Surface'}
+                    variant="Surface"
                     radii="300"
+                    aria-pressed={messageLayout === item.layout}
+                    after={
+                      messageLayout === item.layout ? (
+                        <Icon size="100" src={Icons.Check} />
+                      ) : undefined
+                    }
                     onClick={() => handleSelect(item.layout)}
                   >
                     <Text size="T300">{item.name}</Text>
@@ -656,13 +688,15 @@ function SelectMessageSpacing() {
   return (
     <>
       <Button
+        className={SettingsQuietControl}
         size="300"
         variant="Secondary"
         outlined
-        fill="Soft"
+        fill="None"
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={handleMenu}
+        aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">
           {messageSpacingItems.find((i) => i.spacing === messageSpacing)?.name ?? messageSpacing}
@@ -691,9 +725,16 @@ function SelectMessageSpacing() {
                 {messageSpacingItems.map((item) => (
                   <MenuItem
                     key={item.spacing}
+                    className={SettingsQuietControl}
                     size="300"
-                    variant={messageSpacing === item.spacing ? 'Primary' : 'Surface'}
+                    variant="Surface"
                     radii="300"
+                    aria-pressed={messageSpacing === item.spacing}
+                    after={
+                      messageSpacing === item.spacing ? (
+                        <Icon size="100" src={Icons.Check} />
+                      ) : undefined
+                    }
                     onClick={() => handleSelect(item.spacing)}
                   >
                     <Text size="T300">{item.name}</Text>
@@ -764,7 +805,12 @@ export function AppearancePage({ requestClose }: AppearancePageProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>

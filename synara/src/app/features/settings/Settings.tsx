@@ -150,7 +150,12 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
               </Box>
               <Box shrink="No">
                 {screenSize === ScreenSize.Mobile && (
-                  <IconButton onClick={requestClose} variant="Surface">
+                  <IconButton
+                    className={depthCss.quietInteractiveSurface}
+                    onClick={requestClose}
+                    variant="Surface"
+                    fill="None"
+                  >
                     <Icon src={Icons.Cross} />
                   </IconButton>
                 )}
