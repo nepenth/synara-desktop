@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  compareRecentApprovals,
   historyDecisionLabel,
   historyItemToInboxItem,
   unionRecentApprovals,
@@ -80,4 +81,59 @@ test('history items never render as expired and keep a bounded summary', () => {
   assert.equal(historyDecisionLabel('approve_always', 'decided'), 'Approved always');
   assert.equal(historyDecisionLabel('deny', 'decided'), 'Denied');
   assert.equal(historyDecisionLabel(undefined, 'expired'), 'Expired');
+  assert.equal(historyDecisionLabel(undefined, 'decided'), 'Decided');
+});
+
+test('empty or whitespace summaries fall back to a readable label', () => {
+  const blank = historyItemToInboxItem(history({ summary: '' }));
+  const spaces = historyItemToInboxItem(history({ summary: '   ' }));
+  assert.equal(blank.summary, 'Command not recorded');
+  assert.equal(blank.body, 'Command not recorded');
+  assert.equal(spaces.summary, 'Command not recorded');
+});
+
+test('recent sort is stable for equal timestamps and missing decidedAt', () => {
+  const recent = unionRecentApprovals(
+    [
+      inbox({
+        eventId: '$b',
+        roomId: '!room:example.org',
+        status: 'expired',
+        originServerTs: 1_000,
+      }),
+      inbox({
+        eventId: '$a',
+        roomId: '!room:example.org',
+        status: 'expired',
+        originServerTs: 1_000,
+      }),
+    ],
+    [
+      history({
+        eventId: '$late',
+        roomId: '!other:example.org',
+        decidedAt: 5_000,
+        originServerTs: 1,
+      }),
+    ]
+  );
+  assert.deepEqual(
+    recent.map((item) => item.eventId),
+    ['$late', '$a', '$b']
+  );
+  assert.equal(compareRecentApprovals(recent[1], recent[2]) < 0, true);
+});
+
+test('duplicate history identities keep a single row and 240-char unspaced summaries stay intact', () => {
+  const long = 'あ'.repeat(240);
+  const recent = unionRecentApprovals(
+    [inbox({ eventId: '$dup', status: 'expired', originServerTs: 1 })],
+    [
+      history({ eventId: '$dup', decidedAt: 3, summary: 'first' }),
+      history({ eventId: '$dup', decidedAt: 4, summary: long }),
+    ]
+  );
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].summary, long);
+  assert.equal(recent[0].status, 'decided');
 });

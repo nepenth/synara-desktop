@@ -9,6 +9,7 @@ import {
   Box,
   Button,
   Chip,
+  color,
   config,
   Icon,
   IconButton,
@@ -44,7 +45,7 @@ import {
 import { stopPropagation } from '../../../utils/keyboard';
 import { useMessageLayoutItems } from '../../../hooks/useMessageLayout';
 import { useMessageSpacingItems } from '../../../hooks/useMessageSpacing';
-import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl, SettingsThemeSwatch } from '../styles.css';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { normalizeAccentColor, themeDefaultAccentColor } from '../../../utils/themeAccent';
 import { MESSAGE_TEXT_TONES, type MessageTextTone } from '../../../utils/messageTextTone';
@@ -112,7 +113,8 @@ function SelectTheme({ disabled }: { disabled?: boolean }) {
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={disabled ? undefined : handleThemeMenu}
-        aria-disabled={disabled}
+        disabled={disabled}
+        aria-haspopup="menu"
         aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">{themeNames[selectedTheme.id] ?? selectedTheme.id}</Text>
@@ -193,6 +195,8 @@ function SystemThemePreferences() {
             outlined
             radii="Pill"
             aria-pressed={themeKind === ThemeKind.Light}
+            aria-haspopup="menu"
+            aria-expanded={ltCords !== undefined}
             before={
               themeKind === ThemeKind.Light ? <Icon size="100" src={Icons.Check} /> : undefined
             }
@@ -240,6 +244,8 @@ function SystemThemePreferences() {
             outlined
             radii="Pill"
             aria-pressed={themeKind === ThemeKind.Dark}
+            aria-haspopup="menu"
+            aria-expanded={dtCords !== undefined}
             before={
               themeKind === ThemeKind.Dark ? <Icon size="100" src={Icons.Check} /> : undefined
             }
@@ -414,22 +420,11 @@ function Appearance() {
                     <button
                       key={preset.id}
                       type="button"
+                      className={SettingsThemeSwatch}
                       aria-label={preset.label}
                       aria-pressed={selected}
                       onClick={() => setThemeBaseColor(preset.hex)}
-                      style={{
-                        width: toRem(22),
-                        height: toRem(22),
-                        padding: 0,
-                        borderRadius: '50%',
-                        border: selected
-                          ? `2px solid ${baseColor}`
-                          : '1px solid rgba(255,255,255,0.18)',
-                        background: preset.hex,
-                        cursor: 'pointer',
-                        outline: selected ? '2px solid currentColor' : 'none',
-                        outlineOffset: 2,
-                      }}
+                      style={{ background: preset.hex }}
                     />
                   );
                 })}
@@ -445,7 +440,7 @@ function Appearance() {
                     width: toRem(28),
                     height: toRem(28),
                     padding: 0,
-                    border: '1px solid rgba(127,127,127,0.35)',
+                    border: `1px solid ${color.Surface.ContainerLine}`,
                     borderRadius: toRem(4),
                     background: 'transparent',
                     cursor: 'pointer',
@@ -509,7 +504,7 @@ function Appearance() {
                     width: toRem(28),
                     height: toRem(28),
                     padding: 0,
-                    border: '1px solid rgba(127,127,127,0.35)',
+                    border: `1px solid ${color.Surface.ContainerLine}`,
                     borderRadius: toRem(4),
                     background: 'transparent',
                     cursor: 'pointer',
@@ -618,6 +613,7 @@ function SelectMessageLayout() {
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={handleMenu}
+        aria-haspopup="menu"
         aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">
@@ -696,6 +692,7 @@ function SelectMessageSpacing() {
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={handleMenu}
+        aria-haspopup="menu"
         aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">
@@ -810,6 +807,7 @@ export function AppearancePage({ requestClose }: AppearancePageProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>

@@ -26,6 +26,7 @@ export function Account({ requestClose }: AccountProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>

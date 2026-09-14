@@ -187,6 +187,7 @@ export function Diagnostics({ requestClose }: DiagnosticsProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>

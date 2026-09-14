@@ -290,7 +290,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
         boxShadow: embedded ? undefined : floatingShadow,
       }}
     >
-      <Header size="600" style={{ padding: `0 ${config.space.S300}` }}>
+      <Header size="600" className={css.PanelHeader} style={{ padding: `0 ${config.space.S300}` }}>
         <Box grow="Yes" direction="Column">
           <Text size="H4">Personal Notes</Text>
           <Text size="T200" priority="300" truncate>
@@ -317,7 +317,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
         gap="300"
         onSubmit={handleSubmit}
       >
-        <Box className={css.KindSwitch} gap="100">
+        <Box className={css.KindSwitch} gap="100" role="group" aria-label="Item kind">
           <Button
             className={css.KindButton}
             type="button"
@@ -327,6 +327,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             fill={kind === 'note' ? 'Soft' : 'None'}
             onClick={() => setKind('note')}
             aria-pressed={kind === 'note'}
+            before={kind === 'note' ? <Icon size="100" src={Icons.Check} /> : undefined}
           >
             <Text size="B300">Note</Text>
           </Button>
@@ -339,6 +340,7 @@ export function RoomNotesPanel({ room, requestClose, embedded }: RoomNotesPanelP
             fill={kind === 'todo' ? 'Soft' : 'None'}
             onClick={() => setKind('todo')}
             aria-pressed={kind === 'todo'}
+            before={kind === 'todo' ? <Icon size="100" src={Icons.Check} /> : undefined}
           >
             <Text size="B300">ToDo</Text>
           </Button>

@@ -316,6 +316,7 @@ export function Notifications({ requestClose }: NotificationsProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>

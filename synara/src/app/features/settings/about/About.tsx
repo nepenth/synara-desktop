@@ -31,6 +31,7 @@ export function About({ requestClose }: AboutProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>

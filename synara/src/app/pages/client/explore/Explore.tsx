@@ -65,7 +65,7 @@ export function AddServer() {
         <OverlayCenter>
           <FocusTrap
             focusTrapOptions={{
-              initialFocus: false,
+              initialFocus: () => serverInputRef.current ?? false,
               clickOutsideDeactivates: true,
               onDeactivate: () => setDialog(false),
               escapeDeactivates: stopPropagation,
@@ -90,6 +90,7 @@ export function AddServer() {
                   size="300"
                   onClick={() => setDialog(false)}
                   radii="300"
+                  aria-label="Close"
                 >
                   <Icon src={Icons.Cross} />
                 </IconButton>
@@ -103,8 +104,17 @@ export function AddServer() {
               >
                 <Text priority="400">Add server name to explore public communities.</Text>
                 <Box direction="Column" gap="100">
-                  <Text size="L400">Server Name</Text>
-                  <Input ref={serverInputRef} name="serverInput" variant="Background" required />
+                  <Text as="label" size="L400" htmlFor="explore-add-server-name">
+                    Server Name
+                  </Text>
+                  <Input
+                    ref={serverInputRef}
+                    id="explore-add-server-name"
+                    name="serverInput"
+                    variant="Background"
+                    required
+                    aria-label="Server Name"
+                  />
                 </Box>
                 <Box direction="Column" gap="200">
                   <Button
@@ -128,6 +138,8 @@ export function AddServer() {
         size="300"
         before={<Icon size="100" src={Icons.Plus} />}
         onClick={() => setDialog(true)}
+        aria-haspopup="dialog"
+        aria-expanded={dialog}
       >
         <Text size="B300" truncate>
           Add Server

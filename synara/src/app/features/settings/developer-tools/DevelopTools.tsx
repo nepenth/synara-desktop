@@ -109,6 +109,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>

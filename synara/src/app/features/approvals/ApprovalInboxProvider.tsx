@@ -38,6 +38,8 @@ export type ApprovalInboxContextValue = ApprovalInboxSummary & {
   sessionGeneration?: number;
   items: ApprovalInboxItem[];
   recentItems: ApprovalInboxItem[];
+  /** False only while the first history read for this session is in flight. Omitted by fixtures. */
+  historyReady?: boolean;
   now: number;
   refresh: () => void;
   decided: (item: ApprovalInboxItem) => boolean;
@@ -54,6 +56,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
   const [error, setError] = useState<string>();
   const [now, setNow] = useState(Date.now);
   const [historyItems, setHistoryItems] = useState<SynaraAgentApprovalHistoryItem[]>([]);
+  const [historyReady, setHistoryReady] = useState(false);
   const reload = useRef<() => void>(() => undefined);
   const discoveryActive = useRef(false);
   const pageActive = useRef(onApprovalsPage);
@@ -74,6 +77,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     let releaseScope: (() => void) | undefined;
     projection.reset();
     setHistoryItems([]);
+    setHistoryReady(false);
     setRevision((value) => value + 1);
     setError(undefined);
     const loadHistory = async () => {
@@ -82,6 +86,8 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
         if (!cancelled) setHistoryItems(next.items);
       } catch {
         if (!cancelled) setHistoryItems([]);
+      } finally {
+        if (!cancelled) setHistoryReady(true);
       }
     };
     const load = async () => {
@@ -202,11 +208,12 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       sessionGeneration: snapshot?.sessionGeneration,
       items: snapshot?.items ?? [],
       recentItems,
+      historyReady,
       now,
       refresh,
       decided,
     }),
-    [summary, snapshot, recentItems, now, refresh, decided]
+    [summary, snapshot, recentItems, historyReady, now, refresh, decided]
   );
 
   return (

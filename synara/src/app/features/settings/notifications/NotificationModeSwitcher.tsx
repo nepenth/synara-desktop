@@ -72,6 +72,7 @@ export function NotificationModeSwitcher({ pushRule, onChange }: NotificationMod
         }
         onClick={handleMenu}
         disabled={changing}
+        aria-haspopup="menu"
         aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">{modeToStr[selectedMode]}</Text>

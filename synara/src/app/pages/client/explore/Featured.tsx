@@ -39,6 +39,7 @@ export function FeaturedRooms() {
                   variant="Surface"
                   fill="None"
                   onClick={onBack}
+                  aria-label="Back"
                 >
                   <Icon src={Icons.ArrowLeft} />
                 </IconButton>

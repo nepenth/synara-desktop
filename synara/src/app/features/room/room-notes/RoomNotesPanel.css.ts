@@ -19,6 +19,10 @@ export const Panel = style({
 
 export const HeaderAction = style([quietInteractiveSurface]);
 
+export const PanelHeader = style({
+  flexShrink: 0,
+});
+
 /**
  * folds `Box` resets `min-height: 0`, so inside the height-constrained panel
  * column both the composer form and its tab strip could shrink below their

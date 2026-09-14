@@ -253,7 +253,8 @@ function ThirdPartyProtocolsSelector({
       <Chip
         className={depthCss.quietInteractiveSurface}
         onClick={handleOpenMenu}
-        aria-pressed={!!menuAnchor}
+        aria-haspopup="menu"
+        aria-expanded={!!menuAnchor}
         radii="Pill"
         size="400"
         variant="Surface"
@@ -381,7 +382,9 @@ function LimitButton({ limit, onLimitChange }: LimitButtonProps) {
       <Chip
         className={depthCss.quietInteractiveSurface}
         onClick={handleOpenMenu}
-        aria-pressed={!!menuAnchor}
+        aria-haspopup="dialog"
+        aria-expanded={!!menuAnchor}
+        aria-label={`Page limit: ${limit}`}
         radii="Pill"
         size="400"
         variant="Surface"
@@ -570,6 +573,7 @@ export function PublicRooms() {
                       variant="Surface"
                       fill="None"
                       onClick={onBack}
+                      aria-label="Back"
                     >
                       <Icon src={Icons.ArrowLeft} />
                     </IconButton>
@@ -607,7 +611,7 @@ export function PublicRooms() {
                     ) : (
                       <Text size="H4">Popular Communities</Text>
                     )}
-                    <Box gap="200">
+                    <Box gap="200" wrap="Wrap" style={{ minWidth: 0 }}>
                       {roomTypeFilters.map((filter) => (
                         <Chip
                           className={depthCss.quietInteractiveSurface}
@@ -654,7 +658,7 @@ export function PublicRooms() {
                     </RoomCardGrid>
                   )}
                   {error && (
-                    <Box direction="Column" className={css.PublicRoomsError} gap="200">
+                    <Box direction="Column" className={css.PublicRoomsError} gap="200" role="alert">
                       <Text size="L400">{error.name}</Text>
                       <Text size="T300">{error.message}</Text>
                     </Box>

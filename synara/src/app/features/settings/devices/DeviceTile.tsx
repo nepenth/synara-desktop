@@ -21,7 +21,7 @@ import { timeDayMonYear, timeHourMinute, today, yesterday } from '../../../utils
 import { BreakWord } from '../../../styles/Text.css';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { LogoutDialog } from '../../../components/LogoutDialog';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
@@ -98,7 +98,16 @@ function DeviceDetails({ device }: { device: NativeDevice }) {
       )}
       {typeof device.ed25519Fingerprint === 'string' && (
         <Text className={BreakWord} size="T200" priority="300">
-          Identity key: <i>{device.ed25519Fingerprint}</i>
+          Identity key:{' '}
+          <code
+            style={{
+              userSelect: 'all',
+              fontFamily: 'inherit',
+              fontStyle: 'normal',
+            }}
+          >
+            {device.ed25519Fingerprint}
+          </code>
         </Text>
       )}
       {typeof firstSeenTs === 'number' && <DeviceTimestamp label="First seen: " ts={firstSeenTs} />}
@@ -295,10 +304,14 @@ export function DeviceTile({
       <SettingTile
         before={
           <IconButton
+            className={SettingsQuietControl}
             variant={deleted ? 'Critical' : 'Secondary'}
+            fill="None"
             outlined={deleted}
             radii="300"
             onClick={() => setDetails(!details)}
+            aria-expanded={details}
+            aria-label={details ? 'Hide device details' : 'Show device details'}
           >
             <Icon size="50" src={details ? Icons.ChevronBottom : Icons.ChevronRight} />
           </IconButton>
@@ -321,8 +334,10 @@ export function DeviceTile({
           )
         }
       >
-        <Box alignItems="Center" gap="200" wrap="Wrap">
-          <Text size="T300">{device.displayName ?? device.deviceId}</Text>
+        <Box alignItems="Center" gap="200" wrap="Wrap" style={{ minWidth: 0 }}>
+          <Text size="T300" truncate style={{ minWidth: 0, flex: '1 1 8rem' }}>
+            {device.displayName ?? device.deviceId}
+          </Text>
           {device.isCurrent && (
             <Chip as="span" variant="Secondary" radii="Pill" outlined>
               <Text size="B300">This device</Text>

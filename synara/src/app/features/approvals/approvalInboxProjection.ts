@@ -3,13 +3,14 @@ import {
   approvalStatus,
   type ApprovalInboxSnapshot,
 } from './nativeApprovalInbox';
+import type { ApprovalDecision } from './approvalDecisionEvents';
 
 /** Readback + optimistic decisions for exactly one client/generation, independently testable. */
 export function createApprovalInboxProjection() {
   let client: object | undefined;
   let scope: object = {};
   let snapshot: ApprovalInboxSnapshot | undefined;
-  const completed = new Set<string>();
+  const completed = new Map<string, ApprovalDecision | undefined>();
   return {
     get scope() {
       return scope;
@@ -30,20 +31,26 @@ export function createApprovalInboxProjection() {
     },
     complete(
       expectedScope: object | undefined,
-      item: { roomId: string; eventId: string }
+      item: { roomId: string; eventId: string; decision?: ApprovalDecision }
     ): boolean {
       if (!snapshot || expectedScope !== scope) return false;
-      completed.add(approvalIdentity(item));
+      completed.set(approvalIdentity(item), item.decision);
       return true;
     },
     read(now: number): ApprovalInboxSnapshot | undefined {
       return (
         snapshot && {
           ...snapshot,
-          items: snapshot.items.map((item) => ({
-            ...item,
-            status: completed.has(approvalIdentity(item)) ? 'decided' : approvalStatus(item, now),
-          })),
+          items: snapshot.items.map((item) => {
+            const identity = approvalIdentity(item);
+            if (!completed.has(identity)) return { ...item, status: approvalStatus(item, now) };
+            const decision = completed.get(identity) ?? item.decision;
+            return {
+              ...item,
+              status: 'decided' as const,
+              ...(decision ? { decision, decidedAt: item.decidedAt ?? now } : {}),
+            };
+          }),
         }
       );
     },

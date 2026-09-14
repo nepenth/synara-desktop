@@ -25,5 +25,7 @@ export const PublicRoomsError = style([
     borderRadius: config.radii.R400,
     border: `${config.borderWidth.B300} solid ${color.Critical.Main}`,
     boxShadow: restingInnerEdge,
+    minWidth: 0,
+    overflowWrap: 'anywhere',
   },
 ]);

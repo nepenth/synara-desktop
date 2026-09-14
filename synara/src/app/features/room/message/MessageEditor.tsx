@@ -342,6 +342,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                     onClick={() => setToolbar(!toolbar)}
                     aria-pressed={toolbar}
                     aria-expanded={toolbar}
+                    aria-controls={toolbar ? 'message-formatting-toolbar' : undefined}
                     aria-label={toolbar ? 'Hide formatting toolbar' : 'Show formatting toolbar'}
                   >
                     <Icon size="400" src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
@@ -373,7 +374,8 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                       >
                         <IconButton
                           className={depthCss.quietActionButton}
-                          aria-pressed={anchor !== undefined}
+                          aria-expanded={anchor !== undefined}
+                          aria-haspopup="dialog"
                           aria-label="Emoji picker"
                           onClick={
                             ((evt) =>
@@ -394,7 +396,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                 </Box>
               </Box>
               {toolbar && (
-                <div>
+                <div id="message-formatting-toolbar">
                   <Line variant="SurfaceVariant" size="300" />
                   <Toolbar />
                 </div>

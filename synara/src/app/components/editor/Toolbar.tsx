@@ -84,7 +84,7 @@ export function MarkButton({ format, icon, label, tooltip }: MarkButtonProps) {
           radii="300"
           disabled={disableInline}
         >
-          <Icon size="200" src={icon} />
+          <Icon size="200" src={icon} filled={isMarkActive(editor, format)} />
         </IconButton>
       )}
     </TooltipProvider>
@@ -119,7 +119,7 @@ export function BlockButton({ format, icon, label, tooltip }: BlockButtonProps) 
           size="400"
           radii="300"
         >
-          <Icon size="200" src={icon} />
+          <Icon size="200" src={icon} filled={isBlockActive(editor, format)} />
         </IconButton>
       )}
     </TooltipProvider>
@@ -177,6 +177,7 @@ export function HeadingBlockButton() {
                     fill="None"
                     onClick={() => handleMenuSelect(1)}
                     aria-label="Heading 1"
+                    aria-pressed={level === 1}
                     size="400"
                     radii="300"
                   >
@@ -196,6 +197,7 @@ export function HeadingBlockButton() {
                     fill="None"
                     onClick={() => handleMenuSelect(2)}
                     aria-label="Heading 2"
+                    aria-pressed={level === 2}
                     size="400"
                     radii="300"
                   >
@@ -215,6 +217,7 @@ export function HeadingBlockButton() {
                     fill="None"
                     onClick={() => handleMenuSelect(3)}
                     aria-label="Heading 3"
+                    aria-pressed={level === 3}
                     size="400"
                     radii="300"
                   >

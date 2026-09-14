@@ -222,7 +222,8 @@ function DateHint({ hasChanges, handleReset }: DateHintProps) {
           fill="None"
           size="300"
           radii="300"
-          aria-pressed={!!anchor}
+          aria-expanded={!!anchor}
+          aria-haspopup="dialog"
         >
           <Icon style={{ opacity: config.opacity.P300 }} size="100" src={Icons.Info} />
         </IconButton>
@@ -328,6 +329,7 @@ function PresetDateFormat({ value, onChange }: PresetDateFormatProps) {
         radii="300"
         after={<Icon size="300" src={Icons.ChevronBottom} />}
         onClick={handleMenu}
+        aria-haspopup="menu"
         aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">
@@ -1059,6 +1061,7 @@ export function General({ requestClose }: GeneralProps) {
               onClick={requestClose}
               variant="Surface"
               fill="None"
+              aria-label="Close"
             >
               <Icon src={Icons.Cross} />
             </IconButton>
