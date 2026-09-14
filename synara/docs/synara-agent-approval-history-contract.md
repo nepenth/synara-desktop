@@ -55,18 +55,48 @@ v1 and write it back. Missing content normalizes to `{ "version": 1, "items": []
 Malformed items inside a recognized v1 array may be discarded. A non-array
 `items` value fails closed.
 
+The canonical writer schema sets `additionalProperties: false` on the content
+object and on each item, matching Later and room-notes writer schemas. Readers
+ignore unknown fields; they must not persist a rewritten v1 document that
+strips fields they do not understand from an unsupported version.
+
 The complete encoded account-data object is capped at 256 KiB. Oversized reads
 and writes fail closed instead of parsing or publishing a partial replacement.
+That byte cap is enforced by Core, not by JSON Schema.
 
 Writers append after a successful `matrix_agent_approval_decide` reaction send.
 A history-write failure must not fail the decision. Duplicate `(roomId, eventId)`
-rows keep the newest `decidedAt`. Items older than 30 days are dropped. The
-list is newest-first and capped at 200 items.
+rows keep the newest `decidedAt`. Items older than 30 days (`decidedAt` older
+than `now - 30 * 24 * 60 * 60 * 1000` ms) are dropped. The list is newest-first
+and capped at 200 items. Retention and the 200-item cap are writer prune
+policies; the schema `maxItems: 200` bound is the stored canonical payload.
 
 `summary` is at most 240 Unicode scalar values: the first useful fenced/Code
 command line, else the `Reason:` text, else the first non-heading line.
-Whitespace is collapsed. Writers must not store the full command body, access
-tokens, or other secrets.
+Whitespace is collapsed. Empty summary is allowed when no preview line exists.
+Writers must not store the full command body, access tokens, or other secrets.
+Core writers also reject control and bidi format characters in `summary`.
+
+### Item validation (Core codec)
+
+Canonical items use camelCase JSON field names. All three timestamps are finite
+milliseconds since Unix epoch and must be `> 0`. `expiresAt` must be greater
+than `originServerTs` (JSON Schema cannot compare two properties; Core drops
+the item). `decision` is exactly `approve_once`, `approve_always`, or `deny`.
+
+Identity bounds:
+
+- `roomId`: Matrix room ID. Starts with `!`, includes a `:server` suffix Core
+  parses as a Ruma server name, no whitespace/control/bidi characters, at most
+  255 UTF-8 bytes. Canonical writers emit ASCII IDs, so schema `maxLength: 255`
+  matches.
+- `eventId`: starts with `$`, no whitespace/control/bidi characters, at most
+  255 UTF-8 bytes.
+- `sender`: Matrix user ID `@localpart:server`, at most 256 Unicode scalars,
+  no whitespace/control/bidi characters.
+
+The desktop snapshot command `matrix_agent_approval_history_snapshot` returns
+`{ items }` only (no `version`). That DTO is not this account-data schema.
 
 Core serializes read-modify-write mutations within one running process and
 fetches the current server value before each mutation; it does not rely on a

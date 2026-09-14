@@ -1,6 +1,6 @@
 # Synara Shared Contract Inventory
 
-Reviewed: 2026-08-24
+Reviewed: 2026-09-14
 
 Status: portable contract inventory, updated as shared-core and native iOS
 owners land. Individual ownership rows are evidence for those verticals, not a
@@ -46,8 +46,8 @@ Completed locally:
   registration results.
 - Native credential/session storage direction implemented for desktop.
 - Shared contracts documented for routes, notifications, agent actions, agent
-  cards, Later, room notes, unread anchors, space folders, anchors, media URL
-  policy, and settings compatibility.
+  approval history, agent cards, Later, room notes, unread anchors, space
+  folders, anchors, media URL policy, and settings compatibility.
 - JSON Schema and fixture coverage added for all contracts with current runtime
   behavior.
 

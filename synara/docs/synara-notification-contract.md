@@ -1,6 +1,6 @@
 # Synara Notification Contract
 
-Reviewed: 2026-05-25
+Reviewed: 2026-09-14
 
 Status: initial shared contract with runtime summary logic in
 `src/app/notifications/badgeSummary.ts` and route payload validation through
@@ -80,6 +80,7 @@ type SystemNotificationRequest = {
   title: string;
   body?: string;
   route?: string;
+  dismissKeys?: string[];
   privacy?: 'standard' | 'private';
   sound?: 'default' | 'silent';
 };
@@ -92,6 +93,15 @@ Rules:
 - `route` must pass the [Synara Route Contract](./synara-route-contract.md).
 - `privacy` defaults to `standard`.
 - `sound` defaults to `default`.
+- `dismissKeys` is optional. Each key is `room:<roomId>` or `event:<eventId>`
+  after trim. At most 8 keys, each at most 255 Unicode scalars, with no
+  whitespace or control characters. The remainder after the first `:` must be
+  non-empty. Allowed characters are ASCII alphanumeric plus
+  `. _ : - ! $ = / + @`. Duplicate keys are dropped. Keys that fail this
+  grammar are ignored by the shell and never close a notification.
+- `desktop_dismiss_notifications` closes Linux notifications previously tagged
+  with those keys. macOS identifier tracking is receipt-matching, not a
+  dismiss-key map, so the command is a no-op on macOS.
 - Payloads must not include access tokens, device tokens, APNs tokens,
   decrypted message bodies in routes, or remote URLs as routes.
 

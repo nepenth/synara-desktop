@@ -24,8 +24,9 @@
   flat info/error cards with a Critical border instead of a saturated red block.
 - Fix the Personal Notes tab strip being covered by the textarea: folds `Box`
   resets `min-height: 0`, so the composer form and tab strip shrank inside the
-  height-constrained panel; they now keep their intrinsic height and only the
-  notes list scrolls. Remove the gradient fold from resting notes cards and
+  height-constrained panel. Set `flexShrink: 0` on the composer card, kind
+  switch, and textarea so they keep their intrinsic height; only the notes
+  list scrolls. Remove the gradient fold from resting notes cards and
   quiet the Note/ToDo segmented control and Add action.
 - Sweep desktop Settings controls to the quiet style via a shared
   `SettingsQuietControl` helper: transparent rests, `aria-pressed` selection

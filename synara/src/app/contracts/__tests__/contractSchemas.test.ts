@@ -24,6 +24,7 @@ type JsonSchema = {
   minLength?: number;
   maxLength?: number;
   minimum?: number;
+  exclusiveMinimum?: number;
   pattern?: string;
   items?: JsonSchema;
   minItems?: number;
@@ -201,19 +202,27 @@ const validateWithSchema = (
   }
 
   if (typeof value === 'string') {
-    if (resolved.minLength !== undefined && value.length < resolved.minLength) {
+    const characterCount = [...value].length;
+    if (resolved.minLength !== undefined && characterCount < resolved.minLength) {
       errors.push(`${path} must have at least ${resolved.minLength} characters`);
     }
-    if (resolved.maxLength !== undefined && value.length > resolved.maxLength) {
+    if (resolved.maxLength !== undefined && characterCount > resolved.maxLength) {
       errors.push(`${path} must have at most ${resolved.maxLength} characters`);
     }
-    if (resolved.pattern && !new RegExp(resolved.pattern).test(value)) {
+    if (resolved.pattern && !new RegExp(resolved.pattern, 'u').test(value)) {
       errors.push(`${path} must match ${resolved.pattern}`);
     }
   }
 
   if (typeof value === 'number' && resolved.minimum !== undefined && value < resolved.minimum) {
     errors.push(`${path} must be at least ${resolved.minimum}`);
+  }
+  if (
+    typeof value === 'number' &&
+    resolved.exclusiveMinimum !== undefined &&
+    value <= resolved.exclusiveMinimum
+  ) {
+    errors.push(`${path} must be greater than ${resolved.exclusiveMinimum}`);
   }
 
   if (Array.isArray(value)) {
@@ -322,18 +331,80 @@ test('Agent approval history account-data schema validates fixtures', () => {
   const fixtures = readJson<FlatFixtures>(
     'docs/contracts/fixtures/synara-agent-approval-history-content.json'
   );
+  const itemSchema = schema.$defs?.SynaraAgentApprovalHistoryItem;
 
   assert.equal(
     schema.$id,
     'https://synara.local/contracts/synara-agent-approval-history-content.schema.json'
   );
-  assert.deepEqual(schema.$defs?.SynaraAgentApprovalHistoryItem.properties?.decision?.enum, [
+  assert.equal(schema.additionalProperties, false);
+  assert.equal(itemSchema?.additionalProperties, false);
+  assert.equal(schema.properties?.items?.maxItems, 200);
+  assert.equal(itemSchema?.properties?.summary?.maxLength, 240);
+  assert.equal(itemSchema?.properties?.decidedAt?.exclusiveMinimum, 0);
+  assert.equal(itemSchema?.properties?.originServerTs?.exclusiveMinimum, 0);
+  assert.equal(itemSchema?.properties?.expiresAt?.exclusiveMinimum, 0);
+  assert.deepEqual(itemSchema?.properties?.decision?.enum, [
     'approve_once',
     'approve_always',
     'deny',
   ]);
   assertValidFixtures(fixtures.valid, schema, 'approvalHistory.valid');
   assertInvalidFixtures(fixtures.invalid, schema, 'approvalHistory.invalid');
+
+  const maxSummary = (fixtures.valid.maxSummary as { items: Array<{ summary: string }> }).items[0]
+    .summary;
+  assert.equal([...maxSummary].length, 240);
+  const overlong = (fixtures.invalid.fullCommandBody as { items: Array<{ summary: string }> })
+    .items[0].summary;
+  assert.equal([...overlong].length, 241);
+
+  const canonicalItem = (
+    fixtures.valid.approveOnce as {
+      items: Array<{
+        roomId: string;
+        eventId: string;
+        sender: string;
+        decidedAt: number;
+        originServerTs: number;
+        expiresAt: number;
+        summary: string;
+      }>;
+    }
+  ).items[0];
+  Object.values(fixtures.valid).forEach((fixture, index) => {
+    const payload = fixture as { items?: Array<typeof canonicalItem> };
+    (payload.items ?? []).forEach((item, itemIndex) => {
+      assert.ok(
+        item.expiresAt > item.originServerTs,
+        `approvalHistory.valid[${index}].items[${itemIndex}] expiresAt must be > originServerTs`
+      );
+      assert.ok(item.decidedAt > 0);
+      assert.ok(item.originServerTs > 0);
+    });
+  });
+
+  const expiresNotAfterOrigin = {
+    version: 1,
+    items: [{ ...canonicalItem, expiresAt: canonicalItem.originServerTs }],
+  };
+  assert.deepEqual(
+    validateWithSchema(expiresNotAfterOrigin, schema),
+    [],
+    'JSON Schema cannot compare expiresAt to originServerTs; Core still drops the item'
+  );
+
+  const tooManyItems = {
+    version: 1,
+    items: Array.from({ length: 201 }, (_, index) => ({
+      ...canonicalItem,
+      eventId: `$event${index}`,
+    })),
+  };
+  assert.ok(
+    validateWithSchema(tooManyItems, schema).length > 0,
+    'approvalHistory with 201 items should be invalid'
+  );
 });
 
 test('Room notes account-data schema validates fixtures and runtime normalization', () => {

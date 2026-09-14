@@ -86,8 +86,8 @@ Element X does not implement call UI natively. It:
    `matrix_sdk::widget::{WidgetSettings, WidgetDriver}` with the
    `experimental-widgets` feature.
 2. Builds the Element Call URL with
-   `WidgetSettings::new_virtual_element_call_widget(...)` +
-   `generate_webview_url(room, props, client_props)` (there are typed
+   `WidgetSettings::new_virtual_element_call_widget(props, config)` +
+   `settings.generate_webview_url(room, client_props)` (there are typed
    `VirtualElementCallWidgetProperties` / `VirtualElementCallWidgetConfig` with
    `intent`, `skip_lobby`, `header`, `controlled_audio_devices`, etc.).
 3. Loads that URL in a platform **WebView** and bridges `postMessage` traffic

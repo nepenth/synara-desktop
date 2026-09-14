@@ -1,6 +1,6 @@
 # Synara Shared Contracts
 
-Reviewed: 2026-08-24
+Reviewed: 2026-09-14
 
 This directory contains machine-readable contract artifacts for behavior that
 must remain compatible across the desktop runtime, macOS/Linux shells, and the
