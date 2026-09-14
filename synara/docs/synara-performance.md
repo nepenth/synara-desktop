@@ -49,6 +49,34 @@ Disable it with:
 localStorage.removeItem('synara.performance.debug');
 ```
 
+## Native Timeline Scrolling
+
+The native presenter (`NativeTimelinePresenter`) owns scroll restoration, so
+browser overflow anchoring is disabled on virtual rows. Smoothness work in this
+layer is aimed at two hot paths: backward pagination in long rooms, and live
+appends while the user is either following the tail or parked in history.
+
+Current tactics:
+
+- Kind-aware `estimateSize` plus a keyed measured-height cache so TanStack does
+  not fall back to a constant 64px after `rows` array replacement.
+- Intrinsic media boxes from Matrix `info.w/h` so image/video loads do not
+  reflow already-painted rows.
+- Same-frame coalescing of native view deltas, and metadata-only batches that
+  keep the existing `rows` array identity.
+- Follow-live sticks with `scrollTop = scrollHeight - clientHeight` in the same
+  layout pass that grows the spacer, instead of a later `scrollToIndex(end)`.
+- Bottom observation and live-read/follow-live attempts are rAF-batched; the
+  presenter does not attach extra subtree MutationObservers while scrolling.
+
+The Playwright native-timeline harness records dropped frames (>2 vsync) during
+scripted wheel scrolling with mocked live appends (~300ms) and a backward
+prepend. Run it with:
+
+```sh
+npm run test:browser:native-timeline
+```
+
 ## Desktop Notes
 
 Synara Desktop uses the platform webview. macOS WebKit already handles compositing

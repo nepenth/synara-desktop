@@ -7,17 +7,28 @@ import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
-import type {
-  NativeTimelinePosition,
-  NativeTimelineViewDeltaBatch,
-  NativeTimelineViewSnapshot,
+import {
+  applyNativeTimelineViewDelta,
+  type NativeTimelinePosition,
+  type NativeTimelineViewDeltaBatch,
+  type NativeTimelineViewSnapshot,
 } from '../../src/app/features/room/nativeTimelineView';
 
 const room = '!navigation:example.test';
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
-let sequence = polish ? 4 : scenario === 'sparse-missing' ? 1 : scenario === 'short' ? 2 : 60;
+const jank = params.has('jank');
+let sequence = polish
+  ? 4
+  : scenario === 'sparse-missing'
+  ? 1
+  : scenario === 'short'
+  ? 2
+  : jank
+  ? 180
+  : 60;
+let historyIndex = 0;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
 let releaseLastRead: (() => void) | undefined;
@@ -37,7 +48,12 @@ const makeRow = (index: number) => ({
   senderId: `@reader${index % 2}:example.test`,
   senderName: `Reader ${index % 2}`,
   originServerTs: 1_700_000_000_000 + index * 60_000,
-  body: `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
+  body: jank
+    ? `Message ${index}\n${Array.from(
+        { length: 1 + (index % 6) },
+        (_, line) => `Native jank fixture line ${line + 2}.`
+      ).join('\n')}`
+    : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
   edited: false,
   forwardTransport: polish ? ('text' as const) : undefined,
   capabilities: {
@@ -296,6 +312,23 @@ if (params.has('nativeEvents')) {
   });
 }
 
+const emitActiveBatch = (
+  build: (current: NativeTimelineViewSnapshot, streamId: string) => NativeTimelineViewDeltaBatch
+) => {
+  for (const [streamId, current] of snapshots) {
+    const batch = build(current, streamId);
+    const next = applyNativeTimelineViewDelta(current, batch);
+    if (!next) continue;
+    snapshots.set(streamId, next);
+    snapshot = next;
+    for (const [id, listener] of eventListeners) {
+      if (listener.event === 'matrix-timeline-view-updated') {
+        eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
+      }
+    }
+  }
+};
+
 const api = {
   commands,
   activeStreamCount: () => snapshots.size,
@@ -304,6 +337,41 @@ const api = {
   append() {
     rows.push(makeRow(++sequence));
     update();
+  },
+  appendLive() {
+    const row = makeRow(++sequence);
+    rows.push(row);
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [{ op: 'push_back', row }],
+    }));
+  },
+  prependHistory(count = 40) {
+    const newRows = Array.from({ length: count }, () => makeRow(--historyIndex)).reverse();
+    rows = [...newRows, ...rows];
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [{ op: 'reset', rows: [...newRows, ...current.rows] }],
+    }));
+  },
+  metadataPulse() {
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [],
+      readState: { ...current.readState },
+    }));
   },
   edit() {
     rows = rows.map((row, index) =>

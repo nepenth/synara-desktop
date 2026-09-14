@@ -189,3 +189,116 @@ export const nativeVisibleReadFrontier = (
   isValidEventIdHint(frontier.receiptTailEventId)
     ? frontier.receiptTailEventId
     : undefined;
+
+export const NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX = 64;
+export const NATIVE_TIMELINE_MEDIA_MAX_PX = 480;
+export const NATIVE_TIMELINE_STICKER_MAX_PX = 256;
+const NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT = 4000;
+const nativeTimelineMeasuredSizes = new Map<string, number>();
+
+export type NativeTimelineRowSizeHint = {
+  kind: string;
+  grouped: boolean;
+  bodyLineCount?: number;
+  hasFormattedCode?: boolean;
+  messageType?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+};
+
+/** Scale Matrix `info.w/h` into the presenter media box so image loads do not reflow. */
+export const reservedNativeTimelineMediaSize = (
+  width: number | undefined,
+  height: number | undefined,
+  maxWidth: number,
+  maxHeight: number
+): { width: number; height: number } | undefined => {
+  if (
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    maxWidth <= 0 ||
+    maxHeight <= 0
+  ) {
+    return undefined;
+  }
+  const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+};
+
+export const nativeTimelineMeasuredSizeKey = (roomId: string, rowKey: string): string =>
+  `${roomId}\0${rowKey}`;
+
+export const rememberNativeTimelineMeasuredSize = (key: string, size: number): void => {
+  if (!Number.isFinite(size) || size <= 0) return;
+  if (nativeTimelineMeasuredSizes.has(key)) nativeTimelineMeasuredSizes.delete(key);
+  nativeTimelineMeasuredSizes.set(key, Math.round(size));
+  if (nativeTimelineMeasuredSizes.size > NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT) {
+    const oldest = nativeTimelineMeasuredSizes.keys().next().value;
+    if (oldest !== undefined) nativeTimelineMeasuredSizes.delete(oldest);
+  }
+};
+
+export const nativeTimelineMeasuredSize = (key: string): number | undefined =>
+  nativeTimelineMeasuredSizes.get(key);
+
+const chromeHeight = (grouped: boolean): number => (grouped ? 32 : 56);
+
+/** Kind-aware fallback used until `measureElement` records a real row height. */
+export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): number => {
+  const chrome = chromeHeight(hint.grouped);
+  switch (hint.kind) {
+    case 'date_separator':
+    case 'read_marker':
+    case 'unread_marker':
+    case 'timeline_start':
+    case 'pagination':
+      return 40;
+    case 'membership':
+    case 'state':
+    case 'other':
+      return 40;
+    case 'redacted':
+    case 'encrypted_unavailable':
+      return hint.grouped ? 44 : 64;
+    case 'call':
+      return 72;
+    case 'poll':
+      return 140;
+    case 'sticker': {
+      const media =
+        reservedNativeTimelineMediaSize(
+          hint.mediaWidth,
+          hint.mediaHeight,
+          NATIVE_TIMELINE_STICKER_MAX_PX,
+          NATIVE_TIMELINE_STICKER_MAX_PX
+        )?.height ?? 96;
+      return chrome + media;
+    }
+    case 'message': {
+      if (hint.messageType === 'image' || hint.messageType === 'video') {
+        const media =
+          reservedNativeTimelineMediaSize(
+            hint.mediaWidth,
+            hint.mediaHeight,
+            NATIVE_TIMELINE_MEDIA_MAX_PX,
+            NATIVE_TIMELINE_MEDIA_MAX_PX
+          )?.height ?? 180;
+        return chrome + media;
+      }
+      if (hint.messageType === 'audio') return chrome + 48;
+      if (hint.messageType === 'file') return chrome + 40;
+      if (hint.hasFormattedCode) return chrome + 140;
+      const lines = Math.min(8, Math.max(1, hint.bodyLineCount ?? 1));
+      return chrome + lines * 24;
+    }
+    default:
+      return NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX;
+  }
+};

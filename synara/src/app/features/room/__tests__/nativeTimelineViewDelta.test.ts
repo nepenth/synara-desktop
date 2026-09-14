@@ -4,6 +4,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import {
   applyNativeTimelineViewDelta,
+  applyNativeTimelineViewDeltaBatches,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   isNativeTimelineReadbackStale,
@@ -36,7 +37,31 @@ const baseSnapshot = (): NativeTimelineViewSnapshot => ({
 });
 
 test('applies metadata-only read-frontier deltas without row ops', () => {
-  const next = applyNativeTimelineViewDelta(baseSnapshot(), {
+  const current = baseSnapshot();
+  current.rows = [
+    {
+      kind: 'message',
+      itemId: 'm1',
+      eventId: '$m1:example.org',
+      senderId: '@a:example.org',
+      senderName: 'A',
+      originServerTs: 1,
+      body: 'hello',
+      edited: false,
+      capabilities: {
+        react: true,
+        reply: true,
+        edit: false,
+        redact: true,
+        report: true,
+        pin: true,
+        forward: true,
+        vote: false,
+        declineCall: false,
+      },
+    },
+  ];
+  const next = applyNativeTimelineViewDelta(current, {
     schemaVersion: 1,
     sessionGeneration: 2,
     streamId: 'live:!room:example.org:1',
@@ -53,6 +78,7 @@ test('applies metadata-only read-frontier deltas without row ops', () => {
   assert.equal(next.readState.ownReadEventId, '$frontier:example.org');
   assert.equal(next.readState.isMarkedUnread, false);
   assert.equal(next.pagination.backward, 'available');
+  assert.equal(next.rows, current.rows);
 });
 
 test('poll and sticker rows preserve Core relation and reaction presentation fields', () => {
@@ -119,6 +145,58 @@ test('poll and sticker rows preserve Core relation and reaction presentation fie
     assert.equal(row.thread?.latestEventId, '$latest:example.org');
     assert.deepEqual(row.reactions, [{ key: '✅', count: 2, own: true }]);
   }
+});
+
+test('coalesced batches apply in order and fail closed on a revision gap', () => {
+  const current = baseSnapshot();
+  const first = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      pagination: { backward: 'loading', forward: 'available' },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [],
+      pagination: { backward: 'exhausted', forward: 'available' },
+    },
+  ]);
+  assert.ok(first);
+  assert.equal(first.revision, 5);
+  assert.equal(first.pagination.backward, 'exhausted');
+  assert.equal(first.rows, current.rows);
+
+  assert.equal(
+    applyNativeTimelineViewDeltaBatches(baseSnapshot(), [
+      {
+        schemaVersion: 1,
+        sessionGeneration: 2,
+        streamId: 'live:!room:example.org:1',
+        roomId: '!room:example.org',
+        revision: 4,
+        ops: [],
+        readState: { isMarkedUnread: false },
+      },
+      {
+        schemaVersion: 1,
+        sessionGeneration: 2,
+        streamId: 'live:!room:example.org:1',
+        roomId: '!room:example.org',
+        revision: 6,
+        ops: [],
+        readState: { isMarkedUnread: true },
+      },
+    ]),
+    undefined
+  );
 });
 
 test('applies pagination and pin-list metadata and rejects empty batches', () => {
@@ -266,6 +344,13 @@ test('timeline open is not aborted when event listen is unavailable', () => {
   assert.match(source, /matrix_timeline_open/);
   assert.match(source, /matrix_timeline_snapshot/);
   assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
+});
+
+test('live stream deltas coalesce to one React state update per animation frame', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /requestAnimationFrame\(flushCoalescedBatches\)/);
+  assert.match(source, /batch.revision <= next.revision/);
+  assert.match(source, /cancelAnimationFrame\(coalesceFrame\)/);
 });
 
 test('follow-live accepts a placement change at the same SDK revision', () => {

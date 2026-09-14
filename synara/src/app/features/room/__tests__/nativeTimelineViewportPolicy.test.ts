@@ -4,13 +4,19 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+  estimateNativeTimelineRowSize,
+  NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX,
   NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
   nativeFollowLiveAttemptKey,
   nativeFollowLiveTarget,
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
+  nativeTimelineMeasuredSize,
+  nativeTimelineMeasuredSizeKey,
   nativeVisibleReadFrontier,
   latestNativeReadEventId,
+  rememberNativeTimelineMeasuredSize,
+  reservedNativeTimelineMediaSize,
   shouldRestoreNativeTimelineViewport,
   shouldShowJumpToLastRead,
   shouldShowJumpToLatest,
@@ -244,4 +250,51 @@ test('frontier metadata ahead of displayed rows cannot acknowledge an unseen new
     undefined
   );
   assert.equal(nativeVisibleReadFrontier('$old:example.org', undefined), undefined);
+});
+
+test('reserves intrinsic media boxes from Matrix info dimensions', () => {
+  assert.deepEqual(reservedNativeTimelineMediaSize(800, 400, 480, 480), {
+    width: 480,
+    height: 240,
+  });
+  assert.deepEqual(reservedNativeTimelineMediaSize(100, 50, 480, 480), {
+    width: 100,
+    height: 50,
+  });
+  assert.equal(reservedNativeTimelineMediaSize(undefined, 50, 480, 480), undefined);
+  assert.equal(reservedNativeTimelineMediaSize(0, 50, 480, 480), undefined);
+});
+
+test('kind-aware row estimates keep grouped continuations and dividers smaller than media', () => {
+  const groupedText = estimateNativeTimelineRowSize({
+    kind: 'message',
+    grouped: true,
+    bodyLineCount: 1,
+  });
+  const ungroupedText = estimateNativeTimelineRowSize({
+    kind: 'message',
+    grouped: false,
+    bodyLineCount: 1,
+  });
+  const divider = estimateNativeTimelineRowSize({ kind: 'date_separator', grouped: false });
+  const image = estimateNativeTimelineRowSize({
+    kind: 'message',
+    grouped: false,
+    messageType: 'image',
+    mediaWidth: 800,
+    mediaHeight: 600,
+  });
+  assert.ok(groupedText < ungroupedText);
+  assert.ok(divider < groupedText);
+  assert.ok(image > ungroupedText);
+  assert.equal(
+    estimateNativeTimelineRowSize({ kind: 'unknown', grouped: false }),
+    NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX
+  );
+});
+
+test('measured row sizes are remembered by room and row key', () => {
+  const key = nativeTimelineMeasuredSizeKey('!room:example.org', '$event');
+  rememberNativeTimelineMeasuredSize(key, 128.4);
+  assert.equal(nativeTimelineMeasuredSize(key), 128);
 });

@@ -353,6 +353,17 @@ export const applyNativeTimelineViewDelta = (
     return undefined;
   }
 
+  if (batch.ops.length === 0) {
+    return {
+      ...snapshot,
+      revision: batch.revision,
+      rows: snapshot.rows,
+      ...(batch.readState ? { readState: batch.readState } : {}),
+      ...(batch.pagination ? { pagination: batch.pagination } : {}),
+      ...(batch.pinnedEventIds !== undefined ? { pinnedEventIds: batch.pinnedEventIds } : {}),
+    };
+  }
+
   const rows = [...snapshot.rows];
   for (const op of batch.ops) {
     switch (op.op) {
@@ -408,6 +419,19 @@ export const applyNativeTimelineViewDelta = (
     ...(batch.pagination ? { pagination: batch.pagination } : {}),
     ...(batch.pinnedEventIds !== undefined ? { pinnedEventIds: batch.pinnedEventIds } : {}),
   };
+};
+
+/** Apply several consecutive stream batches, failing closed on the first gap. */
+export const applyNativeTimelineViewDeltaBatches = (
+  snapshot: NativeTimelineViewSnapshot,
+  batches: readonly NativeTimelineViewDeltaBatch[]
+): NativeTimelineViewSnapshot | undefined => {
+  let current: NativeTimelineViewSnapshot | undefined = snapshot;
+  for (const batch of batches) {
+    current = applyNativeTimelineViewDelta(current, batch);
+    if (!current) return undefined;
+  }
+  return current;
 };
 
 /** Whether the room pin list currently includes this remote event id. */
@@ -1014,26 +1038,55 @@ export const useNativeTimelineView = (
     let disposed = false;
     let unlisten: (() => void) | undefined;
     let pollTimer: number | undefined;
-    const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {
-      if (disposed || batch.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION) return;
-      if (batch.streamId !== streamIdRef.current || !snapshotRef.current) {
-        pendingOpenRef.current?.add(batch);
-        return;
+    const COALESCE_QUEUE_LIMIT = 128;
+    let coalesceQueued: NativeTimelineViewDeltaBatch[] = [];
+    let coalesceFrame = 0;
+    const flushCoalescedBatches = () => {
+      coalesceFrame = 0;
+      const queued = coalesceQueued;
+      coalesceQueued = [];
+      if (disposed || queued.length === 0) return;
+      let next = snapshotRef.current;
+      for (const batch of queued) {
+        if (batch.streamId !== streamIdRef.current || !next) {
+          pendingOpenRef.current?.add(batch);
+          continue;
+        }
+        if (batch.revision <= next.revision) continue;
+        const applied = applyNativeTimelineViewDelta(next, batch);
+        if (!applied) {
+          setState({
+            status: 'error',
+            error: new Error('Native timeline stream lost synchronization.'),
+          });
+          return;
+        }
+        next = applied;
       }
-      const next = applyNativeTimelineViewDelta(snapshotRef.current, batch);
-      if (!next) {
-        setState({
-          status: 'error',
-          error: new Error('Native timeline stream lost synchronization.'),
-        });
-        return;
-      }
+      if (!next || next === snapshotRef.current) return;
       snapshotRef.current = next;
       setState({
         status: 'ready',
         snapshot: next,
         selectedPosition: selectedPositionRef.current ?? next.position,
       });
+    };
+    const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {
+      if (disposed || batch.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION) return;
+      if (batch.streamId !== streamIdRef.current || !snapshotRef.current) {
+        pendingOpenRef.current?.add(batch);
+        return;
+      }
+      coalesceQueued.push(batch);
+      // rAF pauses while the document is hidden; bound the queue so a busy
+      // room cannot accumulate unboundedly before the next visible frame.
+      if (coalesceQueued.length >= COALESCE_QUEUE_LIMIT) {
+        if (coalesceFrame !== 0) window.cancelAnimationFrame(coalesceFrame);
+        flushCoalescedBatches();
+        return;
+      }
+      if (coalesceFrame !== 0) return;
+      coalesceFrame = window.requestAnimationFrame(flushCoalescedBatches);
     };
 
     const pollSnapshot = async () => {
@@ -1153,6 +1206,8 @@ export const useNativeTimelineView = (
     void open();
     return () => {
       disposed = true;
+      coalesceQueued = [];
+      if (coalesceFrame !== 0) window.cancelAnimationFrame(coalesceFrame);
       pendingOpenRef.current?.cancel();
       pendingOpenRef.current = undefined;
       navigationRevisionRef.current += 1;

@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '..',
-  testMatch: 'native-timeline-navigation.spec.ts',
+  testMatch: 'native-timeline-*.spec.ts',
   fullyParallel: false,
   retries: 0,
   timeout: 30000,

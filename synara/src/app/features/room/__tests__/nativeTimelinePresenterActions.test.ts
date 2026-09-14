@@ -27,6 +27,8 @@ test('native timeline rows show timestamps and formatted HTML without the legacy
   assert.match(presenter, /htmlCss\.MessageBody/);
   assert.match(presenter, /NativeTimelineSenderAvatar/);
   assert.match(presenter, /followingLiveRef/);
+  assert.match(presenter, /estimateNativeTimelineRowSize/);
+  assert.match(presenter, /scrollEl\.scrollTop = nextTop/);
   assert.doesNotMatch(presenter, /dangerouslySetInnerHTML/);
 });
 
@@ -212,11 +214,11 @@ test('native live-tail receipts persist until event-driven painted-bottom proof 
   assert.match(presenter, /document\.hasFocus\(\)/);
   assert.match(presenter, /cancelAnimationFrame\(animationFrame\)/);
   assert.match(presenter, /liveTailMarkGenerationRef\.current !== generation/);
-  assert.match(presenter, /new ResizeObserver\(requestPaintCheck\)/);
-  assert.match(presenter, /new MutationObserver\(\(\) =>/);
-  assert.match(presenter, /scrollEl\.addEventListener\('scroll', requestPaintCheck/);
+  assert.match(presenter, /observeNativeTimelineBottom/);
+  assert.match(presenter, /if \(!atLiveBottom \|\| !documentActive\) return undefined/);
   assert.doesNotMatch(presenter, /paintAttempts|paintAttempts < \d/);
   assert.doesNotMatch(presenter, /attributes: true/);
+  assert.doesNotMatch(presenter, /new MutationObserver\(\(\) =>/);
 });
 
 test('read target comes from the unfiltered native snapshot while paint uses the filtered UI', () => {
