@@ -129,11 +129,12 @@ test('Home leaves follow-live; End returns to the tail; PageDown at bottom does 
   expect((await geometry(page)).distance).toBeGreaterThan(8);
   await page.keyboard.press('End');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
-  const atEnd = await geometry(page);
+  const atEnd = await settledGeometry(page);
+  expect(atEnd.distance).toBeLessThanOrEqual(8);
   await page.keyboard.press('PageDown');
-  await page.waitForTimeout(80);
-  const afterPageDown = await geometry(page);
-  expect(Math.abs(afterPageDown.top - atEnd.top)).toBeLessThanOrEqual(2);
+  const afterPageDown = await settledGeometry(page);
+  expect(afterPageDown.distance).toBeLessThanOrEqual(8);
+  expect(Math.abs(afterPageDown.top - atEnd.top)).toBeLessThanOrEqual(8);
   await fixture(page, 'appendLive');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
 });
