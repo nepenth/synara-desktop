@@ -71,7 +71,10 @@ Current tactics:
   layout pass that grows the spacer, instead of a later `scrollToIndex(end)`.
   A small move away from an already-stuck tail during the programmatic lock
   (focus/`scrollIntoView`) releases follow-live; in-flight viewport saves are
-  skipped so prepend anchoring is not overwritten.
+  skipped so prepend anchoring is not overwritten. History prepends shift
+  `scrollTop` by the spacer delta in that same layout pass (not a later rAF
+  `scrollToIndex`) so two prepends in consecutive frames cannot cancel the
+  parked-row correction.
 - Bottom observation and live-read/follow-live attempts are rAF-batched; the
   presenter does not attach extra subtree MutationObservers while scrolling.
 

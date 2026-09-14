@@ -458,30 +458,29 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         .collect::<Vec<_>>();
 
     let waiter = tauri::async_runtime::spawn(async move {
-        let wait = handle
-            .wait_for_action_async(move |response| match response {
-                NotificationResponse::Default => {
-                    let Some(route) = route.as_deref() else {
-                        return;
-                    };
-                    if let Err(error) = navigate_main_window(&app, route) {
-                        eprintln!("failed to navigate from notification click: {error}");
-                    }
+        let wait = handle.wait_for_action_async(move |response| match response {
+            NotificationResponse::Default => {
+                let Some(route) = route.as_deref() else {
+                    return;
+                };
+                if let Err(error) = navigate_main_window(&app, route) {
+                    eprintln!("failed to navigate from notification click: {error}");
                 }
-                NotificationResponse::Action(action) => {
-                    if allowed_action_ids
-                        .iter()
-                        .any(|candidate| candidate == action)
+            }
+            NotificationResponse::Action(action) => {
+                if allowed_action_ids
+                    .iter()
+                    .any(|candidate| candidate == action)
+                {
+                    if let Err(error) =
+                        emit_notification_action(&app, action, action_context.clone())
                     {
-                        if let Err(error) =
-                            emit_notification_action(&app, action, action_context.clone())
-                        {
-                            eprintln!("failed to emit notification action: {error}");
-                        }
+                        eprintln!("failed to emit notification action: {error}");
                     }
                 }
-                NotificationResponse::Closed(_) | NotificationResponse::Reply(_) => {}
-            });
+            }
+            NotificationResponse::Closed(_) | NotificationResponse::Reply(_) => {}
+        });
         if tokio::time::timeout(LINUX_NOTIFICATION_WAIT_MAX, wait)
             .await
             .is_err()

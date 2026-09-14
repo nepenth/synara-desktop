@@ -2054,7 +2054,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const appliedLatestPlacementRef = useRef(0);
   const [lastReadPlacementRequest, setLastReadPlacementRequest] = useState(0);
   const appliedLastReadPlacementRef = useRef(0);
-  const firstRenderedRowRef = useRef<string | undefined>(undefined);
   const mountedRoomRef = useRef(roomId);
   mountedRoomRef.current = roomId;
   const mountedNavigationRef = useRef(input);
@@ -2248,7 +2247,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     pendingBackwardGrowRef.current = false;
     lastParkedStartRef.current = -1;
     lastClientHeightRef.current = 0;
-    firstRenderedRowRef.current = undefined;
     liveTailSubmittedKeyRef.current = undefined;
     followLiveSubmittedKeyRef.current = undefined;
     setPendingLastRead(undefined);
@@ -2389,9 +2387,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     };
   }, [atLiveBottom, documentActive, followLiveKey, followLiveTarget, followLive]);
 
-  const scrollHandlersRef = useRef<{ onScroll: () => void; onUserInput: () => void } | undefined>(
-    undefined
-  );
+  const scrollHandlersRef = useRef<
+    { onScroll: () => void; onUserInput: (event?: Event) => void } | undefined
+  >(undefined);
   const paginate = controller.paginate;
   const readyStateRef = useRef(readyState);
   readyStateRef.current = readyState;
@@ -2471,9 +2469,24 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       userInitiatedScrollRef.current = true;
       paginateAtEdge();
     };
-    const onUserInput = () => {
-      programmaticScrollUntilRef.current = 0;
+    const onUserInput = (event?: Event) => {
       userInitiatedScrollRef.current = true;
+      // End is an explicit request for the live tail. Stick now and keep the
+      // programmatic lock so the following scroll event cannot drop ownership
+      // when the virtualizer is still a few dozen pixels short of max.
+      if (event instanceof KeyboardEvent && event.key === 'End') {
+        followingLiveRef.current = true;
+        const el = scrollRef.current;
+        if (el) {
+          programmaticScrollUntilRef.current = Math.max(
+            programmaticScrollUntilRef.current,
+            performance.now() + 48
+          );
+          el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
+        }
+        return;
+      }
+      programmaticScrollUntilRef.current = 0;
       if (smoothScrollActiveRef.current) {
         smoothScrollActiveRef.current = false;
         const el = scrollRef.current;
@@ -2501,7 +2514,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
     const onScroll = () => scrollHandlersRef.current?.onScroll();
-    const onUserInput = () => scrollHandlersRef.current?.onUserInput();
+    const onUserInput = (event: Event) => scrollHandlersRef.current?.onUserInput(event);
     scrollEl.addEventListener('wheel', onUserInput, { passive: true });
     scrollEl.addEventListener('pointerdown', onUserInput, { passive: true });
     scrollEl.addEventListener('keydown', onUserInput);
@@ -2517,6 +2530,36 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       scrollEl.removeEventListener('focusin', onUserInput);
     };
   }, [hasReadyState, roomId]);
+
+  const pinParkedHistory = useCallback(
+    (index: number, offsetPx: number) => {
+      const scrollEl = scrollRef.current;
+      if (!scrollEl || index < 0) return;
+      programmaticScrollUntilRef.current = Math.max(
+        programmaticScrollUntilRef.current,
+        performance.now() + 48
+      );
+      const item = virtualizer.getVirtualItems().find((row) => row.index === index);
+      if (item) {
+        const desired = Math.max(0, item.start + offsetPx);
+        if (Math.abs(scrollEl.scrollTop - desired) > 0.5) scrollEl.scrollTop = desired;
+        lastParkedStartRef.current = item.start;
+        return;
+      }
+      // The parked row left the virtual window (typical after a large prepend).
+      // scrollToIndex(align start) does not update getVirtualItems in this
+      // turn, so apply the saved pixel offset on top of that placement.
+      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+      const after = virtualizer.getVirtualItems().find((row) => row.index === index);
+      if (after) {
+        scrollEl.scrollTop = Math.max(0, after.start + offsetPx);
+        lastParkedStartRef.current = after.start;
+        return;
+      }
+      scrollEl.scrollTop += offsetPx;
+    },
+    [virtualizer]
+  );
 
   useLayoutEffect(() => {
     if (!readyState || rows.length === 0) return undefined;
@@ -2540,10 +2583,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       ? openingViewport ?? nativeTimelineViewports.get(roomId)
       : nativeTimelineViewports.get(roomId);
     const parkedIndex = savedViewport?.anchor ? findAnchorIndex(rows, savedViewport.anchor) : -1;
-    const firstRow = rowKey(rows[0]);
-    const prepended =
-      firstRenderedRowRef.current !== undefined && firstRenderedRowRef.current !== firstRow;
-    firstRenderedRowRef.current = firstRow;
     const explicitLatest = latestPlacementRequest !== appliedLatestPlacementRef.current;
     appliedLatestPlacementRef.current = latestPlacementRequest;
     const explicitLastRead = lastReadPlacementRequest !== appliedLastReadPlacementRef.current;
@@ -2612,45 +2651,21 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       return undefined;
     }
 
-    if (prepended && savedViewport?.anchor) {
-      const anchor = savedViewport.anchor;
-      const index = findAnchorIndex(rows, anchor);
-      if (index >= 0) {
-        programmaticScrollUntilRef.current = Math.max(
-          programmaticScrollUntilRef.current,
-          performance.now() + 48
-        );
-        virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-        const frame = requestAnimationFrame(() => {
-          const scrollEl = scrollRef.current;
-          if (!scrollEl) return;
-          const element = Array.from(
-            scrollEl.querySelectorAll<HTMLElement>('[data-native-timeline-event-id]')
-          ).find((node) => node.dataset.nativeTimelineEventId === anchor.eventId);
-          if (element)
-            scrollEl.scrollTop +=
-              element.getBoundingClientRect().top -
-              scrollEl.getBoundingClientRect().top +
-              anchor.offsetPx;
-        });
-        pendingBackwardGrowRef.current = false;
-        return () => cancelAnimationFrame(frame);
-      }
-    }
-
-    if (!prepended && selectedPosition.kind === 'live_bottom' && parkedIndex >= 0) {
-      const parkedItem = virtualizer.getVirtualItems().find((item) => item.index === parkedIndex);
-      const previousStart = lastParkedStartRef.current;
-      if (parkedItem) {
-        if (previousStart >= 0 && parkedItem.start - previousStart > 0.5) {
-          const scrollEl = scrollRef.current;
-          if (scrollEl) scrollEl.scrollTop += parkedItem.start - previousStart;
-        }
-        lastParkedStartRef.current = parkedItem.start;
-      }
-    }
-
-    if (pendingBackwardGrowRef.current && previousTotalSize > 0 && totalSize > previousTotalSize) {
+    // Pin a parked history row by its saved start+offset. Applies to prepends
+    // and to later measurements of rows above the anchor.
+    if (
+      !followingLiveRef.current &&
+      parkedIndex >= 0 &&
+      savedViewport?.anchor &&
+      (selectedPosition.kind === 'live_bottom' || selectedPosition.kind === 'restored')
+    ) {
+      pinParkedHistory(parkedIndex, savedViewport.anchor.offsetPx);
+      pendingBackwardGrowRef.current = false;
+    } else if (
+      pendingBackwardGrowRef.current &&
+      previousTotalSize > 0 &&
+      totalSize > previousTotalSize
+    ) {
       pendingBackwardGrowRef.current = false;
       const scrollEl = scrollRef.current;
       if (scrollEl) scrollEl.scrollTop += totalSize - previousTotalSize;
@@ -2664,26 +2679,38 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     latestPlacementRequest,
     lastReadPlacementRequest,
     openingViewport,
+    pinParkedHistory,
   ]);
 
   // Sticking to the live tail from the rows effect uses estimated heights for
   // rows `measureElement` has not seen yet. When a measurement then grows the
   // total size (a long message, media with dimensions, late fonts), re-stick in
   // the same layout pass so a following viewport never drifts off the bottom.
+  // Parked history uses the same trigger: prepended rows measure after the
+  // spacer delta, and only a totalSize-keyed pass can restore the saved offset.
   const totalSize = virtualizer.getTotalSize();
   useLayoutEffect(() => {
-    if (!followingLiveRef.current) return;
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
-    const nextTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-    if (Math.abs(scrollEl.scrollTop - nextTop) > 0.5) {
-      programmaticScrollUntilRef.current = Math.max(
-        programmaticScrollUntilRef.current,
-        performance.now() + 48
-      );
-      scrollEl.scrollTop = nextTop;
+    if (followingLiveRef.current) {
+      const nextTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+      if (Math.abs(scrollEl.scrollTop - nextTop) > 0.5) {
+        programmaticScrollUntilRef.current = Math.max(
+          programmaticScrollUntilRef.current,
+          performance.now() + 48
+        );
+        scrollEl.scrollTop = nextTop;
+      }
+      return;
     }
-  }, [totalSize]);
+    const selectedKind = readyState?.selectedPosition.kind;
+    if (selectedKind !== 'live_bottom' && selectedKind !== 'restored') return;
+    const saved = nativeTimelineViewports.get(roomId);
+    if (!saved?.anchor) return;
+    const index = findAnchorIndex(rows, saved.anchor);
+    if (index < 0) return;
+    pinParkedHistory(index, saved.anchor.offsetPx);
+  }, [totalSize, roomId, rows, virtualizer, pinParkedHistory, readyState]);
 
   const onFocusEvent = useCallback(
     (targetEventId: string) => {
