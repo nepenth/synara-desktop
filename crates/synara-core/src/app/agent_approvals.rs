@@ -165,17 +165,67 @@ fn collapse_whitespace(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
+fn is_disallowed_summary_char(ch: char) -> bool {
+    ch.is_control()
+        || matches!(
+            ch,
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{180E}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+        )
+}
+
+fn first_display_line(value: &str) -> &str {
+    value
+        .split(['\u{000B}', '\u{000C}', '\u{2028}', '\u{2029}'])
+        .next()
+        .unwrap_or(value)
+}
+
+/// Single visible preview line: no extra fence lines, bidi/overrides, or
+/// control characters. Account data is server-readable plaintext.
+pub(crate) fn sanitize_agent_approval_history_summary(value: &str) -> String {
+    let display = first_display_line(value);
+    let mut cleaned = String::new();
+    for ch in display.chars() {
+        if ch == '\u{2028}' || ch == '\u{2029}' {
+            break;
+        }
+        if is_disallowed_summary_char(ch) {
+            continue;
+        }
+        cleaned.push(ch);
+    }
+    collapse_whitespace(&cleaned)
+        .chars()
+        .take(AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS)
+        .collect()
+}
+
+fn preview_from_line(value: &str) -> Option<String> {
+    let preview = sanitize_agent_approval_history_summary(value);
+    if preview.is_empty() {
+        None
+    } else {
+        Some(preview)
+    }
+}
+
 fn first_useful_command_line(block: &str) -> Option<String> {
     block.lines().find_map(|line| {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
+        let display = first_display_line(line.trim());
+        if display.is_empty() {
             return None;
         }
-        let lowered = trimmed.to_ascii_lowercase();
+        let lowered = display.to_ascii_lowercase();
         if lowered == "code" || lowered == "copy" {
             return None;
         }
-        Some(collapse_whitespace(trimmed))
+        preview_from_line(display)
     })
 }
 
@@ -208,7 +258,7 @@ fn extract_labeled_command_preview(body: &str) -> Option<String> {
             {
                 break;
             }
-            return Some(collapse_whitespace(trimmed));
+            return preview_from_line(first_display_line(trimmed));
         }
         break;
     }
@@ -224,21 +274,18 @@ fn extract_reason_preview(body: &str) -> Option<String> {
         else {
             continue;
         };
-        let preview = collapse_whitespace(rest);
-        if !preview.is_empty() {
-            return Some(preview);
-        }
+        return preview_from_line(first_display_line(rest));
     }
     None
 }
 
 fn extract_fallback_preview(body: &str) -> Option<String> {
     body.lines().find_map(|line| {
-        let trimmed = line.trim();
-        if trimmed.is_empty() {
+        let display = first_display_line(line.trim());
+        if display.is_empty() {
             return None;
         }
-        let lowered = trimmed.to_ascii_lowercase();
+        let lowered = display.to_ascii_lowercase();
         if APPROVAL_HEADINGS
             .iter()
             .any(|heading| lowered.contains(heading))
@@ -248,22 +295,18 @@ fn extract_fallback_preview(body: &str) -> Option<String> {
         {
             return None;
         }
-        Some(collapse_whitespace(trimmed))
+        preview_from_line(display)
     })
 }
 
 /// Bounded account-data summary: command preview line, else Reason, else a
 /// non-heading line. Never the full command body.
 pub fn agent_approval_history_summary(body: &str) -> String {
-    let preview = extract_fenced_command_preview(body)
+    extract_fenced_command_preview(body)
         .or_else(|| extract_labeled_command_preview(body))
         .or_else(|| extract_reason_preview(body))
         .or_else(|| extract_fallback_preview(body))
-        .unwrap_or_default();
-    preview
-        .chars()
-        .take(AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS)
-        .collect()
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -454,6 +497,29 @@ mod tests {
             .count(),
             AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS
         );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\necho visible\nexport TOKEN=secret\n```"
+            ),
+            "echo visible"
+        );
+        assert_eq!(
+            agent_approval_history_summary(&format!(
+                "Approval Required: Dangerous Command\n```\nls\u{2028}cat /secrets\n```"
+            )),
+            "ls"
+        );
+        let spoofed = agent_approval_history_summary(
+            "Approval Required: Dangerous Command\n```\nrm \u{202E}elif\u{200B}secret\n```",
+        );
+        assert_eq!(spoofed, "rm elifsecret");
+        assert!(!spoofed.contains('\u{202E}'));
+        assert!(!spoofed.contains('\u{200B}'));
+        assert!(agent_approval_history_summary(
+            "Approval Required: Dangerous Command\n```\n\u{0000}token\n```"
+        )
+        .chars()
+        .all(|ch| !ch.is_control()));
     }
 
     #[test]

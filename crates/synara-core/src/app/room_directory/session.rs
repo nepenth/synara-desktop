@@ -266,31 +266,46 @@ pub fn directory_hit_is_presentable(hit: &DirectoryRoomHit) -> bool {
     validate_hit(hit).is_ok()
 }
 
+fn field_has_disallowed_chars(value: &str) -> bool {
+    value.chars().any(|ch| {
+        ch.is_control()
+            || matches!(
+                ch,
+                '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}'
+            )
+    })
+}
+
 fn validate_hit(hit: &DirectoryRoomHit) -> Result<(), RoomDirectoryError> {
     if hit.room_id.is_empty()
         || !hit.room_id.starts_with('!')
         || hit.room_id.chars().count() > MAX_ALIAS_CHARS
+        || field_has_disallowed_chars(&hit.room_id)
     {
         return Err(RoomDirectoryError::Invalid {
             diagnostic_id: "p6.10-invalid-room-id",
         });
     }
     if let Some(ref n) = hit.name {
-        if n.chars().count() > MAX_TEXT_CHARS {
+        if n.chars().count() > MAX_TEXT_CHARS || field_has_disallowed_chars(n) {
             return Err(RoomDirectoryError::Invalid {
                 diagnostic_id: "p6.10-name-cap",
             });
         }
     }
     if let Some(ref t) = hit.topic {
-        if t.chars().count() > MAX_TEXT_CHARS * 4 {
+        if t.chars().count() > MAX_TEXT_CHARS * 4 || field_has_disallowed_chars(t) {
             return Err(RoomDirectoryError::Invalid {
                 diagnostic_id: "p6.10-topic-cap",
             });
         }
     }
     if let Some(ref a) = hit.canonical_alias {
-        if a.is_empty() || !a.starts_with('#') || a.chars().count() > MAX_ALIAS_CHARS {
+        if a.is_empty()
+            || !a.starts_with('#')
+            || a.chars().count() > MAX_ALIAS_CHARS
+            || field_has_disallowed_chars(a)
+        {
             return Err(RoomDirectoryError::Invalid {
                 diagnostic_id: "p6.10-invalid-alias",
             });
@@ -299,6 +314,7 @@ fn validate_hit(hit: &DirectoryRoomHit) -> Result<(), RoomDirectoryError> {
     if let Some(ref url) = hit.avatar_url {
         let lower = url.to_ascii_lowercase();
         if url.chars().count() > MAX_BATCH_CHARS
+            || field_has_disallowed_chars(url)
             || (!lower.starts_with("mxc://") && !lower.starts_with("synara-media://"))
             || lower.starts_with("data:")
             || lower.starts_with("javascript:")

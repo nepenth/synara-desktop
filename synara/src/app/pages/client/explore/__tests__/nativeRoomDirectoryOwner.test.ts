@@ -251,3 +251,32 @@ test('directory owner maps invalid-server diagnostics to a user-readable message
     /not a valid Matrix server name/
   );
 });
+
+test('directory owner never surfaces server error bodies or unknown diagnostics', async () => {
+  const secret = 'syt_directory_secret_token';
+  const owner = createNativeRoomDirectoryOwner(true, async (command) => {
+    if (command === 'matrix_session_snapshot') return { available: true, value: loggedIn };
+    throw {
+      message: `Homeserver said ${secret}`,
+      diagnosticId: 'M_UNKNOWN',
+    };
+  });
+  await assert.rejects(
+    () => owner.search({ serverName: 'matrix.org', limit: 24 }),
+    (error: unknown) => {
+      assert.ok(error instanceof Error);
+      assert.equal(error.message, 'Native Matrix room directory is unavailable.');
+      assert.doesNotMatch(error.message, new RegExp(secret));
+      return true;
+    }
+  );
+
+  const invalidHit = createNativeRoomDirectoryOwner(true, async (command) => {
+    if (command === 'matrix_session_snapshot') return { available: true, value: loggedIn };
+    throw { diagnosticId: 'v-rooms.directory-invalid-hit' };
+  });
+  await assert.rejects(
+    () => invalidHit.search({ serverName: 'matrix.org', limit: 24 }),
+    /could not be loaded/
+  );
+});

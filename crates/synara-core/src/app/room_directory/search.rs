@@ -516,4 +516,31 @@ mod tests {
             "v-rooms.directory-invalid-hit"
         );
     }
+
+    #[test]
+    fn project_response_fails_closed_on_bidi_override_in_room_name() {
+        let normalized = normalize_search_input(DirectorySearchInput {
+            server_name: Some("matrix.org".into()),
+            limit: 24,
+            ..DirectorySearchInput::default()
+        })
+        .unwrap();
+        let mut spoofed: matrix_sdk::ruma::directory::PublicRoomsChunk =
+            matrix_sdk::ruma::directory::PublicRoomsChunkInit {
+                num_joined_members: matrix_sdk::ruma::uint!(3),
+                room_id: matrix_sdk::ruma::room_id!("!room:matrix.org").to_owned(),
+                world_readable: true,
+                guest_can_join: true,
+            }
+            .into();
+        spoofed.name = Some("Official\u{202E}kcatta".into());
+        let mut response =
+            matrix_sdk::ruma::api::client::directory::get_public_rooms_filtered::v3::Response::new(
+            );
+        response.chunk = vec![spoofed];
+        assert_eq!(
+            project_response(7, 3, &normalized, response).unwrap_err(),
+            "v-rooms.directory-invalid-hit"
+        );
+    }
 }

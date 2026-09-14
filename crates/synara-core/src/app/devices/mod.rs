@@ -56,16 +56,22 @@ pub fn project_native_device_trust(signals: NativeDeviceTrustSignals) -> NativeD
 }
 
 /// Element-style ed25519 fingerprint: unpadded base64 in 4-character groups.
+/// Rejects anything that is not a 32-byte ed25519 key encoding.
 pub fn format_ed25519_fingerprint(unpadded_base64: &str) -> Option<String> {
+    const ED25519_UNPADDED_BASE64_LEN: usize = 43;
     let trimmed = unpadded_base64.trim();
-    if trimmed.is_empty() {
+    if trimmed.len() != ED25519_UNPADDED_BASE64_LEN
+        || !trimmed
+            .bytes()
+            .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/'))
+    {
         return None;
     }
     Some(
         trimmed
             .as_bytes()
             .chunks(4)
-            .map(|chunk| std::str::from_utf8(chunk).unwrap_or_default())
+            .map(|chunk| std::str::from_utf8(chunk).expect("ascii base64"))
             .collect::<Vec<_>>()
             .join(" "),
     )
@@ -355,10 +361,19 @@ mod tests {
     #[test]
     fn ed25519_fingerprint_is_grouped_in_fours() {
         assert_eq!(
-            format_ed25519_fingerprint("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijk").as_deref(),
-            Some("ABCD EFGH IJKL MNOP QRST UVWX YZab cdef ghij k")
+            format_ed25519_fingerprint("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq").as_deref(),
+            Some("ABCD EFGH IJKL MNOP QRST UVWX YZab cdef ghij klmn opq")
         );
         assert_eq!(format_ed25519_fingerprint("  ").as_deref(), None);
+        assert_eq!(
+            format_ed25519_fingerprint(&"A".repeat(1_024)).as_deref(),
+            None
+        );
+        assert_eq!(format_ed25519_fingerprint(&"é".repeat(43)).as_deref(), None);
+        assert_eq!(
+            format_ed25519_fingerprint("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij=").as_deref(),
+            None
+        );
         let value: NativeDeviceSnapshot = serde_json::from_value(serde_json::json!({
             "sessionGeneration": 1,
             "ownVerification": "unverified",

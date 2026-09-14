@@ -258,5 +258,23 @@ mod tests {
             canonicalize_directory_server_name(Some("https://not a host".into())).unwrap_err(),
             "v-rooms.directory-invalid-server"
         );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("https://user@evil.example".into()))
+                .unwrap_err(),
+            "v-rooms.directory-invalid-server"
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("https://user:pass@matrix.org".into()))
+                .unwrap_err(),
+            "v-rooms.directory-invalid-server"
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("example.org:999999".into())).unwrap_err(),
+            "v-rooms.directory-invalid-server"
+        );
+        assert_eq!(
+            canonicalize_directory_server_name(Some("еxample.org".into())).unwrap_err(),
+            "v-rooms.directory-invalid-server"
+        );
     }
 }

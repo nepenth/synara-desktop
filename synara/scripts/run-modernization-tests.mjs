@@ -39,6 +39,7 @@ const tests = [
   'src/app/features/approvals/__tests__/nativeApprovalInbox.test.ts',
   'src/app/features/approvals/__tests__/nativeInboxProjection.test.ts',
   'src/app/features/approvals/__tests__/approvalHistoryProjection.test.ts',
+  'src/app/features/approvals/__tests__/nativeAgentApprovalHistory.test.ts',
   'src/app/utils/__tests__/hermes.test.ts',
   'src/app/agents/__tests__/agentActions.test.ts',
   'src/app/utils/__tests__/drafts.test.ts',

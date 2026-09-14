@@ -6,9 +6,11 @@
 
 use serde::{Deserialize, Serialize};
 
+use matrix_sdk::ruma::OwnedServerName;
+
 use crate::app::agent_approvals::{
-    AGENT_APPROVAL_ACTION_APPROVE_ALWAYS, AGENT_APPROVAL_ACTION_APPROVE_ONCE,
-    AGENT_APPROVAL_ACTION_DENY,
+    sanitize_agent_approval_history_summary, AGENT_APPROVAL_ACTION_APPROVE_ALWAYS,
+    AGENT_APPROVAL_ACTION_APPROVE_ONCE, AGENT_APPROVAL_ACTION_DENY,
 };
 
 pub const AGENT_APPROVAL_HISTORY_EVENT_TYPE: &str = "in.synara.agent_approval_history";
@@ -76,28 +78,53 @@ pub struct NativeAgentApprovalHistorySnapshot {
     pub items: Vec<SynaraAgentApprovalHistoryItem>,
 }
 
+fn has_disallowed_id_char(ch: char) -> bool {
+    ch.is_whitespace()
+        || ch.is_control()
+        || matches!(
+            ch,
+            '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+        )
+}
+
 fn is_matrix_room_id(value: &str) -> bool {
-    value.starts_with('!')
-        && value.len() > 1
-        && value.len() <= MAX_AGENT_APPROVAL_HISTORY_ROOM_ID_BYTES
-        && value.chars().all(|character| !character.is_whitespace())
+    if !value.starts_with('!')
+        || value.len() <= 1
+        || value.len() > MAX_AGENT_APPROVAL_HISTORY_ROOM_ID_BYTES
+        || value.chars().any(has_disallowed_id_char)
+    {
+        return false;
+    }
+    let Some((_, server)) = value.split_once(':') else {
+        return false;
+    };
+    OwnedServerName::try_from(server).is_ok()
 }
 
 fn is_matrix_event_id(value: &str) -> bool {
     value.starts_with('$')
         && value.len() > 1
         && value.len() <= MAX_AGENT_APPROVAL_HISTORY_EVENT_ID_BYTES
-        && value.chars().all(|character| !character.is_whitespace())
+        && !value.chars().any(has_disallowed_id_char)
+}
+
+fn is_matrix_user_id(value: &str) -> bool {
+    if value.chars().count() > MAX_AGENT_APPROVAL_HISTORY_SENDER_LENGTH
+        || value.chars().any(has_disallowed_id_char)
+    {
+        return false;
+    }
+    let Some((local, server)) = value.split_once(':') else {
+        return false;
+    };
+    local.starts_with('@') && local.len() > 1 && OwnedServerName::try_from(server).is_ok()
 }
 
 fn limit_summary(value: &str) -> String {
-    value
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .chars()
-        .take(MAX_AGENT_APPROVAL_HISTORY_SUMMARY_CHARS)
-        .collect()
+    sanitize_agent_approval_history_summary(value)
 }
 
 fn finite_ts(value: Option<f64>) -> Option<f64> {
@@ -121,8 +148,8 @@ pub fn normalize_agent_approval_history_item(
     let expires_at = finite_ts(item.get("expiresAt").and_then(|v| v.as_f64()))?;
     if !is_matrix_room_id(&room_id)
         || !is_matrix_event_id(&event_id)
-        || sender.is_empty()
-        || sender.chars().count() > MAX_AGENT_APPROVAL_HISTORY_SENDER_LENGTH
+        || !is_matrix_user_id(&sender)
+        || decided_at <= 0.0
         || origin_server_ts <= 0.0
         || expires_at <= origin_server_ts
     {
@@ -192,14 +219,24 @@ pub fn validate_agent_approval_history_item(
 ) -> Result<(), &'static str> {
     if !is_matrix_room_id(&item.room_id)
         || !is_matrix_event_id(&item.event_id)
-        || item.sender.is_empty()
-        || item.sender.chars().count() > MAX_AGENT_APPROVAL_HISTORY_SENDER_LENGTH
+        || !is_matrix_user_id(&item.sender)
         || !item.decided_at.is_finite()
         || !item.origin_server_ts.is_finite()
         || !item.expires_at.is_finite()
+        || item.decided_at <= 0.0
         || item.origin_server_ts <= 0.0
         || item.expires_at <= item.origin_server_ts
         || item.summary.chars().count() > MAX_AGENT_APPROVAL_HISTORY_SUMMARY_CHARS
+        || item.summary.chars().any(|ch| {
+            ch.is_control()
+                || matches!(
+                    ch,
+                    '\u{200B}'..='\u{200F}'
+                        | '\u{202A}'..='\u{202E}'
+                        | '\u{2066}'..='\u{2069}'
+                        | '\u{FEFF}'
+                )
+        })
     {
         return Err("agent-approval-history-invalid-item");
     }
@@ -451,5 +488,84 @@ mod tests {
         assert_eq!(encoded["originServerTs"], 9_000.0);
         assert_eq!(encoded["expiresAt"], 310_000.0);
         assert!(encoded.get("command").is_none());
+    }
+
+    #[test]
+    fn hostile_account_data_items_are_dropped_or_sanitized() {
+        let now = 1_700_000_000_000.0;
+        let content = normalize_agent_approval_history_content(
+            Some(&json!({
+                "version": 1,
+                "items": [
+                    {
+                        "roomId": "!room:example.org",
+                        "eventId": "$ok",
+                        "sender": "@hermes:example.org",
+                        "decision": "deny",
+                        "decidedAt": now,
+                        "originServerTs": now - 1.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "rm file"
+                    },
+                    {
+                        "roomId": "!ApprovedAlways",
+                        "eventId": "$spoof-room",
+                        "sender": "@hermes:example.org",
+                        "decision": "approve_always",
+                        "decidedAt": now - 4.0,
+                        "originServerTs": now - 5.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "spoofed room"
+                    },
+                    {
+                        "roomId": "!room:example.org",
+                        "eventId": "$spoof-sender",
+                        "sender": "You approved this",
+                        "decision": "approve_always",
+                        "decidedAt": now - 3.0,
+                        "originServerTs": now - 4.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "spoofed sender"
+                    },
+                    {
+                        "roomId": "!room:example.org",
+                        "eventId": "$bidi",
+                        "sender": "@hermes:example.org",
+                        "decision": "deny",
+                        "decidedAt": now - 1.0,
+                        "originServerTs": now - 1.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "rm \u{202E}elif"
+                    },
+                    {
+                        "roomId": "!room:example.org",
+                        "eventId": "$negative",
+                        "sender": "@hermes:example.org",
+                        "decision": "deny",
+                        "decidedAt": -1.0,
+                        "originServerTs": now - 1.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "negative"
+                    },
+                    {
+                        "roomId": "!room:example.org",
+                        "eventId": 12,
+                        "sender": "@hermes:example.org",
+                        "decision": "deny",
+                        "decidedAt": now,
+                        "originServerTs": now - 1.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "non-string"
+                    }
+                ]
+            })),
+            now,
+        );
+        assert_eq!(content.items.len(), 2);
+        assert_eq!(content.items[0].event_id, "$ok");
+        assert_eq!(content.items[0].summary, "rm file");
+        assert_eq!(content.items[1].event_id, "$bidi");
+        assert_eq!(content.items[1].summary, "rm elif");
+        assert!(!content.items[1].summary.contains('\u{202E}'));
     }
 }

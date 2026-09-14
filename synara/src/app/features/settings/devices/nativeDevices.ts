@@ -69,11 +69,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isSafeCounter = (value: unknown): value is number =>
   typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 
-const optionalBoundedString = (value: unknown): string | undefined => {
+const MAX_DEVICE_ID_CHARS = 255;
+const MAX_DISPLAY_NAME_CHARS = 256;
+const MAX_LAST_SEEN_IP_CHARS = 64;
+const MAX_FINGERPRINT_CHARS = 64;
+
+const optionalBoundedString = (value: unknown, maxChars: number): string | undefined => {
   if (value === undefined || value === null) return undefined;
   if (typeof value !== 'string') return undefined;
   const trimmed = value.trim();
-  return trimmed.length === 0 ? undefined : trimmed;
+  if (trimmed.length === 0 || [...trimmed].length > maxChars) return undefined;
+  return trimmed;
 };
 
 const optionalTimestamp = (value: unknown): number | undefined => {
@@ -96,7 +102,7 @@ const parseOwnVerification = (value: unknown): NativeOwnDeviceVerification | und
 
 const parseDevice = (value: unknown): NativeDevice | undefined => {
   if (!isRecord(value)) return undefined;
-  const deviceId = optionalBoundedString(value.deviceId);
+  const deviceId = optionalBoundedString(value.deviceId, MAX_DEVICE_ID_CHARS);
   const trust = parseTrust(value.trust);
   if (!deviceId || !trust) return undefined;
   const isCurrent = value.isCurrent === true;
@@ -105,9 +111,9 @@ const parseDevice = (value: unknown): NativeDevice | undefined => {
     trust,
     isCurrent,
   };
-  const displayName = optionalBoundedString(value.displayName);
+  const displayName = optionalBoundedString(value.displayName, MAX_DISPLAY_NAME_CHARS);
   if (displayName) device.displayName = displayName;
-  const lastSeenIp = optionalBoundedString(value.lastSeenIp);
+  const lastSeenIp = optionalBoundedString(value.lastSeenIp, MAX_LAST_SEEN_IP_CHARS);
   if (lastSeenIp) device.lastSeenIp = lastSeenIp;
   const lastSeenTs = optionalTimestamp(value.lastSeenTs);
   if (lastSeenTs !== undefined) device.lastSeenTs = lastSeenTs;
@@ -116,8 +122,10 @@ const parseDevice = (value: unknown): NativeDevice | undefined => {
   }
   const firstSeenTs = optionalTimestamp(value.firstSeenTs);
   if (firstSeenTs !== undefined) device.firstSeenTs = firstSeenTs;
-  const fingerprint = optionalBoundedString(value.ed25519Fingerprint);
-  if (fingerprint) device.ed25519Fingerprint = fingerprint;
+  const fingerprint = optionalBoundedString(value.ed25519Fingerprint, MAX_FINGERPRINT_CHARS);
+  if (fingerprint && /^[A-Za-z0-9+/ ]+$/.test(fingerprint)) {
+    device.ed25519Fingerprint = fingerprint;
+  }
   return device;
 };
 

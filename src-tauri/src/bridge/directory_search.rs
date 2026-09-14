@@ -194,6 +194,10 @@ fn directory_search_user_error(
             "InvalidRequest",
             "The room directory request is invalid.",
         ),
+        "v-rooms.directory-invalid-hit" | "v-rooms.directory-hit-cap" => (
+            "InvalidRequest",
+            "The public room directory could not be loaded.",
+        ),
         "v-rooms.directory-rate-limited" => (
             "RateLimited",
             "The room directory is rate-limited. Try again in a moment.",
@@ -276,5 +280,29 @@ mod tests {
                 .with_diagnostic("p2-room-directory-search-no-session"),
         );
         assert_eq!(error.message, "No native Matrix session is active.");
+    }
+
+    #[test]
+    fn invalid_hit_and_unknown_diagnostics_stay_static() {
+        let invalid_hit = map_directory_search_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("v-rooms.directory-invalid-hit"),
+        );
+        assert_eq!(invalid_hit.code, "InvalidRequest");
+        assert_eq!(
+            invalid_hit.message,
+            "The public room directory could not be loaded."
+        );
+
+        let unknown = map_directory_search_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("server-supplied-M_UNKNOWN"),
+        );
+        assert_eq!(unknown.code, "Unknown");
+        assert_eq!(
+            unknown.message,
+            "The public room directory could not be loaded."
+        );
+        assert!(!unknown.message.contains("M_UNKNOWN"));
     }
 }

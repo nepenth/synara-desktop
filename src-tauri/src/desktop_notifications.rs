@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_notification::NotificationExt;
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 #[cfg(target_os = "linux")]
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -31,6 +31,7 @@ const DESKTOP_NOTIFICATION_MAX_ACTION_CONTEXT_CHARS: usize = 255;
 const DESKTOP_NOTIFICATION_MAX_DISMISS_KEYS: usize = 8;
 const DESKTOP_NOTIFICATION_MAX_DISMISS_KEY_CHARS: usize = 255;
 const DESKTOP_DISMISS_COMMAND_MAX_KEYS: usize = 32;
+const MAX_LINUX_NOTIFICATION_HANDLES: usize = 256;
 const DESKTOP_NOTIFICATION_DEFAULT_ACTION_ID: &str = "default";
 const DESKTOP_NOTIFICATION_ACTION_EVENT: &str = "synara://notification-action";
 
@@ -221,12 +222,19 @@ fn sanitize_dismiss_keys(keys: Option<Vec<String>>) -> Option<Vec<String>> {
 pub(crate) struct DismissKeyIndex {
     by_key: HashMap<String, HashSet<u32>>,
     keys_by_id: HashMap<u32, Vec<String>>,
+    order: VecDeque<u32>,
 }
 
 #[allow(dead_code)]
 impl DismissKeyIndex {
     pub(crate) fn register(&mut self, id: u32, keys: &[String]) {
         self.unregister(id);
+        while self.keys_by_id.len() >= MAX_LINUX_NOTIFICATION_HANDLES {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            self.unregister(oldest);
+        }
         let mut stored = Vec::new();
         for key in keys {
             if stored.iter().any(|existing| existing == key) {
@@ -237,11 +245,13 @@ impl DismissKeyIndex {
         }
         if !stored.is_empty() {
             self.keys_by_id.insert(id, stored);
+            self.order.push_back(id);
         }
     }
 
     pub(crate) fn unregister(&mut self, id: u32) {
         if let Some(keys) = self.keys_by_id.remove(&id) {
+            self.order.retain(|candidate| *candidate != id);
             for key in keys {
                 if let Some(ids) = self.by_key.get_mut(&key) {
                     ids.remove(&id);
@@ -325,7 +335,31 @@ fn register_linux_notification(
     if !keys.is_empty() {
         lock_mutex(linux_dismiss_index()).register(id, keys);
     }
-    lock_mutex(linux_notification_handles()).insert(id, handle);
+    let evicted = {
+        let mut handles = lock_mutex(linux_notification_handles());
+        let mut evicted = Vec::new();
+        while handles.len() >= MAX_LINUX_NOTIFICATION_HANDLES {
+            let Some(old_id) = handles.keys().min().copied() else {
+                break;
+            };
+            if let Some(old_handle) = handles.remove(&old_id) {
+                evicted.push((old_id, old_handle));
+            }
+        }
+        handles.insert(id, handle);
+        evicted
+    };
+    if !evicted.is_empty() {
+        let mut index = lock_mutex(linux_dismiss_index());
+        for (old_id, _) in &evicted {
+            index.unregister(*old_id);
+        }
+    }
+    for (_, handle) in evicted {
+        tauri::async_runtime::spawn(async move {
+            handle.close_async().await;
+        });
+    }
 }
 
 #[cfg(target_os = "linux")]
@@ -987,8 +1021,8 @@ pub async fn desktop_notify<R: Runtime>(
 pub async fn desktop_dismiss_notifications(keys: Vec<String>) -> Result<(), String> {
     let keys: Vec<String> = keys
         .into_iter()
-        .filter_map(|key| sanitize_dismiss_key(&key))
         .take(DESKTOP_DISMISS_COMMAND_MAX_KEYS)
+        .filter_map(|key| sanitize_dismiss_key(&key))
         .collect();
     if keys.is_empty() {
         return Ok(());
@@ -1164,6 +1198,16 @@ mod tests {
         assert_eq!(sanitize_dismiss_key("room:"), None);
         assert_eq!(sanitize_dismiss_key("room:!room example"), None);
         assert_eq!(sanitize_dismiss_key(&"x".repeat(300)), None);
+        assert_eq!(
+            sanitize_dismiss_key("event:$abc+/=_-:example.org"),
+            Some("event:$abc+/=_-:example.org".to_owned())
+        );
+        assert_eq!(sanitize_dismiss_key("room:!ünicode:example.org"), None);
+        assert_eq!(sanitize_dismiss_key("room:!room:example.org\u{202E}"), None);
+        assert_ne!(
+            sanitize_dismiss_key("room:event:$x"),
+            sanitize_dismiss_key("event:$x")
+        );
     }
 
     #[test]
@@ -1182,5 +1226,24 @@ mod tests {
         remaining.sort_unstable();
         assert_eq!(remaining, vec![2]);
         assert!(index.ids_for_keys(&["event:$one".to_owned()]).is_empty());
+    }
+
+    #[test]
+    fn dismiss_key_index_is_bounded() {
+        let mut index = DismissKeyIndex::default();
+        for id in 0..=MAX_LINUX_NOTIFICATION_HANDLES as u32 {
+            index.register(id, &[format!("room:!{id}:example.org")]);
+        }
+        assert_eq!(index.keys_by_id.len(), MAX_LINUX_NOTIFICATION_HANDLES);
+        assert!(index
+            .ids_for_keys(&["room:!0:example.org".to_owned()])
+            .is_empty());
+        assert_eq!(
+            index.ids_for_keys(&[format!(
+                "room:!{}:example.org",
+                MAX_LINUX_NOTIFICATION_HANDLES
+            )]),
+            vec![MAX_LINUX_NOTIFICATION_HANDLES as u32]
+        );
     }
 }

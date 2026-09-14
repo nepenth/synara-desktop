@@ -54,6 +54,38 @@ test('device snapshot parser stays tolerant of missing optional fields', () => {
   } satisfies NativeDeviceSnapshot);
 });
 
+test('device snapshot parser rejects unbounded and hostile strings', () => {
+  assert.equal(
+    parseNativeDeviceSnapshot({
+      sessionGeneration: 3,
+      ownVerification: 'verified',
+      hasDevicesToVerifyAgainst: false,
+      devices: [{ deviceId: 'X'.repeat(300), trust: 'verified', isCurrent: true }],
+    }),
+    undefined
+  );
+
+  const snapshot = parseNativeDeviceSnapshot({
+    sessionGeneration: 3,
+    ownVerification: 'unverified',
+    hasDevicesToVerifyAgainst: false,
+    devices: [
+      {
+        deviceId: 'ONLY',
+        trust: 'unverified',
+        isCurrent: true,
+        displayName: 'n'.repeat(300),
+        lastSeenIp: '1'.repeat(80),
+        ed25519Fingerprint: '<script>alert(1)</script>',
+      },
+    ],
+  });
+  assert.ok(snapshot);
+  assert.equal(snapshot.devices[0]?.displayName, undefined);
+  assert.equal(snapshot.devices[0]?.lastSeenIp, undefined);
+  assert.equal(snapshot.devices[0]?.ed25519Fingerprint, undefined);
+});
+
 test('device snapshot parser rejects malformed trust and missing identity', () => {
   assert.equal(
     parseNativeDeviceSnapshot({

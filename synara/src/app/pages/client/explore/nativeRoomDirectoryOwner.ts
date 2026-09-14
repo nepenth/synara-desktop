@@ -76,6 +76,8 @@ const DIRECTORY_DIAGNOSTIC_MESSAGES: Record<string, string> = {
   'v-rooms.directory-invalid-instance': 'The room directory request is invalid.',
   'v-rooms.directory-invalid-since': 'The room directory request is invalid.',
   'v-rooms.directory-invalid-correlation': 'The room directory request is invalid.',
+  'v-rooms.directory-invalid-hit': 'The public room directory could not be loaded.',
+  'v-rooms.directory-hit-cap': 'The public room directory could not be loaded.',
   'v-rooms.directory-rate-limited': 'The room directory is rate-limited. Try again in a moment.',
   'v-rooms.directory-sdk-failed': 'The public room directory could not be loaded.',
 };
