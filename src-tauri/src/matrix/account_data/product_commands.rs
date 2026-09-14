@@ -222,6 +222,14 @@ pub async fn matrix_later_mark_reminded(
 }
 
 #[tauri::command]
+pub async fn matrix_agent_approval_history_snapshot(
+    core: State<'_, Arc<synara_core::Core>>,
+) -> Result<NativeAgentApprovalHistorySnapshot, MatrixAuthCommandError> {
+    crate::bridge::agent_approval_history::agent_approval_history_snapshot(core.inner().as_ref())
+        .await
+}
+
+#[tauri::command]
 pub async fn matrix_room_notes_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<NativeRoomNotesSnapshot, MatrixAuthCommandError> {

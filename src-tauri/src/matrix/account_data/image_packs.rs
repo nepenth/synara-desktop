@@ -10,9 +10,10 @@ use tauri::{AppHandle, Emitter};
 
 pub use synara_core::app::account_data::{
     set_global_image_packs, set_room_image_pack, set_user_image_pack, snapshot_global_image_packs,
-    snapshot_room_image_packs, snapshot_user_image_pack, NativeGlobalImagePacksSnapshot,
-    NativeImagePack, NativeImagePackOwner, NativeImagePackUpdateSignal,
-    NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot, IMAGE_PACKS_UPDATED_EVENT,
+    snapshot_room_image_packs, snapshot_user_image_pack, NativeAccountDataWakeupKind,
+    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
+    NativeImagePackUpdateSignal, NativeRoomImagePacksSnapshot, NativeUserImagePackSnapshot,
+    AGENT_APPROVAL_HISTORY_UPDATED_EVENT, IMAGE_PACKS_UPDATED_EVENT,
 };
 
 /// Start the Core owner and emit pack wakeups on the existing Tauri event.
@@ -23,9 +24,16 @@ pub fn start(
 ) -> Result<NativeImagePackOwner, &'static str> {
     NativeImagePackOwner::start(
         client,
-        Arc::new(move |signal: NativeImagePackUpdateSignal| {
-            let _ = app.emit(IMAGE_PACKS_UPDATED_EVENT, signal);
-        }),
+        Arc::new(
+            move |signal: NativeImagePackUpdateSignal| match signal.kind {
+                NativeAccountDataWakeupKind::ImagePacks => {
+                    let _ = app.emit(IMAGE_PACKS_UPDATED_EVENT, signal);
+                }
+                NativeAccountDataWakeupKind::AgentApprovalHistory => {
+                    let _ = app.emit(AGENT_APPROVAL_HISTORY_UPDATED_EVENT, signal);
+                }
+            },
+        ),
         session_generation,
     )
 }

@@ -6,7 +6,8 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
+use std::time::Instant;
 
 use eyeball_im::VectorDiff;
 use futures_util::{stream, StreamExt};
@@ -40,7 +41,15 @@ use serde::{Deserialize, Serialize};
 use tokio::time::{timeout, Duration};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
-use crate::app::agent_approvals::{plan_agent_approval, AgentApprovalDecisionStatus};
+use crate::app::account_data::{
+    append_agent_approval_history_item_live, snapshot_agent_approval_history,
+    NativeAgentApprovalHistorySnapshot, SynaraAgentApprovalHistoryDecision,
+    SynaraAgentApprovalHistoryItem,
+};
+use crate::app::agent_approvals::{
+    agent_approval_history_summary, plan_agent_approval, AgentApprovalDecisionStatus,
+    AGENT_APPROVAL_TTL_MS,
+};
 use crate::app::send::{
     apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
     parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
@@ -332,6 +341,8 @@ pub struct NativeTimelineRegistry {
     utd_recovery: UtdRecoveryCoordinator,
 }
 
+const AGENT_APPROVAL_HISTORY_PENDING_TTL: Duration = Duration::from_secs(30);
+
 /// Shared handle so Core and the desktop session own one live registry.
 pub struct NativeTimelineOwner {
     client: Client,
@@ -343,6 +354,8 @@ pub struct NativeTimelineOwner {
     approval_inbox: tokio::sync::Mutex<ApprovalInboxOwner>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
     sends: tokio::sync::Mutex<SendQueue>,
+    approval_history_mutation: tokio::sync::Mutex<()>,
+    approval_history_pending: Mutex<Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>>,
 }
 
 impl NativeTimelineOwner {
@@ -362,6 +375,8 @@ impl NativeTimelineOwner {
             )),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
+            approval_history_mutation: tokio::sync::Mutex::new(()),
+            approval_history_pending: Mutex::new(None),
         }
     }
 
@@ -400,6 +415,33 @@ impl NativeTimelineOwner {
             .await
             .snapshot(&self.client, &decisions, discovery_active, reusable)
             .await
+    }
+
+    pub async fn agent_approval_history_snapshot(
+        &self,
+    ) -> Result<NativeAgentApprovalHistorySnapshot, &'static str> {
+        if let Ok(guard) = self.approval_history_pending.lock() {
+            if let Some((stored_at, items)) = guard.as_ref() {
+                if stored_at.elapsed() < AGENT_APPROVAL_HISTORY_PENDING_TTL {
+                    return Ok(NativeAgentApprovalHistorySnapshot {
+                        items: items.clone(),
+                    });
+                }
+            }
+        }
+        snapshot_agent_approval_history(&self.client).await
+    }
+
+    async fn record_agent_approval_history(
+        &self,
+        item: SynaraAgentApprovalHistoryItem,
+    ) -> Result<(), &'static str> {
+        let _lock = self.approval_history_mutation.lock().await;
+        let snapshot = append_agent_approval_history_item_live(&self.client, item).await?;
+        if let Ok(mut pending) = self.approval_history_pending.lock() {
+            *pending = Some((Instant::now(), snapshot.items));
+        }
+        Ok(())
     }
 
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {
@@ -673,6 +715,25 @@ impl NativeTimelineOwner {
             .map_err(|_| "v-send.2-reaction-ensure-failed")??;
         let readback =
             approval_reaction_readback(&item.reactions, &reaction_key, &own_user_id, sent_event_id);
+        if let Some(decision) =
+            SynaraAgentApprovalHistoryDecision::from_action_id(&request.action_id)
+        {
+            if let Ok(decided_at) = agent_approval_now_ms() {
+                let history_item = SynaraAgentApprovalHistoryItem {
+                    room_id: room_id.clone(),
+                    event_id: event_id.to_string(),
+                    sender: item.sender.clone(),
+                    decision,
+                    decided_at: decided_at as f64,
+                    origin_server_ts: item.origin_server_ts as f64,
+                    expires_at: item.origin_server_ts.saturating_add(AGENT_APPROVAL_TTL_MS) as f64,
+                    summary: agent_approval_history_summary(&item.body),
+                };
+                if let Err(diagnostic) = self.record_agent_approval_history(history_item).await {
+                    eprintln!("agent-approval-history-write-failed: {diagnostic}");
+                }
+            }
+        }
         Ok(NativeAgentApprovalDecisionResult {
             room_id: room_id.clone(),
             event_id: event_id.to_string(),

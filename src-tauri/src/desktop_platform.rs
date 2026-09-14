@@ -142,6 +142,7 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
             route: candidate.route,
             actions: None,
             action_context: None,
+            dismiss_keys: None,
         };
         let app = self.app.clone();
         tauri::async_runtime::spawn(async move {

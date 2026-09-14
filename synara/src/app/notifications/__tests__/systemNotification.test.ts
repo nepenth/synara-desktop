@@ -118,3 +118,20 @@ test('normalizeSystemNotificationRequest preserves safe notification actions', (
     }
   );
 });
+
+test('normalizeSystemNotificationRequest preserves dismiss keys without actions', () => {
+  assert.deepEqual(
+    normalizeSystemNotificationRequest({
+      title: 'Room',
+      dismissKeys: [' room:!room:example.org ', 'event:$event:example.org'],
+    }),
+    {
+      title: 'Room',
+      body: undefined,
+      route: undefined,
+      privacy: 'standard',
+      sound: 'default',
+      dismissKeys: ['room:!room:example.org', 'event:$event:example.org'],
+    }
+  );
+});

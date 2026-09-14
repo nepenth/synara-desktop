@@ -5,6 +5,7 @@ Synara uses namespaced `in.synara.*` account data and event-content fields for c
 ## Account Data
 
 - `in.synara.later`: per-user Later inbox anchors. Items store only `roomId`, `eventId`, timestamps, kind, due/reminded/completed state, and never plaintext message bodies. See [Synara Later Account Data Contract](./synara-later-contract.md).
+- `in.synara.agent_approval_history`: per-user decided agent-approval history. Items store room/event anchors, decision, timestamps, and a bounded command-preview summary — never the full command body. See [Synara Agent Approval History Contract](./synara-agent-approval-history-contract.md).
 - `in.synara.room_notes`: per-user room notes, to-dos, and message anchors. See [Synara Room Notes Contract](./synara-room-notes-contract.md).
 - `in.synara.unread_anchor`: per-user message-level unread anchors. This is a private client marker and does not move public read receipts. See [Synara Unread Anchor Contract](./synara-unread-anchor-contract.md).
 - `in.synara.spaces`: existing space organization metadata. See [Synara Spaces Contract](./synara-spaces-contract.md).

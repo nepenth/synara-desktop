@@ -241,6 +241,7 @@ export type DesktopNotificationPayload = {
   route?: string;
   actions?: DesktopNotificationAction[];
   actionContext?: DesktopNotificationActionContext;
+  dismissKeys?: string[];
 };
 
 export type DesktopNotificationActionEventPayload = {
@@ -1039,12 +1040,22 @@ export const showDesktopNotification = async (
         }
       : undefined;
   }
+  if (notification.dismissKeys && notification.dismissKeys.length > 0) {
+    payload.dismissKeys = notification.dismissKeys
+      .map((key) => normalizeValue(key))
+      .filter((key) => key.length > 0);
+  }
 
   const result = await invokeDesktop<boolean>('desktop_notify', {
     notification: payload,
   });
   return result === true;
 };
+
+export async function dismissDesktopNotifications(keys: string[]): Promise<void> {
+  if (!isSynaraDesktop() || keys.length === 0) return;
+  await invokeDesktopWithAvailability('desktop_dismiss_notifications', { keys });
+}
 
 export const getDesktopNotificationCount = (
   unreadCounts: Iterable<{ total?: number; highlight?: number }>,

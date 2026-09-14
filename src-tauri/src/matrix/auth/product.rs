@@ -60,10 +60,10 @@ use crate::matrix::account_data::{
     set_room_image_pack, set_user_image_pack, snapshot_global_image_packs, snapshot_later,
     snapshot_mdirect, snapshot_room_image_packs, snapshot_room_notes, snapshot_user_image_pack,
     snooze_later_item_live, upsert_later_item, upsert_room_note_item,
-    NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeLaterSnapshot,
-    NativeMDirectMutationResult, NativeMDirectSnapshot, NativeRoomImagePacksSnapshot,
-    NativeRoomNotesSnapshot, NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem,
-    SynaraRoomNoteItem,
+    NativeAgentApprovalHistorySnapshot, NativeGlobalImagePacksSnapshot, NativeImagePackOwner,
+    NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
+    NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,

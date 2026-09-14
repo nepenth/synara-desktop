@@ -9,6 +9,8 @@
 #![allow(dead_code)]
 #![allow(unused_imports)]
 
+mod agent_approval_history;
+mod agent_approval_history_live;
 mod error;
 mod image_packs;
 mod image_packs_live;
@@ -20,6 +22,20 @@ mod mdirect_live;
 mod room_notes;
 mod room_notes_live;
 
+pub use agent_approval_history::{
+    append_agent_approval_history_item, normalize_agent_approval_history_content,
+    normalize_agent_approval_history_content_checked, normalize_agent_approval_history_item,
+    prune_agent_approval_history_items, validate_agent_approval_history_content_size,
+    validate_agent_approval_history_item, NativeAgentApprovalHistorySnapshot,
+    SynaraAgentApprovalHistoryContent, SynaraAgentApprovalHistoryDecision,
+    SynaraAgentApprovalHistoryItem, AGENT_APPROVAL_HISTORY_ACCOUNT_DATA_VERSION,
+    AGENT_APPROVAL_HISTORY_EVENT_TYPE, AGENT_APPROVAL_HISTORY_RETENTION_MS,
+    AGENT_APPROVAL_HISTORY_UPDATED_EVENT, MAX_AGENT_APPROVAL_HISTORY_CONTENT_BYTES,
+    MAX_AGENT_APPROVAL_HISTORY_ITEMS, MAX_AGENT_APPROVAL_HISTORY_SUMMARY_CHARS,
+};
+pub use agent_approval_history_live::{
+    append_agent_approval_history_item_live, snapshot_agent_approval_history,
+};
 pub use error::AccountDataError;
 pub use image_packs::{
     is_image_pack_account_data_type, is_image_pack_room_state_type, pack_from_account_data,
@@ -31,8 +47,8 @@ pub use image_packs::{
 };
 pub use image_packs_live::{
     set_global_image_packs, set_room_image_pack, set_user_image_pack, snapshot_global_image_packs,
-    snapshot_room_image_packs, snapshot_user_image_pack, ImagePackUpdateEmit, NativeImagePackOwner,
-    NativeImagePackUpdateSignal,
+    snapshot_room_image_packs, snapshot_user_image_pack, ImagePackUpdateEmit,
+    NativeAccountDataWakeupKind, NativeImagePackOwner, NativeImagePackUpdateSignal,
 };
 pub use index::{
     AccountDataEntry, AccountDataIndex, MAX_CONTENT_FIELDS, MAX_GLOBAL_TYPES, MAX_KEY_LEN,

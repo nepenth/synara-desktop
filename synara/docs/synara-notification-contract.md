@@ -41,13 +41,13 @@ invalid, negative, or non-finite values normalize to `0`.
 
 ## Source Counts
 
-| Field                | Meaning                                                                                                                          | Current source                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `highlightCount`     | Sum of room highlight counts. A room with an explicit highlight field contributes highlight count instead of total unread count. | Matrix room unread/highlight state.                                                      |
-| `unreadCount`        | Sum of unread totals for rooms that do not provide an explicit highlight count.                                                  | Matrix room unread state.                                                                |
-| `laterActiveCount`   | Later items that are not completed.                                                                                              | `in.synara.later` account data.                                                          |
-| `inviteCount`        | Pending room invites.                                                                                                            | Matrix invite room list.                                                                 |
-| `agentApprovalCount` | Pending agent approvals that require user action.                                                                                | Currently notification-time detection only; durable count source is not implemented yet. |
+| Field                | Meaning                                                                                                                          | Current source                                                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `highlightCount`     | Sum of room highlight counts. A room with an explicit highlight field contributes highlight count instead of total unread count. | Matrix room unread/highlight state.                                                                                                          |
+| `unreadCount`        | Sum of unread totals for rooms that do not provide an explicit highlight count.                                                  | Matrix room unread state.                                                                                                                    |
+| `laterActiveCount`   | Later items that are not completed.                                                                                              | `in.synara.later` account data.                                                                                                              |
+| `inviteCount`        | Pending room invites.                                                                                                            | Matrix invite room list.                                                                                                                     |
+| `agentApprovalCount` | Pending agent approvals that require user action.                                                                                | Pending inbox from Core `matrix_agent_approvals_list`. Decided history lives in `in.synara.agent_approval_history` and is not a badge count. |
 
 ## Badge Formulas
 

@@ -7,6 +7,7 @@ export enum AccountDataEvent {
   SynaraSpaces = 'in.synara.spaces',
   SynaraLater = 'in.synara.later',
   SynaraRoomNotes = 'in.synara.room_notes',
+  SynaraAgentApprovalHistory = 'in.synara.agent_approval_history',
   SynaraUnreadAnchor = 'in.synara.unread_anchor',
 
   ElementRecentEmoji = 'io.element.recent_emoji',
@@ -65,6 +66,24 @@ export type SynaraRoomNotesContent = {
       items?: Record<string, SynaraRoomNoteItem>;
     }
   >;
+};
+
+export type SynaraAgentApprovalHistoryDecision = 'approve_once' | 'approve_always' | 'deny';
+
+export type SynaraAgentApprovalHistoryItem = {
+  roomId: string;
+  eventId: string;
+  sender: string;
+  decision: SynaraAgentApprovalHistoryDecision;
+  decidedAt: number;
+  originServerTs: number;
+  expiresAt: number;
+  summary: string;
+};
+
+export type SynaraAgentApprovalHistoryContent = {
+  version?: number;
+  items?: SynaraAgentApprovalHistoryItem[];
 };
 
 export type SynaraUnreadAnchorContent = {

@@ -16,6 +16,12 @@ import {
   type ApprovalInboxSnapshot,
 } from './nativeApprovalInbox';
 import { createApprovalInboxProjection } from './approvalInboxProjection';
+import { unionRecentApprovals } from './approvalHistoryProjection';
+import {
+  loadAgentApprovalHistory,
+  subscribeAgentApprovalHistory,
+} from './nativeAgentApprovalHistory';
+import type { SynaraAgentApprovalHistoryItem } from '../../../types/matrix/accountData';
 import {
   activateApprovalDecisionScope,
   subscribeApprovalDecisions,
@@ -31,6 +37,7 @@ type ApprovalInboxSummary = {
 export type ApprovalInboxContextValue = ApprovalInboxSummary & {
   sessionGeneration?: number;
   items: ApprovalInboxItem[];
+  recentItems: ApprovalInboxItem[];
   now: number;
   refresh: () => void;
   decided: (item: ApprovalInboxItem) => boolean;
@@ -46,6 +53,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
   const [, setRevision] = useState(0);
   const [error, setError] = useState<string>();
   const [now, setNow] = useState(Date.now);
+  const [historyItems, setHistoryItems] = useState<SynaraAgentApprovalHistoryItem[]>([]);
   const reload = useRef<() => void>(() => undefined);
   const discoveryActive = useRef(false);
   const pageActive = useRef(onApprovalsPage);
@@ -65,8 +73,17 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     let queued = false;
     let releaseScope: (() => void) | undefined;
     projection.reset();
+    setHistoryItems([]);
     setRevision((value) => value + 1);
     setError(undefined);
+    const loadHistory = async () => {
+      try {
+        const next = await loadAgentApprovalHistory();
+        if (!cancelled) setHistoryItems(next.items);
+      } catch {
+        if (!cancelled) setHistoryItems([]);
+      }
+    };
     const load = async () => {
       if (cancelled) return;
       if (busy) {
@@ -100,6 +117,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     };
     reload.current = () => {
       void load();
+      void loadHistory();
     };
     // Every successful shared-native decision (room, OS, or inbox) updates one
     // projection immediately. Old-session replies can neither overlay nor refresh it.
@@ -107,8 +125,20 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       if (cancelled || !projection.complete(notice.scope, notice)) return;
       setRevision((value) => value + 1);
       void load();
+      void loadHistory();
+    });
+    let unlistenHistory: (() => void) | undefined;
+    void subscribeAgentApprovalHistory(() => {
+      void loadHistory();
+    }).then((unlisten) => {
+      if (cancelled) {
+        unlisten();
+        return;
+      }
+      unlistenHistory = unlisten;
     });
     void load();
+    void loadHistory();
     const poll = window.setInterval(() => {
       void load();
     }, 5000);
@@ -130,6 +160,7 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       cancelled = true;
       releaseScope?.();
       unsubscribe();
+      unlistenHistory?.();
       reload.current = () => undefined;
       window.clearInterval(poll);
       window.removeEventListener('focus', focus);
@@ -154,6 +185,10 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
     [projection, scope]
   );
   const pendingCount = snapshot?.items.filter((item) => item.status === 'pending').length ?? 0;
+  const recentItems = useMemo(
+    () => unionRecentApprovals(snapshot?.items ?? [], historyItems),
+    [snapshot, historyItems]
+  );
   const loading = (!snapshot && !error) || Boolean(snapshot?.loading);
   const incomplete = Boolean(snapshot?.incomplete);
   const coverage = snapshot?.coverage ?? 'latest_event';
@@ -166,11 +201,12 @@ export function ApprovalInboxProvider({ children }: { children: React.ReactNode 
       ...summary,
       sessionGeneration: snapshot?.sessionGeneration,
       items: snapshot?.items ?? [],
+      recentItems,
       now,
       refresh,
       decided,
     }),
-    [summary, snapshot, now, refresh, decided]
+    [summary, snapshot, recentItems, now, refresh, decided]
   );
 
   return (

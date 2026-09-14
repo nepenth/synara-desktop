@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://synara.local/contracts/synara-agent-approval-history-content.schema.json",
+  "$comment": "Canonical writer schema for in.synara.agent_approval_history v1. Live Core readers fail closed on missing or unsupported versions. Summary is a bounded command-preview line and must never be the full command body.",
+  "title": "SynaraAgentApprovalHistoryContent",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "items"],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 200,
+      "items": {
+        "$ref": "#/$defs/SynaraAgentApprovalHistoryItem"
+      }
+    }
+  },
+  "$defs": {
+    "SynaraAgentApprovalHistoryItem": {
+      "title": "SynaraAgentApprovalHistoryItem",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "roomId",
+        "eventId",
+        "sender",
+        "decision",
+        "decidedAt",
+        "originServerTs",
+        "expiresAt",
+        "summary"
+      ],
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 255,
+          "pattern": "^![^\\s]+$"
+        },
+        "eventId": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 255,
+          "pattern": "^\\$[^\\s]+$"
+        },
+        "sender": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        },
+        "decision": {
+          "type": "string",
+          "enum": ["approve_once", "approve_always", "deny"]
+        },
+        "decidedAt": {
+          "type": "number"
+        },
+        "originServerTs": {
+          "type": "number"
+        },
+        "expiresAt": {
+          "type": "number"
+        },
+        "summary": {
+          "type": "string",
+          "maxLength": 240
+        }
+      }
+    }
+  }
+}

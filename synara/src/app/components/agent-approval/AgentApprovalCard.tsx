@@ -138,12 +138,6 @@ export function AgentApprovalCard({
     [target, busyKey, sentKey, confirmApproveAlways, submitDecision]
   );
 
-  const sourceDetails =
-    prompt.replyInstructions ||
-    (prompt.sourceContext && prompt.sourceContext !== prompt.body
-      ? prompt.sourceContext
-      : undefined);
-
   return (
     <Box
       direction="Column"
@@ -190,45 +184,6 @@ export function AgentApprovalCard({
           <pre style={monospacedBlockStyle}>
             <code>{prompt.sourceContext}</code>
           </pre>
-        </Box>
-      )}
-      {prompt.command && sourceDetails && !isResolved && (
-        <Box
-          as="details"
-          direction="Column"
-          gap="200"
-          className={css.ApprovalDetail}
-          style={{
-            border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
-            borderRadius: config.radii.R300,
-            padding: config.space.S300,
-          }}
-        >
-          <Box as="summary" alignItems="Center" gap="200" style={{ cursor: 'pointer' }}>
-            <Text as="span" size="T300">
-              Full approval prompt
-            </Text>
-          </Box>
-          {prompt.replyInstructions && (
-            <Box direction="Column" gap="100">
-              <Text size="L400" priority="300">
-                Reply / reaction options
-              </Text>
-              <pre style={{ ...monospacedBlockStyle, maxHeight: toRem(140) }}>
-                <code>{prompt.replyInstructions}</code>
-              </pre>
-            </Box>
-          )}
-          {prompt.sourceContext && (
-            <Box direction="Column" gap="100">
-              <Text size="L400" priority="300">
-                Source context
-              </Text>
-              <pre style={monospacedBlockStyle}>
-                <code>{prompt.sourceContext}</code>
-              </pre>
-            </Box>
-          )}
         </Box>
       )}
 

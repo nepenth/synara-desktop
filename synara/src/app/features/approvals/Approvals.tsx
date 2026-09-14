@@ -9,6 +9,7 @@ import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { useApprovalInbox } from './ApprovalInboxProvider';
 import { approvalIdentity, type ApprovalInboxItem } from './nativeApprovalInbox';
+import { historyDecisionLabel } from './approvalHistoryProjection';
 import * as css from './Approvals.css';
 
 type Filter = 'pending' | 'recent';
@@ -31,6 +32,7 @@ export function ApprovalsView({
   const {
     sessionGeneration,
     items,
+    recentItems,
     pendingCount,
     loading,
     incomplete,
@@ -50,24 +52,29 @@ export function ApprovalsView({
     setFilter('pending');
   }, [mx, sessionGeneration]);
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const recentCount = items.filter((item) => item.status !== 'pending').length;
+  const recentCount = recentItems.length;
   const visible = useMemo(() => {
     const query = search.trim().toLocaleLowerCase();
-    return items
-      .filter((item) =>
-        filter === 'pending' ? item.status === 'pending' : item.status !== 'pending'
-      )
+    const source =
+      filter === 'pending' ? items.filter((item) => item.status === 'pending') : recentItems;
+    return source
       .filter(
         (item) =>
           !query ||
-          [roomName(item.roomId), senderName(item), item.sender, item.body].some((value) =>
-            value.toLocaleLowerCase().includes(query)
-          )
+          [
+            roomName(item.roomId),
+            senderName(item),
+            item.sender,
+            item.body,
+            item.summary ?? '',
+          ].some((value) => value.toLocaleLowerCase().includes(query))
       )
       .sort((a, b) =>
-        filter === 'pending' ? a.expiresAt - b.expiresAt : b.originServerTs - a.originServerTs
+        filter === 'pending'
+          ? a.expiresAt - b.expiresAt
+          : (b.decidedAt ?? b.originServerTs) - (a.decidedAt ?? a.originServerTs)
       );
-  }, [items, filter, search, roomName, senderName]);
+  }, [items, recentItems, filter, search, roomName, senderName]);
   const handleDecision = (item: ApprovalInboxItem) => {
     if (!decided(item)) return;
     setAnnouncement(`Request in ${roomName(item.roomId)} resolved. Available in Recent.`);
@@ -154,8 +161,8 @@ export function ApprovalsView({
       )}
       {filter === 'recent' && (
         <Text size="T300" priority="300">
-          Recently observed requests that were decided by your account or whose approval window has
-          ended.
+          Decisions your account made, synced across devices. Inbox-only expired requests stay here
+          until they age out of recent room activity.
         </Text>
       )}
       {visible.length === 0 ? (
@@ -182,7 +189,7 @@ export function ApprovalsView({
               ? 'Try a different agent, room, or command.'
               : filter === 'pending'
               ? 'New Hermes approval requests will appear here as they arrive.'
-              : 'Decided and expired requests will appear here after they are observed.'}
+              : 'Decided approvals will appear here after you approve or deny a request.'}
           </Text>
         </div>
       ) : (
@@ -210,13 +217,15 @@ export function ApprovalsView({
                   <Text
                     className={css.Status}
                     size="T200"
-                    title={`Received ${new Date(item.originServerTs).toLocaleString()}`}
+                    title={
+                      item.decidedAt
+                        ? `Decided ${new Date(item.decidedAt).toLocaleString()}`
+                        : `Received ${new Date(item.originServerTs).toLocaleString()}`
+                    }
                   >
                     {item.status === 'pending'
                       ? remainingTime(item.expiresAt, now)
-                      : item.status === 'decided'
-                      ? 'Decided'
-                      : 'Expired'}
+                      : historyDecisionLabel(item.decision, item.status)}
                   </Text>
                   <Button
                     size="300"
@@ -253,14 +262,25 @@ export function ApprovalsView({
                 />
               ) : (
                 <Box direction="Column" gap="200" style={{ padding: config.space.S400 }}>
-                  <Text size="T300">{prompt.body}</Text>
-                  {prompt.commandPreview && (
+                  {item.summary ? (
+                    <Text size="T300" style={{ overflowWrap: 'anywhere', fontFamily: 'monospace' }}>
+                      {item.summary}
+                    </Text>
+                  ) : (
+                    <Text size="T300">{prompt.body}</Text>
+                  )}
+                  {prompt.commandPreview && !item.summary && (
                     <Text
                       size="T200"
                       priority="300"
                       style={{ overflowWrap: 'anywhere', fontFamily: 'monospace' }}
                     >
                       {prompt.commandPreview}
+                    </Text>
+                  )}
+                  {item.decidedAt && (
+                    <Text size="T200" priority="300">
+                      Decided {new Date(item.decidedAt).toLocaleString()}
                     </Text>
                   )}
                   <Text size="T200" priority="300">

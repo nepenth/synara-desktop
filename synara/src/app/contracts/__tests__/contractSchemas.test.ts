@@ -315,6 +315,27 @@ test('Later contract schema validates canonical fixtures and rejects non-canonic
   );
 });
 
+test('Agent approval history account-data schema validates fixtures', () => {
+  const schema = readJson<JsonSchema>(
+    'docs/contracts/synara-agent-approval-history-content.schema.json'
+  );
+  const fixtures = readJson<FlatFixtures>(
+    'docs/contracts/fixtures/synara-agent-approval-history-content.json'
+  );
+
+  assert.equal(
+    schema.$id,
+    'https://synara.local/contracts/synara-agent-approval-history-content.schema.json'
+  );
+  assert.deepEqual(schema.$defs?.SynaraAgentApprovalHistoryItem.properties?.decision?.enum, [
+    'approve_once',
+    'approve_always',
+    'deny',
+  ]);
+  assertValidFixtures(fixtures.valid, schema, 'approvalHistory.valid');
+  assertInvalidFixtures(fixtures.invalid, schema, 'approvalHistory.invalid');
+});
+
 test('Room notes account-data schema validates fixtures and runtime normalization', () => {
   const schema = readJson<JsonSchema>('docs/contracts/synara-room-notes-content.schema.json');
   const fixtures = readJson<NormalizationFixtures>(

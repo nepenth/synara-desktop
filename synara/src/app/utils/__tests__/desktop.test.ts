@@ -777,16 +777,19 @@ test('desktop notification payloads include routes for message, later, and agent
       title: 'Room',
       body: 'New inbox notification from Alice',
       route,
+      dismissKeys: [`room:${roomId}`],
     });
     await showDesktopNotification({
       title: 'Reminder',
       body: 'A saved reminder is due.',
       route,
+      dismissKeys: [`room:${roomId}`],
     });
     await showDesktopNotification({
       title: 'Approve command',
       body: 'Room: Run `npm test`',
       route,
+      dismissKeys: [`room:${roomId}`, `event:${eventId}`],
     });
   } finally {
     (globalThis as any).window = originalWindow;
@@ -800,6 +803,7 @@ test('desktop notification payloads include routes for message, later, and agent
           title: 'Room',
           body: 'New inbox notification from Alice',
           route,
+          dismissKeys: [`room:${roomId}`],
         },
       },
     },
@@ -810,6 +814,7 @@ test('desktop notification payloads include routes for message, later, and agent
           title: 'Reminder',
           body: 'A saved reminder is due.',
           route,
+          dismissKeys: [`room:${roomId}`],
         },
       },
     },
@@ -820,6 +825,7 @@ test('desktop notification payloads include routes for message, later, and agent
           title: 'Approve command',
           body: 'Room: Run `npm test`',
           route,
+          dismissKeys: [`room:${roomId}`, `event:${eventId}`],
         },
       },
     },

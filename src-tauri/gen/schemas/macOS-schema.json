@@ -369,6 +369,12 @@
           "markdownDescription": "Enables the desktop_diagnostics_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_dismiss_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-dismiss-notifications",
+          "markdownDescription": "Enables the desktop_dismiss_notifications command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_enable_spellcheck command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-enable-spellcheck",
@@ -541,6 +547,12 @@
           "type": "string",
           "const": "allow-matrix-agent-approval-decide",
           "markdownDescription": "Enables the matrix_agent_approval_decide command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_agent_approval_history_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-approval-history-snapshot",
+          "markdownDescription": "Enables the matrix_agent_approval_history_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_agent_approvals_list command without any pre-configured scope.",
@@ -1563,6 +1575,12 @@
           "markdownDescription": "Denies the desktop_diagnostics_status command without any pre-configured scope."
         },
         {
+          "description": "Denies the desktop_dismiss_notifications command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-dismiss-notifications",
+          "markdownDescription": "Denies the desktop_dismiss_notifications command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_enable_spellcheck command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-enable-spellcheck",
@@ -1735,6 +1753,12 @@
           "type": "string",
           "const": "deny-matrix-agent-approval-decide",
           "markdownDescription": "Denies the matrix_agent_approval_decide command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_agent_approval_history_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-approval-history-snapshot",
+          "markdownDescription": "Denies the matrix_agent_approval_history_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_agent_approvals_list command without any pre-configured scope.",

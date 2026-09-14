@@ -1,5 +1,6 @@
 //! Thin desktop adapters for the transport-neutral shared Core.
 
+pub(crate) mod agent_approval_history;
 pub(crate) mod auth_probes;
 pub(crate) mod backup_status;
 pub(crate) mod cross_signing_setup;

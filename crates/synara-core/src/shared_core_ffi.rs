@@ -178,8 +178,8 @@ use matrix_sdk_ui::notification_client::{
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
-    NativeImagePackUpdateSignal, NativeLaterSnapshot, NativeMDirectSnapshot,
+    NativeAccountDataWakeupKind, NativeGlobalImagePacksSnapshot, NativeImagePack,
+    NativeImagePackOwner, NativeImagePackUpdateSignal, NativeLaterSnapshot, NativeMDirectSnapshot,
     NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
     RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind, SynaraRoomNoteItem,
     SynaraRoomNoteItemKind,
@@ -3806,6 +3806,9 @@ impl SharedCore {
         let image_packs_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeImagePackUpdateSignal| {
+                if update.kind != NativeAccountDataWakeupKind::ImagePacks {
+                    return;
+                }
                 push_owner_update(&queue, "image_packs", update.session_generation, None);
             })
         };

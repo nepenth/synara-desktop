@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Persist decided agent approvals in `in.synara.agent_approval_history` account
+  data so the Approvals Recent tab survives restarts and syncs across devices.
+- Remove the redundant empty "Full approval prompt" details block from approval
+  cards; the Command block and the no-command fallback remain.
+- Dismiss Linux OS notifications when a room is focused or an agent-approval
+  decision is submitted (`desktop_dismiss_notifications`). macOS remains a no-op
+  for this command.
+
 - Make native room-timeline scrolling smoother: cache measured row heights,
   reserve media space, coalesce view deltas, and stick to the live tail in the
   same layout pass.
@@ -85,7 +93,7 @@
 - Stop Room Settings > Developer Tools from crashing on native rooms. The page
   assumed a js-sdk `currentState.events` map that native room projections do
   not provide, so opening the panel threw `undefined is not an object
-  (evaluating 'i.events.forEach')` before Room ID could be copied. Room ID is
+(evaluating 'i.events.forEach')` before Room ID could be copied. Room ID is
   now always visible on that page. Settings panels and routes also render a
   closeable error screen instead of React Router's default "Unexpected
   Application Error" page.
@@ -221,7 +229,6 @@
 - Preserve iOS room invalidations across temporary read-marker streams.
 - Allow local iOS sign-out after failed restore or remote push cleanup; revoke
   the current server session when reachable and remove persisted authentication.
-
 
 ## 2.1.26 - 2026-09-04
 
@@ -449,7 +456,7 @@
   the peer back as Verified after relaunch.
 - Opt-in iOS notification previews more reliably retain decrypted message
   content when available while preserving privacy-safe fallback text.
-- Added a Pop!_OS/Debian-family APT repository path that publishes the tagged
+- Added a Pop!\_OS/Debian-family APT repository path that publishes the tagged
   `.deb` and signed flat repository metadata alongside every production
   release.
 - Updated Linux update guidance to cover APT as well as pacman/paru, with

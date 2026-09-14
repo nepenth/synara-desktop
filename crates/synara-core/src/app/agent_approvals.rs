@@ -159,6 +159,113 @@ pub fn plan_agent_approval<'a, 'b>(
     })
 }
 
+pub const AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS: usize = 240;
+
+fn collapse_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn first_useful_command_line(block: &str) -> Option<String> {
+    block.lines().find_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let lowered = trimmed.to_ascii_lowercase();
+        if lowered == "code" || lowered == "copy" {
+            return None;
+        }
+        Some(collapse_whitespace(trimmed))
+    })
+}
+
+fn extract_fenced_command_preview(body: &str) -> Option<String> {
+    let start = body.find("```")?;
+    let after_ticks = body.get(start + 3..)?;
+    let after_info = after_ticks.split_once('\n')?.1;
+    let block = after_info.split("```").next().unwrap_or(after_info);
+    first_useful_command_line(block)
+}
+
+fn extract_labeled_command_preview(body: &str) -> Option<String> {
+    let mut lines = body.lines().peekable();
+    while let Some(line) = lines.next() {
+        let lowered = line.trim().to_ascii_lowercase();
+        if lowered != "code" && lowered != "copy" {
+            continue;
+        }
+        for candidate in lines.by_ref() {
+            let trimmed = candidate.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let lowered = trimmed.to_ascii_lowercase();
+            if lowered == "code" || lowered == "copy" {
+                continue;
+            }
+            if trimmed.to_ascii_lowercase().starts_with("reason:")
+                || trimmed.to_ascii_lowercase().starts_with("reply ")
+            {
+                break;
+            }
+            return Some(collapse_whitespace(trimmed));
+        }
+        break;
+    }
+    None
+}
+
+fn extract_reason_preview(body: &str) -> Option<String> {
+    for line in body.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed
+            .strip_prefix("Reason:")
+            .or_else(|| trimmed.strip_prefix("reason:"))
+        else {
+            continue;
+        };
+        let preview = collapse_whitespace(rest);
+        if !preview.is_empty() {
+            return Some(preview);
+        }
+    }
+    None
+}
+
+fn extract_fallback_preview(body: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            return None;
+        }
+        let lowered = trimmed.to_ascii_lowercase();
+        if APPROVAL_HEADINGS
+            .iter()
+            .any(|heading| lowered.contains(heading))
+            || lowered.starts_with("reply ")
+            || lowered == "code"
+            || lowered == "copy"
+        {
+            return None;
+        }
+        Some(collapse_whitespace(trimmed))
+    })
+}
+
+/// Bounded account-data summary: command preview line, else Reason, else a
+/// non-heading line. Never the full command body.
+pub fn agent_approval_history_summary(body: &str) -> String {
+    let preview = extract_fenced_command_preview(body)
+        .or_else(|| extract_labeled_command_preview(body))
+        .or_else(|| extract_reason_preview(body))
+        .or_else(|| extract_fallback_preview(body))
+        .unwrap_or_default();
+    preview
+        .chars()
+        .take(AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,6 +425,35 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plan.status, AgentApprovalDecisionStatus::Applied);
+    }
+
+    #[test]
+    fn history_summary_prefers_fenced_command_preview_line() {
+        assert_eq!(
+            agent_approval_history_summary(HERMES_MATRIX_PROMPT),
+            "rm -rf /tmp/test"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\nCode\nrm file\nReason: do not store this whole body"
+            ),
+            "rm file"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\nReason: rotate the token\nReply !approve to execute"
+            ),
+            "rotate the token"
+        );
+        let long = format!("```\n{}\n```", "x".repeat(300));
+        assert_eq!(
+            agent_approval_history_summary(&format!(
+                "Approval Required: Dangerous Command\n{long}"
+            ))
+            .chars()
+            .count(),
+            AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS
+        );
     }
 
     #[test]

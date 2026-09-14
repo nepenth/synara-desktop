@@ -31,7 +31,8 @@ use super::{
     NativeImagePack, NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
     NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
     RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem, SynaraRoomNotesContent,
-    EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE, ROOM_NOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
+    AGENT_APPROVAL_HISTORY_EVENT_TYPE, EMOTE_ROOMS_EVENT_TYPE, ROOM_EMOTES_EVENT_TYPE,
+    ROOM_NOTES_EVENT_TYPE, USER_EMOTES_EVENT_TYPE,
 };
 
 const ROOM_NOTES_PENDING_PROJECTION_TTL: Duration = Duration::from_secs(30);
@@ -166,10 +167,18 @@ impl Drop for RoomNotesMutationProjectionGuard {
 /// Shell-supplied sink for image-pack wakeups.
 pub type ImagePackUpdateEmit = Arc<dyn Fn(NativeImagePackUpdateSignal) + Send + Sync>;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum NativeAccountDataWakeupKind {
+    ImagePacks,
+    AgentApprovalHistory,
+}
+
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeImagePackUpdateSignal {
     pub session_generation: u64,
+    pub kind: NativeAccountDataWakeupKind,
 }
 
 fn user_emotes_type() -> GlobalAccountDataEventType {
@@ -416,8 +425,17 @@ impl NativeImagePackOwner {
                         lock_room_notes_projection(&projection)
                             .observe_synchronized_event(content, Instant::now());
                     }
+                    if event_type == AGENT_APPROVAL_HISTORY_EVENT_TYPE {
+                        emit(NativeImagePackUpdateSignal {
+                            session_generation,
+                            kind: NativeAccountDataWakeupKind::AgentApprovalHistory,
+                        });
+                    }
                     if is_image_pack_account_data_type(&event_type) {
-                        emit(NativeImagePackUpdateSignal { session_generation });
+                        emit(NativeImagePackUpdateSignal {
+                            session_generation,
+                            kind: NativeAccountDataWakeupKind::ImagePacks,
+                        });
                     }
                 }
             });
@@ -428,7 +446,10 @@ impl NativeImagePackOwner {
             async move {
                 let event_type = event.event_type().to_string();
                 if is_image_pack_room_state_type(&event_type) {
-                    emit(NativeImagePackUpdateSignal { session_generation });
+                    emit(NativeImagePackUpdateSignal {
+                        session_generation,
+                        kind: NativeAccountDataWakeupKind::ImagePacks,
+                    });
                 }
             }
         });
