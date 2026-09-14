@@ -41,7 +41,7 @@ export function ApprovalsView({
   const {
     sessionGeneration,
     items,
-    recentItems,
+    recentItems = [],
     historyReady,
     pendingCount,
     loading,
