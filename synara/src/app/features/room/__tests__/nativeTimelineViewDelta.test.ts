@@ -199,6 +199,129 @@ test('coalesced batches apply in order and fail closed on a revision gap', () =>
   );
 });
 
+test('coalesced batches sort unordered revisions and skip stale duplicates', () => {
+  const current = baseSnapshot();
+  const outOfOrder = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [],
+      pagination: { backward: 'exhausted', forward: 'available' },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      pagination: { backward: 'loading', forward: 'available' },
+    },
+  ]);
+  assert.ok(outOfOrder);
+  assert.equal(outOfOrder.revision, 5);
+  assert.equal(outOfOrder.pagination.backward, 'exhausted');
+  assert.equal(outOfOrder.rows, current.rows);
+
+  const withDuplicate = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: false },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: true },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [],
+      pagination: { backward: 'exhausted', forward: 'available' },
+    },
+  ]);
+  assert.ok(withDuplicate);
+  assert.equal(withDuplicate.revision, 5);
+  assert.equal(withDuplicate.readState.isMarkedUnread, false);
+  assert.equal(withDuplicate.pagination.backward, 'exhausted');
+});
+
+test('metadata-only then ops in one coalesced flush preserve then replace rows', () => {
+  const current = baseSnapshot();
+  current.rows = [
+    {
+      kind: 'message',
+      itemId: 'm1',
+      eventId: '$m1:example.org',
+      senderId: '@a:example.org',
+      senderName: 'A',
+      originServerTs: 1,
+      body: 'hello',
+      edited: false,
+      capabilities: {
+        react: true,
+        reply: true,
+        edit: false,
+        redact: true,
+        report: true,
+        pin: true,
+        forward: true,
+        vote: false,
+        declineCall: false,
+      },
+    },
+  ];
+  const appended = {
+    ...current.rows[0],
+    itemId: 'm2',
+    eventId: '$m2:example.org',
+    body: 'tail',
+  };
+  const next = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: false },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [{ op: 'push_back', row: appended }],
+    },
+  ]);
+  assert.ok(next);
+  assert.equal(next.revision, 5);
+  assert.equal(next.readState.isMarkedUnread, false);
+  assert.equal(next.rows.length, 2);
+  assert.equal(next.rows[0], current.rows[0]);
+  assert.equal(
+    next.rows[1]?.kind === 'message' ? next.rows[1].eventId : undefined,
+    '$m2:example.org'
+  );
+});
+
 test('applies pagination and pin-list metadata and rejects empty batches', () => {
   const next = applyNativeTimelineViewDelta(baseSnapshot(), {
     schemaVersion: 1,
@@ -351,6 +474,8 @@ test('live stream deltas coalesce to one React state update per animation frame'
   assert.match(source, /requestAnimationFrame\(flushCoalescedBatches\)/);
   assert.match(source, /batch.revision <= next.revision/);
   assert.match(source, /cancelAnimationFrame\(coalesceFrame\)/);
+  assert.match(source, /active.sort\(\(left, right\) => left.revision - right.revision\)/);
+  assert.match(source, /if \(next !== snapshotRef.current\) \{\s*snapshotRef.current = next;/);
 });
 
 test('follow-live accepts a placement change at the same SDK revision', () => {

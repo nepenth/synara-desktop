@@ -90,6 +90,7 @@ import {
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
   nativeTimelineMeasuredSize,
+  nativeTimelineMeasuredSizeIdentity,
   nativeTimelineMeasuredSizeKey,
   nativeVisibleReadFrontier,
   latestNativeReadEventId,
@@ -234,6 +235,12 @@ const mediaStyle = (
   return { maxWidth, maxHeight, width: 'auto', height: 'auto' };
 };
 
+const rowReactionCount = (row: NativeTimelineViewRow): number => {
+  if (row.kind === 'sticker') return row.reactions?.length ?? 0;
+  if ('reactions' in row) return row.reactions?.length ?? 0;
+  return 0;
+};
+
 const nativeTimelineRowSizeHint = (
   row: NativeTimelineViewRow,
   grouped: boolean
@@ -241,6 +248,7 @@ const nativeTimelineRowSizeHint = (
   kind: row.kind,
   grouped,
   bodyLineCount: row.kind === 'message' ? Math.max(1, row.body.split('\n').length) : undefined,
+  bodyLength: row.kind === 'message' ? row.body.length : undefined,
   hasFormattedCode:
     row.kind === 'message' && Boolean(row.formattedBody && row.formattedBody.includes('<pre')),
   messageType: row.kind === 'message' ? row.messageType : undefined,
@@ -256,7 +264,24 @@ const nativeTimelineRowSizeHint = (
       : row.kind === 'message'
       ? row.media?.height
       : undefined,
+  reactionCount: rowReactionCount(row),
 });
+
+const measuredSizeKeyForRow = (
+  roomId: string,
+  rows: readonly NativeTimelineViewRow[],
+  index: number
+): string | undefined => {
+  const row = rows[index];
+  if (!row) return undefined;
+  return nativeTimelineMeasuredSizeKey(
+    roomId,
+    rowKey(row),
+    nativeTimelineMeasuredSizeIdentity(
+      nativeTimelineRowSizeHint(row, isGroupedWithPrevious(rows[index - 1], row))
+    )
+  );
+};
 
 const hasMessageSurface = (kind: NativeTimelineViewRow['kind']): boolean =>
   kind === 'message' ||
@@ -2047,9 +2072,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
   const pendingBackwardGrowRef = useRef(false);
+  const lastParkedStartRef = useRef(-1);
+  const lastClientHeightRef = useRef(0);
   const userInitiatedScrollRef = useRef(false);
   const followingLiveRef = useRef(false);
   const programmaticScrollUntilRef = useRef(0);
+  const lastDistanceFromBottomRef = useRef(Number.POSITIVE_INFINITY);
   const smoothScrollActiveRef = useRef(false);
   const lastTotalSizeRef = useRef(0);
   const [hideMembershipEvents] = useSetting(settingsAtom, 'hideMembershipEvents');
@@ -2064,6 +2092,21 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       setAtLiveBottom(atBottom);
       if (atBottom && readyState?.selectedPosition.kind === 'live_bottom') {
         followingLiveRef.current = true;
+      }
+      const resized =
+        lastClientHeightRef.current > 0 && element.clientHeight !== lastClientHeightRef.current;
+      lastClientHeightRef.current = element.clientHeight;
+      // A follow-live viewport that shrinks would otherwise leave the tail. Do
+      // not treat a user scroll (same clientHeight) as a resize.
+      if (resized && followingLiveRef.current) {
+        const nextTop = Math.max(0, element.scrollHeight - element.clientHeight);
+        if (Math.abs(element.scrollTop - nextTop) > 0.5) {
+          programmaticScrollUntilRef.current = Math.max(
+            programmaticScrollUntilRef.current,
+            performance.now() + 48
+          );
+          element.scrollTop = nextTop;
+        }
       }
     });
   }, [roomId, timelineReady, readyState?.selectedPosition.kind]);
@@ -2089,14 +2132,22 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   );
   const rowsRef = useRef(rows);
   rowsRef.current = rows;
+  const rowIndexByKey = useMemo(() => {
+    const map = new Map<string, number>();
+    for (let index = 0; index < rows.length; index += 1) {
+      map.set(rowKey(rows[index]), index);
+    }
+    return map;
+  }, [rows]);
+  const rowIndexByKeyRef = useRef(rowIndexByKey);
+  rowIndexByKeyRef.current = rowIndexByKey;
   const estimateSize = useCallback(
     (index: number) => {
       const current = rowsRef.current;
       const row = current[index];
       if (!row) return NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX;
-      const measured = nativeTimelineMeasuredSize(
-        nativeTimelineMeasuredSizeKey(roomId, rowKey(row))
-      );
+      const measuredKey = measuredSizeKeyForRow(roomId, current, index);
+      const measured = measuredKey ? nativeTimelineMeasuredSize(measuredKey) : undefined;
       if (measured) return measured;
       return estimateNativeTimelineRowSize(
         nativeTimelineRowSizeHint(row, isGroupedWithPrevious(current[index - 1], row))
@@ -2109,13 +2160,18 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       const measured = entry?.borderBoxSize?.[0]?.blockSize
         ? Math.round(entry.borderBoxSize[0].blockSize)
         : Math.round(element.getBoundingClientRect().height);
-      const index = Number(element.dataset.index);
-      const row = Number.isInteger(index) ? rowsRef.current[index] : undefined;
+      const current = rowsRef.current;
+      const keyed = element.dataset.nativeTimelineRowKey;
+      const fromKey = keyed !== undefined ? rowIndexByKeyRef.current.get(keyed) : undefined;
+      // A recycled node can fire ResizeObserver after the keyed row left the
+      // window. Falling back to dataset.index would cache this height on the
+      // row that now occupies that slot.
+      if (keyed !== undefined && fromKey === undefined) return measured;
+      const index = fromKey ?? Number(element.dataset.index);
+      const row = Number.isInteger(index) ? current[index] : undefined;
       if (row && measured > 0) {
-        rememberNativeTimelineMeasuredSize(
-          nativeTimelineMeasuredSizeKey(roomId, rowKey(row)),
-          measured
-        );
+        const measuredKey = measuredSizeKeyForRow(roomId, current, index);
+        if (measuredKey) rememberNativeTimelineMeasuredSize(measuredKey, measured);
       }
       return measured;
     },
@@ -2151,6 +2207,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const visible = virtualizer.getVirtualItems().find((item) => item.end > scrollEl.scrollTop);
     const row = visible ? rows[visible.index] : undefined;
     if (!visible || !row) return;
+    lastParkedStartRef.current = visible.start;
     setNativeTimelineViewport(roomId, {
       atBottom: false,
       anchor: {
@@ -2184,10 +2241,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     userInitiatedScrollRef.current = false;
     followingLiveRef.current = false;
     programmaticScrollUntilRef.current = 0;
+    lastDistanceFromBottomRef.current = Number.POSITIVE_INFINITY;
     smoothScrollActiveRef.current = false;
     initialPlacementRef.current = undefined;
     lastTotalSizeRef.current = 0;
     pendingBackwardGrowRef.current = false;
+    lastParkedStartRef.current = -1;
+    lastClientHeightRef.current = 0;
     firstRenderedRowRef.current = undefined;
     liveTailSubmittedKeyRef.current = undefined;
     followLiveSubmittedKeyRef.current = undefined;
@@ -2332,17 +2392,21 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const scrollHandlersRef = useRef<{ onScroll: () => void; onUserInput: () => void } | undefined>(
     undefined
   );
+  const paginate = controller.paginate;
+  const readyStateRef = useRef(readyState);
+  readyStateRef.current = readyState;
+  const hasReadyState = readyState !== undefined;
   useEffect(() => {
-    if (!readyState) {
+    if (!hasReadyState) {
       scrollHandlersRef.current = undefined;
       return undefined;
     }
     const scrollEl = scrollRef.current;
     if (!scrollEl) return undefined;
     const paginateAtEdge = () => {
-      if (paginationInFlightRef.current) return;
-      if (!userInitiatedScrollRef.current) return;
-      const { snapshot } = readyState;
+      const current = readyStateRef.current;
+      if (!current || paginationInFlightRef.current || !userInitiatedScrollRef.current) return;
+      const { snapshot } = current;
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const direction =
         scrollEl.scrollTop <= 96 &&
@@ -2359,8 +2423,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       paginationInFlightRef.current = direction;
       if (direction === 'backwards') pendingBackwardGrowRef.current = true;
       setActionError(undefined);
-      void controller
-        .paginate(direction)
+      void paginate(direction)
         .catch((error) => {
           setActionError(
             error instanceof Error ? error.message : 'Native timeline pagination failed.'
@@ -2371,24 +2434,40 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         });
     };
     const onScroll = () => {
-      saveViewport();
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
+      const locked = performance.now() < programmaticScrollUntilRef.current;
+      // Programmatic prepend/stick scrolls must not overwrite the parked
+      // history anchor; the next prepend would then restore the in-flight
+      // geometry instead of the user's row.
+      if (!locked) saveViewport();
       setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
-      if (performance.now() < programmaticScrollUntilRef.current) {
-        // Programmatic sticks land within a few pixels of the bottom. A scroll
-        // that ends far from it inside the lock window is a real departure and
-        // must release follow-live now, or the next append snaps the user back.
+      if (locked) {
+        // Programmatic sticks land within a few pixels of the bottom. A
+        // far jump inside the lock is still a real departure. A small move
+        // away from a tail we were already stuck to (scrollIntoView, focus)
+        // is also a departure — in-flight scrollToIndex starts far from
+        // the tail (lastDistance is Infinity until we have been at bottom).
         if (distanceFromBottom > 96) followingLiveRef.current = false;
+        else if (
+          followingLiveRef.current &&
+          lastDistanceFromBottomRef.current <= 8 &&
+          distanceFromBottom > 8
+        ) {
+          followingLiveRef.current = false;
+        }
+        lastDistanceFromBottomRef.current = distanceFromBottom;
         return;
       }
+      lastDistanceFromBottomRef.current = distanceFromBottom;
       // Only leaving the bottom releases follow-live. A scroll that ends at the
       // bottom (the virtualizer re-measuring rows above the viewport after
       // fonts or media load, or a late programmatic placement) keeps the
       // ownership the placement established; a live position re-acquires it.
       followingLiveRef.current =
         atBottom &&
-        (readyState.selectedPosition.kind === 'live_bottom' || followingLiveRef.current);
+        (readyStateRef.current?.selectedPosition.kind === 'live_bottom' ||
+          followingLiveRef.current);
       userInitiatedScrollRef.current = true;
       paginateAtEdge();
     };
@@ -2406,9 +2485,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     scrollHandlersRef.current = { onScroll, onUserInput };
     saveViewport();
     return () => {
-      saveViewport();
+      if (performance.now() >= programmaticScrollUntilRef.current) saveViewport();
     };
-  }, [controller, readyState, saveViewport]);
+  }, [hasReadyState, paginate, saveViewport]);
 
   // The DOM listeners are bound once per mounted viewport and delegate to the
   // latest handlers above. Re-subscribing on every render raced the
@@ -2417,7 +2496,6 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   // added during dispatch is skipped for the in-flight event. The first scroll
   // of a gesture was lost, `followingLiveRef` stayed true, and the next
   // snapshot snapped a single wheel step back to the live tail.
-  const hasReadyState = readyState !== undefined;
   useEffect(() => {
     if (!hasReadyState) return undefined;
     const scrollEl = scrollRef.current;
@@ -2427,12 +2505,16 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     scrollEl.addEventListener('wheel', onUserInput, { passive: true });
     scrollEl.addEventListener('pointerdown', onUserInput, { passive: true });
     scrollEl.addEventListener('keydown', onUserInput);
+    // Focus-induced scrollIntoView does not fire wheel/pointer/key. Treat it
+    // as user input so the 48ms stick lock cannot yank the viewport back.
+    scrollEl.addEventListener('focusin', onUserInput);
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       scrollEl.removeEventListener('scroll', onScroll);
       scrollEl.removeEventListener('wheel', onUserInput);
       scrollEl.removeEventListener('pointerdown', onUserInput);
       scrollEl.removeEventListener('keydown', onUserInput);
+      scrollEl.removeEventListener('focusin', onUserInput);
     };
   }, [hasReadyState, roomId]);
 
@@ -2457,6 +2539,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const savedViewport = initialPlacement
       ? openingViewport ?? nativeTimelineViewports.get(roomId)
       : nativeTimelineViewports.get(roomId);
+    const parkedIndex = savedViewport?.anchor ? findAnchorIndex(rows, savedViewport.anchor) : -1;
     const firstRow = rowKey(rows[0]);
     const prepended =
       firstRenderedRowRef.current !== undefined && firstRenderedRowRef.current !== firstRow;
@@ -2552,6 +2635,18 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         });
         pendingBackwardGrowRef.current = false;
         return () => cancelAnimationFrame(frame);
+      }
+    }
+
+    if (!prepended && selectedPosition.kind === 'live_bottom' && parkedIndex >= 0) {
+      const parkedItem = virtualizer.getVirtualItems().find((item) => item.index === parkedIndex);
+      const previousStart = lastParkedStartRef.current;
+      if (parkedItem) {
+        if (previousStart >= 0 && parkedItem.start - previousStart > 0.5) {
+          const scrollEl = scrollRef.current;
+          if (scrollEl) scrollEl.scrollTop += parkedItem.start - previousStart;
+        }
+        lastParkedStartRef.current = parkedItem.start;
       }
     }
 
@@ -2718,6 +2813,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                   key={virtualItem.key}
                   ref={virtualizer.measureElement}
                   data-index={virtualItem.index}
+                  data-native-timeline-row-key={rowKey(row)}
                   data-native-timeline-row-kind={row.kind}
                   data-native-timeline-event-id={rowEventId(row)}
                   style={{

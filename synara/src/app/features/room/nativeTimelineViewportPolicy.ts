@@ -193,17 +193,19 @@ export const nativeVisibleReadFrontier = (
 export const NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX = 64;
 export const NATIVE_TIMELINE_MEDIA_MAX_PX = 480;
 export const NATIVE_TIMELINE_STICKER_MAX_PX = 256;
-const NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT = 4000;
+export const NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT = 4000;
 const nativeTimelineMeasuredSizes = new Map<string, number>();
 
 export type NativeTimelineRowSizeHint = {
   kind: string;
   grouped: boolean;
   bodyLineCount?: number;
+  bodyLength?: number;
   hasFormattedCode?: boolean;
   messageType?: string;
   mediaWidth?: number;
   mediaHeight?: number;
+  reactionCount?: number;
 };
 
 /** Scale Matrix `info.w/h` into the presenter media box so image loads do not reflow. */
@@ -232,8 +234,24 @@ export const reservedNativeTimelineMediaSize = (
   };
 };
 
-export const nativeTimelineMeasuredSizeKey = (roomId: string, rowKey: string): string =>
-  `${roomId}\0${rowKey}`;
+export const nativeTimelineMeasuredSizeIdentity = (hint: NativeTimelineRowSizeHint): string =>
+  [
+    hint.kind,
+    hint.grouped ? '1' : '0',
+    hint.bodyLineCount ?? '',
+    hint.bodyLength ?? '',
+    hint.hasFormattedCode ? '1' : '0',
+    hint.messageType ?? '',
+    hint.mediaWidth ?? '',
+    hint.mediaHeight ?? '',
+    hint.reactionCount ?? '',
+  ].join(':');
+
+export const nativeTimelineMeasuredSizeKey = (
+  roomId: string,
+  rowKey: string,
+  sizeIdentity?: string
+): string => (sizeIdentity ? `${roomId}\0${rowKey}\0${sizeIdentity}` : `${roomId}\0${rowKey}`);
 
 export const rememberNativeTimelineMeasuredSize = (key: string, size: number): void => {
   if (!Number.isFinite(size) || size <= 0) return;

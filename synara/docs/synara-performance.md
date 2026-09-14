@@ -58,14 +58,20 @@ appends while the user is either following the tail or parked in history.
 
 Current tactics:
 
-- Kind-aware `estimateSize` plus a keyed measured-height cache so TanStack does
-  not fall back to a constant 64px after `rows` array replacement.
+- Kind-aware `estimateSize` plus a keyed measured-height cache (room, row key,
+  and a size identity covering grouping, body, media, and reactions) so TanStack
+  does not reuse a stale height after an edit or fall back to a constant 64px
+  after `rows` array replacement.
 - Intrinsic media boxes from Matrix `info.w/h` so image/video loads do not
   reflow already-painted rows.
-- Same-frame coalescing of native view deltas, and metadata-only batches that
-  keep the existing `rows` array identity.
+- Same-frame coalescing of native view deltas in revision order (stale revisions
+  skipped, true gaps fail closed while keeping a successful prefix), and
+  metadata-only batches that keep the existing `rows` array identity.
 - Follow-live sticks with `scrollTop = scrollHeight - clientHeight` in the same
   layout pass that grows the spacer, instead of a later `scrollToIndex(end)`.
+  A small move away from an already-stuck tail during the programmatic lock
+  (focus/`scrollIntoView`) releases follow-live; in-flight viewport saves are
+  skipped so prepend anchoring is not overwritten.
 - Bottom observation and live-read/follow-live attempts are rAF-batched; the
   presenter does not attach extra subtree MutationObservers while scrolling.
 

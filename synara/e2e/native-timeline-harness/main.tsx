@@ -312,6 +312,14 @@ if (params.has('nativeEvents')) {
   });
 }
 
+const dispatchBatch = (batch: NativeTimelineViewDeltaBatch) => {
+  for (const [id, listener] of eventListeners) {
+    if (listener.event === 'matrix-timeline-view-updated') {
+      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
+    }
+  }
+};
+
 const emitActiveBatch = (
   build: (current: NativeTimelineViewSnapshot, streamId: string) => NativeTimelineViewDeltaBatch
 ) => {
@@ -321,11 +329,7 @@ const emitActiveBatch = (
     if (!next) continue;
     snapshots.set(streamId, next);
     snapshot = next;
-    for (const [id, listener] of eventListeners) {
-      if (listener.event === 'matrix-timeline-view-updated') {
-        eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
-      }
-    }
+    dispatchBatch(batch);
   }
 };
 
@@ -362,6 +366,25 @@ const api = {
       ops: [{ op: 'reset', rows: [...newRows, ...current.rows] }],
     }));
   },
+  prependMediaWithoutInfo(count = 8) {
+    const newRows = Array.from({ length: count }, () => {
+      const row = makeRow(--historyIndex);
+      return {
+        ...row,
+        messageType: 'image' as const,
+        media: { handleId: `missing-media:${row.itemId}` },
+      };
+    }).reverse();
+    rows = [...newRows, ...rows];
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [{ op: 'reset', rows: [...newRows, ...current.rows] }],
+    }));
+  },
   metadataPulse() {
     emitActiveBatch((current, streamId) => ({
       schemaVersion: 1,
@@ -372,6 +395,209 @@ const api = {
       ops: [],
       readState: { ...current.readState },
     }));
+  },
+  emitDeltaFlood(count = 130) {
+    for (let index = 0; index < count; index += 1) {
+      emitActiveBatch((current, streamId) => ({
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [],
+        readState: { ...current.readState },
+      }));
+    }
+  },
+  outOfOrderLiveAppends() {
+    const rowA = makeRow(++sequence);
+    const rowB = makeRow(++sequence);
+    rows.push(rowA, rowB);
+    for (const [streamId, current] of snapshots) {
+      const first: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [{ op: 'push_back', row: rowA }],
+      };
+      const second: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 2,
+        ops: [{ op: 'push_back', row: rowB }],
+      };
+      const withFirst = applyNativeTimelineViewDelta(current, first);
+      const withSecond = withFirst ? applyNativeTimelineViewDelta(withFirst, second) : undefined;
+      if (!withSecond) continue;
+      snapshots.set(streamId, withSecond);
+      snapshot = withSecond;
+      dispatchBatch(second);
+      dispatchBatch(first);
+    }
+  },
+  emitRevisionGap() {
+    const row = makeRow(++sequence);
+    rows.push(row);
+    for (const [streamId, current] of snapshots) {
+      dispatchBatch({
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 2,
+        ops: [{ op: 'push_back', row }],
+      });
+    }
+  },
+  metadataThenOps() {
+    const row = makeRow(++sequence);
+    rows.push(row);
+    for (const [streamId, current] of snapshots) {
+      const meta: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [],
+        readState: { ...current.readState, isMarkedUnread: false },
+      };
+      const ops: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 2,
+        ops: [{ op: 'push_back', row }],
+      };
+      const withMeta = applyNativeTimelineViewDelta(current, meta);
+      const withOps = withMeta ? applyNativeTimelineViewDelta(withMeta, ops) : undefined;
+      if (!withOps) continue;
+      snapshots.set(streamId, withOps);
+      snapshot = withOps;
+      dispatchBatch(meta);
+      dispatchBatch(ops);
+    }
+  },
+  growEdit(eventId = '$50') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex(
+        (row) => 'eventId' in row && row.eventId === eventId && row.kind === 'message'
+      );
+      const row = index >= 0 ? current.rows[index] : undefined;
+      if (!row || row.kind !== 'message') {
+        return {
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId,
+          revision: current.revision + 1,
+          ops: [],
+          readState: { ...current.readState },
+        };
+      }
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [
+          {
+            op: 'set',
+            index,
+            row: {
+              ...row,
+              edited: true,
+              body: `${row.body}\n${Array.from(
+                { length: 12 },
+                (_, line) => `Grown edit ${line}.`
+              ).join('\n')}`,
+            },
+          },
+        ],
+      };
+    });
+  },
+  addReaction(eventId = '$50') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex(
+        (row) => 'eventId' in row && row.eventId === eventId && row.kind === 'message'
+      );
+      const row = index >= 0 ? current.rows[index] : undefined;
+      if (!row || row.kind !== 'message') {
+        return {
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId,
+          revision: current.revision + 1,
+          ops: [],
+          readState: { ...current.readState },
+        };
+      }
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [
+          {
+            op: 'set',
+            index,
+            row: {
+              ...row,
+              reactions: [...(row.reactions ?? []), { key: '✅', count: 1, own: true }],
+            },
+          },
+        ],
+      };
+    });
+  },
+  insertUngroupedHeader(eventId = '$50') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex(
+        (row) => 'eventId' in row && row.eventId === eventId && row.kind === 'message'
+      );
+      if (index < 0) {
+        return {
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId,
+          revision: current.revision + 1,
+          ops: [],
+          readState: { ...current.readState },
+        };
+      }
+      const divider = {
+        kind: 'date_separator' as const,
+        itemId: `$divider-${current.revision}`,
+        timestampMs: 1_700_000_000_000,
+      };
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [{ op: 'insert', index, row: divider }],
+      };
+    });
+  },
+  scrollEventIntoView(eventId: string) {
+    document
+      .querySelector<HTMLElement>(`[data-native-timeline-event-id="${eventId}"]`)
+      ?.scrollIntoView({ block: 'center', inline: 'nearest' });
+  },
+  resizeTimeline(height: number) {
+    const el = document.getElementById('native-timeline');
+    if (el) el.style.height = `${height}px`;
   },
   edit() {
     rows = rows.map((row, index) =>

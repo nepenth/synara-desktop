@@ -421,13 +421,19 @@ export const applyNativeTimelineViewDelta = (
   };
 };
 
-/** Apply several consecutive stream batches, failing closed on the first gap. */
+/**
+ * Apply several stream batches in revision order. Stale/duplicate revisions are
+ * skipped; a missing revision is still a gap and fails closed rather than guessed.
+ */
 export const applyNativeTimelineViewDeltaBatches = (
   snapshot: NativeTimelineViewSnapshot,
   batches: readonly NativeTimelineViewDeltaBatch[]
 ): NativeTimelineViewSnapshot | undefined => {
+  const sorted = [...batches].sort((left, right) => left.revision - right.revision);
   let current: NativeTimelineViewSnapshot | undefined = snapshot;
-  for (const batch of batches) {
+  for (const batch of sorted) {
+    if (!current) return undefined;
+    if (batch.revision <= current.revision) continue;
     current = applyNativeTimelineViewDelta(current, batch);
     if (!current) return undefined;
   }
@@ -1047,14 +1053,25 @@ export const useNativeTimelineView = (
       coalesceQueued = [];
       if (disposed || queued.length === 0) return;
       let next = snapshotRef.current;
+      const active: NativeTimelineViewDeltaBatch[] = [];
       for (const batch of queued) {
         if (batch.streamId !== streamIdRef.current || !next) {
           pendingOpenRef.current?.add(batch);
           continue;
         }
-        if (batch.revision <= next.revision) continue;
+        active.push(batch);
+      }
+      // Same-frame Tauri events can arrive unordered. Apply in revision order
+      // so a later-then-earlier pair is not a false gap. Keep a successful
+      // prefix if a true gap follows, so a later fill can recover.
+      active.sort((left, right) => left.revision - right.revision);
+      for (const batch of active) {
+        if (!next || batch.revision <= next.revision) continue;
         const applied = applyNativeTimelineViewDelta(next, batch);
         if (!applied) {
+          if (next !== snapshotRef.current) {
+            snapshotRef.current = next;
+          }
           setState({
             status: 'error',
             error: new Error('Native timeline stream lost synchronization.'),
