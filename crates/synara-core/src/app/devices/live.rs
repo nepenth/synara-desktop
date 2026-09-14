@@ -27,7 +27,7 @@ use crate::app::room_keys::{
 use super::{
     format_ed25519_fingerprint, project_native_device_trust, sort_native_device_summaries,
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge, NativeDeviceDeleteResult,
-    NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrustSignals,
+    NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust, NativeDeviceTrustSignals,
     NativeOwnDeviceVerification,
 };
 
@@ -433,6 +433,22 @@ impl Drop for NativeDeviceOwner {
     }
 }
 
+/// Homeserver sessions without a matching crypto device: `NoEncryption` only
+/// after the crypto store answered. A failed/not-yet-ready store must not
+/// paint every session as "Not encrypted" on first load.
+fn trust_when_crypto_device_absent(crypto_store_loaded: bool) -> NativeDeviceTrust {
+    if crypto_store_loaded {
+        project_native_device_trust(NativeDeviceTrustSignals {
+            has_crypto_device: false,
+            is_dehydrated: false,
+            is_verified_with_cross_signing: false,
+            is_verified: false,
+        })
+    } else {
+        NativeDeviceTrust::Unverified
+    }
+}
+
 /// Mirror of the SDK's `has_devices_to_verify_against` predicate over an
 /// already-fetched local device set: signed by the owner's cross-signing key,
 /// Olm-capable, and not dehydrated. Used only when the authority `/keys/query`
@@ -541,6 +557,7 @@ pub async fn snapshot(
     // Crypto trust enrichment may be temporarily unavailable while a fresh
     // store is still processing device keys; do not erase valid sessions in
     // that case or the user loses the only path to target verification.
+    let crypto_store_loaded = crypto_devices.is_ok();
     let crypto_devices = crypto_devices.ok();
 
     let mut devices = server_devices
@@ -556,7 +573,8 @@ pub async fn snapshot(
                         // Cross-signing is `Verified`. Direct SAS / local trust
                         // without a signature chain is `VerifiedLocallyOnly` so
                         // a completed SAS sheet does not render the peer as
-                        // unverified. Missing crypto devices are `NoEncryption`.
+                        // unverified. Missing crypto devices are `NoEncryption`
+                        // only when the crypto store itself loaded.
                         project_native_device_trust(NativeDeviceTrustSignals {
                             has_crypto_device: true,
                             is_dehydrated: crypto_device.is_dehydrated(),
@@ -571,12 +589,7 @@ pub async fn snapshot(
                             .and_then(|key| format_ed25519_fingerprint(&key.to_base64())),
                     ),
                     None => (
-                        project_native_device_trust(NativeDeviceTrustSignals {
-                            has_crypto_device: false,
-                            is_dehydrated: false,
-                            is_verified_with_cross_signing: false,
-                            is_verified: false,
-                        }),
+                        trust_when_crypto_device_absent(crypto_store_loaded),
                         false,
                         None,
                         None,
@@ -722,5 +735,34 @@ mod tests {
 
         let sso_only = UiaaInfo::new(vec![AuthFlow::new(vec![AuthType::Sso])]);
         assert!(supported_delete_authentication(&sso_only).is_empty());
+    }
+
+    #[test]
+    fn missing_crypto_device_does_not_claim_no_encryption_until_the_store_answers() {
+        use crate::app::devices::NativeDeviceTrust;
+        assert_eq!(
+            super::trust_when_crypto_device_absent(false),
+            NativeDeviceTrust::Unverified
+        );
+        assert_eq!(
+            super::trust_when_crypto_device_absent(true),
+            NativeDeviceTrust::NoEncryption
+        );
+    }
+
+    #[test]
+    fn trust_signals_are_sampled_from_one_crypto_device_handle() {
+        let source = include_str!("live.rs");
+        let snapshot = source
+            .split("pub async fn snapshot(\n")
+            .nth(1)
+            .and_then(|rest| rest.split("pub fn supported_delete_authentication").next())
+            .expect("device snapshot");
+        assert!(snapshot.contains("is_verified_with_cross_signing()"));
+        assert!(snapshot.contains(".is_verified()"));
+        assert!(
+            snapshot.contains("trust_when_crypto_device_absent(crypto_store_loaded)"),
+            "a failed crypto fetch must not collapse every homeserver session to NoEncryption"
+        );
     }
 }

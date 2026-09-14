@@ -181,6 +181,22 @@ pub struct NativeImagePackUpdateSignal {
     pub kind: NativeAccountDataWakeupKind,
 }
 
+/// Independent kinds so one `/sync` that carries both image-pack and history
+/// account data still emits both wakeups. Types are disjoint today; keep the
+/// iterator so an accidental overlap cannot drop one of the two signals.
+fn account_data_wakeup_kinds(
+    event_type: &str,
+) -> impl Iterator<Item = NativeAccountDataWakeupKind> {
+    [
+        (event_type == AGENT_APPROVAL_HISTORY_EVENT_TYPE)
+            .then_some(NativeAccountDataWakeupKind::AgentApprovalHistory),
+        is_image_pack_account_data_type(event_type)
+            .then_some(NativeAccountDataWakeupKind::ImagePacks),
+    ]
+    .into_iter()
+    .flatten()
+}
+
 fn user_emotes_type() -> GlobalAccountDataEventType {
     GlobalAccountDataEventType::from(USER_EMOTES_EVENT_TYPE)
 }
@@ -425,16 +441,10 @@ impl NativeImagePackOwner {
                         lock_room_notes_projection(&projection)
                             .observe_synchronized_event(content, Instant::now());
                     }
-                    if event_type == AGENT_APPROVAL_HISTORY_EVENT_TYPE {
+                    for kind in account_data_wakeup_kinds(&event_type) {
                         emit(NativeImagePackUpdateSignal {
                             session_generation,
-                            kind: NativeAccountDataWakeupKind::AgentApprovalHistory,
-                        });
-                    }
-                    if is_image_pack_account_data_type(&event_type) {
-                        emit(NativeImagePackUpdateSignal {
-                            session_generation,
-                            kind: NativeAccountDataWakeupKind::ImagePacks,
+                            kind,
                         });
                     }
                 }
@@ -1047,5 +1057,64 @@ mod tests {
             state.project(Ok(external.clone()), now + Duration::from_secs(33)),
             Ok(external)
         );
+    }
+
+    #[test]
+    fn history_and_image_pack_wakeups_are_disjoint_and_independent() {
+        assert_eq!(
+            account_data_wakeup_kinds(AGENT_APPROVAL_HISTORY_EVENT_TYPE).collect::<Vec<_>>(),
+            vec![NativeAccountDataWakeupKind::AgentApprovalHistory]
+        );
+        assert_eq!(
+            account_data_wakeup_kinds(USER_EMOTES_EVENT_TYPE).collect::<Vec<_>>(),
+            vec![NativeAccountDataWakeupKind::ImagePacks]
+        );
+        assert_eq!(
+            account_data_wakeup_kinds(EMOTE_ROOMS_EVENT_TYPE).collect::<Vec<_>>(),
+            vec![NativeAccountDataWakeupKind::ImagePacks]
+        );
+        assert!(account_data_wakeup_kinds(ROOM_NOTES_EVENT_TYPE)
+            .next()
+            .is_none());
+        assert!(account_data_wakeup_kinds("m.direct").next().is_none());
+        assert!(!is_image_pack_account_data_type(
+            AGENT_APPROVAL_HISTORY_EVENT_TYPE
+        ));
+        assert!(!is_image_pack_room_state_type(
+            AGENT_APPROVAL_HISTORY_EVENT_TYPE
+        ));
+    }
+
+    #[test]
+    fn history_snapshot_after_wakeup_reads_the_sdk_cache_not_a_homeserver_fetch() {
+        let live = include_str!("agent_approval_history_live.rs");
+        let snapshot = live
+            .split("pub async fn snapshot_agent_approval_history(")
+            .nth(1)
+            .and_then(|rest| {
+                rest.split("pub async fn append_agent_approval_history_item_live(")
+                    .next()
+            })
+            .expect("history snapshot");
+        assert!(snapshot.contains("load_cached_agent_approval_history_content"));
+        assert!(!snapshot.contains("fetch_account_data"));
+        let load = live
+            .split("async fn load_cached_agent_approval_history_content(")
+            .nth(1)
+            .and_then(|rest| {
+                rest.split("async fn fetch_fresh_agent_approval_history_content(")
+                    .next()
+            })
+            .expect("cached load");
+        assert!(load.contains("account_data_raw"));
+        let fetch = live
+            .split("async fn fetch_fresh_agent_approval_history_content(")
+            .nth(1)
+            .and_then(|rest| {
+                rest.split("async fn store_agent_approval_history_content(")
+                    .next()
+            })
+            .expect("fresh fetch");
+        assert!(fetch.contains("fetch_account_data"));
     }
 }

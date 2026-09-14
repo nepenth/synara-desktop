@@ -8372,6 +8372,37 @@ mod tests {
         );
     }
 
+    #[test]
+    fn directory_search_owner_errors_keep_classified_categories() {
+        let cases = [
+            (
+                "v-rooms.directory-federation-forbidden",
+                MatrixIpcErrorCategory::Forbidden,
+            ),
+            (
+                "v-rooms.directory-network-failed",
+                MatrixIpcErrorCategory::Connectivity,
+            ),
+            (
+                "v-rooms.directory-server-not-found",
+                MatrixIpcErrorCategory::HomeserverUnavailable,
+            ),
+            (
+                "v-rooms.directory-rate-limited",
+                MatrixIpcErrorCategory::RateLimited,
+            ),
+            (
+                "v-rooms.directory-stale-generation-after-request",
+                MatrixIpcErrorCategory::StaleSessionGeneration,
+            ),
+        ];
+        for (diagnostic, category) in cases {
+            let error = directory_search_owner_error(diagnostic);
+            assert_eq!(error.category, category);
+            assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic));
+        }
+    }
+
     #[tokio::test]
     async fn matrix_device_snapshot_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));

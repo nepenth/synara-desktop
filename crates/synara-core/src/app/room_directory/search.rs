@@ -279,10 +279,10 @@ pub async fn search_directory(
         }
     }
     let request = build_public_rooms_request(&normalized)?;
-    let response = client
-        .public_rooms_filtered(request)
-        .await
-        .map_err(|error| directory_http_error_diagnostic(&error))?;
+    let outcome = client.public_rooms_filtered(request).await;
+    // Re-check authority before surfacing anything from this request: a
+    // superseded or cancelled query must not paint its classified HTTP error
+    // (rate limit, network) over the current query's result.
     match request_authority(session_generation, request_id) {
         RequestAuthority::Stale => return Ok(stale_response(session_generation, request_id)),
         RequestAuthority::Cancelled => {
@@ -290,6 +290,7 @@ pub async fn search_directory(
         }
         RequestAuthority::Current => {}
     }
+    let response = outcome.map_err(|error| directory_http_error_diagnostic(&error))?;
     let page = project_response(session_generation, request_id, &normalized, response)?;
     Ok(NativeRoomDirectorySearchResponse {
         session_generation,

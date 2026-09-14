@@ -16,6 +16,15 @@ pub use synara_core::app::account_data::{
     AGENT_APPROVAL_HISTORY_UPDATED_EVENT, IMAGE_PACKS_UPDATED_EVENT,
 };
 
+pub(crate) fn event_name_for_account_data_wakeup(
+    kind: NativeAccountDataWakeupKind,
+) -> &'static str {
+    match kind {
+        NativeAccountDataWakeupKind::ImagePacks => IMAGE_PACKS_UPDATED_EVENT,
+        NativeAccountDataWakeupKind::AgentApprovalHistory => AGENT_APPROVAL_HISTORY_UPDATED_EVENT,
+    }
+}
+
 /// Start the Core owner and emit pack wakeups on the existing Tauri event.
 pub fn start(
     client: &Client,
@@ -24,16 +33,30 @@ pub fn start(
 ) -> Result<NativeImagePackOwner, &'static str> {
     NativeImagePackOwner::start(
         client,
-        Arc::new(
-            move |signal: NativeImagePackUpdateSignal| match signal.kind {
-                NativeAccountDataWakeupKind::ImagePacks => {
-                    let _ = app.emit(IMAGE_PACKS_UPDATED_EVENT, signal);
-                }
-                NativeAccountDataWakeupKind::AgentApprovalHistory => {
-                    let _ = app.emit(AGENT_APPROVAL_HISTORY_UPDATED_EVENT, signal);
-                }
-            },
-        ),
+        Arc::new(move |signal: NativeImagePackUpdateSignal| {
+            let _ = app.emit(event_name_for_account_data_wakeup(signal.kind), signal);
+        }),
         session_generation,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn wakeup_kinds_emit_distinct_tauri_events() {
+        assert_eq!(
+            event_name_for_account_data_wakeup(NativeAccountDataWakeupKind::ImagePacks),
+            IMAGE_PACKS_UPDATED_EVENT
+        );
+        assert_eq!(
+            event_name_for_account_data_wakeup(NativeAccountDataWakeupKind::AgentApprovalHistory),
+            AGENT_APPROVAL_HISTORY_UPDATED_EVENT
+        );
+        assert_ne!(
+            IMAGE_PACKS_UPDATED_EVENT,
+            AGENT_APPROVAL_HISTORY_UPDATED_EVENT
+        );
+    }
 }

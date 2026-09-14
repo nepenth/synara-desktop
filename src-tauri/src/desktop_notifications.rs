@@ -320,6 +320,30 @@ fn linux_notification_handles() -> &'static Mutex<HashMap<u32, Arc<notify_rust::
     HANDLES.get_or_init(|| Mutex::new(HashMap::new()))
 }
 
+/// Waiter tasks per notification id so a dismiss or eviction can abort a
+/// `wait_for_action_async` that would otherwise hang when the daemon's
+/// `NotificationClosed` signal was missed (closed before the match rule was
+/// installed, or the daemon restarted).
+#[cfg(target_os = "linux")]
+fn linux_notification_waiters() -> &'static Mutex<HashMap<u32, tauri::async_runtime::JoinHandle<()>>>
+{
+    static WAITERS: OnceLock<Mutex<HashMap<u32, tauri::async_runtime::JoinHandle<()>>>> =
+        OnceLock::new();
+    WAITERS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Upper bound on how long a Linux waiter task may outlive its notification.
+/// The longest notification timeout we request is 300 s (agent approvals).
+#[cfg(target_os = "linux")]
+const LINUX_NOTIFICATION_WAIT_MAX: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+#[cfg(target_os = "linux")]
+fn abort_linux_waiter(id: u32) {
+    if let Some(waiter) = lock_mutex(linux_notification_waiters()).remove(&id) {
+        waiter.abort();
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn linux_dismiss_index() -> &'static Mutex<DismissKeyIndex> {
     static INDEX: OnceLock<Mutex<DismissKeyIndex>> = OnceLock::new();
@@ -355,9 +379,10 @@ fn register_linux_notification(
             index.unregister(*old_id);
         }
     }
-    for (_, handle) in evicted {
+    for (old_id, handle) in evicted {
         tauri::async_runtime::spawn(async move {
             handle.close_async().await;
+            abort_linux_waiter(old_id);
         });
     }
 }
@@ -366,14 +391,19 @@ fn register_linux_notification(
 fn unregister_linux_notification(id: u32) {
     lock_mutex(linux_dismiss_index()).unregister(id);
     lock_mutex(linux_notification_handles()).remove(&id);
+    // Called from the waiter itself on completion; it is finished, so only
+    // drop the bookkeeping entry rather than aborting.
+    lock_mutex(linux_notification_waiters()).remove(&id);
 }
 
 #[cfg(target_os = "linux")]
 async fn dismiss_linux_notifications(keys: &[String]) {
     let ids = lock_mutex(linux_dismiss_index()).ids_for_keys(keys);
-    let handles: Vec<Arc<notify_rust::NotificationHandle>> = {
+    let live: Vec<(u32, Arc<notify_rust::NotificationHandle>)> = {
         let mut handles = lock_mutex(linux_notification_handles());
-        ids.iter().filter_map(|id| handles.remove(id)).collect()
+        ids.iter()
+            .filter_map(|id| handles.remove(id).map(|handle| (*id, handle)))
+            .collect()
     };
     {
         let mut index = lock_mutex(linux_dismiss_index());
@@ -381,8 +411,9 @@ async fn dismiss_linux_notifications(keys: &[String]) {
             index.unregister(*id);
         }
     }
-    for handle in handles {
+    for (id, handle) in live {
         handle.close_async().await;
+        abort_linux_waiter(id);
     }
 }
 
@@ -426,8 +457,8 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         .map(|action| action.id.clone())
         .collect::<Vec<_>>();
 
-    tauri::async_runtime::spawn(async move {
-        handle
+    let waiter = tauri::async_runtime::spawn(async move {
+        let wait = handle
             .wait_for_action_async(move |response| match response {
                 NotificationResponse::Default => {
                     let Some(route) = route.as_deref() else {
@@ -450,10 +481,16 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                     }
                 }
                 NotificationResponse::Closed(_) | NotificationResponse::Reply(_) => {}
-            })
-            .await;
+            });
+        if tokio::time::timeout(LINUX_NOTIFICATION_WAIT_MAX, wait)
+            .await
+            .is_err()
+        {
+            eprintln!("notification {id} waiter timed out without a close signal");
+        }
         unregister_linux_notification(id);
     });
+    lock_mutex(linux_notification_waiters()).insert(id, waiter);
 
     Ok(())
 }
