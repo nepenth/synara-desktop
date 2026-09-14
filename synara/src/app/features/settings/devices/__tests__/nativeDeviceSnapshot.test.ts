@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { parseNativeDeviceSnapshot, type NativeDeviceSnapshot } from '../nativeDevices';
+import {
+  parseNativeDeviceSnapshot,
+  nativeDeviceTrustLabel,
+  type NativeDeviceSnapshot,
+} from '../nativeDevices';
 
 test('device snapshot parser accepts additive trust fields and aliases unsupported', () => {
   const snapshot = parseNativeDeviceSnapshot({
@@ -37,6 +41,14 @@ test('device snapshot parser accepts additive trust fields and aliases unsupport
   assert.equal(snapshot.devices[0]?.isCrossSignedByOwner, true);
   assert.equal(snapshot.devices[1]?.trust, 'no_encryption');
   assert.equal(snapshot.devices[2]?.trust, 'verified_locally_only');
+});
+
+test('device trust labels distinguish backup devices from unencrypted sessions', () => {
+  assert.equal(nativeDeviceTrustLabel('verified'), 'Verified');
+  assert.equal(nativeDeviceTrustLabel('verified_locally_only'), 'Verified');
+  assert.equal(nativeDeviceTrustLabel('unverified'), 'Unverified');
+  assert.equal(nativeDeviceTrustLabel('dehydrated'), 'Backup device');
+  assert.equal(nativeDeviceTrustLabel('no_encryption'), 'Not encrypted');
 });
 
 test('device snapshot parser stays tolerant of missing optional fields', () => {

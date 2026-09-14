@@ -2075,8 +2075,27 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const lastClientHeightRef = useRef(0);
   const userInitiatedScrollRef = useRef(false);
   const followingLiveRef = useRef(false);
+  const applyingStickRef = useRef(false);
+  const parkedPinFrameRef = useRef(0);
   const programmaticScrollUntilRef = useRef(0);
   const lastDistanceFromBottomRef = useRef(Number.POSITIVE_INFINITY);
+  const stickToLiveTail = useCallback(() => {
+    const scrollEl = scrollRef.current;
+    if (!scrollEl || !followingLiveRef.current) return;
+    const nextTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
+    if (Math.abs(scrollEl.scrollTop - nextTop) <= 0.5) {
+      lastDistanceFromBottomRef.current = 0;
+      return;
+    }
+    applyingStickRef.current = true;
+    programmaticScrollUntilRef.current = Math.max(
+      programmaticScrollUntilRef.current,
+      performance.now() + 48
+    );
+    scrollEl.scrollTop = nextTop;
+    applyingStickRef.current = false;
+    lastDistanceFromBottomRef.current = 0;
+  }, []);
   const smoothScrollActiveRef = useRef(false);
   const lastTotalSizeRef = useRef(0);
   const [hideMembershipEvents] = useSetting(settingsAtom, 'hideMembershipEvents');
@@ -2097,18 +2116,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       lastClientHeightRef.current = element.clientHeight;
       // A follow-live viewport that shrinks would otherwise leave the tail. Do
       // not treat a user scroll (same clientHeight) as a resize.
-      if (resized && followingLiveRef.current) {
-        const nextTop = Math.max(0, element.scrollHeight - element.clientHeight);
-        if (Math.abs(element.scrollTop - nextTop) > 0.5) {
-          programmaticScrollUntilRef.current = Math.max(
-            programmaticScrollUntilRef.current,
-            performance.now() + 48
-          );
-          element.scrollTop = nextTop;
-        }
-      }
+      if (resized) stickToLiveTail();
     });
-  }, [roomId, timelineReady, readyState?.selectedPosition.kind]);
+  }, [roomId, timelineReady, readyState?.selectedPosition.kind, stickToLiveTail]);
   useEffect(() => {
     if (activeSessionGeneration === undefined) return;
     bindNativeTimelineActionSession(activeSessionGeneration);
@@ -2247,6 +2257,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     pendingBackwardGrowRef.current = false;
     lastParkedStartRef.current = -1;
     lastClientHeightRef.current = 0;
+    applyingStickRef.current = false;
+    if (parkedPinFrameRef.current !== 0) {
+      window.cancelAnimationFrame(parkedPinFrameRef.current);
+      parkedPinFrameRef.current = 0;
+    }
     liveTailSubmittedKeyRef.current = undefined;
     followLiveSubmittedKeyRef.current = undefined;
     setPendingLastRead(undefined);
@@ -2434,6 +2449,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const onScroll = () => {
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
+      if (applyingStickRef.current) {
+        lastDistanceFromBottomRef.current = distanceFromBottom;
+        setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
+        return;
+      }
       const locked = performance.now() < programmaticScrollUntilRef.current;
       // Programmatic prepend/stick scrolls must not overwrite the parked
       // history anchor; the next prepend would then restore the in-flight
@@ -2476,14 +2496,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       // when the virtualizer is still a few dozen pixels short of max.
       if (event instanceof KeyboardEvent && event.key === 'End') {
         followingLiveRef.current = true;
-        const el = scrollRef.current;
-        if (el) {
-          programmaticScrollUntilRef.current = Math.max(
-            programmaticScrollUntilRef.current,
-            performance.now() + 48
-          );
-          el.scrollTop = Math.max(0, el.scrollHeight - el.clientHeight);
-        }
+        stickToLiveTail();
         return;
       }
       programmaticScrollUntilRef.current = 0;
@@ -2500,7 +2513,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     return () => {
       if (performance.now() >= programmaticScrollUntilRef.current) saveViewport();
     };
-  }, [hasReadyState, paginate, saveViewport]);
+  }, [hasReadyState, paginate, saveViewport, stickToLiveTail]);
 
   // The DOM listeners are bound once per mounted viewport and delegate to the
   // latest handlers above. Re-subscribing on every render raced the
@@ -2532,7 +2545,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   }, [hasReadyState, roomId]);
 
   const pinParkedHistory = useCallback(
-    (index: number, offsetPx: number) => {
+    (index: number, offsetPx: number, parkedEventId?: string) => {
       const scrollEl = scrollRef.current;
       if (!scrollEl || index < 0) return;
       programmaticScrollUntilRef.current = Math.max(
@@ -2544,19 +2557,37 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         const desired = Math.max(0, item.start + offsetPx);
         if (Math.abs(scrollEl.scrollTop - desired) > 0.5) scrollEl.scrollTop = desired;
         lastParkedStartRef.current = item.start;
-        return;
+      } else {
+        // The parked row left the virtual window (typical after a large prepend).
+        // scrollToIndex(align start) does not update getVirtualItems in this
+        // turn, so apply the saved pixel offset on top of that placement.
+        virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+        const after = virtualizer.getVirtualItems().find((row) => row.index === index);
+        if (after) {
+          scrollEl.scrollTop = Math.max(0, after.start + offsetPx);
+          lastParkedStartRef.current = after.start;
+        } else {
+          scrollEl.scrollTop += offsetPx;
+        }
       }
-      // The parked row left the virtual window (typical after a large prepend).
-      // scrollToIndex(align start) does not update getVirtualItems in this
-      // turn, so apply the saved pixel offset on top of that placement.
-      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-      const after = virtualizer.getVirtualItems().find((row) => row.index === index);
-      if (after) {
-        scrollEl.scrollTop = Math.max(0, after.start + offsetPx);
-        lastParkedStartRef.current = after.start;
-        return;
+      if (!parkedEventId) return;
+      if (parkedPinFrameRef.current !== 0) {
+        window.cancelAnimationFrame(parkedPinFrameRef.current);
       }
-      scrollEl.scrollTop += offsetPx;
+      parkedPinFrameRef.current = window.requestAnimationFrame(() => {
+        parkedPinFrameRef.current = 0;
+        if (followingLiveRef.current) return;
+        const el = scrollRef.current;
+        if (!el) return;
+        const node = el.querySelector(
+          `[data-native-timeline-event-id="${CSS.escape(parkedEventId)}"]`
+        );
+        if (!(node instanceof HTMLElement)) return;
+        const current = node.getBoundingClientRect().top - el.getBoundingClientRect().top;
+        const desired = -offsetPx;
+        const delta = current - desired;
+        if (Math.abs(delta) > 0.5) el.scrollTop += delta;
+      });
     },
     [virtualizer]
   );
@@ -2637,17 +2668,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     }
 
     if (followingLiveRef.current) {
-      const scrollEl = scrollRef.current;
-      if (scrollEl) {
-        const nextTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-        if (Math.abs(scrollEl.scrollTop - nextTop) > 0.5) {
-          programmaticScrollUntilRef.current = Math.max(
-            programmaticScrollUntilRef.current,
-            performance.now() + 48
-          );
-          scrollEl.scrollTop = nextTop;
-        }
-      }
+      stickToLiveTail();
       return undefined;
     }
 
@@ -2659,7 +2680,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       savedViewport?.anchor &&
       (selectedPosition.kind === 'live_bottom' || selectedPosition.kind === 'restored')
     ) {
-      pinParkedHistory(parkedIndex, savedViewport.anchor.offsetPx);
+      pinParkedHistory(parkedIndex, savedViewport.anchor.offsetPx, savedViewport.anchor.eventId);
       pendingBackwardGrowRef.current = false;
     } else if (
       pendingBackwardGrowRef.current &&
@@ -2680,6 +2701,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     lastReadPlacementRequest,
     openingViewport,
     pinParkedHistory,
+    stickToLiveTail,
   ]);
 
   // Sticking to the live tail from the rows effect uses estimated heights for
@@ -2693,14 +2715,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const scrollEl = scrollRef.current;
     if (!scrollEl) return;
     if (followingLiveRef.current) {
-      const nextTop = Math.max(0, scrollEl.scrollHeight - scrollEl.clientHeight);
-      if (Math.abs(scrollEl.scrollTop - nextTop) > 0.5) {
-        programmaticScrollUntilRef.current = Math.max(
-          programmaticScrollUntilRef.current,
-          performance.now() + 48
-        );
-        scrollEl.scrollTop = nextTop;
-      }
+      stickToLiveTail();
       return;
     }
     const selectedKind = readyState?.selectedPosition.kind;
@@ -2709,8 +2724,8 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     if (!saved?.anchor) return;
     const index = findAnchorIndex(rows, saved.anchor);
     if (index < 0) return;
-    pinParkedHistory(index, saved.anchor.offsetPx);
-  }, [totalSize, roomId, rows, virtualizer, pinParkedHistory, readyState]);
+    pinParkedHistory(index, saved.anchor.offsetPx, saved.anchor.eventId);
+  }, [totalSize, roomId, rows, virtualizer, pinParkedHistory, stickToLiveTail, readyState]);
 
   const onFocusEvent = useCallback(
     (targetEventId: string) => {

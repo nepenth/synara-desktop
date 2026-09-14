@@ -11,7 +11,7 @@ type Fixture = {
   metadataThenOps(): void;
   growEdit(eventId?: string): void;
   addReaction(eventId?: string): void;
-  insertUngroupedHeader(): void;
+  insertUngroupedHeader(eventId?: string): void;
   scrollEventIntoView(eventId: string): void;
   resizeTimeline(height: number): void;
 };
@@ -256,4 +256,54 @@ test('a reaction on a later row does not jump the parked history anchor more tha
   const after = await settledGeometry(page);
   expect(after.eventId).toBe(before.eventId);
   expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+});
+
+test('inserting a date separator at the parked row does not jump the parked anchor more than 2px', async ({
+  page,
+}) => {
+  await open(page, 'scenario=live&nativeEvents=1');
+  await scrollToHistory(page);
+  const before = await settledGeometry(page);
+  await fixture(page, 'insertUngroupedHeader', before.eventId);
+  await page.waitForTimeout(250);
+  const after = await settledGeometry(page);
+  expect(after.eventId).toBe(before.eventId);
+  expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+});
+
+test('a reaction on the parked row itself does not jump the parked anchor more than 2px', async ({
+  page,
+}) => {
+  await open(page, 'scenario=live&nativeEvents=1');
+  await scrollToHistory(page);
+  const before = await settledGeometry(page);
+  await fixture(page, 'addReaction', before.eventId);
+  await page.waitForTimeout(250);
+  const after = await settledGeometry(page);
+  expect(after.eventId).toBe(before.eventId);
+  expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
+});
+
+test('a scripted scroll away from the tail during live appends is not yanked back', async ({
+  page,
+}) => {
+  await open(page, 'scenario=live&nativeEvents=1');
+  await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  await fixture(page, 'appendLive');
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+  );
+  await page.evaluate(() => {
+    const viewport = [...document.querySelectorAll<HTMLElement>('#native-timeline *')].find(
+      (node) => ['auto', 'scroll'].includes(getComputedStyle(node).overflowY)
+    );
+    if (!viewport) throw new Error('Native Scroll viewport missing');
+    viewport.scrollTop -= 40;
+  });
+  await expect.poll(async () => (await geometry(page)).distance).toBeGreaterThan(8);
+  await fixture(page, 'appendLive');
+  await page.waitForTimeout(150);
+  expect((await geometry(page)).distance).toBeGreaterThan(8);
+  await expect(page.getByRole('button', { name: 'Jump to latest', exact: true })).toBeVisible();
 });

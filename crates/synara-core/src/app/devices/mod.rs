@@ -55,6 +55,20 @@ pub fn project_native_device_trust(signals: NativeDeviceTrustSignals) -> NativeD
     NativeDeviceTrust::Unverified
 }
 
+/// Homeserver display names and last-seen IPs are untrusted. Drop empty or
+/// oversized values rather than copying them onto the snapshot wire.
+pub const MAX_DEVICE_DISPLAY_NAME_CHARS: usize = 256;
+pub const MAX_DEVICE_LAST_SEEN_IP_CHARS: usize = 64;
+
+pub fn bounded_optional_hs_text(value: Option<String>, max_chars: usize) -> Option<String> {
+    let trimmed = value?.trim().to_owned();
+    if trimmed.is_empty() || trimmed.chars().count() > max_chars {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
 /// Element-style ed25519 fingerprint: unpadded base64 in 4-character groups.
 /// Rejects anything that is not a 32-byte ed25519 key encoding.
 pub fn format_ed25519_fingerprint(unpadded_base64: &str) -> Option<String> {
@@ -388,5 +402,34 @@ mod tests {
         assert_eq!(value.devices[0].trust, NativeDeviceTrust::NoEncryption);
         assert!(!value.devices[0].is_cross_signed_by_owner);
         assert_eq!(value.devices[0].ed25519_fingerprint, None);
+    }
+
+    #[test]
+    fn homeserver_display_name_and_ip_are_dropped_when_empty_or_oversized() {
+        assert_eq!(
+            bounded_optional_hs_text(Some("  MacBook  ".into()), MAX_DEVICE_DISPLAY_NAME_CHARS)
+                .as_deref(),
+            Some("MacBook")
+        );
+        assert_eq!(
+            bounded_optional_hs_text(Some("   ".into()), MAX_DEVICE_DISPLAY_NAME_CHARS),
+            None
+        );
+        assert_eq!(
+            bounded_optional_hs_text(
+                Some("n".repeat(MAX_DEVICE_DISPLAY_NAME_CHARS + 1)),
+                MAX_DEVICE_DISPLAY_NAME_CHARS
+            ),
+            None
+        );
+        assert_eq!(
+            bounded_optional_hs_text(Some("1".repeat(80)), MAX_DEVICE_LAST_SEEN_IP_CHARS),
+            None
+        );
+        assert_eq!(
+            bounded_optional_hs_text(Some("192.0.2.1".into()), MAX_DEVICE_LAST_SEEN_IP_CHARS)
+                .as_deref(),
+            Some("192.0.2.1")
+        );
     }
 }

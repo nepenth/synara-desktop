@@ -723,10 +723,26 @@ private struct SessionDeviceRow: View {
                 .font(SynaraTypography.supporting)
                 .foregroundStyle(SynaraColor.secondaryText)
                 .accessibilityIdentifier("SettingsSessionTrust-\(device.id)")
+            if device.isCrossSignedByOwner {
+                Text("Signed by your identity")
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
+            if let firstSeen = SharedCoreDevicesLive.firstSeenDisplay(firstSeenTs: device.firstSeenTs) {
+                Text(firstSeen)
+                    .font(SynaraTypography.supporting)
+                    .foregroundStyle(SynaraColor.secondaryText)
+            }
             if let lastActivity = SharedCoreDevicesLive.lastActivityDisplay(lastSeenTs: device.lastSeenTs) {
                 Text(lastActivity)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)
+            }
+            if let fingerprint = device.ed25519Fingerprint {
+                Text("Identity key \(fingerprint)")
+                    .font(SynaraTypography.fineMeta)
+                    .foregroundStyle(SynaraColor.secondaryText)
+                    .textSelection(.enabled)
             }
             Text(device.id)
                 .font(SynaraTypography.fineMeta)

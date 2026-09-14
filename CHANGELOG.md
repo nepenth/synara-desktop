@@ -20,8 +20,11 @@
   same layout pass. Follow-live releases on a focus/`scrollIntoView` move away
   from the tail, prepend anchoring is never overwritten by an in-flight
   programmatic scroll, a parked history row is held steady when rows above it
-  re-measure, same-frame deltas apply in revision order, and the measured-size
-  cache is keyed by row content so edits do not reuse stale heights.
+  re-measure or when a date separator or reaction lands on the parked row
+  itself, a scripted move off the live tail is not yanked back, same-frame
+  deltas apply in revision order (keeping a successful prefix on a true gap),
+  and the measured-size cache is keyed by row content so edits do not reuse
+  stale heights.
 - Promote the composer action recipe to a shared `quietActionButton` export in
   `Depth.css.ts` (`RoomComposer.css.ts` re-exports it as `ComposerAction`, no
   visual change) and restyle the message formatting toolbar and message-editor
@@ -52,7 +55,11 @@
   a This device marker, and expanded identity-key fingerprint / first-seen
   fields from the native device snapshot. The trust vocabulary now separates
   cross-signed (`verified`) from direct-SAS (`verified_locally_only`)
-  sessions; both desktop and iOS render either as Verified.
+  sessions; both desktop and iOS render either as Verified. Dehydrated
+  sessions read as Backup device rather than Not encrypted. iOS session rows
+  now show the same identity-key / first-seen / cross-signed details (still
+  without last-seen IP). Oversized homeserver display names and last-seen IPs
+  are dropped in Core before they reach the snapshot wire.
 
 ## [2.1.36] - 2026-09-13
 

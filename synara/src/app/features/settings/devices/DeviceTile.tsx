@@ -26,7 +26,7 @@ import { LogoutDialog } from '../../../components/LogoutDialog';
 import { stopPropagation } from '../../../utils/keyboard';
 import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
-import { NativeDevice, NativeDeviceTrust, renameNativeDevice } from './nativeDevices';
+import { NativeDevice, nativeDeviceTrustLabel, renameNativeDevice } from './nativeDevices';
 import { RefreshDeviceList } from '../../../hooks/useDeviceList';
 
 export function DeviceTilePlaceholder() {
@@ -64,20 +64,20 @@ function DeviceActiveTime({ ts }: { ts: number }) {
   return <DeviceTimestamp label="Last activity: " ts={ts} />;
 }
 
-function deviceTrustChip(trust: NativeDeviceTrust): {
+function deviceTrustChip(trust: NativeDevice['trust']): {
   variant: 'Success' | 'Critical' | 'Secondary';
   label: string;
 } {
   if (trust === 'verified' || trust === 'verified_locally_only') {
-    return { variant: 'Success', label: 'Verified' };
+    return { variant: 'Success', label: nativeDeviceTrustLabel(trust) };
   }
   if (trust === 'unverified') {
-    return { variant: 'Critical', label: 'Unverified' };
+    return { variant: 'Critical', label: nativeDeviceTrustLabel(trust) };
   }
-  return { variant: 'Secondary', label: 'Not encrypted' };
+  return { variant: 'Secondary', label: nativeDeviceTrustLabel(trust) };
 }
 
-function DeviceTrustChip({ trust }: { trust: NativeDeviceTrust }) {
+function DeviceTrustChip({ trust }: { trust: NativeDevice['trust'] }) {
   const { variant, label } = deviceTrustChip(trust);
   return (
     <Chip as="span" variant={variant} radii="Pill" outlined>

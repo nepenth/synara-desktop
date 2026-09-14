@@ -95,6 +95,13 @@ const parseTrust = (value: unknown): NativeDeviceTrust | undefined => {
   return undefined;
 };
 
+export const nativeDeviceTrustLabel = (trust: NativeDeviceTrust): string => {
+  if (trust === 'verified' || trust === 'verified_locally_only') return 'Verified';
+  if (trust === 'unverified') return 'Unverified';
+  if (trust === 'dehydrated') return 'Backup device';
+  return 'Not encrypted';
+};
+
 const parseOwnVerification = (value: unknown): NativeOwnDeviceVerification | undefined => {
   if (value === 'unknown' || value === 'unverified' || value === 'verified') return value;
   return undefined;

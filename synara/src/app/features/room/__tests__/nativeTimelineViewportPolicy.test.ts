@@ -377,4 +377,7 @@ test('presenter honors the 250ms placement lock, skips in-flight viewport saves,
   assert.match(presenter, /rowsRef.current/);
   assert.match(presenter, /measuredSizeKeyForRow/);
   assert.match(presenter, /lastDistanceFromBottomRef.current <= 8/);
+  assert.match(presenter, /applyingStickRef/);
+  assert.match(presenter, /CSS.escape\(parkedEventId\)/);
+  assert.match(presenter, /stickToLiveTail/);
 });

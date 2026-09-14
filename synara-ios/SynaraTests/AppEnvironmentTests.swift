@@ -47,7 +47,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("verified_locally_only"), "Verified")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unverified"), "Unverified")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("no_encryption"), "Not encrypted")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("dehydrated"), "Not encrypted")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("dehydrated"), "Backup device")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Not encrypted")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("something_new"), "Unknown")
         XCTAssertEqual(
@@ -60,6 +60,24 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertNotNil(
             SharedCoreDevicesLive.lastActivityDisplay(
                 lastSeenTs: device.lastSeenTs,
+                now: Date(timeIntervalSince1970: 1_700_000_360)
+            )
+        )
+        let detailed = SharedCoreDevicesLive.devices(
+            deviceId: "DEVICEABC",
+            displayName: "MacBook",
+            isCurrent: false,
+            trust: "verified",
+            lastSeenTs: 1_700_000_000_000,
+            isCrossSignedByOwner: true,
+            firstSeenTs: 1_699_000_000_000,
+            ed25519Fingerprint: "  ABCD EFGH  "
+        )
+        XCTAssertTrue(detailed.isCrossSignedByOwner)
+        XCTAssertEqual(detailed.ed25519Fingerprint, "ABCD EFGH")
+        XCTAssertNotNil(
+            SharedCoreDevicesLive.firstSeenDisplay(
+                firstSeenTs: detailed.firstSeenTs,
                 now: Date(timeIntervalSince1970: 1_700_000_360)
             )
         )

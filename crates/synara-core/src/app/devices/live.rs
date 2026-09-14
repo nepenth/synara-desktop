@@ -25,10 +25,11 @@ use crate::app::room_keys::{
 };
 
 use super::{
-    format_ed25519_fingerprint, project_native_device_trust, sort_native_device_summaries,
-    NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge, NativeDeviceDeleteResult,
-    NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust, NativeDeviceTrustSignals,
-    NativeOwnDeviceVerification,
+    bounded_optional_hs_text, format_ed25519_fingerprint, project_native_device_trust,
+    sort_native_device_summaries, NativeDeviceDeleteAuthentication, NativeDeviceDeleteChallenge,
+    NativeDeviceDeleteResult, NativeDeviceSnapshot, NativeDeviceSummary, NativeDeviceTrust,
+    NativeDeviceTrustSignals, NativeOwnDeviceVerification, MAX_DEVICE_DISPLAY_NAME_CHARS,
+    MAX_DEVICE_LAST_SEEN_IP_CHARS,
 };
 
 /// Shell-supplied sink for device/security status wakeups. Payloads carry only
@@ -598,8 +599,14 @@ pub async fn snapshot(
             NativeDeviceSummary {
                 is_current: device.device_id == current_device_id,
                 device_id: device.device_id.to_string(),
-                display_name: device.display_name,
-                last_seen_ip: device.last_seen_ip,
+                display_name: bounded_optional_hs_text(
+                    device.display_name,
+                    MAX_DEVICE_DISPLAY_NAME_CHARS,
+                ),
+                last_seen_ip: bounded_optional_hs_text(
+                    device.last_seen_ip,
+                    MAX_DEVICE_LAST_SEEN_IP_CHARS,
+                ),
                 last_seen_ts: device.last_seen_ts.map(|timestamp| u64::from(timestamp.0)),
                 trust,
                 is_cross_signed_by_owner,

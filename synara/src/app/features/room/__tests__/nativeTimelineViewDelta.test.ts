@@ -147,7 +147,7 @@ test('poll and sticker rows preserve Core relation and reaction presentation fie
   }
 });
 
-test('coalesced batches apply in order and fail closed on a revision gap', () => {
+test('coalesced batches apply in order and keep a successful prefix on a revision gap', () => {
   const current = baseSnapshot();
   const first = applyNativeTimelineViewDeltaBatches(current, [
     {
@@ -169,34 +169,34 @@ test('coalesced batches apply in order and fail closed on a revision gap', () =>
       pagination: { backward: 'exhausted', forward: 'available' },
     },
   ]);
-  assert.ok(first);
-  assert.equal(first.revision, 5);
-  assert.equal(first.pagination.backward, 'exhausted');
-  assert.equal(first.rows, current.rows);
+  assert.equal(first.gap, false);
+  assert.equal(first.snapshot.revision, 5);
+  assert.equal(first.snapshot.pagination.backward, 'exhausted');
+  assert.equal(first.snapshot.rows, current.rows);
 
-  assert.equal(
-    applyNativeTimelineViewDeltaBatches(baseSnapshot(), [
-      {
-        schemaVersion: 1,
-        sessionGeneration: 2,
-        streamId: 'live:!room:example.org:1',
-        roomId: '!room:example.org',
-        revision: 4,
-        ops: [],
-        readState: { isMarkedUnread: false },
-      },
-      {
-        schemaVersion: 1,
-        sessionGeneration: 2,
-        streamId: 'live:!room:example.org:1',
-        roomId: '!room:example.org',
-        revision: 6,
-        ops: [],
-        readState: { isMarkedUnread: true },
-      },
-    ]),
-    undefined
-  );
+  const gapped = applyNativeTimelineViewDeltaBatches(baseSnapshot(), [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: false },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 6,
+      ops: [],
+      readState: { isMarkedUnread: true },
+    },
+  ]);
+  assert.equal(gapped.gap, true);
+  assert.equal(gapped.snapshot.revision, 4);
+  assert.equal(gapped.snapshot.readState.isMarkedUnread, false);
 });
 
 test('coalesced batches sort unordered revisions and skip stale duplicates', () => {
@@ -222,9 +222,10 @@ test('coalesced batches sort unordered revisions and skip stale duplicates', () 
     },
   ]);
   assert.ok(outOfOrder);
-  assert.equal(outOfOrder.revision, 5);
-  assert.equal(outOfOrder.pagination.backward, 'exhausted');
-  assert.equal(outOfOrder.rows, current.rows);
+  assert.equal(outOfOrder.gap, false);
+  assert.equal(outOfOrder.snapshot.revision, 5);
+  assert.equal(outOfOrder.snapshot.pagination.backward, 'exhausted');
+  assert.equal(outOfOrder.snapshot.rows, current.rows);
 
   const withDuplicate = applyNativeTimelineViewDeltaBatches(current, [
     {
@@ -256,9 +257,10 @@ test('coalesced batches sort unordered revisions and skip stale duplicates', () 
     },
   ]);
   assert.ok(withDuplicate);
-  assert.equal(withDuplicate.revision, 5);
-  assert.equal(withDuplicate.readState.isMarkedUnread, false);
-  assert.equal(withDuplicate.pagination.backward, 'exhausted');
+  assert.equal(withDuplicate.gap, false);
+  assert.equal(withDuplicate.snapshot.revision, 5);
+  assert.equal(withDuplicate.snapshot.readState.isMarkedUnread, false);
+  assert.equal(withDuplicate.snapshot.pagination.backward, 'exhausted');
 });
 
 test('metadata-only then ops in one coalesced flush preserve then replace rows', () => {
@@ -312,12 +314,13 @@ test('metadata-only then ops in one coalesced flush preserve then replace rows',
     },
   ]);
   assert.ok(next);
-  assert.equal(next.revision, 5);
-  assert.equal(next.readState.isMarkedUnread, false);
-  assert.equal(next.rows.length, 2);
-  assert.equal(next.rows[0], current.rows[0]);
+  assert.equal(next.gap, false);
+  assert.equal(next.snapshot.revision, 5);
+  assert.equal(next.snapshot.readState.isMarkedUnread, false);
+  assert.equal(next.snapshot.rows.length, 2);
+  assert.equal(next.snapshot.rows[0], current.rows[0]);
   assert.equal(
-    next.rows[1]?.kind === 'message' ? next.rows[1].eventId : undefined,
+    next.snapshot.rows[1]?.kind === 'message' ? next.snapshot.rows[1].eventId : undefined,
     '$m2:example.org'
   );
 });
@@ -472,10 +475,13 @@ test('timeline open is not aborted when event listen is unavailable', () => {
 test('live stream deltas coalesce to one React state update per animation frame', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   assert.match(source, /requestAnimationFrame\(flushCoalescedBatches\)/);
-  assert.match(source, /batch.revision <= next.revision/);
+  assert.match(source, /applyNativeTimelineViewDeltaBatches\(next, active\)/);
   assert.match(source, /cancelAnimationFrame\(coalesceFrame\)/);
-  assert.match(source, /active.sort\(\(left, right\) => left.revision - right.revision\)/);
-  assert.match(source, /if \(next !== snapshotRef.current\) \{\s*snapshotRef.current = next;/);
+  assert.match(source, /if \(applied\.gap\)/);
+  assert.match(
+    source,
+    /if \(applied\.snapshot !== snapshotRef\.current\) \{\s*snapshotRef\.current = applied\.snapshot;/
+  );
 });
 
 test('follow-live accepts a placement change at the same SDK revision', () => {

@@ -1971,7 +1971,10 @@ final class SharedCoreCryptoStatusService: CryptoStatusServicing {
                 displayName: $0.displayName,
                 isCurrent: $0.isCurrent,
                 trust: $0.trust,
-                lastSeenTs: $0.lastSeenTs
+                lastSeenTs: $0.lastSeenTs,
+                isCrossSignedByOwner: $0.isCrossSignedByOwner ?? false,
+                firstSeenTs: $0.firstSeenTs,
+                ed25519Fingerprint: $0.ed25519Fingerprint
             )
         }
     }

@@ -421,23 +421,30 @@ export const applyNativeTimelineViewDelta = (
   };
 };
 
+export type NativeTimelineViewDeltaBatchApply = {
+  snapshot: NativeTimelineViewSnapshot;
+  /** True when a later batch was a gap or invalid op; `snapshot` is the prefix. */
+  gap: boolean;
+};
+
 /**
  * Apply several stream batches in revision order. Stale/duplicate revisions are
- * skipped; a missing revision is still a gap and fails closed rather than guessed.
+ * skipped. A missing revision or invalid op fails closed rather than guessed,
+ * but a successful prefix is kept so a later fill can recover.
  */
 export const applyNativeTimelineViewDeltaBatches = (
   snapshot: NativeTimelineViewSnapshot,
   batches: readonly NativeTimelineViewDeltaBatch[]
-): NativeTimelineViewSnapshot | undefined => {
+): NativeTimelineViewDeltaBatchApply => {
   const sorted = [...batches].sort((left, right) => left.revision - right.revision);
-  let current: NativeTimelineViewSnapshot | undefined = snapshot;
+  let current = snapshot;
   for (const batch of sorted) {
-    if (!current) return undefined;
     if (batch.revision <= current.revision) continue;
-    current = applyNativeTimelineViewDelta(current, batch);
-    if (!current) return undefined;
+    const applied = applyNativeTimelineViewDelta(current, batch);
+    if (!applied) return { snapshot: current, gap: true };
+    current = applied;
   }
-  return current;
+  return { snapshot: current, gap: false };
 };
 
 /** Whether the room pin list currently includes this remote event id. */
@@ -1052,7 +1059,7 @@ export const useNativeTimelineView = (
       const queued = coalesceQueued;
       coalesceQueued = [];
       if (disposed || queued.length === 0) return;
-      let next = snapshotRef.current;
+      const next = snapshotRef.current;
       const active: NativeTimelineViewDeltaBatch[] = [];
       for (const batch of queued) {
         if (batch.streamId !== streamIdRef.current || !next) {
@@ -1061,31 +1068,24 @@ export const useNativeTimelineView = (
         }
         active.push(batch);
       }
-      // Same-frame Tauri events can arrive unordered. Apply in revision order
-      // so a later-then-earlier pair is not a false gap. Keep a successful
-      // prefix if a true gap follows, so a later fill can recover.
-      active.sort((left, right) => left.revision - right.revision);
-      for (const batch of active) {
-        if (!next || batch.revision <= next.revision) continue;
-        const applied = applyNativeTimelineViewDelta(next, batch);
-        if (!applied) {
-          if (next !== snapshotRef.current) {
-            snapshotRef.current = next;
-          }
-          setState({
-            status: 'error',
-            error: new Error('Native timeline stream lost synchronization.'),
-          });
-          return;
+      if (!next || active.length === 0) return;
+      const applied = applyNativeTimelineViewDeltaBatches(next, active);
+      if (applied.gap) {
+        if (applied.snapshot !== snapshotRef.current) {
+          snapshotRef.current = applied.snapshot;
         }
-        next = applied;
+        setState({
+          status: 'error',
+          error: new Error('Native timeline stream lost synchronization.'),
+        });
+        return;
       }
-      if (!next || next === snapshotRef.current) return;
-      snapshotRef.current = next;
+      if (applied.snapshot === snapshotRef.current) return;
+      snapshotRef.current = applied.snapshot;
       setState({
         status: 'ready',
-        snapshot: next,
-        selectedPosition: selectedPositionRef.current ?? next.position,
+        snapshot: applied.snapshot,
+        selectedPosition: selectedPositionRef.current ?? applied.snapshot.position,
       });
     };
     const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {

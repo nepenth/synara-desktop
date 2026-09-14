@@ -70,11 +70,14 @@ Current tactics:
 - Follow-live sticks with `scrollTop = scrollHeight - clientHeight` in the same
   layout pass that grows the spacer, instead of a later `scrollToIndex(end)`.
   A small move away from an already-stuck tail during the programmatic lock
-  (focus/`scrollIntoView`) releases follow-live; in-flight viewport saves are
-  skipped so prepend anchoring is not overwritten. History prepends shift
-  `scrollTop` by the spacer delta in that same layout pass (not a later rAF
-  `scrollToIndex`) so two prepends in consecutive frames cannot cancel the
-  parked-row correction.
+  (focus/`scrollIntoView`) releases follow-live; the stick itself is marked so a
+  scripted `scrollTop` away from the tail is not yanked back. In-flight viewport
+  saves are skipped so prepend anchoring is not overwritten. History prepends
+  shift `scrollTop` by the spacer delta in that same layout pass (not a later
+  rAF `scrollToIndex`) so two prepends in consecutive frames cannot cancel the
+  parked-row correction. A parked `live_bottom`/`restored` row is then pinned to
+  its saved DOM offset on the next frame so a date separator or reaction on that
+  row cannot jump the viewport.
 - Bottom observation and live-read/follow-live attempts are rAF-batched; the
   presenter does not attach extra subtree MutationObservers while scrolling.
 

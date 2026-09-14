@@ -29,6 +29,8 @@ test('native timeline rows show timestamps and formatted HTML without the legacy
   assert.match(presenter, /followingLiveRef/);
   assert.match(presenter, /estimateNativeTimelineRowSize/);
   assert.match(presenter, /scrollEl\.scrollTop = nextTop/);
+  assert.match(presenter, /applyingStickRef/);
+  assert.match(presenter, /CSS.escape\(parkedEventId\)/);
   assert.doesNotMatch(presenter, /dangerouslySetInnerHTML/);
 });
 
