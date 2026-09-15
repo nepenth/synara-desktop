@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   estimateNativeTimelineRowSize,
   NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX,
+  NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX,
   NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT,
   NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
   nativeFollowLiveAttemptKey,
@@ -290,6 +291,15 @@ test('kind-aware row estimates keep grouped continuations and dividers smaller t
   assert.ok(divider < groupedText);
   assert.ok(image > ungroupedText);
   assert.equal(
+    estimateNativeTimelineRowSize({
+      kind: 'message',
+      grouped: false,
+      bodyLineCount: 1,
+      reactionCount: 1,
+    }) - ungroupedText,
+    NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX
+  );
+  assert.equal(
     estimateNativeTimelineRowSize({ kind: 'unknown', grouped: false }),
     NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX
   );
@@ -379,5 +389,7 @@ test('presenter honors the 250ms placement lock, skips in-flight viewport saves,
   assert.match(presenter, /lastDistanceFromBottomRef.current <= 8/);
   assert.match(presenter, /applyingStickRef/);
   assert.match(presenter, /CSS.escape\(parkedEventId\)/);
+  assert.match(presenter, /parkedVisualTopRef/);
+  assert.match(presenter, /parkedResizeObserverRef/);
   assert.match(presenter, /stickToLiveTail/);
 });

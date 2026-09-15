@@ -155,6 +155,12 @@ const findAnchorIndex = (
     (row) => rowKey(row) === anchor.itemId || (anchor.eventId && rowEventId(row) === anchor.eventId)
   );
 
+const parkedNodeVisualTop = (scrollEl: HTMLElement, eventId: string): number | undefined => {
+  const node = scrollEl.querySelector(`[data-native-timeline-event-id="${CSS.escape(eventId)}"]`);
+  if (!(node instanceof HTMLElement)) return undefined;
+  return node.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top;
+};
+
 const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilities | undefined => {
   if (row.kind === 'sticker') return row.event.capabilities;
   if (row.kind === 'other') return row.event?.capabilities;
@@ -2077,6 +2083,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const followingLiveRef = useRef(false);
   const applyingStickRef = useRef(false);
   const parkedPinFrameRef = useRef(0);
+  const parkedPinGenerationRef = useRef(0);
+  const parkedVisualTopRef = useRef<number | undefined>(undefined);
+  const parkedResizeObserverRef = useRef<ResizeObserver | undefined>(undefined);
   const programmaticScrollUntilRef = useRef(0);
   const lastDistanceFromBottomRef = useRef(Number.POSITIVE_INFINITY);
   const stickToLiveTail = useCallback(() => {
@@ -2210,6 +2219,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     if (!scrollEl || rows.length === 0) return;
     const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 8;
     if (atBottom) {
+      parkedVisualTopRef.current = undefined;
       setNativeTimelineViewport(roomId, { atBottom: true });
       return;
     }
@@ -2217,11 +2227,18 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const row = visible ? rows[visible.index] : undefined;
     if (!visible || !row) return;
     lastParkedStartRef.current = visible.start;
+    const anchorEventId = rowEventId(row);
+    if (anchorEventId) {
+      const visualTop = parkedNodeVisualTop(scrollEl, anchorEventId);
+      if (visualTop !== undefined) parkedVisualTopRef.current = visualTop;
+    } else {
+      parkedVisualTopRef.current = undefined;
+    }
     setNativeTimelineViewport(roomId, {
       atBottom: false,
       anchor: {
         itemId: rowKey(row),
-        eventId: rowEventId(row),
+        eventId: anchorEventId,
         offsetPx: scrollEl.scrollTop - visible.start,
       },
     });
@@ -2258,6 +2275,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     lastParkedStartRef.current = -1;
     lastClientHeightRef.current = 0;
     applyingStickRef.current = false;
+    parkedPinGenerationRef.current += 1;
+    parkedVisualTopRef.current = undefined;
+    parkedResizeObserverRef.current?.disconnect();
+    parkedResizeObserverRef.current = undefined;
     if (parkedPinFrameRef.current !== 0) {
       window.cancelAnimationFrame(parkedPinFrameRef.current);
       parkedPinFrameRef.current = 0;
@@ -2571,23 +2592,49 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         }
       }
       if (!parkedEventId) return;
+      parkedPinGenerationRef.current += 1;
+      const generation = parkedPinGenerationRef.current;
       if (parkedPinFrameRef.current !== 0) {
         window.cancelAnimationFrame(parkedPinFrameRef.current);
-      }
-      parkedPinFrameRef.current = window.requestAnimationFrame(() => {
         parkedPinFrameRef.current = 0;
-        if (followingLiveRef.current) return;
+      }
+      parkedResizeObserverRef.current?.disconnect();
+      parkedResizeObserverRef.current = undefined;
+      const applyDomPin = () => {
+        if (parkedPinGenerationRef.current !== generation || followingLiveRef.current) return;
         const el = scrollRef.current;
         if (!el) return;
-        const node = el.querySelector(
-          `[data-native-timeline-event-id="${CSS.escape(parkedEventId)}"]`
-        );
-        if (!(node instanceof HTMLElement)) return;
-        const current = node.getBoundingClientRect().top - el.getBoundingClientRect().top;
-        const desired = -offsetPx;
-        const delta = current - desired;
-        if (Math.abs(delta) > 0.5) el.scrollTop += delta;
-      });
+        const current = parkedNodeVisualTop(el, parkedEventId);
+        if (current === undefined) return;
+        const desired = parkedVisualTopRef.current;
+        // Only restore a visual top recorded from a user park. Capturing here
+        // would freeze pre-offset placement (room reentry applies offsetPx on
+        // the next frame) and fight Home/End.
+        if (desired !== undefined && Math.abs(current - desired) > 0.5) {
+          el.scrollTop += current - desired;
+        }
+        if (!parkedResizeObserverRef.current) {
+          const node = el.querySelector(
+            `[data-native-timeline-event-id="${CSS.escape(parkedEventId)}"]`
+          );
+          if (node instanceof HTMLElement) {
+            const observer = new ResizeObserver(() => applyDomPin());
+            parkedResizeObserverRef.current = observer;
+            observer.observe(node);
+          }
+        }
+      };
+      applyDomPin();
+      const schedule = (remaining: number) => {
+        parkedPinFrameRef.current = window.requestAnimationFrame(() => {
+          parkedPinFrameRef.current = 0;
+          applyDomPin();
+          if (remaining > 0 && parkedPinGenerationRef.current === generation) {
+            schedule(remaining - 1);
+          }
+        });
+      };
+      schedule(1);
     },
     [virtualizer]
   );

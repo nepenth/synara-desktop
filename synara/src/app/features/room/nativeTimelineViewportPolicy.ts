@@ -191,6 +191,7 @@ export const nativeVisibleReadFrontier = (
     : undefined;
 
 export const NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX = 64;
+export const NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX = 36;
 export const NATIVE_TIMELINE_MEDIA_MAX_PX = 480;
 export const NATIVE_TIMELINE_STICKER_MAX_PX = 256;
 export const NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT = 4000;
@@ -268,6 +269,9 @@ export const nativeTimelineMeasuredSize = (key: string): number | undefined =>
 
 const chromeHeight = (grouped: boolean): number => (grouped ? 32 : 56);
 
+const reactionStripHeight = (hint: NativeTimelineRowSizeHint): number =>
+  (hint.reactionCount ?? 0) > 0 ? NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX : 0;
+
 /** Kind-aware fallback used until `measureElement` records a real row height. */
 export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): number => {
   const chrome = chromeHeight(hint.grouped);
@@ -284,11 +288,11 @@ export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): 
       return 40;
     case 'redacted':
     case 'encrypted_unavailable':
-      return hint.grouped ? 44 : 64;
+      return (hint.grouped ? 44 : 64) + reactionStripHeight(hint);
     case 'call':
       return 72;
     case 'poll':
-      return 140;
+      return 140 + reactionStripHeight(hint);
     case 'sticker': {
       const media =
         reservedNativeTimelineMediaSize(
@@ -297,7 +301,7 @@ export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): 
           NATIVE_TIMELINE_STICKER_MAX_PX,
           NATIVE_TIMELINE_STICKER_MAX_PX
         )?.height ?? 96;
-      return chrome + media;
+      return chrome + media + reactionStripHeight(hint);
     }
     case 'message': {
       if (hint.messageType === 'image' || hint.messageType === 'video') {
@@ -308,13 +312,13 @@ export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): 
             NATIVE_TIMELINE_MEDIA_MAX_PX,
             NATIVE_TIMELINE_MEDIA_MAX_PX
           )?.height ?? 180;
-        return chrome + media;
+        return chrome + media + reactionStripHeight(hint);
       }
-      if (hint.messageType === 'audio') return chrome + 48;
-      if (hint.messageType === 'file') return chrome + 40;
-      if (hint.hasFormattedCode) return chrome + 140;
+      if (hint.messageType === 'audio') return chrome + 48 + reactionStripHeight(hint);
+      if (hint.messageType === 'file') return chrome + 40 + reactionStripHeight(hint);
+      if (hint.hasFormattedCode) return chrome + 140 + reactionStripHeight(hint);
       const lines = Math.min(8, Math.max(1, hint.bodyLineCount ?? 1));
-      return chrome + lines * 24;
+      return chrome + lines * 24 + reactionStripHeight(hint);
     }
     default:
       return NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX;
