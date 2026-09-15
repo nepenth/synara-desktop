@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.37] - 2026-09-15
+
 - Persist decided agent approvals in `in.synara.agent_approval_history` account
   data so the Approvals Recent tab survives restarts and syncs across devices.
   Recent prefers an inbox `decision` over account data; a decided inbox row
@@ -20,7 +22,6 @@
 - Dismiss Linux OS notifications when a room is focused or an agent-approval
   decision is submitted (`desktop_dismiss_notifications`). macOS remains a no-op
   for this command.
-
 - Make native room-timeline scrolling smoother: cache measured row heights,
   reserve media space, coalesce view deltas, and stick to the live tail in the
   same layout pass. Follow-live releases on a focus/`scrollIntoView` move away
@@ -30,7 +31,10 @@
   itself, a scripted move off the live tail is not yanked back, same-frame
   deltas apply in revision order (keeping a successful prefix on a true gap),
   and the measured-size cache is keyed by row content so edits do not reuse
-  stale heights.
+  stale heights. Home drops follow-live so a keyboard move into history is
+  not yanked back toward the live tail.
+- Bump rustls to 0.23.45 in the desktop and workspace lockfiles
+  (RUSTSEC-2026-0285).
 - Promote the composer action recipe to a shared `quietActionButton` export in
   `Depth.css.ts` (`RoomComposer.css.ts` re-exports it as `ComposerAction`, no
   visual change) and restyle the message formatting toolbar and message-editor

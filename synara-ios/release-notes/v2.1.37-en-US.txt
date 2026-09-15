@@ -1,0 +1,1 @@
+Approvals Recent now syncs decided prompts across devices. Explore can browse other homeservers with clearer errors. Devices show trust chips, identity key, and first-seen. Timeline scrolling holds your place when older messages load.
