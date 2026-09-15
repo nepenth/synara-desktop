@@ -2538,6 +2538,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         stickToLiveTail();
         return;
       }
+      // Home is an explicit history request. Drop follow-live before the
+      // browser scrolls so a same-turn stick cannot leave the viewport only
+      // a few dozen pixels off the tail.
+      if (event instanceof KeyboardEvent && event.key === 'Home') {
+        followingLiveRef.current = false;
+      }
       programmaticScrollUntilRef.current = 0;
       if (smoothScrollActiveRef.current) {
         smoothScrollActiveRef.current = false;

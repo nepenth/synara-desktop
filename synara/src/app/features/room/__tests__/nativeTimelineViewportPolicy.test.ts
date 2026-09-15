@@ -382,6 +382,7 @@ test('presenter honors the 250ms placement lock, skips in-flight viewport saves,
   );
   assert.match(presenter, /if \(!locked\) saveViewport\(\)/);
   assert.match(presenter, /addEventListener\('focusin', onUserInput\)/);
+  assert.match(presenter, /event.key === 'Home'/);
   assert.match(presenter, /data-native-timeline-row-key=\{rowKey\(row\)\}/);
   assert.match(presenter, /keyed !== undefined && fromKey === undefined/);
   assert.match(presenter, /rowsRef.current/);
