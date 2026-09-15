@@ -18,6 +18,25 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-15 client polish release-candidate review (2.1.37):
+
+- PR #1127 passed its required Quality gate and merged to main as `91818c86`.
+  iOS simulator unit and UI suites are skipped on ordinary PRs and run on this
+  `release/v2.1.37` candidate.
+- Desktop Node validation, Rust desktop shell, iOS compile, package smoke, and
+  the parked-row native-timeline Playwright suite were green on the feature
+  branch before merge. This Linux environment cannot run UIKit or signed
+  desktop installers.
+- Remaining human checks before tagging: Approvals Pending/Recent across two
+  clients after restart; Explore a remote homeserver; Notes tab strip visible
+  above the composer; Devices expand for fingerprint / first-seen; Linux
+  notification dismiss on room focus; timeline follow-live and parked history
+  while older messages load.
+- The maintainer authorized merging #1127 and cutting this release. Final
+  signed-artifact install/update, physical-device testing, and live
+  cross-client UI checks were not repeated here. Do not push tag `v2.1.37`
+  until this candidate's Quality gate (including iOS simulator tests) is green.
+
 2026-09-13 approvals center and inbox notifications release-candidate review (2.1.36):
 
 - PR #1125 passed its required Quality gate and merged to main as `414ecf4a`.

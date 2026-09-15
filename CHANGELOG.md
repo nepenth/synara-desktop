@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.37] - 2026-09-15
+
 - Persist decided agent approvals in `in.synara.agent_approval_history` account
   data so the Approvals Recent tab survives restarts and syncs across devices.
   Recent prefers an inbox `decision` over account data; a decided inbox row
@@ -20,7 +22,6 @@
 - Dismiss Linux OS notifications when a room is focused or an agent-approval
   decision is submitted (`desktop_dismiss_notifications`). macOS remains a no-op
   for this command.
-
 - Make native room-timeline scrolling smoother: cache measured row heights,
   reserve media space, coalesce view deltas, and stick to the live tail in the
   same layout pass. Follow-live releases on a focus/`scrollIntoView` move away
