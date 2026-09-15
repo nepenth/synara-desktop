@@ -16,12 +16,79 @@ pub use live::{
 /// Signal only — never carries device keys or tokens.
 pub const DEVICE_LIST_UPDATED_EVENT: &str = "matrix-device-list-updated";
 
+/// Per-session crypto trust. `verified` is cross-signing trust only.
+/// Direct SAS without cross-signing is `verified_locally_only`. The previous
+/// `unsupported` wire value deserializes as `no_encryption`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceTrust {
     Verified,
+    VerifiedLocallyOnly,
     Unverified,
-    Unsupported,
+    #[serde(alias = "unsupported")]
+    NoEncryption,
+    Dehydrated,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NativeDeviceTrustSignals {
+    pub has_crypto_device: bool,
+    pub is_dehydrated: bool,
+    pub is_verified_with_cross_signing: bool,
+    pub is_verified: bool,
+}
+
+/// Map SDK crypto flags onto the product trust vocabulary.
+pub fn project_native_device_trust(signals: NativeDeviceTrustSignals) -> NativeDeviceTrust {
+    if !signals.has_crypto_device {
+        return NativeDeviceTrust::NoEncryption;
+    }
+    if signals.is_dehydrated {
+        return NativeDeviceTrust::Dehydrated;
+    }
+    if signals.is_verified_with_cross_signing {
+        return NativeDeviceTrust::Verified;
+    }
+    if signals.is_verified {
+        return NativeDeviceTrust::VerifiedLocallyOnly;
+    }
+    NativeDeviceTrust::Unverified
+}
+
+/// Homeserver display names and last-seen IPs are untrusted. Drop empty or
+/// oversized values rather than copying them onto the snapshot wire.
+pub const MAX_DEVICE_DISPLAY_NAME_CHARS: usize = 256;
+pub const MAX_DEVICE_LAST_SEEN_IP_CHARS: usize = 64;
+
+pub fn bounded_optional_hs_text(value: Option<String>, max_chars: usize) -> Option<String> {
+    let trimmed = value?.trim().to_owned();
+    if trimmed.is_empty() || trimmed.chars().count() > max_chars {
+        None
+    } else {
+        Some(trimmed)
+    }
+}
+
+/// Element-style ed25519 fingerprint: unpadded base64 in 4-character groups.
+/// Rejects anything that is not a 32-byte ed25519 key encoding.
+pub fn format_ed25519_fingerprint(unpadded_base64: &str) -> Option<String> {
+    const ED25519_UNPADDED_BASE64_LEN: usize = 43;
+    let trimmed = unpadded_base64.trim();
+    if trimmed.len() != ED25519_UNPADDED_BASE64_LEN
+        || !trimmed
+            .bytes()
+            .all(|byte| matches!(byte, b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'+' | b'/'))
+    {
+        return None;
+    }
+    Some(
+        trimmed
+            .as_bytes()
+            .chunks(4)
+            .map(|chunk| std::str::from_utf8(chunk).expect("ascii base64"))
+            .collect::<Vec<_>>()
+            .join(" "),
+    )
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -33,6 +100,12 @@ pub struct NativeDeviceSummary {
     pub last_seen_ts: Option<u64>,
     pub trust: NativeDeviceTrust,
     pub is_current: bool,
+    #[serde(default)]
+    pub is_cross_signed_by_owner: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub first_seen_ts: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ed25519_fingerprint: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,17 +200,23 @@ mod tests {
                 last_seen_ts: Some(1),
                 trust: NativeDeviceTrust::Verified,
                 is_current: true,
+                is_cross_signed_by_owner: true,
+                first_seen_ts: Some(1),
+                ed25519_fingerprint: Some("ABCD EFGH IJKL MNOP QRST UVWX YZab cde".into()),
             }],
         };
         let json = serde_json::to_string(&snapshot)
             .unwrap()
             .to_ascii_lowercase();
         assert!(json.contains("lastseenip"));
+        assert!(json.contains("ed25519fingerprint"));
+        assert!(json.contains("abcd efgh ijkl"));
+        assert!(json.contains("iscrosssignedbyowner"));
+        assert!(json.contains("firstseents"));
         for forbidden in [
             "access_token",
             "refresh_token",
             "device_key",
-            "ed25519",
             "curve25519",
             "password",
             "auth_session",
@@ -194,6 +273,9 @@ mod tests {
                 last_seen_ts: Some(1),
                 trust: NativeDeviceTrust::Unverified,
                 is_current: false,
+                is_cross_signed_by_owner: false,
+                first_seen_ts: None,
+                ed25519_fingerprint: None,
             },
             NativeDeviceSummary {
                 device_id: "A".into(),
@@ -202,6 +284,9 @@ mod tests {
                 last_seen_ts: Some(1),
                 trust: NativeDeviceTrust::Unverified,
                 is_current: false,
+                is_cross_signed_by_owner: false,
+                first_seen_ts: None,
+                ed25519_fingerprint: None,
             },
             NativeDeviceSummary {
                 device_id: "CUR".into(),
@@ -210,6 +295,9 @@ mod tests {
                 last_seen_ts: Some(0),
                 trust: NativeDeviceTrust::Verified,
                 is_current: true,
+                is_cross_signed_by_owner: true,
+                first_seen_ts: None,
+                ed25519_fingerprint: None,
             },
         ];
         sort_native_device_summaries(&mut devices);
@@ -223,5 +311,125 @@ mod tests {
             devices,
         }
         .contains("CUR"));
+    }
+
+    #[test]
+    fn trust_projection_distinguishes_cross_signing_local_sas_and_missing_crypto() {
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: false,
+                is_dehydrated: false,
+                is_verified_with_cross_signing: false,
+                is_verified: false,
+            }),
+            NativeDeviceTrust::NoEncryption
+        );
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: true,
+                is_dehydrated: true,
+                is_verified_with_cross_signing: false,
+                is_verified: false,
+            }),
+            NativeDeviceTrust::Dehydrated
+        );
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: true,
+                is_dehydrated: false,
+                is_verified_with_cross_signing: true,
+                is_verified: true,
+            }),
+            NativeDeviceTrust::Verified
+        );
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: true,
+                is_dehydrated: false,
+                is_verified_with_cross_signing: false,
+                is_verified: true,
+            }),
+            NativeDeviceTrust::VerifiedLocallyOnly
+        );
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: true,
+                is_dehydrated: false,
+                is_verified_with_cross_signing: false,
+                is_verified: false,
+            }),
+            NativeDeviceTrust::Unverified
+        );
+        let decoded: NativeDeviceTrust = serde_json::from_str("\"unsupported\"").unwrap();
+        assert_eq!(decoded, NativeDeviceTrust::NoEncryption);
+        assert_eq!(
+            serde_json::to_string(&NativeDeviceTrust::NoEncryption).unwrap(),
+            "\"no_encryption\""
+        );
+        assert_eq!(
+            serde_json::to_string(&NativeDeviceTrust::VerifiedLocallyOnly).unwrap(),
+            "\"verified_locally_only\""
+        );
+    }
+
+    #[test]
+    fn ed25519_fingerprint_is_grouped_in_fours() {
+        assert_eq!(
+            format_ed25519_fingerprint("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopq").as_deref(),
+            Some("ABCD EFGH IJKL MNOP QRST UVWX YZab cdef ghij klmn opq")
+        );
+        assert_eq!(format_ed25519_fingerprint("  ").as_deref(), None);
+        assert_eq!(
+            format_ed25519_fingerprint(&"A".repeat(1_024)).as_deref(),
+            None
+        );
+        assert_eq!(format_ed25519_fingerprint(&"é".repeat(43)).as_deref(), None);
+        assert_eq!(
+            format_ed25519_fingerprint("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghij=").as_deref(),
+            None
+        );
+        let value: NativeDeviceSnapshot = serde_json::from_value(serde_json::json!({
+            "sessionGeneration": 1,
+            "ownVerification": "unverified",
+            "hasDevicesToVerifyAgainst": false,
+            "devices": [{
+                "deviceId": "OLD",
+                "trust": "unsupported",
+                "isCurrent": false
+            }]
+        }))
+        .expect("older snapshots without additive fields remain readable");
+        assert_eq!(value.devices[0].trust, NativeDeviceTrust::NoEncryption);
+        assert!(!value.devices[0].is_cross_signed_by_owner);
+        assert_eq!(value.devices[0].ed25519_fingerprint, None);
+    }
+
+    #[test]
+    fn homeserver_display_name_and_ip_are_dropped_when_empty_or_oversized() {
+        assert_eq!(
+            bounded_optional_hs_text(Some("  MacBook  ".into()), MAX_DEVICE_DISPLAY_NAME_CHARS)
+                .as_deref(),
+            Some("MacBook")
+        );
+        assert_eq!(
+            bounded_optional_hs_text(Some("   ".into()), MAX_DEVICE_DISPLAY_NAME_CHARS),
+            None
+        );
+        assert_eq!(
+            bounded_optional_hs_text(
+                Some("n".repeat(MAX_DEVICE_DISPLAY_NAME_CHARS + 1)),
+                MAX_DEVICE_DISPLAY_NAME_CHARS
+            ),
+            None
+        );
+        assert_eq!(
+            bounded_optional_hs_text(Some("1".repeat(80)), MAX_DEVICE_LAST_SEEN_IP_CHARS),
+            None
+        );
+        assert_eq!(
+            bounded_optional_hs_text(Some("192.0.2.1".into()), MAX_DEVICE_LAST_SEEN_IP_CHARS)
+                .as_deref(),
+            Some("192.0.2.1")
+        );
     }
 }

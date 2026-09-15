@@ -112,3 +112,29 @@ test('failed or mismatched native replies cannot publish optimistic approval com
   assert.deepEqual(notices, []);
   unsubscribe();
 });
+
+test('an optimistic decision labels the Recent row before account data syncs', async () => {
+  const client = {};
+  const projection = createApprovalInboxProjection();
+  projection.receive(
+    await loadApprovalInbox(async () => ({ available: true, value: snapshot(1) })),
+    client
+  );
+  const release = activateApprovalDecisionScope(projection.scope);
+  const unsubscribe = subscribeApprovalDecisions((notice) =>
+    projection.complete(notice.scope, notice)
+  );
+  await decideAgentApprovalWithNativeOwner(
+    { roomId: '!room:example.org', eventId: '$event', actionId: 'agent-approval.deny' },
+    async () => ({
+      available: true,
+      value: { roomId: '!room:example.org', eventId: '$event', status: 'applied' },
+    })
+  );
+  const item = projection.read(2000)?.items[0];
+  assert.equal(item?.status, 'decided');
+  assert.equal(item?.decision, 'deny');
+  assert.equal(item?.decidedAt, 2000);
+  unsubscribe();
+  release();
+});

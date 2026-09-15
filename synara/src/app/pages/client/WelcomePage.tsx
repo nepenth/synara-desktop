@@ -7,8 +7,10 @@ import {
   SYNARA_PROJECT_URL,
   SYNARA_RELEASES_URL,
   SYNARA_SOURCE_CODE_URL,
+  SYNARA_SUPPORT_URL,
   openExternalUrlFromClick,
 } from '../../utils/appLinks';
+import * as depthCss from '../../styles/Depth.css';
 
 export function WelcomePage() {
   return (
@@ -41,6 +43,7 @@ export function WelcomePage() {
               <Box grow="Yes" style={{ maxWidth: toRem(300) }} direction="Column" gap="300">
                 <Button
                   as="a"
+                  className={depthCss.quietInteractiveSurface}
                   href={SYNARA_SOURCE_CODE_URL}
                   onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_SOURCE_CODE_URL)}
                   target="_blank"
@@ -53,15 +56,31 @@ export function WelcomePage() {
                 </Button>
                 <Button
                   as="a"
+                  className={depthCss.quietInteractiveSurface}
                   href={SYNARA_PROJECT_URL}
                   onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_PROJECT_URL)}
                   target="_blank"
                   rel="noreferrer noopener"
                   fill="Soft"
-                  before={<Icon size="200" src={Icons.Heart} />}
+                  before={<Icon size="200" src={Icons.Info} />}
                 >
                   <Text as="span" size="B400" truncate>
                     Project
+                  </Text>
+                </Button>
+                <Button
+                  as="a"
+                  className={depthCss.quietInteractiveSurface}
+                  href={SYNARA_SUPPORT_URL}
+                  onClick={(evt) => openExternalUrlFromClick(evt, SYNARA_SUPPORT_URL)}
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  variant="Primary"
+                  fill="Soft"
+                  before={<Icon size="200" src={Icons.Heart} />}
+                >
+                  <Text as="span" size="B400" truncate>
+                    Support this project
                   </Text>
                 </Button>
               </Box>

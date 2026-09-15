@@ -6,7 +6,7 @@ import { AllMessagesNotifications } from './AllMessages';
 import { SpecialMessagesNotifications } from './SpecialMessages';
 import { KeywordMessagesNotifications } from './KeywordMessages';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -40,11 +40,14 @@ function NativeModePicker({
       {(Object.keys(MODE_LABEL) as NativePushRuleMode[]).map((mode) => (
         <Button
           key={mode}
+          className={SettingsQuietControl}
           size="300"
-          variant={mode === value ? 'Primary' : 'Secondary'}
-          fill={mode === value ? 'Solid' : 'Soft'}
+          variant="Secondary"
+          fill={mode === value ? 'Soft' : 'None'}
           outlined
           radii="300"
+          aria-pressed={mode === value}
+          before={mode === value ? <Icon size="100" src={Icons.Check} /> : undefined}
           disabled={disabled}
           onClick={() => onChange(mode)}
         >
@@ -188,11 +191,16 @@ function NativePushRulesEditor() {
               after={
                 snapshot && (
                   <Button
+                    className={SettingsQuietControl}
                     size="300"
                     variant="Secondary"
-                    fill="Soft"
+                    fill={snapshot.mentions[ruleId] ? 'Soft' : 'None'}
                     outlined
                     radii="300"
+                    aria-pressed={snapshot.mentions[ruleId]}
+                    before={
+                      snapshot.mentions[ruleId] ? <Icon size="100" src={Icons.Check} /> : undefined
+                    }
                     disabled={busy}
                     onClick={() =>
                       write(() => nativePushRulesSetMention(ruleId, !snapshot.mentions[ruleId]))
@@ -242,6 +250,7 @@ function NativePushRulesEditor() {
                 />
               </Box>
               <Button
+                className={SettingsQuietControl}
                 size="400"
                 variant="Secondary"
                 fill="Soft"
@@ -268,10 +277,12 @@ function NativePushRulesEditor() {
               title={`"${item}"`}
               before={
                 <IconButton
+                  className={SettingsQuietControl}
                   onClick={() => write(() => nativePushRulesRemoveKeyword(item))}
                   size="300"
                   radii="Pill"
                   variant="Secondary"
+                  fill="None"
                   disabled={busy}
                 >
                   <Icon src={Icons.Cross} size="100" />
@@ -300,7 +311,13 @@ export function Notifications({ requestClose }: NotificationsProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+              aria-label="Close"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>

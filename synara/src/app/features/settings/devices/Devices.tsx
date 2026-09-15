@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Button, Text, IconButton, Icon, Icons, Scroll, Spinner } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { InfoCard } from '../../../components/info-card';
 import { useDeviceList, useSplitCurrentDevice } from '../../../hooks/useDeviceList';
@@ -68,7 +68,13 @@ export function Devices({ requestClose }: DevicesProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+              aria-label="Close"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>

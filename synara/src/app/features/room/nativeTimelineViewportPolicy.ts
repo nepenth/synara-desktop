@@ -189,3 +189,138 @@ export const nativeVisibleReadFrontier = (
   isValidEventIdHint(frontier.receiptTailEventId)
     ? frontier.receiptTailEventId
     : undefined;
+
+export const NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX = 64;
+export const NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX = 36;
+export const NATIVE_TIMELINE_MEDIA_MAX_PX = 480;
+export const NATIVE_TIMELINE_STICKER_MAX_PX = 256;
+export const NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT = 4000;
+const nativeTimelineMeasuredSizes = new Map<string, number>();
+
+export type NativeTimelineRowSizeHint = {
+  kind: string;
+  grouped: boolean;
+  bodyLineCount?: number;
+  bodyLength?: number;
+  hasFormattedCode?: boolean;
+  messageType?: string;
+  mediaWidth?: number;
+  mediaHeight?: number;
+  reactionCount?: number;
+};
+
+/** Scale Matrix `info.w/h` into the presenter media box so image loads do not reflow. */
+export const reservedNativeTimelineMediaSize = (
+  width: number | undefined,
+  height: number | undefined,
+  maxWidth: number,
+  maxHeight: number
+): { width: number; height: number } | undefined => {
+  if (
+    typeof width !== 'number' ||
+    typeof height !== 'number' ||
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    width <= 0 ||
+    height <= 0 ||
+    maxWidth <= 0 ||
+    maxHeight <= 0
+  ) {
+    return undefined;
+  }
+  const scale = Math.min(maxWidth / width, maxHeight / height, 1);
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+};
+
+export const nativeTimelineMeasuredSizeIdentity = (hint: NativeTimelineRowSizeHint): string =>
+  [
+    hint.kind,
+    hint.grouped ? '1' : '0',
+    hint.bodyLineCount ?? '',
+    hint.bodyLength ?? '',
+    hint.hasFormattedCode ? '1' : '0',
+    hint.messageType ?? '',
+    hint.mediaWidth ?? '',
+    hint.mediaHeight ?? '',
+    hint.reactionCount ?? '',
+  ].join(':');
+
+export const nativeTimelineMeasuredSizeKey = (
+  roomId: string,
+  rowKey: string,
+  sizeIdentity?: string
+): string => (sizeIdentity ? `${roomId}\0${rowKey}\0${sizeIdentity}` : `${roomId}\0${rowKey}`);
+
+export const rememberNativeTimelineMeasuredSize = (key: string, size: number): void => {
+  if (!Number.isFinite(size) || size <= 0) return;
+  if (nativeTimelineMeasuredSizes.has(key)) nativeTimelineMeasuredSizes.delete(key);
+  nativeTimelineMeasuredSizes.set(key, Math.round(size));
+  if (nativeTimelineMeasuredSizes.size > NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT) {
+    const oldest = nativeTimelineMeasuredSizes.keys().next().value;
+    if (oldest !== undefined) nativeTimelineMeasuredSizes.delete(oldest);
+  }
+};
+
+export const nativeTimelineMeasuredSize = (key: string): number | undefined =>
+  nativeTimelineMeasuredSizes.get(key);
+
+const chromeHeight = (grouped: boolean): number => (grouped ? 32 : 56);
+
+const reactionStripHeight = (hint: NativeTimelineRowSizeHint): number =>
+  (hint.reactionCount ?? 0) > 0 ? NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX : 0;
+
+/** Kind-aware fallback used until `measureElement` records a real row height. */
+export const estimateNativeTimelineRowSize = (hint: NativeTimelineRowSizeHint): number => {
+  const chrome = chromeHeight(hint.grouped);
+  switch (hint.kind) {
+    case 'date_separator':
+    case 'read_marker':
+    case 'unread_marker':
+    case 'timeline_start':
+    case 'pagination':
+      return 40;
+    case 'membership':
+    case 'state':
+    case 'other':
+      return 40;
+    case 'redacted':
+    case 'encrypted_unavailable':
+      return (hint.grouped ? 44 : 64) + reactionStripHeight(hint);
+    case 'call':
+      return 72;
+    case 'poll':
+      return 140 + reactionStripHeight(hint);
+    case 'sticker': {
+      const media =
+        reservedNativeTimelineMediaSize(
+          hint.mediaWidth,
+          hint.mediaHeight,
+          NATIVE_TIMELINE_STICKER_MAX_PX,
+          NATIVE_TIMELINE_STICKER_MAX_PX
+        )?.height ?? 96;
+      return chrome + media + reactionStripHeight(hint);
+    }
+    case 'message': {
+      if (hint.messageType === 'image' || hint.messageType === 'video') {
+        const media =
+          reservedNativeTimelineMediaSize(
+            hint.mediaWidth,
+            hint.mediaHeight,
+            NATIVE_TIMELINE_MEDIA_MAX_PX,
+            NATIVE_TIMELINE_MEDIA_MAX_PX
+          )?.height ?? 180;
+        return chrome + media + reactionStripHeight(hint);
+      }
+      if (hint.messageType === 'audio') return chrome + 48 + reactionStripHeight(hint);
+      if (hint.messageType === 'file') return chrome + 40 + reactionStripHeight(hint);
+      if (hint.hasFormattedCode) return chrome + 140 + reactionStripHeight(hint);
+      const lines = Math.min(8, Math.max(1, hint.bodyLineCount ?? 1));
+      return chrome + lines * 24 + reactionStripHeight(hint);
+    }
+    default:
+      return NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX;
+  }
+};

@@ -47,10 +47,14 @@ import {
   planAgentApprovalNativeNotificationAction,
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
-import { buildDesktopNotificationRoomRoute } from '../../utils/desktop';
+import {
+  buildDesktopNotificationRoomRoute,
+  dismissDesktopNotifications,
+} from '../../utils/desktop';
 import { notifiedEventIdsCache } from '../../notifications/notificationCaches';
 import { DesktopUpdaterProvider } from '../../features/desktop-updater/DesktopUpdaterProvider';
 import { decideAgentApprovalWithNativeOwner } from '../../features/room/nativeReactionOwner';
+import { subscribeApprovalDecisions } from '../../features/approvals/approvalDecisionEvents';
 import {
   decideNotificationWithNativeOwner,
   dismissNotificationWithNativeOwner,
@@ -268,6 +272,9 @@ function MessageNotifications() {
     const reportFocus = () => {
       const focused = document.hasFocus() ? selectedRoomId ?? null : null;
       setNotificationFocusWithNativeOwner(focused).catch(() => undefined);
+      if (focused) {
+        void dismissDesktopNotifications([`room:${focused}`]);
+      }
     };
     reportFocus();
     window.addEventListener('focus', reportFocus);
@@ -312,6 +319,7 @@ function MessageNotifications() {
             title,
             body,
             route: route ?? buildDesktopNotificationRoomRoute(roomId, eventId),
+            dismissKeys: [`room:${roomId}`],
           });
           return shown ? 'delivered' : 'failed';
         } catch {
@@ -533,6 +541,7 @@ function AgentApprovalNotifications() {
             roomId,
             eventId: approvalEventId,
           },
+          dismissKeys: [`room:${roomId}`, `event:${approvalEventId}`],
         });
         return shown ? 'delivered' : 'failed';
       }
@@ -645,6 +654,12 @@ function AgentApprovalNotifications() {
     };
   }, [handleNativeNotificationAction]);
 
+  useEffect(() => {
+    return subscribeApprovalDecisions((notice) => {
+      void dismissDesktopNotifications([`event:${notice.eventId}`]);
+    });
+  }, []);
+
   const playSound = useCallback(() => {
     audioRef.current?.play();
   }, []);
@@ -742,6 +757,7 @@ function LaterReminderNotifications() {
           title: 'Reminder',
           body,
           route: buildDesktopNotificationRoomRoute(roomId, eventId),
+          dismissKeys: [`room:${roomId}`],
         }).catch(() => undefined);
         return;
       }

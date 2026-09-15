@@ -21,6 +21,7 @@ final class AppEnvironmentTests: XCTestCase {
 
         XCTAssertTrue(environment.later is MockLaterService)
         XCTAssertTrue(environment.roomNotes is MockRoomNotesService)
+        XCTAssertTrue(environment.agentApprovalHistory is MockAgentApprovalHistoryService)
     }
 
     func testMatrixClientCoreSessionIdentityDefaultsToNilForMock() async {
@@ -43,12 +44,40 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(device.id, "DEVICEABC")
         XCTAssertEqual(device.displayName, "MacBook")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(device.trust), "Verified")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("verified_locally_only"), "Verified")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unverified"), "Unverified")
-        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Unknown")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("no_encryption"), "Not encrypted")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("dehydrated"), "Backup device")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unsupported"), "Not encrypted")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("something_new"), "Unknown")
+        XCTAssertEqual(
+            RoomManagementError.directoryFailed(
+                "The room directory is rate-limited. Try again in a moment."
+            ).errorDescription,
+            "The room directory is rate-limited. Try again in a moment."
+        )
         XCTAssertNil(SharedCoreDevicesLive.lastActivityDisplay(lastSeenTs: nil))
         XCTAssertNotNil(
             SharedCoreDevicesLive.lastActivityDisplay(
                 lastSeenTs: device.lastSeenTs,
+                now: Date(timeIntervalSince1970: 1_700_000_360)
+            )
+        )
+        let detailed = SharedCoreDevicesLive.devices(
+            deviceId: "DEVICEABC",
+            displayName: "MacBook",
+            isCurrent: false,
+            trust: "verified",
+            lastSeenTs: 1_700_000_000_000,
+            isCrossSignedByOwner: true,
+            firstSeenTs: 1_699_000_000_000,
+            ed25519Fingerprint: "  ABCD EFGH  "
+        )
+        XCTAssertTrue(detailed.isCrossSignedByOwner)
+        XCTAssertEqual(detailed.ed25519Fingerprint, "ABCD EFGH")
+        XCTAssertNotNil(
+            SharedCoreDevicesLive.firstSeenDisplay(
+                firstSeenTs: detailed.firstSeenTs,
                 now: Date(timeIntervalSince1970: 1_700_000_360)
             )
         )
@@ -164,6 +193,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertTrue(environment.messageSender is SharedCoreMessageSendService)
         XCTAssertTrue(environment.eventActions is SharedCoreEventActionService)
         XCTAssertTrue(environment.agentApprovals is SharedCoreAgentApprovalService)
+        XCTAssertTrue(environment.agentApprovalHistory is SharedCoreAgentApprovalHistoryService)
         XCTAssertTrue(environment.crypto is SharedCoreCryptoStatusService)
         XCTAssertTrue(environment.roomManagement is SharedCoreRoomManagementService)
     }

@@ -10,9 +10,10 @@ ready proposal without quietly turning a brainstorm into a migration.
 
 ## Projects
 
-| Project                                                              | Question                                                                                         | Status                                  |
-| -------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ | --------------------------------------- |
-| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover? | Docs-only research completed on 2026-09-01; ownership conclusions and unresolved product/evidence actions are recorded under [program/](rust-ownership-expansion/program/README.md). |
+| Project                                                              | Question                                                                                                                          | Status                                                                                                                                                                               |
+| -------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| [Rust ownership residual census](rust-ownership-expansion/README.md) | Does current source prove any harmful duplicate authority remains after the shared-Core cutover?                                  | Docs-only research completed on 2026-09-01; ownership conclusions and unresolved product/evidence actions are recorded under [program/](rust-ownership-expansion/program/README.md). |
+| [Voice and video calls (MatrixRTC)](voice-video-matrixrtc/README.md) | How should Synara offer voice/video calls between users and with AI agents given Element, Synapse, and `matrix-rust-sdk` support? | Research memo written 2026-09-14; recommends embedding Element Call through the SDK widget driver. No ADR or plan accepted yet.                                                      |
 
 ## Rules for work in this directory
 

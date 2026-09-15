@@ -241,6 +241,7 @@ export type DesktopNotificationPayload = {
   route?: string;
   actions?: DesktopNotificationAction[];
   actionContext?: DesktopNotificationActionContext;
+  dismissKeys?: string[];
 };
 
 export type DesktopNotificationActionEventPayload = {
@@ -333,6 +334,25 @@ export const sanitizeDesktopNotificationRoute = (value: unknown): string | undef
   if (!normalized || normalized.includes('://')) return undefined;
   if (!normalized.startsWith('/') && !normalized.startsWith('#')) return undefined;
   return normalized;
+};
+
+const MAX_DESKTOP_DISMISS_KEY_CHARS = 255;
+const DESKTOP_DISMISS_KEY_PREFIXES = ['room:', 'event:'] as const;
+
+export const sanitizeDesktopDismissKey = (value: unknown): string | undefined => {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  if (
+    !trimmed ||
+    [...trimmed].length > MAX_DESKTOP_DISMISS_KEY_CHARS ||
+    [...trimmed].some((ch) => ch.trim() === '' || ch.charCodeAt(0) < 32)
+  ) {
+    return undefined;
+  }
+  const prefix = DESKTOP_DISMISS_KEY_PREFIXES.find((candidate) => trimmed.startsWith(candidate));
+  if (!prefix || trimmed.length <= prefix.length) return undefined;
+  if (!/^[A-Za-z0-9._:\-!$=/+@]+$/.test(trimmed)) return undefined;
+  return trimmed;
 };
 
 export const buildDesktopNotificationRoomRoute = (roomId: string, eventId?: string): string =>
@@ -1039,12 +1059,29 @@ export const showDesktopNotification = async (
         }
       : undefined;
   }
+  if (notification.dismissKeys && notification.dismissKeys.length > 0) {
+    payload.dismissKeys = notification.dismissKeys
+      .map((key) => sanitizeDesktopDismissKey(key))
+      .filter((key): key is string => key !== undefined);
+    if (payload.dismissKeys.length === 0) {
+      delete payload.dismissKeys;
+    }
+  }
 
   const result = await invokeDesktop<boolean>('desktop_notify', {
     notification: payload,
   });
   return result === true;
 };
+
+export async function dismissDesktopNotifications(keys: string[]): Promise<void> {
+  if (!isSynaraDesktop() || keys.length === 0) return;
+  const sanitized = keys
+    .map(sanitizeDesktopDismissKey)
+    .filter((key): key is string => key !== undefined);
+  if (sanitized.length === 0) return;
+  await invokeDesktopWithAvailability('desktop_dismiss_notifications', { keys: sanitized });
+}
 
 export const getDesktopNotificationCount = (
   unreadCounts: Iterable<{ total?: number; highlight?: number }>,

@@ -4,13 +4,22 @@ import { join } from 'node:path';
 import test from 'node:test';
 
 import {
+  estimateNativeTimelineRowSize,
+  NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX,
+  NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX,
+  NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT,
   NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
   nativeFollowLiveAttemptKey,
   nativeFollowLiveTarget,
   nativeLiveReadAttemptKey,
   nativeLiveReadTarget,
+  nativeTimelineMeasuredSize,
+  nativeTimelineMeasuredSizeIdentity,
+  nativeTimelineMeasuredSizeKey,
   nativeVisibleReadFrontier,
   latestNativeReadEventId,
+  rememberNativeTimelineMeasuredSize,
+  reservedNativeTimelineMediaSize,
   shouldRestoreNativeTimelineViewport,
   shouldShowJumpToLastRead,
   shouldShowJumpToLatest,
@@ -244,4 +253,152 @@ test('frontier metadata ahead of displayed rows cannot acknowledge an unseen new
     undefined
   );
   assert.equal(nativeVisibleReadFrontier('$old:example.org', undefined), undefined);
+});
+
+test('reserves intrinsic media boxes from Matrix info dimensions', () => {
+  assert.deepEqual(reservedNativeTimelineMediaSize(800, 400, 480, 480), {
+    width: 480,
+    height: 240,
+  });
+  assert.deepEqual(reservedNativeTimelineMediaSize(100, 50, 480, 480), {
+    width: 100,
+    height: 50,
+  });
+  assert.equal(reservedNativeTimelineMediaSize(undefined, 50, 480, 480), undefined);
+  assert.equal(reservedNativeTimelineMediaSize(0, 50, 480, 480), undefined);
+});
+
+test('kind-aware row estimates keep grouped continuations and dividers smaller than media', () => {
+  const groupedText = estimateNativeTimelineRowSize({
+    kind: 'message',
+    grouped: true,
+    bodyLineCount: 1,
+  });
+  const ungroupedText = estimateNativeTimelineRowSize({
+    kind: 'message',
+    grouped: false,
+    bodyLineCount: 1,
+  });
+  const divider = estimateNativeTimelineRowSize({ kind: 'date_separator', grouped: false });
+  const image = estimateNativeTimelineRowSize({
+    kind: 'message',
+    grouped: false,
+    messageType: 'image',
+    mediaWidth: 800,
+    mediaHeight: 600,
+  });
+  assert.ok(groupedText < ungroupedText);
+  assert.ok(divider < groupedText);
+  assert.ok(image > ungroupedText);
+  assert.equal(
+    estimateNativeTimelineRowSize({
+      kind: 'message',
+      grouped: false,
+      bodyLineCount: 1,
+      reactionCount: 1,
+    }) - ungroupedText,
+    NATIVE_TIMELINE_REACTION_STRIP_ESTIMATE_PX
+  );
+  assert.equal(
+    estimateNativeTimelineRowSize({ kind: 'unknown', grouped: false }),
+    NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX
+  );
+});
+
+test('measured row sizes are remembered by room and row key', () => {
+  const key = nativeTimelineMeasuredSizeKey('!room:example.org', '$event');
+  rememberNativeTimelineMeasuredSize(key, 128.4);
+  assert.equal(nativeTimelineMeasuredSize(key), 128);
+});
+
+test('measured size keys isolate rooms, edits, grouping, and reactions', () => {
+  const roomA = '!a:example.org';
+  const roomB = '!b:example.org';
+  const short = nativeTimelineMeasuredSizeIdentity({
+    kind: 'message',
+    grouped: true,
+    bodyLineCount: 1,
+    bodyLength: 5,
+    reactionCount: 0,
+  });
+  const grown = nativeTimelineMeasuredSizeIdentity({
+    kind: 'message',
+    grouped: true,
+    bodyLineCount: 8,
+    bodyLength: 200,
+    reactionCount: 0,
+  });
+  const ungrouped = nativeTimelineMeasuredSizeIdentity({
+    kind: 'message',
+    grouped: false,
+    bodyLineCount: 1,
+    bodyLength: 5,
+    reactionCount: 0,
+  });
+  const reacted = nativeTimelineMeasuredSizeIdentity({
+    kind: 'message',
+    grouped: true,
+    bodyLineCount: 1,
+    bodyLength: 5,
+    reactionCount: 2,
+  });
+  assert.notEqual(short, grown);
+  assert.notEqual(short, ungrouped);
+  assert.notEqual(short, reacted);
+  const keyA = nativeTimelineMeasuredSizeKey(roomA, '$same-item', short);
+  const keyB = nativeTimelineMeasuredSizeKey(roomB, '$same-item', short);
+  const keyGrown = nativeTimelineMeasuredSizeKey(roomA, '$same-item', grown);
+  rememberNativeTimelineMeasuredSize(keyA, 80);
+  rememberNativeTimelineMeasuredSize(keyB, 240);
+  rememberNativeTimelineMeasuredSize(keyGrown, 220);
+  assert.equal(nativeTimelineMeasuredSize(keyA), 80);
+  assert.equal(nativeTimelineMeasuredSize(keyB), 240);
+  assert.equal(nativeTimelineMeasuredSize(keyGrown), 220);
+  assert.notEqual(keyA, keyB);
+  assert.notEqual(keyA, keyGrown);
+});
+
+test('measured size cache evicts the least-recently used entry at the cap', () => {
+  const sentinel = nativeTimelineMeasuredSizeKey('!lru:example.org', '$sentinel', 's');
+  rememberNativeTimelineMeasuredSize(sentinel, 50);
+  for (let index = 0; index < NATIVE_TIMELINE_MEASURED_SIZE_CACHE_LIMIT; index += 1) {
+    rememberNativeTimelineMeasuredSize(
+      nativeTimelineMeasuredSizeKey('!lru:example.org', `$fill-${index}`, 's'),
+      60
+    );
+  }
+  assert.equal(nativeTimelineMeasuredSize(sentinel), undefined);
+});
+
+test('presenter honors the 250ms placement lock, skips in-flight viewport saves, and maps measures by row key', () => {
+  const presenter = readFileSync(
+    join(process.cwd(), 'src/app/features/room/NativeTimelinePresenter.tsx'),
+    'utf8'
+  );
+  assert.match(presenter, /performance.now\(\) \+ 250/);
+  assert.match(
+    presenter,
+    /Math.max\(\s*programmaticScrollUntilRef.current,\s*performance.now\(\) \+ 48/
+  );
+  assert.match(presenter, /if \(!locked\) saveViewport\(\)/);
+  assert.match(presenter, /addEventListener\('focusin', onUserInput\)/);
+  assert.match(presenter, /data-native-timeline-row-key=\{rowKey\(row\)\}/);
+  assert.match(presenter, /keyed !== undefined && fromKey === undefined/);
+  assert.match(presenter, /rowsRef.current/);
+  assert.match(presenter, /measuredSizeKeyForRow/);
+  assert.match(presenter, /lastDistanceFromBottomRef.current <= 8/);
+  assert.match(presenter, /applyingStickRef/);
+  assert.match(presenter, /CSS.escape\(parkedEventId\)/);
+  assert.match(presenter, /parkedVisualTopRef/);
+  assert.match(presenter, /visualTopPx/);
+  assert.match(presenter, /unreadAnchorIsMissing/);
+  assert.match(presenter, /parkedResizeObserverRef/);
+  assert.match(presenter, /stickToLiveTail/);
+  assert.match(
+    presenter,
+    /if \(performance.now\(\) < programmaticScrollUntilRef.current\) return;/
+  );
+  assert.match(presenter, /if \(visualTop !== undefined\) parkedVisualTopRef.current = visualTop/);
+  assert.match(presenter, /schedule\(3\)/);
+  assert.doesNotMatch(presenter, /scrollEl\.scrollTop \+= offsetPx/);
 });

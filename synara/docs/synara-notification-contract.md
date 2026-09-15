@@ -1,6 +1,6 @@
 # Synara Notification Contract
 
-Reviewed: 2026-05-25
+Reviewed: 2026-09-14
 
 Status: initial shared contract with runtime summary logic in
 `src/app/notifications/badgeSummary.ts` and route payload validation through
@@ -41,13 +41,13 @@ invalid, negative, or non-finite values normalize to `0`.
 
 ## Source Counts
 
-| Field                | Meaning                                                                                                                          | Current source                                                                           |
-| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
-| `highlightCount`     | Sum of room highlight counts. A room with an explicit highlight field contributes highlight count instead of total unread count. | Matrix room unread/highlight state.                                                      |
-| `unreadCount`        | Sum of unread totals for rooms that do not provide an explicit highlight count.                                                  | Matrix room unread state.                                                                |
-| `laterActiveCount`   | Later items that are not completed.                                                                                              | `in.synara.later` account data.                                                          |
-| `inviteCount`        | Pending room invites.                                                                                                            | Matrix invite room list.                                                                 |
-| `agentApprovalCount` | Pending agent approvals that require user action.                                                                                | Currently notification-time detection only; durable count source is not implemented yet. |
+| Field                | Meaning                                                                                                                          | Current source                                                                                                                               |
+| -------------------- | -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `highlightCount`     | Sum of room highlight counts. A room with an explicit highlight field contributes highlight count instead of total unread count. | Matrix room unread/highlight state.                                                                                                          |
+| `unreadCount`        | Sum of unread totals for rooms that do not provide an explicit highlight count.                                                  | Matrix room unread state.                                                                                                                    |
+| `laterActiveCount`   | Later items that are not completed.                                                                                              | `in.synara.later` account data.                                                                                                              |
+| `inviteCount`        | Pending room invites.                                                                                                            | Matrix invite room list.                                                                                                                     |
+| `agentApprovalCount` | Pending agent approvals that require user action.                                                                                | Pending inbox from Core `matrix_agent_approvals_list`. Decided history lives in `in.synara.agent_approval_history` and is not a badge count. |
 
 ## Badge Formulas
 
@@ -80,6 +80,7 @@ type SystemNotificationRequest = {
   title: string;
   body?: string;
   route?: string;
+  dismissKeys?: string[];
   privacy?: 'standard' | 'private';
   sound?: 'default' | 'silent';
 };
@@ -92,6 +93,15 @@ Rules:
 - `route` must pass the [Synara Route Contract](./synara-route-contract.md).
 - `privacy` defaults to `standard`.
 - `sound` defaults to `default`.
+- `dismissKeys` is optional. Each key is `room:<roomId>` or `event:<eventId>`
+  after trim. At most 8 keys, each at most 255 Unicode scalars, with no
+  whitespace or control characters. The remainder after the first `:` must be
+  non-empty. Allowed characters are ASCII alphanumeric plus
+  `. _ : - ! $ = / + @`. Duplicate keys are dropped. Keys that fail this
+  grammar are ignored by the shell and never close a notification.
+- `desktop_dismiss_notifications` closes Linux notifications previously tagged
+  with those keys. macOS identifier tracking is receipt-matching, not a
+  dismiss-key map, so the command is a no-op on macOS.
 - Payloads must not include access tokens, device tokens, APNs tokens,
   decrypted message bodies in routes, or remote URLs as routes.
 

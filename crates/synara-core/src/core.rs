@@ -9,10 +9,10 @@ use std::sync::{Arc, Mutex};
 use serde::{Deserialize, Serialize};
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePackOwner, NativeLaterSnapshot,
-    NativeMDirectMutationResult, NativeMDirectSnapshot, NativeRoomImagePacksSnapshot,
-    NativeRoomNotesSnapshot, NativeUserImagePackSnapshot, RoomNoteMoveDirection, SynaraLaterItem,
-    SynaraRoomNoteItem,
+    NativeAgentApprovalHistorySnapshot, NativeGlobalImagePacksSnapshot, NativeImagePackOwner,
+    NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
+    NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
+    RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
 use crate::app::auth::{
     discover_login_flows, login_flows_response, probe_register_flows, AuthError,
@@ -2425,6 +2425,14 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_agent_approval_decide", matrix_agent_approval_decide)
         .expect("built-in matrix_agent_approval_decide must remain in the command census");
     registry
+        .register(
+            "matrix_agent_approval_history_snapshot",
+            matrix_agent_approval_history_snapshot,
+        )
+        .expect(
+            "built-in matrix_agent_approval_history_snapshot must remain in the command census",
+        );
+    registry
         .register("matrix_agent_approvals_list", matrix_agent_approvals_list)
         .expect("built-in matrix_agent_approvals_list must remain in the command census");
     registry
@@ -2836,6 +2844,29 @@ fn matrix_agent_approval_decide(state: Arc<CoreState>, request: CommandEnvelope)
             })?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("agent-approval-serialization-failed"))
+    })
+}
+
+fn matrix_agent_approval_history_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("agent-approval-history-invalid-payload"));
+        }
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("agent-approval-history-no-session")
+        })?;
+        let snapshot: NativeAgentApprovalHistorySnapshot = owner
+            .agent_approval_history_snapshot()
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic)
+            })?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("agent-approval-history-serialization-failed"))
     })
 }
 
@@ -3833,6 +3864,10 @@ fn directory_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
             MatrixIpcErrorCategory::StaleSessionGeneration
         }
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-rooms.directory-federation-forbidden" => MatrixIpcErrorCategory::Forbidden,
+        "v-rooms.directory-network-failed" => MatrixIpcErrorCategory::Connectivity,
+        "v-rooms.directory-server-not-found" => MatrixIpcErrorCategory::HomeserverUnavailable,
+        "v-rooms.directory-rate-limited" => MatrixIpcErrorCategory::RateLimited,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -6278,6 +6313,7 @@ mod tests {
             core.registered_commands(),
             vec![
                 "matrix_agent_approval_decide",
+                "matrix_agent_approval_history_snapshot",
                 "matrix_agent_approvals_list",
                 "matrix_backup_status",
                 "matrix_composer_clear_reply_draft",
@@ -8059,6 +8095,25 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_agent_approval_history_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_agent_approval_history_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("approval history snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("agent-approval-history-no-session")
+        );
+    }
+
+    #[tokio::test]
     async fn matrix_agent_approval_decide_rejects_unknown_payload_fields() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -8315,6 +8370,37 @@ mod tests {
             error.diagnostic_id.as_deref(),
             Some("p2-room-directory-cancel-no-session")
         );
+    }
+
+    #[test]
+    fn directory_search_owner_errors_keep_classified_categories() {
+        let cases = [
+            (
+                "v-rooms.directory-federation-forbidden",
+                MatrixIpcErrorCategory::Forbidden,
+            ),
+            (
+                "v-rooms.directory-network-failed",
+                MatrixIpcErrorCategory::Connectivity,
+            ),
+            (
+                "v-rooms.directory-server-not-found",
+                MatrixIpcErrorCategory::HomeserverUnavailable,
+            ),
+            (
+                "v-rooms.directory-rate-limited",
+                MatrixIpcErrorCategory::RateLimited,
+            ),
+            (
+                "v-rooms.directory-stale-generation-after-request",
+                MatrixIpcErrorCategory::StaleSessionGeneration,
+            ),
+        ];
+        for (diagnostic, category) in cases {
+            let error = directory_search_owner_error(diagnostic);
+            assert_eq!(error.category, category);
+            assert_eq!(error.diagnostic_id.as_deref(), Some(diagnostic));
+        }
     }
 
     #[tokio::test]

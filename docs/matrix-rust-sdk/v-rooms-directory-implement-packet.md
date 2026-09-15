@@ -214,9 +214,11 @@ The request bounds are fixed for this slice:
   `roomType: "space"` to `m.space`, map `thirdPartyInstanceId` to the typed
   `RoomNetwork::ThirdParty` value, and preserve `limit`, `since`, and the
   server-name query.
-- Project each typed `PublicRoomsChunk` into `DirectoryRoomHit`. The room-type
-  discriminator is required; an invalid or unsupported room type is a bounded
-  projection error, not an ordinary-room guess.
+- Project each typed `PublicRoomsChunk` into `DirectoryRoomHit`. Unknown
+  public-room types (`v-rooms.directory-unsupported-room-type`) are omitted
+  from the page so a mixed remote directory still renders; they are not
+  guessed as ordinary rooms. Any other hit projection or validation failure
+  (`v-rooms.directory-invalid-hit`) still fails the page closed.
 - Build the protocol selector from the typed Matrix third-party-protocol
   request through the managed client. Do not call a raw endpoint or return an
   arbitrary protocol map to the webview.
@@ -227,6 +229,28 @@ The request bounds are fixed for this slice:
 - Native errors use the repository's privacy-safe Matrix IPC error categories
   and diagnostic IDs. Error text and logs must never contain tokens, secrets,
   credentials, arbitrary raw response content, or unbounded room metadata.
+
+Classified remote-directory diagnostics (desktop Explore, 2026-09-14). These
+IDs are product error keys for `nativeRoomDirectoryOwner.ts`, not members of
+`SAFE_NATIVE_DIAGNOSTIC_IDS` (that allowlist is send-sdk log echoing only).
+
+| Diagnostic ID | Desktop user-facing string (Tauri `directory_search.rs` + frontend map) |
+| ------------- | ----------------------------------------------------------------------- |
+| `v-rooms.directory-federation-forbidden` | This server does not allow public room directory queries over federation. The remote homeserver must enable allow_public_rooms_over_federation. |
+| `v-rooms.directory-server-not-found` | That Matrix server was not found. |
+| `v-rooms.directory-network-failed` | Could not reach the room directory. Check your connection and try again. |
+| `v-rooms.directory-rate-limited` | The room directory is rate-limited. Try again in a moment. |
+| `v-rooms.directory-invalid-server` | That is not a valid Matrix server name. |
+| `v-rooms.directory-invalid-hit` | Not mapped; the page fails closed with "The public room directory could not be loaded." |
+| `v-rooms.directory-unsupported-room-type` | Omitted from the page; not a user-facing search error. |
+
+iOS FFI (`shared_core_ffi.rs`) currently uses shorter copy for federation
+("…over federation." without the homeserver-config sentence) and network
+("Could not reach the room directory." without "Check your connection…"),
+and maps leftover `v-rooms.directory-*` codes including `invalid-hit` to
+"The room-directory-search request is not available." Desktop and FFI
+strings should be reconciled in a later code change; this packet records
+the drift.
 
 ### Pinned upstream evidence
 

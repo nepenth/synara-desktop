@@ -4,7 +4,7 @@ import { Box, Text, Badge, Button, Input, config, IconButton, Icons, Icon, Spinn
 import { useAccountData } from '../../../hooks/useAccountData';
 import { AccountDataEvent } from '../../../../types/matrix/accountData';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import {
@@ -75,11 +75,13 @@ function KeywordInput() {
             keyword &&
             !addingKeyword && (
               <IconButton
+                className={SettingsQuietControl}
                 type="reset"
                 onClick={handleReset}
                 size="300"
                 radii="300"
                 variant="Secondary"
+                fill="None"
               >
                 <Icon src={Icons.Cross} size="100" />
               </IconButton>
@@ -88,6 +90,7 @@ function KeywordInput() {
         />
       </Box>
       <Button
+        className={SettingsQuietControl}
         size="400"
         variant="Secondary"
         fill="Soft"
@@ -123,7 +126,15 @@ function KeywordCross({ pushRule }: PushRulesProps) {
 
   const removing = removeState.status === AsyncStatus.Loading;
   return (
-    <IconButton onClick={remove} size="300" radii="Pill" variant="Secondary" disabled={removing}>
+    <IconButton
+      className={SettingsQuietControl}
+      onClick={remove}
+      size="300"
+      radii="Pill"
+      variant="Secondary"
+      fill="None"
+      disabled={removing}
+    >
       {removing ? <Spinner size="100" /> : <Icon src={Icons.Cross} size="100" />}
     </IconButton>
   );

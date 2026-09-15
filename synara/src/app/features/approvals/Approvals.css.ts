@@ -26,15 +26,19 @@ export const Filter = style([
     border: `1px solid ${color.Surface.ContainerLine}`,
     borderRadius: config.radii.R400,
     padding: `${config.space.S200} ${config.space.S300}`,
-    backgroundColor: color.Surface.Container,
+    backgroundColor: 'transparent',
     color: color.Surface.OnContainer,
     cursor: 'pointer',
     font: 'inherit',
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: config.space.S100,
     selectors: {
+      // Selection reads as a quiet pressed surface plus the check glyph the
+      // button renders; no saturated fill at rest.
       '&[aria-pressed=true]': {
-        backgroundColor: color.Primary.Container,
-        borderColor: color.Primary.Main,
-        color: color.Primary.OnContainer,
+        borderColor: `color-mix(in srgb, currentColor 35%, ${color.Surface.ContainerLine})`,
+        fontWeight: config.fontWeight.W600,
       },
     },
   },

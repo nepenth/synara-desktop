@@ -42,6 +42,7 @@ import { useRoomNavigate } from '../../../hooks/useRoomNavigate';
 import { stopPropagation } from '../../../utils/keyboard';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../../components/BackRouteHandler';
+import * as depthCss from '../../../styles/Depth.css';
 import { isSynaraDesktop, invokeDesktopWithAvailability } from '../../../utils/desktop';
 import {
   createNativeRoomDirectoryOwner,
@@ -127,8 +128,10 @@ function Search({ active, loading, searchInputRef, onSearch, onReset }: SearchPr
         after={
           active ? (
             <Chip
+              className={depthCss.quietInteractiveSurface}
               type="button"
               variant="Secondary"
+              fill="None"
               size="400"
               radii="Pill"
               outlined
@@ -138,7 +141,15 @@ function Search({ active, loading, searchInputRef, onSearch, onReset }: SearchPr
               <Text size="B300">Clear</Text>
             </Chip>
           ) : (
-            <Chip type="submit" variant="Primary" size="400" radii="Pill" outlined>
+            <Chip
+              className={depthCss.quietInteractiveSurface}
+              type="submit"
+              variant="Primary"
+              fill="Soft"
+              size="400"
+              radii="Pill"
+              outlined
+            >
               <Text size="B300">Enter</Text>
             </Chip>
           )
@@ -187,7 +198,7 @@ function ThirdPartyProtocolsSelector({
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Menu variant="Surface">
+          <Menu variant="Surface" className={depthCss.floatingSurface}>
             <Box
               direction="Column"
               gap="100"
@@ -198,10 +209,14 @@ function ThirdPartyProtocolsSelector({
               </Text>
               <Box direction="Column">
                 <MenuItem
+                  className={depthCss.quietInteractiveSurface}
                   size="300"
                   variant="Surface"
                   aria-pressed={instanceId === undefined}
                   radii="300"
+                  after={
+                    instanceId === undefined ? <Icon size="100" src={Icons.Check} /> : undefined
+                  }
                   onClick={handleInstanceSelect}
                 >
                   <Text size="T200" truncate>
@@ -210,11 +225,18 @@ function ThirdPartyProtocolsSelector({
                 </MenuItem>
                 {instances.map((instance) => (
                   <MenuItem
+                    className={depthCss.quietInteractiveSurface}
                     size="300"
                     key={instance.instanceId}
                     data-instance-id={instance.instanceId}
                     variant="Surface"
                     radii="300"
+                    aria-pressed={instanceId === instance.instanceId}
+                    after={
+                      instanceId === instance.instanceId ? (
+                        <Icon size="100" src={Icons.Check} />
+                      ) : undefined
+                    }
                     onClick={handleInstanceSelect}
                   >
                     <Text size="T200" truncate>
@@ -229,11 +251,14 @@ function ThirdPartyProtocolsSelector({
       }
     >
       <Chip
+        className={depthCss.quietInteractiveSurface}
         onClick={handleOpenMenu}
-        aria-pressed={!!menuAnchor}
+        aria-haspopup="menu"
+        aria-expanded={!!menuAnchor}
         radii="Pill"
         size="400"
-        variant={instanceId ? 'Success' : 'SurfaceVariant'}
+        variant="Surface"
+        fill="None"
         after={<Icon size="100" src={Icons.ChevronBottom} />}
       >
         <Text size="T200" truncate>
@@ -282,18 +307,42 @@ function LimitButton({ limit, onLimitChange }: LimitButtonProps) {
             escapeDeactivates: stopPropagation,
           }}
         >
-          <Menu variant="Surface">
+          <Menu variant="Surface" className={depthCss.floatingSurface}>
             <Box direction="Column" gap="400" style={{ padding: config.space.S300 }}>
               <Box direction="Column" gap="100">
                 <Text size="L400">Presets</Text>
                 <Box gap="100" wrap="Wrap">
-                  <Chip variant="SurfaceVariant" onClick={() => setLimit('24')} radii="Pill">
+                  <Chip
+                    className={depthCss.quietInteractiveSurface}
+                    variant="Surface"
+                    fill="None"
+                    onClick={() => setLimit('24')}
+                    aria-pressed={limit === 24}
+                    before={limit === 24 ? <Icon size="100" src={Icons.Check} /> : undefined}
+                    radii="Pill"
+                  >
                     <Text size="T200">24</Text>
                   </Chip>
-                  <Chip variant="SurfaceVariant" onClick={() => setLimit('48')} radii="Pill">
+                  <Chip
+                    className={depthCss.quietInteractiveSurface}
+                    variant="Surface"
+                    fill="None"
+                    onClick={() => setLimit('48')}
+                    aria-pressed={limit === 48}
+                    before={limit === 48 ? <Icon size="100" src={Icons.Check} /> : undefined}
+                    radii="Pill"
+                  >
                     <Text size="T200">48</Text>
                   </Chip>
-                  <Chip variant="SurfaceVariant" onClick={() => setLimit('96')} radii="Pill">
+                  <Chip
+                    className={depthCss.quietInteractiveSurface}
+                    variant="Surface"
+                    fill="None"
+                    onClick={() => setLimit('96')}
+                    aria-pressed={limit === 96}
+                    before={limit === 96 ? <Icon size="100" src={Icons.Check} /> : undefined}
+                    radii="Pill"
+                  >
                     <Text size="T200">96</Text>
                   </Chip>
                 </Box>
@@ -314,7 +363,14 @@ function LimitButton({ limit, onLimitChange }: LimitButtonProps) {
                     aria-label="Per Page Item Limit"
                   />
                 </Box>
-                <Button type="submit" size="300" variant="Primary" radii="400">
+                <Button
+                  className={depthCss.quietInteractiveSurface}
+                  type="submit"
+                  size="300"
+                  variant="Primary"
+                  fill="Soft"
+                  radii="400"
+                >
                   <Text size="B300">Change Limit</Text>
                 </Button>
               </Box>
@@ -324,11 +380,15 @@ function LimitButton({ limit, onLimitChange }: LimitButtonProps) {
       }
     >
       <Chip
+        className={depthCss.quietInteractiveSurface}
         onClick={handleOpenMenu}
-        aria-pressed={!!menuAnchor}
+        aria-haspopup="dialog"
+        aria-expanded={!!menuAnchor}
+        aria-label={`Page limit: ${limit}`}
         radii="Pill"
         size="400"
-        variant="SurfaceVariant"
+        variant="Surface"
+        fill="None"
         after={<Icon size="100" src={Icons.ChevronBottom} />}
       >
         <Text size="T200" truncate>{`Page Limit: ${limit}`}</Text>
@@ -482,8 +542,10 @@ export function PublicRooms() {
           <>
             <Box grow="Yes" basis="No">
               <Chip
+                className={depthCss.quietInteractiveSurface}
                 size="500"
                 variant="Surface"
+                fill="None"
                 radii="Pill"
                 before={<Icon size="100" src={Icons.ArrowLeft} />}
                 onClick={handleSearchClear}
@@ -506,7 +568,13 @@ export function PublicRooms() {
               {screenSize === ScreenSize.Mobile && (
                 <BackRouteHandler>
                   {(onBack) => (
-                    <IconButton onClick={onBack}>
+                    <IconButton
+                      className={depthCss.quietInteractiveSurface}
+                      variant="Surface"
+                      fill="None"
+                      onClick={onBack}
+                      aria-label="Back"
+                    >
                       <Icon src={Icons.ArrowLeft} />
                     </IconButton>
                   )}
@@ -543,13 +611,15 @@ export function PublicRooms() {
                     ) : (
                       <Text size="H4">Popular Communities</Text>
                     )}
-                    <Box gap="200">
+                    <Box gap="200" wrap="Wrap" style={{ minWidth: 0 }}>
                       {roomTypeFilters.map((filter) => (
                         <Chip
+                          className={depthCss.quietInteractiveSurface}
                           key={filter.title}
                           onClick={handleRoomFilterClick}
                           data-room-filter={filter.value}
-                          variant={filter.value === selectedRoomType ? 'Success' : 'Surface'}
+                          variant="Surface"
+                          fill="None"
                           aria-pressed={filter.value === selectedRoomType}
                           before={
                             filter.value === selectedRoomType && (
@@ -588,7 +658,7 @@ export function PublicRooms() {
                     </RoomCardGrid>
                   )}
                   {error && (
-                    <Box direction="Column" className={css.PublicRoomsError} gap="200">
+                    <Box direction="Column" className={css.PublicRoomsError} gap="200" role="alert">
                       <Text size="L400">{error.name}</Text>
                       <Text size="T300">{error.message}</Text>
                     </Box>
@@ -623,9 +693,12 @@ export function PublicRooms() {
                         {(data.prevBatch || data.nextBatch) && (
                           <Box justifyContent="Center" gap="200">
                             <Button
+                              className={depthCss.quietInteractiveSurface}
                               onClick={paginateBack}
                               size="300"
-                              fill="Soft"
+                              variant="Secondary"
+                              fill="None"
+                              radii="300"
                               disabled={!data.prevBatch}
                             >
                               <Text size="B300" truncate>
@@ -634,9 +707,12 @@ export function PublicRooms() {
                             </Button>
                             <Box data-spacing-node grow="Yes" />
                             <Button
+                              className={depthCss.quietInteractiveSurface}
                               onClick={paginateFront}
                               size="300"
-                              fill="Solid"
+                              variant="Primary"
+                              fill="Soft"
+                              radii="300"
                               disabled={!data.nextBatch}
                             >
                               <Text size="B300" truncate>

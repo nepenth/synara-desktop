@@ -1125,7 +1125,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               <IconButton
                 className={css.ComposerAction}
                 fill="None"
-                variant="SurfaceVariant"
+                variant="Surface"
                 size="300"
                 radii="300"
                 onClick={() => setToolbar(!toolbar)}
@@ -1169,7 +1169,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   aria-pressed={emojiBoardOpen}
                   aria-label={t('composer.emoji_picker_aria_label', 'Emoji picker')}
                   onClick={() => setEmojiBoardOpen((open) => !open)}
-                  variant="SurfaceVariant"
+                  variant="Surface"
                   size="300"
                   radii="300"
                 >

@@ -5,34 +5,37 @@ export const observeNativeTimelineBottom = (
 ): (() => void) => {
   let frame = 0;
   let disposed = false;
+  let needsResubscribe = false;
+  const resize = new ResizeObserver(() => schedule());
   const measure = () => {
     frame = 0;
     if (disposed) return;
+    if (needsResubscribe) {
+      needsResubscribe = false;
+      resize.disconnect();
+      resize.observe(element);
+      Array.from(element.children).forEach((child) => resize.observe(child));
+    }
     onBottomChanged(
       element.clientHeight > 0 &&
         element.scrollHeight - element.scrollTop - element.clientHeight <= 8
     );
   };
-  const schedule = () => {
+  const schedule = (resubscribe = false) => {
+    if (resubscribe) needsResubscribe = true;
     if (!disposed && frame === 0) frame = requestAnimationFrame(measure);
   };
-  const resize = new ResizeObserver(schedule);
+  const onScroll = () => schedule();
   resize.observe(element);
-  const observeContent = () => {
-    resize.disconnect();
-    resize.observe(element);
-    Array.from(element.children).forEach((child) => resize.observe(child));
-    schedule();
-  };
-  const mutations = new MutationObserver(observeContent);
+  const mutations = new MutationObserver(() => schedule(true));
   mutations.observe(element, { childList: true });
-  element.addEventListener('scroll', schedule, { passive: true });
-  observeContent();
+  element.addEventListener('scroll', onScroll, { passive: true });
+  schedule(true);
   return () => {
     disposed = true;
     cancelAnimationFrame(frame);
     resize.disconnect();
     mutations.disconnect();
-    element.removeEventListener('scroll', schedule);
+    element.removeEventListener('scroll', onScroll);
   };
 };

@@ -2,7 +2,7 @@ import React from 'react';
 import { Box, Text, Chip } from 'folds';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { copyToClipboard } from '../../../utils/dom';
 
@@ -22,7 +22,13 @@ export function MatrixId() {
         <SettingTile
           title={userId}
           after={
-            <Chip variant="Secondary" radii="Pill" onClick={() => copyToClipboard(userId)}>
+            <Chip
+              className={SettingsQuietControl}
+              variant="Secondary"
+              fill="None"
+              radii="Pill"
+              onClick={() => copyToClipboard(userId)}
+            >
               <Text size="T200">Copy</Text>
             </Chip>
           }

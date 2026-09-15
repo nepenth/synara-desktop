@@ -31,6 +31,10 @@
 		1A5417BC15B5AC21819DCBD1 /* ConnectionStatusCopyTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BF3C056F084434309E1D3F3 /* ConnectionStatusCopyTests.swift */; };
 		1BB9888030B3687336DE5A44 /* SharedCoreSpaces.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0B665F3BD49873F6C4732FF /* SharedCoreSpaces.swift */; };
 		1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 80584058D243DE7197CF3096 /* AgentActionService.swift */; };
+		DA4F713CE50B729D24F63814 /* AgentApprovalHistoryProjection.swift in Sources */ = {isa = PBXBuildFile; fileRef = C93E602BD4FA618C13E52703 /* AgentApprovalHistoryProjection.swift */; };
+		1E83B570294FB6D1683A7C58 /* AgentApprovalHistoryProjectionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0D72A46F183EA5C057296B47 /* AgentApprovalHistoryProjectionTests.swift */; };
+		B82D5F1AC3E9507B02D416F2 /* ApprovalsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A71C4E09B2D84F6A91C305E1 /* ApprovalsView.swift */; };
+		FC61935E072D94BF46185A36 /* SharedCoreAgentApprovalHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = EB50824DF61C83AE35074925 /* SharedCoreAgentApprovalHistory.swift */; };
 		1DF4C901D18BA2FDFE0754D2 /* NotificationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 34B7F1719CBFE6CC6BD8166C /* NotificationService.swift */; };
 		1F2AE40317C7704B4ADD16F8 /* StableTimelineViewportTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 311E5731825808ADC48C05B4 /* StableTimelineViewportTests.swift */; };
 		23D51A50A6F59472FB89F9B7 /* RoomNotesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3B0EB5A7A2E6623F144D5280 /* RoomNotesView.swift */; };
@@ -234,6 +238,10 @@
 		0913C89133240B496A0103CB /* SharedCoreSessionLogin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreSessionLogin.swift; sourceTree = "<group>"; };
 		0BF3C056F084434309E1D3F3 /* ConnectionStatusCopyTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusCopyTests.swift; sourceTree = "<group>"; };
 		0CC3097C5F2157B0C1B6E975 /* MatrixStoreLifecycleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MatrixStoreLifecycleTests.swift; sourceTree = "<group>"; };
+		0D72A46F183EA5C057296B47 /* AgentApprovalHistoryProjectionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalHistoryProjectionTests.swift; sourceTree = "<group>"; };
+		A71C4E09B2D84F6A91C305E1 /* ApprovalsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApprovalsView.swift; sourceTree = "<group>"; };
+		C93E602BD4FA618C13E52703 /* AgentApprovalHistoryProjection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AgentApprovalHistoryProjection.swift; sourceTree = "<group>"; };
+		EB50824DF61C83AE35074925 /* SharedCoreAgentApprovalHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreAgentApprovalHistory.swift; sourceTree = "<group>"; };
 		0D151178FEAF6AA24CF435C4 /* CryptoVerificationPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CryptoVerificationPresentationTests.swift; sourceTree = "<group>"; };
 		0D42B2D11968F0B23193A4ED /* RoomListServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoomListServiceTests.swift; sourceTree = "<group>"; };
 		116AB841E618EC850075543B /* SharedCoreAccountSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedCoreAccountSettings.swift; sourceTree = "<group>"; };
@@ -461,6 +469,7 @@
 		206AF00355E9B840C00AD4A5 /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				A71C4E09B2D84F6A91C305E1 /* ApprovalsView.swift */,
 				C52EDC986E0B57231E77F695 /* HomeserverSelectionView.swift */,
 				B5BE26F02C5C59C8ED097BF8 /* LaterListView.swift */,
 				2515972271FDB4E4717F0CEE /* LoginView.swift */,
@@ -554,6 +563,7 @@
 			isa = PBXGroup;
 			children = (
 				80584058D243DE7197CF3096 /* AgentActionService.swift */,
+				C93E602BD4FA618C13E52703 /* AgentApprovalHistoryProjection.swift */,
 				CB040EB752E246AD052AC7E7 /* AppEnvironment.swift */,
 				3C94FF43A1B1DDDCF8067FB1 /* AppLogging.swift */,
 				8A4D48D89C01C70901919CAB /* AppServices.swift */,
@@ -580,6 +590,7 @@
 				75DD7BEECD59D41C5461C892 /* SessionCoordinator.swift */,
 				116AB841E618EC850075543B /* SharedCoreAccountSettings.swift */,
 				5EDD2A18920864F8AED4F9BF /* SharedCoreAgentApprovals.swift */,
+				EB50824DF61C83AE35074925 /* SharedCoreAgentApprovalHistory.swift */,
 				82059D5929B0DD831A769874 /* SharedCoreBackupRestore.swift */,
 				34064BA2D401DE01569CC3CB /* SharedCoreComposerReplyDraft.swift */,
 				BAFBA65E1252F324C84B028E /* SharedCoreDevices.swift */,
@@ -686,6 +697,7 @@
 			isa = PBXGroup;
 			children = (
 				9DA6E8858D607B040754AF0E /* AgentActionResolverTests.swift */,
+				0D72A46F183EA5C057296B47 /* AgentApprovalHistoryProjectionTests.swift */,
 				45436B56CDB7CBBD40303484 /* AgentApprovalServiceTests.swift */,
 				3FF241378CB1601D3575AF03 /* AppEnvironmentTests.swift */,
 				F55BBDF32970A214C2829B1B /* AppRouteTests.swift */,
@@ -887,6 +899,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				969D33C61DAE6C1B12C9BCDB /* AgentActionResolverTests.swift in Sources */,
+				1E83B570294FB6D1683A7C58 /* AgentApprovalHistoryProjectionTests.swift in Sources */,
 				6CCD8DBF4D4A6682D58FD5B1 /* AgentApprovalServiceTests.swift in Sources */,
 				F2A315907EC47F18BB54CC1C /* AppEnvironmentTests.swift in Sources */,
 				7BD7C2DB346D071A5121FC36 /* AppRouteTests.swift in Sources */,
@@ -935,12 +948,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				1DB7278B67BE35BB7DC62210 /* AgentActionService.swift in Sources */,
+				DA4F713CE50B729D24F63814 /* AgentApprovalHistoryProjection.swift in Sources */,
 				56E15BC20C25F32A6D25BA18 /* AppEnvironment.swift in Sources */,
 				1A25A4B89F510B78AED4E8C6 /* AppLogging.swift in Sources */,
 				48CE91CF86CBAC3081878AC9 /* AppRoute.swift in Sources */,
 				FFB6A97B5F18519D154EAC9C /* AppRouter.swift in Sources */,
 				D46F130EFA2B2D58B79B605D /* AppServices.swift in Sources */,
 				90B73234B5A1DC142783A451 /* AppTab.swift in Sources */,
+				B82D5F1AC3E9507B02D416F2 /* ApprovalsView.swift in Sources */,
 				2AEC9CA069983AED2A534D47 /* AuthService.swift in Sources */,
 				37E0DABCD7B044B59F2C5545 /* BoundedLRUCache.swift in Sources */,
 				828A1EF26C245C22F21B95EF /* CameraImagePicker.swift in Sources */,
@@ -983,6 +998,7 @@
 				EE7410A9C8E4EB56072632D8 /* SettingsView.swift in Sources */,
 				651AFA7EFE139EE9ED145571 /* SharedCoreAccountSettings.swift in Sources */,
 				C8F99ABAA3FD519459C33F27 /* SharedCoreAgentApprovals.swift in Sources */,
+				FC61935E072D94BF46185A36 /* SharedCoreAgentApprovalHistory.swift in Sources */,
 				0217E92B1B5F08C565219A57 /* SharedCoreBackupRestore.swift in Sources */,
 				D8374F63F8465BD4917F14F3 /* SharedCoreComposerReplyDraft.swift in Sources */,
 				276F320443969E9B55369092 /* SharedCoreDevices.swift in Sources */,

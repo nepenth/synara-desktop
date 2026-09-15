@@ -1,18 +1,17 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-import {
-  quietInteractiveSurface,
-  quietSurfaceFold,
-  raisedShadow,
-  restingInnerEdge,
-} from '../../../styles/Depth.css';
+import { quietInteractiveSurface, raisedShadow, restingInnerEdge } from '../../../styles/Depth.css';
 
+/**
+ * Resting notes surfaces sit flat on the reading plane (hairline border,
+ * at most the resting inner edge). `raisedShadow` is reserved for
+ * hover/selected, matching the settings cards.
+ */
 export const Panel = style({
-  backgroundImage: quietSurfaceFold,
+  backgroundColor: color.Surface.Container,
   border: `${config.borderWidth.B300} solid ${color.Surface.ContainerLine}`,
   '@media': {
     '(prefers-contrast: more)': {
-      backgroundImage: 'none',
       borderColor: 'var(--synara-depth-contrast-strong-edge)',
     },
   },
@@ -20,18 +19,27 @@ export const Panel = style({
 
 export const HeaderAction = style([quietInteractiveSurface]);
 
+export const PanelHeader = style({
+  flexShrink: 0,
+});
+
+/**
+ * folds `Box` resets `min-height: 0`, so inside the height-constrained panel
+ * column both the composer form and its tab strip could shrink below their
+ * content and the later-painted textarea covered the tabs. The composer keeps
+ * its intrinsic height; only the notes list below scrolls.
+ */
 export const ComposerCard = style({
+  flexShrink: 0,
   minWidth: 0,
   margin: config.space.S300,
   padding: config.space.S300,
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   borderRadius: config.radii.R400,
   backgroundColor: color.SurfaceVariant.Container,
-  backgroundImage: quietSurfaceFold,
   boxShadow: restingInnerEdge,
   '@media': {
     '(prefers-contrast: more)': {
-      backgroundImage: 'none',
       boxShadow: 'none',
       borderColor: 'var(--synara-depth-contrast-strong-edge)',
     },
@@ -39,6 +47,7 @@ export const ComposerCard = style({
 });
 
 export const KindSwitch = style({
+  flexShrink: 0,
   width: 'fit-content',
   padding: toRem(3),
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
@@ -63,6 +72,7 @@ export const KindButton = style([
 ]);
 
 export const ComposerTextArea = style({
+  flexShrink: 0,
   boxShadow: restingInnerEdge,
   transition: 'border-color 140ms ease-out, box-shadow 140ms ease-out',
   selectors: {
@@ -99,7 +109,6 @@ export const NoteItem = style({
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   borderRadius: config.radii.R400,
   backgroundColor: color.SurfaceVariant.Container,
-  backgroundImage: quietSurfaceFold,
   boxShadow: restingInnerEdge,
   transition: 'border-color 140ms ease-out, box-shadow 140ms ease-out',
   selectors: {
@@ -113,7 +122,6 @@ export const NoteItem = style({
       transition: 'none',
     },
     '(prefers-contrast: more)': {
-      backgroundImage: 'none',
       boxShadow: 'none',
       selectors: {
         '&:hover, &:focus-within': {
@@ -134,11 +142,9 @@ export const EmptyState = style({
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   borderRadius: config.radii.R400,
   backgroundColor: color.SurfaceVariant.Container,
-  backgroundImage: quietSurfaceFold,
   boxShadow: restingInnerEdge,
   '@media': {
     '(prefers-contrast: more)': {
-      backgroundImage: 'none',
       boxShadow: 'none',
     },
   },

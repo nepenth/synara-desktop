@@ -6,7 +6,8 @@
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
-use std::sync::{Arc, Weak};
+use std::sync::{Arc, Mutex, Weak};
+use std::time::Instant;
 
 use eyeball_im::VectorDiff;
 use futures_util::{stream, StreamExt};
@@ -40,7 +41,15 @@ use serde::{Deserialize, Serialize};
 use tokio::time::{timeout, Duration};
 use tokio::{sync::Mutex as AsyncMutex, task::JoinHandle};
 
-use crate::app::agent_approvals::{plan_agent_approval, AgentApprovalDecisionStatus};
+use crate::app::account_data::{
+    append_agent_approval_history_item_live, prune_agent_approval_history_items,
+    snapshot_agent_approval_history, NativeAgentApprovalHistorySnapshot,
+    SynaraAgentApprovalHistoryDecision, SynaraAgentApprovalHistoryItem,
+};
+use crate::app::agent_approvals::{
+    agent_approval_history_summary, plan_agent_approval, AgentApprovalDecisionStatus,
+    AGENT_APPROVAL_TTL_MS,
+};
 use crate::app::send::{
     apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
     parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
@@ -71,6 +80,8 @@ use super::{
     TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
+#[cfg(test)]
+mod agent_approval_history_overlay_tests;
 mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
@@ -332,6 +343,84 @@ pub struct NativeTimelineRegistry {
     utd_recovery: UtdRecoveryCoordinator,
 }
 
+const AGENT_APPROVAL_HISTORY_PENDING_TTL: Duration = Duration::from_secs(30);
+
+fn lock_approval_history_pending(
+    pending: &Mutex<Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>>,
+) -> std::sync::MutexGuard<'_, Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>> {
+    pending
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn lock_approval_history_unconfirmed(
+    pending: &Mutex<HashMap<(String, String), SynaraAgentApprovalHistoryItem>>,
+) -> std::sync::MutexGuard<'_, HashMap<(String, String), SynaraAgentApprovalHistoryItem>> {
+    pending
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+fn approval_history_item_key(item: &SynaraAgentApprovalHistoryItem) -> (String, String) {
+    (item.room_id.clone(), item.event_id.clone())
+}
+
+fn native_agent_approval_history_item(
+    room_id: String,
+    event_id: String,
+    item: &NativeTimelineItem,
+    decision: SynaraAgentApprovalHistoryDecision,
+    decided_at: f64,
+) -> SynaraAgentApprovalHistoryItem {
+    SynaraAgentApprovalHistoryItem {
+        room_id,
+        event_id,
+        sender: item.sender.clone(),
+        decision,
+        decided_at,
+        origin_server_ts: item.origin_server_ts as f64,
+        expires_at: item.origin_server_ts.saturating_add(AGENT_APPROVAL_TTL_MS) as f64,
+        summary: agent_approval_history_summary(&item.body),
+    }
+}
+
+fn fresh_overlay_items(
+    pending: &Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>,
+    now: Instant,
+) -> Option<&[SynaraAgentApprovalHistoryItem]> {
+    pending.as_ref().and_then(|(stored_at, items)| {
+        (now.saturating_duration_since(*stored_at) < AGENT_APPROVAL_HISTORY_PENDING_TTL)
+            .then_some(items.as_slice())
+    })
+}
+
+/// Union a local write overlay with the SDK cache. Overlay-only snapshots hide
+/// other-device `/sync` items for the full TTL; merging keeps local decisions
+/// visible without masking a later remote RMW that has already reached the store.
+fn merge_approval_history_overlay(
+    overlay: Option<&[SynaraAgentApprovalHistoryItem]>,
+    cached: Vec<SynaraAgentApprovalHistoryItem>,
+    now_ms: f64,
+) -> Vec<SynaraAgentApprovalHistoryItem> {
+    let Some(overlay) = overlay.filter(|items| !items.is_empty()) else {
+        return cached;
+    };
+    prune_agent_approval_history_items(overlay.iter().cloned().chain(cached).collect(), now_ms)
+}
+
+fn push_overlay_history_item(
+    pending: Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>,
+    item: SynaraAgentApprovalHistoryItem,
+    now: Instant,
+) -> (Instant, Vec<SynaraAgentApprovalHistoryItem>) {
+    let decided_at = item.decided_at;
+    let mut items = fresh_overlay_items(&pending, now)
+        .map(Vec::from)
+        .unwrap_or_default();
+    items.push(item);
+    (now, prune_agent_approval_history_items(items, decided_at))
+}
+
 /// Shared handle so Core and the desktop session own one live registry.
 pub struct NativeTimelineOwner {
     client: Client,
@@ -343,6 +432,12 @@ pub struct NativeTimelineOwner {
     approval_inbox: tokio::sync::Mutex<ApprovalInboxOwner>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
     sends: tokio::sync::Mutex<SendQueue>,
+    approval_history_mutation: tokio::sync::Mutex<()>,
+    approval_history_pending: Mutex<Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>>,
+    /// Local decisions whose reaction landed but whose account-data RMW did
+    /// not. `AlreadyDecided` retries drain this map so a failed history write
+    /// is not stranded by completed-decision memory.
+    approval_history_unconfirmed: Mutex<HashMap<(String, String), SynaraAgentApprovalHistoryItem>>,
 }
 
 impl NativeTimelineOwner {
@@ -362,6 +457,9 @@ impl NativeTimelineOwner {
             )),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
+            approval_history_mutation: tokio::sync::Mutex::new(()),
+            approval_history_pending: Mutex::new(None),
+            approval_history_unconfirmed: Mutex::new(HashMap::new()),
         }
     }
 
@@ -400,6 +498,77 @@ impl NativeTimelineOwner {
             .await
             .snapshot(&self.client, &decisions, discovery_active, reusable)
             .await
+    }
+
+    pub async fn agent_approval_history_snapshot(
+        &self,
+    ) -> Result<NativeAgentApprovalHistorySnapshot, &'static str> {
+        let overlay = {
+            let pending = lock_approval_history_pending(&self.approval_history_pending);
+            fresh_overlay_items(&pending, Instant::now()).map(Vec::from)
+        };
+        let unconfirmed = lock_approval_history_unconfirmed(&self.approval_history_unconfirmed)
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let now_ms = agent_approval_now_ms()
+            .map(|ms| ms as f64)
+            .unwrap_or(f64::NAN);
+        let local = merge_approval_history_overlay(overlay.as_deref(), unconfirmed, now_ms);
+        match snapshot_agent_approval_history(&self.client).await {
+            Ok(cached) => Ok(NativeAgentApprovalHistorySnapshot {
+                items: merge_approval_history_overlay(Some(&local), cached.items, now_ms),
+            }),
+            Err(err) => {
+                if local.is_empty() {
+                    Err(err)
+                } else {
+                    Ok(NativeAgentApprovalHistorySnapshot { items: local })
+                }
+            }
+        }
+    }
+
+    async fn record_agent_approval_history(
+        &self,
+        item: SynaraAgentApprovalHistoryItem,
+    ) -> Result<(), &'static str> {
+        let _lock = self.approval_history_mutation.lock().await;
+        {
+            let mut pending = lock_approval_history_pending(&self.approval_history_pending);
+            *pending = Some(push_overlay_history_item(
+                pending.take(),
+                item.clone(),
+                Instant::now(),
+            ));
+        }
+        match append_agent_approval_history_item_live(&self.client, item.clone()).await {
+            Ok(snapshot) => {
+                lock_approval_history_unconfirmed(&self.approval_history_unconfirmed)
+                    .remove(&approval_history_item_key(&item));
+                *lock_approval_history_pending(&self.approval_history_pending) =
+                    Some((Instant::now(), snapshot.items));
+                Ok(())
+            }
+            Err(err) => {
+                lock_approval_history_unconfirmed(&self.approval_history_unconfirmed)
+                    .insert(approval_history_item_key(&item), item);
+                Err(err)
+            }
+        }
+    }
+
+    /// Drain a failed history write for this event. Must not run while holding
+    /// `approval_decisions` (std mutex) or the per-event decision guard.
+    async fn retry_unconfirmed_approval_history(&self, room_id: &str, event_id: &str) {
+        let item = lock_approval_history_unconfirmed(&self.approval_history_unconfirmed)
+            .remove(&(room_id.to_owned(), event_id.to_owned()));
+        let Some(item) = item else {
+            return;
+        };
+        if let Err(diagnostic) = self.record_agent_approval_history(item).await {
+            eprintln!("agent-approval-history-write-failed: {diagnostic}");
+        }
     }
 
     pub async fn lock(&self) -> tokio::sync::MutexGuard<'_, NativeTimelineRegistry> {
@@ -531,14 +700,22 @@ impl NativeTimelineOwner {
                 .lock()
                 .map_err(|_| "agent-approval-decision-state-poisoned")?;
             if decisions.is_completed(&decision_key) {
-                return Ok(NativeAgentApprovalDecisionResult {
-                    room_id,
-                    event_id: event_id.to_string(),
-                    status: AgentApprovalDecisionStatus::AlreadyDecided,
-                    reaction: None,
-                });
+                None
+            } else {
+                Some(decisions.lock_for(&decision_key))
             }
-            decisions.lock_for(&decision_key)
+        };
+        let Some(decision_lock) = decision_lock else {
+            // Completed-memory returns must drop the std mutex before this
+            // await so a history backfill cannot deadlock other decisions.
+            self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
+                .await;
+            return Ok(NativeAgentApprovalDecisionResult {
+                room_id,
+                event_id: event_id.to_string(),
+                status: AgentApprovalDecisionStatus::AlreadyDecided,
+                reaction: None,
+            });
         };
         // Cancellation before a Matrix side effect releases this guard. Once
         // send begins, the guard moves into a detached task below.
@@ -554,6 +731,9 @@ impl NativeTimelineOwner {
             .map_err(|_| "agent-approval-decision-state-poisoned")?
             .is_completed(&decision_key)
         {
+            drop(decision_guard);
+            self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
+                .await;
             return Ok(NativeAgentApprovalDecisionResult {
                 room_id,
                 event_id: event_id.to_string(),
@@ -628,6 +808,29 @@ impl NativeTimelineOwner {
                 .lock()
                 .map_err(|_| "agent-approval-decision-state-poisoned")?
                 .remember(decision_key);
+            drop(decision_guard);
+            if let Some(decision) = SynaraAgentApprovalHistoryDecision::matching_own_reaction(
+                &request.action_id,
+                item.reactions
+                    .iter()
+                    .map(|reaction| (reaction.key.as_str(), reaction.me)),
+            ) {
+                if let Ok(decided_at) = agent_approval_now_ms() {
+                    let history_item = native_agent_approval_history_item(
+                        room_id.clone(),
+                        event_id.to_string(),
+                        &item,
+                        decision,
+                        decided_at as f64,
+                    );
+                    if let Err(diagnostic) = self.record_agent_approval_history(history_item).await
+                    {
+                        eprintln!("agent-approval-history-write-failed: {diagnostic}");
+                    }
+                }
+            }
+            self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
+                .await;
             return Ok(NativeAgentApprovalDecisionResult {
                 room_id,
                 event_id: event_id.to_string(),
@@ -673,6 +876,22 @@ impl NativeTimelineOwner {
             .map_err(|_| "v-send.2-reaction-ensure-failed")??;
         let readback =
             approval_reaction_readback(&item.reactions, &reaction_key, &own_user_id, sent_event_id);
+        if let Some(decision) =
+            SynaraAgentApprovalHistoryDecision::from_action_id(&request.action_id)
+        {
+            if let Ok(decided_at) = agent_approval_now_ms() {
+                let history_item = native_agent_approval_history_item(
+                    room_id.clone(),
+                    event_id.to_string(),
+                    &item,
+                    decision,
+                    decided_at as f64,
+                );
+                if let Err(diagnostic) = self.record_agent_approval_history(history_item).await {
+                    eprintln!("agent-approval-history-write-failed: {diagnostic}");
+                }
+            }
+        }
         Ok(NativeAgentApprovalDecisionResult {
             room_id: room_id.clone(),
             event_id: event_id.to_string(),

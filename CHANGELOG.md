@@ -2,6 +2,71 @@
 
 ## Unreleased
 
+- Persist decided agent approvals in `in.synara.agent_approval_history` account
+  data so the Approvals Recent tab survives restarts and syncs across devices.
+  Recent prefers an inbox `decision` over account data; a decided inbox row
+  without a named decision does not inherit a homeserver-injected label.
+  History summaries redact path-like args and secret-like assignments. History
+  writes fetch-confirm and retry because Matrix global account data has no
+  `If-Match`. AlreadyDecided taps persist history only when an existing own
+  terminal reaction matches the requested action.
+- Remove the redundant empty "Full approval prompt" details block from approval
+  cards; the Command block and the no-command fallback remain.
+- Expose decided agent-approval history to iOS through UniFFI
+  `agent_approval_history_snapshot` and show a Recent list that unions Core
+  inbox decided/expired items with synced account data using the same
+  inbox-proof conflict rules as desktop. Remove the redundant iOS "Full
+  approval prompt" block; the Command block and no-command fallback remain.
+- Dismiss Linux OS notifications when a room is focused or an agent-approval
+  decision is submitted (`desktop_dismiss_notifications`). macOS remains a no-op
+  for this command.
+
+- Make native room-timeline scrolling smoother: cache measured row heights,
+  reserve media space, coalesce view deltas, and stick to the live tail in the
+  same layout pass. Follow-live releases on a focus/`scrollIntoView` move away
+  from the tail, prepend anchoring is never overwritten by an in-flight
+  programmatic scroll, a parked history row is held steady when rows above it
+  re-measure or when a date separator or reaction lands on the parked row
+  itself, a scripted move off the live tail is not yanked back, same-frame
+  deltas apply in revision order (keeping a successful prefix on a true gap),
+  and the measured-size cache is keyed by row content so edits do not reuse
+  stale heights.
+- Promote the composer action recipe to a shared `quietActionButton` export in
+  `Depth.css.ts` (`RoomComposer.css.ts` re-exports it as `ComposerAction`, no
+  visual change) and restyle the message formatting toolbar and message-editor
+  Aa/emoji buttons to match the composer exactly: transparent at rest,
+  tint + edge light on hover, stronger tint when pressed.
+- Restyle Explore Community controls to the quiet style: transparent filter,
+  protocol, and page-limit chips (selection reads as a quiet raised/pressed
+  state, no green fill), quiet Add Server dialog buttons, floating menus, and
+  flat info/error cards with a Critical border instead of a saturated red block.
+- Fix the Personal Notes tab strip being covered by the textarea: folds `Box`
+  resets `min-height: 0`, so the composer form and tab strip shrank inside the
+  height-constrained panel. Set `flexShrink: 0` on the composer card, kind
+  switch, and textarea so they keep their intrinsic height; only the notes
+  list scrolls. Remove the gradient fold from resting notes cards and
+  quiet the Note/ToDo segmented control and Add action.
+- Sweep desktop Settings controls to the quiet style via a shared
+  `SettingsQuietControl` helper: transparent rests, `aria-pressed` selection
+  states, Soft fill only for each page's primary action, Critical color kept
+  for danger actions at a quiet rest.
+- Add a "Support this project" button (Sponsors page) to the Welcome page and
+  Settings › About, with `.github/FUNDING.yml` for GitHub's Sponsor button.
+- Restore Explore Community browsing of other homeservers: classified
+  federation/network/server errors replace the generic "unavailable"
+  message, unknown public-room types no longer fail the whole page, and
+  keyword search, All/Spaces/Rooms filters, and page limit still pass
+  through to the remote directory.
+- Show richer Settings > Devices session details: per-tile trust chips,
+  a This device marker, and expanded identity-key fingerprint / first-seen
+  fields from the native device snapshot. The trust vocabulary now separates
+  cross-signed (`verified`) from direct-SAS (`verified_locally_only`)
+  sessions; both desktop and iOS render either as Verified. Dehydrated
+  sessions read as Backup device rather than Not encrypted. iOS session rows
+  now show the same identity-key / first-seen / cross-signed details (still
+  without last-seen IP). Oversized homeserver display names and last-seen IPs
+  are dropped in Core before they reach the snapshot wire.
+
 ## [2.1.36] - 2026-09-13
 
 - Add an Approvals center (rail and `/approvals/` page) backed by Core
@@ -51,7 +116,7 @@
 - Stop Room Settings > Developer Tools from crashing on native rooms. The page
   assumed a js-sdk `currentState.events` map that native room projections do
   not provide, so opening the panel threw `undefined is not an object
-  (evaluating 'i.events.forEach')` before Room ID could be copied. Room ID is
+(evaluating 'i.events.forEach')` before Room ID could be copied. Room ID is
   now always visible on that page. Settings panels and routes also render a
   closeable error screen instead of React Router's default "Unexpected
   Application Error" page.
@@ -187,7 +252,6 @@
 - Preserve iOS room invalidations across temporary read-marker streams.
 - Allow local iOS sign-out after failed restore or remote push cleanup; revoke
   the current server session when reachable and remove persisted authentication.
-
 
 ## 2.1.26 - 2026-09-04
 
@@ -415,7 +479,7 @@
   the peer back as Verified after relaunch.
 - Opt-in iOS notification previews more reliably retain decrypted message
   content when available while preserving privacy-safe fallback text.
-- Added a Pop!_OS/Debian-family APT repository path that publishes the tagged
+- Added a Pop!\_OS/Debian-family APT repository path that publishes the tagged
   `.deb` and signed flat repository metadata alongside every production
   release.
 - Updated Linux update guidance to cover APT as well as pacman/paru, with

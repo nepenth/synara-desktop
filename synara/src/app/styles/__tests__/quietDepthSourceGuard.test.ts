@@ -17,6 +17,7 @@ test('quiet depth system preserves accessibility preferences and keeps text flat
   assert.match(depth, /export const avatarSurface/);
   assert.match(depth, /export const avatarMedia/);
   assert.match(depth, /export const quietInteractiveSurface/);
+  assert.match(depth, /export const quietActionButton/);
   assert.match(depth, /:not\(:disabled\):not\(\[aria-disabled=true\]\)/);
   assert.match(depth, /&:disabled, &\[aria-disabled=true\]/);
   assert.doesNotMatch(depth, /textShadow|text-shadow/);
@@ -94,7 +95,13 @@ test('desktop controls and personal notes share quiet interactive depth', () => 
   assert.match(sidebar, /interactive && depthCss\.quietInteractiveSurface/);
   assert.match(sidebar, /aria-current=\{interactive && active \? 'page' : undefined\}/);
   assert.match(editorToolbar, /import \* as depthCss from '\.\.\/\.\.\/styles\/Depth\.css'/);
-  assert.match(editorToolbar, /className=\{depthCss\.quietInteractiveSurface\}/);
+  // The formatting toolbar matches the composer exactly through the shared
+  // quiet action recipe (transparent rest, tint + edge on hover, stronger
+  // tint when pressed), which lives in Depth.css.ts next to
+  // quietInteractiveSurface.
+  assert.match(editorToolbar, /className=\{depthCss\.quietActionButton\}/);
+  assert.match(editorToolbar, /fill="None"/);
+  assert.doesNotMatch(editorToolbar, /<IconButton[^>]*variant="SurfaceVariant"/);
 });
 
 test('room menus, members, and message search share quiet interactive depth', () => {
@@ -143,4 +150,112 @@ test('room menus, members, and message search share quiet interactive depth', ()
       `${name} has ${items.length} menu options but only ${depth.length} quiet-depth classes`
     );
   }
+});
+
+const mixRgb = (
+  fg: [number, number, number],
+  bg: [number, number, number],
+  amount: number
+): [number, number, number] => [
+  Math.round(fg[0] * amount + bg[0] * (1 - amount)),
+  Math.round(fg[1] * amount + bg[1] * (1 - amount)),
+  Math.round(fg[2] * amount + bg[2] * (1 - amount)),
+];
+
+const relativeLuminance = (rgb: [number, number, number]): number => {
+  const linear = rgb.map((channel) => {
+    const sample = channel / 255;
+    return sample <= 0.03928 ? sample / 12.92 : ((sample + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+};
+
+const contrastRatio = (a: [number, number, number], b: [number, number, number]): number => {
+  const first = relativeLuminance(a);
+  const second = relativeLuminance(b);
+  const lighter = Math.max(first, second);
+  const darker = Math.min(first, second);
+  return (lighter + 0.05) / (darker + 0.05);
+};
+
+test('quiet action 7%/12% tints fail 3:1 so pressed keeps an inset ring after hover', () => {
+  const pairs: Array<[[number, number, number], [number, number, number]]> = [
+    [
+      [0, 0, 0],
+      [242, 242, 242],
+    ],
+    [
+      [255, 255, 255],
+      [26, 26, 26],
+    ],
+  ];
+  for (const [foreground, background] of pairs) {
+    const hover = mixRgb(foreground, background, 0.07);
+    const pressed = mixRgb(foreground, background, 0.12);
+    assert.ok(contrastRatio(hover, background) < 3, 'hover tint vs rest is below 3:1');
+    assert.ok(contrastRatio(pressed, background) < 3, 'pressed tint vs rest is below 3:1');
+    assert.ok(contrastRatio(pressed, hover) < 3, 'pressed vs hover tint is below 3:1');
+  }
+
+  const depth = source('src/app/styles/Depth.css.ts');
+  const hoverShadow = depth.indexOf('const quietActionHoverShadow');
+  const pressedShadow = depth.indexOf('const quietActionPressedShadow');
+  const hoverRule = depth.indexOf('&&:not(:disabled):not([aria-disabled=true]):hover');
+  const pressedRule = depth.indexOf(
+    '&&:not(:disabled):not([aria-disabled=true])[aria-pressed=true]'
+  );
+  assert.ok(pressedShadow > hoverShadow);
+  assert.ok(pressedRule > hoverRule);
+  assert.match(depth, /quietActionPressedShadow = `inset 0 1px 0/);
+  assert.match(
+    depth,
+    /inset 0 0 0 \$\{config\.borderWidth\.B300\} color-mix\(in srgb, currentColor/
+  );
+  assert.match(depth, /&&:disabled, &&\[aria-disabled=true\]/);
+});
+
+test('quiet-depth restyle covers new settings, explore, notes, approvals, and support surfaces', () => {
+  const settingsCss = source('src/app/features/settings/styles.css.ts');
+  const appearance = source('src/app/features/settings/appearance/Appearance.tsx');
+  const deviceTile = source('src/app/features/settings/devices/DeviceTile.tsx');
+  const devices = source('src/app/features/settings/devices/Devices.tsx');
+  const explore = source('src/app/pages/client/explore/Explore.tsx');
+  const server = source('src/app/pages/client/explore/Server.tsx');
+  const exploreCss = source('src/app/pages/client/explore/style.css.ts');
+  const notes = source('src/app/features/room/room-notes/RoomNotesPanel.tsx');
+  const notesCss = source('src/app/features/room/room-notes/RoomNotesPanel.css.ts');
+  const approvals = source('src/app/features/approvals/Approvals.tsx');
+  const editor = source('src/app/features/room/message/MessageEditor.tsx');
+  const toolbar = source('src/app/components/editor/Toolbar.tsx');
+  const welcome = source('src/app/pages/client/WelcomePage.tsx');
+
+  assert.match(settingsCss, /export const SettingsThemeSwatch/);
+  assert.match(settingsCss, /&:focus-visible/);
+  assert.doesNotMatch(appearance, /rgba\(255, 255, 255, 0\.18\)/);
+  assert.match(appearance, /className=\{SettingsThemeSwatch\}/);
+  assert.match(appearance, /aria-haspopup="menu"/);
+  assert.match(deviceTile, /wrap="Wrap"/);
+  assert.match(deviceTile, /aria-expanded=\{details\}/);
+  assert.match(deviceTile, /userSelect: 'all'/);
+  assert.match(devices, /SettingsQuietControl/);
+  assert.match(explore, /aria-haspopup="dialog"/);
+  assert.match(explore, /initialFocus: \(\) => serverInputRef\.current/);
+  assert.match(server, /wrap="Wrap"/);
+  assert.match(server, /role="alert"/);
+  assert.match(server, /aria-haspopup="dialog"/);
+  assert.match(exploreCss, /overflowWrap: 'anywhere'/);
+  assert.match(exploreCss, /color\.Critical\.Main/);
+  assert.doesNotMatch(exploreCss, /ContainerColor\(\{ variant: 'Critical' \}\)/);
+  assert.match(notes, /role="group"/);
+  assert.match(notes, /aria-label="Item kind"/);
+  assert.match(notesCss, /export const PanelHeader/);
+  assert.match(notesCss, /flexShrink: 0/);
+  assert.match(approvals, /role="list"/);
+  assert.match(approvals, /role="listitem"/);
+  assert.match(approvals, /<time dateTime=/);
+  assert.match(approvals, /dir="auto"/);
+  assert.match(editor, /aria-controls=\{toolbar \? 'message-formatting-toolbar' : undefined\}/);
+  assert.match(editor, /aria-haspopup="dialog"/);
+  assert.match(toolbar, /filled=\{isMarkActive\(editor, format\)\}/);
+  assert.match(welcome, /openExternalUrlFromClick\(evt, SYNARA_SUPPORT_URL\)/);
 });

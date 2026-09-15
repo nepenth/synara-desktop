@@ -83,6 +83,7 @@ const inbox: ApprovalInboxContextValue = {
       bodyTruncated: false,
     },
   ],
+  recentItems: [],
 };
 
 function Entry() {

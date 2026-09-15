@@ -53,6 +53,7 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { UseStateProvider } from '../../../components/UseStateProvider';
 import { EmojiBoard } from '../../../components/emoji-board';
+import * as depthCss from '../../../styles/Depth.css';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { editMessageWithNativeDesktopOwner } from '../nativeEditMessage';
@@ -333,10 +334,16 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                 </Box>
                 <Box gap="Inherit">
                   <IconButton
-                    variant="SurfaceVariant"
+                    className={depthCss.quietActionButton}
+                    variant="Surface"
+                    fill="None"
                     size="300"
                     radii="300"
                     onClick={() => setToolbar(!toolbar)}
+                    aria-pressed={toolbar}
+                    aria-expanded={toolbar}
+                    aria-controls={toolbar ? 'message-formatting-toolbar' : undefined}
+                    aria-label={toolbar ? 'Hide formatting toolbar' : 'Show formatting toolbar'}
                   >
                     <Icon size="400" src={toolbar ? Icons.AlphabetUnderline : Icons.Alphabet} />
                   </IconButton>
@@ -366,14 +373,18 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                         }
                       >
                         <IconButton
-                          aria-pressed={anchor !== undefined}
+                          className={depthCss.quietActionButton}
+                          aria-expanded={anchor !== undefined}
+                          aria-haspopup="dialog"
+                          aria-label="Emoji picker"
                           onClick={
                             ((evt) =>
                               setAnchor(
                                 evt.currentTarget.getBoundingClientRect()
                               )) as MouseEventHandler<HTMLButtonElement>
                           }
-                          variant="SurfaceVariant"
+                          variant="Surface"
+                          fill="None"
                           size="300"
                           radii="300"
                         >
@@ -385,7 +396,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                 </Box>
               </Box>
               {toolbar && (
-                <div>
+                <div id="message-formatting-toolbar">
                   <Line variant="SurfaceVariant" size="300" />
                   <Toolbar />
                 </div>

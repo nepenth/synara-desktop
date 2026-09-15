@@ -17,6 +17,7 @@ import FocusTrap from 'focus-trap-react';
 import { NotificationMode, useNotificationActionsMode } from '../../../hooks/useNotificationMode';
 import { stopPropagation } from '../../../utils/keyboard';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
+import { SettingsQuietControl } from '../styles.css';
 
 export const useNotificationModes = (): NotificationMode[] =>
   useMemo(() => [NotificationMode.NotifyLoud, NotificationMode.Notify, NotificationMode.OFF], []);
@@ -56,10 +57,11 @@ export function NotificationModeSwitcher({ pushRule, onChange }: NotificationMod
   return (
     <>
       <Button
+        className={SettingsQuietControl}
         size="300"
         variant="Secondary"
         outlined
-        fill="Soft"
+        fill="None"
         radii="300"
         after={
           changing ? (
@@ -70,6 +72,8 @@ export function NotificationModeSwitcher({ pushRule, onChange }: NotificationMod
         }
         onClick={handleMenu}
         disabled={changing}
+        aria-haspopup="menu"
+        aria-expanded={menuCords !== undefined}
       >
         <Text size="T300">{modeToStr[selectedMode]}</Text>
       </Button>
@@ -96,10 +100,14 @@ export function NotificationModeSwitcher({ pushRule, onChange }: NotificationMod
                 {modes.map((mode) => (
                   <MenuItem
                     key={mode}
+                    className={SettingsQuietControl}
                     size="300"
                     variant="Surface"
                     aria-selected={mode === selectedMode}
                     radii="300"
+                    after={
+                      mode === selectedMode ? <Icon size="100" src={Icons.Check} /> : undefined
+                    }
                     onClick={() => handleSelect(mode)}
                   >
                     <Box grow="Yes">

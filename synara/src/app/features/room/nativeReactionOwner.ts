@@ -1,6 +1,7 @@
 import {
   captureApprovalDecisionScope,
   publishApprovalDecision,
+  approvalDecisionFromActionId,
 } from '../approvals/approvalDecisionEvents';
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../utils/desktop';
 
@@ -156,7 +157,12 @@ export async function decideAgentApprovalWithNativeOwner(
   ) {
     throw new Error('Native agent approval readback did not match the requested decision.');
   }
-  publishApprovalDecision({ scope, roomId: input.roomId, eventId: input.eventId });
+  publishApprovalDecision({
+    scope,
+    roomId: input.roomId,
+    eventId: input.eventId,
+    decision: approvalDecisionFromActionId(input.actionId),
+  });
   return result.value;
 }
 

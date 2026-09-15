@@ -27,6 +27,8 @@ import {
   shouldStreamDesktopFileIpc,
   showDesktopNotification,
   subscribeDesktopTrayDndToggle,
+  sanitizeDesktopDismissKey,
+  dismissDesktopNotifications,
   type DesktopTrayState,
 } from '../desktop';
 import {
@@ -777,16 +779,19 @@ test('desktop notification payloads include routes for message, later, and agent
       title: 'Room',
       body: 'New inbox notification from Alice',
       route,
+      dismissKeys: [`room:${roomId}`],
     });
     await showDesktopNotification({
       title: 'Reminder',
       body: 'A saved reminder is due.',
       route,
+      dismissKeys: [`room:${roomId}`],
     });
     await showDesktopNotification({
       title: 'Approve command',
       body: 'Room: Run `npm test`',
       route,
+      dismissKeys: [`room:${roomId}`, `event:${eventId}`],
     });
   } finally {
     (globalThis as any).window = originalWindow;
@@ -800,6 +805,7 @@ test('desktop notification payloads include routes for message, later, and agent
           title: 'Room',
           body: 'New inbox notification from Alice',
           route,
+          dismissKeys: [`room:${roomId}`],
         },
       },
     },
@@ -810,6 +816,7 @@ test('desktop notification payloads include routes for message, later, and agent
           title: 'Reminder',
           body: 'A saved reminder is due.',
           route,
+          dismissKeys: [`room:${roomId}`],
         },
       },
     },
@@ -820,8 +827,66 @@ test('desktop notification payloads include routes for message, later, and agent
           title: 'Approve command',
           body: 'Room: Run `npm test`',
           route,
+          dismissKeys: [`room:${roomId}`, `event:${eventId}`],
         },
       },
+    },
+  ]);
+});
+
+test('desktop dismiss keys match the native charset and prefixes', async () => {
+  assert.equal(sanitizeDesktopDismissKey('room:!room:example.org'), 'room:!room:example.org');
+  assert.equal(
+    sanitizeDesktopDismissKey('event:$abc+/=_-:example.org'),
+    'event:$abc+/=_-:example.org'
+  );
+  assert.equal(sanitizeDesktopDismissKey('invite:abc'), undefined);
+  assert.equal(sanitizeDesktopDismissKey('room:!ünicode:example.org'), undefined);
+  assert.equal(sanitizeDesktopDismissKey('room:!room:example.org\u202E'), undefined);
+  assert.equal(
+    sanitizeDesktopDismissKey('room:event:$x') !== sanitizeDesktopDismissKey('event:$x'),
+    true
+  );
+
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+  try {
+    await showDesktopNotification({
+      title: 'Room',
+      dismissKeys: [' room:!room:example.org ', 'room:!ünicode:example.org', 'bad key'],
+    });
+    await dismissDesktopNotifications([
+      'event:$event:example.org',
+      'room:!ünicode:example.org',
+      'invite:x',
+    ]);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+  assert.deepEqual(calls, [
+    {
+      command: 'desktop_notify',
+      args: {
+        notification: {
+          title: 'Room',
+          body: undefined,
+          route: undefined,
+          dismissKeys: ['room:!room:example.org'],
+        },
+      },
+    },
+    {
+      command: 'desktop_dismiss_notifications',
+      args: { keys: ['event:$event:example.org'] },
     },
   ]);
 });

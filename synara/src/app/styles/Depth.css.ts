@@ -1,6 +1,5 @@
 import { style } from '@vanilla-extract/css';
 import { color, config, toRem } from 'folds';
-
 /**
  * Synara's depth system is deliberately quiet: edge light establishes the
  * upper plane and soft occlusion separates it from the surface beneath. Text
@@ -176,6 +175,78 @@ export const quietInteractiveSurface = style({
         '&:disabled, &[aria-disabled=true]': {
           boxShadow: 'none',
           outline: 'none',
+        },
+      },
+    },
+  },
+});
+
+/**
+ * Hover of a quiet action: faint tint plus a raised edge. Pressed/expanded
+ * must not reuse this shadow — a hovered unpressed control would otherwise
+ * look identical to a pressed control, and hovering a pressed control
+ * would replace its inset indicator with a raised one.
+ */
+const quietActionHoverShadow = `inset 0 1px 0 ${quietEdgeLight}, 0 1px 2px color-mix(in srgb, var(--synara-depth-shadow-near) 45%, transparent)`;
+const quietActionPressedShadow = `inset 0 1px 0 ${quietEdgeLight}, inset 0 0 0 ${config.borderWidth.B300} color-mix(in srgb, currentColor 22%, transparent)`;
+
+/**
+ * Composer-exact quiet action recipe: transparent at rest, a faint
+ * `currentColor` tint plus edge light on hover, a stronger tint and inset
+ * ring while `aria-pressed`/`aria-expanded`, and a primary-colored focus ring.
+ * Pair with `fill="None"` on folds buttons so the resting control sits flat
+ * on the reading plane. Text never receives depth.
+ *
+ * The 7% hover vs 12% pressed tints are below 3:1 against both theme
+ * surfaces; selection therefore also uses the inset ring (and, on compact
+ * icon toggles, a filled glyph). Hover of a pressed control keeps the inset
+ * because the pressed shadow rule is declared after hover.
+ */
+export const quietActionButton = style({
+  transition: 'background-color 140ms ease-out, color 140ms ease-out, box-shadow 140ms ease-out',
+  selectors: {
+    '&&': {
+      backgroundColor: 'transparent',
+      boxShadow: 'none',
+    },
+    '&&:not(:disabled):not([aria-disabled=true]):hover': {
+      backgroundColor: 'color-mix(in srgb, currentColor 7%, transparent)',
+      boxShadow: quietActionHoverShadow,
+    },
+    '&&:not(:disabled):not([aria-disabled=true])[aria-pressed=true], &&:not(:disabled):not([aria-disabled=true])[aria-expanded=true]':
+      {
+        backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)',
+        boxShadow: quietActionPressedShadow,
+      },
+    '&&:not(:disabled):not([aria-disabled=true]):active': {
+      backgroundColor: 'color-mix(in srgb, currentColor 12%, transparent)',
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
+    },
+    '&&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: '-2px',
+    },
+    '&&:disabled, &&[aria-disabled=true]': {
+      backgroundColor: 'transparent',
+      boxShadow: 'none',
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
+    '(prefers-contrast: more)': {
+      selectors: {
+        '&&:not(:disabled):not([aria-disabled=true]):hover, &&:not(:disabled):not([aria-disabled=true]):active':
+          {
+            boxShadow: 'none',
+          },
+        '&&[aria-pressed=true], &&[aria-expanded=true]': {
+          outline: '1px solid currentColor',
+          outlineOffset: '-2px',
+        },
+        '&&:focus-visible': {
+          outlineWidth: '2px',
         },
       },
     },

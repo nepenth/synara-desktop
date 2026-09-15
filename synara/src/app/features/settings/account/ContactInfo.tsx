@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Box, Text, Chip, Button, Input, Spinner, Icon, Icons } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -100,9 +100,11 @@ function NativeContactInformation() {
             <Box wrap="Wrap" gap="200">
               {emails.map((address) => (
                 <Chip
+                  className={SettingsQuietControl}
                   key={address}
                   as="button"
                   variant="Secondary"
+                  fill="None"
                   radii="Pill"
                   after={<Icon src={Icons.Cross} size="100" />}
                   onClick={() => remove(address)}
@@ -124,6 +126,7 @@ function NativeContactInformation() {
                 />
               </Box>
               <Button
+                className={SettingsQuietControl}
                 size="400"
                 variant="Secondary"
                 fill="Soft"
@@ -152,6 +155,7 @@ function NativeContactInformation() {
                   />
                 </Box>
                 <Button
+                  className={SettingsQuietControl}
                   size="400"
                   variant="Secondary"
                   fill="Soft"

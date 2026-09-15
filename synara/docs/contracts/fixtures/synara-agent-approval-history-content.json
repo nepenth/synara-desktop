@@ -1,0 +1,246 @@
+{
+  "valid": {
+    "approveOnce": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "approve_once",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "mixedDecisions": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$always",
+          "sender": "@hermes:example.org",
+          "decision": "approve_always",
+          "decidedAt": 1770000001000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "apt upgrade"
+        },
+        {
+          "roomId": "!other:example.org",
+          "eventId": "$deny",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000500,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rotate token"
+        }
+      ]
+    },
+    "empty": {
+      "version": 1,
+      "items": []
+    },
+    "emptySummary": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$empty-summary",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": ""
+        }
+      ]
+    },
+    "maxSummary": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$max-summary",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      ]
+    }
+  },
+  "invalid": {
+    "missingVersion": {
+      "items": []
+    },
+    "unsupportedVersion": {
+      "version": 2,
+      "items": []
+    },
+    "itemsObject": {
+      "version": 1,
+      "items": {}
+    },
+    "extraProperty": {
+      "version": 1,
+      "items": [],
+      "command": "rm -rf /"
+    },
+    "badDecision": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "maybe",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "fullCommandBody": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        }
+      ]
+    },
+    "missingEventId": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "missingColonRoomId": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!nocolon",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "senderNotMxid": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "hermes",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "emptySender": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "originServerTsZero": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 0,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "decidedAtZero": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 0,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "whitespaceEventId": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event id",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file"
+        }
+      ]
+    },
+    "itemExtraProperty": {
+      "version": 1,
+      "items": [
+        {
+          "roomId": "!room:example.org",
+          "eventId": "$event",
+          "sender": "@hermes:example.org",
+          "decision": "deny",
+          "decidedAt": 1770000000000,
+          "originServerTs": 1769999700000,
+          "expiresAt": 1770000000000,
+          "summary": "rm file",
+          "command": "rm -rf /"
+        }
+      ]
+    }
+  }
+}

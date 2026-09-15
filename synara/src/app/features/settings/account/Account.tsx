@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Text, IconButton, Icon, Icons, Scroll } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
+import { SettingsQuietControl } from '../styles.css';
 import { MatrixId } from './MatrixId';
 import { Profile } from './Profile';
 import { ContactInformation } from './ContactInfo';
@@ -20,7 +21,13 @@ export function Account({ requestClose }: AccountProps) {
             </Text>
           </Box>
           <Box shrink="No">
-            <IconButton onClick={requestClose} variant="Surface">
+            <IconButton
+              className={SettingsQuietControl}
+              onClick={requestClose}
+              variant="Surface"
+              fill="None"
+              aria-label="Close"
+            >
               <Icon src={Icons.Cross} />
             </IconButton>
           </Box>

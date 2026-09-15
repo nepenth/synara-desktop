@@ -159,6 +159,261 @@ pub fn plan_agent_approval<'a, 'b>(
     })
 }
 
+pub const AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS: usize = 240;
+
+fn collapse_whitespace(value: &str) -> String {
+    value.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn is_disallowed_summary_char(ch: char) -> bool {
+    ch.is_control()
+        || matches!(
+            ch,
+            '\u{00AD}'
+                | '\u{061C}'
+                | '\u{180E}'
+                | '\u{200B}'..='\u{200F}'
+                | '\u{202A}'..='\u{202E}'
+                | '\u{2066}'..='\u{2069}'
+                | '\u{FEFF}'
+        )
+}
+
+fn first_display_line(value: &str) -> &str {
+    value
+        .split(['\u{000B}', '\u{000C}', '\u{2028}', '\u{2029}'])
+        .next()
+        .unwrap_or(value)
+}
+
+fn is_path_arg(token: &str) -> bool {
+    if token.starts_with('/')
+        || token.starts_with("~/")
+        || token.starts_with("./")
+        || token.starts_with("../")
+        || token.starts_with("file:")
+        || token.starts_with("\\\\")
+    {
+        return true;
+    }
+    if token.contains('/') || token.contains('\\') {
+        return !token.starts_with('-');
+    }
+    let bytes = token.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/')
+}
+
+fn looks_like_secret_name(name: &str) -> bool {
+    let n = name.trim_start_matches(['-', '_']).to_ascii_lowercase();
+    n == "auth"
+        || n.ends_with("_auth")
+        || n.ends_with("-auth")
+        || n.ends_with("token")
+        || n.ends_with("secret")
+        || n.ends_with("password")
+        || n.ends_with("passwd")
+        || n.ends_with("authorization")
+        || n.ends_with("credential")
+        || n.ends_with("api_key")
+        || n.ends_with("apikey")
+        || n.ends_with("api-key")
+        || n.ends_with("access_key")
+        || n.ends_with("bearer")
+}
+
+fn is_secret_flag(token: &str) -> bool {
+    looks_like_secret_name(token) && token.starts_with('-') && !token.contains('=')
+}
+
+fn is_known_secret_literal(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    lower == "bearer"
+        || lower.starts_with("sk-")
+        || lower.starts_with("ghp_")
+        || lower.starts_with("github_pat_")
+        || lower.starts_with("xox")
+}
+
+fn redact_assignment(token: &str) -> Option<String> {
+    let (name, value) = token.split_once('=')?;
+    if name.is_empty() || value.is_empty() {
+        return None;
+    }
+    if looks_like_secret_name(name) {
+        return Some(format!("{name}=<redacted>"));
+    }
+    if is_path_arg(value) {
+        return Some(format!("{name}=<path>"));
+    }
+    None
+}
+
+fn redact_agent_approval_history_preview(value: &str) -> String {
+    let tokens: Vec<&str> = value.split_whitespace().collect();
+    if tokens.is_empty() {
+        return String::new();
+    }
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut redact_next = false;
+    for token in tokens {
+        if redact_next {
+            out.push(if is_path_arg(token) {
+                "<path>".to_owned()
+            } else {
+                "<redacted>".to_owned()
+            });
+            redact_next = false;
+            continue;
+        }
+        if let Some(redacted) = redact_assignment(token) {
+            out.push(redacted);
+            continue;
+        }
+        if is_secret_flag(token) {
+            out.push(token.to_owned());
+            redact_next = true;
+            continue;
+        }
+        if is_known_secret_literal(token) {
+            out.push("<redacted>".to_owned());
+            continue;
+        }
+        if is_path_arg(token) {
+            out.push("<path>".to_owned());
+            continue;
+        }
+        out.push(token.to_owned());
+    }
+    out.join(" ")
+}
+
+/// Single visible preview line: no extra fence lines, bidi/overrides, or
+/// control characters. Account data is server-readable plaintext, so path-like
+/// args and secret-like assignments are replaced with placeholders.
+pub(crate) fn sanitize_agent_approval_history_summary(value: &str) -> String {
+    let display = first_display_line(value);
+    let mut cleaned = String::new();
+    for ch in display.chars() {
+        if ch == '\u{2028}' || ch == '\u{2029}' {
+            break;
+        }
+        if is_disallowed_summary_char(ch) {
+            continue;
+        }
+        cleaned.push(ch);
+    }
+    redact_agent_approval_history_preview(&collapse_whitespace(&cleaned))
+        .chars()
+        .take(AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS)
+        .collect()
+}
+
+fn preview_from_line(value: &str) -> Option<String> {
+    let preview = sanitize_agent_approval_history_summary(value);
+    if preview.is_empty() {
+        None
+    } else {
+        Some(preview)
+    }
+}
+
+fn first_useful_command_line(block: &str) -> Option<String> {
+    block.lines().find_map(|line| {
+        let display = first_display_line(line.trim());
+        if display.is_empty() {
+            return None;
+        }
+        let lowered = display.to_ascii_lowercase();
+        if lowered == "code" || lowered == "copy" {
+            return None;
+        }
+        preview_from_line(display)
+    })
+}
+
+fn extract_fenced_command_preview(body: &str) -> Option<String> {
+    let start = body.find("```")?;
+    let after_ticks = body.get(start + 3..)?;
+    let after_info = after_ticks.split_once('\n')?.1;
+    let block = after_info.split("```").next().unwrap_or(after_info);
+    first_useful_command_line(block)
+}
+
+fn extract_labeled_command_preview(body: &str) -> Option<String> {
+    let mut lines = body.lines().peekable();
+    while let Some(line) = lines.next() {
+        let lowered = line.trim().to_ascii_lowercase();
+        if lowered != "code" && lowered != "copy" {
+            continue;
+        }
+        for candidate in lines.by_ref() {
+            let trimmed = candidate.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let lowered = trimmed.to_ascii_lowercase();
+            if lowered == "code" || lowered == "copy" {
+                continue;
+            }
+            if trimmed.to_ascii_lowercase().starts_with("reason:")
+                || trimmed.to_ascii_lowercase().starts_with("reply ")
+            {
+                break;
+            }
+            return preview_from_line(first_display_line(trimmed));
+        }
+        break;
+    }
+    None
+}
+
+fn extract_reason_preview(body: &str) -> Option<String> {
+    for line in body.lines() {
+        let trimmed = line.trim();
+        let Some(rest) = trimmed
+            .strip_prefix("Reason:")
+            .or_else(|| trimmed.strip_prefix("reason:"))
+        else {
+            continue;
+        };
+        return preview_from_line(first_display_line(rest));
+    }
+    None
+}
+
+fn extract_fallback_preview(body: &str) -> Option<String> {
+    body.lines().find_map(|line| {
+        let display = first_display_line(line.trim());
+        if display.is_empty() {
+            return None;
+        }
+        let lowered = display.to_ascii_lowercase();
+        if APPROVAL_HEADINGS
+            .iter()
+            .any(|heading| lowered.contains(heading))
+            || lowered.starts_with("reply ")
+            || lowered == "code"
+            || lowered == "copy"
+        {
+            return None;
+        }
+        preview_from_line(display)
+    })
+}
+
+/// Bounded account-data summary: command preview line, else Reason, else a
+/// non-heading line. Never the full command body.
+pub fn agent_approval_history_summary(body: &str) -> String {
+    extract_fenced_command_preview(body)
+        .or_else(|| extract_labeled_command_preview(body))
+        .or_else(|| extract_reason_preview(body))
+        .or_else(|| extract_fallback_preview(body))
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -318,6 +573,76 @@ mod tests {
         )
         .unwrap();
         assert_eq!(plan.status, AgentApprovalDecisionStatus::Applied);
+    }
+
+    #[test]
+    fn history_summary_prefers_fenced_command_preview_line() {
+        assert_eq!(
+            agent_approval_history_summary(HERMES_MATRIX_PROMPT),
+            "rm -rf <path>"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\nCode\nrm file\nReason: do not store this whole body"
+            ),
+            "rm file"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\nReason: rotate the token\nReply !approve to execute"
+            ),
+            "rotate the token"
+        );
+        let long = format!("```\n{}\n```", "x".repeat(300));
+        assert_eq!(
+            agent_approval_history_summary(&format!(
+                "Approval Required: Dangerous Command\n{long}"
+            ))
+            .chars()
+            .count(),
+            AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\necho visible\nexport TOKEN=secret\n```"
+            ),
+            "echo visible"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\nls\u{2028}cat /secrets\n```"
+            ),
+            "ls"
+        );
+        let spoofed = agent_approval_history_summary(
+            "Approval Required: Dangerous Command\n```\nrm \u{202E}elif\u{200B}secret\n```",
+        );
+        assert_eq!(spoofed, "rm elifsecret");
+        assert!(!spoofed.contains('\u{202E}'));
+        assert!(!spoofed.contains('\u{200B}'));
+        assert!(agent_approval_history_summary(
+            "Approval Required: Dangerous Command\n```\n\u{0000}token\n```"
+        )
+        .chars()
+        .all(|ch| !ch.is_control()));
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\nexport TOKEN=secret\n```"
+            ),
+            "export TOKEN=<redacted>"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\ncurl --token abcdef\n```"
+            ),
+            "curl --token <redacted>"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\nrm file\n```"
+            ),
+            "rm file"
+        );
     }
 
     #[test]

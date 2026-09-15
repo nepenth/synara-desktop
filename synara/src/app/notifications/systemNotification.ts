@@ -20,6 +20,7 @@ export type SystemNotificationRequest = {
   route?: string;
   actions?: SystemNotificationAction[];
   actionContext?: SystemNotificationActionContext;
+  dismissKeys?: string[];
   privacy?: SystemNotificationPrivacy;
   sound?: SystemNotificationSoundPolicy;
 };
@@ -79,6 +80,19 @@ const normalizeActionContext = (
   };
 };
 
+const normalizeDismissKeys = (keys: string[] | undefined): string[] | undefined => {
+  if (!Array.isArray(keys)) return undefined;
+  const normalized: string[] = [];
+  const seen = new Set<string>();
+  keys.slice(0, 8).forEach((key) => {
+    const next = normalizeText(key, MAX_ACTION_CONTEXT_LENGTH);
+    if (!next || seen.has(next)) return;
+    seen.add(next);
+    normalized.push(next);
+  });
+  return normalized.length > 0 ? normalized : undefined;
+};
+
 export const normalizeSystemNotificationRequest = (
   request: SystemNotificationRequest
 ): SystemNotificationRequest | undefined => {
@@ -89,6 +103,7 @@ export const normalizeSystemNotificationRequest = (
   const route = normalizeRoute(request.route);
   const actions = normalizeNotificationActions(request.actions);
   const actionContext = actions ? normalizeActionContext(request.actionContext) : undefined;
+  const dismissKeys = normalizeDismissKeys(request.dismissKeys);
 
   const normalized: SystemNotificationRequest = {
     title,
@@ -100,6 +115,9 @@ export const normalizeSystemNotificationRequest = (
   if (actions) {
     normalized.actions = actions;
     normalized.actionContext = actionContext;
+  }
+  if (dismissKeys) {
+    normalized.dismissKeys = dismissKeys;
   }
   return normalized;
 };

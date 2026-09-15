@@ -158,6 +158,10 @@ mod approval_inbox;
 pub use approval_inbox::{
     AgentApprovalInboxDto, AgentApprovalInboxError, AgentApprovalInboxItemDto,
 };
+mod agent_approval_history;
+pub use agent_approval_history::{
+    AgentApprovalHistoryCommandError, AgentApprovalHistoryItemDto, AgentApprovalHistorySnapshotDto,
+};
 mod inbox_notifications;
 pub use inbox_notifications::{
     InboxNotificationDto, InboxNotificationsError, InboxNotificationsPageDto,
@@ -178,8 +182,8 @@ use matrix_sdk_ui::notification_client::{
 use zeroize::Zeroizing;
 
 use crate::app::account_data::{
-    NativeGlobalImagePacksSnapshot, NativeImagePack, NativeImagePackOwner,
-    NativeImagePackUpdateSignal, NativeLaterSnapshot, NativeMDirectSnapshot,
+    NativeAccountDataWakeupKind, NativeGlobalImagePacksSnapshot, NativeImagePack,
+    NativeImagePackOwner, NativeImagePackUpdateSignal, NativeLaterSnapshot, NativeMDirectSnapshot,
     NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
     RoomNoteMoveDirection, SynaraLaterItem, SynaraLaterItemKind, SynaraRoomNoteItem,
     SynaraRoomNoteItemKind,
@@ -1230,6 +1234,15 @@ fn push_room_list_update(queue: &Mutex<Vec<RoomListUpdateDto>>, session_generati
             guard.remove(0);
         }
         guard.push(RoomListUpdateDto { session_generation });
+    }
+}
+
+fn account_data_owner_update_family(kind: NativeAccountDataWakeupKind) -> Option<&'static str> {
+    match kind {
+        NativeAccountDataWakeupKind::ImagePacks => Some("image_packs"),
+        // Older iOS waiters ignore unknown families, so this cannot mis-route
+        // into the image-pack UI. New iOS refetches history on this family.
+        NativeAccountDataWakeupKind::AgentApprovalHistory => Some("agent_approval_history"),
     }
 }
 
@@ -3806,7 +3819,9 @@ impl SharedCore {
         let image_packs_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeImagePackUpdateSignal| {
-                push_owner_update(&queue, "image_packs", update.session_generation, None);
+                if let Some(family) = account_data_owner_update_family(update.kind) {
+                    push_owner_update(&queue, family, update.session_generation, None);
+                }
             })
         };
         let image_packs = Arc::new(
@@ -8111,6 +8126,8 @@ fn parse_verification_sas_request(
 }
 
 /// Privacy-safe device row. Identity/presentation fields only; no keys or tokens.
+/// Additive fingerprint/first-seen/cross-sign fields are optional for older
+/// consumers.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceSummaryDto {
     pub device_id: String,
@@ -8119,6 +8136,9 @@ pub struct DeviceSummaryDto {
     pub last_seen_ts: Option<u64>,
     pub trust: String,
     pub is_current: bool,
+    pub is_cross_signed_by_owner: Option<bool>,
+    pub first_seen_ts: Option<u64>,
+    pub ed25519_fingerprint: Option<String>,
 }
 
 /// Privacy-safe device inbox. No tokens or password.
@@ -10203,6 +10223,29 @@ fn map_directory_search_core_error(
     match error.diagnostic_id.as_deref() {
         Some(code) if code == no_session => {
             directory_search_failed(code, DIRECTORY_SEARCH_NO_SESSION_DESCRIPTION)
+        }
+        Some("v-rooms.directory-federation-forbidden") => directory_search_failed(
+            "v-rooms.directory-federation-forbidden",
+            "This server does not allow public room directory queries over federation. The remote homeserver must enable allow_public_rooms_over_federation.",
+        ),
+        Some("v-rooms.directory-server-not-found") => directory_search_failed(
+            "v-rooms.directory-server-not-found",
+            "That Matrix server was not found.",
+        ),
+        Some("v-rooms.directory-network-failed") => directory_search_failed(
+            "v-rooms.directory-network-failed",
+            "Could not reach the room directory. Check your connection and try again.",
+        ),
+        Some("v-rooms.directory-invalid-server") => directory_search_failed(
+            "v-rooms.directory-invalid-server",
+            "That is not a valid Matrix server name.",
+        ),
+        Some("v-rooms.directory-rate-limited") => directory_search_failed(
+            "v-rooms.directory-rate-limited",
+            "The room directory is rate-limited. Try again in a moment.",
+        ),
+        Some(code @ ("v-rooms.directory-invalid-hit" | "v-rooms.directory-hit-cap")) => {
+            directory_search_failed(code, "The public room directory could not be loaded.")
         }
         Some(code)
             if code.starts_with("v-rooms.directory-")
@@ -13049,8 +13092,10 @@ fn restricted_join_reparent_dto(
 fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
     match trust {
         NativeDeviceTrust::Verified => "verified",
+        NativeDeviceTrust::VerifiedLocallyOnly => "verified_locally_only",
         NativeDeviceTrust::Unverified => "unverified",
-        NativeDeviceTrust::Unsupported => "unsupported",
+        NativeDeviceTrust::NoEncryption => "no_encryption",
+        NativeDeviceTrust::Dehydrated => "dehydrated",
     }
     .to_owned()
 }
@@ -13075,6 +13120,9 @@ fn device_snapshot_dto(snapshot: NativeDeviceSnapshot) -> DeviceSnapshotDto {
                 last_seen_ts: device.last_seen_ts,
                 trust: device_trust_as_str(device.trust),
                 is_current: device.is_current,
+                is_cross_signed_by_owner: Some(device.is_cross_signed_by_owner),
+                first_seen_ts: device.first_seen_ts,
+                ed25519_fingerprint: device.ed25519_fingerprint,
             })
             .collect(),
     }
@@ -13591,6 +13639,28 @@ mod tests {
     use std::collections::HashMap;
     use std::fs;
     use std::time::{SystemTime, UNIX_EPOCH};
+
+    #[test]
+    fn account_data_wakeup_does_not_misroute_approval_history_to_image_packs() {
+        assert_eq!(
+            super::account_data_owner_update_family(
+                crate::app::account_data::NativeAccountDataWakeupKind::ImagePacks
+            ),
+            Some("image_packs")
+        );
+        assert_eq!(
+            super::account_data_owner_update_family(
+                crate::app::account_data::NativeAccountDataWakeupKind::AgentApprovalHistory
+            ),
+            Some("agent_approval_history")
+        );
+        assert_ne!(
+            super::account_data_owner_update_family(
+                crate::app::account_data::NativeAccountDataWakeupKind::AgentApprovalHistory
+            ),
+            Some("image_packs")
+        );
+    }
 
     struct MemoryCallbackVault(std::sync::Arc<Mutex<HashMap<String, Vec<u8>>>>);
 

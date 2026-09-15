@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Box, Text, Icon, Icons, Button, MenuItem } from 'folds';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useAccountDataCallback } from '../../../hooks/useAccountDataCallback';
@@ -39,9 +39,10 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
           description="Data stored in your global account data."
           after={
             <Button
+              className={SettingsQuietControl}
               onClick={() => onExpandToggle(!expand)}
               variant="Secondary"
-              fill="Soft"
+              fill="None"
               size="300"
               radii="300"
               outlined
@@ -61,6 +62,7 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
             </Box>
             <CutoutCard>
               <MenuItem
+                className={SettingsQuietControl}
                 variant="Surface"
                 fill="None"
                 size="300"
@@ -77,6 +79,7 @@ export function AccountData({ expand, onExpandToggle, onSelect }: AccountDataPro
               {accountDataTypes.sort().map((type) => (
                 <MenuItem
                   key={type}
+                  className={SettingsQuietControl}
                   variant="Surface"
                   fill="None"
                   size="300"

@@ -121,18 +121,15 @@ test('Core-pending unformatted requests show full source and native approval con
   await expect(page.getByRole('button', { name: 'Open message', exact: true })).toHaveCount(2);
 });
 
-test('full prompt stays open through clock updates and refreshes', async ({ page }) => {
+test('command block stays visible through clock updates and refreshes', async ({ page }) => {
   await page.goto(route);
-  const details = page
-    .getByRole('region', { name: /^Approval from / })
-    .first()
-    .locator('details');
-  await details.locator('summary').click();
-  await expect(details).toHaveAttribute('open', '');
+  const card = page.getByRole('region', { name: /^Approval from / }).first();
+  const command = card.getByText('Command: rm -rf ./build/preview', { exact: true });
+  await expect(command).toBeVisible();
   await page.getByRole('button', { name: 'Refresh approval requests' }).click();
-  await expect(details).toHaveAttribute('open', '');
+  await expect(command).toBeVisible();
   await page.waitForTimeout(1200);
-  await expect(details).toHaveAttribute('open', '');
+  await expect(command).toBeVisible();
 });
 
 test('native session generation resets optimistic decisions on the same client facade', async ({

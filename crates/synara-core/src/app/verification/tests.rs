@@ -366,8 +366,8 @@ async fn live_direct_peer_sas_transport_completes_through_product_owner_and_sync
         .expect("verified peer in product device snapshot");
     assert_eq!(
         projected_peer.trust,
-        crate::app::devices::NativeDeviceTrust::Verified,
-        "product trust projection must preserve direct SAS verification"
+        crate::app::devices::NativeDeviceTrust::VerifiedLocallyOnly,
+        "direct SAS without cross-signing projects as verified_locally_only"
     );
     // This fixture intentionally proves only direct-peer SAS transport. Two
     // fresh sessions are not eligible authorities for the SDK own-identity

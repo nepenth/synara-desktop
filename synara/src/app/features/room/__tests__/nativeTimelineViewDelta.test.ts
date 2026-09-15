@@ -4,6 +4,7 @@ import test from 'node:test';
 import { readFileSync } from 'node:fs';
 import {
   applyNativeTimelineViewDelta,
+  applyNativeTimelineViewDeltaBatches,
   filterNativeForwardTargets,
   isNativeTimelineEventPinned,
   isNativeTimelineReadbackStale,
@@ -36,7 +37,31 @@ const baseSnapshot = (): NativeTimelineViewSnapshot => ({
 });
 
 test('applies metadata-only read-frontier deltas without row ops', () => {
-  const next = applyNativeTimelineViewDelta(baseSnapshot(), {
+  const current = baseSnapshot();
+  current.rows = [
+    {
+      kind: 'message',
+      itemId: 'm1',
+      eventId: '$m1:example.org',
+      senderId: '@a:example.org',
+      senderName: 'A',
+      originServerTs: 1,
+      body: 'hello',
+      edited: false,
+      capabilities: {
+        react: true,
+        reply: true,
+        edit: false,
+        redact: true,
+        report: true,
+        pin: true,
+        forward: true,
+        vote: false,
+        declineCall: false,
+      },
+    },
+  ];
+  const next = applyNativeTimelineViewDelta(current, {
     schemaVersion: 1,
     sessionGeneration: 2,
     streamId: 'live:!room:example.org:1',
@@ -53,6 +78,7 @@ test('applies metadata-only read-frontier deltas without row ops', () => {
   assert.equal(next.readState.ownReadEventId, '$frontier:example.org');
   assert.equal(next.readState.isMarkedUnread, false);
   assert.equal(next.pagination.backward, 'available');
+  assert.equal(next.rows, current.rows);
 });
 
 test('poll and sticker rows preserve Core relation and reaction presentation fields', () => {
@@ -119,6 +145,184 @@ test('poll and sticker rows preserve Core relation and reaction presentation fie
     assert.equal(row.thread?.latestEventId, '$latest:example.org');
     assert.deepEqual(row.reactions, [{ key: '✅', count: 2, own: true }]);
   }
+});
+
+test('coalesced batches apply in order and keep a successful prefix on a revision gap', () => {
+  const current = baseSnapshot();
+  const first = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      pagination: { backward: 'loading', forward: 'available' },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [],
+      pagination: { backward: 'exhausted', forward: 'available' },
+    },
+  ]);
+  assert.equal(first.gap, false);
+  assert.equal(first.snapshot.revision, 5);
+  assert.equal(first.snapshot.pagination.backward, 'exhausted');
+  assert.equal(first.snapshot.rows, current.rows);
+
+  const gapped = applyNativeTimelineViewDeltaBatches(baseSnapshot(), [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: false },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 6,
+      ops: [],
+      readState: { isMarkedUnread: true },
+    },
+  ]);
+  assert.equal(gapped.gap, true);
+  assert.equal(gapped.snapshot.revision, 4);
+  assert.equal(gapped.snapshot.readState.isMarkedUnread, false);
+});
+
+test('coalesced batches sort unordered revisions and skip stale duplicates', () => {
+  const current = baseSnapshot();
+  const outOfOrder = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [],
+      pagination: { backward: 'exhausted', forward: 'available' },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      pagination: { backward: 'loading', forward: 'available' },
+    },
+  ]);
+  assert.ok(outOfOrder);
+  assert.equal(outOfOrder.gap, false);
+  assert.equal(outOfOrder.snapshot.revision, 5);
+  assert.equal(outOfOrder.snapshot.pagination.backward, 'exhausted');
+  assert.equal(outOfOrder.snapshot.rows, current.rows);
+
+  const withDuplicate = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: false },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: true },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [],
+      pagination: { backward: 'exhausted', forward: 'available' },
+    },
+  ]);
+  assert.ok(withDuplicate);
+  assert.equal(withDuplicate.gap, false);
+  assert.equal(withDuplicate.snapshot.revision, 5);
+  assert.equal(withDuplicate.snapshot.readState.isMarkedUnread, false);
+  assert.equal(withDuplicate.snapshot.pagination.backward, 'exhausted');
+});
+
+test('metadata-only then ops in one coalesced flush preserve then replace rows', () => {
+  const current = baseSnapshot();
+  current.rows = [
+    {
+      kind: 'message',
+      itemId: 'm1',
+      eventId: '$m1:example.org',
+      senderId: '@a:example.org',
+      senderName: 'A',
+      originServerTs: 1,
+      body: 'hello',
+      edited: false,
+      capabilities: {
+        react: true,
+        reply: true,
+        edit: false,
+        redact: true,
+        report: true,
+        pin: true,
+        forward: true,
+        vote: false,
+        declineCall: false,
+      },
+    },
+  ];
+  const appended = {
+    ...current.rows[0],
+    itemId: 'm2',
+    eventId: '$m2:example.org',
+    body: 'tail',
+  };
+  const next = applyNativeTimelineViewDeltaBatches(current, [
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 4,
+      ops: [],
+      readState: { isMarkedUnread: false },
+    },
+    {
+      schemaVersion: 1,
+      sessionGeneration: 2,
+      streamId: 'live:!room:example.org:1',
+      roomId: '!room:example.org',
+      revision: 5,
+      ops: [{ op: 'push_back', row: appended }],
+    },
+  ]);
+  assert.ok(next);
+  assert.equal(next.gap, false);
+  assert.equal(next.snapshot.revision, 5);
+  assert.equal(next.snapshot.readState.isMarkedUnread, false);
+  assert.equal(next.snapshot.rows.length, 2);
+  assert.equal(next.snapshot.rows[0], current.rows[0]);
+  assert.equal(
+    next.snapshot.rows[1]?.kind === 'message' ? next.snapshot.rows[1].eventId : undefined,
+    '$m2:example.org'
+  );
 });
 
 test('applies pagination and pin-list metadata and rejects empty batches', () => {
@@ -266,6 +470,18 @@ test('timeline open is not aborted when event listen is unavailable', () => {
   assert.match(source, /matrix_timeline_open/);
   assert.match(source, /matrix_timeline_snapshot/);
   assert.doesNotMatch(source, /if \(disposed \|\| !unlisten\)/);
+});
+
+test('live stream deltas coalesce to one React state update per animation frame', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /requestAnimationFrame\(flushCoalescedBatches\)/);
+  assert.match(source, /applyNativeTimelineViewDeltaBatches\(next, active\)/);
+  assert.match(source, /cancelAnimationFrame\(coalesceFrame\)/);
+  assert.match(source, /if \(applied\.gap\)/);
+  assert.match(
+    source,
+    /if \(applied\.snapshot !== snapshotRef\.current\) \{\s*snapshotRef\.current = applied\.snapshot;/
+  );
 });
 
 test('follow-live accepts a placement change at the same SDK revision', () => {

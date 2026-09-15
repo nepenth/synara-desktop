@@ -10,6 +10,9 @@ export type ApprovalInboxItem = {
   originServerTs: number;
   expiresAt: number;
   status: 'pending' | 'decided' | 'expired';
+  decision?: 'approve_once' | 'approve_always' | 'deny';
+  decidedAt?: number;
+  summary?: string;
 };
 
 export type ApprovalInboxSnapshot = {

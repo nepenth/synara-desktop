@@ -249,7 +249,7 @@ them. Missing owner → `Forbidden` with `p2-*-no-session`.
 | Typing | `NativeTypingOwner` | `matrix_typing_snapshot`, `matrix_typing_set` |
 | Presence | `NativePresenceOwner` | snapshot, subscribe, unsubscribe |
 | Verification | `NativeVerificationOwner` | list + SAS flow commands |
-| Devices | `NativeDeviceOwner` | snapshot, rename, delete start/cancel, backup_status, room-key status, cross-signing setup start |
+| Devices | `NativeDeviceOwner` | snapshot, rename, delete start/cancel, backup_status, room-key status, cross-signing setup start. Snapshot rows keep `device_id` / `display_name` / `last_seen_*` / `is_current` and extend them with `trust` (`verified` = cross-signed, `verified_locally_only` = SAS/local, `unverified`, `no_encryption` with wire alias `unsupported`, `dehydrated`), optional `is_cross_signed_by_owner`, `first_seen_ts`, and grouped `ed25519_fingerprint`. UDL/Rust names are snake_case; desktop JSON and generated Swift are camelCase (`isCrossSignedByOwner`, `firstSeenTs`, `ed25519Fingerprint`). Older clients ignore the additive fields. |
 | Join rules / room profile | `NativeRoomJoinRuleOwner` | join-rule snapshot, name/topic/avatar, directory, leave/join, moderation, power levels, create, members, spaces, **all five invite commands** |
 | Image packs / account data | `NativeImagePackOwner` | image packs, later, m.direct, room notes, own display-name/avatar |
 | Timelines | `NativeTimelineOwner` | open/close/paginate/read/reactions/composer/send text/edit/sticker/poll |
@@ -461,8 +461,8 @@ P4-S16 product timeline rows          LANDED #1001
        Snapshot DTO keeps privacy-safe row bodies. Product
        SharedCoreTimelineService maps them. No media bytes.
 P4-S17 owner emit poll                LANDED #1001
-       Presence/devices/join_rules/image_packs poll queue.
-       Summaries only. No presence user id. NSE cannot poll.
+       Presence/devices/join_rules/image_packs/agent_approval_history
+       poll queue. Summaries only. No presence user id. NSE cannot poll.
 P4-S18 product timeline live poll     LANDED #1001
        SharedCoreTimelineService.timelineUpdates stays open and
        re-fetches on S14 summaries. One host poller. No room-list
@@ -510,7 +510,10 @@ P4-S31/S32/S33 timeline reactions + media handle LANDED #1001
        SharedCore.timeline_media_bytes is a dedicated UniFFI byte
        channel (ADR 0005). Not Core.command. NSE cannot download.
 P4-S34 product device list              LANDED #1001
-       Settings lists leftover-safe device snapshot rows. No keys.
+       Settings lists leftover-safe device snapshot rows. Presentation
+       fields now include additive trust detail, first-seen, and a
+       grouped ed25519 fingerprint. No private keys. iOS keeps working
+       because the extra DTO fields are optional.
 P4-S35 last-message preview             LANDED #1001
        Core projects a privacy-safe last_message_preview. UniFFI
        room-list DTO and both UIs consume it. No mxc/token.
@@ -1169,6 +1172,7 @@ After every product merge:
 | `crates/synara-core/src/synara_core.udl` | UniFFI surface (P4 only) |
 | `crates/synara-core/src/ffi.rs` | UniFFI translation for namespace probes (P4) |
 | `crates/synara-core/src/shared_core_ffi.rs` | `SharedCore` FFI (P4-S3) |
+| `crates/synara-core/src/shared_core_ffi/agent_approval_history.rs` | UniFFI read of Core `matrix_agent_approval_history_snapshot`; owner family `agent_approval_history` (not `image_packs`). iOS Approvals Recent unions inbox decided/expired with account-data history. |
 | `crates/synara-core/src/session_projection_ffi.rs` | Session-projection mirror only |
 | `src-tauri/src/bridge/` | Desktop adapters |
 | `src-tauri/src/matrix/*/product_commands.rs` | Thin Tauri wrappers |

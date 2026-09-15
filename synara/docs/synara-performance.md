@@ -49,6 +49,46 @@ Disable it with:
 localStorage.removeItem('synara.performance.debug');
 ```
 
+## Native Timeline Scrolling
+
+The native presenter (`NativeTimelinePresenter`) owns scroll restoration, so
+browser overflow anchoring is disabled on virtual rows. Smoothness work in this
+layer is aimed at two hot paths: backward pagination in long rooms, and live
+appends while the user is either following the tail or parked in history.
+
+Current tactics:
+
+- Kind-aware `estimateSize` plus a keyed measured-height cache (room, row key,
+  and a size identity covering grouping, body, media, and reactions) so TanStack
+  does not reuse a stale height after an edit or fall back to a constant 64px
+  after `rows` array replacement.
+- Intrinsic media boxes from Matrix `info.w/h` so image/video loads do not
+  reflow already-painted rows.
+- Same-frame coalescing of native view deltas in revision order (stale revisions
+  skipped, true gaps fail closed while keeping a successful prefix), and
+  metadata-only batches that keep the existing `rows` array identity.
+- Follow-live sticks with `scrollTop = scrollHeight - clientHeight` in the same
+  layout pass that grows the spacer, instead of a later `scrollToIndex(end)`.
+  A small move away from an already-stuck tail during the programmatic lock
+  (focus/`scrollIntoView`) releases follow-live; the stick itself is marked so a
+  scripted `scrollTop` away from the tail is not yanked back. In-flight viewport
+  saves are skipped so prepend anchoring is not overwritten. History prepends
+  shift `scrollTop` by the spacer delta in that same layout pass (not a later
+  rAF `scrollToIndex`) so two prepends in consecutive frames cannot cancel the
+  parked-row correction. A parked `live_bottom`/`restored` row is then pinned to
+  its saved DOM offset on the next frame so a date separator or reaction on that
+  row cannot jump the viewport.
+- Bottom observation and live-read/follow-live attempts are rAF-batched; the
+  presenter does not attach extra subtree MutationObservers while scrolling.
+
+The Playwright native-timeline harness records dropped frames (>2 vsync) during
+scripted wheel scrolling with mocked live appends (~300ms) and a backward
+prepend. Run it with:
+
+```sh
+npm run test:browser:native-timeline
+```
+
 ## Desktop Notes
 
 Synara Desktop uses the platform webview. macOS WebKit already handles compositing

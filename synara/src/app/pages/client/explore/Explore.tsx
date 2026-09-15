@@ -33,6 +33,7 @@ import {
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { stopPropagation } from '../../../utils/keyboard';
+import * as depthCss from '../../../styles/Depth.css';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 import { readNativeRoomDirectorySession } from './nativeRoomDirectoryOwner';
 
@@ -64,7 +65,7 @@ export function AddServer() {
         <OverlayCenter>
           <FocusTrap
             focusTrapOptions={{
-              initialFocus: false,
+              initialFocus: () => serverInputRef.current ?? false,
               clickOutsideDeactivates: true,
               onDeactivate: () => setDialog(false),
               escapeDeactivates: stopPropagation,
@@ -82,7 +83,15 @@ export function AddServer() {
                 <Box grow="Yes">
                   <Text size="H4">Add Server</Text>
                 </Box>
-                <IconButton size="300" onClick={() => setDialog(false)} radii="300">
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  variant="Surface"
+                  fill="None"
+                  size="300"
+                  onClick={() => setDialog(false)}
+                  radii="300"
+                  aria-label="Close"
+                >
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Header>
@@ -95,11 +104,25 @@ export function AddServer() {
               >
                 <Text priority="400">Add server name to explore public communities.</Text>
                 <Box direction="Column" gap="100">
-                  <Text size="L400">Server Name</Text>
-                  <Input ref={serverInputRef} name="serverInput" variant="Background" required />
+                  <Text as="label" size="L400" htmlFor="explore-add-server-name">
+                    Server Name
+                  </Text>
+                  <Input
+                    ref={serverInputRef}
+                    id="explore-add-server-name"
+                    name="serverInput"
+                    variant="Background"
+                    required
+                    aria-label="Server Name"
+                  />
                 </Box>
                 <Box direction="Column" gap="200">
-                  <Button type="submit" variant="Secondary" fill="Soft">
+                  <Button
+                    className={depthCss.quietInteractiveSurface}
+                    type="submit"
+                    variant="Secondary"
+                    fill="Soft"
+                  >
                     <Text size="B400">View</Text>
                   </Button>
                 </Box>
@@ -109,11 +132,14 @@ export function AddServer() {
         </OverlayCenter>
       </Overlay>
       <Button
+        className={depthCss.quietInteractiveSurface}
         variant="Secondary"
-        fill="Soft"
+        fill="None"
         size="300"
         before={<Icon size="100" src={Icons.Plus} />}
         onClick={() => setDialog(true)}
+        aria-haspopup="dialog"
+        aria-expanded={dialog}
       >
         <Text size="B300" truncate>
           Add Server

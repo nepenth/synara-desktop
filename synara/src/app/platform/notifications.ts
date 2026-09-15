@@ -34,6 +34,7 @@ export const showPlatformNotification = async (
     route: normalized.route,
     actions: normalized.actions,
     actionContext: normalized.actionContext,
+    dismissKeys: normalized.dismissKeys,
   });
 };
 

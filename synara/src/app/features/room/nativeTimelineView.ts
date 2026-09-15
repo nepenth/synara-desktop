@@ -353,6 +353,17 @@ export const applyNativeTimelineViewDelta = (
     return undefined;
   }
 
+  if (batch.ops.length === 0) {
+    return {
+      ...snapshot,
+      revision: batch.revision,
+      rows: snapshot.rows,
+      ...(batch.readState ? { readState: batch.readState } : {}),
+      ...(batch.pagination ? { pagination: batch.pagination } : {}),
+      ...(batch.pinnedEventIds !== undefined ? { pinnedEventIds: batch.pinnedEventIds } : {}),
+    };
+  }
+
   const rows = [...snapshot.rows];
   for (const op of batch.ops) {
     switch (op.op) {
@@ -408,6 +419,32 @@ export const applyNativeTimelineViewDelta = (
     ...(batch.pagination ? { pagination: batch.pagination } : {}),
     ...(batch.pinnedEventIds !== undefined ? { pinnedEventIds: batch.pinnedEventIds } : {}),
   };
+};
+
+export type NativeTimelineViewDeltaBatchApply = {
+  snapshot: NativeTimelineViewSnapshot;
+  /** True when a later batch was a gap or invalid op; `snapshot` is the prefix. */
+  gap: boolean;
+};
+
+/**
+ * Apply several stream batches in revision order. Stale/duplicate revisions are
+ * skipped. A missing revision or invalid op fails closed rather than guessed,
+ * but a successful prefix is kept so a later fill can recover.
+ */
+export const applyNativeTimelineViewDeltaBatches = (
+  snapshot: NativeTimelineViewSnapshot,
+  batches: readonly NativeTimelineViewDeltaBatch[]
+): NativeTimelineViewDeltaBatchApply => {
+  const sorted = [...batches].sort((left, right) => left.revision - right.revision);
+  let current = snapshot;
+  for (const batch of sorted) {
+    if (batch.revision <= current.revision) continue;
+    const applied = applyNativeTimelineViewDelta(current, batch);
+    if (!applied) return { snapshot: current, gap: true };
+    current = applied;
+  }
+  return { snapshot: current, gap: false };
 };
 
 /** Whether the room pin list currently includes this remote event id. */
@@ -1014,26 +1051,59 @@ export const useNativeTimelineView = (
     let disposed = false;
     let unlisten: (() => void) | undefined;
     let pollTimer: number | undefined;
-    const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {
-      if (disposed || batch.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION) return;
-      if (batch.streamId !== streamIdRef.current || !snapshotRef.current) {
-        pendingOpenRef.current?.add(batch);
-        return;
+    const COALESCE_QUEUE_LIMIT = 128;
+    let coalesceQueued: NativeTimelineViewDeltaBatch[] = [];
+    let coalesceFrame = 0;
+    const flushCoalescedBatches = () => {
+      coalesceFrame = 0;
+      const queued = coalesceQueued;
+      coalesceQueued = [];
+      if (disposed || queued.length === 0) return;
+      const next = snapshotRef.current;
+      const active: NativeTimelineViewDeltaBatch[] = [];
+      for (const batch of queued) {
+        if (batch.streamId !== streamIdRef.current || !next) {
+          pendingOpenRef.current?.add(batch);
+          continue;
+        }
+        active.push(batch);
       }
-      const next = applyNativeTimelineViewDelta(snapshotRef.current, batch);
-      if (!next) {
+      if (!next || active.length === 0) return;
+      const applied = applyNativeTimelineViewDeltaBatches(next, active);
+      if (applied.gap) {
+        if (applied.snapshot !== snapshotRef.current) {
+          snapshotRef.current = applied.snapshot;
+        }
         setState({
           status: 'error',
           error: new Error('Native timeline stream lost synchronization.'),
         });
         return;
       }
-      snapshotRef.current = next;
+      if (applied.snapshot === snapshotRef.current) return;
+      snapshotRef.current = applied.snapshot;
       setState({
         status: 'ready',
-        snapshot: next,
-        selectedPosition: selectedPositionRef.current ?? next.position,
+        snapshot: applied.snapshot,
+        selectedPosition: selectedPositionRef.current ?? applied.snapshot.position,
       });
+    };
+    const applyBatch = (batch: NativeTimelineViewDeltaBatch) => {
+      if (disposed || batch.schemaVersion !== TIMELINE_VIEW_SCHEMA_VERSION) return;
+      if (batch.streamId !== streamIdRef.current || !snapshotRef.current) {
+        pendingOpenRef.current?.add(batch);
+        return;
+      }
+      coalesceQueued.push(batch);
+      // rAF pauses while the document is hidden; bound the queue so a busy
+      // room cannot accumulate unboundedly before the next visible frame.
+      if (coalesceQueued.length >= COALESCE_QUEUE_LIMIT) {
+        if (coalesceFrame !== 0) window.cancelAnimationFrame(coalesceFrame);
+        flushCoalescedBatches();
+        return;
+      }
+      if (coalesceFrame !== 0) return;
+      coalesceFrame = window.requestAnimationFrame(flushCoalescedBatches);
     };
 
     const pollSnapshot = async () => {
@@ -1153,6 +1223,8 @@ export const useNativeTimelineView = (
     void open();
     return () => {
       disposed = true;
+      coalesceQueued = [];
+      if (coalesceFrame !== 0) window.cancelAnimationFrame(coalesceFrame);
       pendingOpenRef.current?.cancel();
       pendingOpenRef.current = undefined;
       navigationRevisionRef.current += 1;

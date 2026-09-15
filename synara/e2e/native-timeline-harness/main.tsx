@@ -7,17 +7,28 @@ import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
-import type {
-  NativeTimelinePosition,
-  NativeTimelineViewDeltaBatch,
-  NativeTimelineViewSnapshot,
+import {
+  applyNativeTimelineViewDelta,
+  type NativeTimelinePosition,
+  type NativeTimelineViewDeltaBatch,
+  type NativeTimelineViewSnapshot,
 } from '../../src/app/features/room/nativeTimelineView';
 
 const room = '!navigation:example.test';
 const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
-let sequence = polish ? 4 : scenario === 'sparse-missing' ? 1 : scenario === 'short' ? 2 : 60;
+const jank = params.has('jank');
+let sequence = polish
+  ? 4
+  : scenario === 'sparse-missing'
+  ? 1
+  : scenario === 'short'
+  ? 2
+  : jank
+  ? 180
+  : 60;
+let historyIndex = 0;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
 let releaseLastRead: (() => void) | undefined;
@@ -37,7 +48,12 @@ const makeRow = (index: number) => ({
   senderId: `@reader${index % 2}:example.test`,
   senderName: `Reader ${index % 2}`,
   originServerTs: 1_700_000_000_000 + index * 60_000,
-  body: `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
+  body: jank
+    ? `Message ${index}\n${Array.from(
+        { length: 1 + (index % 6) },
+        (_, line) => `Native jank fixture line ${line + 2}.`
+      ).join('\n')}`
+    : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
   edited: false,
   forwardTransport: polish ? ('text' as const) : undefined,
   capabilities: {
@@ -296,6 +312,27 @@ if (params.has('nativeEvents')) {
   });
 }
 
+const dispatchBatch = (batch: NativeTimelineViewDeltaBatch) => {
+  for (const [id, listener] of eventListeners) {
+    if (listener.event === 'matrix-timeline-view-updated') {
+      eventCallbacks.get(listener.handler)?.({ event: listener.event, id, payload: batch });
+    }
+  }
+};
+
+const emitActiveBatch = (
+  build: (current: NativeTimelineViewSnapshot, streamId: string) => NativeTimelineViewDeltaBatch
+) => {
+  for (const [streamId, current] of snapshots) {
+    const batch = build(current, streamId);
+    const next = applyNativeTimelineViewDelta(current, batch);
+    if (!next) continue;
+    snapshots.set(streamId, next);
+    snapshot = next;
+    dispatchBatch(batch);
+  }
+};
+
 const api = {
   commands,
   activeStreamCount: () => snapshots.size,
@@ -304,6 +341,268 @@ const api = {
   append() {
     rows.push(makeRow(++sequence));
     update();
+  },
+  appendLive() {
+    const row = makeRow(++sequence);
+    rows.push(row);
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [{ op: 'push_back', row }],
+    }));
+  },
+  prependHistory(count = 40) {
+    const newRows = Array.from({ length: count }, () => makeRow(--historyIndex)).reverse();
+    rows = [...newRows, ...rows];
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [{ op: 'reset', rows: [...newRows, ...current.rows] }],
+    }));
+  },
+  prependMediaWithoutInfo(count = 8) {
+    const newRows = Array.from({ length: count }, () => {
+      const row = makeRow(--historyIndex);
+      return {
+        ...row,
+        messageType: 'image' as const,
+        media: { handleId: `missing-media:${row.itemId}` },
+      };
+    }).reverse();
+    rows = [...newRows, ...rows];
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [{ op: 'reset', rows: [...newRows, ...current.rows] }],
+    }));
+  },
+  metadataPulse() {
+    emitActiveBatch((current, streamId) => ({
+      schemaVersion: 1,
+      sessionGeneration: current.sessionGeneration,
+      roomId: current.roomId,
+      streamId,
+      revision: current.revision + 1,
+      ops: [],
+      readState: { ...current.readState },
+    }));
+  },
+  emitDeltaFlood(count = 130) {
+    for (let index = 0; index < count; index += 1) {
+      emitActiveBatch((current, streamId) => ({
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [],
+        readState: { ...current.readState },
+      }));
+    }
+  },
+  outOfOrderLiveAppends() {
+    const rowA = makeRow(++sequence);
+    const rowB = makeRow(++sequence);
+    rows.push(rowA, rowB);
+    for (const [streamId, current] of snapshots) {
+      const first: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [{ op: 'push_back', row: rowA }],
+      };
+      const second: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 2,
+        ops: [{ op: 'push_back', row: rowB }],
+      };
+      const withFirst = applyNativeTimelineViewDelta(current, first);
+      const withSecond = withFirst ? applyNativeTimelineViewDelta(withFirst, second) : undefined;
+      if (!withSecond) continue;
+      snapshots.set(streamId, withSecond);
+      snapshot = withSecond;
+      dispatchBatch(second);
+      dispatchBatch(first);
+    }
+  },
+  emitRevisionGap() {
+    if (eventListeners.size === 0 || snapshots.size === 0) {
+      throw new Error('emitRevisionGap requires an open native timeline stream');
+    }
+    const row = makeRow(++sequence);
+    rows.push(row);
+    for (const [streamId, current] of snapshots) {
+      // Skip more than one revision so a concurrent follow-live increment
+      // (N -> N+1) cannot turn this batch into a sequential apply.
+      dispatchBatch({
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 8,
+        ops: [{ op: 'push_back', row }],
+      });
+    }
+  },
+  metadataThenOps() {
+    const row = makeRow(++sequence);
+    rows.push(row);
+    for (const [streamId, current] of snapshots) {
+      const meta: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [],
+        readState: { ...current.readState, isMarkedUnread: false },
+      };
+      const ops: NativeTimelineViewDeltaBatch = {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 2,
+        ops: [{ op: 'push_back', row }],
+      };
+      const withMeta = applyNativeTimelineViewDelta(current, meta);
+      const withOps = withMeta ? applyNativeTimelineViewDelta(withMeta, ops) : undefined;
+      if (!withOps) continue;
+      snapshots.set(streamId, withOps);
+      snapshot = withOps;
+      dispatchBatch(meta);
+      dispatchBatch(ops);
+    }
+  },
+  growEdit(eventId = '$50') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex(
+        (row) => 'eventId' in row && row.eventId === eventId && row.kind === 'message'
+      );
+      const row = index >= 0 ? current.rows[index] : undefined;
+      if (!row || row.kind !== 'message') {
+        return {
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId,
+          revision: current.revision + 1,
+          ops: [],
+          readState: { ...current.readState },
+        };
+      }
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [
+          {
+            op: 'set',
+            index,
+            row: {
+              ...row,
+              edited: true,
+              body: `${row.body}\n${Array.from(
+                { length: 12 },
+                (_, line) => `Grown edit ${line}.`
+              ).join('\n')}`,
+            },
+          },
+        ],
+      };
+    });
+  },
+  addReaction(eventId = '$50') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex(
+        (row) => 'eventId' in row && row.eventId === eventId && row.kind === 'message'
+      );
+      const row = index >= 0 ? current.rows[index] : undefined;
+      if (!row || row.kind !== 'message') {
+        return {
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId,
+          revision: current.revision + 1,
+          ops: [],
+          readState: { ...current.readState },
+        };
+      }
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [
+          {
+            op: 'set',
+            index,
+            row: {
+              ...row,
+              reactions: [...(row.reactions ?? []), { key: '✅', count: 1, own: true }],
+            },
+          },
+        ],
+      };
+    });
+  },
+  insertUngroupedHeader(eventId = '$50') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex(
+        (row) => 'eventId' in row && row.eventId === eventId && row.kind === 'message'
+      );
+      if (index < 0) {
+        return {
+          schemaVersion: 1,
+          sessionGeneration: current.sessionGeneration,
+          roomId: current.roomId,
+          streamId,
+          revision: current.revision + 1,
+          ops: [],
+          readState: { ...current.readState },
+        };
+      }
+      const divider = {
+        kind: 'date_separator' as const,
+        itemId: `$divider-${current.revision}`,
+        timestampMs: 1_700_000_000_000,
+      };
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [{ op: 'insert', index, row: divider }],
+      };
+    });
+  },
+  scrollEventIntoView(eventId: string) {
+    document
+      .querySelector<HTMLElement>(`[data-native-timeline-event-id="${eventId}"]`)
+      ?.scrollIntoView({ block: 'center', inline: 'nearest' });
+  },
+  resizeTimeline(height: number) {
+    const el = document.getElementById('native-timeline');
+    if (el) el.style.height = `${height}px`;
   },
   edit() {
     rows = rows.map((row, index) =>

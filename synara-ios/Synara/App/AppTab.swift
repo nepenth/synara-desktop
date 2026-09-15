@@ -33,6 +33,18 @@ private struct NotificationsTabView: View {
             await reloadInbox()
         }
         .navigationTitle("Notifications")
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                NavigationLink {
+                    ApprovalsView()
+                } label: {
+                    Image(systemName: "checkmark.shield")
+                }
+                .accessibilityLabel("Approvals")
+                .accessibilityHint("Review pending and recent agent approvals")
+                .accessibilityIdentifier("NotificationsApprovalsButton")
+            }
+        }
         .task {
             loadInbox()
             startRoomUpdates()

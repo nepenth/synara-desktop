@@ -59,6 +59,30 @@ const hasExactSessionKeys = (value: Record<string, unknown>): boolean => {
 };
 
 const unavailableMessage = 'Native Matrix room directory is unavailable.';
+
+const DIRECTORY_DIAGNOSTIC_MESSAGES: Record<string, string> = {
+  'p2-room-directory-search-no-session': 'No native Matrix session is active.',
+  'p2-room-directory-cancel-no-session': 'No native Matrix session is active.',
+  'v-rooms.directory-requires-session': 'No native Matrix session is active.',
+  'v-send.r-room-profile-join-rule-requires-session': 'No native Matrix session is active.',
+  'v-rooms.directory-federation-forbidden':
+    'This server does not allow public room directory queries over federation. The remote homeserver must enable allow_public_rooms_over_federation.',
+  'v-rooms.directory-server-not-found': 'That Matrix server was not found.',
+  'v-rooms.directory-network-failed':
+    'Could not reach the room directory. Check your connection and try again.',
+  'v-rooms.directory-invalid-server': 'That is not a valid Matrix server name.',
+  'v-rooms.directory-invalid-limit': 'The room directory request is invalid.',
+  'v-rooms.directory-invalid-term': 'The room directory request is invalid.',
+  'v-rooms.directory-invalid-instance': 'The room directory request is invalid.',
+  'v-rooms.directory-invalid-since': 'The room directory request is invalid.',
+  'v-rooms.directory-invalid-correlation': 'The room directory request is invalid.',
+  'v-rooms.directory-invalid-hit': 'The public room directory could not be loaded.',
+  'v-rooms.directory-hit-cap': 'The public room directory could not be loaded.',
+  'v-rooms.directory-rate-limited': 'The room directory is rate-limited. Try again in a moment.',
+  'v-rooms.directory-sdk-failed': 'The public room directory could not be loaded.',
+};
+
+const DIRECTORY_USER_MESSAGES = new Set(Object.values(DIRECTORY_DIAGNOSTIC_MESSAGES));
 const defaultInvoke: NativeRoomDirectoryInvoke = (command, args) =>
   invokeDesktopWithAvailability(command, args);
 
@@ -76,6 +100,24 @@ const serverFromUserId = (userId: string): string | undefined => {
 
 const unavailable = (): Error => new Error(unavailableMessage);
 
+const directoryErrorFromInvoke = (error: unknown): Error => {
+  if (error && typeof error === 'object' && !Array.isArray(error)) {
+    const record = error as Record<string, unknown>;
+    const diagnosticId = record.diagnosticId ?? record.diagnostic_id;
+    if (typeof diagnosticId === 'string' && diagnosticId in DIRECTORY_DIAGNOSTIC_MESSAGES) {
+      return new Error(DIRECTORY_DIAGNOSTIC_MESSAGES[diagnosticId]);
+    }
+    const message = record.message;
+    if (typeof message === 'string' && DIRECTORY_USER_MESSAGES.has(message)) {
+      return new Error(message);
+    }
+  }
+  if (error instanceof Error && DIRECTORY_USER_MESSAGES.has(error.message)) {
+    return error;
+  }
+  return unavailable();
+};
+
 const invokeNative = async (
   command: string,
   args: Record<string, unknown>,
@@ -85,8 +127,8 @@ const invokeNative = async (
     const result = await invoke(command, args);
     if (!result.available || result.value === undefined) throw unavailable();
     return result.value;
-  } catch {
-    throw unavailable();
+  } catch (error) {
+    throw directoryErrorFromInvoke(error);
   }
 };
 

@@ -26,7 +26,7 @@ import {
 } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { SequenceCard } from '../../../components/sequence-card';
-import { SequenceCardStyle } from '../styles.css';
+import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { SettingTile } from '../../../components/setting-tile';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { UserProfile, useUserProfile } from '../../../hooks/useUserProfile';
@@ -187,10 +187,11 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
       ) : (
         <Box gap="200">
           <Button
+            className={SettingsQuietControl}
             onClick={() => pickFile('image/*')}
             size="300"
             variant="Secondary"
-            fill="Soft"
+            fill="None"
             outlined
             radii="300"
             disabled={disableSetAvatar}
@@ -199,6 +200,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
           </Button>
           {avatarUrl && (
             <Button
+              className={SettingsQuietControl}
               size="300"
               variant="Critical"
               fill="None"
@@ -257,7 +259,14 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
                 <Box grow="Yes">
                   <Text size="H4">Remove Avatar</Text>
                 </Box>
-                <IconButton size="300" onClick={() => setAlertRemove(false)} radii="300">
+                <IconButton
+                  className={SettingsQuietControl}
+                  variant="Surface"
+                  fill="None"
+                  size="300"
+                  onClick={() => setAlertRemove(false)}
+                  radii="300"
+                >
                   <Icon src={Icons.Cross} />
                 </IconButton>
               </Header>
@@ -265,7 +274,12 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
                 <Box direction="Column" gap="200">
                   <Text priority="400">Are you sure you want to remove profile avatar?</Text>
                 </Box>
-                <Button variant="Critical" onClick={handleRemoveAvatar}>
+                <Button
+                  className={SettingsQuietControl}
+                  variant="Critical"
+                  fill="Soft"
+                  onClick={handleRemoveAvatar}
+                >
                   <Text size="B400">Remove</Text>
                 </Button>
               </Box>
@@ -354,11 +368,13 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
                 hasChanges &&
                 !changingDisplayName && (
                   <IconButton
+                    className={SettingsQuietControl}
                     type="reset"
                     onClick={handleReset}
                     size="300"
                     radii="300"
                     variant="Secondary"
+                    fill="None"
                   >
                     <Icon src={Icons.Cross} size="100" />
                   </IconButton>
@@ -367,9 +383,10 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
             />
           </Box>
           <Button
+            className={SettingsQuietControl}
             size="400"
             variant={hasChanges ? 'Success' : 'Secondary'}
-            fill={hasChanges ? 'Solid' : 'Soft'}
+            fill="Soft"
             outlined
             radii="300"
             disabled={!hasChanges || changingDisplayName}
@@ -442,11 +459,14 @@ function ProfilePresence({ userId }: { userId: string }) {
           {PRESENCE_OPTIONS.map(({ state, label }) => (
             <Button
               key={state}
+              className={SettingsQuietControl}
               size="300"
-              variant={state === current ? 'Primary' : 'Secondary'}
-              fill={state === current ? 'Solid' : 'Soft'}
+              variant="Secondary"
+              fill={state === current ? 'Soft' : 'None'}
               outlined
               radii="300"
+              aria-pressed={state === current}
+              before={state === current ? <Icon size="100" src={Icons.Check} /> : undefined}
               disabled={busy || unavailable}
               onClick={() => {
                 if (state === current || busy || unavailable) return;

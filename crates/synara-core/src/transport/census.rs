@@ -10,6 +10,7 @@
 /// actual desktop invoke list, making surface drift explicit in CI.
 pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_agent_approval_decide",
+    "matrix_agent_approval_history_snapshot",
     "matrix_agent_approvals_list",
     "matrix_backup_repair",
     "matrix_backup_restore",

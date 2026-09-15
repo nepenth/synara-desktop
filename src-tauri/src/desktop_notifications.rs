@@ -2,6 +2,10 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Runtime};
 use tauri_plugin_notification::NotificationExt;
 
+use std::collections::{HashMap, HashSet, VecDeque};
+#[cfg(target_os = "linux")]
+use std::sync::{Arc, Mutex, OnceLock};
+
 use crate::desktop::navigate_main_window;
 #[cfg(test)]
 use crate::desktop_sanitize::sanitize_route;
@@ -24,6 +28,10 @@ const DESKTOP_NOTIFICATION_MAX_ACTIONS: usize = 4;
 const DESKTOP_NOTIFICATION_MAX_ACTION_ID_CHARS: usize = 96;
 const DESKTOP_NOTIFICATION_MAX_ACTION_LABEL_CHARS: usize = 80;
 const DESKTOP_NOTIFICATION_MAX_ACTION_CONTEXT_CHARS: usize = 255;
+const DESKTOP_NOTIFICATION_MAX_DISMISS_KEYS: usize = 8;
+const DESKTOP_NOTIFICATION_MAX_DISMISS_KEY_CHARS: usize = 255;
+const DESKTOP_DISMISS_COMMAND_MAX_KEYS: usize = 32;
+const MAX_LINUX_NOTIFICATION_HANDLES: usize = 256;
 const DESKTOP_NOTIFICATION_DEFAULT_ACTION_ID: &str = "default";
 const DESKTOP_NOTIFICATION_ACTION_EVENT: &str = "synara://notification-action";
 
@@ -57,6 +65,8 @@ pub struct DesktopNotificationPayload {
     pub route: Option<String>,
     pub actions: Option<Vec<DesktopNotificationAction>>,
     pub action_context: Option<DesktopNotificationActionContext>,
+    #[serde(default)]
+    pub dismiss_keys: Option<Vec<String>>,
 }
 
 fn sanitize_notification_payload(
@@ -80,6 +90,7 @@ fn sanitize_notification_payload(
     let action_context = notification
         .action_context
         .and_then(sanitize_notification_action_context);
+    let dismiss_keys = sanitize_dismiss_keys(notification.dismiss_keys);
 
     Ok(DesktopNotificationPayload {
         title,
@@ -87,6 +98,7 @@ fn sanitize_notification_payload(
         route,
         actions,
         action_context,
+        dismiss_keys,
     })
 }
 
@@ -158,6 +170,117 @@ fn sanitize_notification_action_context(
     })
 }
 
+pub(crate) fn sanitize_dismiss_key(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty()
+        || trimmed.chars().count() > DESKTOP_NOTIFICATION_MAX_DISMISS_KEY_CHARS
+        || trimmed
+            .chars()
+            .any(|ch| ch.is_whitespace() || ch.is_control())
+    {
+        return None;
+    }
+    let (prefix, rest) = trimmed.split_once(':')?;
+    if rest.is_empty() || (prefix != "room" && prefix != "event") {
+        return None;
+    }
+    if !trimmed.chars().all(|ch| {
+        ch.is_ascii_alphanumeric()
+            || matches!(
+                ch,
+                '.' | '_' | ':' | '-' | '!' | '$' | '=' | '/' | '+' | '@'
+            )
+    }) {
+        return None;
+    }
+    Some(trimmed.to_owned())
+}
+
+fn sanitize_dismiss_keys(keys: Option<Vec<String>>) -> Option<Vec<String>> {
+    let mut sanitized = Vec::new();
+    for key in keys.unwrap_or_default() {
+        if sanitized.len() >= DESKTOP_NOTIFICATION_MAX_DISMISS_KEYS {
+            break;
+        }
+        let Some(key) = sanitize_dismiss_key(&key) else {
+            continue;
+        };
+        if sanitized.iter().any(|existing| existing == &key) {
+            continue;
+        }
+        sanitized.push(key);
+    }
+    if sanitized.is_empty() {
+        None
+    } else {
+        Some(sanitized)
+    }
+}
+
+#[derive(Debug, Default)]
+#[allow(dead_code)] // Exercised on Linux and in unit tests.
+pub(crate) struct DismissKeyIndex {
+    by_key: HashMap<String, HashSet<u32>>,
+    keys_by_id: HashMap<u32, Vec<String>>,
+    order: VecDeque<u32>,
+}
+
+#[allow(dead_code)]
+impl DismissKeyIndex {
+    pub(crate) fn register(&mut self, id: u32, keys: &[String]) {
+        self.unregister(id);
+        while self.keys_by_id.len() >= MAX_LINUX_NOTIFICATION_HANDLES {
+            let Some(oldest) = self.order.pop_front() else {
+                break;
+            };
+            self.unregister(oldest);
+        }
+        let mut stored = Vec::new();
+        for key in keys {
+            if stored.iter().any(|existing| existing == key) {
+                continue;
+            }
+            self.by_key.entry(key.clone()).or_default().insert(id);
+            stored.push(key.clone());
+        }
+        if !stored.is_empty() {
+            self.keys_by_id.insert(id, stored);
+            self.order.push_back(id);
+        }
+    }
+
+    pub(crate) fn unregister(&mut self, id: u32) {
+        if let Some(keys) = self.keys_by_id.remove(&id) {
+            self.order.retain(|candidate| *candidate != id);
+            for key in keys {
+                if let Some(ids) = self.by_key.get_mut(&key) {
+                    ids.remove(&id);
+                    if ids.is_empty() {
+                        self.by_key.remove(&key);
+                    }
+                }
+            }
+        }
+    }
+
+    pub(crate) fn ids_for_keys(&self, keys: &[String]) -> Vec<u32> {
+        let mut ids = HashSet::new();
+        for key in keys {
+            if let Some(set) = self.by_key.get(key) {
+                ids.extend(set.iter().copied());
+            }
+        }
+        ids.into_iter().collect()
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn lock_mutex<T>(mutex: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
+    mutex
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
 fn emit_notification_action<R: Runtime>(
     app: &AppHandle<R>,
     action_id: &str,
@@ -190,6 +313,111 @@ fn show_notification_without_route_click_handler<R: Runtime>(
 }
 
 #[cfg(target_os = "linux")]
+fn linux_notification_handles() -> &'static Mutex<HashMap<u32, Arc<notify_rust::NotificationHandle>>>
+{
+    static HANDLES: OnceLock<Mutex<HashMap<u32, Arc<notify_rust::NotificationHandle>>>> =
+        OnceLock::new();
+    HANDLES.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Waiter tasks per notification id so a dismiss or eviction can abort a
+/// `wait_for_action_async` that would otherwise hang when the daemon's
+/// `NotificationClosed` signal was missed (closed before the match rule was
+/// installed, or the daemon restarted).
+#[cfg(target_os = "linux")]
+fn linux_notification_waiters() -> &'static Mutex<HashMap<u32, tauri::async_runtime::JoinHandle<()>>>
+{
+    static WAITERS: OnceLock<Mutex<HashMap<u32, tauri::async_runtime::JoinHandle<()>>>> =
+        OnceLock::new();
+    WAITERS.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// Upper bound on how long a Linux waiter task may outlive its notification.
+/// The longest notification timeout we request is 300 s (agent approvals).
+#[cfg(target_os = "linux")]
+const LINUX_NOTIFICATION_WAIT_MAX: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
+#[cfg(target_os = "linux")]
+fn abort_linux_waiter(id: u32) {
+    if let Some(waiter) = lock_mutex(linux_notification_waiters()).remove(&id) {
+        waiter.abort();
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn linux_dismiss_index() -> &'static Mutex<DismissKeyIndex> {
+    static INDEX: OnceLock<Mutex<DismissKeyIndex>> = OnceLock::new();
+    INDEX.get_or_init(|| Mutex::new(DismissKeyIndex::default()))
+}
+
+#[cfg(target_os = "linux")]
+fn register_linux_notification(
+    id: u32,
+    keys: &[String],
+    handle: Arc<notify_rust::NotificationHandle>,
+) {
+    if !keys.is_empty() {
+        lock_mutex(linux_dismiss_index()).register(id, keys);
+    }
+    let evicted = {
+        let mut handles = lock_mutex(linux_notification_handles());
+        let mut evicted = Vec::new();
+        while handles.len() >= MAX_LINUX_NOTIFICATION_HANDLES {
+            let Some(old_id) = handles.keys().min().copied() else {
+                break;
+            };
+            if let Some(old_handle) = handles.remove(&old_id) {
+                evicted.push((old_id, old_handle));
+            }
+        }
+        handles.insert(id, handle);
+        evicted
+    };
+    if !evicted.is_empty() {
+        let mut index = lock_mutex(linux_dismiss_index());
+        for (old_id, _) in &evicted {
+            index.unregister(*old_id);
+        }
+    }
+    for (old_id, handle) in evicted {
+        tauri::async_runtime::spawn(async move {
+            handle.close_async().await;
+            abort_linux_waiter(old_id);
+        });
+    }
+}
+
+#[cfg(target_os = "linux")]
+fn unregister_linux_notification(id: u32) {
+    lock_mutex(linux_dismiss_index()).unregister(id);
+    lock_mutex(linux_notification_handles()).remove(&id);
+    // Called from the waiter itself on completion; it is finished, so only
+    // drop the bookkeeping entry rather than aborting.
+    lock_mutex(linux_notification_waiters()).remove(&id);
+}
+
+#[cfg(target_os = "linux")]
+async fn dismiss_linux_notifications(keys: &[String]) {
+    let ids = lock_mutex(linux_dismiss_index()).ids_for_keys(keys);
+    let live: Vec<(u32, Arc<notify_rust::NotificationHandle>)> = {
+        let mut handles = lock_mutex(linux_notification_handles());
+        ids.iter()
+            .filter_map(|id| handles.remove(id).map(|handle| (*id, handle)))
+            .collect()
+    };
+    {
+        let mut index = lock_mutex(linux_dismiss_index());
+        for id in &ids {
+            index.unregister(*id);
+        }
+    }
+    for (id, handle) in live {
+        handle.close_async().await;
+        abort_linux_waiter(id);
+    }
+}
+
+#[cfg(target_os = "linux")]
 fn show_notification_with_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
     title: &str,
@@ -197,9 +425,9 @@ fn show_notification_with_route_click_handler<R: Runtime>(
     route: Option<&str>,
     actions: &[DesktopNotificationAction],
     action_context: Option<&DesktopNotificationActionContext>,
+    dismiss_keys: &[String],
 ) -> Result<(), String> {
-    use notify_rust::Notification;
-    use notify_rust::Urgency;
+    use notify_rust::{Notification, NotificationResponse, Urgency};
 
     let mut notification = Notification::new();
     notification.summary(title);
@@ -218,7 +446,9 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         notification.action(&action.id, &action.label);
     }
 
-    let handle = notification.show().map_err(|error| error.to_string())?;
+    let handle = Arc::new(notification.show().map_err(|error| error.to_string())?);
+    let id = handle.id();
+    register_linux_notification(id, dismiss_keys, handle.clone());
     let app = app.clone();
     let route = route.map(str::to_owned);
     let action_context = action_context.cloned();
@@ -227,19 +457,17 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         .map(|action| action.id.clone())
         .collect::<Vec<_>>();
 
-    tauri::async_runtime::spawn(async move {
-        let _ = tauri::async_runtime::spawn_blocking(move || {
-            handle.wait_for_action(move |action| {
-                if action == DESKTOP_NOTIFICATION_DEFAULT_ACTION_ID {
-                    let Some(route) = route.as_deref() else {
-                        return;
-                    };
-                    if let Err(error) = navigate_main_window(&app, route) {
-                        eprintln!("failed to navigate from notification click: {error}");
-                    }
+    let waiter = tauri::async_runtime::spawn(async move {
+        let wait = handle.wait_for_action_async(move |response| match response {
+            NotificationResponse::Default => {
+                let Some(route) = route.as_deref() else {
                     return;
+                };
+                if let Err(error) = navigate_main_window(&app, route) {
+                    eprintln!("failed to navigate from notification click: {error}");
                 }
-
+            }
+            NotificationResponse::Action(action) => {
                 if allowed_action_ids
                     .iter()
                     .any(|candidate| candidate == action)
@@ -250,10 +478,18 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                         eprintln!("failed to emit notification action: {error}");
                     }
                 }
-            });
-        })
-        .await;
+            }
+            NotificationResponse::Closed(_) | NotificationResponse::Reply(_) => {}
+        });
+        if tokio::time::timeout(LINUX_NOTIFICATION_WAIT_MAX, wait)
+            .await
+            .is_err()
+        {
+            eprintln!("notification {id} waiter timed out without a close signal");
+        }
+        unregister_linux_notification(id);
     });
+    lock_mutex(linux_notification_waiters()).insert(id, waiter);
 
     Ok(())
 }
@@ -574,6 +810,7 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
     route: Option<&str>,
     actions: &[DesktopNotificationAction],
     action_context: Option<&DesktopNotificationActionContext>,
+    _dismiss_keys: &[String],
 ) -> Result<bool, String> {
     use mac_notification_sys::{MainButton, Notification, NotificationResponse, Sound};
 
@@ -689,9 +926,18 @@ async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     route: Option<&str>,
     actions: &[DesktopNotificationAction],
     action_context: Option<&DesktopNotificationActionContext>,
+    dismiss_keys: &[String],
 ) -> Result<bool, String> {
-    show_notification_with_route_click_handler(app, title, body, route, actions, action_context)
-        .map(|()| true)
+    show_notification_with_route_click_handler(
+        app,
+        title,
+        body,
+        route,
+        actions,
+        action_context,
+        dismiss_keys,
+    )
+    .map(|()| true)
 }
 
 #[cfg(target_os = "macos")]
@@ -702,9 +948,18 @@ async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     route: Option<&str>,
     actions: &[DesktopNotificationAction],
     action_context: Option<&DesktopNotificationActionContext>,
+    dismiss_keys: &[String],
 ) -> Result<bool, String> {
-    show_notification_with_route_click_handler(app, title, body, route, actions, action_context)
-        .await
+    show_notification_with_route_click_handler(
+        app,
+        title,
+        body,
+        route,
+        actions,
+        action_context,
+        dismiss_keys,
+    )
+    .await
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
@@ -715,6 +970,7 @@ async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     _route: Option<&str>,
     _actions: &[DesktopNotificationAction],
     _action_context: Option<&DesktopNotificationActionContext>,
+    _dismiss_keys: &[String],
 ) -> Result<bool, String> {
     show_notification_without_route_click_handler(app, title, body).map(|()| true)
 }
@@ -765,7 +1021,14 @@ pub async fn desktop_notify<R: Runtime>(
     let notification = sanitize_notification_payload(notification)?;
     let actions = notification.actions.as_deref().unwrap_or(&[]);
 
-    if cfg!(target_os = "macos") || notification.route.is_some() || !actions.is_empty() {
+    if cfg!(target_os = "macos")
+        || notification.route.is_some()
+        || !actions.is_empty()
+        || notification
+            .dismiss_keys
+            .as_ref()
+            .is_some_and(|keys| !keys.is_empty())
+    {
         return show_notification_with_route_click_handler_receipt(
             &app,
             &notification.title,
@@ -773,6 +1036,7 @@ pub async fn desktop_notify<R: Runtime>(
             notification.route.as_deref(),
             actions,
             notification.action_context.as_ref(),
+            notification.dismiss_keys.as_deref().unwrap_or(&[]),
         )
         .await;
     }
@@ -783,6 +1047,25 @@ pub async fn desktop_notify<R: Runtime>(
         notification.body.as_deref(),
     )?;
     Ok(true)
+}
+
+/// Close delivered Linux notifications that were tagged with `dismissKeys`.
+///
+/// macOS identifier tracking is receipt-matching, not a dismiss-key map, so
+/// this command is a documented no-op there.
+#[tauri::command]
+pub async fn desktop_dismiss_notifications(keys: Vec<String>) -> Result<(), String> {
+    let keys: Vec<String> = keys
+        .into_iter()
+        .take(DESKTOP_DISMISS_COMMAND_MAX_KEYS)
+        .filter_map(|key| sanitize_dismiss_key(&key))
+        .collect();
+    if keys.is_empty() {
+        return Ok(());
+    }
+    #[cfg(target_os = "linux")]
+    dismiss_linux_notifications(&keys).await;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -797,6 +1080,7 @@ mod tests {
             route: None,
             actions: None,
             action_context: None,
+            dismiss_keys: None,
         });
 
         assert!(result.is_err());
@@ -810,6 +1094,7 @@ mod tests {
             route: Some("/inbox/".to_owned()),
             actions: None,
             action_context: None,
+            dismiss_keys: None,
         })
         .expect("notification payload should pass");
 
@@ -835,6 +1120,7 @@ mod tests {
             route: Some("/inbox/later/".to_owned()),
             actions: None,
             action_context: None,
+            dismiss_keys: None,
         })
         .expect("notification payload should sanitize");
         let route = notification.route.expect("route should be present");
@@ -851,6 +1137,7 @@ mod tests {
             route: Some("/inbox/notifications/".to_owned()),
             actions: None,
             action_context: None,
+            dismiss_keys: None,
         })
         .expect("notification payload should pass");
         assert_eq!(payload.route, Some("/inbox/notifications/".to_string()));
@@ -864,6 +1151,7 @@ mod tests {
             route: Some("https://evil.example.com".to_owned()),
             actions: None,
             action_context: None,
+            dismiss_keys: None,
         });
 
         assert!(result.is_err());
@@ -894,6 +1182,11 @@ mod tests {
                 room_id: Some(" !room:matrix.org ".to_owned()),
                 event_id: Some(" $event:matrix.org ".to_owned()),
             }),
+            dismiss_keys: Some(vec![
+                " room:!room:matrix.org ".to_owned(),
+                "event:$event:matrix.org".to_owned(),
+                "bad key".to_owned(),
+            ]),
         })
         .expect("notification payload should sanitize");
 
@@ -917,6 +1210,76 @@ mod tests {
                 room_id: Some("!room:matrix.org".to_owned()),
                 event_id: Some("$event:matrix.org".to_owned()),
             })
+        );
+        assert_eq!(
+            payload.dismiss_keys,
+            Some(vec![
+                "room:!room:matrix.org".to_owned(),
+                "event:$event:matrix.org".to_owned(),
+            ])
+        );
+    }
+
+    #[test]
+    fn sanitize_dismiss_key_allows_matrix_ids_and_rejects_unsafe_values() {
+        assert_eq!(
+            sanitize_dismiss_key("room:!room:example.org"),
+            Some("room:!room:example.org".to_owned())
+        );
+        assert_eq!(
+            sanitize_dismiss_key("event:$event:example.org"),
+            Some("event:$event:example.org".to_owned())
+        );
+        assert_eq!(sanitize_dismiss_key("invite:abc"), None);
+        assert_eq!(sanitize_dismiss_key("room:"), None);
+        assert_eq!(sanitize_dismiss_key("room:!room example"), None);
+        assert_eq!(sanitize_dismiss_key(&"x".repeat(300)), None);
+        assert_eq!(
+            sanitize_dismiss_key("event:$abc+/=_-:example.org"),
+            Some("event:$abc+/=_-:example.org".to_owned())
+        );
+        assert_eq!(sanitize_dismiss_key("room:!ünicode:example.org"), None);
+        assert_eq!(sanitize_dismiss_key("room:!room:example.org\u{202E}"), None);
+        assert_ne!(
+            sanitize_dismiss_key("room:event:$x"),
+            sanitize_dismiss_key("event:$x")
+        );
+    }
+
+    #[test]
+    fn dismiss_key_index_removes_a_handle_from_every_key() {
+        let mut index = DismissKeyIndex::default();
+        index.register(
+            1,
+            &["room:!a:example.org".to_owned(), "event:$one".to_owned()],
+        );
+        index.register(2, &["room:!a:example.org".to_owned()]);
+        let mut ids = index.ids_for_keys(&["event:$one".to_owned()]);
+        ids.sort_unstable();
+        assert_eq!(ids, vec![1]);
+        index.unregister(1);
+        let mut remaining = index.ids_for_keys(&["room:!a:example.org".to_owned()]);
+        remaining.sort_unstable();
+        assert_eq!(remaining, vec![2]);
+        assert!(index.ids_for_keys(&["event:$one".to_owned()]).is_empty());
+    }
+
+    #[test]
+    fn dismiss_key_index_is_bounded() {
+        let mut index = DismissKeyIndex::default();
+        for id in 0..=MAX_LINUX_NOTIFICATION_HANDLES as u32 {
+            index.register(id, &[format!("room:!{id}:example.org")]);
+        }
+        assert_eq!(index.keys_by_id.len(), MAX_LINUX_NOTIFICATION_HANDLES);
+        assert!(index
+            .ids_for_keys(&["room:!0:example.org".to_owned()])
+            .is_empty());
+        assert_eq!(
+            index.ids_for_keys(&[format!(
+                "room:!{}:example.org",
+                MAX_LINUX_NOTIFICATION_HANDLES
+            )]),
+            vec![MAX_LINUX_NOTIFICATION_HANDLES as u32]
         );
     }
 }

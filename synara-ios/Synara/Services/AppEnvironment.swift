@@ -56,6 +56,7 @@ struct AppEnvironment {
     let eventActions: EventActionServicing
     let agentApprovals: AgentApprovalServicing
     let agentApprovalDecisions: AgentApprovalDecisionServicing
+    let agentApprovalHistory: AgentApprovalHistoryServicing
     let readMarkers: RoomReadMarkerServicing
     let mediaLoader: MediaLoading
     let mediaUploader: MediaUploading
@@ -151,6 +152,7 @@ struct AppEnvironment {
             eventActions: SharedCoreEventActionService(host: host),
             agentApprovals: SharedCoreAgentApprovalService(host: host),
             agentApprovalDecisions: SharedCoreAgentApprovalDecisionService(host: host),
+            agentApprovalHistory: SharedCoreAgentApprovalHistoryService(host: host),
             readMarkers: SharedCoreRoomReadMarkerService(host: host),
             mediaLoader: SharedCoreMediaLoader(host: host),
             mediaUploader: SharedCoreMediaUploadService(host: host),
@@ -185,6 +187,7 @@ struct AppEnvironment {
         eventActions: EventActionServicing = MockEventActionService(),
         agentApprovals: AgentApprovalServicing = MockAgentApprovalService(),
         agentApprovalDecisions: AgentApprovalDecisionServicing = MockAgentApprovalDecisionService(),
+        agentApprovalHistory: AgentApprovalHistoryServicing = MockAgentApprovalHistoryService(),
         readMarkers: RoomReadMarkerServicing = MockRoomReadMarkerService(),
         mediaLoader: MediaLoading = MockMediaLoader(),
         mediaUploader: MediaUploading = MockMediaUploadService(),
@@ -230,6 +233,7 @@ struct AppEnvironment {
             eventActions: eventActions,
             agentApprovals: agentApprovals,
             agentApprovalDecisions: agentApprovalDecisions,
+            agentApprovalHistory: agentApprovalHistory,
             readMarkers: readMarkers,
             mediaLoader: mediaLoader,
             mediaUploader: mediaUploader,
