@@ -35,7 +35,11 @@ test('native timeline rows show timestamps and formatted HTML without the legacy
   assert.match(presenter, /visualTopPx/);
   assert.match(presenter, /unreadAnchorIsMissing/);
   assert.match(presenter, /parkedResizeObserverRef/);
+  assert.match(presenter, /if \(performance.now\(\) < programmaticScrollUntilRef.current\) return;/);
+  assert.match(presenter, /if \(visualTop !== undefined\) parkedVisualTopRef.current = visualTop/);
+  assert.match(presenter, /schedule\(3\)/);
   assert.doesNotMatch(presenter, /dangerouslySetInnerHTML/);
+  assert.doesNotMatch(presenter, /scrollEl\.scrollTop \+= offsetPx/);
 });
 
 test('native timeline rows retain hover/focus action access without restoring the legacy owner', () => {

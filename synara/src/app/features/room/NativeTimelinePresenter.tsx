@@ -2227,6 +2227,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
+    // Programmatic prepend/stick/placement must not snapshot in-flight
+    // geometry. A rows-change effect used to call this while the parked
+    // event was still off the virtual window, which cleared visualTopPx
+    // and replaced the user's row with a prepended one.
+    if (performance.now() < programmaticScrollUntilRef.current) return;
     const scrollEl = scrollRef.current;
     if (!scrollEl || rows.length === 0) return;
     const atBottom = scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 8;
@@ -2241,14 +2246,18 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     lastParkedStartRef.current = visible.start;
     const anchorEventId = rowEventId(row);
     const visualTop = anchorEventId ? parkedNodeVisualTop(scrollEl, anchorEventId) : undefined;
-    parkedVisualTopRef.current = visualTop;
+    // Keep the last user-parked visual top when the event has left the
+    // virtual window this frame. Assigning undefined here made the next
+    // prepend pin to align-start and drop the intra-row offset.
+    if (visualTop !== undefined) parkedVisualTopRef.current = visualTop;
+    else if (!anchorEventId) parkedVisualTopRef.current = undefined;
     setNativeTimelineViewport(roomId, {
       atBottom: false,
       anchor: {
         itemId: rowKey(row),
         eventId: anchorEventId,
         offsetPx: scrollEl.scrollTop - visible.start,
-        visualTopPx: visualTop,
+        visualTopPx: visualTop ?? parkedVisualTopRef.current,
       },
     });
   }, [roomId, rows, virtualizer]);
@@ -2541,7 +2550,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     scrollHandlersRef.current = { onScroll, onUserInput };
     saveViewport();
     return () => {
-      if (performance.now() >= programmaticScrollUntilRef.current) saveViewport();
+      saveViewport();
     };
   }, [hasReadyState, paginate, saveViewport, stickToLiveTail]);
 
@@ -2580,25 +2589,24 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       if (!scrollEl || index < 0) return;
       programmaticScrollUntilRef.current = Math.max(
         programmaticScrollUntilRef.current,
-        performance.now() + 48
+        performance.now() + 250
       );
-      const item = virtualizer.getVirtualItems().find((row) => row.index === index);
-      if (item) {
+      const applyIndexOffset = () => {
+        const item = virtualizer.getVirtualItems().find((row) => row.index === index);
+        if (!item) return false;
         const desired = Math.max(0, item.start + offsetPx);
         if (Math.abs(scrollEl.scrollTop - desired) > 0.5) scrollEl.scrollTop = desired;
         lastParkedStartRef.current = item.start;
-      } else {
+        return true;
+      };
+      if (!applyIndexOffset()) {
         // The parked row left the virtual window (typical after a large prepend).
-        // scrollToIndex(align start) does not update getVirtualItems in this
-        // turn, so apply the saved pixel offset on top of that placement.
+        // scrollToIndex(align start) may not expose the item this turn; the
+        // visual-top rAF restores the intra-row offset once it is mounted.
+        // Do not add offsetPx to the pre-remap scrollTop — that stacked the
+        // saved offset onto stale geometry.
         virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
-        const after = virtualizer.getVirtualItems().find((row) => row.index === index);
-        if (after) {
-          scrollEl.scrollTop = Math.max(0, after.start + offsetPx);
-          lastParkedStartRef.current = after.start;
-        } else {
-          scrollEl.scrollTop += offsetPx;
-        }
+        applyIndexOffset();
       }
       if (!parkedEventId) return;
       parkedPinGenerationRef.current += 1;
@@ -2643,7 +2651,9 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           }
         });
       };
-      schedule(1);
+      // Extra frames cover CI measurement of prepended rows after the item
+      // remounts; one frame was enough locally and dropped the intra-row pin.
+      schedule(3);
     },
     [virtualizer]
   );

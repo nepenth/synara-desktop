@@ -394,4 +394,8 @@ test('presenter honors the 250ms placement lock, skips in-flight viewport saves,
   assert.match(presenter, /unreadAnchorIsMissing/);
   assert.match(presenter, /parkedResizeObserverRef/);
   assert.match(presenter, /stickToLiveTail/);
+  assert.match(presenter, /if \(performance.now\(\) < programmaticScrollUntilRef.current\) return;/);
+  assert.match(presenter, /if \(visualTop !== undefined\) parkedVisualTopRef.current = visualTop/);
+  assert.match(presenter, /schedule\(3\)/);
+  assert.doesNotMatch(presenter, /scrollEl\.scrollTop \+= offsetPx/);
 });
