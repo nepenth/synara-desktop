@@ -121,6 +121,7 @@ type NativeTimelineViewport = {
     itemId: string;
     eventId?: string;
     offsetPx: number;
+    visualTopPx?: number;
   };
 };
 
@@ -160,6 +161,17 @@ const parkedNodeVisualTop = (scrollEl: HTMLElement, eventId: string): number | u
   if (!(node instanceof HTMLElement)) return undefined;
   return node.getBoundingClientRect().top - scrollEl.getBoundingClientRect().top;
 };
+
+const unreadAnchorIsMissing = (
+  selectedPosition: { kind: string; anchor_event_id?: string } | undefined,
+  rows: NativeTimelineViewRow[]
+): boolean =>
+  selectedPosition?.kind === 'unread' &&
+  Boolean(selectedPosition.anchor_event_id) &&
+  findAnchorIndex(rows, {
+    itemId: selectedPosition.anchor_event_id ?? '',
+    eventId: selectedPosition.anchor_event_id,
+  }) < 0;
 
 const rowCapabilities = (row: NativeTimelineViewRow): NativeTimelineRowCapabilities | undefined => {
   if (row.kind === 'sticker') return row.event.capabilities;
@@ -2228,18 +2240,15 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     if (!visible || !row) return;
     lastParkedStartRef.current = visible.start;
     const anchorEventId = rowEventId(row);
-    if (anchorEventId) {
-      const visualTop = parkedNodeVisualTop(scrollEl, anchorEventId);
-      if (visualTop !== undefined) parkedVisualTopRef.current = visualTop;
-    } else {
-      parkedVisualTopRef.current = undefined;
-    }
+    const visualTop = anchorEventId ? parkedNodeVisualTop(scrollEl, anchorEventId) : undefined;
+    parkedVisualTopRef.current = visualTop;
     setNativeTimelineViewport(roomId, {
       atBottom: false,
       anchor: {
         itemId: rowKey(row),
         eventId: anchorEventId,
         offsetPx: scrollEl.scrollTop - visible.start,
+        visualTopPx: visualTop,
       },
     });
   }, [roomId, rows, virtualizer]);
@@ -2700,15 +2709,22 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         const offsetPx =
           selectedAnchor && !missingLastRead ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
         if (selectedAnchor && !missingLastRead) {
+          parkedVisualTopRef.current = undefined;
           setPendingLastRead((pending) =>
             selectedAnchor.eventId === pending ? undefined : pending
           );
+        } else if (savedViewport?.anchor?.visualTopPx !== undefined) {
+          parkedVisualTopRef.current = savedViewport.anchor.visualTopPx;
         }
-        const animationFrame = window.requestAnimationFrame(() => {
-          if (scrollRef.current && offsetPx !== 0) scrollRef.current.scrollTop += offsetPx;
+        pinParkedHistory(anchorIndex, offsetPx, savedViewport?.anchor?.eventId);
+        // scrollToIndex does not always expose the parked item this turn, and a
+        // later totalSize pass used to cancel the offset rAF — dropping 24px on
+        // unread reentry. Pin again on the next frame without cleanup-cancel.
+        window.requestAnimationFrame(() => {
+          pinParkedHistory(anchorIndex, offsetPx, savedViewport?.anchor?.eventId);
         });
         initialPlacementRef.current = placementKey;
-        return () => window.cancelAnimationFrame(animationFrame);
+        return undefined;
       }
       initialPlacementRef.current = placementKey;
       return undefined;
@@ -2720,13 +2736,19 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     }
 
     // Pin a parked history row by its saved start+offset. Applies to prepends
-    // and to later measurements of rows above the anchor.
+    // and to later measurements of rows above the anchor. Missing last-read
+    // reentry keeps a saved history location, so it must pin too.
     if (
       !followingLiveRef.current &&
       parkedIndex >= 0 &&
       savedViewport?.anchor &&
-      (selectedPosition.kind === 'live_bottom' || selectedPosition.kind === 'restored')
+      (selectedPosition.kind === 'live_bottom' ||
+        selectedPosition.kind === 'restored' ||
+        unreadAnchorIsMissing(selectedPosition, rows))
     ) {
+      if (savedViewport.anchor.visualTopPx !== undefined) {
+        parkedVisualTopRef.current = savedViewport.anchor.visualTopPx;
+      }
       pinParkedHistory(parkedIndex, savedViewport.anchor.offsetPx, savedViewport.anchor.eventId);
       pendingBackwardGrowRef.current = false;
     } else if (
@@ -2766,11 +2788,20 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       return;
     }
     const selectedKind = readyState?.selectedPosition.kind;
-    if (selectedKind !== 'live_bottom' && selectedKind !== 'restored') return;
+    if (
+      selectedKind !== 'live_bottom' &&
+      selectedKind !== 'restored' &&
+      !unreadAnchorIsMissing(readyState?.selectedPosition, rows)
+    ) {
+      return;
+    }
     const saved = nativeTimelineViewports.get(roomId);
     if (!saved?.anchor) return;
     const index = findAnchorIndex(rows, saved.anchor);
     if (index < 0) return;
+    if (saved.anchor.visualTopPx !== undefined) {
+      parkedVisualTopRef.current = saved.anchor.visualTopPx;
+    }
     pinParkedHistory(index, saved.anchor.offsetPx, saved.anchor.eventId);
   }, [totalSize, roomId, rows, virtualizer, pinParkedHistory, stickToLiveTail, readyState]);
 

@@ -440,15 +440,20 @@ const api = {
     }
   },
   emitRevisionGap() {
+    if (eventListeners.size === 0 || snapshots.size === 0) {
+      throw new Error('emitRevisionGap requires an open native timeline stream');
+    }
     const row = makeRow(++sequence);
     rows.push(row);
     for (const [streamId, current] of snapshots) {
+      // Skip more than one revision so a concurrent follow-live increment
+      // (N -> N+1) cannot turn this batch into a sequential apply.
       dispatchBatch({
         schemaVersion: 1,
         sessionGeneration: current.sessionGeneration,
         roomId: current.roomId,
         streamId,
-        revision: current.revision + 2,
+        revision: current.revision + 8,
         ops: [{ op: 'push_back', row }],
       });
     }

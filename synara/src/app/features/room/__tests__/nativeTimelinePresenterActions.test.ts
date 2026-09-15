@@ -32,6 +32,8 @@ test('native timeline rows show timestamps and formatted HTML without the legacy
   assert.match(presenter, /applyingStickRef/);
   assert.match(presenter, /CSS.escape\(parkedEventId\)/);
   assert.match(presenter, /parkedVisualTopRef/);
+  assert.match(presenter, /visualTopPx/);
+  assert.match(presenter, /unreadAnchorIsMissing/);
   assert.match(presenter, /parkedResizeObserverRef/);
   assert.doesNotMatch(presenter, /dangerouslySetInnerHTML/);
 });
