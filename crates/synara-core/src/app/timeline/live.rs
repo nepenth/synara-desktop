@@ -365,6 +365,25 @@ fn approval_history_item_key(item: &SynaraAgentApprovalHistoryItem) -> (String, 
     (item.room_id.clone(), item.event_id.clone())
 }
 
+fn native_agent_approval_history_item(
+    room_id: String,
+    event_id: String,
+    item: &NativeTimelineItem,
+    decision: SynaraAgentApprovalHistoryDecision,
+    decided_at: f64,
+) -> SynaraAgentApprovalHistoryItem {
+    SynaraAgentApprovalHistoryItem {
+        room_id,
+        event_id,
+        sender: item.sender.clone(),
+        decision,
+        decided_at,
+        origin_server_ts: item.origin_server_ts as f64,
+        expires_at: item.origin_server_ts.saturating_add(AGENT_APPROVAL_TTL_MS) as f64,
+        summary: agent_approval_history_summary(&item.body),
+    }
+}
+
 fn fresh_overlay_items(
     pending: &Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>,
     now: Instant,
@@ -790,6 +809,26 @@ impl NativeTimelineOwner {
                 .map_err(|_| "agent-approval-decision-state-poisoned")?
                 .remember(decision_key);
             drop(decision_guard);
+            if let Some(decision) = SynaraAgentApprovalHistoryDecision::matching_own_reaction(
+                &request.action_id,
+                item.reactions
+                    .iter()
+                    .map(|reaction| (reaction.key.as_str(), reaction.me)),
+            ) {
+                if let Ok(decided_at) = agent_approval_now_ms() {
+                    let history_item = native_agent_approval_history_item(
+                        room_id.clone(),
+                        event_id.to_string(),
+                        &item,
+                        decision,
+                        decided_at as f64,
+                    );
+                    if let Err(diagnostic) = self.record_agent_approval_history(history_item).await
+                    {
+                        eprintln!("agent-approval-history-write-failed: {diagnostic}");
+                    }
+                }
+            }
             self.retry_unconfirmed_approval_history(&room_id, event_id.as_str())
                 .await;
             return Ok(NativeAgentApprovalDecisionResult {
@@ -841,16 +880,13 @@ impl NativeTimelineOwner {
             SynaraAgentApprovalHistoryDecision::from_action_id(&request.action_id)
         {
             if let Ok(decided_at) = agent_approval_now_ms() {
-                let history_item = SynaraAgentApprovalHistoryItem {
-                    room_id: room_id.clone(),
-                    event_id: event_id.to_string(),
-                    sender: item.sender.clone(),
+                let history_item = native_agent_approval_history_item(
+                    room_id.clone(),
+                    event_id.to_string(),
+                    &item,
                     decision,
-                    decided_at: decided_at as f64,
-                    origin_server_ts: item.origin_server_ts as f64,
-                    expires_at: item.origin_server_ts.saturating_add(AGENT_APPROVAL_TTL_MS) as f64,
-                    summary: agent_approval_history_summary(&item.body),
-                };
+                    decided_at as f64,
+                );
                 if let Err(diagnostic) = self.record_agent_approval_history(history_item).await {
                     eprintln!("agent-approval-history-write-failed: {diagnostic}");
                 }

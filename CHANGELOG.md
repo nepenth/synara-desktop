@@ -4,13 +4,19 @@
 
 - Persist decided agent approvals in `in.synara.agent_approval_history` account
   data so the Approvals Recent tab survives restarts and syncs across devices.
+  Recent prefers an inbox `decision` over account data; a decided inbox row
+  without a named decision does not inherit a homeserver-injected label.
+  History summaries redact path-like args and secret-like assignments. History
+  writes fetch-confirm and retry because Matrix global account data has no
+  `If-Match`. AlreadyDecided taps persist history only when an existing own
+  terminal reaction matches the requested action.
 - Remove the redundant empty "Full approval prompt" details block from approval
   cards; the Command block and the no-command fallback remain.
 - Expose decided agent-approval history to iOS through UniFFI
   `agent_approval_history_snapshot` and show a Recent list that unions Core
-  inbox decided/expired items with synced account data. Remove the redundant
-  iOS "Full approval prompt" block; the Command block and no-command fallback
-  remain.
+  inbox decided/expired items with synced account data using the same
+  inbox-proof conflict rules as desktop. Remove the redundant iOS "Full
+  approval prompt" block; the Command block and no-command fallback remain.
 - Dismiss Linux OS notifications when a room is focused or an agent-approval
   decision is submitted (`desktop_dismiss_notifications`). macOS remains a no-op
   for this command.

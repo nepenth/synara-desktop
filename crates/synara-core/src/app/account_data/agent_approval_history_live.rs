@@ -12,11 +12,11 @@ use serde_json::value::to_raw_value;
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::{
-    append_agent_approval_history_item, normalize_agent_approval_history_content_checked,
-    validate_agent_approval_history_content_size, validate_agent_approval_history_item,
-    NativeAgentApprovalHistorySnapshot, SynaraAgentApprovalHistoryContent,
-    SynaraAgentApprovalHistoryItem, AGENT_APPROVAL_HISTORY_EVENT_TYPE,
-    MAX_AGENT_APPROVAL_HISTORY_CONTENT_BYTES,
+    append_agent_approval_history_item, history_write_needs_retry,
+    normalize_agent_approval_history_content_checked, validate_agent_approval_history_content_size,
+    validate_agent_approval_history_item, NativeAgentApprovalHistorySnapshot,
+    SynaraAgentApprovalHistoryContent, SynaraAgentApprovalHistoryItem,
+    AGENT_APPROVAL_HISTORY_EVENT_TYPE, MAX_AGENT_APPROVAL_HISTORY_CONTENT_BYTES,
 };
 
 fn agent_approval_history_event_type() -> GlobalAccountDataEventType {
@@ -116,19 +116,46 @@ pub async fn snapshot_agent_approval_history(
     })
 }
 
+const AGENT_APPROVAL_HISTORY_WRITE_ATTEMPTS: usize = 3;
+
 pub async fn append_agent_approval_history_item_live(
     client: &Client,
     item: SynaraAgentApprovalHistoryItem,
 ) -> Result<NativeAgentApprovalHistorySnapshot, &'static str> {
     validate_agent_approval_history_item(&item)?;
-    let now = now_ms();
-    let next = append_agent_approval_history_item(
-        fetch_fresh_agent_approval_history_content(client).await?,
-        item,
-        now,
-    );
-    store_agent_approval_history_content(client, &next).await?;
-    Ok(NativeAgentApprovalHistorySnapshot { items: next.items })
+    let mut last_written: Option<Vec<SynaraAgentApprovalHistoryItem>> = None;
+    let mut last_error: Option<&'static str> = None;
+    for _ in 0..AGENT_APPROVAL_HISTORY_WRITE_ATTEMPTS {
+        let current = match fetch_fresh_agent_approval_history_content(client).await {
+            Ok(content) => content,
+            Err(err) => {
+                last_error = Some(err);
+                continue;
+            }
+        };
+        let next = append_agent_approval_history_item(current, item.clone(), now_ms());
+        match store_agent_approval_history_content(client, &next).await {
+            Ok(()) => {
+                last_written = Some(next.items.clone());
+                match fetch_fresh_agent_approval_history_content(client).await {
+                    Ok(confirmed) if !history_write_needs_retry(&confirmed.items, &item) => {
+                        return Ok(NativeAgentApprovalHistorySnapshot {
+                            items: confirmed.items,
+                        });
+                    }
+                    Ok(_) => {}
+                    Err(_) => {
+                        return Ok(NativeAgentApprovalHistorySnapshot { items: next.items });
+                    }
+                }
+            }
+            Err(err) => last_error = Some(err),
+        }
+    }
+    if let Some(items) = last_written {
+        return Ok(NativeAgentApprovalHistorySnapshot { items });
+    }
+    Err(last_error.unwrap_or("agent-approval-history-set-failed"))
 }
 
 #[cfg(test)]

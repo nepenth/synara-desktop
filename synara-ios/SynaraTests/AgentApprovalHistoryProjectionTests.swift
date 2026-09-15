@@ -2,7 +2,7 @@ import XCTest
 @testable import Synara
 
 final class AgentApprovalHistoryProjectionTests: XCTestCase {
-    func testUnionRecentKeepsPendingOutAndLetsAccountDataWin() {
+    func testUnionRecentKeepsPendingOutAndDoesNotLetAccountDataNameAnUnprovenDecision() {
         let recent = AgentApprovalHistoryProjection.unionRecent(
             inboxItems: [
                 inbox(eventId: "$pending", status: .pending),
@@ -23,9 +23,56 @@ final class AgentApprovalHistoryProjectionTests: XCTestCase {
         XCTAssertEqual(recent.map(\.eventId), ["$same", "$synced", "$expired"])
         XCTAssertEqual(recent[0].summary, "account summary")
         XCTAssertEqual(recent[0].status, .decided)
-        XCTAssertEqual(recent[0].decision, .approveOnce)
+        XCTAssertNil(recent[0].decision)
         XCTAssertEqual(recent[2].status, .expired)
         XCTAssertNil(recent.first { $0.eventId == "$pending" })
+    }
+
+    func testInboxDecisionWinsAConflictWithHistory() {
+        let recent = AgentApprovalHistoryProjection.unionRecent(
+            inboxItems: [
+                inbox(
+                    eventId: "$same",
+                    status: .decided,
+                    decision: .deny,
+                    decidedAt: 4_000
+                ),
+            ],
+            historyItems: [
+                history(
+                    eventId: "$same",
+                    decision: .approveAlways,
+                    decidedAt: 9_000,
+                    summary: "ls"
+                ),
+            ]
+        )
+
+        XCTAssertEqual(recent.count, 1)
+        XCTAssertEqual(recent[0].decision, .deny)
+        XCTAssertEqual(recent[0].status, .decided)
+        XCTAssertEqual(recent[0].summary, "ls")
+    }
+
+    func testExpiredInboxWithoutADecisionStillShowsTheHistoryDecision() {
+        let recent = AgentApprovalHistoryProjection.unionRecent(
+            inboxItems: [
+                inbox(eventId: "$same", status: .expired, originServerTs: 1_000),
+            ],
+            historyItems: [
+                history(eventId: "$same", decision: .approveAlways, decidedAt: 9_000, summary: "ls"),
+            ]
+        )
+
+        XCTAssertEqual(recent[0].decision, .approveAlways)
+        XCTAssertEqual(recent[0].status, .decided)
+        XCTAssertEqual(
+            AgentApprovalHistoryProjection.decisionLabel(
+                decision: recent[0].decision,
+                status: recent[0].status
+            ),
+            "Approved always"
+        )
     }
 
     func testHistoryItemsNeverRenderAsExpiredAndKeepDecisionLabels() {
@@ -127,6 +174,7 @@ final class AgentApprovalHistoryProjectionTests: XCTestCase {
         status: AgentApprovalInboxStatus,
         body: String = "Approval Required: Dangerous Command",
         originServerTs: Double = 1_000,
+        decision: AgentApprovalHistoryDecision? = nil,
         decidedAt: Double? = nil
     ) -> AgentApprovalInboxRecord {
         AgentApprovalInboxRecord(
@@ -139,7 +187,7 @@ final class AgentApprovalHistoryProjectionTests: XCTestCase {
             originServerTs: originServerTs,
             expiresAt: 301_000,
             status: status,
-            decision: nil,
+            decision: decision,
             decidedAt: decidedAt,
             summary: nil
         )
@@ -148,6 +196,7 @@ final class AgentApprovalHistoryProjectionTests: XCTestCase {
     private func history(
         eventId: String,
         roomId: String = "!room:example.org",
+        decision: AgentApprovalHistoryDecision = .approveOnce,
         decidedAt: Double = 2_000,
         originServerTs: Double = 1_000,
         expiresAt: Double = 301_000,
@@ -157,7 +206,7 @@ final class AgentApprovalHistoryProjectionTests: XCTestCase {
             roomId: roomId,
             eventId: eventId,
             sender: "@hermes:example.org",
-            decision: .approveOnce,
+            decision: decision,
             decidedAt: decidedAt,
             originServerTs: originServerTs,
             expiresAt: expiresAt,

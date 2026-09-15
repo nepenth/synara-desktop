@@ -186,8 +186,113 @@ fn first_display_line(value: &str) -> &str {
         .unwrap_or(value)
 }
 
+fn is_path_arg(token: &str) -> bool {
+    if token.starts_with('/')
+        || token.starts_with("~/")
+        || token.starts_with("./")
+        || token.starts_with("../")
+        || token.starts_with("file:")
+        || token.starts_with("\\\\")
+    {
+        return true;
+    }
+    if token.contains('/') || token.contains('\\') {
+        return !token.starts_with('-');
+    }
+    let bytes = token.as_bytes();
+    bytes.len() >= 3
+        && bytes[0].is_ascii_alphabetic()
+        && bytes[1] == b':'
+        && matches!(bytes[2], b'\\' | b'/')
+}
+
+fn looks_like_secret_name(name: &str) -> bool {
+    let n = name.trim_start_matches(['-', '_']).to_ascii_lowercase();
+    n == "auth"
+        || n.ends_with("_auth")
+        || n.ends_with("-auth")
+        || n.ends_with("token")
+        || n.ends_with("secret")
+        || n.ends_with("password")
+        || n.ends_with("passwd")
+        || n.ends_with("authorization")
+        || n.ends_with("credential")
+        || n.ends_with("api_key")
+        || n.ends_with("apikey")
+        || n.ends_with("api-key")
+        || n.ends_with("access_key")
+        || n.ends_with("bearer")
+}
+
+fn is_secret_flag(token: &str) -> bool {
+    looks_like_secret_name(token) && token.starts_with('-') && !token.contains('=')
+}
+
+fn is_known_secret_literal(token: &str) -> bool {
+    let lower = token.to_ascii_lowercase();
+    lower == "bearer"
+        || lower.starts_with("sk-")
+        || lower.starts_with("ghp_")
+        || lower.starts_with("github_pat_")
+        || lower.starts_with("xox")
+}
+
+fn redact_assignment(token: &str) -> Option<String> {
+    let (name, value) = token.split_once('=')?;
+    if name.is_empty() || value.is_empty() {
+        return None;
+    }
+    if looks_like_secret_name(name) {
+        return Some(format!("{name}=<redacted>"));
+    }
+    if is_path_arg(value) {
+        return Some(format!("{name}=<path>"));
+    }
+    None
+}
+
+fn redact_agent_approval_history_preview(value: &str) -> String {
+    let tokens: Vec<&str> = value.split_whitespace().collect();
+    if tokens.is_empty() {
+        return String::new();
+    }
+    let mut out = Vec::with_capacity(tokens.len());
+    let mut redact_next = false;
+    for token in tokens {
+        if redact_next {
+            out.push(if is_path_arg(token) {
+                "<path>".to_owned()
+            } else {
+                "<redacted>".to_owned()
+            });
+            redact_next = false;
+            continue;
+        }
+        if let Some(redacted) = redact_assignment(token) {
+            out.push(redacted);
+            continue;
+        }
+        if is_secret_flag(token) {
+            out.push(token.to_owned());
+            redact_next = true;
+            continue;
+        }
+        if is_known_secret_literal(token) {
+            out.push("<redacted>".to_owned());
+            continue;
+        }
+        if is_path_arg(token) {
+            out.push("<path>".to_owned());
+            continue;
+        }
+        out.push(token.to_owned());
+    }
+    out.join(" ")
+}
+
 /// Single visible preview line: no extra fence lines, bidi/overrides, or
-/// control characters. Account data is server-readable plaintext.
+/// control characters. Account data is server-readable plaintext, so path-like
+/// args and secret-like assignments are replaced with placeholders.
 pub(crate) fn sanitize_agent_approval_history_summary(value: &str) -> String {
     let display = first_display_line(value);
     let mut cleaned = String::new();
@@ -200,7 +305,7 @@ pub(crate) fn sanitize_agent_approval_history_summary(value: &str) -> String {
         }
         cleaned.push(ch);
     }
-    collapse_whitespace(&cleaned)
+    redact_agent_approval_history_preview(&collapse_whitespace(&cleaned))
         .chars()
         .take(AGENT_APPROVAL_HISTORY_SUMMARY_MAX_CHARS)
         .collect()
@@ -474,7 +579,7 @@ mod tests {
     fn history_summary_prefers_fenced_command_preview_line() {
         assert_eq!(
             agent_approval_history_summary(HERMES_MATRIX_PROMPT),
-            "rm -rf /tmp/test"
+            "rm -rf <path>"
         );
         assert_eq!(
             agent_approval_history_summary(
@@ -520,6 +625,24 @@ mod tests {
         )
         .chars()
         .all(|ch| !ch.is_control()));
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\nexport TOKEN=secret\n```"
+            ),
+            "export TOKEN=<redacted>"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\ncurl --token abcdef\n```"
+            ),
+            "curl --token <redacted>"
+        );
+        assert_eq!(
+            agent_approval_history_summary(
+                "Approval Required: Dangerous Command\n```\nrm file\n```"
+            ),
+            "rm file"
+        );
     }
 
     #[test]

@@ -36,7 +36,7 @@ const history = (
   ...overrides,
 });
 
-test('unionRecentApprovals keeps pending out and lets account data win', () => {
+test('unionRecentApprovals keeps pending out and does not let account data name an unproven decision', () => {
   const recent = unionRecentApprovals(
     [
       inbox({ eventId: '$pending', status: 'pending' }),
@@ -60,12 +60,40 @@ test('unionRecentApprovals keeps pending out and lets account data win', () => {
   );
   assert.equal(recent[0].summary, 'account summary');
   assert.equal(recent[0].status, 'decided');
-  assert.equal(recent[0].decision, 'approve_once');
+  assert.equal(recent[0].decision, undefined);
   assert.equal(recent[2].status, 'expired');
   assert.equal(
     recent.find((item) => item.eventId === '$pending'),
     undefined
   );
+});
+
+test('inbox decision wins a conflict with history', () => {
+  const recent = unionRecentApprovals(
+    [
+      inbox({
+        eventId: '$same',
+        status: 'decided',
+        decision: 'deny',
+        decidedAt: 4_000,
+      }),
+    ],
+    [history({ eventId: '$same', decision: 'approve_always', decidedAt: 9_000, summary: 'ls' })]
+  );
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0].decision, 'deny');
+  assert.equal(recent[0].status, 'decided');
+  assert.equal(recent[0].summary, 'ls');
+});
+
+test('expired inbox without a decision still shows the history decision', () => {
+  const recent = unionRecentApprovals(
+    [inbox({ eventId: '$same', status: 'expired', originServerTs: 1_000 })],
+    [history({ eventId: '$same', decision: 'approve_always', decidedAt: 9_000, summary: 'ls' })]
+  );
+  assert.equal(recent[0].decision, 'approve_always');
+  assert.equal(recent[0].status, 'decided');
+  assert.equal(historyDecisionLabel(recent[0].decision, recent[0].status), 'Approved always');
 });
 
 test('history items never render as expired and keep a bounded summary', () => {

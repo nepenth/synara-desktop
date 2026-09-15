@@ -47,18 +47,56 @@ export function compareRecentApprovals(a: ApprovalInboxItem, b: ApprovalInboxIte
   return 0;
 }
 
-/** Recent = account-data history ∪ inbox items whose status ≠ pending. Account data wins. */
+function historyPreview(item: ApprovalInboxItem): string | undefined {
+  const summary = item.summary?.trim();
+  if (summary && summary !== EMPTY_HISTORY_SUMMARY) return item.summary;
+  return undefined;
+}
+
+/** Inbox proof wins a conflict. Account data is not a reaction. */
+function mergeInboxOverHistory(
+  inbox: ApprovalInboxItem,
+  history: ApprovalInboxItem
+): ApprovalInboxItem {
+  const inboxNamedDecision = inbox.decision !== undefined;
+  const hideUnprovenHistoryDecision = inbox.status === 'decided' && !inboxNamedDecision;
+  const decision = inboxNamedDecision
+    ? inbox.decision
+    : hideUnprovenHistoryDecision
+    ? undefined
+    : history.decision;
+  const status = decision !== undefined || hideUnprovenHistoryDecision ? 'decided' : inbox.status;
+  const summary = historyPreview(history) ?? inbox.summary ?? inbox.body;
+  return {
+    ...history,
+    ...inbox,
+    status,
+    decision,
+    summary,
+    body: summary,
+    decidedAt: inbox.decidedAt ?? history.decidedAt,
+  };
+}
+
+/**
+ * Recent = account-data history ∪ inbox items whose status ≠ pending.
+ * History-only rows stay visible (cross-device). Inbox `decision` wins a
+ * conflict. A decided inbox row without `decision` does not inherit the
+ * history decision. An expired inbox row may still show the history decision.
+ */
 export function unionRecentApprovals(
   inboxItems: ApprovalInboxItem[],
   historyItems: SynaraAgentApprovalHistoryItem[]
 ): ApprovalInboxItem[] {
   const merged = new Map<string, ApprovalInboxItem>();
-  for (const item of inboxItems) {
-    if (item.status === 'pending') continue;
-    merged.set(approvalIdentity(item), item);
-  }
   for (const item of historyItems) {
     merged.set(approvalIdentity(item), historyItemToInboxItem(item));
+  }
+  for (const item of inboxItems) {
+    if (item.status === 'pending') continue;
+    const identity = approvalIdentity(item);
+    const history = merged.get(identity);
+    merged.set(identity, history ? mergeInboxOverHistory(item, history) : item);
   }
   return [...merged.values()].sort(compareRecentApprovals);
 }

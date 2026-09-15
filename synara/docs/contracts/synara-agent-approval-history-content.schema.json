@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://synara.local/contracts/synara-agent-approval-history-content.schema.json",
-  "$comment": "Canonical writer schema for in.synara.agent_approval_history v1. Live Core readers fail closed on missing or unsupported versions and on a non-array items value. Malformed items inside a recognized v1 array may be dropped. Summary is at most 240 Unicode scalars and must never be the full command body. Core also rejects expiresAt <= originServerTs (not expressible as a JSON Schema comparison), encoded payloads over 256 KiB, and prunes items older than 30 days / beyond 200 newest (roomId, eventId) rows. additionalProperties is false, matching Later/room-notes writer schemas.",
+  "$comment": "Canonical writer schema for in.synara.agent_approval_history v1. Live Core readers fail closed on missing or unsupported versions and on a non-array items value. Malformed items inside a recognized v1 array may be dropped. Summary is at most 240 Unicode scalars and must never be the full command body. Core writers redact path-like args to <path> and secret-like assignments/flags to <redacted>. Core also rejects expiresAt <= originServerTs (not expressible as a JSON Schema comparison), encoded payloads over 256 KiB, and prunes items older than 30 days / beyond 200 newest (roomId, eventId) rows. additionalProperties is false, matching Later/room-notes writer schemas.",
   "title": "SynaraAgentApprovalHistoryContent",
   "type": "object",
   "additionalProperties": false,

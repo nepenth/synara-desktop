@@ -11,6 +11,9 @@ use matrix_sdk::ruma::OwnedServerName;
 use crate::app::agent_approvals::{
     sanitize_agent_approval_history_summary, AGENT_APPROVAL_ACTION_APPROVE_ALWAYS,
     AGENT_APPROVAL_ACTION_APPROVE_ONCE, AGENT_APPROVAL_ACTION_DENY,
+    AGENT_APPROVAL_REACTION_APPROVE_ALWAYS, AGENT_APPROVAL_REACTION_APPROVE_ALWAYS_TEXT,
+    AGENT_APPROVAL_REACTION_APPROVE_ONCE, AGENT_APPROVAL_REACTION_DENY,
+    AGENT_APPROVAL_REACTION_DENY_ALTERNATE,
 };
 
 pub const AGENT_APPROVAL_HISTORY_EVENT_TYPE: &str = "in.synara.agent_approval_history";
@@ -40,6 +43,35 @@ impl SynaraAgentApprovalHistoryDecision {
             AGENT_APPROVAL_ACTION_DENY => Some(Self::Deny),
             _ => None,
         }
+    }
+
+    pub fn from_reaction_key(key: &str) -> Option<Self> {
+        match key {
+            AGENT_APPROVAL_REACTION_APPROVE_ONCE => Some(Self::ApproveOnce),
+            AGENT_APPROVAL_REACTION_APPROVE_ALWAYS
+            | AGENT_APPROVAL_REACTION_APPROVE_ALWAYS_TEXT => Some(Self::ApproveAlways),
+            AGENT_APPROVAL_REACTION_DENY | AGENT_APPROVAL_REACTION_DENY_ALTERNATE => {
+                Some(Self::Deny)
+            }
+            _ => None,
+        }
+    }
+
+    /// Persist history from an AlreadyDecided tap only when this account already
+    /// sent the same terminal reaction. A mismatched tap must not invent a row.
+    pub fn matching_own_reaction<'a>(
+        requested_action_id: &str,
+        reactions: impl IntoIterator<Item = (&'a str, bool)>,
+    ) -> Option<Self> {
+        let requested = Self::from_action_id(requested_action_id)?;
+        let own = reactions.into_iter().find_map(|(key, own)| {
+            if own {
+                Self::from_reaction_key(key)
+            } else {
+                None
+            }
+        })?;
+        (own == requested).then_some(own)
     }
 }
 
@@ -309,6 +341,15 @@ pub fn append_agent_approval_history_item(
     }
 }
 
+pub fn history_write_needs_retry(
+    confirmed: &[SynaraAgentApprovalHistoryItem],
+    item: &SynaraAgentApprovalHistoryItem,
+) -> bool {
+    !confirmed
+        .iter()
+        .any(|row| row.room_id == item.room_id && row.event_id == item.event_id)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -325,6 +366,22 @@ mod tests {
             expires_at: decided_at + 300_000.0,
             summary: "rm file".to_owned(),
         }
+    }
+
+    #[test]
+    fn history_write_retries_when_confirm_lacks_our_identity() {
+        let ours = item("$ours", 1_700_000_000_000.0);
+        let other = item("$other", 1_700_000_000_001.0);
+        assert!(history_write_needs_retry(&[], &ours));
+        assert!(history_write_needs_retry(
+            std::slice::from_ref(&other),
+            &ours
+        ));
+        assert!(!history_write_needs_retry(
+            std::slice::from_ref(&ours),
+            &ours
+        ));
+        assert!(!history_write_needs_retry(&[other, ours.clone()], &ours));
     }
 
     #[test]
@@ -345,6 +402,45 @@ mod tests {
         );
         assert_eq!(
             SynaraAgentApprovalHistoryDecision::from_action_id("agent-approval.review"),
+            None
+        );
+        assert_eq!(
+            SynaraAgentApprovalHistoryDecision::from_reaction_key(
+                AGENT_APPROVAL_REACTION_APPROVE_ONCE
+            ),
+            Some(SynaraAgentApprovalHistoryDecision::ApproveOnce)
+        );
+        assert_eq!(
+            SynaraAgentApprovalHistoryDecision::from_reaction_key(
+                AGENT_APPROVAL_REACTION_APPROVE_ALWAYS_TEXT
+            ),
+            Some(SynaraAgentApprovalHistoryDecision::ApproveAlways)
+        );
+        assert_eq!(
+            SynaraAgentApprovalHistoryDecision::from_reaction_key(
+                AGENT_APPROVAL_REACTION_DENY_ALTERNATE
+            ),
+            Some(SynaraAgentApprovalHistoryDecision::Deny)
+        );
+        assert_eq!(
+            SynaraAgentApprovalHistoryDecision::matching_own_reaction(
+                AGENT_APPROVAL_ACTION_APPROVE_ONCE,
+                [(AGENT_APPROVAL_REACTION_APPROVE_ONCE, true)]
+            ),
+            Some(SynaraAgentApprovalHistoryDecision::ApproveOnce)
+        );
+        assert_eq!(
+            SynaraAgentApprovalHistoryDecision::matching_own_reaction(
+                AGENT_APPROVAL_ACTION_APPROVE_ALWAYS,
+                [(AGENT_APPROVAL_REACTION_APPROVE_ONCE, true)]
+            ),
+            None
+        );
+        assert_eq!(
+            SynaraAgentApprovalHistoryDecision::matching_own_reaction(
+                AGENT_APPROVAL_ACTION_DENY,
+                [(AGENT_APPROVAL_REACTION_DENY, false)]
+            ),
             None
         );
     }
@@ -430,6 +526,30 @@ mod tests {
             content.items[0].decision,
             SynaraAgentApprovalHistoryDecision::Deny
         );
+    }
+
+    #[test]
+    fn inbound_summaries_redact_paths_and_secret_assignments() {
+        let now = 1_700_000_000_000.0;
+        let content = normalize_agent_approval_history_content(
+            Some(&json!({
+                "version": 1,
+                "items": [
+                    {
+                        "roomId": "!room:example.org",
+                        "eventId": "$ok",
+                        "sender": "@hermes:example.org",
+                        "decision": "deny",
+                        "decidedAt": now,
+                        "originServerTs": now - 1.0,
+                        "expiresAt": now + 1.0,
+                        "summary": "rm -rf /tmp/test TOKEN=secret"
+                    }
+                ]
+            })),
+            now,
+        );
+        assert_eq!(content.items[0].summary, "rm -rf <path> TOKEN=<redacted>");
     }
 
     #[test]

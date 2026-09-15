@@ -23,15 +23,16 @@ mod room_notes;
 mod room_notes_live;
 
 pub use agent_approval_history::{
-    append_agent_approval_history_item, normalize_agent_approval_history_content,
-    normalize_agent_approval_history_content_checked, normalize_agent_approval_history_item,
-    prune_agent_approval_history_items, validate_agent_approval_history_content_size,
-    validate_agent_approval_history_item, NativeAgentApprovalHistorySnapshot,
-    SynaraAgentApprovalHistoryContent, SynaraAgentApprovalHistoryDecision,
-    SynaraAgentApprovalHistoryItem, AGENT_APPROVAL_HISTORY_ACCOUNT_DATA_VERSION,
-    AGENT_APPROVAL_HISTORY_EVENT_TYPE, AGENT_APPROVAL_HISTORY_RETENTION_MS,
-    AGENT_APPROVAL_HISTORY_UPDATED_EVENT, MAX_AGENT_APPROVAL_HISTORY_CONTENT_BYTES,
-    MAX_AGENT_APPROVAL_HISTORY_ITEMS, MAX_AGENT_APPROVAL_HISTORY_SUMMARY_CHARS,
+    append_agent_approval_history_item, history_write_needs_retry,
+    normalize_agent_approval_history_content, normalize_agent_approval_history_content_checked,
+    normalize_agent_approval_history_item, prune_agent_approval_history_items,
+    validate_agent_approval_history_content_size, validate_agent_approval_history_item,
+    NativeAgentApprovalHistorySnapshot, SynaraAgentApprovalHistoryContent,
+    SynaraAgentApprovalHistoryDecision, SynaraAgentApprovalHistoryItem,
+    AGENT_APPROVAL_HISTORY_ACCOUNT_DATA_VERSION, AGENT_APPROVAL_HISTORY_EVENT_TYPE,
+    AGENT_APPROVAL_HISTORY_RETENTION_MS, AGENT_APPROVAL_HISTORY_UPDATED_EVENT,
+    MAX_AGENT_APPROVAL_HISTORY_CONTENT_BYTES, MAX_AGENT_APPROVAL_HISTORY_ITEMS,
+    MAX_AGENT_APPROVAL_HISTORY_SUMMARY_CHARS,
 };
 pub use agent_approval_history_live::{
     append_agent_approval_history_item_live, snapshot_agent_approval_history,

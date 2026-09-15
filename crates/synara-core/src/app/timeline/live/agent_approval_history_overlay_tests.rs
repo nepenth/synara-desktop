@@ -174,6 +174,24 @@ fn already_decided_retries_unconfirmed_history_after_dropping_decision_locks() {
 }
 
 #[test]
+fn already_decided_persists_history_only_for_a_matching_own_reaction() {
+    let source = include_str!("../live.rs");
+    let decide = source
+        .split("    pub async fn decide_agent_approval(")
+        .nth(1)
+        .and_then(|rest| rest.split("    pub async fn redact_reaction(").next())
+        .expect("decide_agent_approval");
+    let already = decide
+        .split("if plan.status == AgentApprovalDecisionStatus::AlreadyDecided")
+        .nth(1)
+        .and_then(|rest| rest.split("let reaction_key = plan").next())
+        .expect("AlreadyDecided branch");
+    assert!(already.contains("matching_own_reaction"));
+    assert!(already.contains("record_agent_approval_history"));
+    assert!(already.contains("retry_unconfirmed_approval_history"));
+}
+
+#[test]
 fn failed_history_write_is_queued_for_already_decided_retry() {
     let source = include_str!("../live.rs");
     let record = source

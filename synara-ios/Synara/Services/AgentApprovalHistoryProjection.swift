@@ -104,18 +104,69 @@ enum AgentApprovalHistoryProjection {
         return false
     }
 
-    /// Recent = account-data history ∪ inbox items whose status ≠ pending. Account data wins.
+    /// Recent = account-data history ∪ inbox items whose status ≠ pending.
+    /// History-only rows stay visible (cross-device). Inbox `decision` wins a
+    /// conflict. A decided inbox row without `decision` does not inherit the
+    /// history decision. An expired inbox row may still show the history decision.
     static func unionRecent(
         inboxItems: [AgentApprovalInboxRecord],
         historyItems: [AgentApprovalHistoryRecord]
     ) -> [AgentApprovalInboxRecord] {
         var merged: [String: AgentApprovalInboxRecord] = [:]
-        for item in inboxItems where item.status != .pending {
-            merged[item.identity] = item
-        }
         for item in historyItems {
             merged[identity(roomId: item.roomId, eventId: item.eventId)] = inboxItem(from: item)
         }
+        for item in inboxItems where item.status != .pending {
+            if let history = merged[item.identity] {
+                merged[item.identity] = mergeInboxOverHistory(inbox: item, history: history)
+            } else {
+                merged[item.identity] = item
+            }
+        }
         return merged.values.sorted(by: compareRecent)
+    }
+
+    private static func historyPreview(_ item: AgentApprovalInboxRecord) -> String? {
+        guard let summary = item.summary?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !summary.isEmpty,
+              summary != emptySummary
+        else {
+            return nil
+        }
+        return item.summary
+    }
+
+    /// Inbox proof wins a conflict. Account data is not a reaction.
+    private static func mergeInboxOverHistory(
+        inbox: AgentApprovalInboxRecord,
+        history: AgentApprovalInboxRecord
+    ) -> AgentApprovalInboxRecord {
+        let inboxNamedDecision = inbox.decision != nil
+        let hideUnprovenHistoryDecision = inbox.status == .decided && !inboxNamedDecision
+        let decision: AgentApprovalHistoryDecision?
+        if inboxNamedDecision {
+            decision = inbox.decision
+        } else if hideUnprovenHistoryDecision {
+            decision = nil
+        } else {
+            decision = history.decision
+        }
+        let status: AgentApprovalInboxStatus =
+            decision != nil || hideUnprovenHistoryDecision ? .decided : inbox.status
+        let summary = historyPreview(history) ?? inbox.summary ?? inbox.body
+        return AgentApprovalInboxRecord(
+            roomId: inbox.roomId,
+            eventId: inbox.eventId,
+            sender: inbox.sender,
+            body: summary,
+            canSendReaction: inbox.canSendReaction,
+            bodyTruncated: inbox.bodyTruncated,
+            originServerTs: inbox.originServerTs,
+            expiresAt: inbox.expiresAt,
+            status: status,
+            decision: decision,
+            decidedAt: inbox.decidedAt ?? history.decidedAt,
+            summary: summary
+        )
     }
 }
