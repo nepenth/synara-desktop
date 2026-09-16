@@ -155,6 +155,7 @@ import {
   nativeComposerSendRelation,
   useNativeComposerReplyDraft,
 } from './nativeComposerDraft';
+import { useNativeThreadRoot } from './nativeThreadViewContext';
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
   completeAttachmentSendStep,
@@ -202,15 +203,20 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       ReactEditor.focus(editor);
       setMentionInsert(undefined);
     }, [mentionInsert, roomId, editor, mx, setMentionInsert]);
-    const replyDraft = useNativeComposerReplyDraft(roomId);
+    const threadRootEventId = useNativeThreadRoot(roomId);
+    const replyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
     const clearReplyDraft = useCallback(
       async (expectedDraftRevision: number) => {
-        const result = await clearNativeComposerReplyDraft({ roomId, expectedDraftRevision });
+        const result = await clearNativeComposerReplyDraft({
+          roomId,
+          expectedDraftRevision,
+          threadRootEventId,
+        });
         if (result === 'unavailable') {
           throw new Error('Native reply draft clear is unavailable.');
         }
       },
-      [roomId]
+      [roomId, threadRootEventId]
     );
     const clearReplyDraftAfterSend = useCallback(
       async (expectedDraftRevision: number | undefined, onFailure: () => void) => {
@@ -292,7 +298,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       async (poll: ParsedPoll) => {
         // Snapshot both fields from the one visible Core draft before the
         // asynchronous send begins; no Jotai/local relation may diverge.
-        const sendRelation = nativeComposerSendRelation(replyDraft);
+        const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
         const owner = await sendPollCommandWithNativeDesktopOwner(
           {
             roomId,
@@ -418,7 +424,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const isComposing = useComposingCheck();
 
     const getReplyRelation = useCallback(() => {
-      const { replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      const { replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
       if (!replyTo) return undefined;
 
       const relation: RelationTypeRelatesTo = {
@@ -503,7 +509,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[], options?: UploadSendOptions) => {
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
       const nativeInputs = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
@@ -644,7 +650,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       if (relation) {
         content['m.relates_to'] = relation;
       }
-      const sendRelation = nativeComposerSendRelation(replyDraft);
+      const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
       try {
         setSendingMessage(true);
         setSendError(undefined);
@@ -779,7 +785,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return;
       }
       try {
-        const sendRelation = nativeComposerSendRelation(replyDraft);
+        const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
         const owner = await sendPollWithNativeDesktopOwner({
           roomId,
           question: poll.question,
@@ -872,7 +878,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleGifSelect = async (gif: GifResult) => {
       setGifSending(true);
       setGifSendError(undefined);
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
       try {
         await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
         await clearReplyDraftAfterSend(draftRevision, () => {

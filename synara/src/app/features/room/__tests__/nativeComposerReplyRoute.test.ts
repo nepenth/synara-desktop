@@ -152,8 +152,11 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
     'utf8'
   );
 
-  assert.match(roomInput, /const replyDraft = useNativeComposerReplyDraft\(roomId\)/);
-  assert.match(roomInput, /clearNativeComposerReplyDraft\(\{ roomId, expectedDraftRevision \}\)/);
+  assert.match(roomInput, /useNativeComposerReplyDraft\(roomId, threadRootEventId\)/);
+  assert.match(
+    roomInput,
+    /clearNativeComposerReplyDraft\(\{\s*roomId,\s*expectedDraftRevision,\s*threadRootEventId,/
+  );
   assert.match(roomInput, /clearReplyDraftAfterSend\(sendRelation\.draftRevision, \(\) =>/);
   const uploadHandler = roomInput.slice(
     roomInput.indexOf('const handleSendUpload ='),
@@ -161,7 +164,7 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
   );
   assert.match(
     uploadHandler,
-    /const \{ draftRevision, replyTo, threadRoot \} = nativeComposerSendRelation\(replyDraft\)/,
+    /const \{ draftRevision, replyTo, threadRoot \} = nativeComposerSendRelation\(replyDraft, threadRootEventId\)/,
     'the upload route must declare its clear revision from the same relation snapshot it sends'
   );
   assert.match(
@@ -187,7 +190,7 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
     (roomInput.match(/clearReplyDraft\(replyDraft\.draftRevision\)/g) ?? []).length >= 2,
     'keyboard and button cancellation must compare the displayed Core revision'
   );
-  assert.match(roomInput, /nativeComposerSendRelation\(replyDraft\)/);
+  assert.match(roomInput, /nativeComposerSendRelation\(replyDraft, threadRootEventId\)/);
   assert.match(roomInput, /sendPollCommandWithNativeDesktopOwner/);
   assert.match(roomInput, /useCommands\([\s\S]*sendSlashPoll[\s\S]*\)/);
   assert.ok(

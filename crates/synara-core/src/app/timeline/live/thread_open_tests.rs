@@ -123,11 +123,11 @@ async fn thread_open_uses_a_distinct_threaded_stream_from_live_and_permalink() {
     let live_ids: Vec<_> = live.snapshot.rows.iter().filter_map(row_event_id).collect();
     assert!(
         live_ids.contains(&root_id.as_str()),
-        "T1 live still shows the thread root: {live_ids:?}"
+        "live still shows the thread root: {live_ids:?}"
     );
     assert!(
-        live_ids.contains(&reply_id.as_str()),
-        "T1 must not hide threaded replies on live: {live_ids:?}"
+        !live_ids.contains(&reply_id.as_str()),
+        "live must hide threaded replies once the thread view owner exists: {live_ids:?}"
     );
     assert!(live_ids.contains(&live_id.as_str()));
     assert_eq!(

@@ -42,6 +42,8 @@ export type NativeComposerSetReplyDraftInput = {
 
 export type NativeComposerReplyDraftRoomInput = {
   roomId: string;
+  /** Live drafts omit this; thread-view drafts key the same room separately. */
+  threadRootEventId?: string;
 };
 
 export type NativeComposerClearReplyDraftInput = NativeComposerReplyDraftRoomInput & {
@@ -96,12 +98,18 @@ const acceptReplyDraftReadback = (
  * selected event silently degrades a reply into a plain thread message.
  */
 export const nativeComposerSendRelation = (
-  draft: NativeComposerReplyDraft | undefined
+  draft: NativeComposerReplyDraft | undefined,
+  viewThreadRoot?: string
 ): NativeComposerSendRelation => ({
   draftRevision: draft?.draftRevision,
   replyTo: draft?.eventId,
-  threadRoot: draft?.threadRootEventId,
+  threadRoot: draft?.threadRootEventId ?? viewThreadRoot,
 });
+
+export const nativeComposerDraftSlotKey = (
+  roomId: string,
+  threadRootEventId?: string
+): string => (threadRootEventId ? `${roomId}\0${threadRootEventId}` : roomId);
 
 type ReplyDraftListener = () => void;
 
@@ -115,31 +123,39 @@ export class NativeComposerReplyDraftProjection {
 
   private readonly listeners = new Map<string, Set<ReplyDraftListener>>();
 
-  get(roomId: string): NativeComposerReplyDraft | undefined {
-    return this.drafts.get(roomId);
+  get(roomId: string, threadRootEventId?: string): NativeComposerReplyDraft | undefined {
+    return this.drafts.get(nativeComposerDraftSlotKey(roomId, threadRootEventId));
   }
 
-  apply(readback: NativeComposerReplyDraftReadback): void {
+  apply(readback: NativeComposerReplyDraftReadback, slotThreadRoot?: string): void {
+    const threadRoot = readback.draft?.threadRootEventId ?? slotThreadRoot;
+    const key = nativeComposerDraftSlotKey(readback.roomId, threadRoot);
     if (readback.status === 'set' && readback.draft) {
-      this.drafts.set(readback.roomId, readback.draft);
+      this.drafts.set(key, readback.draft);
     } else {
-      this.drafts.delete(readback.roomId);
+      this.drafts.delete(key);
     }
-    this.listeners.get(readback.roomId)?.forEach((listener) => listener());
+    this.listeners.get(key)?.forEach((listener) => listener());
   }
 
-  clearLocal(roomId: string): void {
-    if (!this.drafts.delete(roomId)) return;
-    this.listeners.get(roomId)?.forEach((listener) => listener());
+  clearLocal(roomId: string, threadRootEventId?: string): void {
+    const key = nativeComposerDraftSlotKey(roomId, threadRootEventId);
+    if (!this.drafts.delete(key)) return;
+    this.listeners.get(key)?.forEach((listener) => listener());
   }
 
-  subscribe(roomId: string, listener: ReplyDraftListener): () => void {
-    const roomListeners = this.listeners.get(roomId) ?? new Set<ReplyDraftListener>();
+  subscribe(
+    roomId: string,
+    listener: ReplyDraftListener,
+    threadRootEventId?: string
+  ): () => void {
+    const key = nativeComposerDraftSlotKey(roomId, threadRootEventId);
+    const roomListeners = this.listeners.get(key) ?? new Set<ReplyDraftListener>();
     roomListeners.add(listener);
-    this.listeners.set(roomId, roomListeners);
+    this.listeners.set(key, roomListeners);
     return () => {
       roomListeners.delete(listener);
-      if (roomListeners.size === 0) this.listeners.delete(roomId);
+      if (roomListeners.size === 0) this.listeners.delete(key);
     };
   }
 }

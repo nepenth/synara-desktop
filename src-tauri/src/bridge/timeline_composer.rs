@@ -37,16 +37,21 @@ pub(crate) async fn composer_clear_reply_draft(
     core: &Core,
     room_id: String,
     expected_draft_revision: u64,
+    thread_root_event_id: Option<String>,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let mut payload = serde_json::json!({
+        "roomId": room_id,
+        "expectedDraftRevision": expected_draft_revision,
+    });
+    if let Some(thread_root_event_id) = thread_root_event_id {
+        payload["threadRootEventId"] = serde_json::Value::String(thread_root_event_id);
+    }
     let response = core
         .command(CommandEnvelope {
             command: COMPOSER_CLEAR_COMMAND.to_owned(),
             session_generation: READ_ONLY_SESSION_GENERATION,
             request_id: None,
-            payload: serde_json::json!({
-                "roomId": room_id,
-                "expectedDraftRevision": expected_draft_revision,
-            }),
+            payload,
         })
         .await
         .map_err(map_composer_core_error)?;
@@ -56,21 +61,18 @@ pub(crate) async fn composer_clear_reply_draft(
 pub(crate) async fn composer_get_reply_draft(
     core: &Core,
     room_id: String,
+    thread_root_event_id: Option<String>,
 ) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
-    dispatch_room_draft(core, COMPOSER_GET_COMMAND, room_id).await
-}
-
-async fn dispatch_room_draft(
-    core: &Core,
-    command: &str,
-    room_id: String,
-) -> Result<NativeComposerReplyDraftReadback, MatrixAuthCommandError> {
+    let mut payload = serde_json::json!({ "roomId": room_id });
+    if let Some(thread_root_event_id) = thread_root_event_id {
+        payload["threadRootEventId"] = serde_json::Value::String(thread_root_event_id);
+    }
     let response = core
         .command(CommandEnvelope {
-            command: command.to_owned(),
+            command: COMPOSER_GET_COMMAND.to_owned(),
             session_generation: READ_ONLY_SESSION_GENERATION,
             request_id: None,
-            payload: serde_json::json!({ "roomId": room_id }),
+            payload,
         })
         .await
         .map_err(map_composer_core_error)?;

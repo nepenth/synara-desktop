@@ -196,6 +196,7 @@ pub async fn matrix_composer_clear_reply_draft(
         core.inner().as_ref(),
         request.room_id,
         request.expected_draft_revision,
+        request.thread_root_event_id,
     )
     .await
 }
@@ -208,6 +209,7 @@ pub async fn matrix_composer_get_reply_draft(
     crate::bridge::timeline_composer::composer_get_reply_draft(
         core.inner().as_ref(),
         request.room_id,
+        request.thread_root_event_id,
     )
     .await
 }
