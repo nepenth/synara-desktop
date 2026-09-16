@@ -54,6 +54,12 @@ import {
   setOwnPresenceNative,
   snapshotOwnPresenceNative,
 } from '../../matrix-presence/nativePresence';
+import {
+  refreshRtcTransportsNative,
+  snapshotRtcTransportsNative,
+  type NativeRtcTransportsSnapshot,
+} from '../../matrix-rtc/nativeRtcTransports';
+import { rtcTransportsDiagnosticCopy } from '../../matrix-rtc/liveCallChrome';
 
 type ProfileProps = {
   profile: UserProfile;
@@ -488,6 +494,67 @@ function ProfilePresence({ userId }: { userId: string }) {
   );
 }
 
+function ProfileRtcTransports() {
+  const [snapshot, setSnapshot] = useState<NativeRtcTransportsSnapshot | null>(null);
+  const [unavailable, setUnavailable] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const load = useCallback(async (refresh: boolean) => {
+    setBusy(true);
+    try {
+      const next = refresh
+        ? await refreshRtcTransportsNative()
+        : await snapshotRtcTransportsNative();
+      setSnapshot(next);
+      setUnavailable(next === null);
+    } catch {
+      setSnapshot(null);
+      setUnavailable(true);
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load(false).catch(() => {
+      setSnapshot(null);
+      setUnavailable(true);
+    });
+  }, [load]);
+
+  return (
+    <SettingTile
+      title={
+        <Text as="span" size="L400">
+          MatrixRTC
+        </Text>
+      }
+    >
+      <Box direction="Column" gap="100">
+        <Text size="T300" data-testid="matrix-rtc-transport-diagnostic">
+          {unavailable || !snapshot
+            ? 'Native MatrixRTC transports are unavailable.'
+            : rtcTransportsDiagnosticCopy(snapshot)}
+        </Text>
+        <Button
+          className={SettingsQuietControl}
+          size="300"
+          variant="Secondary"
+          fill="Soft"
+          outlined
+          radii="300"
+          disabled={busy}
+          onClick={() => {
+            load(true).catch(() => undefined);
+          }}
+        >
+          {busy ? <Spinner size="300" /> : <Text size="T300">Refresh transport</Text>}
+        </Button>
+      </Box>
+    </SettingTile>
+  );
+}
+
 export function Profile() {
   const mx = useMatrixClient();
   const userId = mx.getUserId()!;
@@ -505,6 +572,7 @@ export function Profile() {
         <ProfileAvatar userId={userId} profile={profile} />
         <ProfileDisplayName userId={userId} profile={profile} />
         <ProfilePresence userId={userId} />
+        <ProfileRtcTransports />
       </SequenceCard>
     </Box>
   );

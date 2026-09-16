@@ -12,6 +12,16 @@ export type AutoDiscoveryError = {
   action: AutoDiscoveryAction;
 };
 
+export type AutoDiscoveryRtcFocus =
+  | {
+      type: 'livekit';
+      livekit_service_url?: string;
+    }
+  | {
+      type: string;
+      [key: string]: unknown;
+    };
+
 export type AutoDiscoveryInfo = Record<string, unknown> & {
   'm.homeserver': {
     base_url: string;
@@ -23,12 +33,8 @@ export type AutoDiscoveryInfo = Record<string, unknown> & {
     account?: string;
     issuer?: string;
   };
-  'org.matrix.msc4143.rtc_foci'?: [
-    {
-      livekit_service_url: string;
-      type: 'livekit';
-    }
-  ];
+  'org.matrix.msc4143.rtc_foci'?: AutoDiscoveryRtcFocus[];
+  'm.rtc_foci'?: AutoDiscoveryRtcFocus[];
 };
 
 const isLoopbackHostname = (hostname: string): boolean =>

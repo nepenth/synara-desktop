@@ -480,6 +480,8 @@ pub fn run() {
             matrix::auth::product::matrix_presence_snapshot,
             matrix::auth::product::matrix_presence_subscribe,
             matrix::auth::product::matrix_presence_unsubscribe,
+            matrix::auth::product::matrix_rtc_transports_snapshot,
+            matrix::auth::product::matrix_rtc_transports_refresh,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_close,
             matrix::auth::product::matrix_timeline_jump_latest,

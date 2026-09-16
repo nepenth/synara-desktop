@@ -1229,7 +1229,10 @@ private extension RoomSummary {
             latestAgentCard: latestAgentCard,
             latestAgentCardEventID: latestAgentCardEventID,
             pendingAgentApprovals: pendingAgentApprovals,
-            isFavorite: isFavorite
+            isFavorite: isFavorite,
+            isCall: isCall,
+            hasActiveCall: hasActiveCall,
+            activeCallParticipantCount: activeCallParticipantCount
         )
     }
 }

@@ -117,6 +117,8 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_room_set_power_levels",
     "matrix_room_set_read_state",
     "matrix_room_unban",
+    "matrix_rtc_transports_refresh",
+    "matrix_rtc_transports_snapshot",
     "matrix_secret_storage_bootstrap",
     "matrix_secret_storage_reset",
     "matrix_secret_storage_status",

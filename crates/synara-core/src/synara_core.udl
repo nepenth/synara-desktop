@@ -297,6 +297,9 @@ dictionary RoomListRoomDto {
   boolean is_direct;
   boolean is_space;
   boolean is_favorite;
+  boolean is_call;
+  boolean has_active_call;
+  u32 active_call_participant_count;
   u32 unread_count;
   u32 highlight_count;
   boolean marked_unread;
@@ -921,6 +924,24 @@ dictionary PresenceSubscriptionDto {
 // Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
 dictionary PresenceWriteDto {
   string status;
+};
+
+// Privacy-safe MatrixRTC transport snapshot. URLs only; no JWTs or tokens.
+dictionary RtcTransportDto {
+  string kind;
+  string? service_url;
+};
+
+dictionary RtcTransportsSnapshotDto {
+  u64 session_generation;
+  string status;
+  sequence<RtcTransportDto> transports;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface RtcTransportsCommandError {
+  Failed(string code, string description);
 };
 
 // Static source constants only. Never echo user id, URL, path, token, or password.
@@ -1819,6 +1840,12 @@ interface SharedCore {
 
   [Async, Throws=PresenceCommandError]
   PresenceWriteDto presence_set(string state, string? status_msg);
+
+  [Async, Throws=RtcTransportsCommandError]
+  RtcTransportsSnapshotDto rtc_transports_snapshot();
+
+  [Async, Throws=RtcTransportsCommandError]
+  RtcTransportsSnapshotDto rtc_transports_refresh();
 
   [Async, Throws=VerificationListError]
   VerificationInboxDto verification_list();

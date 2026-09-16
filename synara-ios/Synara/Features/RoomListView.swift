@@ -1283,6 +1283,17 @@ private struct RoomListRow: View {
                             .accessibilityLabel("Favorite")
                     }
 
+                    if room.hasActiveCall {
+                        Text(room.liveCallChipLabel)
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SynaraColor.accent.opacity(0.12), in: Capsule())
+                            .accessibilityLabel(room.liveCallChipLabel)
+                            .accessibilityIdentifier("RoomRowLiveCall-\(room.id)")
+                    }
+
                     Spacer(minLength: 0)
                 }
 
@@ -1407,6 +1418,9 @@ private extension RoomSummary {
         }
         if isFavorite {
             parts.append("favorite")
+        }
+        if hasActiveCall {
+            parts.append(liveCallChipLabel)
         }
         if isSecureRoom {
             parts.append("encrypted")

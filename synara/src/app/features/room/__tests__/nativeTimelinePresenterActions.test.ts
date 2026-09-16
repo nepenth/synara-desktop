@@ -122,6 +122,7 @@ test('poll and call actions consume Core capabilities with accessible pending co
   assert.match(presenter, /disabled=\{!canVote \|\| closed \|\| submitting\}/);
   assert.match(presenter, /disabled=\{declinePending\}/);
   assert.match(presenter, /callDeclineWithNativeTimelineOwner/);
+  assert.match(presenter, /incomingCallLabel\(row\.callKind\)/);
   assert.doesNotMatch(presenter, /sendEvent\(['"]m\.poll\.response/);
   assert.doesNotMatch(presenter, /sendEvent\(['"]m\.rtc/);
 });

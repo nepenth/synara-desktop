@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '..',
-  testMatch: ['room-list-scroll.spec.ts', 'avatar-lifetime.spec.ts'],
+  testMatch: ['room-list-scroll.spec.ts', 'avatar-lifetime.spec.ts', 'room-list-live-call.spec.ts'],
   fullyParallel: false,
   retries: 0,
   timeout: 30000,

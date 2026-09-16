@@ -81,6 +81,7 @@ use crate::matrix::lifecycle::{
 };
 use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
+use crate::matrix::rtc_transports::NativeRtcTransportsOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -260,6 +261,7 @@ struct ManagedMatrixSession {
     _image_packs: Arc<NativeImagePackOwner>,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
+    rtc_transports: Arc<NativeRtcTransportsOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
     _own_profile: NativeOwnProfileOwner,
     _media_retention: NativeMediaRetentionOwner,
@@ -982,6 +984,8 @@ mod room_list;
 mod room_ops;
 #[path = "../room_profile/product_commands.rs"]
 mod room_profile;
+#[path = "../rtc_transports/product_commands.rs"]
+mod rtc_transports;
 #[path = "../search/product_commands.rs"]
 mod search;
 #[path = "../secret_storage/product_commands.rs"]
@@ -1011,6 +1015,7 @@ pub use room_keys::*;
 pub use room_list::*;
 pub use room_ops::*;
 pub use room_profile::*;
+pub use rtc_transports::*;
 pub use search::*;
 pub use secret_storage::*;
 pub use send::*;

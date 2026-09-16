@@ -14,6 +14,8 @@ pub struct RoomSummaryBuilder {
     membership: Membership,
     is_direct: bool,
     is_call: bool,
+    has_active_call: bool,
+    active_call_participant_count: u32,
     is_favorite: bool,
     is_low_priority: bool,
     folder_id: Option<String>,
@@ -34,6 +36,8 @@ impl RoomSummaryBuilder {
             membership: Membership::Join,
             is_direct: false,
             is_call: false,
+            has_active_call: false,
+            active_call_participant_count: 0,
             is_favorite: false,
             is_low_priority: false,
             folder_id: None,
@@ -69,6 +73,16 @@ impl RoomSummaryBuilder {
 
     pub fn call(mut self, is_call: bool) -> Self {
         self.is_call = is_call;
+        self
+    }
+
+    pub fn active_call(mut self, has_active_call: bool, participant_count: u32) -> Self {
+        self.has_active_call = has_active_call;
+        self.active_call_participant_count = if has_active_call {
+            participant_count
+        } else {
+            0
+        };
         self
     }
 
@@ -138,6 +152,8 @@ impl RoomSummaryBuilder {
             membership: self.membership,
             is_direct: self.is_direct,
             is_call: self.is_call,
+            has_active_call: self.has_active_call,
+            active_call_participant_count: self.active_call_participant_count,
             is_space: false,
             is_favorite: self.is_favorite,
             is_low_priority: self.is_low_priority,

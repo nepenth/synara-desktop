@@ -204,6 +204,7 @@ async fn project_room(room: &Room) -> RoomSummary {
             room_avatar.map(|uri| uri.to_string())
         }
     };
+    let (has_active_call, active_call_participant_count) = project_active_call(room);
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
@@ -213,6 +214,8 @@ async fn project_room(room: &Room) -> RoomSummary {
         is_direct,
         is_space: room.is_space(),
         is_call: room.is_call(),
+        has_active_call,
+        active_call_participant_count,
         is_favorite: room.is_favourite(),
         is_low_priority: room.is_low_priority(),
         folder_id: None,
@@ -228,6 +231,22 @@ async fn project_room(room: &Room) -> RoomSummary {
         heroes: None,
         tombstone_successor_room_id: None,
     }
+}
+
+const MAX_ACTIVE_CALL_PARTICIPANTS: u32 = 99;
+
+fn project_active_call(room: &Room) -> (bool, u32) {
+    if !room.has_active_room_call() {
+        return (false, 0);
+    }
+    let mut unique = std::collections::HashSet::new();
+    for participant in room.active_room_call_participants() {
+        unique.insert(participant);
+    }
+    (
+        true,
+        unique.len().min(MAX_ACTIVE_CALL_PARTICIPANTS as usize) as u32,
+    )
 }
 
 fn project_encryption_status<E>(result: Result<EncryptionState, E>) -> RoomEncryptionStatus {

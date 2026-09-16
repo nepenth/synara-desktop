@@ -155,6 +155,8 @@ private struct AccountSettingsView: View {
     @State private var ownPresence: SharedCorePresence?
     @State private var presenceDraft = "online"
     @State private var isSettingPresence = false
+    @State private var rtcTransports: SharedCoreRtcTransportsSnapshot?
+    @State private var isRefreshingRtc = false
     @State private var coreSessionIdentity: CoreSessionIdentity?
     @State private var signOutDevice: SharedCoreSessionDevice?
     @State private var signOutPassword = ""
@@ -330,6 +332,31 @@ private struct AccountSettingsView: View {
             }
 
             Section {
+                Text(
+                    rtcTransports.map(SharedCoreRtcTransports.diagnosticCopy)
+                        ?? "Native MatrixRTC transports are unavailable."
+                )
+                .font(SynaraTypography.supporting)
+                .foregroundStyle(SynaraColor.secondaryText)
+                .accessibilityIdentifier("SettingsRtcTransportsDiagnostic")
+                Button {
+                    refreshRtcTransports()
+                } label: {
+                    if isRefreshingRtc {
+                        ProgressView()
+                    } else {
+                        Text("Refresh transport")
+                    }
+                }
+                .disabled(isRefreshingRtc)
+                .accessibilityIdentifier("SettingsRtcTransportsRefresh")
+            } header: {
+                Text("MatrixRTC")
+            } footer: {
+                Text("Homeserver call transport discovery. Synara does not join calls from this screen.")
+            }
+
+            Section {
                 if isLoadingSessions && sessionDevices.isEmpty {
                     ProgressView()
                         .accessibilityIdentifier("SettingsSessionsLoading")
@@ -475,12 +502,14 @@ private struct AccountSettingsView: View {
         .task {
             await refreshCoreSessionIdentity()
             let presence = await environment.matrix.presence(userID: session.userID)
+            let rtc = await environment.matrix.rtcTransportsSnapshot()
             let devices = await environment.crypto.sessionDevices()
             let loadedEmails = await environment.matrix.threepidEmails()
             let loadedIgnored = await environment.matrix.ignoredUserIDs()
             let profile = await environment.matrix.ownProfile()
             await MainActor.run {
                 ownPresence = presence
+                rtcTransports = rtc
                 if let state = presence?.state, ["online", "unavailable", "offline"].contains(state) {
                     presenceDraft = state
                 }
@@ -497,6 +526,17 @@ private struct AccountSettingsView: View {
                         .replacingOccurrences(of: "@", with: "")
                         ?? session.userID
                 }
+            }
+        }
+    }
+
+    private func refreshRtcTransports() {
+        isRefreshingRtc = true
+        Task {
+            let next = await environment.matrix.rtcTransportsRefresh()
+            await MainActor.run {
+                rtcTransports = next
+                isRefreshingRtc = false
             }
         }
     }

@@ -98,6 +98,10 @@ pub struct RoomSummary {
     pub is_space: bool,
     /// True when the room is a Matrix voice room (`m.room.create` type `m.call`).
     pub is_call: bool,
+    /// True when MatrixRTC membership says a call is live. Distinct from `is_call`.
+    pub has_active_call: bool,
+    /// Unique live-call participants, capped. Zero when `has_active_call` is false.
+    pub active_call_participant_count: u32,
     /// Account-data favorite (m.tag `m.favourite`) projection.
     pub is_favorite: bool,
     /// Account-data low-priority (m.tag `m.lowpriority`) projection.
@@ -137,6 +141,8 @@ struct RoomSummarySerialize<'a> {
     is_direct: bool,
     is_space: bool,
     is_call: bool,
+    has_active_call: bool,
+    active_call_participant_count: u32,
     is_favorite: bool,
     is_low_priority: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -177,6 +183,8 @@ impl Serialize for RoomSummary {
             is_direct: self.is_direct,
             is_space: self.is_space,
             is_call: self.is_call,
+            has_active_call: self.has_active_call,
+            active_call_participant_count: self.active_call_participant_count,
             is_favorite: self.is_favorite,
             is_low_priority: self.is_low_priority,
             folder_id: &self.folder_id,
@@ -213,6 +221,10 @@ struct RoomSummaryWire {
     is_space: bool,
     #[serde(default)]
     is_call: bool,
+    #[serde(default)]
+    has_active_call: bool,
+    #[serde(default)]
+    active_call_participant_count: u32,
     #[serde(default)]
     is_favorite: bool,
     #[serde(default)]
@@ -260,6 +272,8 @@ impl<'de> Deserialize<'de> for RoomSummary {
             is_direct: wire.is_direct,
             is_space: wire.is_space,
             is_call: wire.is_call,
+            has_active_call: wire.has_active_call,
+            active_call_participant_count: wire.active_call_participant_count,
             is_favorite: wire.is_favorite,
             is_low_priority: wire.is_low_priority,
             folder_id: wire.folder_id,

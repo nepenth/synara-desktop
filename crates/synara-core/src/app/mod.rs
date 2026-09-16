@@ -34,6 +34,7 @@ pub mod room_keys;
 pub mod room_list;
 pub mod room_ops;
 pub mod room_profile;
+pub mod rtc_transports;
 pub mod routes;
 pub mod search;
 pub mod secret_storage;
