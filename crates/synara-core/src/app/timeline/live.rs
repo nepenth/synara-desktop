@@ -69,8 +69,8 @@ use super::{
         enrich_native_items, enrich_native_reactions, enrich_view_delta_ops, enrich_view_rows,
         reaction_event_id_from_send_state,
     },
-    reply_draft_readback, should_attach_formatted_body, ComposerDraftRegistry,
-    NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
+    reply_draft_readback, should_attach_formatted_body, snapshot_pinned_events,
+    ComposerDraftRegistry, NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
@@ -79,11 +79,11 @@ use super::{
     NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
     NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry,
-    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
-    TimelineRoomActionAuthority, TimelineViewCapabilities, TimelineViewDeltaBatch,
-    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
-    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, PinnedEventsSnapshot,
+    TimelineMediaRegistry, TimelineMediaSource, TimelinePageState, TimelinePaginationState,
+    TimelineReadState, TimelineRoomActionAuthority, TimelineViewCapabilities,
+    TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit,
+    UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
     NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
     TIMELINE_VIEW_SCHEMA_VERSION,
 };
@@ -446,10 +446,12 @@ pub struct NativeTimelineOwner {
     /// not. `AlreadyDecided` retries drain this map so a failed history write
     /// is not stranded by completed-decision memory.
     approval_history_unconfirmed: Mutex<HashMap<(String, String), SynaraAgentApprovalHistoryItem>>,
+    pin_media: AsyncMutex<TimelineMediaRegistry>,
 }
 
 impl NativeTimelineOwner {
     pub fn new(client: &Client, emit: TimelineViewUpdateEmit, session_generation: u64) -> Self {
+        let _ = client.event_cache().subscribe();
         let registry = NativeTimelineRegistry::new(session_generation);
         let approval_history = registry.approval_history.clone();
         Self {
@@ -468,6 +470,7 @@ impl NativeTimelineOwner {
             approval_history_mutation: tokio::sync::Mutex::new(()),
             approval_history_pending: Mutex::new(None),
             approval_history_unconfirmed: Mutex::new(HashMap::new()),
+            pin_media: AsyncMutex::new(TimelineMediaRegistry::new(session_generation, "pinned")),
         }
     }
 
@@ -1331,6 +1334,19 @@ impl NativeTimelineOwner {
         event_id: &str,
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         self.set_pinned(room_id, event_id, false).await
+    }
+
+    pub async fn pinned_events_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<PinnedEventsSnapshot, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-pinned-room-not-found")?;
+        let mut media = self.pin_media.lock().await;
+        snapshot_pinned_events(&room, &mut media).await
     }
 
     async fn set_pinned(
@@ -5142,5 +5158,16 @@ mod tests {
         let ensure = &source[ensure_start..redact_start];
         assert!(ensure.contains("send_event_via_room_queue"));
         assert!(!ensure.contains(&format!("{}{}", "room.", "send(")));
+    }
+
+    #[test]
+    fn session_start_subscribes_event_cache_and_pin_panel_uses_cache() {
+        let source = include_str!("live.rs");
+        assert!(source.contains("client.event_cache().subscribe()"));
+        assert!(source.contains("pinned_events_snapshot"));
+        assert!(source.contains("snapshot_pinned_events"));
+        assert!(source.contains("room.pin_event"));
+        assert!(source.contains("room.unpin_event"));
+        assert!(!source.contains("TimelineFocus::PinnedEvents"));
     }
 }

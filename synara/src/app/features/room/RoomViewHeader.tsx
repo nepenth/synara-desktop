@@ -53,6 +53,7 @@ import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getViaServers } from '../../plugins/via-servers';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
+import { pinnedEventCount, useNativePinnedEvents } from './nativePinnedEvents';
 import { RoomPinMenu } from './room-pin-menu';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
@@ -293,7 +294,9 @@ export function RoomViewHeader({
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [notesOverlayOpen, setNotesOverlayOpen] = useState(false);
 
-  const pinnedEvents = useRoomPinnedEvents(room);
+  const jsPinnedEvents = useRoomPinnedEvents(room);
+  const nativePinned = useNativePinnedEvents(room);
+  const pinnedCount = pinnedEventCount(nativePinned, jsPinnedEvents);
   const notesContent = useAtomValue(roomNotesContentAtom);
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
@@ -460,7 +463,7 @@ export function RoomViewHeader({
                 ref={triggerRef}
                 aria-pressed={pinsOpen}
               >
-                {pinnedEvents.length > 0 && (
+                {pinnedCount > 0 && (
                   <Badge
                     style={{
                       position: 'absolute',
@@ -473,7 +476,7 @@ export function RoomViewHeader({
                     radii="Pill"
                   >
                     <Text as="span" size="L400">
-                      {pinnedEvents.length}
+                      {pinnedCount}
                     </Text>
                   </Badge>
                 )}

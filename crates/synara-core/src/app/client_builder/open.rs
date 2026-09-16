@@ -73,6 +73,8 @@ pub async fn build_unauthenticated_client(
         builder = builder.handle_refresh_tokens();
     }
 
+    builder = builder.with_enable_automatic_back_pagination(true);
+
     builder.build().await.map_err(map_build_error)
 }
 
@@ -164,5 +166,12 @@ mod privacy_tests {
         assert_eq!(category, MatrixIpcErrorCategory::StoreLocked);
         assert_eq!(id, "p2.3-sdk-build-store-locked");
         assert_eq!(safe_build_message(id), "store is locked");
+    }
+
+    #[test]
+    fn product_builder_enables_automatic_back_pagination() {
+        let source = include_str!("open.rs");
+        assert!(source.contains("with_enable_automatic_back_pagination(true)"));
+        assert!(!source.contains("experimental-"));
     }
 }

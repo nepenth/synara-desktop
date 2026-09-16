@@ -920,6 +920,13 @@ struct MatrixTimelinePinRequest {
     event_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_pinned_events`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPinnedEventsRequest {
+    room_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_poll_vote`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2496,6 +2503,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_unpin", matrix_timeline_unpin)
         .expect("built-in matrix_timeline_unpin must remain in the command census");
     registry
+        .register("matrix_pinned_events", matrix_pinned_events)
+        .expect("built-in matrix_pinned_events must remain in the command census");
+    registry
         .register("matrix_timeline_poll_vote", matrix_timeline_poll_vote)
         .expect("built-in matrix_timeline_poll_vote must remain in the command census");
     registry
@@ -3126,6 +3136,23 @@ fn matrix_timeline_unpin(state: Arc<CoreState>, request: CommandEnvelope) -> Com
     })
 }
 
+fn matrix_pinned_events(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPinnedEventsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-pinned-events-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-pinned-events-no-session")
+        })?;
+        let snapshot = owner
+            .pinned_events_snapshot(&payload.room_id)
+            .await
+            .map_err(pinned_events_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-pinned-events-serialization-failed"))
+    })
+}
+
 fn matrix_timeline_poll_vote(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixTimelinePollVoteRequest = serde_json::from_value(request.payload)
@@ -3266,6 +3293,10 @@ fn matrix_composer_get_reply_draft(
     })
 }
 
+fn pinned_events_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    timeline_action_owner_error(diagnostic_id)
+}
+
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -3281,6 +3312,9 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-pin-room-not-found"
         | "v-timeline-unpin-invalid-event-id"
         | "v-timeline-unpin-room-not-found"
+        | "v-timeline-pinned-room-not-found"
+        | "v-timeline-pinned-cache-unavailable"
+        | "v-timeline-pinned-subscribe-failed"
         | "v-timeline-poll-vote-invalid-event-id"
         | "v-timeline-poll-vote-room-not-found"
         | "v-timeline-call-decline-invalid-event-id"
@@ -6357,6 +6391,7 @@ mod tests {
                 "matrix_notification_dismiss",
                 "matrix_notification_focus_set",
                 "matrix_notification_pending_snapshot",
+                "matrix_pinned_events",
                 "matrix_poll_respond",
                 "matrix_presence_set",
                 "matrix_presence_snapshot",
@@ -10512,6 +10547,27 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-pin-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_pinned_events_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_pinned_events".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org"
+                }),
+            })
+            .await
+            .expect_err("pinned events without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-pinned-events-no-session")
         );
     }
 

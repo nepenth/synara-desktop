@@ -376,6 +376,15 @@ mod tests {
     }
 
     #[test]
+    fn last_message_preview_matches_local_send_queue_states() {
+        let source = include_str!("live.rs");
+        assert!(source.contains("LatestEventValue::LocalIsSending"));
+        assert!(source.contains("LatestEventValue::LocalHasBeenSent"));
+        assert!(source.contains("LatestEventValue::LocalCannotBeSent"));
+        assert!(source.contains("LatestEventValue::Remote("));
+    }
+
+    #[test]
     fn encryption_projection_preserves_unknown_and_errors_fail_closed() {
         assert_eq!(
             project_encryption_status::<()>(Ok(EncryptionState::Encrypted)),

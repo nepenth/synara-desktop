@@ -1,6 +1,6 @@
 //! Desktop bridges for timeline edit/redact/report/pin through `Core::command`.
 
-use synara_core::app::timeline::NativeTimelineActionReadback;
+use synara_core::app::timeline::{NativeTimelineActionReadback, PinnedEventsSnapshot};
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
 use synara_core::Core;
 
@@ -11,6 +11,7 @@ const TIMELINE_REDACT_COMMAND: &str = "matrix_timeline_redact";
 const TIMELINE_REPORT_COMMAND: &str = "matrix_timeline_report";
 const TIMELINE_PIN_COMMAND: &str = "matrix_timeline_pin";
 const TIMELINE_UNPIN_COMMAND: &str = "matrix_timeline_unpin";
+const PINNED_EVENTS_COMMAND: &str = "matrix_pinned_events";
 const TIMELINE_POLL_VOTE_COMMAND: &str = "matrix_timeline_poll_vote";
 const TIMELINE_CALL_DECLINE_COMMAND: &str = "matrix_timeline_call_decline";
 const TIMELINE_FORWARD_TEXT_COMMAND: &str = "matrix_timeline_forward_text";
@@ -108,6 +109,24 @@ pub(crate) async fn timeline_unpin(
     event_id: String,
 ) -> Result<NativeTimelineActionReadback, MatrixAuthCommandError> {
     dispatch_pin(core, TIMELINE_UNPIN_COMMAND, room_id, event_id).await
+}
+
+pub(crate) async fn pinned_events(
+    core: &Core,
+    room_id: String,
+) -> Result<PinnedEventsSnapshot, MatrixAuthCommandError> {
+    let response = core
+        .command(CommandEnvelope {
+            command: PINNED_EVENTS_COMMAND.to_owned(),
+            session_generation: READ_ONLY_SESSION_GENERATION,
+            request_id: None,
+            payload: serde_json::json!({
+                "roomId": room_id,
+            }),
+        })
+        .await
+        .map_err(map_timeline_action_core_error)?;
+    serde_json::from_value(response.payload).map_err(|_| timeline_action_response_error())
 }
 
 async fn dispatch_pin(
@@ -241,6 +260,7 @@ fn map_timeline_action_core_error(error: MatrixIpcError) -> MatrixAuthCommandErr
                 | "v-timeline-report-room-not-found"
                 | "v-timeline-pin-room-not-found"
                 | "v-timeline-unpin-room-not-found"
+                | "v-timeline-pinned-room-not-found"
                 | "v-timeline-poll-vote-room-not-found"
                 | "v-timeline-call-decline-room-not-found"
                 | "v-timeline-forward-source-room-not-found"
