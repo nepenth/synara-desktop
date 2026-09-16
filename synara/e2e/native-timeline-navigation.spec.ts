@@ -516,6 +516,25 @@ test('date rail jumps toward an earlier loaded message', async ({ page }) => {
   const before = await geometry(page);
   await rail.getByRole('button').first().click();
   await expect.poll(async () => (await geometry(page)).top).toBeLessThan(before.top);
+  await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(0);
+});
+
+test('date rail beginning tick jumps via timestamp_to_event then focused open', async ({
+  page,
+}) => {
+  await page.goto(
+    '/e2e/native-timeline-harness/index.html?scenario=live&roomCreated=1600000000000'
+  );
+  await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
+  const rail = page.locator('[data-timeline-date-rail="true"]');
+  await expect(rail).toBeVisible();
+  await expect(page.getByRole('scrollbar', { name: 'Jump to a date in room history' })).toBeVisible();
+  await rail.getByRole('button', { name: 'Jump to Beginning' }).click();
+  await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(1);
+  await expect
+    .poll(() => commandCount(page, 'matrix_timeline_open'))
+    .toBeGreaterThanOrEqual(2);
+  await expect.poll(async () => (await geometry(page)).eventId).toBe('$history-jump');
 });
 
 test('sparse history and missing last-read recovery controls are separately clickable', async ({

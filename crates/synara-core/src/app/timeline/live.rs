@@ -16,6 +16,7 @@ use matrix_sdk::{
     room::{calls::CallError, edit::EditedContent, Receipts},
     ruma::{
         api::client::receipt::create_receipt::v3::ReceiptType,
+        api::client::room::get_event_by_timestamp,
         events::{
             poll::unstable_start::UnstablePollStartEventContent,
             reaction::ReactionEventContent,
@@ -28,7 +29,7 @@ use matrix_sdk::{
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncStateEvent,
             AnySyncTimelineEvent, Mentions, StateEventType,
         },
-        OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
+        MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
     },
     Client, EncryptionState, Room,
 };
@@ -82,14 +83,14 @@ use super::{
     NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, PinnedEventsSnapshot,
-    TimelineMediaRegistry, TimelineMediaSource, TimelinePageState, TimelinePaginationState,
-    TimelineReadState, TimelineRoomActionAuthority, TimelineViewCapabilities,
-    TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit,
-    UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
-    TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineTimestampToEventReadback,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus,
+    PinnedEventsSnapshot, TimelineMediaRegistry, TimelineMediaSource, TimelinePageState,
+    TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
+    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 #[cfg(test)]
@@ -699,6 +700,35 @@ impl NativeTimelineOwner {
             .await
             .event_readback(&self.client, room_id, event_id)
             .await
+    }
+
+    /// Resolve the closest event at or after `timestamp_ms` (SDK 0.18 Forward /
+    /// `since`, matching Jump to Time `'f'`). Does not paginate the open view.
+    pub async fn timestamp_to_event(
+        &self,
+        room_id: &str,
+        timestamp_ms: u64,
+    ) -> Result<NativeTimelineTimestampToEventReadback, &'static str> {
+        let room_id = parse_room_id(room_id)?;
+        self.client
+            .get_room(room_id.as_ref())
+            .ok_or("d0.3-timeline-room-not-found")?;
+        let millis = UInt::try_from(timestamp_ms)
+            .map_err(|_| "p2-timeline-timestamp-to-event-invalid-timestamp")?;
+        let request = get_event_by_timestamp::v1::Request::since(
+            room_id.clone(),
+            MilliSecondsSinceUnixEpoch(millis),
+        );
+        let response = self
+            .client
+            .send(request)
+            .await
+            .map_err(|_| "p2-timeline-timestamp-to-event-failed")?;
+        Ok(NativeTimelineTimestampToEventReadback {
+            room_id: room_id.to_string(),
+            event_id: response.event_id.to_string(),
+            origin_server_ts: response.origin_server_ts.get().into(),
+        })
     }
 
     pub async fn paginate(

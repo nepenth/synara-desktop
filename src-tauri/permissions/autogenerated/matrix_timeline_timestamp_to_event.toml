@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-timeline-timestamp-to-event"
+description = "Enables the matrix_timeline_timestamp_to_event command without any pre-configured scope."
+commands.allow = ["matrix_timeline_timestamp_to_event"]
+
+[[permission]]
+identifier = "deny-matrix-timeline-timestamp-to-event"
+description = "Denies the matrix_timeline_timestamp_to_event command without any pre-configured scope."
+commands.deny = ["matrix_timeline_timestamp_to_event"]

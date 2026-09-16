@@ -123,11 +123,18 @@ import {
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
 import { NativeTimelineHistoryStatus } from './NativeTimelineHistoryStatus';
 import { NativeTimelineDateRail } from './NativeTimelineDateRail';
+import { timestampToEventWithNativeOwner } from './nativeTimelineTimestampToEvent';
 import {
   activeTimelineHistoryMarkIndex,
+  collectTimedTimelineRows,
   collectTimelineHistoryMarks,
   formatTimelineHistoryMarkLabel,
+  isTimestampInLoadedWindow,
+  rowIndexForTimestamp,
+  rowTimestampMs,
   shouldShowTimelineDateRail,
+  timelineRailAxis,
+  withRoomBeginningMark,
 } from '../../utils/timelineDateMarks';
 import {
   clearTimelinePaginationError,
@@ -150,6 +157,8 @@ type NativeTimelinePresenterProps = {
   threadRootEventId?: string;
   onOpenThreadRoute?: (rootEventId: string) => void;
   onCloseThreadRoute?: () => void;
+  /** `m.room.create` origin timestamp; enables a full-room date-rail axis. */
+  roomCreatedTs?: number;
 };
 
 type NativeTimelineViewport = {
@@ -2278,6 +2287,7 @@ export function NativeTimelinePresenter({
   threadRootEventId,
   onOpenThreadRoute,
   onCloseThreadRoute,
+  roomCreatedTs,
 }: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
   const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
@@ -2364,6 +2374,7 @@ export function NativeTimelinePresenter({
   )?.encryptionStatus;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
+  const dateJumpInFlightRef = useRef(false);
   const [paginationInFlight, setPaginationInFlight] = useState<'backwards' | 'forwards'>();
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [atHistoryEdge, setAtHistoryEdge] = useState({ backward: false, forward: false });
@@ -2373,6 +2384,7 @@ export function NativeTimelinePresenter({
     setPaginationErrors({});
     setAtHistoryEdge({ backward: false, forward: false });
     setFilePreview(undefined);
+    dateJumpInFlightRef.current = false;
   }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
@@ -2511,19 +2523,100 @@ export function NativeTimelinePresenter({
     measureElement,
     overscan: 8,
   });
-  const historyMarks = useMemo(() => collectTimelineHistoryMarks(rows), [rows]);
+  const timedRows = useMemo(() => collectTimedTimelineRows(rows), [rows]);
+  const railAxis = useMemo(
+    () => timelineRailAxis(timedRows, roomCreatedTs, Date.now()),
+    [roomCreatedTs, timedRows]
+  );
+  const historyMarks = useMemo(
+    () => withRoomBeginningMark(collectTimelineHistoryMarks(rows), railAxis),
+    [railAxis, rows]
+  );
+  const railContextRef = useRef({
+    axis: railAxis,
+    timed: timedRows,
+    backwardAvailable: false,
+    forwardAvailable: false,
+  });
+  railContextRef.current = {
+    axis: railAxis,
+    timed: timedRows,
+    backwardAvailable: readyState?.snapshot.pagination.backward === 'available',
+    forwardAvailable: readyState?.snapshot.pagination.forward === 'available',
+  };
   const getVisibleStartIndex = useCallback(
     () => virtualizer.getVirtualItems()[0]?.index ?? 0,
     [virtualizer]
   );
-  const jumpToHistoryIndex = useCallback(
-    (index: number) => {
+  const getVisibleTimestamp = useCallback(() => {
+    const index = virtualizer.getVirtualItems()[0]?.index ?? 0;
+    const row = rowsRef.current[index];
+    return (
+      (row ? rowTimestampMs(row) : undefined) ??
+      railContextRef.current.axis?.endMs ??
+      Date.now()
+    );
+  }, [virtualizer]);
+  const scrollToHistoryTimestamp = useCallback(
+    (timestampMs: number) => {
       followingLiveRef.current = false;
       userInitiatedScrollRef.current = true;
       programmaticScrollUntilRef.current = 0;
-      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+      virtualizer.scrollToIndex(rowIndexForTimestamp(railContextRef.current.timed, timestampMs), {
+        align: 'start',
+        behavior: 'auto',
+      });
     },
     [virtualizer]
+  );
+  const previewHistoryTimestamp = useCallback(
+    (timestampMs: number) => {
+      const { axis, backwardAvailable, forwardAvailable } = railContextRef.current;
+      if (!axis) return;
+      if (isTimestampInLoadedWindow(timestampMs, axis, { backwardAvailable, forwardAvailable })) {
+        scrollToHistoryTimestamp(timestampMs);
+      }
+    },
+    [scrollToHistoryTimestamp]
+  );
+  const commitHistoryTimestamp = useCallback(
+    (timestampMs: number) => {
+      const { axis, backwardAvailable, forwardAvailable } = railContextRef.current;
+      if (!axis) return;
+      if (isTimestampInLoadedWindow(timestampMs, axis, { backwardAvailable, forwardAvailable })) {
+        scrollToHistoryTimestamp(timestampMs);
+        return;
+      }
+      if (dateJumpInFlightRef.current) return;
+      dateJumpInFlightRef.current = true;
+      setActionError(undefined);
+      const navigation = roomId;
+      void timestampToEventWithNativeOwner(roomId, timestampMs)
+        .then((found) => {
+          if (mountedRoomRef.current !== navigation) return;
+          const index = findAnchorIndex(rowsRef.current, {
+            itemId: found.eventId,
+            eventId: found.eventId,
+          });
+          if (index >= 0) {
+            smoothScrollActiveRef.current = true;
+            virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+            return;
+          }
+          setFocusEventId(found.eventId);
+        })
+        .catch((error) => {
+          if (mountedRoomRef.current === navigation) {
+            setActionError(
+              error instanceof Error ? error.message : 'Could not jump to that time.'
+            );
+          }
+        })
+        .finally(() => {
+          dateJumpInFlightRef.current = false;
+        });
+    },
+    [roomId, virtualizer]
   );
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
@@ -3451,14 +3544,15 @@ export function NativeTimelinePresenter({
           onRetry={() => requestPagination('forwards')}
           onLoadMore={() => requestPagination('forwards')}
         />
-        {showDateRail ? (
+        {showDateRail && railAxis ? (
           <NativeTimelineDateRail
             marks={historyMarks}
-            rowCount={rows.length}
+            axis={railAxis}
             hour24Clock={hour24Clock}
             scrollRef={scrollRef}
-            getVisibleStartIndex={getVisibleStartIndex}
-            onJumpToIndex={jumpToHistoryIndex}
+            getVisibleTimestamp={getVisibleTimestamp}
+            onPreviewTimestamp={previewHistoryTimestamp}
+            onCommitTimestamp={commitHistoryTimestamp}
           />
         ) : null}
         {(showJumpToLastRead || showJumpToLatest) && (

@@ -75,6 +75,8 @@ export function RoomView({
   const mx = useMatrixClient();
 
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+  const createEvent = useStateEvent(room, StateEvent.RoomCreate);
+  const roomCreatedTs = createEvent?.getTs();
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
@@ -112,6 +114,7 @@ export function RoomView({
           threadRootEventId={threadRootEventId}
           onOpenThreadRoute={(rootEventId) => navigateThread(roomId, rootEventId)}
           onCloseThreadRoute={() => navigateRoom(roomId)}
+          roomCreatedTs={roomCreatedTs}
         />
         <RoomViewTyping room={room} />
       </Box>
