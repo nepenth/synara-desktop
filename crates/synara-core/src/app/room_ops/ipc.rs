@@ -25,6 +25,10 @@ pub struct MatrixRoomCreateRequest {
     pub creation_content: Option<MatrixRoomCreateContent>,
     #[serde(default)]
     pub encryption: bool,
+    /// Create-time MSC4362 opt-in. Default false on the wire. Core ignores a
+    /// true value when the account setting is off or the room is a call room.
+    #[serde(default)]
+    pub encrypt_state_events: bool,
     pub join_rule: Option<String>,
     #[serde(default)]
     pub knock: bool,

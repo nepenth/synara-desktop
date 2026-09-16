@@ -15,6 +15,7 @@ export type NativeRoomCreateRequest = {
     additionalCreators?: string[];
   };
   encryption?: boolean;
+  encryptStateEvents?: boolean;
   joinRule?: 'invite' | 'knock' | 'restricted' | 'knock_restricted' | 'public';
   knock?: boolean;
   parentRoomId?: string;

@@ -56,6 +56,8 @@ export type RoomSummary = {
   isEncrypted: boolean;
   /** Authoritative Core projection. Security decisions must not use `isEncrypted`. */
   encryptionStatus: RoomEncryptionStatus;
+  /** Optional MSC4362 chrome. Must stay false unless `encryptionStatus` is encrypted. */
+  stateEncrypted?: boolean;
   joinRule?: string;
   unreadCount: number;
   highlightCount: number;
@@ -89,6 +91,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const isFavorite = optBoolean(value, 'isFavorite') ?? false;
   const isEncrypted = reqBoolean(value, 'isEncrypted');
   const encryptionStatus = value.encryptionStatus;
+  const stateEncryptedFlag = optBoolean(value, 'stateEncrypted');
   const joinRule = optString(value, 'joinRule');
   const unreadCount = reqNumber(value, 'unreadCount');
   const highlightCount = reqNumber(value, 'highlightCount');
@@ -114,6 +117,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     lastMessagePreview === null ||
     lastMessageIsAgentApproval === null ||
     tombstoneSuccessorRoomId === null ||
+    stateEncryptedFlag === null ||
     !isMembership(value.membership)
   ) {
     return null;
@@ -121,6 +125,8 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   // Keep the legacy display boolean internally consistent, but never infer the
   // authoritative tri-state from it. Unknown deliberately remains fail-closed.
   if (isEncrypted !== (encryptionStatus === 'encrypted')) return null;
+  const stateEncrypted = stateEncryptedFlag ?? false;
+  if (stateEncrypted && encryptionStatus !== 'encrypted') return null;
 
   let notificationMode: NotificationMode | undefined;
   if (value.notificationMode !== undefined) {
@@ -151,6 +157,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     isFavorite: isFavorite ?? false,
     isEncrypted,
     encryptionStatus,
+    stateEncrypted,
     joinRule,
     unreadCount,
     highlightCount,

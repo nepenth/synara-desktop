@@ -13,6 +13,9 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { createRoomWithNativeOwner } from '../../components/nativeRoomCreateOwner';
 import { useAlive } from '../../hooks/useAlive';
 import { getDirectRoomPath } from '../../pages/pathUtils';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom, getSharedSettings } from '../../state/settings';
+import { pushEncryptedStateEventsSetting } from '../settings/encryptedStateEvents';
 
 type CreateChatProps = {
   defaultUserId?: string;
@@ -22,10 +25,17 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
   const navigate = useNavigate();
 
   const [encryption, setEncryption] = useState(true);
+  const [encryptStateEvents, setEncryptStateEvents] = useState(true);
+  const [encryptedStateEventsSetting] = useSetting(settingsAtom, 'encryptedStateEvents');
   const [invalidUserId, setInvalidUserId] = useState(false);
 
-  const [createState, create] = useAsyncCallback<string, Error | MatrixError, [string, boolean]>(
-    useCallback(async (userId, encrypted) => {
+  const [createState, create] = useAsyncCallback<
+    string,
+    Error | MatrixError,
+    [string, boolean, boolean]
+  >(
+    useCallback(async (userId, encrypted, encryptState) => {
+      await pushEncryptedStateEventsSetting(getSharedSettings().encryptedStateEvents);
       const roomId = await createRoomWithNativeOwner(
         {
           isDirect: true,
@@ -33,6 +43,7 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
           visibility: 'private',
           preset: 'trusted_private_chat',
           encryption: encrypted,
+          encryptStateEvents: encrypted && encryptState,
         },
         isSynaraDesktop(),
         (command, args) => invokeDesktopWithAvailability(command, args)
@@ -61,7 +72,7 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
       return;
     }
 
-    create(userId, encryption).then((roomId) => {
+    create(userId, encryption, encryptedStateEventsSetting && encryptStateEvents).then((roomId) => {
       if (alive()) {
         userIdInput.value = '';
         navigate(getDirectRoomPath(roomId));
@@ -114,6 +125,20 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
               />
             }
           />
+          {encryptedStateEventsSetting && encryption && (
+            <SettingTile
+              title="Encrypt state events"
+              description="Experimental MSC4362. Older clients will not see this chat's name or avatar. Cannot be turned off later."
+              after={
+                <Switch
+                  variant="Primary"
+                  value={encryptStateEvents}
+                  onChange={setEncryptStateEvents}
+                  disabled={disabled}
+                />
+              }
+            />
+          )}
         </SequenceCard>
       </Box>
       {error && (

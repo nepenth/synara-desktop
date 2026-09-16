@@ -8,6 +8,7 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
+import { pushEncryptedStateEventsSetting } from '../encryptedStateEvents';
 import {
   AccountDataEditor,
   AccountDataSubmitCallback,
@@ -71,8 +72,20 @@ type DeveloperToolsProps = {
 export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   const mx = useMatrixClient();
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
+  const [encryptedStateEvents, setEncryptedStateEventsSetting] = useSetting(
+    settingsAtom,
+    'encryptedStateEvents'
+  );
   const [expand, setExpend] = useState(false);
   const [accountDataType, setAccountDataType] = useState<string | null>();
+
+  useEffect(() => {
+    void pushEncryptedStateEventsSetting(encryptedStateEvents);
+  }, [encryptedStateEvents]);
+
+  const setEncryptedStateEvents = (value: boolean) => {
+    setEncryptedStateEventsSetting(value);
+  };
 
   const submitAccountData: AccountDataSubmitCallback = useCallback(
     async (type, content) => {
@@ -135,6 +148,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                         variant="Primary"
                         value={developerTools}
                         onChange={setDeveloperTools}
+                      />
+                    }
+                  />
+                  <SettingTile
+                    title="Encrypted state events (experimental)"
+                    description="MSC4362. Older clients will not see room name, topic, or avatar. This cannot be turned off for rooms that already opted in; this device will still decrypt those rooms."
+                    after={
+                      <Switch
+                        variant="Primary"
+                        value={encryptedStateEvents}
+                        onChange={setEncryptedStateEvents}
                       />
                     }
                   />

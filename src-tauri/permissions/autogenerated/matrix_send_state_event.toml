@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-send-state-event"
+description = "Enables the matrix_send_state_event command without any pre-configured scope."
+commands.allow = ["matrix_send_state_event"]
+
+[[permission]]
+identifier = "deny-matrix-send-state-event"
+description = "Denies the matrix_send_state_event command without any pre-configured scope."
+commands.deny = ["matrix_send_state_event"]

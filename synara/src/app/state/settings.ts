@@ -59,6 +59,8 @@ export interface SharedSettings {
   dateFormatString: string;
 
   developerTools: boolean;
+  /** MSC4362 create/opt-in only. Already-flagged rooms still decrypt. Default on. */
+  encryptedStateEvents: boolean;
 }
 
 export interface DesktopPlatformSettings {
@@ -127,6 +129,7 @@ export const defaultSharedSettings: SharedSettings = {
   dateFormatString: 'D MMM YYYY',
 
   developerTools: false,
+  encryptedStateEvents: true,
 };
 
 export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {

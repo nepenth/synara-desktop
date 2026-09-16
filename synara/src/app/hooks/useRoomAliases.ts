@@ -7,6 +7,7 @@ import { useAlive } from './useAlive';
 import { useStateEvent } from './useStateEvent';
 import { StateEvent } from '../../types/matrix/room';
 import { getStateEvent } from '../utils/room';
+import { sendLeftoverStateEvent } from '../components/nativeStateEventOwner';
 
 type RoomCanonicalAliasEventContent = {
   alias?: string;
@@ -63,7 +64,13 @@ export const useSetMainAlias = (
         alt_aliases: altAliases,
       };
 
-      await mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent);
+      await sendLeftoverStateEvent(
+        room.roomId,
+        StateEvent.RoomCanonicalAlias,
+        newContent as Record<string, unknown>,
+        '',
+        () => mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
+      );
     },
     [mx, room]
   );
@@ -97,7 +104,13 @@ export const usePublishUnpublishAliases = (
         alt_aliases: altAliases,
       };
 
-      await mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent);
+      await sendLeftoverStateEvent(
+        room.roomId,
+        StateEvent.RoomCanonicalAlias,
+        newContent as Record<string, unknown>,
+        '',
+        () => mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
+      );
     },
     [mx, room]
   );
@@ -121,7 +134,13 @@ export const usePublishUnpublishAliases = (
         alt_aliases: altAliases,
       };
 
-      await mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent);
+      await sendLeftoverStateEvent(
+        room.roomId,
+        StateEvent.RoomCanonicalAlias,
+        newContent as Record<string, unknown>,
+        '',
+        () => mx.sendStateEvent(room.roomId, StateEvent.RoomCanonicalAlias as any, newContent)
+      );
     },
     [mx, room]
   );

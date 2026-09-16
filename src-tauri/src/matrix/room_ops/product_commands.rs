@@ -27,6 +27,20 @@ pub async fn matrix_room_create(
     crate::bridge::room_create::room_create(core.inner().as_ref(), request).await
 }
 
+/// Account-level MSC4362 create/opt-in gate. Does not disable decrypt in
+/// rooms that already have the flag.
+#[tauri::command]
+pub async fn matrix_set_encrypted_state_events_setting(
+    core: State<'_, Arc<synara_core::Core>>,
+    enabled: bool,
+) -> Result<serde_json::Value, MatrixAuthCommandError> {
+    crate::bridge::room_profile_writes::set_encrypted_state_events_setting(
+        core.inner().as_ref(),
+        enabled,
+    )
+    .await
+}
+
 /// V-ROOMS room membership: leave the selected room through the native SDK.
 /// Fail-closed: the desktop product must not use `mx.leave` when a native
 /// Matrix session owns the room lifecycle.

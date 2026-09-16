@@ -38,7 +38,11 @@ use crate::app::members::{
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
     ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
-use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
+use crate::app::room_ops::{
+    build_room_create_request, encrypted_state_events_setting_enabled,
+    power_level_tags_readback_source, room_encryption_enable_write, MatrixRoomCreateRequest,
+    PowerLevelTagsReadbackSource, RoomEncryptionEnableWrite,
+};
 use crate::app::spaces::{
     remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
     snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
@@ -432,6 +436,62 @@ impl NativeRoomJoinRuleOwner {
         Ok(MatrixProfileWriteResult { status: "ok" })
     }
 
+    /// Generic leftover state write. SDK `send_state_event_raw` encrypts
+    /// eligible types when the room is `StateEncrypted`.
+    pub async fn send_state_event(
+        &self,
+        room_id: &str,
+        event_type: &str,
+        state_key: &str,
+        content: serde_json::Value,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let event_type = parse_state_event_type(event_type)?;
+        let state_key = parse_state_event_key(state_key)?;
+        validate_state_event_content(&content)?;
+        let room = self.profile_room(room_id)?;
+        room.send_state_event_raw(event_type, state_key, content)
+            .await
+            .map_err(|_| "v-rooms-state-event-send-failed")?;
+        Ok(MatrixProfileWriteResult { status: "ok" })
+    }
+
+    /// Enable message encryption and/or opt an already-E2EE room into
+    /// MSC4362. Setting-off and call rooms never write the flag. Already
+    /// state-encrypted rooms are a no-op. `enable_encryption_with_state_event_encryption`
+    /// is not used for upgrades (it no-ops when `is_encrypted()`).
+    pub async fn enable_room_encrypted_state(
+        &self,
+        room_id: &str,
+        encrypt_state_events: bool,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let room = self.profile_room(room_id)?;
+        let current = room
+            .latest_encryption_state()
+            .await
+            .map_err(|_| "v-rooms-encryption-state-unavailable")?;
+        match room_encryption_enable_write(
+            current.is_encrypted(),
+            current.is_state_encrypted(),
+            encrypt_state_events,
+            encrypted_state_events_setting_enabled(),
+            room.is_call(),
+        ) {
+            RoomEncryptionEnableWrite::NoOp => Ok(MatrixProfileWriteResult { status: "ok" }),
+            RoomEncryptionEnableWrite::Send(content) => {
+                room.send_state_event_raw("m.room.encryption", "", content)
+                    .await
+                    .map_err(|_| "v-rooms-encryption-enable-failed")?;
+                Ok(MatrixProfileWriteResult { status: "ok" })
+            }
+        }
+    }
+
     pub async fn leave(&self, room_id: &str) -> Result<(), &'static str> {
         if self.retired.load(Ordering::Acquire) {
             return Err("v-send.r-room-profile-join-rule-requires-session");
@@ -570,18 +630,7 @@ impl NativeRoomJoinRuleOwner {
         room.send_state_event_raw(event_type, "", content.clone())
             .await
             .map_err(|_| "v-rooms-power-levels-send-failed")?;
-        let readback = self
-            .client
-            .send(get_state_event_for_key::v3::Request::new(
-                room_id.clone(),
-                StateEventType::from(event_type),
-                String::new(),
-            ))
-            .await
-            .map_err(|_| "v-rooms-power-levels-readback-failed")?
-            .into_content()
-            .deserialize_as_unchecked::<serde_json::Value>()
-            .map_err(|_| "v-rooms-power-levels-readback-malformed")?;
+        let readback = read_power_level_writeback(&room, event_type).await?;
         if self.retired.load(Ordering::Acquire) {
             return Err("v-rooms-power-levels-stale-session-generation");
         }
@@ -953,9 +1002,9 @@ impl NativeRoomJoinRuleOwner {
         if room_version.rules().is_none() {
             return Err("v-send.r-room-profile-directory-visibility-permission-state-unavailable");
         }
-        let power_levels = room.power_levels().await.map_err(|_| {
-            "v-send.r-room-profile-directory-visibility-permission-state-unavailable"
-        })?;
+        let power_levels = room.power_levels().await.map_err(
+            |_| "v-send.r-room-profile-directory-visibility-permission-state-unavailable",
+        )?;
         let user_id = self
             .client
             .user_id()
@@ -1025,6 +1074,60 @@ async fn read_room_state_event(
             serde_json::to_value(event).map_err(|_| "v-rooms-members-read-state-malformed")
         })
         .transpose()
+}
+
+async fn read_power_level_writeback(
+    room: &Room,
+    event_type: &str,
+) -> Result<serde_json::Value, &'static str> {
+    let use_store = event_type == ROOM_POWER_LEVEL_TAGS_EVENT_TYPE
+        && power_level_tags_readback_source(room.encryption_state().is_state_encrypted())
+            == PowerLevelTagsReadbackSource::Store;
+    if use_store {
+        return read_room_state_content(room, event_type)
+            .await?
+            .ok_or("v-rooms-power-levels-readback-failed");
+    }
+    room.client()
+        .send(get_state_event_for_key::v3::Request::new(
+            room.room_id().to_owned(),
+            StateEventType::from(event_type),
+            String::new(),
+        ))
+        .await
+        .map_err(|_| "v-rooms-power-levels-readback-failed")?
+        .into_content()
+        .deserialize_as_unchecked::<serde_json::Value>()
+        .map_err(|_| "v-rooms-power-levels-readback-malformed")
+}
+
+fn parse_state_event_type(event_type: &str) -> Result<&str, &'static str> {
+    let event_type = event_type.trim();
+    if event_type.is_empty()
+        || event_type.len() > 255
+        || event_type.chars().any(char::is_whitespace)
+    {
+        return Err("v-rooms-state-event-invalid-type");
+    }
+    Ok(event_type)
+}
+
+fn parse_state_event_key(state_key: &str) -> Result<&str, &'static str> {
+    if state_key.len() > 255 || state_key.chars().any(|ch| ch == '\n' || ch == '\r') {
+        return Err("v-rooms-state-event-invalid-key");
+    }
+    Ok(state_key)
+}
+
+fn validate_state_event_content(content: &serde_json::Value) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-rooms-state-event-invalid-content");
+    }
+    let bytes = serde_json::to_vec(content).map_err(|_| "v-rooms-state-event-invalid-content")?;
+    if bytes.len() > crate::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err("v-rooms-state-event-invalid-content");
+    }
+    Ok(())
 }
 
 fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {

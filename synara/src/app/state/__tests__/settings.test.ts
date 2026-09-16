@@ -30,6 +30,15 @@ const createMemoryStorage = (initialValues: Record<string, string> = {}): Memory
   };
 };
 
+test('encrypted state events setting defaults on and is shared', () => {
+  const store = createLocalStorageSettingsStore(createMemoryStorage());
+  assert.equal(defaultSharedSettings.encryptedStateEvents, true);
+  assert.equal(defaultSettings.encryptedStateEvents, true);
+  assert.equal(store.getSharedSettings().encryptedStateEvents, true);
+  store.setSettings({ ...defaultSettings, encryptedStateEvents: false });
+  assert.equal(store.getSharedSettings().encryptedStateEvents, false);
+});
+
 test('modernization opt-in settings default off', () => {
   const store = createLocalStorageSettingsStore(createMemoryStorage());
 

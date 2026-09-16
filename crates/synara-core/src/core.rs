@@ -47,7 +47,7 @@ use crate::app::room_keys::NativeRoomKeyTransferStatus;
 use crate::app::room_list::{
     snapshot_from_sync_owner, NativeInviteSnapshot, NativeRoomListSnapshot,
 };
-use crate::app::room_ops::MatrixRoomCreateRequest;
+use crate::app::room_ops::{MatrixRoomCreateRequest, set_encrypted_state_events_setting_enabled};
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
@@ -1209,6 +1209,33 @@ struct MatrixSetRoomAvatarRequest {
     mxc: String,
 }
 
+/// Exact React/Tauri envelope payload for leftover native state writes.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSendStateEventRequest {
+    room_id: String,
+    event_type: String,
+    #[serde(default)]
+    state_key: String,
+    content: serde_json::Value,
+}
+
+/// Exact React/Tauri envelope payload for room encryption enable / MSC4362 opt-in.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixEnableRoomEncryptedStateRequest {
+    room_id: String,
+    #[serde(default)]
+    encrypt_state_events: bool,
+}
+
+/// Exact React/Tauri envelope payload for the create/opt-in account setting.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetEncryptedStateEventsSettingRequest {
+    enabled: bool,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_own_display_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2095,6 +2122,12 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_edit_message", matrix_edit_message)
         .expect("built-in matrix_edit_message must remain in the command census");
     registry
+        .register(
+            "matrix_enable_room_encrypted_state",
+            matrix_enable_room_encrypted_state,
+        )
+        .expect("built-in matrix_enable_room_encrypted_state must remain in the command census");
+    registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
     registry
@@ -2235,6 +2268,17 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_set_room_avatar", matrix_set_room_avatar)
         .expect("built-in matrix_set_room_avatar must remain in the command census");
+    registry
+        .register("matrix_send_state_event", matrix_send_state_event)
+        .expect("built-in matrix_send_state_event must remain in the command census");
+    registry
+        .register(
+            "matrix_set_encrypted_state_events_setting",
+            matrix_set_encrypted_state_events_setting,
+        )
+        .expect(
+            "built-in matrix_set_encrypted_state_events_setting must remain in the command census",
+        );
     registry
         .register(
             "matrix_get_room_directory_visibility",
@@ -4544,6 +4588,63 @@ fn matrix_set_room_avatar(state: Arc<CoreState>, request: CommandEnvelope) -> Co
     })
 }
 
+fn matrix_send_state_event(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSendStateEventRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-send-state-event-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-send-state-event-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .send_state_event(
+                &payload.room_id,
+                &payload.event_type,
+                &payload.state_key,
+                payload.content,
+            )
+            .await
+            .map_err(room_state_event_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-send-state-event-serialization-failed"))
+    })
+}
+
+fn matrix_enable_room_encrypted_state(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixEnableRoomEncryptedStateRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-enable-room-encrypted-state-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-enable-room-encrypted-state-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .enable_room_encrypted_state(&payload.room_id, payload.encrypt_state_events)
+            .await
+            .map_err(room_state_event_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-enable-room-encrypted-state-serialization-failed"))
+    })
+}
+
+fn matrix_set_encrypted_state_events_setting(
+    _state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetEncryptedStateEventsSettingRequest =
+            serde_json::from_value(request.payload).map_err(|_| {
+                core_state_error("p2-set-encrypted-state-events-setting-invalid-payload")
+            })?;
+        set_encrypted_state_events_setting_enabled(payload.enabled);
+        Ok(serde_json::json!({ "status": "ok", "enabled": payload.enabled }))
+    })
+}
+
 fn matrix_get_room_directory_visibility(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -4618,6 +4719,19 @@ fn room_profile_write_owner_error(diagnostic_id: &'static str) -> MatrixIpcError
         | "v-send.r-room-profile-name-too-long"
         | "v-send.r-room-profile-topic-too-long"
         | "v-send.r-avatar-invalid-mxc"
+        | "v-send.r-room-profile-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn room_state_event_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms-state-event-invalid-type"
+        | "v-rooms-state-event-invalid-key"
+        | "v-rooms-state-event-invalid-content"
+        | "d0.4-send-invalid-room-id"
         | "v-send.r-room-profile-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
@@ -6327,6 +6441,7 @@ mod tests {
                 "matrix_device_rename",
                 "matrix_device_snapshot",
                 "matrix_edit_message",
+                "matrix_enable_room_encrypted_state",
                 "matrix_get_global_image_packs",
                 "matrix_get_own_profile",
                 "matrix_get_room_directory_visibility",
@@ -6404,8 +6519,10 @@ mod tests {
                 "matrix_room_unban",
                 "matrix_secret_storage_status",
                 "matrix_send_poll",
+                "matrix_send_state_event",
                 "matrix_send_text",
                 "matrix_session_snapshot",
+                "matrix_set_encrypted_state_events_setting",
                 "matrix_set_global_image_packs",
                 "matrix_set_own_avatar",
                 "matrix_set_own_display_name",
@@ -8561,6 +8678,80 @@ mod tests {
             error.diagnostic_id.as_deref(),
             Some("p2-set-room-name-no-session")
         );
+    }
+
+    #[tokio::test]
+    async fn matrix_send_state_event_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_send_state_event".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventType":"m.room.canonical_alias",
+                    "stateKey":"",
+                    "content":{"alias":"#r:example.org"}
+                }),
+            })
+            .await
+            .expect_err("send state event without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-send-state-event-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_enable_room_encrypted_state_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_enable_room_encrypted_state".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "encryptStateEvents":true
+                }),
+            })
+            .await
+            .expect_err("enable encrypted state without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-enable-room-encrypted-state-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_encrypted_state_events_setting_does_not_need_a_session() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let payload = core
+            .command(CommandEnvelope {
+                command: "matrix_set_encrypted_state_events_setting".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "enabled": false }),
+            })
+            .await
+            .expect("setting command is session-free")
+            .payload;
+        assert_eq!(payload["status"], "ok");
+        assert_eq!(payload["enabled"], false);
+        assert!(!crate::app::room_ops::encrypted_state_events_setting_enabled());
+        let _ = core
+            .command(CommandEnvelope {
+                command: "matrix_set_encrypted_state_events_setting".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "enabled": true }),
+            })
+            .await
+            .expect("restore default-on");
+        assert!(crate::app::room_ops::encrypted_state_events_setting_enabled());
     }
 
     #[tokio::test]

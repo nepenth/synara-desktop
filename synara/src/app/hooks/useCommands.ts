@@ -28,6 +28,7 @@ import {
   kickUserWithNativeOwner,
   unbanUserWithNativeOwner,
 } from '../components/nativeRoomModerationOwner';
+import { sendLeftoverStateEvent } from '../components/nativeStateEventOwner';
 
 type ServerMemberReading = MemberReading & { membership: string };
 
@@ -630,7 +631,13 @@ export const useCommands = (
           aclContent.allow?.sort();
           aclContent.deny?.sort();
 
-          await c.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent);
+          await sendLeftoverStateEvent(
+            room.roomId,
+            StateEvent.RoomServerAcl,
+            aclContent as Record<string, unknown>,
+            '',
+            () => c.sendStateEvent(room.roomId, StateEvent.RoomServerAcl as any, aclContent)
+          );
         },
       },
       [Command.Poll]: {

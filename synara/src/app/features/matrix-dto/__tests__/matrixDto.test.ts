@@ -213,6 +213,22 @@ test('room summary lastMessageIsAgentApproval defaults false and accepts true', 
   assert.equal(parseRoomSummary({ ...valid, lastMessageIsAgentApproval: 'yes' }), null);
 });
 
+test('room summary optional stateEncrypted must not break isEncrypted consistency', () => {
+  const valid = loadFixture('valid_room_summary.json') as Record<string, unknown>;
+  assert.equal(parseRoomSummary(valid)?.stateEncrypted, false);
+  assert.equal(parseRoomSummary({ ...valid, stateEncrypted: true })?.stateEncrypted, true);
+  assert.equal(
+    parseRoomSummary({
+      ...valid,
+      isEncrypted: false,
+      encryptionStatus: 'not_encrypted',
+      stateEncrypted: true,
+    }),
+    null
+  );
+  assert.equal(parseRoomSummary({ ...valid, stateEncrypted: 'yes' }), null);
+});
+
 test('room summary rejects invalid membership', () => {
   const bad = {
     ...(loadFixture('valid_room_summary.json') as object),

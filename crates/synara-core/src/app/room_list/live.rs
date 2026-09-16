@@ -191,7 +191,11 @@ async fn project_room(room: &Room) -> RoomSummary {
     );
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
     // `notable_tags` derived from the room's m.tag account data.
-    let encryption_status = project_encryption_status(room.latest_encryption_state().await);
+    let latest_encryption = room.latest_encryption_state().await;
+    let state_encrypted = latest_encryption
+        .as_ref()
+        .is_ok_and(|state| state.is_state_encrypted());
+    let encryption_status = project_encryption_status(latest_encryption);
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
@@ -205,6 +209,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         is_low_priority: room.is_low_priority(),
         folder_id: None,
         encryption_status,
+        state_encrypted,
         join_rule: None,
         unread_count: bounded_count(unread.unread_count),
         highlight_count: bounded_count(mention_count),
@@ -393,6 +398,13 @@ mod tests {
             project_encryption_status::<()>(Err(())),
             RoomEncryptionStatus::Unknown
         );
+        assert_eq!(
+            project_encryption_status::<()>(Ok(EncryptionState::StateEncrypted)),
+            RoomEncryptionStatus::Encrypted
+        );
+        assert!(EncryptionState::StateEncrypted.is_encrypted());
+        assert!(EncryptionState::StateEncrypted.is_state_encrypted());
+        assert!(!EncryptionState::Encrypted.is_state_encrypted());
     }
 
     #[test]

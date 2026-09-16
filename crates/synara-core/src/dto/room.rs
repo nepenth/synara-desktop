@@ -105,6 +105,9 @@ pub struct RoomSummary {
     /// Optional product folder / section label (not a Matrix space id).
     pub folder_id: Option<String>,
     pub encryption_status: RoomEncryptionStatus,
+    /// True when the room is MSC4362 `StateEncrypted`. The lock still uses
+    /// [`RoomEncryptionStatus::Encrypted`]; this flag is optional chrome.
+    pub state_encrypted: bool,
     /// Stable join-rule string (e.g. `public`, `invite`); not an SDK enum object.
     pub join_rule: Option<String>,
     pub unread_count: u32,
@@ -145,6 +148,8 @@ struct RoomSummarySerialize<'a> {
     /// authoritative tri-state so Core can never emit contradictory fields.
     is_encrypted: bool,
     encryption_status: RoomEncryptionStatus,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    state_encrypted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     join_rule: &'a Option<String>,
     unread_count: u32,
@@ -182,6 +187,7 @@ impl Serialize for RoomSummary {
             folder_id: &self.folder_id,
             is_encrypted: self.encryption_status.is_encrypted(),
             encryption_status: self.encryption_status,
+            state_encrypted: self.state_encrypted,
             join_rule: &self.join_rule,
             unread_count: self.unread_count,
             highlight_count: self.highlight_count,
@@ -222,6 +228,8 @@ struct RoomSummaryWire {
     is_encrypted: bool,
     encryption_status: RoomEncryptionStatus,
     #[serde(default)]
+    state_encrypted: bool,
+    #[serde(default)]
     join_rule: Option<String>,
     unread_count: u32,
     highlight_count: u32,
@@ -251,6 +259,11 @@ impl<'de> Deserialize<'de> for RoomSummary {
                 "room encryption fields are inconsistent",
             ));
         }
+        if wire.state_encrypted && !wire.encryption_status.is_encrypted() {
+            return Err(serde::de::Error::custom(
+                "stateEncrypted requires encryptionStatus encrypted",
+            ));
+        }
         Ok(Self {
             room_id: wire.room_id,
             name: wire.name,
@@ -264,6 +277,7 @@ impl<'de> Deserialize<'de> for RoomSummary {
             is_low_priority: wire.is_low_priority,
             folder_id: wire.folder_id,
             encryption_status: wire.encryption_status,
+            state_encrypted: wire.state_encrypted,
             join_rule: wire.join_rule,
             unread_count: wire.unread_count,
             highlight_count: wire.highlight_count,
