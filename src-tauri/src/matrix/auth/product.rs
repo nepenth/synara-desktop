@@ -81,6 +81,7 @@ use crate::matrix::lifecycle::{
 };
 use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
+use crate::matrix::widgets::NativeWidgetOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -265,6 +266,7 @@ struct ManagedMatrixSession {
     presence: Arc<NativePresenceOwner>,
     rtc_transports: Arc<NativeRtcTransportsOwner>,
     user_status: Arc<NativeUserStatusOwner>,
+    widgets: Arc<NativeWidgetOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
     _own_profile: NativeOwnProfileOwner,
     _media_retention: NativeMediaRetentionOwner,
@@ -1007,6 +1009,8 @@ mod user_profile;
 mod user_status;
 #[path = "../verification/product_commands.rs"]
 mod verification;
+#[path = "../widgets/product_commands.rs"]
+mod widgets;
 pub use account_data::*;
 pub use auth_commands::*;
 pub use backup::*;
@@ -1030,6 +1034,7 @@ pub use typing::*;
 pub use user_profile::*;
 pub use user_status::*;
 pub use verification::*;
+pub use widgets::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]

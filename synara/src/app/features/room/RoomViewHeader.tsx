@@ -64,7 +64,7 @@ import {
 } from '../../hooks/useRoomsNotificationPreferences';
 import { JumpToTime } from './jump-to-time';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
-import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { isSynaraDesktop } from '../../utils/desktop';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
@@ -307,9 +307,11 @@ export function RoomViewHeader({
   const topic = useRoomTopic(room);
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+  const [experimentalWidgetsEnabled] = useSetting(settingsAtom, 'experimentalWidgetsEnabled');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
   const notesOpen = activeSidePanel === 'notes' || notesOverlayOpen;
   const threadsOpen = activeSidePanel === 'threads' || threadsOverlayOpen;
+  const widgetsOpen = activeSidePanel === 'widgets';
 
   const handleSearchClick = () => {
     if (onToggleSidePanel) {
@@ -434,6 +436,29 @@ export function RoomViewHeader({
         </Box>
 
         <Box shrink="No">
+          {experimentalWidgetsEnabled && isSynaraDesktop() && onToggleSidePanel && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Widgets</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={() => onToggleSidePanel('widgets')}
+                  aria-pressed={widgetsOpen}
+                >
+                  <Icon size="400" src={Icons.Code} filled={widgetsOpen} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
           {!encryptedRoom && (
             <TooltipProvider
               position="Bottom"

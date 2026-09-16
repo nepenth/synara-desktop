@@ -107,6 +107,7 @@ pub mod user_profile;
 pub mod user_status;
 pub mod utd_recovery;
 pub mod verification;
+pub mod widgets;
 
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
@@ -157,6 +158,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _presence = presence::matrix_presence_markers();
     let _rtc_transports = rtc_transports::matrix_rtc_transports_markers();
     let _user_status = user_status::matrix_user_status_markers();
+    let _widgets = widgets::matrix_widgets_markers();
     let _media = media::matrix_media_markers();
     let _media_cache = media_cache::matrix_media_cache_markers();
     let _media_export = media_export::matrix_media_export_markers();
@@ -214,6 +216,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_presence, presence::MATRIX_PRESENCE_MARKER);
     debug_assert_eq!(_rtc_transports, rtc_transports::RTC_TRANSPORTS_MARKER);
     debug_assert_eq!(_user_status, user_status::USER_STATUS_MARKER);
+    debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_EXPERIMENTAL_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_media_cache, media_cache::MATRIX_MEDIA_CACHE_MARKER);
     debug_assert_eq!(_media_export, media_export::MATRIX_MEDIA_EXPORT_MARKER);

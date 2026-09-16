@@ -36,6 +36,7 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("../search/product_commands.rs"),
     include_str!("../user_profile/product_commands.rs"),
     include_str!("../verification/product_commands.rs"),
+    include_str!("../widgets/product_commands.rs"),
     include_str!("product.rs"),
 );
 
@@ -140,6 +141,43 @@ fn v_user_status_registers_the_frozen_native_surface() {
     assert!(!status_source.contains("experimental-widgets"));
     assert!(!status_source.contains("set_call"));
     assert!(!status_source.contains("enable_automatic_call_status"));
+}
+
+#[test]
+fn experimental_widgets_register_the_isolated_host_surface() {
+    let widgets_source = include_str!("../widgets/product_commands.rs");
+    let host_source = include_str!("../widgets/host.rs");
+    let lib_source = include_str!("../../lib.rs");
+    let build = include_str!("../../../build.rs");
+    let main_capability = include_str!("../../../capabilities/main.json");
+    let widget_capability = include_str!("../../../capabilities/widget.json");
+    for command in [
+        "matrix_widgets_list",
+        "matrix_widget_open",
+        "matrix_widget_close",
+        "matrix_widget_post",
+        "matrix_widget_subscribe",
+    ] {
+        assert!(widgets_source.contains(command));
+        assert!(lib_source.contains(command));
+        assert!(build.contains(&format!("\"{command}\"")));
+        assert!(main_capability.contains(&format!("allow-{}", command.replace('_', "-"))));
+        assert!(!widget_capability.contains(command));
+        assert!(!widget_capability.contains(&format!("allow-{}", command.replace('_', "-"))));
+    }
+    assert!(widgets_source.contains("widget_bridge_post"));
+    assert!(lib_source.contains("widget_bridge_post"));
+    assert!(build.contains("\"widget_bridge_post\""));
+    assert!(widget_capability.contains("allow-widget-bridge-post"));
+    assert!(!main_capability.contains("allow-widget-bridge-post"));
+    assert!(!widget_capability.contains("matrix_session_snapshot"));
+    assert!(!widget_capability.contains("allow-matrix-"));
+    assert!(widget_capability.contains("widget-*"));
+    assert!(host_source.contains("WebviewUrl::External"));
+    assert!(host_source.contains("widget_bridge_post"));
+    assert!(!host_source.contains("matrix-widget-api"));
+    assert!(!widgets_source.contains("matrix-widget-api"));
+    assert!(!widgets_source.contains("rtc_transports"));
 }
 
 #[test]

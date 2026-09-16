@@ -89,6 +89,10 @@ use crate::app::user_status::{
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
+use crate::app::widgets::{
+    AgentWidgetEntry, NativeWidgetOwner, WidgetGrantPolicy, WidgetKind, WidgetListSnapshot,
+    WidgetOpenResult, WidgetSessionRecord,
+};
 use crate::dto::SessionSnapshot;
 use crate::platform::{
     Platform, PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState,
@@ -584,6 +588,54 @@ struct MatrixPresenceSubscribeRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixPresenceUnsubscribeRequest {
     subscription_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widgets_list`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetsListRequest {
+    experimental_widgets_enabled: bool,
+    room_id: String,
+    #[serde(default)]
+    agent_widgets: Vec<AgentWidgetEntry>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_open`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetOpenRequest {
+    experimental_widgets_enabled: bool,
+    room_id: String,
+    widget_id: String,
+    name: String,
+    url: String,
+    kind: WidgetKind,
+    init_on_content_load: bool,
+    receive_room: bool,
+    send_room_message: bool,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_close`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetCloseRequest {
+    session_id: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_post`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetPostRequest {
+    experimental_widgets_enabled: bool,
+    session_id: String,
+    message: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_subscribe`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetSubscribeRequest {
+    experimental_widgets_enabled: bool,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_presence_set`.
@@ -1443,6 +1495,7 @@ pub struct CoreState {
     notification_decisions: Mutex<Option<Arc<NativeNotificationDecisionOwner>>>,
     timelines: Mutex<Option<Arc<NativeTimelineOwner>>>,
     sync: Mutex<Option<Arc<SyncServiceOwner>>>,
+    widgets: Mutex<Option<Arc<NativeWidgetOwner>>>,
 }
 
 impl CoreState {
@@ -1553,6 +1606,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn widget_owner(&self) -> Result<Option<Arc<NativeWidgetOwner>>, MatrixIpcError> {
+        self.widgets
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -1587,6 +1647,7 @@ impl Core {
                 notification_decisions: Mutex::new(None),
                 timelines: Mutex::new(None),
                 sync: Mutex::new(None),
+                widgets: Mutex::new(None),
             }),
             registry,
         }
@@ -1722,6 +1783,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *sync = None;
+        drop(sync);
+        let mut widgets = self
+            .state
+            .widgets
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *widgets = None;
         Ok(())
     }
 
@@ -1780,6 +1848,19 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *user_status = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live experimental widget owner created by the shell after
+    /// login/restore. Runtime enablement stays on the command payloads
+    /// (`experimentalWidgetsEnabled`); attaching the owner is not enablement.
+    pub fn attach_widgets(&self, owner: Arc<NativeWidgetOwner>) -> Result<(), MatrixIpcError> {
+        let mut widgets = self
+            .state
+            .widgets
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *widgets = Some(owner);
         Ok(())
     }
 
@@ -2299,6 +2380,21 @@ fn built_in_registry() -> CommandRegistry {
             matrix_rtc_transports_snapshot,
         )
         .expect("built-in matrix_rtc_transports_snapshot must remain in the command census");
+    registry
+        .register("matrix_widgets_list", matrix_widgets_list)
+        .expect("built-in matrix_widgets_list must remain in the command census");
+    registry
+        .register("matrix_widget_open", matrix_widget_open)
+        .expect("built-in matrix_widget_open must remain in the command census");
+    registry
+        .register("matrix_widget_close", matrix_widget_close)
+        .expect("built-in matrix_widget_close must remain in the command census");
+    registry
+        .register("matrix_widget_post", matrix_widget_post)
+        .expect("built-in matrix_widget_post must remain in the command census");
+    registry
+        .register("matrix_widget_subscribe", matrix_widget_subscribe)
+        .expect("built-in matrix_widget_subscribe must remain in the command census");
     registry
         .register("matrix_verification_accept", matrix_verification_accept)
         .expect("built-in matrix_verification_accept must remain in the command census");
@@ -3737,6 +3833,114 @@ fn matrix_user_status_clear(state: Arc<CoreState>, request: CommandEnvelope) -> 
     })
 }
 
+fn matrix_widgets_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetsListRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widgets-list-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widgets-list-no-session")
+        })?;
+        let snapshot: WidgetListSnapshot = owner
+            .list(
+                payload.experimental_widgets_enabled,
+                &payload.room_id,
+                &payload.agent_widgets,
+            )
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-widgets-list-serialization-failed"))
+    })
+}
+
+fn matrix_widget_open(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetOpenRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-open-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-open-no-session")
+        })?;
+        let policy = WidgetGrantPolicy {
+            receive_room: payload.receive_room,
+            send_room_message: payload.send_room_message,
+        };
+        let opened: WidgetOpenResult = owner
+            .open(
+                payload.experimental_widgets_enabled,
+                &payload.room_id,
+                &payload.widget_id,
+                &payload.name,
+                &payload.url,
+                payload.kind,
+                payload.init_on_content_load,
+                policy,
+            )
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(opened)
+            .map_err(|_| core_state_error("p2-widget-open-serialization-failed"))
+    })
+}
+
+fn matrix_widget_close(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetCloseRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-close-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-close-no-session")
+        })?;
+        let closed = owner
+            .close(payload.session_id.as_deref())
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(closed)
+            .map_err(|_| core_state_error("p2-widget-close-serialization-failed"))
+    })
+}
+
+fn matrix_widget_post(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetPostRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-post-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-post-no-session")
+        })?;
+        owner
+            .post(
+                payload.experimental_widgets_enabled,
+                &payload.session_id,
+                payload.message,
+            )
+            .await
+            .map_err(widget_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn matrix_widget_subscribe(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetSubscribeRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-subscribe-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-subscribe-no-session")
+        })?;
+        let sessions: Vec<WidgetSessionRecord> = owner
+            .subscribe_snapshot(payload.experimental_widgets_enabled)
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(sessions)
+            .map_err(|_| core_state_error("p2-widget-subscribe-serialization-failed"))
+    })
+}
+
+/// Map live presence-owner diagnostics onto closed Core transport categories.
+/// Preserve the owner diagnostic id so the desktop bridge can restore the
+/// established Tauri error shape without leaking user ids or status text.
 fn matrix_verification_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
@@ -6113,6 +6317,24 @@ fn user_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+fn widget_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "experimental-widgets-disabled"
+        | "experimental-widgets-session-not-live"
+        | "experimental-widgets-owner-missing" => MatrixIpcErrorCategory::Forbidden,
+        "experimental-widgets-url-rejected"
+        | "experimental-widgets-room-state-url-rejected"
+        | "experimental-widgets-invalid-room"
+        | "experimental-widgets-room-missing"
+        | "experimental-widgets-session-missing"
+        | "experimental-widgets-registry-full"
+        | "experimental-widgets-driver-stopped"
+        | "experimental-widgets-state-read-failed" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let response = MatrixSessionSnapshotResponse::from(state.session_snapshot()?);
@@ -8016,6 +8238,52 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-presence-snapshot-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_widgets_list_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_widgets_list".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "experimentalWidgetsEnabled": true,
+                    "roomId": "!r:example.org",
+                    "agentWidgets": []
+                }),
+            })
+            .await
+            .expect_err("widget list without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-widgets-list-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_widget_post_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_widget_post".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "experimentalWidgetsEnabled": true,
+                    "sessionId": "w1",
+                    "message": "{}"
+                }),
+            })
+            .await
+            .expect_err("widget post without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-widget-post-no-session")
         );
     }
 

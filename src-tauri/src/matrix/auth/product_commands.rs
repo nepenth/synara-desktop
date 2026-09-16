@@ -140,6 +140,10 @@ pub async fn matrix_login_password(
         &client,
         session_generation,
     ));
+    let widgets = Arc::new(
+        crate::matrix::widgets::start_widget_owner(&client, app.clone(), session_generation)
+            .map_err(map_widget_error)?,
+    );
     // A9 observation stream: Core pushes each live message-like event to the
     // renderer, which hands the identity back to the decision owner. The
     // renderer no longer scans timelines to discover notifiable events.
@@ -213,6 +217,7 @@ pub async fn matrix_login_password(
         presence: presence.clone(),
         rtc_transports: rtc_transports.clone(),
         user_status: user_status.clone(),
+        widgets: widgets.clone(),
         join_rules: join_rules.clone(),
         _own_profile: own_profile,
         _media_retention: media_retention,
@@ -241,6 +246,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_user_status(user_status)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
+    core.inner()
+        .attach_widgets(widgets)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-widgets-attach-failed"))?;
     core.inner()
         .attach_verification(verification)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
@@ -497,6 +505,7 @@ pub async fn matrix_register(
                 presence,
                 rtc_transports,
                 user_status,
+                widgets,
                 verification,
                 devices,
                 dehydrated_devices,
@@ -512,6 +521,7 @@ pub async fn matrix_register(
                         active.presence.clone(),
                         active.rtc_transports.clone(),
                         active.user_status.clone(),
+                        active.widgets.clone(),
                         active.verification.clone(),
                         active.devices.clone(),
                         active.dehydrated_devices.clone(),
@@ -543,6 +553,9 @@ pub async fn matrix_register(
             core.inner()
                 .attach_user_status(user_status)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
+            core.inner()
+                .attach_widgets(widgets)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-widgets-attach-failed"))?;
             core.inner()
                 .attach_verification(verification)
                 .map_err(|_| {
@@ -661,6 +674,10 @@ pub(super) async fn install_session_from_register_secrets(
         &client,
         session_generation,
     ));
+    let widgets = Arc::new(
+        crate::matrix::widgets::start_widget_owner(&client, app.clone(), session_generation)
+            .map_err(map_widget_error)?,
+    );
     // A9 observation stream: Core pushes each live message-like event to the
     // renderer, which hands the identity back to the decision owner. The
     // renderer no longer scans timelines to discover notifiable events.
@@ -733,6 +750,7 @@ pub(super) async fn install_session_from_register_secrets(
         presence: presence.clone(),
         rtc_transports: rtc_transports.clone(),
         user_status: user_status.clone(),
+        widgets: widgets.clone(),
         join_rules: join_rules.clone(),
         _own_profile: own_profile,
         _media_retention: media_retention,
@@ -954,6 +972,10 @@ pub async fn matrix_restore_session(
         &client,
         session_generation,
     ));
+    let widgets = Arc::new(
+        crate::matrix::widgets::start_widget_owner(&client, app.clone(), session_generation)
+            .map_err(map_widget_error)?,
+    );
     // A9 observation stream: Core pushes each live message-like event to the
     // renderer, which hands the identity back to the decision owner. The
     // renderer no longer scans timelines to discover notifiable events.
@@ -1012,6 +1034,7 @@ pub async fn matrix_restore_session(
         presence: presence.clone(),
         rtc_transports: rtc_transports.clone(),
         user_status: user_status.clone(),
+        widgets: widgets.clone(),
         join_rules: join_rules.clone(),
         _own_profile: own_profile,
         _media_retention: media_retention,
@@ -1040,6 +1063,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_user_status(user_status)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
+    core.inner()
+        .attach_widgets(widgets)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-widgets-attach-failed"))?;
     core.inner()
         .attach_verification(verification)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;

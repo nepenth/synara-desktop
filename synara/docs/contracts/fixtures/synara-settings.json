@@ -26,7 +26,8 @@
       "isNotificationSounds": true,
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
-      "developerTools": false
+      "developerTools": false,
+      "experimentalWidgetsEnabled": false
     },
     "sharedWithOptionalFields": {
       "themeId": "aurora",
@@ -59,7 +60,8 @@
       "isNotificationSounds": false,
       "hour24Clock": true,
       "dateFormatString": "YYYY-MM-DD",
-      "developerTools": true
+      "developerTools": true,
+      "experimentalWidgetsEnabled": true
     },
     "desktopPlatform": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
@@ -69,7 +71,8 @@
       "desktopDiagnosticsPerformance": false,
       "desktopDiagnosticsSession": false,
       "desktopDiagnosticsRoomState": false,
-      "desktopDiagnosticsOverlay": false
+      "desktopDiagnosticsOverlay": false,
+      "agentWidgetEntries": []
     }
   },
   "invalid": {
@@ -100,6 +103,7 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
+      "experimentalWidgetsEnabled": false,
       "desktopShortcutShow": "CmdOrCtrl+1"
     },
     "badMessageSpacing": {
@@ -128,7 +132,8 @@
       "isNotificationSounds": true,
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
-      "developerTools": false
+      "developerTools": false,
+      "experimentalWidgetsEnabled": false
     },
     "badThemeBaseColor": {
       "useSystemTheme": true,
@@ -157,6 +162,7 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
+      "experimentalWidgetsEnabled": false,
       "themeBaseColor": "aabbcc"
     },
     "badMessageTextTone": {
@@ -185,7 +191,8 @@
       "isNotificationSounds": true,
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
-      "developerTools": false
+      "developerTools": false,
+      "experimentalWidgetsEnabled": false
     },
     "desktopPlatformContainsSharedField": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
@@ -196,6 +203,7 @@
       "desktopDiagnosticsSession": false,
       "desktopDiagnosticsRoomState": false,
       "desktopDiagnosticsOverlay": false,
+      "agentWidgetEntries": [],
       "themeId": "aurora"
     }
   }

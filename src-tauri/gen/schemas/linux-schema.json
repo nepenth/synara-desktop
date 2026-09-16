@@ -1605,6 +1605,42 @@
           "markdownDescription": "Enables the matrix_verification_start command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_widget_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-close",
+          "markdownDescription": "Enables the matrix_widget_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-open",
+          "markdownDescription": "Enables the matrix_widget_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-post",
+          "markdownDescription": "Enables the matrix_widget_post command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-subscribe",
+          "markdownDescription": "Enables the matrix_widget_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widgets_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widgets-list",
+          "markdownDescription": "Enables the matrix_widgets_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the widget_bridge_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-widget-bridge-post",
+          "markdownDescription": "Enables the widget_bridge_post command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_agent_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-agent-action",
@@ -2863,6 +2899,42 @@
           "type": "string",
           "const": "deny-matrix-verification-start",
           "markdownDescription": "Denies the matrix_verification_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-close",
+          "markdownDescription": "Denies the matrix_widget_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-open",
+          "markdownDescription": "Denies the matrix_widget_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-post",
+          "markdownDescription": "Denies the matrix_widget_post command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-subscribe",
+          "markdownDescription": "Denies the matrix_widget_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widgets_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widgets-list",
+          "markdownDescription": "Denies the matrix_widgets_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the widget_bridge_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-widget-bridge-post",
+          "markdownDescription": "Denies the widget_bridge_post command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",
