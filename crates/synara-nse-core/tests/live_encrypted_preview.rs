@@ -3,6 +3,8 @@
 //! The reader's full Core is closed before the new message is sent; only the
 //! normal NSE request may fetch/decrypt it from the shared encrypted store.
 
+#![recursion_limit = "256"]
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
