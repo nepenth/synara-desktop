@@ -725,6 +725,10 @@ export const HistoryStatusOverlayForward = style({
   background: `linear-gradient(0deg, var(--synara-rich-text-reading-surface) 55%, transparent)`,
 });
 
+export const HistoryStatusHitTarget = style({
+  pointerEvents: 'auto',
+});
+
 export const HistoryStatusCard = style({
   display: 'flex',
   alignItems: 'center',

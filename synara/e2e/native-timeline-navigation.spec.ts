@@ -22,6 +22,16 @@ const open = async (page: Page, scenario: string) => {
   await page.goto(`/e2e/native-timeline-harness/index.html?scenario=${scenario}`);
   await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
 };
+const boxesOverlap = (
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number }
+) =>
+  !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
 const geometry = (page: Page) =>
   page.evaluate(() => {
     const viewport = [...document.querySelectorAll<HTMLElement>('#native-timeline *')].find(
@@ -555,8 +565,15 @@ test('sparse history and missing last-read recovery controls are separately clic
 test('markdown file attachments preview in-client and still download', async ({ page }) => {
   await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-md');
   const chip = page.getByRole('button', { name: 'Preview notes.md' });
+  const older = page.getByRole('button', { name: 'Load older messages', exact: true });
   await expect(chip).toBeVisible();
+  await expect(older).toBeVisible();
   await expect(page.locator('a[download]')).toHaveCount(0);
+  const chipBox = await chip.boundingBox();
+  const olderBox = await older.boundingBox();
+  expect(chipBox).not.toBeNull();
+  expect(olderBox).not.toBeNull();
+  expect(boxesOverlap(chipBox!, olderBox!)).toBe(false);
   await chip.click();
   const preview = page.locator('[data-native-timeline-file-preview="true"]');
   await expect(preview).toBeVisible();
@@ -597,8 +614,15 @@ test('markdown file attachments preview in-client and still download', async ({ 
 test('generic file attachments download on click without a preview', async ({ page }) => {
   await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-zip');
   const chip = page.getByRole('button', { name: 'Download archive.zip' });
+  const older = page.getByRole('button', { name: 'Load older messages', exact: true });
   await expect(chip).toBeVisible();
+  await expect(older).toBeVisible();
   await expect(page.getByRole('button', { name: 'Preview archive.zip' })).toHaveCount(0);
+  const chipBox = await chip.boundingBox();
+  const olderBox = await older.boundingBox();
+  expect(chipBox).not.toBeNull();
+  expect(olderBox).not.toBeNull();
+  expect(boxesOverlap(chipBox!, olderBox!)).toBe(false);
   await chip.click();
   await expect(page.locator('[data-native-timeline-file-preview="true"]')).toHaveCount(0);
   await expect
