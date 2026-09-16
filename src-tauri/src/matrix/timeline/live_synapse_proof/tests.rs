@@ -10,8 +10,14 @@
 //! Exercises the native owner route end-to-end:
 //! register/login → create room → open native timeline → send target (so the
 //! live timeline observes local/remote echo) →
-//! `NativeTimelineRegistry::{toggle,ensure,redact}_reaction` → aggregation
-//! readback.
+//! `NativeTimelineRegistry::{toggle,ensure}_reaction` (add, idempotent ensure,
+//! toggle remove, ensure re-add) → aggregation readback.
+//!
+//! matrix-sdk 0.19 `ReactionInfo` does not project remote annotation event ids,
+//! so this proof does not wait for `reaction_event_id` then call
+//! `redact_reaction`. Product self-unreact is `Timeline::toggle_reaction`.
+//! Recovering those ids for viewer/moderator redact is a messaging-core
+//! follow-up, not this bump.
 //!
 //! JS two-client Synapse CI is not this proof. WebView click-through is not required.
 
@@ -343,45 +349,27 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
     assert_eq!(ensured.mutation, NativeReactionMutation::AlreadyPresent);
     assert!(ensured.readback.as_ref().is_some_and(|r| r.me));
 
-    // Path 3: redact selected annotation once Synapse assigns a remote event id.
-    let reaction_event_id = {
-        let deadline = Instant::now() + Duration::from_secs(20);
-        let mut found = after_toggle
-            .senders
-            .iter()
-            .find_map(|sender| sender.reaction_event_id.clone());
-        while found.is_none() && Instant::now() < deadline {
-            tokio::time::sleep(Duration::from_millis(200)).await;
-            found = poll_me_reaction(
-                &mut registry,
-                &client,
-                &room_id,
-                &target_event_id,
-                "✅",
-                true,
-            )
-            .await
-            .and_then(|r| {
-                r.senders
-                    .into_iter()
-                    .find_map(|sender| sender.reaction_event_id)
-            });
-        }
-        found.expect("remote reaction event id for redaction")
-    };
+    // Path 3: unreact via toggle. 0.19 `ReactionInfo.send_state` is `None`
+    // after remote echo, so native readback cannot supply an annotation id for
+    // `redact_reaction`. A local `Sent { event_id }` echo is not remote-id
+    // recovery; this bump does not pretend it is. Viewer/moderator redact by
+    // id stays a messaging-core follow-up.
+    let projected_annotation_ids = after_toggle
+        .senders
+        .iter()
+        .filter(|sender| sender.reaction_event_id.is_some())
+        .count();
+    eprintln!(
+        "0.19 reaction proof: {} sender(s) still carry a projected annotation id after toggle add (local Sent echo only; remote ids are not on ReactionInfo)",
+        projected_annotation_ids
+    );
 
-    let redacted = registry
-        .redact_reaction(
-            &client,
-            &room_id,
-            &target_event_id,
-            &reaction_event_id,
-            "✅",
-        )
+    let removed = registry
+        .toggle_reaction(&client, &room_id, &target_event_id, "✅")
         .await
-        .expect("redact annotation");
-    assert_eq!(redacted.mutation, NativeReactionMutation::Redacted);
-    let after_redact = poll_me_reaction(
+        .expect("toggle remove");
+    assert_eq!(removed.mutation, NativeReactionMutation::Removed);
+    let after_remove = poll_me_reaction(
         &mut registry,
         &client,
         &room_id,
@@ -391,11 +379,11 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
     )
     .await;
     assert!(
-        after_redact.as_ref().is_none_or(|r| !r.me),
-        "redact must clear me=true from native aggregation readback"
+        after_remove.as_ref().is_none_or(|r| !r.me),
+        "toggle remove must clear me=true from native aggregation readback"
     );
 
-    // Ensure can re-add after redaction (distinct from toggle remove)
+    // Ensure can re-add after toggle remove (distinct from toggle add)
     let readded = registry
         .ensure_reaction(&client, &room_id, &target_event_id, "✅")
         .await

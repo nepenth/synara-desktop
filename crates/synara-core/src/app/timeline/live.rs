@@ -2679,20 +2679,18 @@ impl NativeTimelineRegistry {
                     .map_err(|_| "v-crypto.6-utd-index-failed")?;
             }
             match item.decryption_state {
-                Some(NativeDecryptionState::Unavailable) => {}
-                Some(NativeDecryptionState::Pending) => {
+                Some(NativeDecryptionState::Pending)
                     if self
                         .utd_index
                         .get(&room_id, &item.event_id)
                         .map(|e| e.phase)
-                        == Some(UtdPhase::UnableToDecrypt)
-                    {
-                        self.utd_index
-                            .begin_retry(&room_id, &item.event_id)
-                            .map_err(|_| "v-crypto.6-utd-index-failed")?;
-                    }
+                        == Some(UtdPhase::UnableToDecrypt) =>
+                {
+                    self.utd_index
+                        .begin_retry(&room_id, &item.event_id)
+                        .map_err(|_| "v-crypto.6-utd-index-failed")?;
                 }
-                None => {}
+                _ => {}
             }
         }
 

@@ -797,7 +797,7 @@ jobs:
       - name: Start disposable Synapse
         run: scripts/synapse-integration.sh up
 
-      - name: Prove native reaction toggle/ensure/redact against Synapse
+      - name: Prove native reaction toggle/ensure/unreact against Synapse
         working-directory: src-tauri
         env:
           SYNARA_RUN_MATRIX_RUST_REACTION_LIVE: "1"

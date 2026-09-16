@@ -6,6 +6,10 @@
 //! app's vault. The narrow request object exists only to provide prompt,
 //! idempotent cancellation across UniFFI's Swift async boundary.
 
+// UniFFI-generated async scaffolding overflows rustc's default query-depth
+// limit while laying out `synara_nse_core.uniffi.rs` (iOS nse-release).
+#![recursion_limit = "256"]
+
 use std::future::Future;
 use std::sync::atomic::{AtomicBool, Ordering};
 
