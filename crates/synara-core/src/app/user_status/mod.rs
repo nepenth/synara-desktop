@@ -12,9 +12,9 @@ mod native;
 
 pub use live::NativeUserStatusOwner;
 pub use native::{
-    parse_status_write, NativeInCall, NativeUserStatus, NativeUserStatusSnapshot,
-    NativeUserStatusWriteResult, StatusWrite, MAX_STATUS_EMOJI_BYTES, MAX_STATUS_TEXT_BYTES,
-    USER_STATUS_MARKER,
+    parse_status_write, project_status_field, NativeInCall, NativeUserStatus,
+    NativeUserStatusSnapshot, NativeUserStatusWriteResult, StatusWrite, MAX_STATUS_EMOJI_BYTES,
+    MAX_STATUS_TEXT_BYTES, USER_STATUS_MARKER,
 };
 
 /// Touch MSC4426 paths so they remain linked in non-test builds.

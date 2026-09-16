@@ -3182,7 +3182,19 @@ fn map_user_status_core_error(
         Some(code) if code == no_session => {
             user_status_failed(no_session, USER_STATUS_NO_SESSION_DESCRIPTION)
         }
-        Some(code) => user_status_failed(code, USER_STATUS_FAILED_DESCRIPTION),
+        Some("v-user-status-unsupported") => {
+            user_status_failed("v-user-status-unsupported", USER_STATUS_FAILED_DESCRIPTION)
+        }
+        Some("v-user-status-emoji-cap") => {
+            user_status_failed("v-user-status-emoji-cap", USER_STATUS_FAILED_DESCRIPTION)
+        }
+        Some("v-user-status-text-cap") => {
+            user_status_failed("v-user-status-text-cap", USER_STATUS_FAILED_DESCRIPTION)
+        }
+        Some("v-user-status-invalid-user-id") => user_status_failed(
+            "v-user-status-invalid-user-id",
+            USER_STATUS_FAILED_DESCRIPTION,
+        ),
         _ => user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION),
     }
 }

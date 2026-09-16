@@ -241,7 +241,8 @@ fn project_direct_user_id(room: &Room, is_direct: bool) -> Option<String> {
     if !is_direct {
         return None;
     }
-    let own = room.client().user_id();
+    let client = room.client();
+    let own = client.user_id();
     let mut peer: Option<String> = None;
     for target in room.direct_targets() {
         let Some(user_id) = target.as_user_id() else {

@@ -2,7 +2,7 @@
 
 use matrix_sdk::{
     ruma::{
-        api::client::error::ErrorKind,
+        api::error::ErrorKind,
         profile::{ProfileFieldName, ProfileFieldValue},
         UserId,
     },
