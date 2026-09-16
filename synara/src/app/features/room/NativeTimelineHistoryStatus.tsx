@@ -8,6 +8,7 @@ type NativeTimelineHistoryStatusProps = {
   kind: TimelineHistoryOverlayKind;
   errorMessage?: string;
   visibleDateLabel?: string;
+  reserveRail?: boolean;
   onRetry?: () => void;
   onLoadMore?: () => void;
 };
@@ -32,6 +33,7 @@ export function NativeTimelineHistoryStatus({
   kind,
   errorMessage,
   visibleDateLabel,
+  reserveRail,
   onRetry,
   onLoadMore,
 }: NativeTimelineHistoryStatusProps) {
@@ -46,7 +48,10 @@ export function NativeTimelineHistoryStatus({
           ? htmlCss.HistoryStatusOverlayBackward
           : htmlCss.HistoryStatusOverlayForward
       }
-      style={{ pointerEvents: kind === 'hidden' ? 'none' : 'auto' }}
+      style={{
+        pointerEvents: kind === 'hidden' ? 'none' : 'auto',
+        ...(reserveRail ? undefined : { right: 0 }),
+      }}
     >
       {kind === 'loading' ? (
         <div
