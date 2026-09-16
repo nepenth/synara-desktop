@@ -78,6 +78,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { stopPropagation } from '../../utils/keyboard';
 import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import { NativePlainMessageBody, NativeTimelineLinkUnfurl } from './nativeLinkUnfurlCard';
 import { copyRichTextToClipboard } from '../../utils/dom';
 import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import {
@@ -1743,17 +1744,15 @@ const NativeTimelineRow = ({
                           }}
                         />
                       ) : (
-                        <Text
-                          size="T300"
+                        <NativePlainMessageBody
+                          body={isEmote ? `* ${row.body}` : row.body}
                           style={{
                             whiteSpace: 'pre-wrap',
                             fontWeight: 400,
                             lineHeight: 1.55,
                             fontStyle: isEmote ? 'italic' : undefined,
                           }}
-                        >
-                          {isEmote ? `* ${row.body}` : row.body}
-                        </Text>
+                        />
                       )}
                       {row.edited ? (
                         <Text size="T200" className={htmlCss.Metadata}>
@@ -1762,6 +1761,17 @@ const NativeTimelineRow = ({
                       ) : null}
                     </div>
                   )}
+                  <NativeTimelineLinkUnfurl
+                    roomId={roomId}
+                    sessionGeneration={sessionGeneration}
+                    encryptionStatus={sourceEncryptionStatus}
+                    body={row.body}
+                    formattedBody={row.formattedBody}
+                    messageType={row.messageType}
+                    hasMedia={Boolean(row.media)}
+                    skip={Boolean(approvalPrompt || agentPayload)}
+                    originServerTs={originServerTs}
+                  />
                   <NativeTimelineThreadSurface
                     threadRoot={row.threadRoot}
                     thread={row.thread}

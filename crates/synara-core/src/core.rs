@@ -22,7 +22,7 @@ use crate::app::auth::{
 use crate::app::backup::{MatrixRestoreBackupResult, NativeBackupStatus};
 use crate::app::cross_signing::NativeCrossSigningSetupResult;
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
-use crate::app::media::MatrixUploadMediaResult;
+use crate::app::media::{MatrixMediaPreviewSnapshot, MatrixUploadMediaResult};
 use crate::app::members::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_POWER_LEVELS_EVENT_TYPE,
@@ -1346,6 +1346,17 @@ struct MatrixRoomRetentionRequest {
     session_generation: u64,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_media_preview`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixMediaPreviewRequest {
+    room_id: String,
+    session_generation: u64,
+    url: String,
+    #[serde(default)]
+    ts: Option<u64>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_directory_visibility`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2105,6 +2116,9 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
+    registry
+        .register("matrix_media_preview", matrix_media_preview)
+        .expect("built-in matrix_media_preview must remain in the command census");
     registry
         .register("matrix_login_flows", matrix_login_flows)
         .expect("built-in matrix_login_flows must remain in the command census");
@@ -4594,6 +4608,40 @@ fn matrix_room_retention(state: Arc<CoreState>, request: CommandEnvelope) -> Com
     })
 }
 
+fn matrix_media_preview(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMediaPreviewRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-media-preview-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-media-preview-no-session")
+        })?;
+        let result: MatrixMediaPreviewSnapshot = owner
+            .get_media_preview(
+                &payload.room_id,
+                payload.session_generation,
+                &payload.url,
+                payload.ts,
+            )
+            .await
+            .map_err(media_preview_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-media-preview-serialization-failed"))
+    })
+}
+
+fn media_preview_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-media-preview-invalid"
+        | "v-send.r-media-preview-url-invalid"
+        | "v-send.r-media-preview-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-media-preview-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-send.r-media-preview-stale-generation" => MatrixIpcErrorCategory::StaleSessionGeneration,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn room_retention_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "v-send.r-room-profile-retention-invalid"
@@ -6393,6 +6441,7 @@ mod tests {
                 "matrix_mdirect_remove",
                 "matrix_mdirect_snapshot",
                 "matrix_media_config",
+                "matrix_media_preview",
                 "matrix_message_search",
                 "matrix_notification_decide",
                 "matrix_notification_dismiss",
@@ -9106,6 +9155,29 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-room-retention-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_media_preview_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_media_preview".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "sessionGeneration":1,
+                    "url":"https://example.org/x"
+                }),
+            })
+            .await
+            .expect_err("media preview without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-media-preview-no-session")
         );
     }
 

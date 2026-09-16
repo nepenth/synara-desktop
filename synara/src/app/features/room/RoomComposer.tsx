@@ -11,6 +11,7 @@ type RoomComposerProps = {
   placeholder?: string;
   maxHeight?: string;
   replyPreview?: ReactNode;
+  linkPreview?: ReactNode;
   leadingAction?: ReactNode;
   floatingActions?: ReactNode;
   toolbarVisible?: boolean;
@@ -29,6 +30,7 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
       placeholder,
       maxHeight,
       replyPreview,
+      linkPreview,
       leadingAction,
       floatingActions,
       toolbarVisible,
@@ -52,7 +54,14 @@ export const RoomComposer = forwardRef<HTMLDivElement, RoomComposerProps>(
         onKeyUp={onKeyUp}
         onPaste={onPaste}
         onChange={onChange}
-        top={replyPreview ? <div className={css.RoomComposerReply}>{replyPreview}</div> : undefined}
+        top={
+          replyPreview || linkPreview ? (
+            <>
+              {replyPreview ? <div className={css.RoomComposerReply}>{replyPreview}</div> : null}
+              {linkPreview ? <div className={css.RoomComposerReply}>{linkPreview}</div> : null}
+            </>
+          ) : undefined
+        }
         before={
           leadingAction ? (
             <div className={css.RoomComposerLeadingAction}>{leadingAction}</div>

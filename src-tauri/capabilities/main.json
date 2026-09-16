@@ -146,6 +146,7 @@
     "allow-matrix-set-room-image-pack",
     "allow-matrix-media-config",
     "allow-matrix-media-download",
+    "allow-matrix-media-preview",
     "allow-matrix-upload-media",
     "allow-matrix-set-own-avatar",
     "allow-matrix-set-own-display-name",
