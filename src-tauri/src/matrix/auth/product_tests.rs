@@ -1426,6 +1426,28 @@ fn message_search_routes_through_core_without_desktop_client_io() {
 }
 
 #[test]
+fn native_message_search_is_local_index_replace_in_core() {
+    let live = include_str!("../../../../crates/synara-core/src/app/search/live.rs");
+    let index = include_str!("../../../../crates/synara-core/src/app/search/index.rs");
+    let open = include_str!("../../../../crates/synara-core/src/app/client_builder/open.rs");
+    let production_open = open
+        .split("#[cfg(test)]")
+        .next()
+        .expect("production client open");
+    assert!(live.contains("search-index"));
+    assert!(live.contains("v-search.index-disabled"));
+    assert!(index.contains("client.search_messages"));
+    assert!(!index.contains("search::search_events"));
+    assert!(!index.contains("client.send("));
+    assert!(!index.contains("/_matrix/client"));
+    assert!(!index.contains("dual_backend"));
+    assert!(production_open.contains("EncryptedDirectory"));
+    assert!(!production_open.contains("UnencryptedDirectory"));
+    // FR-7.10-006: SC-072 is the native desktop product path; leftover JS keeps mx.search.
+    assert!(PRODUCT_SOURCE.contains("matrix_message_search"));
+}
+
+#[test]
 fn backup_status_routes_through_core_without_desktop_client_io() {
     let product = PRODUCT_SOURCE;
     let command = product

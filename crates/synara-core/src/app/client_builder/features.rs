@@ -17,6 +17,8 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.0";
 ///   OlmMachine defaults stay on once compiled.
 /// - `experimental-widgets` — compile pin for the experimental widget host.
 ///   Runtime enablement is a separate in-client setting (default off).
+/// - `experimental-search` — desktop-only local Tantivy index via the
+///   synara-core `search-index` feature. NSE / iOS SharedCore must not enable it.
 ///
 /// `e2e-encryption` continues to arrive via `matrix-sdk-ui` feature unification
 /// (documented in P1.2) and enables the crypto store when combined with `sqlite`.
@@ -31,6 +33,7 @@ pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
     "unstable-msc4426",
     "automatic-room-key-forwarding",
     "experimental-widgets",
+    "experimental-search",
 ];
 
 /// Features that must **not** be enabled on the product dependency line.
@@ -40,7 +43,6 @@ pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
 /// may pull it transitively. Do not treat a `cargo tree` hit as a quality-gate
 /// failure when it is not listed on the `matrix-sdk` features array.
 pub const FORBIDDEN_MATRIX_SDK_FEATURES: &[&str] = &[
-    "experimental-search",
     "experimental-encrypted-state-events",
     "experimental-element-recent-emojis",
     "experimental-push-secrets",
@@ -56,10 +58,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn forbidden_features_keep_experimental_search() {
-        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+    fn forbidden_features_keep_remaining_experimentals() {
         assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
-        assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
+        assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
     }
 
     #[test]
@@ -131,5 +133,13 @@ mod tests {
             !features_block.contains("experimental-send-custom-to-device"),
             "experimental-send-custom-to-device must stay a transitive-only feature"
         );
+    }
+
+    #[test]
+    fn experimental_search_is_approved_for_desktop_index() {
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+        assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
     }
 }

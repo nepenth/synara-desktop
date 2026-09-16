@@ -143,20 +143,28 @@ fn message_search_without_started_sync_returns_handler_result_without_echo() {
     drop(rt);
     let _ = fs::remove_dir_all(&root);
 
-    let search_text = search
-        .as_ref()
-        .err()
-        .map(|error| format!("{error:?}{error}"))
-        .expect("unstarted sync still uses the registered message-search handler");
+    let search_text = match search.as_ref() {
+        // Desktop `search-index` with no timeline traffic returns an empty page.
+        // Highlights may include the query term; that is the DTO, not an error echo.
+        Ok(result) => {
+            assert!(result.groups.is_empty());
+            String::new()
+        }
+        // iOS CS `/search` without a mocked homeserver stays a v-search diagnostic.
+        Err(error) => {
+            let text = format!("{error:?}{error}");
+            assert!(
+                text.contains("v-search."),
+                "search must return a registered owner diagnostic: {text}"
+            );
+            assert!(
+                !text.contains("p4-s9-message-search-failed"),
+                "search must not hide a wrong envelope behind the generic fallback: {text}"
+            );
+            text
+        }
+    };
 
-    assert!(
-        search_text.contains("v-search."),
-        "search must return a registered owner diagnostic: {search_text}"
-    );
-    assert!(
-        !search_text.contains("p4-s9-message-search-failed"),
-        "search must not hide a wrong envelope behind the generic fallback: {search_text}"
-    );
     assert!(!search_text.contains("leftover-unavailable"));
     assert!(!search_text.contains(access));
     assert!(!search_text.contains(refresh));

@@ -5688,6 +5688,8 @@ fn message_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-search.invalid-room"
         | "v-search.invalid-sender" => MatrixIpcErrorCategory::SdkInvariant,
         "v-search.no-session" => MatrixIpcErrorCategory::Forbidden,
+        // Off disables product search; no Client-Server `/search` fallback.
+        "v-search.index-disabled" => MatrixIpcErrorCategory::Unknown,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)

@@ -136,11 +136,8 @@ use crate::matrix::user_status::NativeUserStatusOwner;
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
-<<<<<<< HEAD
-use synara_core::app::media_cache::NativeMediaRetentionOwner;
-=======
 use crate::matrix::widgets::NativeWidgetOwner;
->>>>>>> 97c701ba (Apply rustfmt and prettier to the widget host slice.)
+use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";

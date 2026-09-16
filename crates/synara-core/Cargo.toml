@@ -23,6 +23,9 @@ room-key-forwarding = [
   "matrix-sdk/automatic-room-key-forwarding",
   "matrix-sdk-crypto/automatic-room-key-forwarding",
 ]
+# Desktop-only local message index (matrix-sdk-search / Tantivy). NSE and iOS
+# SharedCore must not enable this; they keep Client-Server `/search`.
+search-index = ["matrix-sdk/experimental-search"]
 
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
@@ -114,3 +117,8 @@ matrix-sdk = { version = "=0.19.0", default-features = false, features = [
 matrix-sdk-test = "=0.19.0"
 # Exercise public device-key publication against the real SDK HTTP transport.
 wiremock = "0.6"
+
+[[test]]
+name = "indexed_message_search"
+path = "tests/indexed_message_search.rs"
+required-features = ["search-index"]

@@ -19,8 +19,11 @@ serde_json = "1.0.109"
 serde = { version = "1.0.193", features = ["derive"] }
 # SNC-P1-2: matrix/dto lives in the shared native core; src-tauri (excluded
 # from the workspace) consumes it as a plain path dependency. Default features
-# include full-uniffi → room-key-forwarding (desktop compile-in).
-synara-core = { path = "../crates/synara-core", version = "0.1.0" }
+# include full-uniffi → room-key-forwarding (desktop compile-in). Search index
+# is desktop-only (Tantivy); NSE / iOS SharedCore must not enable it.
+synara-core = { path = "../crates/synara-core", version = "0.1.0", features = [
+  "search-index",
+] }
 keyring = { version = "3.6.3", default-features = false, features = [
   "apple-native",
   "linux-native-sync-persistent",
@@ -68,6 +71,8 @@ matrix-sdk = { version = "=0.19.0", default-features = false, features = [
   # in-client setting (default off). Do not add experimental-send-custom-to-device
   # here; it arrives transitively via experimental-widgets.
   "experimental-widgets",
+  # Desktop-only local message index. Do not enable on NSE / iOS SharedCore.
+  "experimental-search",
 ] }
 matrix-sdk-ui = { version = "=0.19.0", default-features = false, features = [
   "rustls-aws-lc-rs",
@@ -118,3 +123,13 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 hmac = "0.13"
 sha1 = "0.11"
 hex = "0.4"
+matrix-sdk = { version = "=0.19.0", default-features = false, features = [
+  "testing",
+  "sqlite",
+  "bundled-sqlite",
+  "rustls-aws-lc-rs",
+  "markdown",
+  "qrcode",
+  "experimental-search",
+] }
+matrix-sdk-test = "=0.19.0"

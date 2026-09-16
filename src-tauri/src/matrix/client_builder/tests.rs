@@ -55,7 +55,8 @@ fn marker_stable() {
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"unstable-msc4426"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
     assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
-    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
     assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-send-custom-to-device"));
@@ -162,6 +163,12 @@ fn product_default_config_plan_has_no_secrets() {
         .any(|f| f == "automatic-room-key-forwarding"));
     assert!(plan.store_layout.confined_under_matrix_root);
     assert_eq!(plan.store_layout.relative_state_dir, "state");
+    assert_eq!(plan.store_layout.relative_search_dir, "search");
+    assert!(plan.indexed_message_search);
+    assert!(plan
+        .approved_features
+        .iter()
+        .any(|feature| feature == "experimental-search"));
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -205,6 +212,7 @@ fn build_unauthenticated_client_offline_sqlite() {
     );
     assert!(cfg.state_store_path().is_dir());
     assert!(cfg.cache_store_path().is_dir());
+    assert!(cfg.search_store_path().is_dir());
 
     drop(client);
     drop(_enter);

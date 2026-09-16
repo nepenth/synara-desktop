@@ -53,8 +53,10 @@ requireText(workspace, "[profile.nse-release]", "NSE size profile");
 requireText(workspace, 'lto = "fat"', "NSE cross-crate LTO");
 requireText(coreManifest, 'default = ["full-uniffi"]', "full Core default feature");
 requireText(coreManifest, "nse-preview = []", "NSE Core feature");
+requireText(coreManifest, 'search-index = ["matrix-sdk/experimental-search"]', "desktop search-index feature");
 requireText(nseManifest, "default-features = false", "full binding exclusion");
 requireText(nseManifest, 'features = ["nse-preview"]', "NSE-only feature");
+forbidText(nseManifest, "search-index", "NSE search-index feature");
 requireText(nseUdl, "interface NsePreviewRequest {", "cancelable request boundary");
 requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");
@@ -114,5 +116,7 @@ requireText(
   "matrix-sdk-crypto/automatic-room-key-forwarding",
   "crypto forwarding feature via Core",
 );
+requireText(productionFeatures, "matrix-sdk-search", "NSE local-index crate leak check");
+requireText(productionFeatures, "tantivy", "NSE tantivy leak check");
 
 console.log("Synara NSE Core isolation scaffold checks passed.");
