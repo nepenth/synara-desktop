@@ -86,6 +86,7 @@ test('jump to latest stays available until the live tail is the loaded window', 
   assert.equal(shouldShowJumpToLatest('unread', true), true);
   assert.equal(shouldShowJumpToLatest('focused', true), true);
   assert.equal(shouldShowJumpToLatest('restored', true), true);
+  assert.equal(shouldShowJumpToLatest('thread', true), true);
   assert.equal(shouldShowJumpToLatest('live_bottom', false), true);
   assert.equal(shouldShowJumpToLatest('live_bottom', true), false);
   assert.equal(shouldShowJumpToLatest(undefined, false), true);
@@ -149,6 +150,7 @@ test('live-tail read target rejects background, stale-room, and non-live views',
   );
   assert.equal(nativeLiveReadTarget({ ...liveReadInput, atLiveBottom: false }), undefined);
   assert.equal(nativeLiveReadTarget({ ...liveReadInput, positionKind: 'focused' }), undefined);
+  assert.equal(nativeLiveReadTarget({ ...liveReadInput, positionKind: 'thread' }), undefined);
 });
 
 test('explicit marked-unread state is cleared even when the receipt already covers the tail', () => {
@@ -190,6 +192,7 @@ test('follow-live targets only painted tails on non-live positions', () => {
   assert.equal(nativeFollowLiveTarget({ ...base, positionKind: 'focused' }), '$tail:example.org');
   // Already live: the receipt path owns the tail, never follow.
   assert.equal(nativeFollowLiveTarget({ ...base, positionKind: 'live_bottom' }), undefined);
+  assert.equal(nativeFollowLiveTarget({ ...base, positionKind: 'thread' }), undefined);
   // Not at the visual bottom, or no painted tail: no transition.
   assert.equal(nativeFollowLiveTarget({ ...base, atLiveBottom: false }), undefined);
   assert.equal(nativeFollowLiveTarget({ ...base, latestVisibleEventId: undefined }), undefined);

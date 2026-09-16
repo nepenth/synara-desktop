@@ -44,6 +44,11 @@ pub enum NativeTimelineOpenPosition {
     Focused {
         event_id: String,
     },
+    /// Dedicated `TimelineFocus::Thread` stream. Distinct from a permalink
+    /// `Focused` open of the same root event id.
+    Thread {
+        root_event_id: String,
+    },
 }
 
 /// Typed input for the native timeline-open owner.
@@ -383,6 +388,43 @@ mod tests {
             request.position,
             NativeTimelineOpenPosition::Focused {
                 event_id: "$event:example.org".into()
+            }
+        );
+    }
+
+    #[test]
+    fn thread_open_request_keeps_the_root_at_the_native_boundary() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "thread", "root_event_id": "$root:example.org" }
+        }))
+        .unwrap();
+        assert_eq!(
+            request.position,
+            NativeTimelineOpenPosition::Thread {
+                root_event_id: "$root:example.org".into()
+            }
+        );
+    }
+
+    #[test]
+    fn thread_open_request_rejects_missing_or_empty_root() {
+        assert!(
+            serde_json::from_value::<NativeTimelineOpenRequest>(serde_json::json!({
+                "roomId": "!room:example.org",
+                "position": { "kind": "thread" }
+            }))
+            .is_err()
+        );
+        let empty: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "thread", "root_event_id": "" }
+        }))
+        .unwrap();
+        assert_eq!(
+            empty.position,
+            NativeTimelineOpenPosition::Thread {
+                root_event_id: "".into()
             }
         );
     }

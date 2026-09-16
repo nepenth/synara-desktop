@@ -31,3 +31,16 @@ pub const FORBIDDEN_MATRIX_SDK_FEATURES: &[&str] = &[
     "js",
     "uniffi",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn forbidden_features_keep_experimental_search() {
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+    }
+}
