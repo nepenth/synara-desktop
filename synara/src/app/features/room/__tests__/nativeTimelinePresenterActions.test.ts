@@ -261,6 +261,15 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   );
   assert.match(presenter, /NativeTimelineDateRail/);
   assert.match(presenter, /reserveRail=\{showDateRail\}/);
+  assert.match(htmlCss, /export const HistoryStatusHitTarget = style\(/);
+  assert.doesNotMatch(historyStatus, /pointerEvents: 'auto'/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusHitTarget/);
+  assert.match(presenter, /hasSparseLoadButton \? \(/);
+  assert.match(presenter, /<Box shrink="No"/);
+  assert.doesNotMatch(
+    presenter,
+    /position: 'absolute', left: config\.space\.S400, top: config\.space\.S300/
+  );
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
   assert.doesNotMatch(presenter, />\s*Mark unread\s*</);

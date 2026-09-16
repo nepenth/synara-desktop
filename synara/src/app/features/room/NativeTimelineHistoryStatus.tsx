@@ -65,10 +65,7 @@ function NativeTimelineHistoryStatusView({
           ? htmlCss.HistoryStatusOverlayBackward
           : htmlCss.HistoryStatusOverlayForward
       }
-      style={{
-        pointerEvents: 'auto',
-        ...edgeInsetStyle(reserveRail),
-      }}
+      style={edgeInsetStyle(reserveRail)}
     >
       {kind === 'loading' ? (
         <div
@@ -108,16 +105,18 @@ function NativeTimelineHistoryStatusView({
         </div>
       ) : null}
       {kind === 'load_more' && onLoadMore ? (
-        <Button
-          variant="Secondary"
-          fill="Soft"
-          radii="Pill"
-          outlined
-          size="300"
-          onClick={onLoadMore}
-        >
-          <Text size="B300">{copy.loadMore}</Text>
-        </Button>
+        <div className={htmlCss.HistoryStatusHitTarget}>
+          <Button
+            variant="Secondary"
+            fill="Soft"
+            radii="Pill"
+            outlined
+            size="300"
+            onClick={onLoadMore}
+          >
+            <Text size="B300">{copy.loadMore}</Text>
+          </Button>
+        </div>
       ) : null}
     </div>
   );

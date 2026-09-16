@@ -3350,6 +3350,13 @@ export function NativeTimelinePresenter({
           </Button>
         </Box>
       ) : null}
+      {hasSparseLoadButton ? (
+        <Box shrink="No" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+          <Button onClick={() => requestPagination('backwards')}>
+            <Text>Load older messages</Text>
+          </Button>
+        </Box>
+      ) : null}
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
         <Scroll
           id="native-timeline-history"
@@ -3454,13 +3461,6 @@ export function NativeTimelinePresenter({
             onJumpToIndex={jumpToHistoryIndex}
           />
         ) : null}
-        {hasSparseLoadButton && (
-          <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
-            <Button onClick={() => requestPagination('backwards')}>
-              <Text>Load older messages</Text>
-            </Button>
-          </Box>
-        )}
         {(showJumpToLastRead || showJumpToLatest) && (
           <Box
             direction="Column"
