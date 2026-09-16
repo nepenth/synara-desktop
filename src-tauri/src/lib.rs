@@ -2,6 +2,10 @@
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
+// Desktop `cargo clippy --all-targets` overflows rustc's default query-depth
+// limit while laying out `{async fn body of matrix_send_attachment}` (and peers).
+// NSE/Core already pin 256; keep-both dropped this crate-level attribute.
+#![recursion_limit = "256"]
 
 mod bridge;
 mod build_info;

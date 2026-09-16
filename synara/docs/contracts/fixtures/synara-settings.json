@@ -27,7 +27,9 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
-      "experimentalWidgetsEnabled": false
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "sharedWithOptionalFields": {
       "themeId": "aurora",
@@ -61,7 +63,9 @@
       "hour24Clock": true,
       "dateFormatString": "YYYY-MM-DD",
       "developerTools": true,
-      "experimentalWidgetsEnabled": true
+      "experimentalWidgetsEnabled": true,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "desktopPlatform": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
@@ -104,6 +108,8 @@
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
       "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true,
       "desktopShortcutShow": "CmdOrCtrl+1"
     },
     "badMessageSpacing": {
@@ -133,7 +139,9 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
-      "experimentalWidgetsEnabled": false
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "badThemeBaseColor": {
       "useSystemTheme": true,
@@ -163,7 +171,9 @@
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
       "experimentalWidgetsEnabled": false,
-      "themeBaseColor": "aabbcc"
+      "themeBaseColor": "aabbcc",
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "badMessageTextTone": {
       "useSystemTheme": true,
@@ -192,7 +202,9 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
-      "experimentalWidgetsEnabled": false
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "desktopPlatformContainsSharedField": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
