@@ -3491,10 +3491,10 @@ fn matrix_composer_get_reply_draft(
     })
 }
 
-<<<<<<< HEAD
 fn pinned_events_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     timeline_action_owner_error(diagnostic_id)
-=======
+}
+
 fn matrix_thread_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixThreadListRequest = serde_json::from_value(request.payload)
@@ -3510,7 +3510,6 @@ fn matrix_thread_list(state: Arc<CoreState>, request: CommandEnvelope) -> Comman
         serde_json::to_value(snapshot)
             .map_err(|_| core_state_error("p2-thread-list-serialization-failed"))
     })
->>>>>>> ce7418f9 (Add a native thread list panel and /thread/ route.)
 }
 
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {

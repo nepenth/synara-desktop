@@ -155,7 +155,6 @@ import {
   nativeComposerSendRelation,
   useNativeComposerReplyDraft,
 } from './nativeComposerDraft';
-<<<<<<< HEAD
 import {
   COMPOSER_UNFURL_DEBOUNCE_MS,
   fetchMediaPreviewWithNativeOwner,
@@ -165,9 +164,7 @@ import {
 import { NativeLinkUnfurlCard } from './nativeLinkUnfurlCard';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
-=======
 import { useNativeThreadRoot } from './nativeThreadViewContext';
->>>>>>> 2083405a (Hide threaded events on live and scope composer drafts by thread.)
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
   completeAttachmentSendStep,

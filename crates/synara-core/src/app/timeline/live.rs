@@ -34,15 +34,9 @@ use matrix_sdk::{
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-<<<<<<< HEAD
-    EncryptedMessage, MsgLikeKind, Timeline, TimelineBuilder, TimelineDetails,
-    TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
-    TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
-=======
     EncryptedMessage, EventSendState, MsgLikeKind, ThreadListPaginationState, ThreadListService,
     Timeline, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId,
     TimelineFocus, TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
->>>>>>> ce7418f9 (Add a native thread list panel and /thread/ route.)
     TimelineReadReceiptTracking,
 };
 use serde::{Deserialize, Serialize};
