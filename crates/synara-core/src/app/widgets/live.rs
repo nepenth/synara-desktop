@@ -140,6 +140,7 @@ impl NativeWidgetOwner {
         })
     }
 
+    #[allow(clippy::too_many_arguments)] // Host boundary mirrors the typed widget-open contract.
     pub async fn open(
         &self,
         enabled: bool,

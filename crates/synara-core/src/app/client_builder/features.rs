@@ -187,7 +187,6 @@ mod tests {
             matrix_sdk_crypto::OlmMachine::set_room_key_forwarding_enabled;
         let _set_requests: fn(&matrix_sdk_crypto::OlmMachine, bool) =
             matrix_sdk_crypto::OlmMachine::set_room_key_requests_enabled;
-        assert!(cfg!(feature = "room-key-forwarding"));
     }
 
     #[test]

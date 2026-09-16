@@ -54,10 +54,7 @@ impl NativeDehydratedDevicesOwner {
         session_generation: u64,
     ) -> Self {
         let dehydrated = client.encryption().dehydrated_devices();
-        let supported = match dehydrated.is_supported().await {
-            Ok(supported) => supported,
-            Err(_) => false,
-        };
+        let supported = dehydrated.is_supported().await.unwrap_or_default();
         let status = Arc::new(Mutex::new(DehydratedStatusInner {
             supported,
             active: false,

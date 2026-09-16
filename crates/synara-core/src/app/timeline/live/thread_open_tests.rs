@@ -39,7 +39,7 @@ fn row_event_id(row: &TimelineViewRow) -> Option<&str> {
     }
 }
 
-fn message_thread_root<'a>(row: &'a TimelineViewRow) -> Option<&'a str> {
+fn message_thread_root(row: &TimelineViewRow) -> Option<&str> {
     match row {
         TimelineViewRow::Message(row) => row.thread_root.as_deref(),
         _ => None,
