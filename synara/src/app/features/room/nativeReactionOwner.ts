@@ -219,7 +219,9 @@ export async function nativeReactionViewFromEventReadback(input: {
     'matrix_timeline_event_readback',
     { roomId: input.roomId, eventId: input.eventId }
   );
-  if (!result.available || result.value.roomId !== input.roomId) return undefined;
+  if (!result.available || !result.value || result.value.roomId !== input.roomId) {
+    return undefined;
+  }
   const reactions = result.value.item?.reactions;
   if (!Array.isArray(reactions)) return undefined;
   return nativeReactionsForViewer(reactions);

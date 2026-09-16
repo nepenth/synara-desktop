@@ -23,17 +23,19 @@ const EMPTY_STATUS: NativeX509IdentityStatus = {
 };
 
 export function X509IdentityCard() {
-  const [loadState, loadStatus] = useAsyncCallback(
+  const [loadState, loadStatus] = useAsyncCallback<NativeX509IdentityStatus, Error, []>(
     useCallback(() => getNativeX509IdentityStatus(), [])
   );
-  const [enableState, setEnabled] = useAsyncCallback(
+  const [enableState, setEnabled] = useAsyncCallback<NativeX509IdentityStatus, Error, [boolean]>(
     useCallback((enabled: boolean) => setNativeX509IdentityEnabled(enabled), [])
   );
-  const [importState, importCa] = useAsyncCallback(useCallback(() => importNativeX509Ca(), []));
-  const [removeState, removeCa] = useAsyncCallback(
+  const [importState, importCa] = useAsyncCallback<NativeX509IdentityStatus, Error, []>(
+    useCallback(() => importNativeX509Ca(), [])
+  );
+  const [removeState, removeCa] = useAsyncCallback<NativeX509IdentityStatus, Error, [string]>(
     useCallback((fingerprint: string) => removeNativeX509Ca(fingerprint), [])
   );
-  const [signerState, importSigner] = useAsyncCallback(
+  const [signerState, importSigner] = useAsyncCallback<NativeX509IdentityStatus, Error, []>(
     useCallback(() => importNativeX509Signer(), [])
   );
 
