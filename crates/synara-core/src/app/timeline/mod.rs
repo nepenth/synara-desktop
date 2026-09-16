@@ -69,8 +69,9 @@ pub use native::{
     NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
     NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
     NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeTimelineTimestampToEventReadback, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,

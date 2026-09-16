@@ -1,66 +1,62 @@
 import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { Text } from 'folds';
 import {
-  activeTimelineHistoryMarkIndex,
+  activeTimelineHistoryMarkForTimestamp,
   formatTimelineHistoryMarkLabel,
-  rowIndexForRailRatio,
+  formatTimelineRailTimestamp,
+  railRatioForTimestamp,
+  timestampForRailRatio,
   type TimelineHistoryMark,
+  type TimelineRailAxis,
 } from '../../utils/timelineDateMarks';
 import * as htmlCss from './nativeTimelineHtml.css';
 
 type NativeTimelineDateRailProps = {
   marks: readonly TimelineHistoryMark[];
-  rowCount: number;
+  axis: TimelineRailAxis;
   hour24Clock: boolean;
   scrollRef: React.RefObject<HTMLDivElement | null>;
-  getVisibleStartIndex: () => number;
-  onJumpToIndex: (index: number) => void;
-};
-
-const markAtOrBefore = (
-  marks: readonly TimelineHistoryMark[],
-  index: number
-): TimelineHistoryMark | undefined => {
-  let current: TimelineHistoryMark | undefined;
-  for (const mark of marks) {
-    if (mark.index <= index) current = mark;
-    else break;
-  }
-  return current;
+  getVisibleTimestamp: () => number;
+  onPreviewTimestamp: (timestampMs: number) => void;
+  onCommitTimestamp: (timestampMs: number) => void;
 };
 
 export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail({
   marks,
-  rowCount,
+  axis,
   hour24Clock,
   scrollRef,
-  getVisibleStartIndex,
-  onJumpToIndex,
+  getVisibleTimestamp,
+  onPreviewTimestamp,
+  onCommitTimestamp,
 }: NativeTimelineDateRailProps) {
   const trackRef = useRef<HTMLDivElement>(null);
   const thumbRef = useRef<HTMLDivElement>(null);
   const labelRef = useRef<HTMLDivElement>(null);
   const ticksRef = useRef<Array<HTMLButtonElement | null>>([]);
   const lastActiveMarkRef = useRef(-1);
+  const lastTimestampRef = useRef(axis.endMs);
   const [hoverLabel, setHoverLabel] = useState<string>();
 
   const paintThumb = useCallback(
-    (index: number, updateAria: boolean) => {
+    (timestampMs: number, updateAria: boolean) => {
       const track = trackRef.current;
       const thumb = thumbRef.current;
-      if (!track || !thumb || rowCount <= 0) return;
-      const ratio = rowCount <= 1 ? 0 : index / Math.max(1, rowCount - 1);
+      if (!track || !thumb) return;
+      const ratio = railRatioForTimestamp(timestampMs, axis.startMs, axis.endMs);
       const y = ratio * track.clientHeight;
       thumb.style.transform = `translate3d(0, ${y}px, 0)`;
       if (labelRef.current) {
         labelRef.current.style.transform = `translate3d(0, ${y}px, 0) translateY(-50%)`;
       }
-      const active = activeTimelineHistoryMarkIndex(marks, index);
+      const active = activeTimelineHistoryMarkForTimestamp(marks, timestampMs);
       if (!updateAria && active === lastActiveMarkRef.current) return;
       lastActiveMarkRef.current = active;
-      track.setAttribute('aria-valuenow', String(index));
-      const mark = active >= 0 ? marks[active] : markAtOrBefore(marks, index);
-      const label = mark ? formatTimelineHistoryMarkLabel(mark, hour24Clock) : undefined;
+      track.setAttribute('aria-valuenow', String(timestampMs));
+      const mark = active >= 0 ? marks[active] : undefined;
+      const label = mark
+        ? formatTimelineHistoryMarkLabel(mark, hour24Clock)
+        : formatTimelineRailTimestamp(timestampMs, hour24Clock, axis);
       if (label) track.setAttribute('aria-valuetext', label);
       else track.removeAttribute('aria-valuetext');
       ticksRef.current.forEach((tick, tickIndex) => {
@@ -69,15 +65,15 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         else tick.removeAttribute('aria-current');
       });
     },
-    [hour24Clock, marks, rowCount]
+    [axis, hour24Clock, marks]
   );
 
   useLayoutEffect(() => {
     const scrollEl = scrollRef.current;
-    const sync = () => paintThumb(getVisibleStartIndex(), false);
+    const sync = () => paintThumb(getVisibleTimestamp(), false);
     sync();
     if (!scrollEl) return undefined;
-    const onScroll = () => paintThumb(getVisibleStartIndex(), false);
+    const onScroll = () => paintThumb(getVisibleTimestamp(), false);
     scrollEl.addEventListener('scroll', onScroll, { passive: true });
     const track = trackRef.current;
     const observer = track ? new ResizeObserver(sync) : undefined;
@@ -86,36 +82,37 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
       scrollEl.removeEventListener('scroll', onScroll);
       observer?.disconnect();
     };
-  }, [getVisibleStartIndex, paintThumb, scrollRef]);
+  }, [getVisibleTimestamp, paintThumb, scrollRef]);
 
-  const jumpFromClientY = useCallback(
+  const previewFromClientY = useCallback(
     (clientY: number) => {
       const track = trackRef.current;
-      if (!track || rowCount <= 0) return;
+      if (!track) return;
       const rect = track.getBoundingClientRect();
       const ratio = rect.height <= 0 ? 0 : (clientY - rect.top) / rect.height;
-      const index = rowIndexForRailRatio(ratio, rowCount);
-      onJumpToIndex(index);
-      const mark = markAtOrBefore(marks, index);
-      setHoverLabel(mark ? formatTimelineHistoryMarkLabel(mark, hour24Clock) : undefined);
-      paintThumb(index, true);
+      const timestampMs = timestampForRailRatio(ratio, axis.startMs, axis.endMs);
+      lastTimestampRef.current = timestampMs;
+      onPreviewTimestamp(timestampMs);
+      setHoverLabel(formatTimelineRailTimestamp(timestampMs, hour24Clock, axis));
+      paintThumb(timestampMs, true);
     },
-    [hour24Clock, marks, onJumpToIndex, paintThumb, rowCount]
+    [axis, hour24Clock, onPreviewTimestamp, paintThumb]
   );
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    jumpFromClientY(event.clientY);
+    previewFromClientY(event.clientY);
   };
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    jumpFromClientY(event.clientY);
+    previewFromClientY(event.clientY);
   };
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    onCommitTimestamp(lastTimestampRef.current);
     setHoverLabel(undefined);
   };
 
@@ -125,27 +122,33 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         ref={trackRef}
         className={htmlCss.DateRailTrack}
         role="scrollbar"
-        aria-label="Jump to a date in loaded history"
+        aria-label={
+          axis.fullRoom ? 'Jump to a date in room history' : 'Jump to a date in loaded history'
+        }
         aria-controls="native-timeline-history"
         aria-orientation="vertical"
-        aria-valuemin={0}
-        aria-valuemax={Math.max(0, rowCount - 1)}
-        aria-valuenow={0}
+        aria-valuemin={axis.startMs}
+        aria-valuemax={axis.endMs}
+        aria-valuenow={axis.endMs}
         tabIndex={0}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onKeyDown={(event) => {
-          const startIndex = getVisibleStartIndex();
+          const current = getVisibleTimestamp();
+          const span = Math.max(1, axis.endMs - axis.startMs);
+          const step = Math.max(1, Math.round(span / 20));
           if (event.key === 'ArrowUp' || event.key === 'Home') {
             event.preventDefault();
-            onJumpToIndex(Math.max(0, startIndex - (event.key === 'Home' ? rowCount : 8)));
+            onCommitTimestamp(
+              event.key === 'Home' ? axis.startMs : Math.max(axis.startMs, current - step)
+            );
           }
           if (event.key === 'ArrowDown' || event.key === 'End') {
             event.preventDefault();
-            onJumpToIndex(
-              Math.min(rowCount - 1, startIndex + (event.key === 'End' ? rowCount : 8))
+            onCommitTimestamp(
+              event.key === 'End' ? axis.endMs : Math.min(axis.endMs, current + step)
             );
           }
         }}
@@ -153,7 +156,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         <div ref={thumbRef} className={htmlCss.DateRailThumb} />
       </div>
       {marks.map((mark, index) => {
-        const ratio = rowCount <= 1 ? 0 : mark.index / Math.max(1, rowCount - 1);
+        const ratio = railRatioForTimestamp(mark.timestampMs, axis.startMs, axis.endMs);
         const label = formatTimelineHistoryMarkLabel(mark, hour24Clock);
         return (
           <button
@@ -166,7 +169,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
             style={{ top: `${ratio * 100}%` }}
             title={label}
             aria-label={`Jump to ${label}`}
-            onClick={() => onJumpToIndex(mark.index)}
+            onClick={() => onCommitTimestamp(mark.timestampMs)}
           />
         );
       })}

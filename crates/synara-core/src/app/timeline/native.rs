@@ -284,6 +284,15 @@ pub struct NativeTimelineEventReadback {
     pub item: NativeTimelineItem,
 }
 
+/// Homeserver `/timestamp_to_event` result for a full-room date-rail jump.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineTimestampToEventReadback {
+    pub room_id: String,
+    pub event_id: String,
+    pub origin_server_ts: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

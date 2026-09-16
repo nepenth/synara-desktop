@@ -224,6 +224,13 @@ window.__SYNARA_DESKTOP__ = {
           : oldSnapshot
       ) as T;
     }
+    if (command === 'matrix_timeline_timestamp_to_event') {
+      return {
+        roomId: room,
+        eventId: '$history-jump',
+        originServerTs: Number(args?.timestampMs) || 1_600_000_000_000,
+      } as T;
+    }
     if (command === 'matrix_timeline_open') {
       let selectedPosition = position;
       let lastRead = false;
@@ -231,6 +238,22 @@ window.__SYNARA_DESKTOP__ = {
         if (!request.position.event_id) throw new Error('Focused open requires event_id');
         selectedPosition = { kind: 'focused', target_event_id: request.position.event_id };
         lastRead = request.position.event_id === '$missing';
+        if (
+          request.position.event_id === '$history-jump' &&
+          !rows.some((row) => row.eventId === '$history-jump')
+        ) {
+          rows = [
+            {
+              ...makeRow(0),
+              itemId: '$history-jump',
+              eventId: '$history-jump',
+              originServerTs: 1_600_000_000_000,
+              body: 'History jump target',
+            },
+            ...rows,
+          ];
+          update();
+        }
       }
       if (lastRead && failLastRead) {
         failLastRead = false;
@@ -694,7 +717,17 @@ function App() {
           border: '1px solid gray',
         }}
       >
-        {mounted && <NativeTimelinePresenter roomId={room} eventId={focusedEventId} />}
+        {mounted && (
+          <NativeTimelinePresenter
+            roomId={room}
+            eventId={focusedEventId}
+            roomCreatedTs={
+              params.has('roomCreated')
+                ? Number(params.get('roomCreated')) || 1_600_000_000_000
+                : undefined
+            }
+          />
+        )}
       </div>
     </>
   );

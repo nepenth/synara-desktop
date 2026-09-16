@@ -4,8 +4,13 @@ import {
   activeTimelineHistoryMarkIndex,
   collectTimelineHistoryMarks,
   formatTimelineHistoryMarkLabel,
+  isTimestampInLoadedWindow,
   rowIndexForRailRatio,
+  rowIndexForTimestamp,
   shouldShowTimelineDateRail,
+  timestampForRailRatio,
+  timelineRailAxis,
+  withRoomBeginningMark,
 } from '../timelineDateMarks';
 
 const day = (year: number, month: number, date: number, hour = 12): number =>
@@ -83,6 +88,50 @@ test('date rail stays hidden for sparse windows', () => {
   assert.equal(shouldShowTimelineDateRail(6, 3), false);
   assert.equal(shouldShowTimelineDateRail(40, 1), false);
   assert.equal(shouldShowTimelineDateRail(40, 2), true);
+});
+
+test('full-room axis maps ratio onto timestamps and keeps loaded ticks local', () => {
+  const timed = [
+    { index: 0, timestampMs: day(2026, 9, 10) },
+    { index: 10, timestampMs: day(2026, 9, 16) },
+  ];
+  const createTs = day(2024, 1, 1);
+  const axis = timelineRailAxis(timed, createTs, day(2026, 9, 16, 18));
+  assert.equal(axis?.fullRoom, true);
+  assert.equal(axis?.startMs, createTs);
+  assert.equal(timestampForRailRatio(0, axis!.startMs, axis!.endMs), createTs);
+  assert.equal(
+    isTimestampInLoadedWindow(day(2026, 9, 12), axis!, {
+      backwardAvailable: true,
+      forwardAvailable: true,
+    }),
+    true
+  );
+  assert.equal(
+    isTimestampInLoadedWindow(createTs, axis!, {
+      backwardAvailable: true,
+      forwardAvailable: true,
+    }),
+    false
+  );
+  assert.equal(
+    isTimestampInLoadedWindow(createTs, axis!, {
+      backwardAvailable: false,
+      forwardAvailable: true,
+    }),
+    true
+  );
+  const marks = withRoomBeginningMark(
+    collectTimelineHistoryMarks([
+      { kind: 'message', originServerTs: day(2026, 9, 10) },
+      { kind: 'message', originServerTs: day(2026, 9, 16) },
+    ]),
+    axis
+  );
+  assert.equal(marks[0].kind, 'beginning');
+  assert.equal(formatTimelineHistoryMarkLabel(marks[0], true), 'Beginning');
+  assert.equal(rowIndexForTimestamp(timed, day(2026, 9, 10)), 0);
+  assert.equal(rowIndexForTimestamp(timed, day(2026, 9, 16)), 10);
 });
 
 test('day labels use today/yesterday when applicable', () => {

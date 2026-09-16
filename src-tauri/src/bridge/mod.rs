@@ -55,6 +55,7 @@ pub(crate) mod timeline_paginate;
 pub(crate) mod timeline_reactions;
 pub(crate) mod timeline_set_read_state;
 pub(crate) mod timeline_snapshot;
+pub(crate) mod timeline_timestamp_to_event;
 pub(crate) mod typing_set;
 pub(crate) mod typing_snapshot;
 pub(crate) mod user_directory;

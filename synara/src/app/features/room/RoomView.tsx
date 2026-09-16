@@ -67,6 +67,8 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const mx = useMatrixClient();
 
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+  const createEvent = useStateEvent(room, StateEvent.RoomCreate);
+  const roomCreatedTs = createEvent?.getTs();
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
@@ -97,7 +99,12 @@ export function RoomView({ eventId }: { eventId?: string }) {
     <Page ref={roomViewRef}>
       <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
         {room.isCallRoom() && <VoiceRoom />}
-        <NativeTimelinePresenter key={roomId} roomId={roomId} eventId={eventId} />
+        <NativeTimelinePresenter
+          key={roomId}
+          roomId={roomId}
+          eventId={eventId}
+          roomCreatedTs={roomCreatedTs}
+        />
         <RoomViewTyping room={room} />
       </Box>
       <Box shrink="No" direction="Column">

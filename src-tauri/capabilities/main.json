@@ -203,6 +203,7 @@
     "allow-matrix-reaction-redact",
     "allow-matrix-timeline-set-read-state",
     "allow-matrix-timeline-event-readback",
+    "allow-matrix-timeline-timestamp-to-event",
     "allow-matrix-timeline-follow-live",
     "allow-matrix-timeline-jump-latest",
     "allow-matrix-timeline-edit-text",

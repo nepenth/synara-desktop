@@ -71,7 +71,8 @@ use crate::app::timeline::{
     NativeTimelineFollowLiveRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
     NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
     NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
+    NativeTimelineReadStateRequest, NativeTimelineTimestampToEventReadback,
+    NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::user_profile::{
@@ -755,6 +756,14 @@ struct MatrixTimelineJumpLatestRequest {
 struct MatrixTimelineEventReadbackRequest {
     room_id: String,
     event_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_timeline_timestamp_to_event`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineTimestampToEventRequest {
+    room_id: String,
+    timestamp_ms: u64,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_timeline_paginate`.
@@ -2457,6 +2466,12 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_timeline_event_readback must remain in the command census");
     registry
+        .register(
+            "matrix_timeline_timestamp_to_event",
+            matrix_timeline_timestamp_to_event,
+        )
+        .expect("built-in matrix_timeline_timestamp_to_event must remain in the command census");
+    registry
         .register("matrix_timeline_paginate", matrix_timeline_paginate)
         .expect("built-in matrix_timeline_paginate must remain in the command census");
     registry
@@ -2674,6 +2689,38 @@ fn timeline_event_readback_owner_error(diagnostic_id: &'static str) -> MatrixIpc
         "v-crypto.6-event-room-not-found" | "d0.3-timeline-room-not-found" => {
             MatrixIpcErrorCategory::Forbidden
         }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn matrix_timeline_timestamp_to_event(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineTimestampToEventRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-timeline-timestamp-to-event-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-timestamp-to-event-no-session")
+        })?;
+        let readback: NativeTimelineTimestampToEventReadback = owner
+            .timestamp_to_event(&payload.room_id, payload.timestamp_ms)
+            .await
+            .map_err(timeline_timestamp_to_event_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-timestamp-to-event-serialization-failed"))
+    })
+}
+
+fn timeline_timestamp_to_event_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id" | "p2-timeline-timestamp-to-event-invalid-timestamp" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "d0.3-timeline-room-not-found" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -6442,6 +6489,7 @@ mod tests {
                 "matrix_timeline_report",
                 "matrix_timeline_set_read_state",
                 "matrix_timeline_snapshot",
+                "matrix_timeline_timestamp_to_event",
                 "matrix_timeline_unpin",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
@@ -9920,6 +9968,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-timeline-event-readback-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_timestamp_to_event_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_timestamp_to_event".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","timestampMs":1_700_000_000_000_u64}),
+            })
+            .await
+            .expect_err("timeline timestamp_to_event without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-timestamp-to-event-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_timestamp_to_event_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_timestamp_to_event".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "timestampMs":1_700_000_000_000_u64,
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline timestamp_to_event must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-timestamp-to-event-invalid-payload")
         );
     }
 

@@ -225,6 +225,11 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     /export const HistoryStatusCardError = style\(\{[\s\S]*?backgroundColor: color\.Critical\.Container,/
   );
   assert.match(dateRail, /Jump to a date in loaded history/);
+  assert.match(dateRail, /Jump to a date in room history/);
+  assert.match(dateRail, /onCommitTimestamp/);
+  assert.match(presenter, /timestampToEventWithNativeOwner/);
+  assert.match(presenter, /roomCreatedTs/);
+  assert.doesNotMatch(presenter, /mx\.timestampToEvent/);
   assert.match(dateRail, /aria-controls="native-timeline-history"/);
   assert.match(dateRail, /translate3d/);
   assert.match(dateRail, /React\.memo/);

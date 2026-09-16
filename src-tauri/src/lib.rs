@@ -485,6 +485,7 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_set_read_state,
             matrix::auth::product::matrix_timeline_event_readback,
+            matrix::auth::product::matrix_timeline_timestamp_to_event,
             matrix::auth::product::matrix_timeline_follow_live,
             matrix::auth::product::matrix_timeline_reaction_toggle,
             matrix::auth::product::matrix_reaction_ensure,

@@ -166,6 +166,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_timeline_set_read_state",
     "matrix_timeline_close",
     "matrix_timeline_event_readback",
+    "matrix_timeline_timestamp_to_event",
     "matrix_timeline_follow_live",
     "matrix_timeline_jump_latest",
     "matrix_timeline_edit_text",
