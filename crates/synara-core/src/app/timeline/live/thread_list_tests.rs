@@ -47,7 +47,9 @@ async fn thread_list_open_projects_ids_and_counts_without_tokens() {
     assert_eq!(snapshot.threads.len(), 1);
     assert_eq!(snapshot.threads[0].root_event_id, root_id.as_str());
     assert_eq!(snapshot.threads[0].reply_count, 0);
-    assert!(snapshot.threads[0].unread_count.is_none());
+    assert!(
+        snapshot.threads[0].unread_count.is_none() || snapshot.threads[0].unread_count == Some(0)
+    );
     let json = serde_json::to_value(&snapshot).unwrap();
     let encoded = json.to_string();
     assert!(!encoded.contains("prev_batch"));

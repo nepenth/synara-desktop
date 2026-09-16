@@ -15,6 +15,7 @@ use matrix_sdk::{
     event_cache::PaginationStatus,
     room::{calls::CallError, edit::EditedContent, Receipts},
     ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType,
         events::{
             poll::unstable_start::UnstablePollStartEventContent,
             reaction::ReactionEventContent,
@@ -27,7 +28,7 @@ use matrix_sdk::{
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncStateEvent,
             AnySyncTimelineEvent, Mentions, StateEventType,
         },
-        OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
+        OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UserId,
     },
     Client, EncryptionState, Room,
 };
@@ -106,6 +107,8 @@ mod approval_history_tests;
 mod thread_list_tests;
 #[cfg(test)]
 mod thread_open_tests;
+#[cfg(test)]
+mod thread_receipt_tests;
 use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
 use approval_inbox::ApprovalInboxOwner;
@@ -191,6 +194,28 @@ fn validate_poll_vote_selection(
     Ok(answer_ids)
 }
 
+fn position_allows_mark_read(position: &TimelineViewPosition) -> bool {
+    matches!(
+        position,
+        TimelineViewPosition::LiveBottom | TimelineViewPosition::Thread { .. }
+    )
+}
+
+async fn thread_unread_count(
+    client: &Client,
+    room_id: &RoomId,
+    root_event_id: &str,
+) -> Option<u32> {
+    let thread_id = OwnedEventId::try_from(root_event_id).ok()?;
+    let (cache, _drop) = client
+        .event_cache()
+        .thread(room_id, &thread_id)
+        .await
+        .ok()?;
+    let unread = cache.num_unread_messages().await.ok()?;
+    Some(unread.min(u64::from(u32::MAX)) as u32)
+}
+
 fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
     Receipts::new()
         .fully_read_marker(Some(event_id.clone()))
@@ -258,7 +283,11 @@ async fn mark_live_timeline_read(
         LiveReadTargetPlan::NoOp => Ok(None),
         LiveReadTargetPlan::ClearUnreadFlag => {
             // Explicit Mark Read must still clear a manually marked-unread room
-            // when the room has no receipt-capable remote event.
+            // when the room has no receipt-capable remote event. A thread stream
+            // must not clear the room unread flag.
+            if timeline.is_threaded() {
+                return Ok(None);
+            }
             timeline
                 .room()
                 .set_unread_flag(false)
@@ -267,14 +296,24 @@ async fn mark_live_timeline_read(
             Ok(None)
         }
         LiveReadTargetPlan::Send(event_id) => {
-            timeline
-                // Pinned matrix-sdk-ui 0.19 invariant: `Timeline::send_multiple_receipts`
-                // clears the SDK room's unread flag after a submitted marker update and
-                // also when receipt deduplication removes every unchanged marker. Keep
-                // this evidence in the adjacent regression test when upgrading the SDK.
-                .send_multiple_receipts(exact_read_receipts(event_id.clone()))
-                .await
-                .map_err(|_| "v-timeline-send-read-markers-failed")?;
+            if timeline.is_threaded() {
+                // 0.19 FullyRead receipts are always Unthreaded. Thread streams
+                // send a private receipt so Timeline infers ReceiptThread::Thread
+                // from TimelineFocus::Thread.
+                timeline
+                    .send_single_receipt(ReceiptType::ReadPrivate, event_id.clone())
+                    .await
+                    .map_err(|_| "v-timeline-send-thread-receipt-failed")?;
+            } else {
+                timeline
+                    // Pinned matrix-sdk-ui 0.19 invariant: `Timeline::send_multiple_receipts`
+                    // clears the SDK room's unread flag after a submitted marker update and
+                    // also when receipt deduplication removes every unchanged marker. Keep
+                    // this evidence in the adjacent regression test when upgrading the SDK.
+                    .send_multiple_receipts(exact_read_receipts(event_id.clone()))
+                    .await
+                    .map_err(|_| "v-timeline-send-read-markers-failed")?;
+            }
             Ok(Some(event_id))
         }
     }
@@ -1776,8 +1815,14 @@ impl NativeTimelineOwner {
                     }
                 });
                 let mut index = self.thread_index.lock().await;
-                let (threads, truncated) =
+                let (mut threads, truncated) =
                     rebuild_thread_index(&mut index, &room_id_string, projections);
+                drop(index);
+                drop(lists);
+                for summary in &mut threads {
+                    summary.unread_count =
+                        thread_unread_count(&self.client, &room_id, &summary.root_event_id).await;
+                }
                 Ok(NativeThreadListSnapshot {
                     schema_version: crate::app::threads::NATIVE_THREAD_LIST_SCHEMA_VERSION,
                     room_id: room_id_string,
@@ -2276,7 +2321,7 @@ impl NativeTimelineRegistry {
             .get(&request.stream_id)
             .ok_or("v-timeline-view-not-open")?;
         if request.action == NativeTimelineReadAction::MarkRead
-            && stream.position != TimelineViewPosition::LiveBottom
+            && !position_allows_mark_read(&stream.position)
         {
             return Err("v-timeline-read-requires-live-view");
         }
@@ -5080,7 +5125,13 @@ mod tests {
             .unwrap();
         let mark_read_source = &source[mark_read_start..mark_read_end];
         assert!(mark_read_source.contains("timeline.latest_event_id().await"));
+        assert!(mark_read_source.contains("timeline.is_threaded()"));
+        assert!(mark_read_source.contains("send_single_receipt(ReceiptType::ReadPrivate"));
+        assert!(mark_read_source.contains("send_multiple_receipts(exact_read_receipts"));
+        assert!(!mark_read_source.contains("ReceiptThread::Unthreaded"));
         assert!(!mark_read_source.contains("items.iter().rev().find_map"));
+        assert!(source.contains("position_allows_mark_read(&stream.position)"));
+        assert!(source.contains("TimelineViewPosition::LiveBottom | TimelineViewPosition::Thread"));
     }
 
     #[test]

@@ -150,7 +150,7 @@ test('live-tail read target rejects background, stale-room, and non-live views',
   );
   assert.equal(nativeLiveReadTarget({ ...liveReadInput, atLiveBottom: false }), undefined);
   assert.equal(nativeLiveReadTarget({ ...liveReadInput, positionKind: 'focused' }), undefined);
-  assert.equal(nativeLiveReadTarget({ ...liveReadInput, positionKind: 'thread' }), undefined);
+  assert.equal(nativeLiveReadTarget({ ...liveReadInput, positionKind: 'thread' }), '$tail:example.org');
 });
 
 test('explicit marked-unread state is cleared even when the receipt already covers the tail', () => {
