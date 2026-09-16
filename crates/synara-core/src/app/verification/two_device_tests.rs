@@ -13,18 +13,29 @@ use matrix_sdk::{
     test_utils::mocks::{encryption::PendingToDeviceMessages, MatrixMockServer},
     Client,
 };
+use serde_json::json;
 use std::{
-    sync::{Arc, Mutex},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     time::Duration,
 };
 use tokio::time::Instant;
-use wiremock::MockGuard;
+use wiremock::{
+    matchers::{method, path},
+    Mock, MockGuard, ResponseTemplate,
+};
 
 struct TwoDevices {
     server: MatrixMockServer,
     alice: Client,
     alice2: Client,
     queue: Arc<Mutex<PendingToDeviceMessages>>,
+    /// Unique `/sync` `next_batch` tokens. matrix-sdk-base drops a sync whose
+    /// `next_batch` matches the stored token, so reused tokens would skip
+    /// to-device delivery.
+    next_batch: AtomicU64,
     _guard: MockGuard,
 }
 
@@ -68,6 +79,7 @@ async fn two_own_devices() -> TwoDevices {
         alice,
         alice2,
         queue,
+        next_batch: AtomicU64::new(1),
         _guard: guard,
     }
 }
@@ -114,7 +126,10 @@ async fn wait_for_crypto_device(client: &Client, device_id: &DeviceId) {
     }
 }
 
-fn take_pending(queue: &Arc<Mutex<PendingToDeviceMessages>>, recipient: &Client) -> Vec<matrix_sdk::ruma::serde::Raw<matrix_sdk::ruma::events::AnyToDeviceEvent>> {
+fn take_pending(
+    queue: &Arc<Mutex<PendingToDeviceMessages>>,
+    recipient: &Client,
+) -> Vec<matrix_sdk::ruma::serde::Raw<matrix_sdk::ruma::events::AnyToDeviceEvent>> {
     let user = recipient.user_id().expect("recipient user").to_owned();
     let device = recipient.device_id().expect("recipient device").to_owned();
     let mut queue = queue.lock().expect("to-device queue");
@@ -125,16 +140,39 @@ fn take_pending(queue: &Arc<Mutex<PendingToDeviceMessages>>, recipient: &Client)
         .unwrap_or_default()
 }
 
+/// Feed one recipient only the to-device events queued since the last pump.
+///
+/// Do not use [`MatrixMockServer::mock_sync`] here. Its shared
+/// `SyncResponseBuilder::clear()` leaves `to_device_events` in place, so later
+/// syncs replay every prior verification event (duplicate SAS accept, then
+/// `m.key_mismatch` cancel).
 async fn deliver_pending(devices: &TwoDevices, recipient: &Client) {
     for message in take_pending(&devices.queue, recipient) {
-        devices
-            .server
-            .mock_sync()
-            .ok_and_run(recipient, |builder| {
-                builder.add_to_device_event(message.deserialize_as().expect("to-device json"));
-            })
-            .await;
+        let event: serde_json::Value = message.deserialize_as().expect("to-device json");
+        sync_fresh_to_device(devices, recipient, event).await;
     }
+}
+
+async fn sync_fresh_to_device(devices: &TwoDevices, recipient: &Client, event: serde_json::Value) {
+    let next_batch = devices.next_batch.fetch_add(1, Ordering::Relaxed);
+    let body = json!({
+        "device_one_time_keys_count": {},
+        "next_batch": format!("synara-td-{next_batch}"),
+        "device_lists": { "changed": [], "left": [] },
+        "rooms": { "invite": {}, "join": {}, "leave": {}, "knock": {} },
+        "to_device": { "events": [event] },
+        "presence": { "events": [] },
+        "account_data": { "events": [] },
+    });
+    let _scope = Mock::given(method("GET"))
+        .and(path("/_matrix/client/v3/sync"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(body))
+        .mount_as_scoped(devices.server.server())
+        .await;
+    recipient
+        .sync_once(Default::default())
+        .await
+        .expect("fresh to-device sync");
 }
 
 async fn pump(devices: &TwoDevices) {
@@ -259,8 +297,10 @@ async fn wait_for_sdk_sas(
     let deadline = Instant::now() + Duration::from_secs(20);
     loop {
         pump(devices).await;
-        if let Some(Verification::SasV1(sas)) =
-            client.encryption().get_verification(other_user, flow_id).await
+        if let Some(Verification::SasV1(sas)) = client
+            .encryption()
+            .get_verification(other_user, flow_id)
+            .await
         {
             return sas;
         }
@@ -310,8 +350,7 @@ async fn scan_capable_peer_produces_bounded_svg_after_ready() {
         .expect("desktop owner starts verification");
     let flow_id = started.flow_id;
     let other_user = devices.alice.user_id().expect("alice user");
-    let peer_request =
-        wait_for_sdk_request(&devices, &devices.alice2, other_user, &flow_id).await;
+    let peer_request = wait_for_sdk_request(&devices, &devices.alice2, other_user, &flow_id).await;
     peer_request
         .accept_with_methods(scan_capable_methods())
         .await
@@ -384,10 +423,28 @@ async fn sas_only_peer_still_completes_emoji() {
     .await;
     assert_eq!(initiator_sas.sas, responder_sas.sas);
     assert!(initiator_sas.qr.is_none());
-    initiator.confirm(&flow_id).await.expect("initiator confirms");
-    responder.confirm(&flow_id).await.expect("responder confirms");
-    wait_for_owner_phase(&devices, &initiator, &flow_id, NativeVerificationPhase::Done).await;
-    wait_for_owner_phase(&devices, &responder, &flow_id, NativeVerificationPhase::Done).await;
+    initiator
+        .confirm(&flow_id)
+        .await
+        .expect("initiator confirms");
+    responder
+        .confirm(&flow_id)
+        .await
+        .expect("responder confirms");
+    wait_for_owner_phase(
+        &devices,
+        &initiator,
+        &flow_id,
+        NativeVerificationPhase::Done,
+    )
+    .await;
+    wait_for_owner_phase(
+        &devices,
+        &responder,
+        &flow_id,
+        NativeVerificationPhase::Done,
+    )
+    .await;
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -405,8 +462,7 @@ async fn generate_qr_then_begin_sas_fallback() {
         .expect("desktop owner starts verification");
     let flow_id = started.flow_id;
     let other_user = devices.alice.user_id().expect("alice user");
-    let peer_request =
-        wait_for_sdk_request(&devices, &devices.alice2, other_user, &flow_id).await;
+    let peer_request = wait_for_sdk_request(&devices, &devices.alice2, other_user, &flow_id).await;
     peer_request
         .accept_with_methods(scan_capable_methods())
         .await
@@ -422,7 +478,10 @@ async fn generate_qr_then_begin_sas_fallback() {
         "active SAS must drop the show-QR image"
     );
     let peer_sas = wait_for_sdk_sas(&devices, &devices.alice2, other_user, &flow_id).await;
-    peer_sas.accept().await.expect("scan-capable peer accepts SAS");
+    peer_sas
+        .accept()
+        .await
+        .expect("scan-capable peer accepts SAS");
     wait_for_sdk_sas_ready(&devices, &peer_sas).await;
     let owner_sas = wait_for_owner_phase(
         &devices,
