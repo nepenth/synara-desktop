@@ -1527,6 +1527,12 @@
           "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_timestamp_to_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-timestamp-to-event",
+          "markdownDescription": "Enables the matrix_timeline_timestamp_to_event command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-unpin",
@@ -2839,6 +2845,12 @@
           "type": "string",
           "const": "deny-matrix-timeline-snapshot",
           "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_timeline_timestamp_to_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-timestamp-to-event",
+          "markdownDescription": "Denies the matrix_timeline_timestamp_to_event command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",
