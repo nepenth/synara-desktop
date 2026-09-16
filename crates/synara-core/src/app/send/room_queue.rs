@@ -72,6 +72,7 @@ impl QueuedSendError {
 /// In-flight `RoomSendQueue` request waiting for `SentEvent`.
 pub struct QueuedSendSession {
     updates: broadcast::Receiver<RoomSendQueueUpdate>,
+    room: Room,
     pub transaction_id: String,
 }
 
@@ -170,6 +171,7 @@ pub async fn enqueue_event_via_room_queue(
     let transaction_id = identify_transaction(&queue, &mut updates, &handle).await?;
     Ok(QueuedSendSession {
         updates,
+        room: room.clone(),
         transaction_id: transaction_id.to_string(),
     })
 }
@@ -202,6 +204,7 @@ pub async fn enqueue_attachment_via_room_queue(
     let transaction_id = identify_transaction(&queue, &mut updates, &handle).await?;
     Ok(QueuedSendSession {
         updates,
+        room: room.clone(),
         transaction_id: transaction_id.to_string(),
     })
 }
@@ -229,6 +232,16 @@ pub async fn wait_for_queued_send(
                     is_recoverable,
                 }) if transaction_id.as_str() == txn => {
                     if is_recoverable {
+                        // The SDK disables this room's local queue after
+                        // *any* send error, recoverable or not (0.19
+                        // `send_queue::mod.rs` `sending_task`). Only an
+                        // unrecoverable (wedged) failure should keep later
+                        // sends in this room blocked; a recoverable failure
+                        // must not silently strand every following send
+                        // behind a queue nobody re-enables. The failed
+                        // request stays queued (not removed), so re-enabling
+                        // here also lets the SDK retry it in order.
+                        session.room.send_queue().set_enabled(true);
                         return Err(QueuedSendError::failed(
                             send_message_error_diagnostic(error.as_ref()),
                             Some(txn.to_owned()),
