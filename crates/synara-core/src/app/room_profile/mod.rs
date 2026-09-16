@@ -12,17 +12,24 @@ mod error;
 mod index;
 mod live;
 mod native;
+mod retention;
 
 pub use error::RoomProfileError;
 pub use index::{
-    DirectoryVisibility, HistoryVisibility, JoinRule, RoomProfile, RoomProfileIndex,
-    MAX_ALIAS_CHARS, MAX_ALT_ALIASES, MAX_AVATAR_URL_CHARS, MAX_CACHED_ROOMS, MAX_NAME_CHARS,
-    MAX_TOPIC_CHARS,
+    DirectoryVisibility, HistoryVisibility, JoinRule, MAX_ALIAS_CHARS, MAX_ALT_ALIASES,
+    MAX_AVATAR_URL_CHARS, MAX_CACHED_ROOMS, MAX_NAME_CHARS, MAX_TOPIC_CHARS, RoomProfile,
+    RoomProfileIndex,
 };
-pub use live::{project_join_rule, JoinRuleUpdateEmit, NativeRoomJoinRuleOwner};
+pub use live::{JoinRuleUpdateEmit, NativeRoomJoinRuleOwner, project_join_rule};
 pub use native::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate, ROOM_JOIN_RULE_UPDATED_EVENT,
+    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,
+    ROOM_JOIN_RULE_UPDATED_EVENT,
+};
+pub use retention::{
+    MEDIA_CACHE_DEFAULT_SUMMARY, RETENTION_HISTORY_VISIBILITY_DISTINCTION, RETENTION_NO_LOCAL_COPY,
+    RETENTION_UNKNOWN_SUMMARY, RetentionCopy, format_media_cache_summary, format_retention_copy,
+    format_retention_duration, retention_snapshot,
 };
 
 /// Static marker for link / schema smoke.

@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dto::{Membership, RoomSummary};
 
-use super::filters::{room_matches_scope, RoomListScope};
+use super::filters::{RoomListScope, room_matches_scope};
 
 /// Closed membership input for the scalar room-unread projection exported to
 /// iOS. It intentionally carries no room identifier or SDK value.
@@ -112,6 +112,71 @@ impl RoomListBadgeCounts {
     }
 }
 
+/// One joined-room observation for the SDK `total_unread_notifications` fold.
+///
+/// This is **not** the dock badge. SDK math is
+/// `num_unread_notifications.max(is_marked_unread as u64)` over joined rooms
+/// only. It has no mute skip, no space skip, no later-items, no highlight
+/// split, and no `max(messages, notifications)`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SdkUnreadChecksumRoom {
+    pub joined: bool,
+    pub num_unread_notifications: u64,
+    pub is_marked_unread: bool,
+}
+
+/// Synara row presentation inputs used to prove the SDK total cannot replace
+/// `room_unread_presentation` / `summarizeNotifications`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SynaraUnreadChecksumRoom {
+    pub membership: RoomUnreadMembership,
+    pub num_unread_messages: u64,
+    pub num_unread_notifications: u64,
+    pub num_unread_mentions: u64,
+    pub is_marked_unread: bool,
+}
+
+/// Pure SDK-style joined-room notification checksum.
+pub fn sdk_joined_notification_checksum(
+    rooms: impl IntoIterator<Item = SdkUnreadChecksumRoom>,
+) -> u64 {
+    rooms
+        .into_iter()
+        .filter(|room| room.joined)
+        .map(|room| {
+            room.num_unread_notifications
+                .max(u64::from(room.is_marked_unread))
+        })
+        .fold(0, u64::saturating_add)
+}
+
+/// Sum of Synara `room_unread_presentation` unread counts for joined rooms.
+pub fn synara_joined_unread_presentation_sum(
+    rooms: impl IntoIterator<Item = SynaraUnreadChecksumRoom>,
+) -> u64 {
+    rooms
+        .into_iter()
+        .filter(|room| room.membership == RoomUnreadMembership::Joined)
+        .map(|room| {
+            room_unread_presentation(
+                room.membership,
+                room.num_unread_messages,
+                room.num_unread_notifications,
+                room.num_unread_mentions,
+                room.is_marked_unread,
+            )
+            .unread_count
+        })
+        .fold(0, u64::saturating_add)
+}
+
+/// Session accessor for the SDK joined-room notification checksum.
+///
+/// Dock/tray remains a JS fold. This must not write the desktop badge.
+pub fn client_total_unread_notifications(client: &matrix_sdk::Client) -> u64 {
+    client.total_unread_notifications()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -199,6 +264,115 @@ mod tests {
                 unread_count: u64::MAX,
                 has_highlight: false,
             }
+        );
+    }
+
+    #[test]
+    fn sdk_checksum_ignores_message_counts_that_synara_badges() {
+        let sdk = [SdkUnreadChecksumRoom {
+            joined: true,
+            num_unread_notifications: 3,
+            is_marked_unread: false,
+        }];
+        let synara = [SynaraUnreadChecksumRoom {
+            membership: RoomUnreadMembership::Joined,
+            num_unread_messages: 10,
+            num_unread_notifications: 3,
+            num_unread_mentions: 0,
+            is_marked_unread: false,
+        }];
+        assert_eq!(sdk_joined_notification_checksum(sdk), 3);
+        assert_eq!(synara_joined_unread_presentation_sum(synara), 10);
+        assert_ne!(
+            sdk_joined_notification_checksum(sdk),
+            synara_joined_unread_presentation_sum(synara)
+        );
+    }
+
+    #[test]
+    fn sdk_checksum_counts_muted_rooms_that_js_dock_skips() {
+        // Mute skip lives in `unreadInfosFromNativeRooms`, not this Core fold.
+        // A muted joined room still contributes to the SDK total.
+        let sdk = [SdkUnreadChecksumRoom {
+            joined: true,
+            num_unread_notifications: 4,
+            is_marked_unread: false,
+        }];
+        assert_eq!(sdk_joined_notification_checksum(sdk), 4);
+        assert_eq!(
+            synara_joined_unread_presentation_sum([SynaraUnreadChecksumRoom {
+                membership: RoomUnreadMembership::Joined,
+                num_unread_messages: 4,
+                num_unread_notifications: 4,
+                num_unread_mentions: 0,
+                is_marked_unread: false,
+            }]),
+            4
+        );
+    }
+
+    #[test]
+    fn sdk_checksum_has_no_later_items_layer() {
+        // Later-item counts are JS-only (`summarizeNotifications`). The SDK
+        // total cannot represent them.
+        assert_eq!(
+            sdk_joined_notification_checksum([SdkUnreadChecksumRoom {
+                joined: true,
+                num_unread_notifications: 0,
+                is_marked_unread: false,
+            }]),
+            0
+        );
+        assert_eq!(
+            synara_joined_unread_presentation_sum([SynaraUnreadChecksumRoom {
+                membership: RoomUnreadMembership::Joined,
+                num_unread_messages: 0,
+                num_unread_notifications: 0,
+                num_unread_mentions: 0,
+                is_marked_unread: false,
+            }]),
+            0
+        );
+    }
+
+    #[test]
+    fn sdk_checksum_skips_invites_and_non_joined() {
+        assert_eq!(
+            sdk_joined_notification_checksum([SdkUnreadChecksumRoom {
+                joined: false,
+                num_unread_notifications: 9,
+                is_marked_unread: true,
+            }]),
+            0
+        );
+        assert_eq!(
+            synara_joined_unread_presentation_sum([SynaraUnreadChecksumRoom {
+                membership: RoomUnreadMembership::Invited,
+                num_unread_messages: 9,
+                num_unread_notifications: 9,
+                num_unread_mentions: 1,
+                is_marked_unread: true,
+            }]),
+            0
+        );
+    }
+
+    #[test]
+    fn dock_badge_owner_must_stay_js_summarize_notifications() {
+        let live = include_str!("live.rs");
+        let counts = include_str!("counts.rs");
+        let production = counts
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production counts source");
+        assert!(production.contains("client.total_unread_notifications()"));
+        assert!(
+            !live.contains("set_badge"),
+            "Core room-list projection must not write the desktop badge"
+        );
+        assert!(
+            !production.contains("set_badge") && !production.contains("desktop_set_badge"),
+            "SDK unread checksum must not write the desktop badge"
         );
     }
 }

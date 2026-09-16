@@ -30,7 +30,7 @@ const JOIN_RULE_SET_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-set-sdk-
 
 pub use synara_core::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot,
+    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot,
 };
 
 /// V-SEND.R-ROOM-PROFILE-JOIN-RULE — authoritative live room-scoped join-rule
@@ -143,6 +143,21 @@ pub async fn matrix_set_room_avatar(
     mxc: String,
 ) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
     crate::bridge::room_profile_writes::set_room_avatar(core.inner().as_ref(), room_id, mxc).await
+}
+
+/// Read-only MSC1763 retention copy. Unknown homeserver config is not forever.
+#[tauri::command]
+pub async fn matrix_room_retention(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    session_generation: u64,
+) -> Result<MatrixRoomRetentionSnapshot, MatrixAuthCommandError> {
+    crate::bridge::room_retention::room_retention(
+        core.inner().as_ref(),
+        room_id,
+        session_generation,
+    )
+    .await
 }
 
 pub(super) fn parse_room_directory_visibility_room_id(

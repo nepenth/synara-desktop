@@ -1,4 +1,6 @@
 use super::*;
+use crate::matrix::user_profile::NativeOwnProfileOwner;
+use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 /// V-AUTH.3 desktop compatibility re-exports for the shared command response.
 pub use synara_core::app::auth::{MatrixLoginFlowDto, MatrixLoginFlowsResponse};
@@ -145,6 +147,8 @@ pub async fn matrix_login_password(
         .map_err(map_room_join_rule_owner_error)?,
     );
     let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
+    let (own_profile, media_retention) =
+        start_room_surface_owners(&client, app.clone(), session_generation)?;
     let session_vault = KeyringSessionMaterialVault::new();
     persist_session_after_login(&client, &live_identity, &session_vault)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
@@ -192,6 +196,8 @@ pub async fn matrix_login_password(
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
+        _own_profile: own_profile,
+        _media_retention: media_retention,
         notification_observations,
 
         room_key_transfer: devices.room_key_transfer(),
@@ -606,6 +612,8 @@ pub(super) async fn install_session_from_register_secrets(
         .map_err(map_room_join_rule_owner_error)?,
     );
     let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
+    let (own_profile, media_retention) =
+        start_room_surface_owners(&client, app.clone(), session_generation)?;
     // A9 decision stream: account-bound Core policy owner (see login path).
     let notification_decisions = Arc::new(
         synara_core::app::notifications::NativeNotificationDecisionOwner::new(
@@ -652,6 +660,8 @@ pub(super) async fn install_session_from_register_secrets(
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
+        _own_profile: own_profile,
+        _media_retention: media_retention,
         notification_observations,
 
         room_key_transfer: devices.room_key_transfer(),
@@ -877,6 +887,8 @@ pub async fn matrix_restore_session(
         .map_err(map_room_join_rule_owner_error)?,
     );
     let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
+    let (own_profile, media_retention) =
+        start_room_surface_owners(&client, app.clone(), session_generation)?;
     let timelines = Arc::new(NativeTimelineOwner::new(
         &client,
         crate::matrix::timeline::timeline_view_emit(app.clone()),
@@ -909,6 +921,8 @@ pub async fn matrix_restore_session(
         typing: typing.clone(),
         presence: presence.clone(),
         join_rules: join_rules.clone(),
+        _own_profile: own_profile,
+        _media_retention: media_retention,
         notification_observations,
 
         room_key_transfer: devices.room_key_transfer(),
@@ -978,6 +992,19 @@ pub(super) async fn start_sync_owner(
         .await
         .map_err(|error| map_sync_error(error.diagnostic_id()))?;
     Ok(owner)
+}
+
+fn start_room_surface_owners(
+    client: &Client,
+    app: AppHandle,
+    session_generation: u64,
+) -> Result<(NativeOwnProfileOwner, NativeMediaRetentionOwner), MatrixAuthCommandError> {
+    let own_profile =
+        crate::matrix::user_profile::start_own_profile_owner(client, app, session_generation)
+            .map_err(|_| MatrixAuthCommandError::unavailable("p2-own-profile-attach-failed"))?;
+    let media_retention = NativeMediaRetentionOwner::start(client, session_generation)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-media-retention-attach-failed"))?;
+    Ok((own_profile, media_retention))
 }
 
 pub(super) async fn ensure_crypto_ready(client: &Client) -> Result<(), MatrixAuthCommandError> {

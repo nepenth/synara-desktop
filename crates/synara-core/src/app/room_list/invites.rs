@@ -7,19 +7,19 @@
 use std::{collections::BTreeSet, sync::OnceLock};
 
 use matrix_sdk::{
+    Client, Room, RoomState,
     deserialized_responses::RawSyncOrStrippedState,
     ruma::{
+        OwnedUserId, UserId,
         events::{
             ignored_user_list::IgnoredUserListEventContent,
             room::{member::MembershipState, topic::RoomTopicEventContent},
         },
-        OwnedMxcUri, OwnedUserId, UserId,
     },
-    Client, Room, RoomMemberships, RoomState,
 };
 use serde::{Deserialize, Serialize};
 
-use super::InviteAvatarHandles;
+use super::{InviteAvatarHandles, dm_avatar_source};
 
 const BAD_WORDS_JSON: &str = include_str!("invite_bad_words.json");
 const SYNARA_BAD_WORD_ADDITIONS: &[&str] = &["torture", "t0rture"];
@@ -163,7 +163,7 @@ async fn project_invite(
     };
 
     let is_direct = room.is_direct().await.unwrap_or(false);
-    let avatar_handle_id = invite_avatar_source(room, current_user, is_direct)
+    let avatar_handle_id = dm_avatar_source(room, current_user, is_direct)
         .await
         .map(|mxc_uri| avatar_handles.issue(room.room_id().as_str(), mxc_uri))
         .transpose()?;
@@ -188,58 +188,6 @@ async fn project_invite(
             .unwrap_or(false),
         triage,
     })
-}
-
-/// Match the current direct-room avatar selection without synchronizing room
-/// members: use a direct room's non-service heroes first, then its cached
-/// members when it is a two-party conversation, finally its room avatar.
-async fn invite_avatar_source(
-    room: &Room,
-    current_user: &UserId,
-    is_direct: bool,
-) -> Option<OwnedMxcUri> {
-    let room_avatar = room.avatar_url();
-    if !is_direct {
-        return room_avatar;
-    }
-
-    let service_members = room.service_members().unwrap_or_default();
-    let Ok(active_members) = room.members_no_sync(RoomMemberships::ACTIVE).await else {
-        return room_avatar;
-    };
-    let active_non_service_count = active_members
-        .iter()
-        .filter(|member| !service_members.contains(member.user_id()))
-        .count();
-    if active_non_service_count > 2 {
-        return room_avatar;
-    }
-
-    for hero in room.heroes().await {
-        if hero.avatar_url.is_some() || hero.display_name.is_some() {
-            return hero.avatar_url;
-        }
-        if let Ok(Some(member)) = room.get_member_no_sync(&hero.user_id).await {
-            return member.avatar_url().map(ToOwned::to_owned);
-        }
-    }
-
-    let Ok(members) = room.members_no_sync(RoomMemberships::empty()).await else {
-        return room_avatar;
-    };
-    let non_service_members: Vec<_> = members
-        .into_iter()
-        .filter(|member| !service_members.contains(member.user_id()))
-        .collect();
-    if non_service_members.len() <= 2 {
-        if let Some(member) = non_service_members
-            .into_iter()
-            .find(|member| member.user_id() != current_user)
-        {
-            return member.avatar_url().map(ToOwned::to_owned).or(room_avatar);
-        }
-    }
-    room_avatar
 }
 
 async fn room_topic(room: &Room) -> Option<String> {

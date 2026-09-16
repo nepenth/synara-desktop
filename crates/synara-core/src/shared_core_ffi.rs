@@ -202,6 +202,7 @@ use crate::app::lifecycle::{
     restore_session_from_vault, restore_session_from_vault_with_room_load_settings,
     restore_session_onto_client, SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
+use crate::app::media_cache::NativeMediaRetentionOwner;
 use crate::app::notifications::NativeHttpPusherOwner;
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
@@ -233,6 +234,7 @@ use crate::app::timeline::{
     TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
+use crate::app::user_profile::{NativeOwnProfileOwner, OwnProfileUpdateEmit};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
@@ -3337,6 +3339,8 @@ pub struct SharedCore {
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
     room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
+    own_profile_live: Arc<Mutex<Option<NativeOwnProfileOwner>>>,
+    media_retention_live: Arc<Mutex<Option<NativeMediaRetentionOwner>>>,
 }
 
 impl Default for SharedCore {
@@ -3361,6 +3365,8 @@ impl SharedCore {
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -3380,6 +3386,8 @@ impl SharedCore {
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -3923,6 +3931,7 @@ impl SharedCore {
             }
         })?;
         self.spawn_room_list_live();
+        self.spawn_room_surface_owners();
         let snapshot = match self.core.attached_sync_owner() {
             Some(owner) => wait_for_started_readiness(owner.as_ref(), snapshot).await,
             None => snapshot,
@@ -3955,6 +3964,12 @@ impl SharedCore {
         if let Ok(mut live) = self.room_list_live.lock() {
             *live = None;
         }
+        if let Ok(mut live) = self.own_profile_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.media_retention_live.lock() {
+            *live = None;
+        }
         let snapshot = self.core.stop_attached_sync().await.map_err(|code| {
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_stop_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
@@ -3982,6 +3997,30 @@ impl SharedCore {
         let live = NativeRoomListOwner::start(&owner, emit);
         if let Ok(mut guard) = self.room_list_live.lock() {
             *guard = Some(live);
+        }
+    }
+
+    fn spawn_room_surface_owners(&self) {
+        let Ok(client) = self.retained_client() else {
+            return;
+        };
+        let Ok(Some(snapshot)) = self.core.session_snapshot() else {
+            return;
+        };
+        let generation = snapshot.session_generation;
+        if generation == 0 {
+            return;
+        }
+        let emit: OwnProfileUpdateEmit = Arc::new(|_| {});
+        if let Ok(owner) = NativeOwnProfileOwner::start(&client, emit, generation) {
+            if let Ok(mut guard) = self.own_profile_live.lock() {
+                *guard = Some(owner);
+            }
+        }
+        if let Ok(owner) = NativeMediaRetentionOwner::start(&client, generation) {
+            if let Ok(mut guard) = self.media_retention_live.lock() {
+                *guard = Some(owner);
+            }
         }
     }
 
@@ -7097,6 +7136,12 @@ impl SharedCore {
             .await
             .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
         if let Ok(mut live) = self.room_list_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.own_profile_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.media_retention_live.lock() {
             *live = None;
         }
         if let Ok(mut updates) = self.timeline_view_updates.lock() {

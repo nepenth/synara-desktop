@@ -11,6 +11,7 @@ import {
   RoomLocalAddresses,
   RoomPublishedAddresses,
   RoomPublish,
+  RoomRetention,
   RoomUpgrade,
 } from '../../common-settings/general';
 import { useRoomCreators } from '../../../hooks/useRoomCreators';
@@ -50,6 +51,7 @@ export function General({ requestClose }: GeneralProps) {
                 <Text size="L400">Options</Text>
                 <RoomJoinRules permissions={permissions} />
                 <RoomHistoryVisibility permissions={permissions} />
+                <RoomRetention />
                 <RoomEncryption permissions={permissions} />
                 <RoomPublish
                   permissions={permissions}

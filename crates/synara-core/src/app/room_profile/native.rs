@@ -53,6 +53,23 @@ pub struct MatrixRoomJoinRuleSnapshot {
     pub join_rule: String,
 }
 
+/// Read-only MSC1763 retention projection. Unknown is not "kept forever."
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixRoomRetentionSnapshot {
+    pub status: String,
+    pub room_id: String,
+    pub session_generation: u64,
+    pub advertised: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_lifetime_ms: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub min_lifetime_ms: Option<u64>,
+    pub summary: String,
+    pub distinction: String,
+    pub media_cache_summary: String,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -89,5 +106,26 @@ mod tests {
                 "sessionGeneration": 7,
             })
         );
+    }
+
+    #[test]
+    fn retention_snapshot_wire_shape_is_camel_case_without_raw_policy() {
+        let value = serde_json::to_value(MatrixRoomRetentionSnapshot {
+            status: "ok".into(),
+            room_id: "!room:example.org".into(),
+            session_generation: 7,
+            advertised: true,
+            max_lifetime_ms: Some(86_400_000),
+            min_lifetime_ms: None,
+            summary: "This room's server may delete messages older than 1 day.".into(),
+            distinction: "This is separate from history visibility.".into(),
+            media_cache_summary: "Media cache on this device expires after 30 days.".into(),
+        })
+        .unwrap();
+        assert_eq!(value["roomId"], "!room:example.org");
+        assert_eq!(value["sessionGeneration"], 7);
+        assert_eq!(value["maxLifetimeMs"], 86_400_000);
+        assert!(value.get("policies").is_none());
+        assert!(value.get("token").is_none());
     }
 }
