@@ -172,6 +172,6 @@ mod privacy_tests {
     fn product_builder_enables_automatic_back_pagination() {
         let source = include_str!("open.rs");
         assert!(source.contains("with_enable_automatic_back_pagination(true)"));
-        assert!(!source.contains("experimental-"));
+        assert!(!source.contains(&format!("{}{}", "experimental", "-")));
     }
 }
