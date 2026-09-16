@@ -5,6 +5,7 @@ export type SynaraRouteDestination =
       kind: 'room';
       roomIdOrAlias: string;
       eventId?: string;
+      threadRootId?: string;
       parentSpaceIdOrAlias?: string;
     }
   | { kind: 'space'; spaceIdOrAlias: string }
@@ -100,20 +101,38 @@ export const parseSynaraRouteDestination = (value: unknown): SynaraRouteDestinat
     return { kind: 'explore', server: segments[1] };
   }
 
-  if ((segments.length === 2 || segments.length === 3) && segments[0] === 'home') {
-    return {
-      kind: 'room',
-      roomIdOrAlias: segments[1],
-      eventId: segments[2],
-    };
+  if (segments[0] === 'home') {
+    if (segments.length === 4 && segments[2] === 'thread') {
+      return {
+        kind: 'room',
+        roomIdOrAlias: segments[1],
+        threadRootId: segments[3],
+      };
+    }
+    if (segments.length === 2 || segments.length === 3) {
+      return {
+        kind: 'room',
+        roomIdOrAlias: segments[1],
+        eventId: segments[2],
+      };
+    }
   }
 
-  if ((segments.length === 2 || segments.length === 3) && segments[0] === 'direct') {
-    return {
-      kind: 'room',
-      roomIdOrAlias: segments[1],
-      eventId: segments[2],
-    };
+  if (segments[0] === 'direct') {
+    if (segments.length === 4 && segments[2] === 'thread') {
+      return {
+        kind: 'room',
+        roomIdOrAlias: segments[1],
+        threadRootId: segments[3],
+      };
+    }
+    if (segments.length === 2 || segments.length === 3) {
+      return {
+        kind: 'room',
+        roomIdOrAlias: segments[1],
+        eventId: segments[2],
+      };
+    }
   }
 
   const [first, second, third] = segments;
@@ -125,6 +144,15 @@ export const parseSynaraRouteDestination = (value: unknown): SynaraRouteDestinat
 
   if (segments.length === 2 && second === 'lobby') {
     return { kind: 'spaceLobby', spaceIdOrAlias: first };
+  }
+
+  if (segments.length === 4 && segments[2] === 'thread') {
+    return {
+      kind: 'room',
+      parentSpaceIdOrAlias: first,
+      roomIdOrAlias: second,
+      threadRootId: segments[3],
+    };
   }
 
   if (segments.length === 2 || segments.length === 3) {

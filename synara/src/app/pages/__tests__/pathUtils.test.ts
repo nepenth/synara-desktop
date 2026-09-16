@@ -37,6 +37,33 @@ test('all room destinations encode Matrix room and event identifiers exactly onc
   assert.equal(getSpacePath(space), `/${encodeURIComponent(space)}`);
 });
 
+test('thread destinations encode the room and root and survive parse', async () => {
+  const {
+    getHomeRoomThreadPath,
+    getDirectRoomThreadPath,
+    getSpaceRoomThreadPath,
+  } = await import('../pathUtils');
+  const { parseSynaraRouteDestination } = await import('../../routes/synaraRoutes');
+  const room = '#agent room/%25:example.test';
+  const root = '$root/+?%25:example.test';
+  const space = '#parent space/%25:example.test';
+  for (const [path, parent] of [
+    [getHomeRoomThreadPath(room, root), undefined],
+    [getDirectRoomThreadPath(room, root), undefined],
+    [getSpaceRoomThreadPath(space, room, root), space],
+  ]) {
+    assert.ok(path?.includes('/thread/'));
+    assert.ok(path?.includes(encodeURIComponent(root)));
+    const parsed = parseSynaraRouteDestination(path);
+    assert.equal(parsed?.kind, 'room');
+    if (parsed?.kind !== 'room') throw new Error('Expected room destination');
+    assert.equal(parsed.roomIdOrAlias, room);
+    assert.equal(parsed.threadRootId, root);
+    assert.equal(parsed.eventId, undefined);
+    assert.equal(parsed.parentSpaceIdOrAlias, parent);
+  }
+});
+
 test('approval Back preserves its originating location and rejects invalid or self returns', async () => {
   const { getBackRoutePath } = await import('../../components/backRoutePath');
   const { createApprovalsNavigationState, getApprovalsOriginSpace } = await import(

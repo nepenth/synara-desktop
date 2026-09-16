@@ -47,6 +47,7 @@ pub(crate) mod send_poll;
 pub(crate) mod send_text;
 pub(crate) mod session_lifecycle;
 pub(crate) mod spaces;
+pub(crate) mod thread_list;
 pub(crate) mod threepid;
 pub(crate) mod timeline_actions;
 pub(crate) mod timeline_close;

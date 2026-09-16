@@ -11,20 +11,30 @@ import { allRoomsAtom } from '../../state/room-list/roomList';
 import { ScreenSize, useScreenSizeContext } from '../../hooks/useScreenSize';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 
-type JoinBeforeNavigateProps = { roomIdOrAlias: string; eventId?: string; viaServers?: string[] };
+type JoinBeforeNavigateProps = {
+  roomIdOrAlias: string;
+  eventId?: string;
+  threadRootId?: string;
+  viaServers?: string[];
+};
 export function JoinBeforeNavigate({
   roomIdOrAlias,
   eventId,
+  threadRootId,
   viaServers,
 }: JoinBeforeNavigateProps) {
   const mx = useMatrixClient();
   const allRooms = useAtomValue(allRoomsAtom);
-  const { navigateRoom, navigateSpace } = useRoomNavigate();
+  const { navigateRoom, navigateSpace, navigateThread } = useRoomNavigate();
   const screenSize = useScreenSizeContext();
 
   const handleView = (roomId: string) => {
     if (mx.getRoom(roomId)?.isSpaceRoom()) {
       navigateSpace(roomId);
+      return;
+    }
+    if (threadRootId) {
+      navigateThread(roomId, threadRootId);
       return;
     }
     navigateRoom(roomId, eventId);

@@ -225,6 +225,7 @@
     "allow-matrix-composer-set-reply-draft",
     "allow-matrix-composer-clear-reply-draft",
     "allow-matrix-composer-get-reply-draft",
+    "allow-matrix-thread-list",
     "allow-matrix-send-text",
     "allow-matrix-send-attachment",
     "allow-matrix-send-poll",

@@ -4,9 +4,12 @@ import { useAtomValue } from 'jotai';
 import { getCanonicalAliasOrRoomId, getCanonicalAliasRoomId, isRoomAlias } from '../utils/matrix';
 import {
   getDirectRoomPath,
+  getDirectRoomThreadPath,
   getHomeRoomPath,
+  getHomeRoomThreadPath,
   getSpacePath,
   getSpaceRoomPath,
+  getSpaceRoomThreadPath,
 } from '../pages/pathUtils';
 import { useMatrixClient } from './useMatrixClient';
 import { getOrphanParents, guessPerfectParent } from '../utils/room';
@@ -80,8 +83,43 @@ export const useRoomNavigate = () => {
     [mx, navigate, startTransition, spaceSelectedId, roomToParents, mDirects, developerTools]
   );
 
+  const navigateThread = useCallback(
+    (roomId: string, threadRootId: string, opts?: NavigateOptions) => {
+      const roomIdOrAlias = getCanonicalAliasOrRoomId(mx, roomId);
+      const openSpaceTimeline = developerTools && spaceSelectedId === roomId;
+      const orphanParents = openSpaceTimeline ? [roomId] : getOrphanParents(roomToParents, roomId);
+      if (orphanParents.length > 0) {
+        let parentSpace: string;
+        if (spaceSelectedId && orphanParents.includes(spaceSelectedId)) {
+          parentSpace = spaceSelectedId;
+        } else {
+          parentSpace = guessPerfectParent(mx, roomId, orphanParents) ?? orphanParents[0];
+        }
+        const pSpaceIdOrAlias = getCanonicalAliasOrRoomId(mx, parentSpace);
+        startTransition(() =>
+          navigate(
+            getSpaceRoomThreadPath(
+              pSpaceIdOrAlias,
+              openSpaceTimeline ? roomId : roomIdOrAlias,
+              threadRootId
+            ),
+            opts
+          )
+        );
+        return;
+      }
+      if (mDirects.has(roomId)) {
+        startTransition(() => navigate(getDirectRoomThreadPath(roomIdOrAlias, threadRootId), opts));
+        return;
+      }
+      startTransition(() => navigate(getHomeRoomThreadPath(roomIdOrAlias, threadRootId), opts));
+    },
+    [mx, navigate, startTransition, spaceSelectedId, roomToParents, mDirects, developerTools]
+  );
+
   return {
     navigateSpace,
     navigateRoom,
+    navigateThread,
   };
 };

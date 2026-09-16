@@ -238,6 +238,10 @@ test('thread chip and reply-in-thread open a dedicated thread timeline with Back
   assert.match(presenter, /activeThreadRoot=\{threadRootId\}/);
   assert.match(presenter, /setPreferLiveBottom\(true\)/);
   assert.match(presenter, /publishNativeThreadRoot\(roomId, threadRootId\)/);
+  assert.match(presenter, /threadRootEventId/);
+  assert.match(presenter, /onOpenThreadRoute\?\.\(rootEventId\)/);
+  assert.match(presenter, /onCloseThreadRoute\?\.\(\)/);
+  assert.match(presenter, /if \(threadRootEventId \|\| eventId\) \{/);
   assert.doesNotMatch(presenter, /hide_threaded_events:\s*true/);
 });
 

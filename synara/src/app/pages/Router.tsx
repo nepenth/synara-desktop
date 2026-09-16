@@ -29,6 +29,7 @@ import {
   _LOBBY_PATH,
   _NOTIFICATIONS_PATH,
   _ROOM_PATH,
+  _ROOM_THREAD_PATH,
   _SEARCH_PATH,
   _SERVER_PATH,
   CREATE_PATH,
@@ -189,6 +190,14 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           <Route path={_JOIN_PATH} element={<HomeJoin />} />
           <Route path={_SEARCH_PATH} element={<HomeSearch />} />
           <Route
+            path={_ROOM_THREAD_PATH}
+            element={
+              <HomeRouteRoomProvider>
+                <Room />
+              </HomeRouteRoomProvider>
+            }
+          />
+          <Route
             path={_ROOM_PATH}
             element={
               <HomeRouteRoomProvider>
@@ -213,6 +222,14 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
         >
           {mobile ? null : <Route index element={<WelcomePage />} />}
           <Route path={_CREATE_PATH} element={<DirectCreate />} />
+          <Route
+            path={_ROOM_THREAD_PATH}
+            element={
+              <DirectRouteRoomProvider>
+                <Room />
+              </DirectRouteRoomProvider>
+            }
+          />
           <Route
             path={_ROOM_PATH}
             element={
@@ -253,6 +270,14 @@ export const createRouter = (clientConfig: ClientConfig, screenSize: ScreenSize)
           )}
           <Route path={_LOBBY_PATH} element={<Lobby />} />
           <Route path={_SEARCH_PATH} element={<SpaceSearch />} />
+          <Route
+            path={_ROOM_THREAD_PATH}
+            element={
+              <SpaceRouteRoomProvider>
+                <Room />
+              </SpaceRouteRoomProvider>
+            }
+          />
           <Route
             path={_ROOM_PATH}
             element={

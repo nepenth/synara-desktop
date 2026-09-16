@@ -33,9 +33,15 @@ use matrix_sdk::{
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
+<<<<<<< HEAD
     EncryptedMessage, MsgLikeKind, Timeline, TimelineBuilder, TimelineDetails,
     TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
     TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
+=======
+    EncryptedMessage, EventSendState, MsgLikeKind, ThreadListPaginationState, ThreadListService,
+    Timeline, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId,
+    TimelineFocus, TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
+>>>>>>> ce7418f9 (Add a native thread list panel and /thread/ route.)
     TimelineReadReceiptTracking,
 };
 use serde::{Deserialize, Serialize};
@@ -58,6 +64,9 @@ use crate::app::send::{
     poll_response_content, poll_start_content, send_event_via_room_queue, unwedge_queued_send,
     wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult,
     SendQueue,
+};
+use crate::app::threads::{
+    rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::{RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
@@ -93,6 +102,8 @@ mod agent_approval_history_overlay_tests;
 mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
+#[cfg(test)]
+mod thread_list_tests;
 #[cfg(test)]
 mod thread_open_tests;
 use approval_history::{ApprovalHistory, HistoryProtection};
@@ -470,6 +481,8 @@ pub struct NativeTimelineOwner {
     approval_decisions: Arc<std::sync::Mutex<ApprovalDecisionRegistry>>,
     approval_inbox: tokio::sync::Mutex<ApprovalInboxOwner>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
+    thread_lists: tokio::sync::Mutex<HashMap<String, ThreadListService>>,
+    thread_index: tokio::sync::Mutex<ThreadIndex>,
     sends: tokio::sync::Mutex<SendQueue>,
     approval_history_mutation: tokio::sync::Mutex<()>,
     approval_history_pending: Mutex<Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>>,
@@ -497,6 +510,8 @@ impl NativeTimelineOwner {
                 approval_history,
             )),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
+            thread_lists: tokio::sync::Mutex::new(HashMap::new()),
+            thread_index: tokio::sync::Mutex::new(ThreadIndex::new(session_generation)),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
             approval_history_mutation: tokio::sync::Mutex::new(()),
             approval_history_pending: Mutex::new(None),
@@ -1709,6 +1724,70 @@ impl NativeTimelineOwner {
             if draft.is_some() { "set" } else { "empty" },
             draft,
         ))
+    }
+
+    pub async fn thread_list(
+        &self,
+        room_id: &str,
+        action: &str,
+    ) -> Result<NativeThreadListSnapshot, &'static str> {
+        let room_id = parse_action_room_id(room_id).map_err(|_| "v-thread-list-invalid-room-id")?;
+        let room_id_string = room_id.to_string();
+        match action {
+            "close" => {
+                self.thread_lists.lock().await.remove(&room_id_string);
+                self.thread_index.lock().await.clear_room(&room_id_string);
+                Ok(NativeThreadListSnapshot::empty(room_id_string))
+            }
+            "open" | "paginate" => {
+                use matrix_sdk_ui::timeline::RoomExt;
+                let room = self
+                    .client
+                    .get_room(&room_id)
+                    .ok_or("v-thread-list-room-not-found")?;
+                let mut lists = self.thread_lists.lock().await;
+                if !lists.contains_key(&room_id_string) {
+                    lists.insert(room_id_string.clone(), room.thread_list_service());
+                }
+                let service = lists
+                    .get(&room_id_string)
+                    .expect("thread list service present");
+                if action == "paginate" || service.items().is_empty() {
+                    service
+                        .paginate()
+                        .await
+                        .map_err(|_| "v-thread-list-paginate-failed")?;
+                }
+                let end_reached = matches!(
+                    service.pagination_state(),
+                    ThreadListPaginationState::Idle { end_reached: true }
+                );
+                let projections = service.items().into_iter().map(|item| {
+                    let latest = item.latest_event.as_ref();
+                    ThreadListItemProjection {
+                        root_event_id: item.root_event.event_id.to_string(),
+                        reply_count: item.num_replies,
+                        latest_event_id: latest.map(|event| event.event_id.to_string()),
+                        latest_origin_server_ts: latest
+                            .map(|event| u64::from(event.timestamp.get()))
+                            .or(Some(u64::from(item.root_event.timestamp.get()))),
+                        participated: item.root_event.is_own
+                            || latest.map(|event| event.is_own).unwrap_or(false),
+                    }
+                });
+                let mut index = self.thread_index.lock().await;
+                let (threads, truncated) =
+                    rebuild_thread_index(&mut index, &room_id_string, projections);
+                Ok(NativeThreadListSnapshot {
+                    schema_version: crate::app::threads::NATIVE_THREAD_LIST_SCHEMA_VERSION,
+                    room_id: room_id_string,
+                    threads,
+                    end_reached,
+                    truncated,
+                })
+            }
+            _ => Err("v-thread-list-invalid-action"),
+        }
     }
 }
 

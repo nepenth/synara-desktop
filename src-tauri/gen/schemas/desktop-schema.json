@@ -1371,6 +1371,12 @@
           "markdownDescription": "Enables the matrix_sync_status command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_thread_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-thread-list",
+          "markdownDescription": "Enables the matrix_thread_list command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_threepid_add_email command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-threepid-add-email",
@@ -2623,6 +2629,12 @@
           "type": "string",
           "const": "deny-matrix-sync-status",
           "markdownDescription": "Denies the matrix_sync_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_thread_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-thread-list",
+          "markdownDescription": "Denies the matrix_thread_list command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_threepid_add_email command without any pre-configured scope.",

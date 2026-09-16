@@ -506,6 +506,7 @@ pub fn run() {
             matrix::auth::product::matrix_composer_set_reply_draft,
             matrix::auth::product::matrix_composer_clear_reply_draft,
             matrix::auth::product::matrix_composer_get_reply_draft,
+            matrix::auth::product::matrix_thread_list,
             matrix::auth::product::matrix_timeline_forward_media,
             matrix::auth::product::matrix_timeline_poll_vote,
             matrix::auth::product::matrix_timeline_call_decline,
