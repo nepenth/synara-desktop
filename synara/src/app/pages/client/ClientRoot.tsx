@@ -61,6 +61,7 @@ import {
 } from '../../utils/syncSplashRecovery';
 import { recordClientDiagnostic } from '../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { getSettings } from '../../state/settings';
 
 function ClientRootLoading({ status }: { status: string }) {
   return (
@@ -266,7 +267,9 @@ export function ClientRoot({ children }: ClientRootProps) {
       }
       return (async () => {
         if (isSynaraDesktop() && getSessionBootstrapResult().source === 'native') {
-          const restored = await invokeDesktopWithAvailability('matrix_restore_session');
+          const restored = await invokeDesktopWithAvailability('matrix_restore_session', {
+            indexedMessageSearch: getSettings().indexedMessageSearch,
+          });
           if (!restored.available || !restored.value) {
             throw new Error('Native Matrix session is unavailable.');
           }

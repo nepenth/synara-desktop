@@ -47,6 +47,7 @@ export interface SharedSettings {
   hideNickAvatarEvents: boolean;
   mediaAutoLoad: boolean;
   gifSearchEnabled: boolean;
+  indexedMessageSearch: boolean;
   gifOnboardingDismissed: boolean;
   timelineVirtualizationEnabled: boolean;
   showHiddenEvents: boolean;
@@ -115,6 +116,7 @@ export const defaultSharedSettings: SharedSettings = {
   hideNickAvatarEvents: true,
   mediaAutoLoad: true,
   gifSearchEnabled: false,
+  indexedMessageSearch: true,
   gifOnboardingDismissed: false,
   timelineVirtualizationEnabled: true,
   showHiddenEvents: false,

@@ -34,9 +34,11 @@ test('modernization opt-in settings default off', () => {
   const store = createLocalStorageSettingsStore(createMemoryStorage());
 
   assert.equal(defaultSettings.gifSearchEnabled, false);
+  assert.equal(defaultSettings.indexedMessageSearch, true);
   assert.equal(defaultSettings.gifOnboardingDismissed, false);
   assert.equal(defaultSettings.timelineVirtualizationEnabled, true);
   assert.equal(store.getSettings().gifSearchEnabled, false);
+  assert.equal(store.getSettings().indexedMessageSearch, true);
   assert.equal(store.getSettings().timelineVirtualizationEnabled, true);
   assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
   assert.equal(defaultSettings.desktopDiagnosticsPerformance, false);

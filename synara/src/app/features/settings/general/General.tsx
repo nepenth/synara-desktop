@@ -966,6 +966,10 @@ function Messages() {
   );
   const [mediaAutoLoad, setMediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [gifSearchEnabled, setGifSearchEnabled] = useSetting(settingsAtom, 'gifSearchEnabled');
+  const [indexedMessageSearch, setIndexedMessageSearch] = useSetting(
+    settingsAtom,
+    'indexedMessageSearch'
+  );
   const [showHiddenEvents, setShowHiddenEvents] = useSetting(settingsAtom, 'showHiddenEvents');
   const gifProviderAvailable = gifPickerEnabled(clientConfig.gifPicker);
 
@@ -1025,6 +1029,22 @@ function Messages() {
               value={gifProviderAvailable && gifSearchEnabled}
               disabled={!gifProviderAvailable}
               onChange={setGifSearchEnabled}
+            />
+          }
+        />
+      </SequenceCard>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title={t('modernization.settings.indexed_message_search.title', 'Indexed message search')}
+          description={t(
+            'modernization.settings.indexed_message_search.description',
+            'Local experimental index of messages this device has already seen, including encrypted rooms. Not complete homeserver history. Changing this requires a session reload.'
+          )}
+          after={
+            <Switch
+              variant="Primary"
+              value={indexedMessageSearch}
+              onChange={setIndexedMessageSearch}
             />
           }
         />
