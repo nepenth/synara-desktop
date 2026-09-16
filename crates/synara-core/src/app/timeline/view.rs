@@ -45,9 +45,20 @@ const AGENT_CARD_CONTENT_KEYS: [&str; 4] = [
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TimelineViewPosition {
     LiveBottom,
-    Unread { anchor_event_id: EventId },
-    Focused { target_event_id: EventId },
-    Restored { anchor_event_id: Option<EventId> },
+    Unread {
+        anchor_event_id: EventId,
+    },
+    Focused {
+        target_event_id: EventId,
+    },
+    Restored {
+        anchor_event_id: Option<EventId>,
+    },
+    /// Durable thread timeline. Must not share a stream key with a permalink
+    /// `Focused` open of the same root event id.
+    Thread {
+        root_event_id: EventId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]

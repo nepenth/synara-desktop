@@ -61,7 +61,7 @@ export const shouldRestoreNativeTimelineViewport = (
  * can be fully visible while newer messages live on a different timeline.
  */
 export const shouldShowJumpToLatest = (
-  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | undefined,
+  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | 'thread' | undefined,
   scrolledToVisualBottom: boolean
 ): boolean => {
   if (positionKind && positionKind !== 'live_bottom') return true;
@@ -91,7 +91,7 @@ export type NativeLiveReadTargetInput = {
   documentActive: boolean;
   hideActivity: boolean;
   atLiveBottom: boolean;
-  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | undefined;
+  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | 'thread' | undefined;
   canMarkRead: boolean;
   latestVisibleEventId?: string;
   ownReadEventId?: string;
@@ -140,7 +140,7 @@ export const nativeLiveReadAttemptKey = (
 export type NativeFollowLiveTargetInput = {
   roomId: string;
   atLiveBottom: boolean;
-  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | undefined;
+  positionKind: 'live_bottom' | 'unread' | 'focused' | 'restored' | 'thread' | undefined;
   latestVisibleEventId?: string;
 };
 
@@ -158,7 +158,7 @@ export const nativeFollowLiveTarget = ({
   latestVisibleEventId,
 }: NativeFollowLiveTargetInput): string | undefined => {
   if (!atLiveBottom) return undefined;
-  if (positionKind === 'live_bottom') return undefined;
+  if (positionKind === 'live_bottom' || positionKind === 'thread') return undefined;
   if (!isValidEventIdHint(latestVisibleEventId)) return undefined;
   return latestVisibleEventId;
 };

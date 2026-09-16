@@ -519,6 +519,17 @@ test('equal-or-older readbacks are stale for the same stream, not a lost stream'
   assert.equal(isNativeTimelineReadbackStale(undefined, current), false);
 });
 
+test('native timeline open maps a thread root to a distinct Core position', () => {
+  const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
+  assert.match(source, /\| \{ kind: 'thread'; root_event_id: string \}/);
+  assert.match(source, /\| \{ kind: 'thread'; rootEventId: string \}/);
+  assert.match(
+    source,
+    /kind: 'thread' as const, root_event_id: position.rootEventId/
+  );
+  assert.match(source, /positionKind === 'thread' && threadRootEventId/);
+});
+
 test('setReadState keeps the current snapshot when a successful mark_read readback is stale', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   const setReadState = source

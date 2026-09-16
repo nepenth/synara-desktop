@@ -53,6 +53,7 @@ fn marker_stable() {
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"bundled-sqlite"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"unstable-msc4426"));
+    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
 }

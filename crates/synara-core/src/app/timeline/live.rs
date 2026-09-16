@@ -93,6 +93,8 @@ mod agent_approval_history_overlay_tests;
 mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
+#[cfg(test)]
+mod thread_open_tests;
 use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
 use approval_inbox::ApprovalInboxOwner;
@@ -343,6 +345,10 @@ pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    /// Thread timelines keyed by `(room_id, root_event_id)`. Must not share
+    /// `focused_entries`: a permalink of the root and a thread view of the
+    /// root are different SDK streams.
+    thread_entries: HashMap<(String, String), Arc<Timeline>>,
     view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
     view_revisions: HashMap<String, Arc<AtomicU64>>,
@@ -946,6 +952,26 @@ impl NativeTimelineOwner {
             .await
             .open_at(self.emit.clone(), &self.client, request)
             .await
+    }
+
+    #[cfg(test)]
+    pub async fn debug_stream_is_threaded(&self, stream_id: &str) -> Option<bool> {
+        self.registry
+            .lock()
+            .await
+            .view_streams
+            .get(stream_id)
+            .map(|stream| stream.timeline.is_threaded())
+    }
+
+    #[cfg(test)]
+    pub async fn debug_live_is_threaded(&self, room_id: &str) -> Option<bool> {
+        self.registry
+            .lock()
+            .await
+            .entries
+            .get(room_id)
+            .map(|entry| entry.timeline.is_threaded())
     }
 
     pub async fn jump_latest(
@@ -1661,6 +1687,7 @@ impl NativeTimelineRegistry {
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
+            thread_entries: HashMap::new(),
             view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
             view_revisions: HashMap::new(),
@@ -1824,6 +1851,7 @@ impl NativeTimelineRegistry {
                         .await?
                     }
                     TimelineViewPosition::Focused { .. }
+                    | TimelineViewPosition::Thread { .. }
                     | TimelineViewPosition::Restored {
                         anchor_event_id: None,
                     } => unreachable!("normal open only selects live, unread, or anchored restore"),
@@ -1888,6 +1916,13 @@ impl NativeTimelineRegistry {
                         forward: TimelinePageState::Available,
                     },
                 )
+            }
+            NativeTimelineOpenPosition::Thread { root_event_id } => {
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-thread-room-not-found")?;
+                self.open_thread(&room, &room_id_string, root_event_id)
+                    .await?
             }
             NativeTimelineOpenPosition::Unread => {
                 let room = client
@@ -2409,6 +2444,51 @@ impl NativeTimelineRegistry {
         Ok((
             timeline,
             TimelineViewPosition::Unread { anchor_event_id },
+            TimelinePaginationState {
+                backward: TimelinePageState::Available,
+                forward: TimelinePageState::Available,
+            },
+        ))
+    }
+
+    async fn open_thread(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        root_event_id: &str,
+    ) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
+        let root_event_id = parse_thread_root_event_id_for_open(root_event_id)?;
+        let key = (room_id.to_owned(), root_event_id.to_string());
+        if !self.thread_entries.contains_key(&key) {
+            if self.thread_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                if let Some(oldest_key) = self.thread_entries.keys().next().cloned() {
+                    self.thread_entries.remove(&oldest_key);
+                }
+            }
+            let timeline = TimelineBuilder::new(room)
+                .with_focus(TimelineFocus::Thread {
+                    root_event_id: root_event_id.clone(),
+                })
+                .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
+                .build()
+                .await
+                .map_err(|_| "v-timeline-thread-open-failed")?;
+            debug_assert!(
+                timeline.is_threaded(),
+                "TimelineFocus::Thread must report is_threaded"
+            );
+            self.thread_entries.insert(key.clone(), Arc::new(timeline));
+        }
+        let timeline = self
+            .thread_entries
+            .get(&key)
+            .expect("thread timeline present")
+            .clone();
+        Ok((
+            timeline,
+            TimelineViewPosition::Thread {
+                root_event_id: root_event_id.to_string(),
+            },
             TimelinePaginationState {
                 backward: TimelinePageState::Available,
                 forward: TimelinePageState::Available,
@@ -3162,6 +3242,9 @@ fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> Stri
         TimelineViewPosition::Focused { target_event_id } => {
             format!("focused:{room_id}:{target_event_id}")
         }
+        TimelineViewPosition::Thread { root_event_id } => {
+            format!("thread:{room_id}:{root_event_id}")
+        }
         TimelineViewPosition::Restored {
             anchor_event_id: Some(anchor_event_id),
         } => format!("restored:{room_id}:{anchor_event_id}"),
@@ -3625,6 +3708,14 @@ fn parse_action_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
 
 fn parse_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
     OwnedEventId::try_from(event_id.trim()).map_err(|_| "v-crypto.6-invalid-event-id")
+}
+
+fn parse_thread_root_event_id_for_open(event_id: &str) -> Result<OwnedEventId, &'static str> {
+    let trimmed = event_id.trim();
+    if trimmed.is_empty() {
+        return Err("v-timeline-thread-root-invalid");
+    }
+    OwnedEventId::try_from(trimmed).map_err(|_| "v-timeline-thread-root-invalid")
 }
 
 fn parse_action_event_id(
@@ -4695,6 +4786,41 @@ mod tests {
             ),
             "unread:!room:example.org"
         );
+        let focused = view_subscription_key(
+            "!room:example.org",
+            &TimelineViewPosition::Focused {
+                target_event_id: "$root:example.org".into(),
+            },
+        );
+        let thread = view_subscription_key(
+            "!room:example.org",
+            &TimelineViewPosition::Thread {
+                root_event_id: "$root:example.org".into(),
+            },
+        );
+        assert_eq!(focused, "focused:!room:example.org:$root:example.org");
+        assert_eq!(thread, "thread:!room:example.org:$root:example.org");
+        assert_ne!(focused, thread);
+    }
+
+    #[test]
+    fn thread_root_open_rejects_invalid_id_shapes_without_echoing_the_id() {
+        assert_eq!(
+            parse_thread_root_event_id_for_open("").unwrap_err(),
+            "v-timeline-thread-root-invalid"
+        );
+        assert_eq!(
+            parse_thread_root_event_id_for_open("   ").unwrap_err(),
+            "v-timeline-thread-root-invalid"
+        );
+        assert_eq!(
+            parse_thread_root_event_id_for_open("not-an-event").unwrap_err(),
+            "v-timeline-thread-root-invalid"
+        );
+        assert!(parse_thread_root_event_id_for_open("$root:example.org").is_ok());
+        assert!(!parse_thread_root_event_id_for_open("not-an-event")
+            .unwrap_err()
+            .contains("not-an-event"));
     }
 
     #[test]

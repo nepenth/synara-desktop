@@ -2371,6 +2371,15 @@ fn open_position_from_dto(
                 })?;
             Ok(NativeTimelineOpenPosition::Focused { event_id })
         }
+        "thread" => {
+            let root_event_id = position
+                .event_id
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
+                })?;
+            Ok(NativeTimelineOpenPosition::Thread { root_event_id })
+        }
         "normal" => Ok(NativeTimelineOpenPosition::Normal {
             viewport: NativeTimelineViewportHint {
                 at_bottom: position.at_bottom,
@@ -2420,6 +2429,10 @@ fn view_position_dto(position: TimelineViewPosition) -> TimelineViewPositionDto 
         TimelineViewPosition::Focused { target_event_id } => TimelineViewPositionDto {
             kind: "focused".to_owned(),
             event_id: Some(target_event_id),
+        },
+        TimelineViewPosition::Thread { root_event_id } => TimelineViewPositionDto {
+            kind: "thread".to_owned(),
+            event_id: Some(root_event_id),
         },
         TimelineViewPosition::Restored { anchor_event_id } => TimelineViewPositionDto {
             kind: "restored".to_owned(),

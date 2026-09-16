@@ -111,7 +111,11 @@ test('message, poll, and sticker rows share Core relation and reaction presentat
     assert.match(branch, /NativeTimelineReactionPills/);
     assert.match(branch, /reactions=\{row\.reactions\}/);
   }
-  assert.match(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
+  assert.match(presenter, /const latestEventId = nativeThreadFocusEventId\(thread\)/);
+  assert.match(presenter, /onClick=\{\(\) => onOpenThread\(rootEventId, latestEventId\)\}/);
+  assert.match(presenter, /onOpenThread\?\.\(threadRoot \?\? eventId\)/);
+  assert.doesNotMatch(presenter, /onFocusEvent\(latestEventId \?\? rootEventId\)/);
+  assert.doesNotMatch(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
   assert.match(presenter, /variant=\{reaction\.own \? 'Primary' : 'Secondary'\}/);
   assert.match(presenter, /onViewReactions=\{openReactionViewer\}/);
   assert.match(presenter, /nativeReactionViewFromEventReadback/);
@@ -220,6 +224,20 @@ test('native timeline navigation uses contextual controls and edge pagination', 
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
   assert.doesNotMatch(presenter, />\s*Mark unread\s*</);
+});
+
+test('thread chip and reply-in-thread open a dedicated thread timeline with Back to live', () => {
+  assert.match(presenter, /kind: 'thread', rootEventId: threadRootId/);
+  assert.match(presenter, /const openThread = useCallback/);
+  assert.match(presenter, /if \(threadRootId\) return;/);
+  assert.match(presenter, /selectedPosition\.kind === 'thread'/);
+  assert.match(presenter, /aria-label="Back to room"/);
+  assert.match(presenter, /Icons\.ArrowLeft/);
+  assert.match(presenter, /onClick=\{closeThread\}/);
+  assert.match(presenter, /onOpenThread=\{openThread\}/);
+  assert.match(presenter, /activeThreadRoot=\{threadRootId\}/);
+  assert.match(presenter, /setPreferLiveBottom\(true\)/);
+  assert.doesNotMatch(presenter, /hide_threaded_events:\s*true/);
 });
 
 test('native live tail marks the open stream read through the native owner', () => {

@@ -73,6 +73,21 @@ fn map_timeline_open_core_error(error: MatrixIpcError) -> MatrixAuthCommandError
                 "The native Matrix timeline is not available.",
                 "d0.3-timeline-room-not-found",
             ),
+            Some("v-timeline-thread-room-not-found") => MatrixAuthCommandError::new(
+                "NotFound",
+                "The native Matrix timeline is not available.",
+                "v-timeline-thread-room-not-found",
+            ),
+            Some("v-timeline-thread-root-invalid") => MatrixAuthCommandError::new(
+                "InvalidRequest",
+                "The native Matrix timeline request is invalid.",
+                "v-timeline-thread-root-invalid",
+            ),
+            Some("v-timeline-thread-open-failed") => MatrixAuthCommandError::new(
+                "Unknown",
+                "The native Matrix timeline is unavailable.",
+                "v-timeline-thread-open-failed",
+            ),
             _ => MatrixAuthCommandError::new(
                 "InvalidRequest",
                 "The native Matrix timeline request is invalid.",
@@ -112,5 +127,29 @@ mod tests {
             assert_eq!(error.code, "NotFound");
             assert_eq!(error.diagnostic_id, diagnostic);
         }
+    }
+
+    #[test]
+    fn thread_open_diagnostics_stay_privacy_safe() {
+        let invalid = map_timeline_open_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-timeline-thread-root-invalid"),
+        );
+        assert_eq!(invalid.code, "InvalidRequest");
+        assert_eq!(invalid.diagnostic_id, "v-timeline-thread-root-invalid");
+
+        let missing = map_timeline_open_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-timeline-thread-room-not-found"),
+        );
+        assert_eq!(missing.code, "NotFound");
+        assert_eq!(missing.diagnostic_id, "v-timeline-thread-room-not-found");
+
+        let failed = map_timeline_open_core_error(
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("v-timeline-thread-open-failed"),
+        );
+        assert_eq!(failed.code, "Unknown");
+        assert_eq!(failed.diagnostic_id, "v-timeline-thread-open-failed");
     }
 }

@@ -2822,7 +2822,10 @@ fn timeline_open_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         "d0.3-timeline-invalid-room-id"
         | "v-timeline-view-not-open"
         | "v-timeline-normal-room-not-found"
-        | "d0.3-timeline-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        | "d0.3-timeline-room-not-found"
+        | "v-timeline-thread-root-invalid"
+        | "v-timeline-thread-room-not-found"
+        | "v-timeline-thread-open-failed" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
