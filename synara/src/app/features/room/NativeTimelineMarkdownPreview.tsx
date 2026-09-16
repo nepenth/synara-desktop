@@ -114,11 +114,7 @@ export function NativeTimelineMarkdownPreview({
             aria-label={`Preview ${label}`}
             data-native-timeline-file-preview="true"
           >
-            <Box
-              direction="Column"
-              style={{ maxHeight: '88vh' }}
-              data-native-timeline-file-preview="true"
-            >
+            <Box direction="Column" style={{ maxHeight: '88vh' }}>
               <Header className={htmlCss.FilePreviewHeader} size="400">
                 <Box grow="Yes" alignItems="Center" gap="200">
                   <IconButton size="300" radii="300" onClick={onClose} aria-label="Close preview">
