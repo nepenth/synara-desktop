@@ -103,11 +103,16 @@ export type NativeRtcTransportsDependencies = {
   invoke: NativeRtcTransportsInvoke;
 };
 
-const defaultDependencies = (): NativeRtcTransportsDependencies => ({
-  desktopNativeSession:
-    isSynaraDesktop() && getSessionBootstrapResult().source === 'native',
-  invoke: (command, args) => invokeDesktopWithAvailability(command, args),
-});
+function resolveDependencies(
+  deps: Partial<NativeRtcTransportsDependencies>
+): NativeRtcTransportsDependencies {
+  return {
+    desktopNativeSession:
+      deps.desktopNativeSession ??
+      (isSynaraDesktop() && getSessionBootstrapResult().source === 'native'),
+    invoke: deps.invoke ?? ((command, args) => invokeDesktopWithAvailability(command, args)),
+  };
+}
 
 async function invokeSnapshot(
   command: 'matrix_rtc_transports_snapshot' | 'matrix_rtc_transports_refresh',
@@ -122,17 +127,11 @@ async function invokeSnapshot(
 export async function snapshotRtcTransportsNative(
   deps: Partial<NativeRtcTransportsDependencies> = {}
 ): Promise<NativeRtcTransportsSnapshot | null> {
-  return invokeSnapshot('matrix_rtc_transports_snapshot', {
-    ...defaultDependencies(),
-    ...deps,
-  });
+  return invokeSnapshot('matrix_rtc_transports_snapshot', resolveDependencies(deps));
 }
 
 export async function refreshRtcTransportsNative(
   deps: Partial<NativeRtcTransportsDependencies> = {}
 ): Promise<NativeRtcTransportsSnapshot | null> {
-  return invokeSnapshot('matrix_rtc_transports_refresh', {
-    ...defaultDependencies(),
-    ...deps,
-  });
+  return invokeSnapshot('matrix_rtc_transports_refresh', resolveDependencies(deps));
 }

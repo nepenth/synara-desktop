@@ -18,10 +18,9 @@ pub async fn matrix_rtc_transports_refresh(
 #[cfg(test)]
 fn map_rtc_transports_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
-        "p2-rtc-transports-snapshot-no-session" | "p2-rtc-transports-refresh-no-session" => (
-            "Forbidden",
-            "No native Matrix session is active.",
-        ),
+        "p2-rtc-transports-snapshot-no-session" | "p2-rtc-transports-refresh-no-session" => {
+            ("Forbidden", "No native Matrix session is active.")
+        }
         "p2-rtc-transports-snapshot-invalid-payload"
         | "p2-rtc-transports-refresh-invalid-payload" => (
             "InvalidRequest",
@@ -41,8 +40,14 @@ mod tests {
         let cases = [
             ("p2-rtc-transports-snapshot-no-session", "Forbidden"),
             ("p2-rtc-transports-refresh-no-session", "Forbidden"),
-            ("p2-rtc-transports-snapshot-invalid-payload", "InvalidRequest"),
-            ("p2-rtc-transports-refresh-invalid-payload", "InvalidRequest"),
+            (
+                "p2-rtc-transports-snapshot-invalid-payload",
+                "InvalidRequest",
+            ),
+            (
+                "p2-rtc-transports-refresh-invalid-payload",
+                "InvalidRequest",
+            ),
             ("p2-rtc-transports-snapshot-serialization-failed", "Unknown"),
         ];
         for (diagnostic_id, expected_code) in cases {

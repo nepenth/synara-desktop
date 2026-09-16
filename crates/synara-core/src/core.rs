@@ -40,7 +40,6 @@ use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
     NativePresenceWriteResult,
 };
-use crate::app::rtc_transports::{NativeRtcTransportsOwner, NativeRtcTransportsSnapshot};
 use crate::app::room_directory::{
     DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryProtocols,
     NativeRoomDirectorySearchResponse,
@@ -54,6 +53,7 @@ use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleOwner,
 };
+use crate::app::rtc_transports::{NativeRtcTransportsOwner, NativeRtcTransportsSnapshot};
 use crate::app::search::MatrixMessageSearchResult;
 use crate::app::send::{
     MatrixPollRespondResult, MatrixSendPollResult, MatrixSendRoomAttachmentResult,
@@ -1427,7 +1427,9 @@ impl CoreState {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
 
-    fn rtc_transports_owner(&self) -> Result<Option<Arc<NativeRtcTransportsOwner>>, MatrixIpcError> {
+    fn rtc_transports_owner(
+        &self,
+    ) -> Result<Option<Arc<NativeRtcTransportsOwner>>, MatrixIpcError> {
         self.rtc_transports
             .lock()
             .map(|guard| guard.clone())

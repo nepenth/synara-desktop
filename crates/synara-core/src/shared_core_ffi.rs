@@ -209,15 +209,15 @@ use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
     NativePresenceSubscription, NativePresenceUpdate, NativePresenceWriteResult,
 };
-use crate::app::rtc_transports::{
-    NativeRtcTransport, NativeRtcTransportsOwner, NativeRtcTransportsSnapshot,
-};
 use crate::app::room_list::{
     NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListOwner,
     NativeRoomListSnapshot, NativeRoomListUpdateSignal,
 };
 use crate::app::room_profile::{
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
+};
+use crate::app::rtc_transports::{
+    NativeRtcTransport, NativeRtcTransportsOwner, NativeRtcTransportsSnapshot,
 };
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
@@ -3075,10 +3075,9 @@ fn map_rtc_transports_core_error(
     error: MatrixIpcError,
 ) -> RtcTransportsCommandError {
     match error.diagnostic_id.as_deref() {
-        Some(code) if code == no_session => rtc_transports_failed(
-            no_session,
-            RTC_TRANSPORTS_NO_SESSION_DESCRIPTION,
-        ),
+        Some(code) if code == no_session => {
+            rtc_transports_failed(no_session, RTC_TRANSPORTS_NO_SESSION_DESCRIPTION)
+        }
         _ => rtc_transports_failed(
             RTC_TRANSPORTS_FAILED_CODE,
             RTC_TRANSPORTS_FAILED_DESCRIPTION,
@@ -3086,9 +3085,7 @@ fn map_rtc_transports_core_error(
     }
 }
 
-fn rtc_transports_snapshot_dto(
-    snapshot: NativeRtcTransportsSnapshot,
-) -> RtcTransportsSnapshotDto {
+fn rtc_transports_snapshot_dto(snapshot: NativeRtcTransportsSnapshot) -> RtcTransportsSnapshotDto {
     RtcTransportsSnapshotDto {
         session_generation: snapshot.session_generation,
         status: match snapshot.status {

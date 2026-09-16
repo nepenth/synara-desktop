@@ -81,7 +81,6 @@ use crate::matrix::lifecycle::{
 };
 use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
-use crate::matrix::rtc_transports::NativeRtcTransportsOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -94,6 +93,7 @@ use crate::matrix::room_list::{
     NativeRoomListSnapshot,
 };
 use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
+use crate::matrix::rtc_transports::NativeRtcTransportsOwner;
 use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeMissingSecret, NativeSecretStorageAction,
     NativeSecretStorageOperationResult, NativeSecretStorageState, NativeSecretStorageStatus,
