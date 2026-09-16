@@ -49,5 +49,6 @@ pub mod timeline;
 pub mod typing;
 pub mod unread;
 pub mod user_profile;
+pub mod user_status;
 pub mod utd_recovery;
 pub mod verification;

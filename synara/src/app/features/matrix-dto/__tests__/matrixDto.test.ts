@@ -186,6 +186,7 @@ test('valid_room_summary parses', () => {
   assert.equal(r.isCall, false);
   assert.equal(r.hasActiveCall, false);
   assert.equal(r.activeCallParticipantCount, 0);
+  assert.equal(r.directUserId, undefined);
   assert.equal(r.encryptionStatus, 'encrypted');
 });
 
@@ -203,6 +204,13 @@ test('room summary live-call fields do not overload isCall', () => {
   assert.equal(live?.hasActiveCall, true);
   assert.equal(live?.activeCallParticipantCount, 3);
   assert.equal(parseRoomSummary({ ...valid, activeCallParticipantCount: -1 }), null);
+  const dm = parseRoomSummary({
+    ...valid,
+    isDirect: true,
+    directUserId: '@bob:example.org',
+  });
+  assert.equal(dm?.directUserId, '@bob:example.org');
+  assert.equal(parseRoomSummary({ ...valid, directUserId: 1 }), null);
 });
 
 test('room summary requires a closed authoritative encryption status', () => {

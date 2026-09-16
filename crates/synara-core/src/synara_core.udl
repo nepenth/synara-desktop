@@ -295,6 +295,7 @@ dictionary RoomListRoomDto {
   string? avatar_url;
   string membership;
   boolean is_direct;
+  string? direct_user_id;
   boolean is_space;
   boolean is_favorite;
   boolean is_call;
@@ -924,6 +925,33 @@ dictionary PresenceSubscriptionDto {
 // Privacy-safe presence SET ack. Status only; never echo state or statusMsg.
 dictionary PresenceWriteDto {
   string status;
+};
+
+// Privacy-safe MSC4426 status / in-call. Never echo write emoji/text.
+dictionary UserStatusFieldDto {
+  string emoji;
+  string text;
+};
+
+dictionary UserInCallDto {
+  u64? call_joined_ts;
+};
+
+dictionary UserStatusSnapshotDto {
+  u64 session_generation;
+  string user_id;
+  UserStatusFieldDto? user_status;
+  UserInCallDto? in_call;
+};
+
+dictionary UserStatusWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo emoji, text, user id, or tokens.
+[Error]
+interface UserStatusCommandError {
+  Failed(string code, string description);
 };
 
 // Privacy-safe MatrixRTC transport snapshot. URLs only; no JWTs or tokens.
@@ -1846,6 +1874,15 @@ interface SharedCore {
 
   [Async, Throws=RtcTransportsCommandError]
   RtcTransportsSnapshotDto rtc_transports_refresh();
+
+  [Async, Throws=UserStatusCommandError]
+  UserStatusSnapshotDto user_status_snapshot(string user_id);
+
+  [Async, Throws=UserStatusCommandError]
+  UserStatusWriteDto user_status_set(string emoji, string text);
+
+  [Async, Throws=UserStatusCommandError]
+  UserStatusWriteDto user_status_clear();
 
   [Async, Throws=VerificationListError]
   VerificationInboxDto verification_list();

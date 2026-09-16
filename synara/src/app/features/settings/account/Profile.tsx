@@ -55,6 +55,13 @@ import {
   snapshotOwnPresenceNative,
 } from '../../matrix-presence/nativePresence';
 import {
+  clearOwnUserStatusNative,
+  setOwnUserStatusNative,
+  snapshotUserStatusNative,
+  UserStatusWriteError,
+  type NativeUserStatus,
+} from '../../matrix-presence/nativeUserStatus';
+import {
   refreshRtcTransportsNative,
   snapshotRtcTransportsNative,
   type NativeRtcTransportsSnapshot,
@@ -494,6 +501,132 @@ function ProfilePresence({ userId }: { userId: string }) {
   );
 }
 
+function ProfileStatus({ userId }: { userId: string }) {
+  const [emoji, setEmoji] = useState('');
+  const [text, setText] = useState('');
+  const [unavailable, setUnavailable] = useState(false);
+  const [failure, setFailure] = useState<string | undefined>();
+
+  const refresh = useCallback(async () => {
+    const snapshot = await snapshotUserStatusNative(userId);
+    const status: NativeUserStatus | undefined = snapshot?.userStatus;
+    setEmoji(status?.emoji ?? '');
+    setText(status?.text ?? '');
+    setUnavailable(false);
+    setFailure(undefined);
+  }, [userId]);
+
+  useEffect(() => {
+    refresh().catch(() => {
+      setUnavailable(true);
+    });
+  }, [refresh]);
+
+  const [changeState, saveStatus] = useAsyncCallback(
+    useCallback(async (nextEmoji: string, nextText: string) => {
+      await setOwnUserStatusNative(nextEmoji, nextText);
+      setFailure(undefined);
+      try {
+        await refresh();
+      } catch {
+        /* SET committed; keep local fields if snapshot refresh fails. */
+      }
+    }, [refresh])
+  );
+  const [clearState, clearStatus] = useAsyncCallback(
+    useCallback(async () => {
+      await clearOwnUserStatusNative();
+      setEmoji('');
+      setText('');
+      setFailure(undefined);
+    }, [])
+  );
+
+  useEffect(() => {
+    const err = changeState.status === AsyncStatus.Error ? changeState.error : undefined;
+    const clearErr = clearState.status === AsyncStatus.Error ? clearState.error : undefined;
+    const thrown = err ?? clearErr;
+    if (!thrown) return;
+    if (thrown instanceof UserStatusWriteError) {
+      setFailure(thrown.message);
+    } else {
+      setFailure('Native user status is unavailable.');
+    }
+  }, [changeState, clearState]);
+
+  const busy =
+    changeState.status === AsyncStatus.Loading || clearState.status === AsyncStatus.Loading;
+
+  return (
+    <SettingTile
+      title={
+        <Text as="span" size="L400">
+          Status
+        </Text>
+      }
+    >
+      <Box direction="Column" gap="100">
+        <Box gap="100" alignItems="Center">
+          <Input
+            variant="Secondary"
+            radii="300"
+            placeholder="Emoji"
+            value={emoji}
+            disabled={busy || unavailable}
+            onChange={(evt) => setEmoji(evt.target.value)}
+            style={{ maxWidth: 72 }}
+            aria-label="Status emoji"
+          />
+          <Input
+            variant="Secondary"
+            radii="300"
+            placeholder="What are you doing?"
+            value={text}
+            disabled={busy || unavailable}
+            onChange={(evt) => setText(evt.target.value)}
+            style={{ flex: 1 }}
+            aria-label="Status text"
+          />
+          <Button
+            className={SettingsQuietControl}
+            size="300"
+            variant="Secondary"
+            fill="Soft"
+            outlined
+            radii="300"
+            disabled={busy || unavailable}
+            onClick={() => {
+              saveStatus(emoji, text).catch(() => undefined);
+            }}
+          >
+            <Text size="T300">Save</Text>
+          </Button>
+          <Button
+            className={SettingsQuietControl}
+            size="300"
+            variant="Secondary"
+            fill="None"
+            outlined
+            radii="300"
+            disabled={busy || unavailable || (emoji === '' && text === '')}
+            onClick={() => {
+              clearStatus().catch(() => undefined);
+            }}
+          >
+            <Text size="T300">Clear</Text>
+          </Button>
+          {busy && <Spinner size="300" />}
+        </Box>
+        {(unavailable || failure) && (
+          <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
+            {failure ?? 'Native user status is unavailable.'}
+          </Text>
+        )}
+      </Box>
+    </SettingTile>
+  );
+}
+
 function ProfileRtcTransports() {
   const [snapshot, setSnapshot] = useState<NativeRtcTransportsSnapshot | null>(null);
   const [unavailable, setUnavailable] = useState(false);
@@ -572,6 +705,7 @@ export function Profile() {
         <ProfileAvatar userId={userId} profile={profile} />
         <ProfileDisplayName userId={userId} profile={profile} />
         <ProfilePresence userId={userId} />
+        <ProfileStatus userId={userId} />
         <ProfileRtcTransports />
       </SequenceCard>
     </Box>

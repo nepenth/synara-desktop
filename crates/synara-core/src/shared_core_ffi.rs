@@ -239,6 +239,10 @@ use crate::app::timeline::{
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::user_profile::{NativeOwnProfileOwner, OwnProfileUpdateEmit};
+use crate::app::user_status::{
+    NativeInCall, NativeUserStatus, NativeUserStatusOwner, NativeUserStatusSnapshot,
+    NativeUserStatusWriteResult,
+};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
     NativeVerificationOwner, NativeVerificationPhase, NativeVerificationQr,
@@ -375,6 +379,7 @@ const ATTACHED_OWNER_NAMES: &[&str] = &[
     "typing",
     "presence",
     "rtc_transports",
+    "user_status",
     "verification",
     "devices",
     "dehydrated_devices",
@@ -434,6 +439,15 @@ const RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE: &str = "p2-rtc-transports-refresh-
 const RTC_TRANSPORTS_NO_SESSION_DESCRIPTION: &str = "No MatrixRTC transport session is available.";
 const RTC_TRANSPORTS_FAILED_CODE: &str = "p4-rtc-transports-snapshot-failed";
 const RTC_TRANSPORTS_FAILED_DESCRIPTION: &str = "MatrixRTC transports could not be loaded.";
+const USER_STATUS_SNAPSHOT_COMMAND: &str = "matrix_user_status_snapshot";
+const USER_STATUS_SET_COMMAND: &str = "matrix_user_status_set";
+const USER_STATUS_CLEAR_COMMAND: &str = "matrix_user_status_clear";
+const USER_STATUS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-user-status-snapshot-no-session";
+const USER_STATUS_SET_NO_SESSION_CODE: &str = "p2-user-status-set-no-session";
+const USER_STATUS_CLEAR_NO_SESSION_CODE: &str = "p2-user-status-clear-no-session";
+const USER_STATUS_NO_SESSION_DESCRIPTION: &str = "No user status session is available.";
+const USER_STATUS_FAILED_CODE: &str = "p4-user-status-failed";
+const USER_STATUS_FAILED_DESCRIPTION: &str = "User status could not be updated.";
 const TYPING_SNAPSHOT_NO_SESSION_CODE: &str = "p2-typing-snapshot-no-session";
 const TYPING_SET_NO_SESSION_CODE: &str = "p2-typing-set-no-session";
 const PRESENCE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-presence-snapshot-no-session";
@@ -1296,6 +1310,7 @@ pub struct RoomListRoomDto {
     pub avatar_url: Option<String>,
     pub membership: String,
     pub is_direct: bool,
+    pub direct_user_id: Option<String>,
     pub is_space: bool,
     pub is_favorite: bool,
     pub is_call: bool,
@@ -3100,11 +3115,91 @@ fn rtc_transports_snapshot_dto(snapshot: NativeRtcTransportsSnapshot) -> RtcTran
         transports: snapshot
             .transports
             .into_iter()
-            .map(|transport: NativeRtcTransport| RtcTransportDto {
-                kind: transport.kind.as_str().to_owned(),
-                service_url: transport.service_url,
+            .map(|row: NativeRtcTransport| RtcTransportDto {
+                kind: row.kind.as_str().to_owned(),
+                service_url: row.service_url,
             })
             .collect(),
+    }
+}
+
+/// Privacy-safe MSC4426 status field. No tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStatusFieldDto {
+    pub emoji: String,
+    pub text: String,
+}
+
+/// Privacy-safe MSC4426 in-call field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserInCallDto {
+    pub call_joined_ts: Option<u64>,
+}
+
+/// Privacy-safe MSC4426 snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStatusSnapshotDto {
+    pub session_generation: u64,
+    pub user_id: String,
+    pub user_status: Option<UserStatusFieldDto>,
+    pub in_call: Option<UserInCallDto>,
+}
+
+/// Privacy-safe MSC4426 write ack. Status only; never echo emoji or text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStatusWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed user-status error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UserStatusCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for UserStatusCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for UserStatusCommandError {}
+
+fn user_status_failed(code: &'static str, description: &'static str) -> UserStatusCommandError {
+    UserStatusCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_user_status_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> UserStatusCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            user_status_failed(no_session, USER_STATUS_NO_SESSION_DESCRIPTION)
+        }
+        Some(code) => user_status_failed(code, USER_STATUS_FAILED_DESCRIPTION),
+        _ => user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION),
+    }
+}
+
+fn user_status_snapshot_dto(snapshot: NativeUserStatusSnapshot) -> UserStatusSnapshotDto {
+    UserStatusSnapshotDto {
+        session_generation: snapshot.session_generation,
+        user_id: snapshot.user_id,
+        user_status: snapshot
+            .user_status
+            .map(|status: NativeUserStatus| UserStatusFieldDto {
+                emoji: status.emoji,
+                text: status.text,
+            }),
+        in_call: snapshot.in_call.map(|call: NativeInCall| UserInCallDto {
+            call_joined_ts: call.call_joined_ts,
+        }),
     }
 }
 
@@ -3893,6 +3988,7 @@ impl SharedCore {
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
         let rtc_transports = Arc::new(NativeRtcTransportsOwner::start(&client, generation));
+        let user_status = Arc::new(NativeUserStatusOwner::start(&client, generation));
         let verification_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeVerificationUpdateSignal| {
@@ -3988,6 +4084,9 @@ impl SharedCore {
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_rtc_transports(rtc_transports)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_user_status(user_status)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_verification(verification)
@@ -4301,6 +4400,7 @@ impl SharedCore {
                     avatar_url: room.avatar_url,
                     membership: room.membership.as_str().to_owned(),
                     is_direct: room.is_direct,
+                    direct_user_id: room.direct_user_id,
                     is_space: room.is_space,
                     is_favorite: room.is_favorite,
                     is_call: room.is_call,
@@ -4622,6 +4722,75 @@ impl SharedCore {
                 )
             })?;
         Ok(rtc_transports_snapshot_dto(snapshot))
+    }
+
+    pub async fn user_status_snapshot(
+        &self,
+        user_id: String,
+    ) -> Result<UserStatusSnapshotDto, UserStatusCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_STATUS_SNAPSHOT_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "userId": user_id }),
+            })
+            .await
+            .map_err(|error| {
+                map_user_status_core_error(USER_STATUS_SNAPSHOT_NO_SESSION_CODE, error)
+            })?;
+        let snapshot: NativeUserStatusSnapshot =
+            serde_json::from_value(response.payload).map_err(|_| {
+                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
+            })?;
+        Ok(user_status_snapshot_dto(snapshot))
+    }
+
+    pub async fn user_status_set(
+        &self,
+        emoji: String,
+        text: String,
+    ) -> Result<UserStatusWriteDto, UserStatusCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_STATUS_SET_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "emoji": emoji, "text": text }),
+            })
+            .await
+            .map_err(|error| map_user_status_core_error(USER_STATUS_SET_NO_SESSION_CODE, error))?;
+        let result: NativeUserStatusWriteResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
+            })?;
+        Ok(UserStatusWriteDto {
+            status: result.status,
+        })
+    }
+
+    pub async fn user_status_clear(&self) -> Result<UserStatusWriteDto, UserStatusCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_STATUS_CLEAR_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| {
+                map_user_status_core_error(USER_STATUS_CLEAR_NO_SESSION_CODE, error)
+            })?;
+        let result: NativeUserStatusWriteResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
+            })?;
+        Ok(UserStatusWriteDto {
+            status: result.status,
+        })
     }
 
     pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {

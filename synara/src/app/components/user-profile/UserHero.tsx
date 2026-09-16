@@ -18,6 +18,8 @@ import colorMXID from '../../../util/colorMXID';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { BreakWord, LineClamp3 } from '../../styles/Text.css';
 import { UserPresence } from '../../features/matrix-presence/nativePresence';
+import type { NativeUserStatus } from '../../features/matrix-presence/nativeUserStatus';
+import { AvatarPresence, PresenceBadge } from '../presence';
 import { AvatarPresence, PresenceBadge } from '../presence';
 import { ImageViewer } from '../image-viewer';
 import { stopPropagation } from '../../utils/keyboard';
@@ -27,8 +29,10 @@ type UserHeroProps = {
   userId: string;
   avatarUrl?: string;
   presence?: UserPresence;
+  userStatus?: NativeUserStatus;
+  inCall?: boolean;
 };
-export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
+export function UserHero({ userId, avatarUrl, presence, userStatus, inCall }: UserHeroProps) {
   const resolvedAvatarUrl = useNativeMatrixMediaSrc(avatarUrl);
   const [viewAvatar, setViewAvatar] = useState<string>();
 
@@ -54,7 +58,14 @@ export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
         <AvatarPresence
           className={css.UserAvatarContainer}
           badge={
-            presence && <PresenceBadge presence={presence.presence} status={presence.status} />
+            presence && (
+              <PresenceBadge
+                presence={presence.presence}
+                status={presence.status}
+                userStatus={userStatus}
+                inCall={inCall}
+              />
+            )
           }
         >
           <Avatar
@@ -72,6 +83,11 @@ export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
             />
           </Avatar>
         </AvatarPresence>
+        {inCall && (
+          <Text size="T200" data-testid="user-hero-in-call">
+            In a call
+          </Text>
+        )}
         {viewAvatar && (
           <Overlay open backdrop={<OverlayBackdrop />}>
             <OverlayCenter>
@@ -102,9 +118,13 @@ export function UserHero({ userId, avatarUrl, presence }: UserHeroProps) {
 type UserHeroNameProps = {
   displayName?: string;
   userId: string;
+  userStatus?: NativeUserStatus;
 };
-export function UserHeroName({ displayName, userId }: UserHeroNameProps) {
+export function UserHeroName({ displayName, userId, userStatus }: UserHeroNameProps) {
   const username = getMxIdLocalPart(userId);
+  const statusLabel = userStatus
+    ? [userStatus.emoji, userStatus.text].filter((part) => part.length > 0).join(' ')
+    : undefined;
 
   return (
     <Box grow="Yes" direction="Column" gap="0">
@@ -122,6 +142,11 @@ export function UserHeroName({ displayName, userId }: UserHeroNameProps) {
           @{username}
         </Text>
       </Box>
+      {statusLabel && (
+        <Text size="T200" className={classNames(BreakWord, LineClamp3)} title={statusLabel}>
+          {statusLabel}
+        </Text>
+      )}
     </Box>
   );
 }

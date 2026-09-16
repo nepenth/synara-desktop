@@ -33,11 +33,12 @@ enum SharedCoreRoomListRows {
         let lastActivityTs: UInt64?
         let lastMessagePreview: String?
         let lastMessageIsAgentApproval: Bool
-        let isFavorite: Bool
-        let isCall: Bool
-        let hasActiveCall: Bool
-        let activeCallParticipantCount: Int
-        let encryptionStatus: SynaraRoomEncryptionStatus
+    let isFavorite: Bool
+    let isCall: Bool
+    let hasActiveCall: Bool
+    let activeCallParticipantCount: Int
+    let directUserId: String?
+    let encryptionStatus: SynaraRoomEncryptionStatus
     }
 
     struct InviteRow {
@@ -89,6 +90,7 @@ enum SharedCoreRoomListRows {
                 isCall: room.isCall,
                 hasActiveCall: room.hasActiveCall,
                 activeCallParticipantCount: room.activeCallParticipantCount,
+                directUserId: room.directUserId,
                 encryptionStatus: room.encryptionStatus
             )
         }

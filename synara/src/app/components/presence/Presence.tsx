@@ -24,10 +24,15 @@ type PresenceBadgeProps = {
   presence: Presence;
   status?: string;
   size?: '200' | '300' | '400' | '500';
+  userStatus?: { emoji: string; text: string };
+  inCall?: boolean;
 };
-export function PresenceBadge({ presence, status, size }: PresenceBadgeProps) {
+export function PresenceBadge({ presence, status, size, userStatus, inCall }: PresenceBadgeProps) {
   const label = usePresenceLabel();
   const badgeLabelId = useId();
+  const statusLabel = userStatus
+    ? [userStatus.emoji, userStatus.text].filter((part) => part.length > 0).join(' ')
+    : undefined;
 
   return (
     <TooltipProvider
@@ -41,6 +46,10 @@ export function PresenceBadge({ presence, status, size }: PresenceBadgeProps) {
             <Text size="L400">{label[presence]}</Text>
             {status && <Text size="T200">•</Text>}
             {status && <Text size="T200">{status}</Text>}
+            {statusLabel && <Text size="T200">•</Text>}
+            {statusLabel && <Text size="T200">{statusLabel}</Text>}
+            {inCall && <Text size="T200">•</Text>}
+            {inCall && <Text size="T200">In a call</Text>}
           </Box>
         </Tooltip>
       }

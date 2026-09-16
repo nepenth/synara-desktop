@@ -433,6 +433,14 @@ mod tests {
             parse_presence_write_state("unknown").unwrap_err(),
             "v-presence-state-unsupported"
         );
+        assert_eq!(
+            parse_presence_write_state("☕").unwrap_err(),
+            "v-presence-state-unsupported"
+        );
+        assert_eq!(
+            parse_presence_write_state("in a meeting").unwrap_err(),
+            "v-presence-state-unsupported"
+        );
     }
 
     #[test]

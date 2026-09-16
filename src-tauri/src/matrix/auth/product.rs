@@ -131,6 +131,7 @@ use crate::matrix::timeline::{
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
 use crate::matrix::user_profile::NativeOwnProfileOwner;
+use crate::matrix::user_status::NativeUserStatusOwner;
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -262,6 +263,7 @@ struct ManagedMatrixSession {
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
     rtc_transports: Arc<NativeRtcTransportsOwner>,
+    user_status: Arc<NativeUserStatusOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
     _own_profile: NativeOwnProfileOwner,
     _media_retention: NativeMediaRetentionOwner,
@@ -1000,6 +1002,8 @@ mod timeline;
 mod typing;
 #[path = "../user_profile/product_commands.rs"]
 mod user_profile;
+#[path = "../user_status/product_commands.rs"]
+mod user_status;
 #[path = "../verification/product_commands.rs"]
 mod verification;
 pub use account_data::*;
@@ -1023,6 +1027,7 @@ pub use spaces::*;
 pub use timeline::*;
 pub use typing::*;
 pub use user_profile::*;
+pub use user_status::*;
 pub use verification::*;
 
 #[cfg(test)]

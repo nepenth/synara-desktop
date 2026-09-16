@@ -205,6 +205,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         }
     };
     let (has_active_call, active_call_participant_count) = project_active_call(room);
+    let is_direct = room.is_direct().await.unwrap_or(false);
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
@@ -212,6 +213,7 @@ async fn project_room(room: &Room) -> RoomSummary {
         avatar_url,
         membership,
         is_direct,
+        direct_user_id: project_direct_user_id(room, is_direct),
         is_space: room.is_space(),
         is_call: room.is_call(),
         has_active_call,
@@ -234,6 +236,28 @@ async fn project_room(room: &Room) -> RoomSummary {
 }
 
 const MAX_ACTIVE_CALL_PARTICIPANTS: u32 = 99;
+
+fn project_direct_user_id(room: &Room, is_direct: bool) -> Option<String> {
+    if !is_direct {
+        return None;
+    }
+    let own = room.client().user_id();
+    let mut peer: Option<String> = None;
+    for target in room.direct_targets() {
+        let Some(user_id) = target.as_user_id() else {
+            continue;
+        };
+        if own.is_some_and(|own| own == user_id) {
+            continue;
+        }
+        let next = user_id.to_string();
+        if peer.as_ref().is_some_and(|existing| existing != &next) {
+            return None;
+        }
+        peer = Some(next);
+    }
+    peer
+}
 
 fn project_active_call(room: &Room) -> (bool, u32) {
     if !room.has_active_room_call() {

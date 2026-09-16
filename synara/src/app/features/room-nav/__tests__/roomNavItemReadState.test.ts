@@ -11,6 +11,8 @@ test('RoomNavItem mark-as-read hits the native owner instead of the JS-sdk no-op
   assert.match(source, /useNativeRoomListSnapshot/);
   assert.match(source, /LiveCallChip/);
   assert.match(source, /hasActiveCall/);
+  assert.match(source, /useNativeUserStatus/);
+  assert.match(source, /directUserId/);
   assert.doesNotMatch(source, /experimental-widgets/);
   assert.match(source, /'mark_unread'/);
   assert.doesNotMatch(source, /markAsReadInBackground/);
