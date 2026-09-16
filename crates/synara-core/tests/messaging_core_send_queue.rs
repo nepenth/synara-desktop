@@ -135,6 +135,87 @@ async fn unrecoverable_send_wedges_and_abort_unblocks_later_send() {
 }
 
 #[tokio::test]
+async fn recoverable_failure_does_not_strand_the_next_send() {
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().build().await;
+    let room_id = room_id!("!send-queue-recoverable:example.org");
+    let room = server.sync_joined_room(&client, room_id).await;
+    server.mock_room_state_encryption().plain().mount().await;
+    // Exactly exhaust the SDK's internal `short_retry` (3 attempts) for one
+    // logical send, so this surfaces as a real
+    // `SendError { is_recoverable: true }` to the `RoomSendQueue` task
+    // instead of being absorbed by HTTP-layer retry.
+    server
+        .mock_room_send()
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "errcode": "M_UNKNOWN",
+            "error": "transient failure",
+        })))
+        .up_to_n_times(3)
+        .expect(3)
+        .mount()
+        .await;
+
+    let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 45);
+    let first = owner
+        .send_text(
+            room_id.to_string(),
+            "first (recoverable failure)".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .await
+        .expect_err("a persistent-enough 5xx must fail this send");
+    assert_ne!(
+        first, "d0.4-send-queue-wedged",
+        "a recoverable error must not be reported as wedged"
+    );
+    let projected = owner.outbound_text_for_room(room_id.as_str()).await;
+    assert_ne!(projected[0].state, LocalEchoState::Wedged);
+    let first_txn = projected[0].local_txn_id.clone();
+    assert!(
+        !synara_core::app::send::queued_send_is_wedged(&room, &first_txn)
+            .await
+            .unwrap_or(true),
+        "recoverable failure must not mark the SDK request wedged"
+    );
+
+    // The server recovers (matches "HTTP 520 must remain retried"). A
+    // brand-new send in the same room must not hang: the SDK disables the
+    // room's local send-queue after any error (recoverable or not), and only
+    // a wedged (unrecoverable) failure should keep later sends blocked.
+    server
+        .mock_room_send()
+        .ok(event_id!("$after-recoverable"))
+        .mount()
+        .await;
+    let second = tokio::time::timeout(
+        Duration::from_secs(10),
+        owner.send_text(
+            room_id.to_string(),
+            "second (fresh message)".into(),
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        ),
+    )
+    .await
+    .expect("a fresh send after a recoverable failure must not hang")
+    .expect("a fresh send after a recoverable failure must succeed");
+    assert_eq!(second.event_id, "$after-recoverable");
+    assert_eq!(second.status, "sent");
+}
+
+#[tokio::test]
 async fn unwedge_retries_wedged_send() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
