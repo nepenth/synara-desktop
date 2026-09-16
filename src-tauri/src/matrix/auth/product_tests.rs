@@ -180,6 +180,29 @@ fn experimental_widgets_register_the_isolated_host_surface() {
     assert!(!widgets_source.contains("rtc_transports"));
 }
 
+/// The widget webview loads third-party / loopback code. `core:default` would
+/// hand it `core:event`, which is a global `app.emit` subscription (timeline
+/// batches, notification observations, agent actions) plus `emit-to` into the
+/// privileged `main` webview. The bridge pump must be the only grant.
+#[test]
+fn widget_capability_grants_only_the_bridge_pump() {
+    let widget_capability: serde_json::Value =
+        serde_json::from_str(include_str!("../../../capabilities/widget.json"))
+            .expect("widget capability must be valid JSON");
+    let permissions = widget_capability["permissions"]
+        .as_array()
+        .expect("widget capability must list permissions");
+    let granted: Vec<&str> = permissions
+        .iter()
+        .map(|permission| {
+            permission
+                .as_str()
+                .expect("widget permissions must be plain identifiers")
+        })
+        .collect();
+    assert_eq!(granted, vec!["allow-widget-bridge-post"]);
+}
+
 #[test]
 fn room_publish_join_rule_snapshot_registers_one_native_read_owner() {
     let product = PRODUCT_SOURCE;
