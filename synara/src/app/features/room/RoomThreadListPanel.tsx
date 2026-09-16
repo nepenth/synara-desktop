@@ -100,6 +100,7 @@ export function RoomThreadListPanel({ requestClose }: RoomThreadListPanelProps) 
               <Text size="T200" priority="400">
                 {thread.replyCount === 1 ? '1 reply' : `${thread.replyCount} replies`}
                 {thread.participated ? ' · participated' : ''}
+                {thread.unreadCount ? ` · ${thread.unreadCount} unread` : ''}
               </Text>
             </Box>
           ))}

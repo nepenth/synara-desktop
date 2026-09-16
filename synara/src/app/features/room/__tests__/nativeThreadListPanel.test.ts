@@ -25,6 +25,7 @@ test('thread list panel paginates without claiming completeness', () => {
   assert.match(panel, /Load more/);
   assert.match(panel, /Showing the 256 most recently active threads/);
   assert.match(panel, /navigateThread\(room.roomId, thread.rootEventId\)/);
+  assert.match(panel, /thread.unreadCount \? ` · \$\{thread.unreadCount\} unread` : ''/);
   assert.doesNotMatch(panel, /all threads/);
 });
 

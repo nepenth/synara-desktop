@@ -233,7 +233,10 @@ test('native live tail marks the open stream read through the native owner', () 
   assert.match(presenter, /action: 'mark_read'/);
   assert.match(presenter, /intent: 'automatic_visibility'/);
   assert.match(presenter, /observedLiveTailEventId: liveTailReadTarget/);
-  assert.match(presenter, /selectedPosition\.kind === 'live_bottom'/);
+  assert.match(
+    readFileSync('src/app/features/room/nativeTimelineViewportPolicy.ts', 'utf8'),
+    /positionKind !== 'live_bottom' && positionKind !== 'thread'/
+  );
   assert.match(presenter, /capabilities\.markRead/);
   assert.doesNotMatch(presenter, /markAsReadInBackground/);
   assert.doesNotMatch(presenter, /sendReadReceipt/);

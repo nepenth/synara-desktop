@@ -120,7 +120,7 @@ export const nativeLiveReadTarget = ({
     !documentActive ||
     hideActivity ||
     !atLiveBottom ||
-    positionKind !== 'live_bottom' ||
+    (positionKind !== 'live_bottom' && positionKind !== 'thread') ||
     !canMarkRead ||
     !isValidEventIdHint(latestVisibleEventId)
   ) {
