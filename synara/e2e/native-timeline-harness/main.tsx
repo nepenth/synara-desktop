@@ -19,9 +19,10 @@ const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
 const jank = params.has('jank');
+const FILE_MD_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
 let sequence = polish
   ? 4
-  : scenario === 'sparse-missing'
+  : scenario === 'sparse-missing' || scenario === 'file-md'
   ? 1
   : scenario === 'short'
   ? 2
@@ -48,14 +49,27 @@ const makeRow = (index: number) => ({
   senderId: `@reader${index % 2}:example.test`,
   senderName: `Reader ${index % 2}`,
   originServerTs: 1_700_000_000_000 + index * 60_000,
-  body: jank
-    ? `Message ${index}\n${Array.from(
-        { length: 1 + (index % 6) },
-        (_, line) => `Native jank fixture line ${line + 2}.`
-      ).join('\n')}`
-    : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
+  body:
+    scenario === 'file-md'
+      ? 'notes.md'
+      : jank
+      ? `Message ${index}\n${Array.from(
+          { length: 1 + (index % 6) },
+          (_, line) => `Native jank fixture line ${line + 2}.`
+        ).join('\n')}`
+      : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
   edited: false,
   forwardTransport: polish ? ('text' as const) : undefined,
+  ...(scenario === 'file-md'
+    ? {
+        messageType: 'file' as const,
+        mediaFilename: 'notes.md',
+        media: {
+          handleId: FILE_MD_HANDLE,
+          mimeType: 'text/markdown',
+        },
+      }
+    : {}),
   capabilities: {
     react: polish,
     reply: polish,
@@ -277,6 +291,12 @@ window.__SYNARA_DESKTOP__ = {
       return undefined as T;
     }
     if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
+    if (command === 'matrix_media_download') {
+      return { bytes: Array.from(new TextEncoder().encode('# heading\n')) } as T;
+    }
+    if (command === 'desktop_save_file') {
+      return '/tmp/synara-e2e-notes.md' as T;
+    }
     return undefined as T;
   },
 };

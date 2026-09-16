@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   downloadMatrixMedia,
+  downloadTimelineMediaBytes,
   isNativeMediaContentUri,
   resolveMatrixMediaUrl,
   resolveMatrixThumbnailUrl,
@@ -136,6 +137,40 @@ test('downloadMatrixMedia resolves timeline handles through native download with
     assert.equal(requests.length, 0);
     assert.equal(await blob.arrayBuffer().then((buf) => new Uint8Array(buf).join(',')), '1,2,3');
     assert.equal(blob.type, 'image/png');
+  } finally {
+    globalThis.fetch = originalFetch;
+    (globalThis as { window: unknown }).window = originalWindow;
+  }
+});
+
+test('downloadTimelineMediaBytes downloads markdown handles without JS fetch', async () => {
+  const originalFetch = globalThis.fetch;
+  const originalWindow = globalThis.window;
+  const requests: string[] = [];
+  globalThis.fetch = (async (url: RequestInfo | URL) => {
+    requests.push(String(url));
+    return { blob: async () => new Blob(['js']) } as Response;
+  }) as typeof fetch;
+
+  const handle = `timeline-media-${'ab'.repeat(32)}`;
+  (globalThis as { window: unknown }).window = {
+    __TAURI_INTERNALS__: {
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        assert.equal(command, 'matrix_media_download');
+        assert.equal(args?.contentUri, handle);
+        return { bytes: [35, 32, 104] };
+      },
+    },
+  };
+
+  try {
+    const blob = await downloadTimelineMediaBytes(handle, 'text/markdown');
+    assert.equal(requests.length, 0);
+    assert.equal(
+      await blob.arrayBuffer().then((buf) => new Uint8Array(buf).join(',')),
+      '35,32,104'
+    );
+    assert.equal(blob.type, 'text/markdown');
   } finally {
     globalThis.fetch = originalFetch;
     (globalThis as { window: unknown }).window = originalWindow;

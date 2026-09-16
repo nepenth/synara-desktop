@@ -12,7 +12,7 @@ type Fixture = {
   activeStreamCount(): number;
   emitAfterOpen(): void;
   releaseOperation(): void;
-  commands: { command: string }[];
+  commands: { command: string; args?: Record<string, unknown> }[];
 };
 const fixture = (page: Page, action: Exclude<keyof Fixture, 'commands' | 'activeStreamCount'>) =>
   page.evaluate((key) => {
@@ -550,4 +550,46 @@ test('sparse history and missing last-read recovery controls are separately clic
       )
     )
     .toBe(2);
+});
+
+test('markdown file attachments download through native save instead of protocol href', async ({
+  page,
+}) => {
+  await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-md');
+  const chip = page.getByRole('button', { name: 'Download notes.md' });
+  await expect(chip).toBeVisible();
+  await expect(page.locator('a[download]')).toHaveCount(0);
+  await chip.click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const commands = (
+          window as unknown as {
+            nativeTimelineFixture: {
+              commands: { command: string; args?: Record<string, unknown> }[];
+            };
+          }
+        ).nativeTimelineFixture.commands;
+        const download = commands.find((entry) => entry.command === 'matrix_media_download');
+        const save = commands.find((entry) => entry.command === 'desktop_save_file');
+        return {
+          downloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
+            .length,
+          saveCount: commands.filter((entry) => entry.command === 'desktop_save_file').length,
+          contentUri: download?.args?.contentUri,
+          filename: (
+            save?.args as { payload?: { filename?: string; bytes?: number[] } } | undefined
+          )?.payload?.filename,
+          bytes: (save?.args as { payload?: { bytes?: number[] } } | undefined)?.payload?.bytes,
+        };
+      })
+    )
+    .toEqual({
+      downloadCount: 1,
+      saveCount: 1,
+      contentUri: `timeline-media-${'ab'.repeat(32)}`,
+      filename: 'notes.md',
+      bytes: Array.from(new TextEncoder().encode('# heading\n')),
+    });
+  await expect(chip).toBeEnabled();
 });

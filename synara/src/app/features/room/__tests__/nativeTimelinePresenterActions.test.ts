@@ -226,6 +226,19 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   );
   assert.match(dateRail, /Jump to a date in loaded history/);
   assert.match(dateRail, /aria-controls="native-timeline-history"/);
+  assert.match(dateRail, /translate3d/);
+  assert.match(dateRail, /React\.memo/);
+  assert.doesNotMatch(dateRail, /TooltipProvider/);
+  assert.doesNotMatch(dateRail, /visibleStartIndex/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusDateChip/);
+  assert.match(htmlCss, /export const HistoryStatusDateChip = style\(/);
+  assert.doesNotMatch(
+    htmlCss.slice(
+      htmlCss.indexOf('export const HistoryStatusDateChip'),
+      htmlCss.indexOf('export const DateRail')
+    ),
+    /linear-gradient/
+  );
   assert.match(presenter, /NativeTimelineDateRail/);
   assert.match(presenter, /reserveRail=\{showDateRail\}/);
 
@@ -294,6 +307,26 @@ test('room read state stays a single contextual overflow action', () => {
   assert.match(header, /aria-label="More Options"/);
   assert.match(header, /unread \? 'Mark as Read' : 'Mark as Unread'/);
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
+});
+
+test('native timeline file attachments save through download+save, not protocol href', () => {
+  const mediaFn = presenter.slice(
+    presenter.indexOf('const NativeTimelineMedia'),
+    presenter.indexOf('const NativeTimelineSenderAvatar')
+  );
+  const fileBranch = mediaFn.indexOf("if (messageType === 'file')");
+  const missingSrc = mediaFn.indexOf('if (!mediaSrc)');
+  assert.ok(fileBranch >= 0, 'file attachments must have a dedicated branch');
+  assert.ok(fileBranch < missingSrc, 'file chips must not depend on protocol mediaSrc');
+  assert.match(presenter, /saveNativeTimelineFileAttachment/);
+  assert.match(presenter, /data-native-timeline-file-download="true"/);
+  assert.match(presenter, /onActionError=\{onActionError\}/);
+  assert.match(htmlCss, /export const FileDownload = style\(/);
+  assert.doesNotMatch(presenter, /<a href=\{mediaSrc\} download/);
+  assert.doesNotMatch(presenter, /href=\{mediaSrc\}/);
+  assert.doesNotMatch(presenter, /text\/markdown/);
+  assert.doesNotMatch(presenter, /FileHeader|FileDownloadButton/);
+  assert.doesNotMatch(mediaFn, /if \([^)]*mimeType[^)]*markdown/i);
 });
 
 test('native timeline honors hide membership, hide activity receipts, and message spacing', () => {
