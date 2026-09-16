@@ -49,10 +49,11 @@ import * as depthCss from '../../styles/Depth.css';
 type OrderButtonProps = {
   order?: string;
   onChange: (order?: string) => void;
+  relevanceOnly?: boolean;
 };
-function OrderButton({ order, onChange }: OrderButtonProps) {
+function OrderButton({ order, onChange, relevanceOnly }: OrderButtonProps) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
-  const rankOrder = order === 'rank';
+  const rankOrder = order === 'rank' || relevanceOnly;
 
   const setOrder = (o?: string) => {
     setMenuAnchor(undefined);
@@ -82,16 +83,18 @@ function OrderButton({ order, onChange }: OrderButtonProps) {
             </Header>
             <Line variant="Surface" size="300" />
             <div style={{ padding: config.space.S100 }}>
-              <MenuItem
-                className={depthCss.quietInteractiveSurface}
-                onClick={() => setOrder()}
-                variant="Surface"
-                size="300"
-                radii="300"
-                aria-pressed={!rankOrder}
-              >
-                <Text size="T300">Recent</Text>
-              </MenuItem>
+              {!relevanceOnly && (
+                <MenuItem
+                  className={depthCss.quietInteractiveSurface}
+                  onClick={() => setOrder()}
+                  variant="Surface"
+                  size="300"
+                  radii="300"
+                  aria-pressed={!rankOrder}
+                >
+                  <Text size="T300">Recent</Text>
+                </MenuItem>
+              )}
               <MenuItem
                 className={depthCss.quietInteractiveSurface}
                 onClick={() => setOrder('rank')}
@@ -368,6 +371,7 @@ type SearchFiltersProps = {
   fromDate?: string;
   toDate?: string;
   onDateRangeChange: (fromDate?: string, toDate?: string) => void;
+  relevanceOnly?: boolean;
 };
 export function SearchFilters({
   defaultRoomsFilterName,
@@ -386,6 +390,7 @@ export function SearchFilters({
   onTypeChange,
   onSendersChange,
   onDateRangeChange,
+  relevanceOnly,
 }: SearchFiltersProps) {
   const mx = useMatrixClient();
   const { t } = useTranslation();
@@ -521,7 +526,7 @@ export function SearchFilters({
             </Chip>
           );
         })}
-        <OrderButton order={order} onChange={onOrderChange} />
+        <OrderButton order={order} onChange={onOrderChange} relevanceOnly={relevanceOnly} />
       </Box>
       <Box gap="200" wrap="Wrap" alignItems="End">
         <Box as="form" onSubmit={handleSenderSubmit} gap="100" alignItems="End">

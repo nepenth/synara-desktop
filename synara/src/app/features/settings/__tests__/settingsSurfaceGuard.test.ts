@@ -89,6 +89,12 @@ test('General settings use positive phrasing for media loading', () => {
   assert.equal(general.includes('Disable Media Auto Load'), false);
 });
 
+test('General hosts Indexed message search with a session-reload note', () => {
+  assert.match(general, /Indexed message search/);
+  assert.match(general, /indexedMessageSearch/);
+  assert.match(general, /session reload/);
+});
+
 test('native Notifications owns homeserver push rules instead of a unavailable stub', () => {
   assert.match(notifications, /isNativeMatrixSession/);
   assert.match(notifications, /NativePushRulesEditor/);

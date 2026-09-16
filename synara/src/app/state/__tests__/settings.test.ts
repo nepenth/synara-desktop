@@ -38,9 +38,11 @@ test('modernization opt-in settings default off', () => {
   assert.deepEqual(defaultSettings.agentWidgetEntries, []);
   assert.equal(store.getSettings().experimentalWidgetsEnabled, false);
   assert.deepEqual(store.getSettings().agentWidgetEntries, []);
+  assert.equal(defaultSettings.indexedMessageSearch, true);
   assert.equal(defaultSettings.gifOnboardingDismissed, false);
   assert.equal(defaultSettings.timelineVirtualizationEnabled, true);
   assert.equal(store.getSettings().gifSearchEnabled, false);
+  assert.equal(store.getSettings().indexedMessageSearch, true);
   assert.equal(store.getSettings().timelineVirtualizationEnabled, true);
   assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
   assert.equal(defaultSettings.desktopDiagnosticsPerformance, false);
