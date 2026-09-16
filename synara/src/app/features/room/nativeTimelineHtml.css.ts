@@ -700,14 +700,14 @@ const historyStatusOverlay = {
 export const HistoryStatusOverlayBackward = style({
   ...historyStatusOverlay,
   top: 0,
-  background: `linear-gradient(180deg, ${color.Background.Container} 55%, transparent)`,
+  background: `linear-gradient(180deg, var(--synara-rich-text-reading-surface) 55%, transparent)`,
 });
 
 export const HistoryStatusOverlayForward = style({
   ...historyStatusOverlay,
   top: 'auto',
   bottom: 0,
-  background: `linear-gradient(0deg, ${color.Background.Container} 55%, transparent)`,
+  background: `linear-gradient(0deg, var(--synara-rich-text-reading-surface) 55%, transparent)`,
 });
 
 export const HistoryStatusCard = style({
