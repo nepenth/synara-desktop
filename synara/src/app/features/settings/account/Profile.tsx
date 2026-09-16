@@ -523,15 +523,18 @@ function ProfileStatus({ userId }: { userId: string }) {
   }, [refresh]);
 
   const [changeState, saveStatus] = useAsyncCallback(
-    useCallback(async (nextEmoji: string, nextText: string) => {
-      await setOwnUserStatusNative(nextEmoji, nextText);
-      setFailure(undefined);
-      try {
-        await refresh();
-      } catch {
-        /* SET committed; keep local fields if snapshot refresh fails. */
-      }
-    }, [refresh])
+    useCallback(
+      async (nextEmoji: string, nextText: string) => {
+        await setOwnUserStatusNative(nextEmoji, nextText);
+        setFailure(undefined);
+        try {
+          await refresh();
+        } catch {
+          /* SET committed; keep local fields if snapshot refresh fails. */
+        }
+      },
+      [refresh]
+    )
   );
   const [clearState, clearStatus] = useAsyncCallback(
     useCallback(async () => {

@@ -51,7 +51,6 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { LiveCallChip } from './LiveCallChip';
 import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import * as css from './styles.css';
-import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
 
 type RoomNavItemMenuProps = {

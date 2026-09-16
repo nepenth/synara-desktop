@@ -20,7 +20,6 @@ import { BreakWord, LineClamp3 } from '../../styles/Text.css';
 import { UserPresence } from '../../features/matrix-presence/nativePresence';
 import type { NativeUserStatus } from '../../features/matrix-presence/nativeUserStatus';
 import { AvatarPresence, PresenceBadge } from '../presence';
-import { AvatarPresence, PresenceBadge } from '../presence';
 import { ImageViewer } from '../image-viewer';
 import { stopPropagation } from '../../utils/keyboard';
 import { useNativeMatrixMediaSrc } from '../../hooks/useNativeMatrixMediaSrc';
