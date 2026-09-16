@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   parseRtcTransport,
   parseRtcTransportsSnapshot,
+  refreshRtcTransportsNative,
   snapshotRtcTransportsNative,
   type NativeRtcTransportsInvoke,
 } from '../nativeRtcTransports';
@@ -84,6 +85,15 @@ test('snapshot invoke stays on the native command and never widgets types', asyn
   });
   assert.equal(snapshot?.status, 'unsupported');
   assert.deepEqual(calls, ['matrix_rtc_transports_snapshot']);
+  const refresh = await refreshRtcTransportsNative({
+    desktopNativeSession: true,
+    invoke,
+  });
+  assert.equal(refresh?.status, 'unsupported');
+  assert.deepEqual(calls, [
+    'matrix_rtc_transports_snapshot',
+    'matrix_rtc_transports_refresh',
+  ]);
 });
 
 test('live-call chrome distinguishes voice-room type from a live call', () => {

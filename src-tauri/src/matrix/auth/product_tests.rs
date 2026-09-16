@@ -86,6 +86,15 @@ fn v_rtc_transports_registers_the_frozen_native_surface() {
     assert!(capability.contains("allow-matrix-rtc-transports-refresh"));
     assert!(snapshot_permission.contains("matrix_rtc_transports_snapshot"));
     assert!(refresh_permission.contains("matrix_rtc_transports_refresh"));
+    let schemas = [
+        include_str!("../../../gen/schemas/desktop-schema.json"),
+        include_str!("../../../gen/schemas/linux-schema.json"),
+        include_str!("../../../gen/schemas/macOS-schema.json"),
+    ];
+    for schema in schemas {
+        assert!(schema.contains("allow-matrix-rtc-transports-snapshot"));
+        assert!(schema.contains("allow-matrix-rtc-transports-refresh"));
+    }
     assert!(!rtc_source.contains("experimental-widgets"));
     assert!(!rtc_source.contains("widget::"));
 }

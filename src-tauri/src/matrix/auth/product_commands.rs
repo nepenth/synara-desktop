@@ -464,23 +464,32 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation, notification_decisions) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, rtc_transports, verification, devices, join_rules, image_packs, timelines, sync) =
-                session
-                    .as_ref()
-                    .map(|active| {
-                        (
-                            active.typing.clone(),
-                            active.presence.clone(),
-                            active.rtc_transports.clone(),
-                            active.verification.clone(),
-                            active.devices.clone(),
-                            active.join_rules.clone(),
-                            active._image_packs.clone(),
-                            active.timelines.clone(),
-                            active.sync.clone(),
-                        )
-                    })
-                    .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+            let (
+                typing,
+                presence,
+                rtc_transports,
+                verification,
+                devices,
+                join_rules,
+                image_packs,
+                timelines,
+                sync,
+            ) = session
+                .as_ref()
+                .map(|active| {
+                    (
+                        active.typing.clone(),
+                        active.presence.clone(),
+                        active.rtc_transports.clone(),
+                        active.verification.clone(),
+                        active.devices.clone(),
+                        active.join_rules.clone(),
+                        active._image_packs.clone(),
+                        active.timelines.clone(),
+                        active.sync.clone(),
+                    )
+                })
+                .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
             drop(session);
             crate::bridge::session_lifecycle::open_after_desktop_session_install(
                 core.inner().as_ref(),

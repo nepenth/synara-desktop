@@ -1179,6 +1179,18 @@
           "markdownDescription": "Enables the matrix_room_unban command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_rtc_transports_refresh command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-rtc-transports-refresh",
+          "markdownDescription": "Enables the matrix_rtc_transports_refresh command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_rtc_transports_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-rtc-transports-snapshot",
+          "markdownDescription": "Enables the matrix_rtc_transports_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_secret_storage_bootstrap command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-secret-storage-bootstrap",
@@ -2383,6 +2395,18 @@
           "type": "string",
           "const": "deny-matrix-room-unban",
           "markdownDescription": "Denies the matrix_room_unban command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_rtc_transports_refresh command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-rtc-transports-refresh",
+          "markdownDescription": "Denies the matrix_rtc_transports_refresh command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_rtc_transports_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-rtc-transports-snapshot",
+          "markdownDescription": "Denies the matrix_rtc_transports_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_secret_storage_bootstrap command without any pre-configured scope.",

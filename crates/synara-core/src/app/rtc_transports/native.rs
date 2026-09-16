@@ -178,7 +178,13 @@ mod tests {
             "https://livekit.example.org/jwt"
         );
         let raw = serde_json::to_string(&snapshot).expect("serialize string");
-        for forbidden in ["jwt_token", "accessToken", "access_token", "widget", "password"] {
+        for forbidden in [
+            "jwt_token",
+            "accessToken",
+            "access_token",
+            "widget",
+            "password",
+        ] {
             assert!(!raw.contains(forbidden), "{raw}");
         }
     }
@@ -219,6 +225,9 @@ mod tests {
             ]),
         );
         assert_eq!(snapshot.transports.len(), 2);
-        assert!(snapshot.transports.iter().all(|row| row.service_url.is_none()));
+        assert!(snapshot
+            .transports
+            .iter()
+            .all(|row| row.service_url.is_none()));
     }
 }
