@@ -637,7 +637,7 @@ test("rejects TestFlight upload that archives without UniFFI generate", () => {
         "          targets: aarch64-apple-ios",
         "          targets: aarch64-apple-darwin"
       ),
-      /Rust 1\.93/i,
+      /Rust 1\.96/i,
     ],
     [
       releaseWorkflow.replace(
