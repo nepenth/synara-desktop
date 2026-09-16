@@ -7,8 +7,9 @@ use super::{
 use matrix_sdk::{
     encryption::verification::{SasState, Verification, VerificationRequest},
     ruma::{
-        events::key::verification::VerificationMethod, owned_device_id, owned_user_id, DeviceId,
-        UserId,
+        api::client::to_device::send_event_to_device::v3::Messages,
+        events::key::verification::VerificationMethod, owned_device_id, owned_user_id,
+        to_device::DeviceIdOrAllDevices, DeviceId, MilliSecondsSinceUnixEpoch, UserId,
     },
     test_utils::mocks::{encryption::PendingToDeviceMessages, MatrixMockServer},
     Client,
@@ -23,8 +24,8 @@ use std::{
 };
 use tokio::time::Instant;
 use wiremock::{
-    matchers::{method, path},
-    Mock, MockGuard, ResponseTemplate,
+    matchers::{method, path, path_regex},
+    Mock, MockGuard, Request, ResponseTemplate,
 };
 
 struct TwoDevices {
@@ -71,9 +72,7 @@ async fn two_own_devices() -> TwoDevices {
     wait_for_crypto_device(&alice, alice2.device_id().expect("alice2 device")).await;
     wait_for_crypto_device(&alice2, alice.device_id().expect("alice device")).await;
     let queue = Arc::new(Mutex::new(PendingToDeviceMessages::default()));
-    let guard = server
-        .capture_put_to_device_traffic(&user, queue.clone())
-        .await;
+    let guard = capture_to_device_traffic(&server, &user, queue.clone()).await;
     TwoDevices {
         server,
         alice,
@@ -124,6 +123,55 @@ async fn wait_for_crypto_device(client: &Client, device_id: &DeviceId) {
         );
         tokio::time::sleep(Duration::from_millis(25)).await;
     }
+}
+
+/// Like [`MatrixMockServer::capture_put_to_device_traffic`], but skip `*` /
+/// [`DeviceIdOrAllDevices::AllDevices`]. Confirm sends
+/// `m.key.verification.done` to all devices; the SDK helper panics on that
+/// and poisons the queue during the post-`Done` pump.
+async fn capture_to_device_traffic(
+    server: &MatrixMockServer,
+    sender_user_id: &UserId,
+    queue: Arc<Mutex<PendingToDeviceMessages>>,
+) -> MockGuard {
+    let sender = sender_user_id.to_owned();
+    Mock::given(method("PUT"))
+        .and(path_regex(r"^/_matrix/client/.*/sendToDevice/([^/]+)/.*"))
+        .respond_with(move |req: &Request| {
+            #[derive(Debug, serde::Deserialize)]
+            struct Parameters {
+                messages: Messages,
+            }
+            let params: Parameters = req.body_json().expect("sendToDevice body");
+            let event_type = req
+                .url
+                .path_segments()
+                .and_then(|segments| segments.rev().nth(1))
+                .expect("sendToDevice event type");
+            let mut queue = queue.lock().expect("to-device queue");
+            for (user_id, device_map) in params.messages.iter() {
+                for (device_id, content) in device_map.iter() {
+                    let DeviceIdOrAllDevices::DeviceId(device_id) = device_id else {
+                        continue;
+                    };
+                    let event = json!({
+                        "origin_server_ts": MilliSecondsSinceUnixEpoch::now(),
+                        "sender": sender,
+                        "type": event_type,
+                        "content": content,
+                    });
+                    queue
+                        .entry(user_id.to_owned())
+                        .or_default()
+                        .entry(device_id.to_owned())
+                        .or_default()
+                        .push(serde_json::from_value(event).expect("to-device event"));
+                }
+            }
+            ResponseTemplate::new(200).set_body_json(json!({}))
+        })
+        .mount_as_scoped(server.server())
+        .await
 }
 
 fn take_pending(
