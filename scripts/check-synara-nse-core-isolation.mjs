@@ -14,6 +14,7 @@ const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
 const productionFeatures = read("scripts/check-synara-nse-core-production-features.mjs");
+const archiveExports = read("scripts/check-synara-nse-core-archive-exports.sh");
 const iosCiBuild = read("synara-ios/scripts/ci-build.sh");
 const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
 const generatorSyntax = spawnSync(
@@ -24,6 +25,16 @@ const generatorSyntax = spawnSync(
 if (generatorSyntax.status !== 0) {
   throw new Error(
     `SynaraNseCore generator shell syntax failed: ${generatorSyntax.stderr || generatorSyntax.stdout}`,
+  );
+}
+const archiveExportsSyntax = spawnSync(
+  "bash",
+  ["-n", resolve(root, "scripts/check-synara-nse-core-archive-exports.sh")],
+  { encoding: "utf8" },
+);
+if (archiveExportsSyntax.status !== 0) {
+  throw new Error(
+    `SynaraNseCore archive export checker shell syntax failed: ${archiveExportsSyntax.stderr || archiveExportsSyntax.stdout}`,
   );
 }
 const notificationService = read(
@@ -73,6 +84,13 @@ requireText(
   'node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"',
   "NSE production feature CI invocation",
 );
+requireText(
+  iosCiBuild,
+  '"$nse_archive_checker" "${nse_archives[@]}"',
+  "NSE archive export CI invocation",
+);
+requireText(archiveExports, "_uniffi_synara_core_", "NSE archive full-Core export needle");
+requireText(archiveExports, "Unknown attribute kind", "rustc 1.96 LLVM22 nm mismatch handling");
 for (const triple of ["aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
   requireText(productionFeatures, `"${triple}"`, `NSE production feature ${triple} query`);
 }

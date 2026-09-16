@@ -271,6 +271,7 @@ jobs:
             synara-ios/scripts/check-notification-service-archive.sh \
             scripts/check-synara-nse-core-isolation.mjs \
             scripts/check-synara-nse-core-production-features.mjs \
+            scripts/check-synara-nse-core-archive-exports.sh \
             scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"

@@ -65,6 +65,7 @@ const required = [
   "scripts/lib/publish-generated-apple-pair.sh",
   "scripts/__tests__/apple-pair-publication.test.mjs",
   "scripts/check-synara-nse-core-production-features.mjs",
+  "scripts/check-synara-nse-core-archive-exports.sh",
   "synara-ios/scripts/ci-build.sh",
   ".github/workflows/ci.yml",
 ];
@@ -1682,6 +1683,13 @@ const nseProductionFeatureIndex = iosCiBuild.indexOf(nseProductionFeatureInvocat
 if (nseProductionFeatureIndex < 0 || nseProductionFeatureIndex > ciBuildXcodebuildIndex) {
   throw new Error(
     "P4-4 iOS CI build must retain the NSE production feature graph guard before xcodebuild"
+  );
+}
+const nseArchiveExportInvocation = '"$nse_archive_checker" "${nse_archives[@]}"';
+const nseArchiveExportIndex = iosCiBuild.indexOf(nseArchiveExportInvocation);
+if (nseArchiveExportIndex < 0 || nseArchiveExportIndex > ciBuildXcodebuildIndex) {
+  throw new Error(
+    "P4-4 iOS CI build must retain the NSE archive export guard before xcodebuild"
   );
 }
 if (!iosCiBuild.includes("test-without-building")) {
