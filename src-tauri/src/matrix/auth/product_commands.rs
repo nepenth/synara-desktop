@@ -465,23 +465,32 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation, notification_decisions) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, widgets, verification, devices, join_rules, image_packs, timelines, sync) =
-                session
-                    .as_ref()
-                    .map(|active| {
-                        (
-                            active.typing.clone(),
-                            active.presence.clone(),
-                            active.widgets.clone(),
-                            active.verification.clone(),
-                            active.devices.clone(),
-                            active.join_rules.clone(),
-                            active._image_packs.clone(),
-                            active.timelines.clone(),
-                            active.sync.clone(),
-                        )
-                    })
-                    .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
+            let (
+                typing,
+                presence,
+                widgets,
+                verification,
+                devices,
+                join_rules,
+                image_packs,
+                timelines,
+                sync,
+            ) = session
+                .as_ref()
+                .map(|active| {
+                    (
+                        active.typing.clone(),
+                        active.presence.clone(),
+                        active.widgets.clone(),
+                        active.verification.clone(),
+                        active.devices.clone(),
+                        active.join_rules.clone(),
+                        active._image_packs.clone(),
+                        active.timelines.clone(),
+                        active.sync.clone(),
+                    )
+                })
+                .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
             drop(session);
             crate::bridge::session_lifecycle::open_after_desktop_session_install(
                 core.inner().as_ref(),
@@ -790,6 +799,10 @@ pub async fn matrix_logout(
     let _remote_logout_succeeded = active.client.matrix_auth().logout().await.is_ok();
     active.join_rules.retire();
     active.notification_observations.retire();
+    // TM-T10: cancel every WidgetDriver::run and destroy every widget webview
+    // before the session is dropped. The owner's Drop is a best-effort
+    // `try_lock` fallback, not the logout guarantee.
+    active.widgets.retire_and_close().await;
     active
         .sync
         .stop()
