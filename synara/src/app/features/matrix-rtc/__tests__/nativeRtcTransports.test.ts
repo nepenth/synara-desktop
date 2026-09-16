@@ -90,10 +90,7 @@ test('snapshot invoke stays on the native command and never widgets types', asyn
     invoke,
   });
   assert.equal(refresh?.status, 'unsupported');
-  assert.deepEqual(calls, [
-    'matrix_rtc_transports_snapshot',
-    'matrix_rtc_transports_refresh',
-  ]);
+  assert.deepEqual(calls, ['matrix_rtc_transports_snapshot', 'matrix_rtc_transports_refresh']);
 });
 
 test('live-call chrome distinguishes voice-room type from a live call', () => {
