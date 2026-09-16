@@ -992,6 +992,8 @@ mod typing;
 mod user_profile;
 #[path = "../verification/product_commands.rs"]
 mod verification;
+#[path = "../x509/product_commands.rs"]
+mod x509_identity;
 pub use account_data::*;
 pub use auth_commands::*;
 pub use backup::*;
@@ -1013,6 +1015,7 @@ pub use timeline::*;
 pub use typing::*;
 pub use user_profile::*;
 pub use verification::*;
+pub use x509_identity::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]

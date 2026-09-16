@@ -44,6 +44,9 @@ requireText(coreManifest, 'default = ["full-uniffi"]', "full Core default featur
 requireText(coreManifest, "nse-preview = []", "NSE Core feature");
 requireText(nseManifest, "default-features = false", "full binding exclusion");
 requireText(nseManifest, 'features = ["nse-preview"]', "NSE-only feature");
+forbidText(nseManifest, "x509-identity", "NSE X.509 Core feature");
+forbidText(coreManifest, 'default = ["full-uniffi", "x509-identity"]', "X.509 must not be Core default");
+requireText(coreManifest, "x509-identity = [", "desktop-optional X.509 feature");
 requireText(nseUdl, "interface NsePreviewRequest {", "cancelable request boundary");
 requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");

@@ -29,5 +29,13 @@ for (const target of appleTargets) {
     console.error(`SynaraNseCore must not enable the full Core UniFFI feature in its production graph (${target})`);
     process.exit(1);
   }
+  if (
+    result.stdout.includes('x509-identity')
+    || result.stdout.includes('experimental-x509-identity-verification')
+    || result.stdout.includes('rust-x509-verifier-impl')
+  ) {
+    console.error(`SynaraNseCore must not enable X.509 identity verification (${target})`);
+    process.exit(1);
+  }
 }
 console.log("Synara NSE Core production feature isolation passed for all Apple slices.");

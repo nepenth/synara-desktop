@@ -34,6 +34,11 @@ test('device snapshot parser accepts additive trust fields and aliases unsupport
         trust: 'verified_locally_only',
         isCurrent: false,
       },
+      {
+        deviceId: 'CERT',
+        trust: 'verified_by_certificate',
+        isCurrent: false,
+      },
     ],
   });
   assert.ok(snapshot);
@@ -41,11 +46,13 @@ test('device snapshot parser accepts additive trust fields and aliases unsupport
   assert.equal(snapshot.devices[0]?.isCrossSignedByOwner, true);
   assert.equal(snapshot.devices[1]?.trust, 'no_encryption');
   assert.equal(snapshot.devices[2]?.trust, 'verified_locally_only');
+  assert.equal(snapshot.devices[3]?.trust, 'verified_by_certificate');
 });
 
 test('device trust labels distinguish backup devices from unencrypted sessions', () => {
   assert.equal(nativeDeviceTrustLabel('verified'), 'Verified');
   assert.equal(nativeDeviceTrustLabel('verified_locally_only'), 'Verified');
+  assert.equal(nativeDeviceTrustLabel('verified_by_certificate'), 'Verified (certificate)');
   assert.equal(nativeDeviceTrustLabel('unverified'), 'Unverified');
   assert.equal(nativeDeviceTrustLabel('dehydrated'), 'Backup device');
   assert.equal(nativeDeviceTrustLabel('no_encryption'), 'Not encrypted');

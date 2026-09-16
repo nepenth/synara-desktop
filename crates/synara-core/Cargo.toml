@@ -14,6 +14,13 @@ crate-type = ["lib", "staticlib", "cdylib"]
 default = ["full-uniffi"]
 full-uniffi = []
 nse-preview = []
+# Desktop-only. Do not enable on nse-preview / iOS SharedCore graphs.
+x509-identity = [
+  "matrix-sdk/experimental-x509-identity-verification",
+  "matrix-sdk-crypto/experimental-x509-identity-verification",
+  "matrix-sdk-crypto/rust-x509-verifier-impl",
+  "dep:rustls",
+]
 
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
@@ -76,6 +83,14 @@ zeroize = "1"
 # Avatar MIME parsing for upload_avatar (bytes stay off Core JSON).
 # Pin matches src-tauri (`mime = "0.3"`).
 mime = "0.3"
+# Optional: desktop `x509-identity` installs aws-lc as the rustls process
+# default so HTTPS and `RustRawX509Verifier` share one provider. The verifier
+# crate also enables rustls `ring`; we never install ring as default.
+rustls = { version = "0.23.45", default-features = false, features = [
+  "std",
+  "aws_lc_rs",
+  "tls12",
+], optional = true }
 
 [build-dependencies]
 uniffi = { version = "=0.28.3", features = ["build"] }

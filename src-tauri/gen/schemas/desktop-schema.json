@@ -1551,6 +1551,36 @@
           "markdownDescription": "Enables the matrix_verification_start command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_x509_identity_import_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-import-ca",
+          "markdownDescription": "Enables the matrix_x509_identity_import_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_import_signer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-import-signer",
+          "markdownDescription": "Enables the matrix_x509_identity_import_signer command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_remove_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-remove-ca",
+          "markdownDescription": "Enables the matrix_x509_identity_remove_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-set-enabled",
+          "markdownDescription": "Enables the matrix_x509_identity_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-status",
+          "markdownDescription": "Enables the matrix_x509_identity_status command without any pre-configured scope."
+        },
+        {
           "description": "Denies the desktop_agent_action command without any pre-configured scope.",
           "type": "string",
           "const": "deny-desktop-agent-action",
@@ -2755,6 +2785,36 @@
           "type": "string",
           "const": "deny-matrix-verification-start",
           "markdownDescription": "Denies the matrix_verification_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_import_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-import-ca",
+          "markdownDescription": "Denies the matrix_x509_identity_import_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_import_signer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-import-signer",
+          "markdownDescription": "Denies the matrix_x509_identity_import_signer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_remove_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-remove-ca",
+          "markdownDescription": "Denies the matrix_x509_identity_remove_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-set-enabled",
+          "markdownDescription": "Denies the matrix_x509_identity_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-status",
+          "markdownDescription": "Denies the matrix_x509_identity_status command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",

@@ -73,7 +73,36 @@ pub async fn build_unauthenticated_client(
         builder = builder.handle_refresh_tokens();
     }
 
+    #[cfg(feature = "x509-identity")]
+    {
+        crate::app::x509::ensure_aws_lc_rustls_provider();
+        builder = apply_x509_identity_hooks(builder, config.account_root());
+    }
+
     builder.build().await.map_err(map_build_error)
+}
+
+#[cfg(feature = "x509-identity")]
+fn apply_x509_identity_hooks(
+    mut builder: matrix_sdk::ClientBuilder,
+    account_root: &std::path::Path,
+) -> matrix_sdk::ClientBuilder {
+    let runtime = crate::app::x509::load_runtime(account_root);
+    let inject = runtime.should_inject_verifier();
+    if inject {
+        if let Some(verifier) = crate::app::x509::build_verifier(&runtime.trust_anchors_pem) {
+            builder = builder.with_x509_verifier(Some(verifier));
+            if let (Some(cert), Some(key)) = (runtime.signer_cert_pem.as_deref(), runtime.signer_key_pem.as_deref()) {
+                if let Some(signer) = crate::app::x509::build_signer(cert, key) {
+                    builder = builder.with_x509_signer(Some(signer));
+                }
+            }
+            crate::app::x509::record_applied(account_root, true);
+            return builder;
+        }
+    }
+    crate::app::x509::record_applied(account_root, false);
+    builder
 }
 
 fn map_build_error(err: matrix_sdk::ClientBuildError) -> ClientBuilderError {

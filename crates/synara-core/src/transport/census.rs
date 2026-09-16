@@ -177,6 +177,11 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_verification_list",
     "matrix_verification_mismatch",
     "matrix_verification_start",
+    "matrix_x509_identity_import_ca",
+    "matrix_x509_identity_import_signer",
+    "matrix_x509_identity_remove_ca",
+    "matrix_x509_identity_set_enabled",
+    "matrix_x509_identity_status",
 ];
 
 /// Whether `command` is an exact React-facing Matrix invoke command.

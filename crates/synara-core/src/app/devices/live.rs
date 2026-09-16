@@ -444,6 +444,7 @@ fn trust_when_crypto_device_absent(crypto_store_loaded: bool) -> NativeDeviceTru
             is_dehydrated: false,
             is_verified_with_cross_signing: false,
             is_verified: false,
+            is_verified_by_certificate: false,
         })
     } else {
         NativeDeviceTrust::Unverified
@@ -582,6 +583,9 @@ pub async fn snapshot(
                             is_verified_with_cross_signing: crypto_device
                                 .is_verified_with_cross_signing(),
                             is_verified: crypto_device.is_verified(),
+                            // Own-account session list: X.509 never stands in
+                            // for SAS / USK on this device.
+                            is_verified_by_certificate: false,
                         }),
                         crypto_device.is_cross_signed_by_owner(),
                         Some(u64::from(crypto_device.first_time_seen_ts().0)),

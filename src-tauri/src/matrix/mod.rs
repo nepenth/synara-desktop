@@ -104,6 +104,7 @@ pub mod unread;
 pub mod user_profile;
 pub mod utd_recovery;
 pub mod verification;
+pub mod x509;
 
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
@@ -144,6 +145,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _backup = backup::matrix_backup_markers();
     let _devices = devices::matrix_devices_markers();
     let _verification = verification::matrix_verification_markers();
+    let _x509 = x509::matrix_x509_identity_markers();
     let _cross_signing = cross_signing::matrix_cross_signing_markers();
     let _crypto_store = crypto_store::matrix_crypto_store_markers();
     let _send = send::matrix_send_markers();
@@ -199,6 +201,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_backup, backup::MATRIX_BACKUP_MARKER);
     debug_assert_eq!(_devices, devices::MATRIX_DEVICES_MARKER);
     debug_assert_eq!(_verification, verification::MATRIX_VERIFICATION_MARKER);
+    debug_assert_eq!(_x509, x509::MATRIX_X509_IDENTITY_MARKER);
     debug_assert_eq!(_cross_signing, cross_signing::MATRIX_CROSS_SIGNING_MARKER);
     debug_assert_eq!(_crypto_store, crypto_store::MATRIX_CRYPTO_STORE_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);

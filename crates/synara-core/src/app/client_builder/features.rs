@@ -10,10 +10,18 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.0";
 /// - `bundled-sqlite` — portable desktop binary without system libsqlite
 /// - `rustls-aws-lc-rs` — rustls crypto provider. Required when
 ///   `default-features = false` on matrix-sdk 0.19.0.
+/// - `experimental-x509-identity-verification` — compiled via Core
+///   `x509-identity` from **desktop `src-tauri` only**. Runtime-inert until a
+///   verifier is injected (Devices setting on **and** a CA PEM imported).
 ///
 /// `e2e-encryption` continues to arrive via `matrix-sdk-ui` feature unification
 /// (documented in P1.2) and enables the crypto store when combined with `sqlite`.
-pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &["sqlite", "bundled-sqlite", "rustls-aws-lc-rs"];
+pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
+    "sqlite",
+    "bundled-sqlite",
+    "rustls-aws-lc-rs",
+    "experimental-x509-identity-verification",
+];
 
 /// Features that must **not** be enabled on the product dependency line.
 ///
@@ -25,9 +33,24 @@ pub const FORBIDDEN_MATRIX_SDK_FEATURES: &[&str] = &[
     "experimental-element-recent-emojis",
     "experimental-push-secrets",
     "experimental-send-custom-to-device",
-    "experimental-x509-identity-verification",
     "automatic-room-key-forwarding",
     "indexeddb",
     "js",
     "uniffi",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn x509_identity_is_approved_not_forbidden() {
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
+        assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
+    }
+}
