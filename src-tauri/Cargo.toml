@@ -64,6 +64,10 @@ matrix-sdk = { version = "=0.19.0", default-features = false, features = [
   "qrcode",
   "unstable-msc4426",
   "automatic-room-key-forwarding",
+  # Experimental widget host compile pin. Runtime enablement is a separate
+  # in-client setting (default off). Do not add experimental-send-custom-to-device
+  # here; it arrives transitively via experimental-widgets.
+  "experimental-widgets",
 ] }
 matrix-sdk-ui = { version = "=0.19.0", default-features = false, features = [
   "rustls-aws-lc-rs",

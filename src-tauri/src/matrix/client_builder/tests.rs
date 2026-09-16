@@ -56,7 +56,9 @@ fn marker_stable() {
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
     assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
-    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-send-custom-to-device"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
 }
 
