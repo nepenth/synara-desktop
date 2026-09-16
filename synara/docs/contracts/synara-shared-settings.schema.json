@@ -85,6 +85,7 @@
     "isNotificationSounds": { "type": "boolean" },
     "hour24Clock": { "type": "boolean" },
     "dateFormatString": { "type": "string" },
-    "developerTools": { "type": "boolean" }
+    "developerTools": { "type": "boolean" },
+    "encryptedStateEvents": { "type": "boolean" }
   }
 }
