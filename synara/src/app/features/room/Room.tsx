@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Box, Line } from 'folds';
 import { useParams } from 'react-router-dom';
 import { RoomView } from './RoomView';
@@ -10,12 +10,14 @@ import { PowerLevelsContextProvider, usePowerLevels } from '../../hooks/usePower
 import { useRoom } from '../../hooks/useRoom';
 import { RoomViewHeader } from './RoomViewHeader';
 import { RoomSidePanel, RoomSidePanelType } from './RoomSidePanel';
+import { closeExperimentalWidgets } from '../widgets/experimentalWidgets';
 
 export function Room() {
   const { eventId } = useParams();
   const room = useRoom();
 
   const [isDrawer, setIsDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+  const [experimentalWidgetsEnabled] = useSetting(settingsAtom, 'experimentalWidgetsEnabled');
   const [roomSidePanel, setRoomSidePanel] = useState<RoomSidePanelType>();
   const screenSize = useScreenSizeContext();
   const powerLevels = usePowerLevels(room);
@@ -36,6 +38,20 @@ export function Room() {
     setRoomSidePanel(undefined);
     setIsDrawer(false);
   }, [setIsDrawer]);
+
+  useEffect(() => {
+    if (!experimentalWidgetsEnabled) {
+      void closeExperimentalWidgets();
+      setRoomSidePanel((current) => (current === 'widgets' ? undefined : current));
+    }
+  }, [experimentalWidgetsEnabled]);
+
+  useEffect(
+    () => () => {
+      void closeExperimentalWidgets();
+    },
+    [room.roomId]
+  );
 
   return (
     <PowerLevelsContextProvider value={powerLevels}>

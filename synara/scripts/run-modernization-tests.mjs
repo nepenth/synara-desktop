@@ -138,6 +138,7 @@ const tests = [
   'src/app/state/__tests__/clearLoginData.test.ts',
   'src/app/state/__tests__/performLogout.test.ts',
   'src/app/state/__tests__/settings.test.ts',
+  'src/app/features/widgets/__tests__/experimentalWidgets.test.ts',
   'src/app/state/room-list/__tests__/roomActivity.test.ts',
   'src/app/state/room/__tests__/roomToUnread.test.ts',
   'src/app/state/room/__tests__/roomToParents.test.ts',

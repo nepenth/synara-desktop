@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-widget-post"
+description = "Enables the matrix_widget_post command without any pre-configured scope."
+commands.allow = ["matrix_widget_post"]
+
+[[permission]]
+identifier = "deny-matrix-widget-post"
+description = "Denies the matrix_widget_post command without any pre-configured scope."
+commands.deny = ["matrix_widget_post"]

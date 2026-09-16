@@ -49,3 +49,4 @@ pub mod unread;
 pub mod user_profile;
 pub mod utd_recovery;
 pub mod verification;
+pub mod widgets;

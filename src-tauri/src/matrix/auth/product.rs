@@ -80,6 +80,7 @@ use crate::matrix::lifecycle::{
 };
 use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
+use crate::matrix::widgets::NativeWidgetOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -256,6 +257,7 @@ struct ManagedMatrixSession {
     _image_packs: Arc<NativeImagePackOwner>,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
+    widgets: Arc<NativeWidgetOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
     /// Core→renderer observation stream; retired on logout, dropped with
     /// the session.
@@ -992,6 +994,8 @@ mod typing;
 mod user_profile;
 #[path = "../verification/product_commands.rs"]
 mod verification;
+#[path = "../widgets/product_commands.rs"]
+mod widgets;
 pub use account_data::*;
 pub use auth_commands::*;
 pub use backup::*;
@@ -1013,6 +1017,7 @@ pub use timeline::*;
 pub use typing::*;
 pub use user_profile::*;
 pub use verification::*;
+pub use widgets::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]

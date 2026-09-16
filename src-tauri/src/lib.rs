@@ -478,6 +478,12 @@ pub fn run() {
             matrix::auth::product::matrix_presence_snapshot,
             matrix::auth::product::matrix_presence_subscribe,
             matrix::auth::product::matrix_presence_unsubscribe,
+            matrix::auth::product::matrix_widgets_list,
+            matrix::auth::product::matrix_widget_open,
+            matrix::auth::product::matrix_widget_close,
+            matrix::auth::product::matrix_widget_post,
+            matrix::auth::product::matrix_widget_subscribe,
+            matrix::auth::product::widget_bridge_post,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_close,
             matrix::auth::product::matrix_timeline_jump_latest,
@@ -546,6 +552,26 @@ pub fn run() {
             matrix::auth::product::matrix_restore_session
         ])
         .on_window_event(|window, event| {
+            if let Some(session_id) =
+                crate::matrix::widgets::host::session_id_from_widget_label(window.label())
+            {
+                if matches!(event, WindowEvent::Destroyed | WindowEvent::CloseRequested { .. })
+                {
+                    if let Some(core) = window.try_state::<Arc<synara_core::Core>>() {
+                        let core = Arc::clone(core.inner());
+                        let session_id = session_id.to_owned();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = crate::bridge::widgets::widget_close(
+                                core.as_ref(),
+                                Some(session_id),
+                            )
+                            .await;
+                        });
+                    }
+                }
+                return;
+            }
+
             if window.label() != desktop::MAIN_WINDOW_LABEL {
                 return;
             }

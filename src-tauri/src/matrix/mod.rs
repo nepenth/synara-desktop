@@ -104,6 +104,7 @@ pub mod unread;
 pub mod user_profile;
 pub mod utd_recovery;
 pub mod verification;
+pub mod widgets;
 
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
@@ -152,6 +153,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _typing = typing::matrix_typing_markers();
     let _utd_recovery = utd_recovery::matrix_utd_recovery_markers();
     let _presence = presence::matrix_presence_markers();
+    let _widgets = widgets::matrix_widgets_markers();
     let _media = media::matrix_media_markers();
     let _media_cache = media_cache::matrix_media_cache_markers();
     let _media_export = media_export::matrix_media_export_markers();
@@ -207,6 +209,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_utd_recovery, utd_recovery::MATRIX_UTD_RECOVERY_MARKER);
     debug_assert_eq!(_presence, presence::MATRIX_PRESENCE_MARKER);
+    debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_EXPERIMENTAL_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_media_cache, media_cache::MATRIX_MEDIA_CACHE_MARKER);
     debug_assert_eq!(_media_export, media_export::MATRIX_MEDIA_EXPORT_MARKER);

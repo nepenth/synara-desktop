@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-widget-bridge-post"
+description = "Enables the widget_bridge_post command without any pre-configured scope."
+commands.allow = ["widget_bridge_post"]
+
+[[permission]]
+identifier = "deny-widget-bridge-post"
+description = "Denies the widget_bridge_post command without any pre-configured scope."
+commands.deny = ["widget_bridge_post"]
