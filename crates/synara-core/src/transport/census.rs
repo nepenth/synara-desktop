@@ -65,6 +65,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_notification_pending_snapshot",
     "matrix_password_reset_complete",
     "matrix_password_reset_request_email_token",
+    "matrix_pinned_events",
     "matrix_poll_respond",
     "matrix_presence_set",
     "matrix_presence_snapshot",

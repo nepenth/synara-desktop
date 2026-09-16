@@ -26,6 +26,7 @@ mod live;
 mod media;
 mod native;
 mod pagination;
+mod pins;
 mod projection;
 mod reactions;
 mod registry;
@@ -76,6 +77,10 @@ pub use native::{
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
     TimelinePagination,
+};
+pub use pins::{
+    project_pinned_items, reactions_for_target, snapshot_pinned_events, NativePinnedEventsRequest,
+    PinnedEventItem, PinnedEventsSnapshot, PINNED_EVENTS_SCHEMA_VERSION,
 };
 pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};

@@ -219,6 +219,7 @@
     "allow-matrix-timeline-report",
     "allow-matrix-timeline-pin",
     "allow-matrix-timeline-unpin",
+    "allow-matrix-pinned-events",
     "allow-matrix-timeline-poll-vote",
     "allow-matrix-timeline-call-decline",
     "allow-matrix-composer-set-reply-draft",

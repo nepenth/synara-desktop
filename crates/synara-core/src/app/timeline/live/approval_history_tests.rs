@@ -22,8 +22,8 @@ async fn approval_history_first_view_initializes_a_fresh_clients_event_cache() {
         .ok(RoomMessagesResponseTemplate::default())
         .mount()
         .await;
-    // Deliberately no client.event_cache().subscribe(): this is the production
-    // first-open route, where TimelineBuilder previously initialized the cache.
+    // Production session subscribe is `NativeTimelineOwner::new`. This still
+    // proves first view does not require a prior test-only subscribe.
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 21);
     let opened = timeout(
         Duration::from_secs(8),

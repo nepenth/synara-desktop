@@ -300,6 +300,14 @@ pub async fn matrix_timeline_pin(
 }
 
 #[tauri::command]
+pub async fn matrix_pinned_events(
+    core: State<'_, Arc<synara_core::Core>>,
+    request: NativePinnedEventsRequest,
+) -> Result<PinnedEventsSnapshot, MatrixAuthCommandError> {
+    crate::bridge::timeline_actions::pinned_events(core.inner().as_ref(), request.room_id).await
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_unpin(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelinePinRequest,
