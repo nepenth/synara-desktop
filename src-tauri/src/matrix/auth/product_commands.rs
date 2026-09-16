@@ -109,6 +109,14 @@ pub async fn matrix_login_password(
             .await
             .map_err(map_device_error)?,
     );
+    let dehydrated_devices = Arc::new(
+        crate::matrix::dehydrated_devices::start_dehydrated_devices_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .await,
+    );
     let image_packs = Arc::new(
         crate::matrix::account_data::start_image_pack_owner(
             &client,
@@ -188,6 +196,7 @@ pub async fn matrix_login_password(
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         devices: devices.clone(),
+        dehydrated_devices: dehydrated_devices.clone(),
         _image_packs: image_packs.clone(),
         typing: typing.clone(),
         presence: presence.clone(),
@@ -217,6 +226,11 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_devices(devices)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+    core.inner()
+        .attach_dehydrated_devices(dehydrated_devices)
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed")
+        })?;
     core.inner()
         .attach_join_rules(join_rules)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
@@ -457,7 +471,7 @@ pub async fn matrix_register(
         RegisterSubmitOutcome::Complete(secrets) => {
             let (identity, session_generation, notification_decisions) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (typing, presence, verification, devices, join_rules, image_packs, timelines, sync) =
+            let (typing, presence, verification, devices, dehydrated_devices, join_rules, image_packs, timelines, sync) =
                 session
                     .as_ref()
                     .map(|active| {
@@ -466,6 +480,7 @@ pub async fn matrix_register(
                             active.presence.clone(),
                             active.verification.clone(),
                             active.devices.clone(),
+                            active.dehydrated_devices.clone(),
                             active.join_rules.clone(),
                             active._image_packs.clone(),
                             active.timelines.clone(),
@@ -494,6 +509,11 @@ pub async fn matrix_register(
             core.inner()
                 .attach_devices(devices)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+            core.inner()
+                .attach_dehydrated_devices(dehydrated_devices)
+                .map_err(|_| {
+                    MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed")
+                })?;
             core.inner()
                 .attach_join_rules(join_rules)
                 .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
@@ -569,6 +589,14 @@ pub(super) async fn install_session_from_register_secrets(
         crate::matrix::devices::start_device_owner(&client, app.clone(), session_generation)
             .await
             .map_err(map_device_error)?,
+    );
+    let dehydrated_devices = Arc::new(
+        crate::matrix::dehydrated_devices::start_dehydrated_devices_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .await,
     );
     let image_packs = Arc::new(
         crate::matrix::account_data::start_image_pack_owner(
@@ -648,6 +676,7 @@ pub(super) async fn install_session_from_register_secrets(
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         devices: devices.clone(),
+        dehydrated_devices: dehydrated_devices.clone(),
         _image_packs: image_packs.clone(),
         typing: typing.clone(),
         presence: presence.clone(),
@@ -841,6 +870,14 @@ pub async fn matrix_restore_session(
             .await
             .map_err(map_device_error)?,
     );
+    let dehydrated_devices = Arc::new(
+        crate::matrix::dehydrated_devices::start_dehydrated_devices_owner(
+            &client,
+            app.clone(),
+            session_generation,
+        )
+        .await,
+    );
     let image_packs = Arc::new(
         crate::matrix::account_data::start_image_pack_owner(
             &client,
@@ -905,6 +942,7 @@ pub async fn matrix_restore_session(
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         devices: devices.clone(),
+        dehydrated_devices: dehydrated_devices.clone(),
         _image_packs: image_packs.clone(),
         typing: typing.clone(),
         presence: presence.clone(),
@@ -934,6 +972,11 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_devices(devices)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
+    core.inner()
+        .attach_dehydrated_devices(dehydrated_devices)
+        .map_err(|_| {
+            MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed")
+        })?;
     core.inner()
         .attach_join_rules(join_rules)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;

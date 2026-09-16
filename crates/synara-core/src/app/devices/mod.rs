@@ -38,6 +38,13 @@ pub struct NativeDeviceTrustSignals {
     pub is_verified: bool,
 }
 
+/// Password multi-select logout is `/devices` DELETE. That destroys the
+/// MSC3814 catcher's queued to-device keys, so backup rows stay out of the
+/// selection. Current-device rows are also excluded.
+pub fn device_eligible_for_password_logout(device: &NativeDeviceSummary) -> bool {
+    !device.is_current && device.trust != NativeDeviceTrust::Dehydrated
+}
+
 /// Map SDK crypto flags onto the product trust vocabulary.
 pub fn project_native_device_trust(signals: NativeDeviceTrustSignals) -> NativeDeviceTrust {
     if !signals.has_crypto_device {
@@ -360,6 +367,43 @@ mod tests {
             }),
             NativeDeviceTrust::Unverified
         );
+        let backup = NativeDeviceSummary {
+            device_id: "BACKUP".into(),
+            display_name: None,
+            last_seen_ip: None,
+            last_seen_ts: None,
+            trust: NativeDeviceTrust::Dehydrated,
+            is_current: false,
+            is_cross_signed_by_owner: false,
+            first_seen_ts: None,
+            ed25519_fingerprint: None,
+        };
+        let other = NativeDeviceSummary {
+            device_id: "PHONE".into(),
+            display_name: None,
+            last_seen_ip: None,
+            last_seen_ts: None,
+            trust: NativeDeviceTrust::Unverified,
+            is_current: false,
+            is_cross_signed_by_owner: false,
+            first_seen_ts: None,
+            ed25519_fingerprint: None,
+        };
+        let current = NativeDeviceSummary {
+            device_id: "CUR".into(),
+            display_name: None,
+            last_seen_ip: None,
+            last_seen_ts: None,
+            trust: NativeDeviceTrust::Verified,
+            is_current: true,
+            is_cross_signed_by_owner: true,
+            first_seen_ts: None,
+            ed25519_fingerprint: None,
+        };
+        assert!(!device_eligible_for_password_logout(&backup));
+        assert!(!device_eligible_for_password_logout(&current));
+        assert!(device_eligible_for_password_logout(&other));
+
         let decoded: NativeDeviceTrust = serde_json::from_str("\"unsupported\"").unwrap();
         assert_eq!(decoded, NativeDeviceTrust::NoEncryption);
         assert_eq!(

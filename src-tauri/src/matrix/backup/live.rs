@@ -101,6 +101,9 @@ pub async fn setup(
         .wait_for_backups_to_upload()
         .await
         .map_err(map_recovery_setup_error)?;
+    let _ =
+        synara_core::app::dehydrated_devices::start_with_secret(client, &generated_recovery_key)
+            .await;
     generated_recovery_key.zeroize();
 
     operation_complete(client, session_generation, "v-crypto.3-setup-incomplete").await
@@ -123,6 +126,7 @@ pub async fn restore(
                 "v-crypto.3-restore-rejected",
             )
         })?;
+    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
     operation_complete(client, session_generation, "v-crypto.3-restore-incomplete").await
 }
 
@@ -143,6 +147,7 @@ pub async fn repair(
                 "v-crypto.3-repair-rejected",
             )
         })?;
+    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
     operation_complete(client, session_generation, "v-crypto.3-repair-incomplete").await
 }
 

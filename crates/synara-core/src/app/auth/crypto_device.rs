@@ -93,6 +93,19 @@ mod tests {
         assert_eq!(peeked.as_deref(), Some("LEFTOVERDEV"));
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn leftover_store_peek_uses_live_olm_account_not_a_dehydrated_device() {
+        let production = include_str!("crypto_device.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source");
+        assert!(production.contains("CryptoStore::load_account"));
+        assert!(production.contains("account.device_id()"));
+        assert!(!production.contains("dehydrated"));
+        assert!(!production.contains("msc3814"));
+        assert!(!production.contains("LoginOptions"));
+    }
 }
 
 #[cfg(test)]

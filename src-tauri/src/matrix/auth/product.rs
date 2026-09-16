@@ -73,6 +73,7 @@ use crate::matrix::client_builder::{
 };
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
+use crate::matrix::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::matrix::lifecycle::{
     clear_session_material, load_session_material, matrix_session_from_host_secrets,
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
@@ -253,6 +254,7 @@ struct ManagedMatrixSession {
     attachments: AttachmentSendQueue,
     verification: Arc<NativeVerificationOwner>,
     devices: Arc<NativeDeviceOwner>,
+    dehydrated_devices: Arc<NativeDehydratedDevicesOwner>,
     _image_packs: Arc<NativeImagePackOwner>,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,

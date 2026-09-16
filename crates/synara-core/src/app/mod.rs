@@ -12,6 +12,7 @@ pub mod backup;
 pub mod client_builder;
 pub mod cross_signing;
 pub mod crypto_store;
+pub mod dehydrated_devices;
 pub mod devices;
 pub mod diagnostics;
 pub mod legacy;

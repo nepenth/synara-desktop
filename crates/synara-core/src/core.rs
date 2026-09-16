@@ -21,6 +21,7 @@ use crate::app::auth::{
 };
 use crate::app::backup::{MatrixRestoreBackupResult, NativeBackupStatus};
 use crate::app::cross_signing::NativeCrossSigningSetupResult;
+use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::app::media::MatrixUploadMediaResult;
 use crate::app::members::{
@@ -1370,6 +1371,7 @@ pub struct CoreState {
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
+    dehydrated_devices: Mutex<Option<Arc<NativeDehydratedDevicesOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
     http_pusher: Mutex<Option<Arc<NativeHttpPusherOwner>>>,
@@ -1420,6 +1422,15 @@ impl CoreState {
 
     fn device_owner(&self) -> Result<Option<Arc<NativeDeviceOwner>>, MatrixIpcError> {
         self.devices
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn dehydrated_devices_owner(
+        &self,
+    ) -> Result<Option<Arc<NativeDehydratedDevicesOwner>>, MatrixIpcError> {
+        self.dehydrated_devices
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -1486,6 +1497,7 @@ impl Core {
                 presence: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
+                dehydrated_devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
                 http_pusher: Mutex::new(None),
@@ -1565,6 +1577,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *devices = None;
         drop(devices);
+        let mut dehydrated_devices = self
+            .state
+            .dehydrated_devices
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *dehydrated_devices = None;
+        drop(dehydrated_devices);
         let mut join_rules = self
             .state
             .join_rules
@@ -1665,6 +1684,21 @@ impl Core {
         Ok(())
     }
 
+    /// Install the live dehydrated-device manager. Start failures stay on
+    /// the owner; attach itself is infallible from the shell's point of view.
+    pub fn attach_dehydrated_devices(
+        &self,
+        owner: Arc<NativeDehydratedDevicesOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut dehydrated_devices = self
+            .state
+            .dehydrated_devices
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *dehydrated_devices = Some(owner);
+        Ok(())
+    }
+
     /// Password UIAA for a pending device delete. The password is a method
     /// argument, never a `Core::command` JSON field.
     pub async fn device_delete_password(
@@ -1698,10 +1732,14 @@ impl Core {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-restore-backup-no-session")
         })?;
-        owner
+        let result = owner
             .restore_backup(recovery_secret)
             .await
-            .map_err(restore_backup_owner_error)
+            .map_err(restore_backup_owner_error)?;
+        if let Some(dehydrated) = self.state.dehydrated_devices_owner()? {
+            let _ = dehydrated.try_start_with_secret(recovery_secret).await;
+        }
+        Ok(result)
     }
 
     /// Password UIAA for a pending email 3PID attach. Password is a method

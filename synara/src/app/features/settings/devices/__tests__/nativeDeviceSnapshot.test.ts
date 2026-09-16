@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   parseNativeDeviceSnapshot,
   nativeDeviceTrustLabel,
+  isNativeDeviceSelectableForLogout,
   type NativeDeviceSnapshot,
 } from '../nativeDevices';
 
@@ -49,6 +50,33 @@ test('device trust labels distinguish backup devices from unencrypted sessions',
   assert.equal(nativeDeviceTrustLabel('unverified'), 'Unverified');
   assert.equal(nativeDeviceTrustLabel('dehydrated'), 'Backup device');
   assert.equal(nativeDeviceTrustLabel('no_encryption'), 'Not encrypted');
+});
+
+test('backup devices are excluded from password logout selection', () => {
+  assert.equal(
+    isNativeDeviceSelectableForLogout({
+      deviceId: 'PHONE',
+      trust: 'unverified',
+      isCurrent: false,
+    }),
+    true
+  );
+  assert.equal(
+    isNativeDeviceSelectableForLogout({
+      deviceId: 'BACKUP',
+      trust: 'dehydrated',
+      isCurrent: false,
+    }),
+    false
+  );
+  assert.equal(
+    isNativeDeviceSelectableForLogout({
+      deviceId: 'CURRENT',
+      trust: 'verified',
+      isCurrent: true,
+    }),
+    false
+  );
 });
 
 test('device snapshot parser stays tolerant of missing optional fields', () => {

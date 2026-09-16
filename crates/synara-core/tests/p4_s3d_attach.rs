@@ -56,6 +56,7 @@ fn expected_owners() -> Vec<String> {
         "presence".to_owned(),
         "verification".to_owned(),
         "devices".to_owned(),
+        "dehydrated_devices".to_owned(),
         "join_rules".to_owned(),
         "image_packs".to_owned(),
         "http_pusher".to_owned(),
