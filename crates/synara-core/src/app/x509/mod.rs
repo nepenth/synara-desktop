@@ -691,9 +691,14 @@ mod tests {
         assert!(live.contains("is_self_verification"));
         assert!(!live.contains("with_x509"));
         assert!(!live.contains("io.element.x509"));
+        // 1140 advertises QR *verification* (show + reciprocate) beside SAS.
+        // X.509 must still not add a method. QR login stays out of this file.
+        assert!(!live.contains("QrCodeScanV1"));
         let methods = live.matches("VerificationMethod::").count();
-        let sas = live.matches("VerificationMethod::SasV1").count();
-        assert_eq!(methods, sas, "X.509 must not add a VerificationMethod");
+        let allowed = live.matches("VerificationMethod::SasV1").count()
+            + live.matches("VerificationMethod::QrCodeShowV1").count()
+            + live.matches("VerificationMethod::ReciprocateV1").count();
+        assert_eq!(methods, allowed, "X.509 must not add a VerificationMethod");
     }
 
     #[test]

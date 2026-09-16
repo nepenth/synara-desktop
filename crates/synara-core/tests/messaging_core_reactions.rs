@@ -182,4 +182,10 @@ async fn remote_reaction_ids_recover_for_other_sender_and_toggle_unreact_stays_i
         .await
         .expect("toggle remove without waiting for a remote id");
     assert_eq!(removed.mutation, NativeReactionMutation::Removed);
+
+    let readded = owner
+        .ensure_reaction(room_id.as_str(), target.as_str(), "🎉")
+        .await
+        .expect("ensure re-add after toggle remove");
+    assert_eq!(readded.mutation, NativeReactionMutation::Added);
 }

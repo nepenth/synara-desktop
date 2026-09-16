@@ -7264,6 +7264,11 @@ mod tests {
                 "matrix_verification_list",
                 "matrix_verification_mismatch",
                 "matrix_verification_start",
+                "matrix_widget_close",
+                "matrix_widget_open",
+                "matrix_widget_post",
+                "matrix_widget_subscribe",
+                "matrix_widgets_list",
             ]
         );
 
