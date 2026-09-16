@@ -13,12 +13,12 @@ use matrix_sdk::ruma::{
 };
 
 use super::{
-    MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
-    MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
     encrypted_state::{
         encrypted_state_events_setting_enabled, is_call_room_type, room_encryption_content,
         should_create_with_encrypted_state,
     },
+    MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
+    MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
 };
 
 pub fn build_room_create_request(
@@ -372,11 +372,9 @@ mod tests {
             .expect("create");
         let content = encryption_event(&request).expect("encryption event");
         assert!(content.get("encrypt_state_events").is_none());
-        assert!(
-            content
-                .get("io.element.msc4362.encrypt_state_events")
-                .is_none()
-        );
+        assert!(content
+            .get("io.element.msc4362.encrypt_state_events")
+            .is_none());
     }
 
     #[test]

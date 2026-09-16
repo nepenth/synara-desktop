@@ -973,7 +973,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
         content,
       });
       if (!result.available) return null;
-      return isObject(result.value) ? (result.value as FacadeSendStateEventResult) : { status: 'ok' };
+      return isObject(result.value)
+        ? (result.value as FacadeSendStateEventResult)
+        : { status: 'ok' };
     },
 
     /** F3 — account-data is a documented GAP (no native command yet); fail-closed undefined. */

@@ -99,9 +99,14 @@ test('leftover helper uses JS only when native is not live', async () => {
 test('encrypted-state opt-in fails closed when native is unavailable', async () => {
   await assert.rejects(
     () =>
-      enableRoomEncryptedStateWithNativeOwner('!r:example.org', true, async () => {
-        return { available: true, value: { status: 'ok' } };
-      }, false),
+      enableRoomEncryptedStateWithNativeOwner(
+        '!r:example.org',
+        true,
+        async () => {
+          return { available: true, value: { status: 'ok' } };
+        },
+        false
+      ),
     /unavailable/
   );
 });

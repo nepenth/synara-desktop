@@ -61,12 +61,8 @@ function StateEventEdit({ type, stateKey, content, requestClose }: StateEventEdi
   const [submitState, submit] = useAsyncCallback<object | null, MatrixError, [object]>(
     useCallback(
       (c) =>
-        sendLeftoverStateEvent(
-          room.roomId,
-          type,
-          c as Record<string, unknown>,
-          stateKey,
-          () => mx.sendStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey)
+        sendLeftoverStateEvent(room.roomId, type, c as Record<string, unknown>, stateKey, () =>
+          mx.sendStateEvent(room.roomId, type as any, c as Record<string, unknown>, stateKey)
         ).then(() => ({})),
       [mx, room, type, stateKey]
     )

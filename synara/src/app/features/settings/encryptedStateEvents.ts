@@ -2,7 +2,9 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { getSharedSettings } from '../../state/settings';
 
 /** Push the create/opt-in gate to Core. Decrypt in already-flagged rooms stays on. */
-export async function pushEncryptedStateEventsSetting(enabled = getSharedSettings().encryptedStateEvents): Promise<void> {
+export async function pushEncryptedStateEventsSetting(
+  enabled = getSharedSettings().encryptedStateEvents
+): Promise<void> {
   if (!isSynaraDesktop()) return;
   try {
     await invokeDesktopWithAvailability('matrix_set_encrypted_state_events_setting', {

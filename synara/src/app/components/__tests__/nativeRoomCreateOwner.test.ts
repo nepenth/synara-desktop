@@ -68,10 +68,7 @@ test('room create forwards encryptStateEvents on the native request', async () =
       : { available: true, value: '!created:example.org' };
   };
   await createRoomWithNativeOwner(flagged, true, invoke);
-  assert.equal(
-    (calls[1]?.args?.request as NativeRoomCreateRequest).encryptStateEvents,
-    true
-  );
+  assert.equal((calls[1]?.args?.request as NativeRoomCreateRequest).encryptStateEvents, true);
 });
 
 test('room create throws when the native command is unavailable or returns no room id', async () => {

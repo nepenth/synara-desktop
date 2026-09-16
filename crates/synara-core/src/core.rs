@@ -47,7 +47,7 @@ use crate::app::room_keys::NativeRoomKeyTransferStatus;
 use crate::app::room_list::{
     snapshot_from_sync_owner, NativeInviteSnapshot, NativeRoomListSnapshot,
 };
-use crate::app::room_ops::{MatrixRoomCreateRequest, set_encrypted_state_events_setting_enabled};
+use crate::app::room_ops::{set_encrypted_state_events_setting_enabled, MatrixRoomCreateRequest};
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
