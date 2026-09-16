@@ -155,6 +155,10 @@ private struct AccountSettingsView: View {
     @State private var ownPresence: SharedCorePresence?
     @State private var presenceDraft = "online"
     @State private var isSettingPresence = false
+    @State private var statusEmojiDraft = ""
+    @State private var statusTextDraft = ""
+    @State private var isSettingStatus = false
+    @State private var statusMessage: String?
     @State private var rtcTransports: SharedCoreRtcTransportsSnapshot?
     @State private var isRefreshingRtc = false
     @State private var coreSessionIdentity: CoreSessionIdentity?
@@ -331,6 +335,31 @@ private struct AccountSettingsView: View {
                 }
             }
 
+            Section("Status") {
+                TextField("Emoji", text: $statusEmojiDraft)
+                    .disabled(isSettingStatus)
+                    .accessibilityIdentifier("SettingsUserStatusEmoji")
+                TextField("What are you doing?", text: $statusTextDraft)
+                    .disabled(isSettingStatus)
+                    .accessibilityIdentifier("SettingsUserStatusText")
+                Button("Save status") {
+                    applyUserStatus()
+                }
+                .disabled(isSettingStatus)
+                .accessibilityIdentifier("SettingsUserStatusSave")
+                Button("Clear status") {
+                    clearUserStatus()
+                }
+                .disabled(isSettingStatus)
+                .accessibilityIdentifier("SettingsUserStatusClear")
+                if let statusMessage {
+                    Text(statusMessage)
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.secondaryText)
+                        .accessibilityIdentifier("SettingsUserStatusMessage")
+                }
+            }
+
             Section {
                 Text(
                     rtcTransports.map(SharedCoreRtcTransports.diagnosticCopy)
@@ -502,6 +531,7 @@ private struct AccountSettingsView: View {
         .task {
             await refreshCoreSessionIdentity()
             let presence = await environment.matrix.presence(userID: session.userID)
+            let status = await environment.matrix.userStatus(userID: session.userID)
             let rtc = await environment.matrix.rtcTransportsSnapshot()
             let devices = await environment.crypto.sessionDevices()
             let loadedEmails = await environment.matrix.threepidEmails()
@@ -509,6 +539,8 @@ private struct AccountSettingsView: View {
             let profile = await environment.matrix.ownProfile()
             await MainActor.run {
                 ownPresence = presence
+                statusEmojiDraft = status?.userStatus?.emoji ?? ""
+                statusTextDraft = status?.userStatus?.text ?? ""
                 rtcTransports = rtc
                 if let state = presence?.state, ["online", "unavailable", "offline"].contains(state) {
                     presenceDraft = state
@@ -537,6 +569,41 @@ private struct AccountSettingsView: View {
             await MainActor.run {
                 rtcTransports = next
                 isRefreshingRtc = false
+            }
+        }
+    }
+
+    private func applyUserStatus() {
+        isSettingStatus = true
+        statusMessage = nil
+        Task {
+            let ok = await environment.matrix.setOwnUserStatus(
+                emoji: statusEmojiDraft,
+                text: statusTextDraft
+            )
+            await MainActor.run {
+                isSettingStatus = false
+                statusMessage = ok
+                    ? "Status updated."
+                    : "This homeserver does not support user status."
+            }
+        }
+    }
+
+    private func clearUserStatus() {
+        isSettingStatus = true
+        statusMessage = nil
+        Task {
+            let ok = await environment.matrix.clearOwnUserStatus()
+            await MainActor.run {
+                isSettingStatus = false
+                if ok {
+                    statusEmojiDraft = ""
+                    statusTextDraft = ""
+                    statusMessage = "Status cleared."
+                } else {
+                    statusMessage = "This homeserver does not support user status."
+                }
             }
         }
     }

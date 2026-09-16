@@ -151,6 +151,7 @@ impl RoomSummaryBuilder {
             avatar_url: None,
             membership: self.membership,
             is_direct: self.is_direct,
+            direct_user_id: None,
             is_call: self.is_call,
             has_active_call: self.has_active_call,
             active_call_participant_count: self.active_call_participant_count,

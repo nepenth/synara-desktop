@@ -32,6 +32,7 @@ struct RoomSummary: Identifiable, Equatable {
     let isCall: Bool
     let hasActiveCall: Bool
     let activeCallParticipantCount: Int
+    let directUserId: String?
     /// Authoritative Core tri-state. Security decisions must consume this value.
     let encryptionStatus: SynaraRoomEncryptionStatus
 
@@ -59,6 +60,7 @@ struct RoomSummary: Identifiable, Equatable {
         isCall: Bool = false,
         hasActiveCall: Bool = false,
         activeCallParticipantCount: Int = 0,
+        directUserId: String? = nil,
         isEncrypted: Bool? = nil,
         encryptionStatus: SynaraRoomEncryptionStatus? = nil
     ) {
@@ -82,6 +84,7 @@ struct RoomSummary: Identifiable, Equatable {
         self.isCall = isCall
         self.hasActiveCall = hasActiveCall
         self.activeCallParticipantCount = activeCallParticipantCount
+        self.directUserId = directUserId
         if let encryptionStatus {
             self.encryptionStatus = encryptionStatus
         } else if let isEncrypted {

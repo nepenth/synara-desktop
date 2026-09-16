@@ -97,6 +97,7 @@ fn room_summary_round_trip_and_fixture() {
         avatar_url: None,
         membership: Membership::Join,
         is_direct: false,
+        direct_user_id: None,
         is_space: false,
         is_call: false,
         has_active_call: false,
@@ -116,6 +117,8 @@ fn room_summary_round_trip_and_fixture() {
         heroes: Some(vec![RoomHero {
             user_id: "@bob:example.org".into(),
             display_name: Some("Bob".into()),
+            in_call: None,
+            status_emoji: None,
         }]),
         tombstone_successor_room_id: None,
     };
@@ -377,6 +380,7 @@ fn room_summary_is_call_defaults_and_round_trips() {
         avatar_url: None,
         membership: Membership::Join,
         is_direct: false,
+        direct_user_id: None,
         is_call: false,
         has_active_call: false,
         active_call_participant_count: 0,

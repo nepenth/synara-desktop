@@ -147,8 +147,10 @@ pub use shared_core_ffi::{
     TimelineViewRowDto, TimelineViewThreadSummaryDto, TimelineViewUpdateDto,
     TimelineViewUpdateError, TimelineVoteDeclineDto, TimelineVoteDeclineError, TypingCommandError,
     TypingRoomDto, TypingSnapshotDto, UserDirectoryHitDto, UserDirectorySearchDto,
-    UserDirectorySearchError, UserImagePackSnapshotDto, VerificationEmojiDto, VerificationInboxDto,
-    VerificationListError, VerificationRequestDto, VerificationSasDto, VerificationSasError,
+    UserDirectorySearchError, UserImagePackSnapshotDto, UserInCallDto, UserStatusCommandError,
+    UserStatusFieldDto, UserStatusSnapshotDto, UserStatusWriteDto, VerificationEmojiDto,
+    VerificationInboxDto, VerificationListError, VerificationRequestDto, VerificationSasDto,
+    VerificationSasError,
 };
 
 mod core;

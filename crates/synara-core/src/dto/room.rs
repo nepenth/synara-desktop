@@ -63,6 +63,11 @@ pub struct RoomHero {
     pub user_id: UserId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// MSC4426 `m.call` on this hero when projected. Distinct from room live-call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_call: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_emoji: Option<String>,
 }
 
 /// Authoritative room-encryption knowledge carried across product boundaries.
@@ -94,6 +99,8 @@ pub struct RoomSummary {
     pub avatar_url: Option<String>,
     pub membership: Membership,
     pub is_direct: bool,
+    /// Direct-target user id for DM in-call chrome. Local `direct_targets` only.
+    pub direct_user_id: Option<UserId>,
     /// True when the room is a Matrix space (`m.space`).
     pub is_space: bool,
     /// True when the room is a Matrix voice room (`m.room.create` type `m.call`).
@@ -139,6 +146,8 @@ struct RoomSummarySerialize<'a> {
     avatar_url: &'a Option<String>,
     membership: Membership,
     is_direct: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    direct_user_id: &'a Option<UserId>,
     is_space: bool,
     is_call: bool,
     has_active_call: bool,
@@ -181,6 +190,7 @@ impl Serialize for RoomSummary {
             avatar_url: &self.avatar_url,
             membership: self.membership,
             is_direct: self.is_direct,
+            direct_user_id: &self.direct_user_id,
             is_space: self.is_space,
             is_call: self.is_call,
             has_active_call: self.has_active_call,
@@ -217,6 +227,8 @@ struct RoomSummaryWire {
     avatar_url: Option<String>,
     membership: Membership,
     is_direct: bool,
+    #[serde(default)]
+    direct_user_id: Option<UserId>,
     #[serde(default)]
     is_space: bool,
     #[serde(default)]
@@ -270,6 +282,7 @@ impl<'de> Deserialize<'de> for RoomSummary {
             avatar_url: wire.avatar_url,
             membership: wire.membership,
             is_direct: wire.is_direct,
+            direct_user_id: wire.direct_user_id,
             is_space: wire.is_space,
             is_call: wire.is_call,
             has_active_call: wire.has_active_call,

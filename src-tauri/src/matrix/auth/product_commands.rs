@@ -126,6 +126,10 @@ pub async fn matrix_login_password(
     let rtc_transports = Arc::new(
         crate::matrix::rtc_transports::NativeRtcTransportsOwner::start(&client, session_generation),
     );
+    let user_status = Arc::new(crate::matrix::user_status::NativeUserStatusOwner::start(
+        &client,
+        session_generation,
+    ));
     // A9 observation stream: Core pushes each live message-like event to the
     // renderer, which hands the identity back to the decision owner. The
     // renderer no longer scans timelines to discover notifiable events.
@@ -195,6 +199,7 @@ pub async fn matrix_login_password(
         typing: typing.clone(),
         presence: presence.clone(),
         rtc_transports: rtc_transports.clone(),
+        user_status: user_status.clone(),
         join_rules: join_rules.clone(),
         notification_observations,
 
@@ -218,6 +223,9 @@ pub async fn matrix_login_password(
     core.inner()
         .attach_rtc_transports(rtc_transports)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-rtc-transports-attach-failed"))?;
+    core.inner()
+        .attach_user_status(user_status)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
     core.inner()
         .attach_verification(verification)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
@@ -468,6 +476,7 @@ pub async fn matrix_register(
                 typing,
                 presence,
                 rtc_transports,
+                user_status,
                 verification,
                 devices,
                 join_rules,
@@ -481,6 +490,7 @@ pub async fn matrix_register(
                         active.typing.clone(),
                         active.presence.clone(),
                         active.rtc_transports.clone(),
+                        active.user_status.clone(),
                         active.verification.clone(),
                         active.devices.clone(),
                         active.join_rules.clone(),
@@ -508,6 +518,9 @@ pub async fn matrix_register(
                 .map_err(|_| {
                     MatrixAuthCommandError::unavailable("p2-rtc-transports-attach-failed")
                 })?;
+            core.inner()
+                .attach_user_status(user_status)
+                .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
             core.inner()
                 .attach_verification(verification)
                 .map_err(|_| {
@@ -609,6 +622,10 @@ pub(super) async fn install_session_from_register_secrets(
     let rtc_transports = Arc::new(
         crate::matrix::rtc_transports::NativeRtcTransportsOwner::start(&client, session_generation),
     );
+    let user_status = Arc::new(crate::matrix::user_status::NativeUserStatusOwner::start(
+        &client,
+        session_generation,
+    ));
     // A9 observation stream: Core pushes each live message-like event to the
     // renderer, which hands the identity back to the decision owner. The
     // renderer no longer scans timelines to discover notifiable events.
@@ -677,6 +694,7 @@ pub(super) async fn install_session_from_register_secrets(
         typing: typing.clone(),
         presence: presence.clone(),
         rtc_transports: rtc_transports.clone(),
+        user_status: user_status.clone(),
         join_rules: join_rules.clone(),
         notification_observations,
 
@@ -884,6 +902,10 @@ pub async fn matrix_restore_session(
     let rtc_transports = Arc::new(
         crate::matrix::rtc_transports::NativeRtcTransportsOwner::start(&client, session_generation),
     );
+    let user_status = Arc::new(crate::matrix::user_status::NativeUserStatusOwner::start(
+        &client,
+        session_generation,
+    ));
     // A9 observation stream: Core pushes each live message-like event to the
     // renderer, which hands the identity back to the decision owner. The
     // renderer no longer scans timelines to discover notifiable events.
@@ -938,6 +960,7 @@ pub async fn matrix_restore_session(
         typing: typing.clone(),
         presence: presence.clone(),
         rtc_transports: rtc_transports.clone(),
+        user_status: user_status.clone(),
         join_rules: join_rules.clone(),
         notification_observations,
 
@@ -961,6 +984,9 @@ pub async fn matrix_restore_session(
     core.inner()
         .attach_rtc_transports(rtc_transports)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-rtc-transports-attach-failed"))?;
+    core.inner()
+        .attach_user_status(user_status)
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
     core.inner()
         .attach_verification(verification)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;

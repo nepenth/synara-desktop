@@ -81,6 +81,9 @@ use crate::app::user_profile::{
     MatrixThreepidSnapshot, MatrixThreepidWriteResult, MatrixUploadAvatarResult,
     MatrixUserDirectorySearchResult,
 };
+use crate::app::user_status::{
+    NativeUserStatusOwner, NativeUserStatusSnapshot, NativeUserStatusWriteResult,
+};
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
@@ -592,6 +595,26 @@ struct MatrixPresenceSetRequest {
     state: String,
     #[serde(default)]
     status_msg: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_user_status_snapshot`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixUserStatusSnapshotRequest {
+    user_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_user_status_set`.
+///
+/// `emoji` and `text` are MSC4426 `m.status` fields. Both empty clears.
+/// Unknown keys are rejected so this cannot grow presence `state` or secrets.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixUserStatusSetRequest {
+    #[serde(default)]
+    emoji: String,
+    #[serde(default)]
+    text: String,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_get_room_image_packs`.
@@ -1370,6 +1393,7 @@ pub struct CoreState {
     typing: Mutex<Option<Arc<NativeTypingOwner>>>,
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
     rtc_transports: Mutex<Option<Arc<NativeRtcTransportsOwner>>>,
+    user_status: Mutex<Option<Arc<NativeUserStatusOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
@@ -1410,6 +1434,13 @@ impl CoreState {
         &self,
     ) -> Result<Option<Arc<NativeRtcTransportsOwner>>, MatrixIpcError> {
         self.rtc_transports
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn user_status_owner(&self) -> Result<Option<Arc<NativeUserStatusOwner>>, MatrixIpcError> {
+        self.user_status
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -1496,6 +1527,7 @@ impl Core {
                 typing: Mutex::new(None),
                 presence: Mutex::new(None),
                 rtc_transports: Mutex::new(None),
+                user_status: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
@@ -1570,6 +1602,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *rtc_transports = None;
         drop(rtc_transports);
+        let mut user_status = self
+            .state
+            .user_status
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *user_status = None;
+        drop(user_status);
         let mut verification = self
             .state
             .verification
@@ -1667,6 +1706,22 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *rtc_transports = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live MSC4426 status owner created after login/restore.
+    /// Core snapshots it for `matrix_user_status_snapshot` and writes through
+    /// `matrix_user_status_set` / `clear`. This never calls `set_call`.
+    pub fn attach_user_status(
+        &self,
+        owner: Arc<NativeUserStatusOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut user_status = self
+            .state
+            .user_status
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *user_status = Some(owner);
         Ok(())
     }
 
@@ -2341,6 +2396,15 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_user_directory_search", matrix_user_directory_search)
         .expect("built-in matrix_user_directory_search must remain in the command census");
+    registry
+        .register("matrix_user_status_clear", matrix_user_status_clear)
+        .expect("built-in matrix_user_status_clear must remain in the command census");
+    registry
+        .register("matrix_user_status_set", matrix_user_status_set)
+        .expect("built-in matrix_user_status_set must remain in the command census");
+    registry
+        .register("matrix_user_status_snapshot", matrix_user_status_snapshot)
+        .expect("built-in matrix_user_status_snapshot must remain in the command census");
     registry
         .register("matrix_message_search", matrix_message_search)
         .expect("built-in matrix_message_search must remain in the command census");
@@ -3480,9 +3544,56 @@ fn matrix_rtc_transports_refresh(state: Arc<CoreState>, request: CommandEnvelope
     })
 }
 
-/// Map live presence-owner diagnostics onto closed Core transport categories.
-/// Preserve the owner diagnostic id so the desktop bridge can restore the
-/// established Tauri error shape without leaking user ids or status text.
+fn matrix_user_status_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixUserStatusSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-user-status-snapshot-invalid-payload"))?;
+        let owner = state.user_status_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-status-snapshot-no-session")
+        })?;
+        let snapshot: NativeUserStatusSnapshot = owner
+            .snapshot(&payload.user_id)
+            .await
+            .map_err(user_status_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-user-status-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_user_status_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixUserStatusSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-user-status-set-invalid-payload"))?;
+        let owner = state.user_status_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-status-set-no-session")
+        })?;
+        let result: NativeUserStatusWriteResult = owner
+            .set(&payload.emoji, &payload.text)
+            .await
+            .map_err(user_status_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-user-status-set-serialization-failed"))
+    })
+}
+
+fn matrix_user_status_clear(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-user-status-clear-invalid-payload"));
+        }
+        let owner = state.user_status_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-status-clear-no-session")
+        })?;
+        let result: NativeUserStatusWriteResult =
+            owner.clear().await.map_err(user_status_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-user-status-clear-serialization-failed"))
+    })
+}
+
 fn matrix_verification_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
@@ -5784,6 +5895,17 @@ fn presence_set_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+fn user_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-user-status-emoji-cap"
+        | "v-user-status-text-cap"
+        | "v-user-status-invalid-user-id"
+        | "v-user-status-unsupported" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_session_snapshot(state: Arc<CoreState>, _request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let response = MatrixSessionSnapshotResponse::from(state.session_snapshot()?);
@@ -6531,6 +6653,9 @@ mod tests {
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_user_directory_search",
+                "matrix_user_status_clear",
+                "matrix_user_status_set",
+                "matrix_user_status_snapshot",
                 "matrix_verification_accept",
                 "matrix_verification_begin_sas",
                 "matrix_verification_cancel",
@@ -7891,6 +8016,126 @@ mod tests {
         for forbidden in ["widget", "jwt", "accessToken", "password"] {
             assert!(!raw.contains(forbidden), "{raw}");
         }
+    }
+
+    #[tokio::test]
+    async fn matrix_user_status_set_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"emoji":"☕","text":"secret-status-text"}),
+            })
+            .await
+            .expect_err("user status set without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-user-status-set-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("secret-status-text"));
+        assert!(!text.contains("☕"));
+    }
+
+    #[tokio::test]
+    async fn matrix_user_status_set_rejects_presence_state_and_unknown_keys() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"state":"online","emoji":"☕","text":"hi"}),
+            })
+            .await
+            .expect_err("user status set must not accept presence state keys");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-user-status-set-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_user_status_write_capability_missing_and_success_ack() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let missing = crate::app::user_status::NativeUserStatusOwner::from_static_snapshot(
+            7,
+            crate::app::user_status::NativeUserStatusSnapshot {
+                session_generation: 7,
+                user_id: "@alice:example.org".into(),
+                user_status: None,
+                in_call: None,
+            },
+            false,
+        );
+        core.attach_user_status(Arc::new(missing))
+            .expect("attach static user-status owner");
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"emoji":"☕","text":"secret-status-text"}),
+            })
+            .await
+            .expect_err("missing MSC4426 capability must fail closed");
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("v-user-status-unsupported")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("secret-status-text"));
+
+        let core = Core::new(Arc::new(TestPlatform));
+        let ready = crate::app::user_status::NativeUserStatusOwner::from_static_snapshot(
+            8,
+            crate::app::user_status::NativeUserStatusSnapshot {
+                session_generation: 8,
+                user_id: "@alice:example.org".into(),
+                user_status: None,
+                in_call: Some(crate::app::user_status::NativeInCall {
+                    call_joined_ts: Some(1_720_000_000),
+                }),
+            },
+            true,
+        );
+        core.attach_user_status(Arc::new(ready))
+            .expect("attach capable user-status owner");
+        let response = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"emoji":"☕","text":"in a meeting"}),
+            })
+            .await
+            .expect("capable set");
+        let ack: NativeUserStatusWriteResult =
+            serde_json::from_value(response.payload).expect("ack");
+        assert_eq!(ack.status, "ok");
+        let raw = serde_json::to_string(&ack).expect("serialize");
+        assert!(!raw.contains("☕"));
+        assert!(!raw.contains("in a meeting"));
+        assert!(!raw.contains("emoji"));
+        assert!(!raw.contains("text"));
+
+        let snapshot = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"userId":"@bob:example.org"}),
+            })
+            .await
+            .expect("snapshot");
+        let body: NativeUserStatusSnapshot =
+            serde_json::from_value(snapshot.payload).expect("snapshot body");
+        assert_eq!(body.user_id, "@bob:example.org");
+        assert!(body.in_call.is_some());
     }
 
     #[tokio::test]

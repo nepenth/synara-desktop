@@ -5596,6 +5596,7 @@ private struct RoomMemberPresenceRow: View {
     let onChanged: () async -> Void
     @Environment(\.appEnvironment) private var environment
     @State private var presence: SharedCorePresence?
+    @State private var userStatus: SharedCoreUserStatusSnapshot?
     @State private var isActionsPresented = false
 
     var body: some View {
@@ -5609,6 +5610,21 @@ private struct RoomMemberPresenceRow: View {
                 Text(presence?.displayName ?? member.membership)
                     .font(SynaraTypography.supporting)
                     .foregroundStyle(SynaraColor.secondaryText)
+                if let status = userStatus?.userStatus {
+                    let label = [status.emoji, status.text]
+                        .filter { $0.isEmpty == false }
+                        .joined(separator: " ")
+                    if label.isEmpty == false {
+                        Text(label)
+                            .font(SynaraTypography.supporting)
+                            .foregroundStyle(SynaraColor.secondaryText)
+                    }
+                }
+                if userStatus?.inCall != nil {
+                    Text("In a call")
+                        .font(SynaraTypography.supporting)
+                        .foregroundStyle(SynaraColor.accent)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -5624,6 +5640,7 @@ private struct RoomMemberPresenceRow: View {
         }
         .task(id: member.userID) {
             presence = await environment.matrix.presence(userID: member.userID)
+            userStatus = await environment.matrix.userStatus(userID: member.userID)
         }
     }
 }

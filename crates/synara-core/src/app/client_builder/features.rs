@@ -10,10 +10,16 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.0";
 /// - `bundled-sqlite` — portable desktop binary without system libsqlite
 /// - `rustls-aws-lc-rs` — rustls crypto provider. Required when
 ///   `default-features = false` on matrix-sdk 0.19.0.
+/// - `unstable-msc4426` — MSC4426 `m.status` / `m.call` profile fields.
 ///
 /// `e2e-encryption` continues to arrive via `matrix-sdk-ui` feature unification
 /// (documented in P1.2) and enables the crypto store when combined with `sqlite`.
-pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &["sqlite", "bundled-sqlite", "rustls-aws-lc-rs"];
+pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
+    "sqlite",
+    "bundled-sqlite",
+    "rustls-aws-lc-rs",
+    "unstable-msc4426",
+];
 
 /// Features that must **not** be enabled on the product dependency line.
 ///

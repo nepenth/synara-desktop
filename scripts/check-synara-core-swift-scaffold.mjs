@@ -32,6 +32,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreTimeline.swift",
   "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
   "synara-ios/Synara/Services/SharedCoreRtcTransports.swift",
+  "synara-ios/Synara/Services/SharedCoreUserStatus.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
   "synara-ios/Synara/Services/SharedCoreDevices.swift",
@@ -123,6 +124,10 @@ const sharedCoreTypingPresence = readFileSync(
 );
 const sharedCoreRtcTransports = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreRtcTransports.swift"),
+  "utf8"
+);
+const sharedCoreUserStatus = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreUserStatus.swift"),
   "utf8"
 );
 const sharedCoreVerificationList = readFileSync(
@@ -459,6 +464,18 @@ const assertions = [
   [sharedCoreRtcTransports, "rtcTransportsSnapshot", "product rtc-transports-snapshot helper"],
   [sharedCoreRtcTransports, "core: SharedCore", "rtc helper takes an already-constructed SharedCore"],
   [sharedCoreRtcTransports, "core.rtcTransportsSnapshot", "rtc helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "user_status_snapshot", "MSC4426 typed user-status-snapshot FFI"],
+  [sharedCoreFfi, "matrix_user_status_snapshot", "MSC4426 calls the registered status snapshot"],
+  [sharedCoreFfi, "matrix_user_status_set", "MSC4426 calls the registered status set"],
+  [sharedCoreFfi, "matrix_user_status_clear", "MSC4426 calls the registered status clear"],
+  [udl, "UserStatusSnapshotDto user_status_snapshot(", "SharedCore user-status-snapshot operation"],
+  [udl, "UserStatusWriteDto user_status_set(", "SharedCore user-status-set operation"],
+  [udl, "UserStatusWriteDto user_status_clear()", "SharedCore user-status-clear operation"],
+  [udl, "interface UserStatusCommandError", "static user-status error"],
+  [swiftBindingsTests, "testSharedCoreUserStatusWithoutSessionFailsClosed", "Swift fail-closed user-status test"],
+  [sharedCoreUserStatus, "userStatusSnapshot", "product user-status-snapshot helper"],
+  [sharedCoreUserStatus, "core: SharedCore", "user-status helper takes an already-constructed SharedCore"],
+  [sharedCoreUserStatus, "core.userStatusSnapshot", "user-status helper reads on the caller-owned instance"],
   [sharedCoreFfi, "verification_list", "P4-S8 typed verification-list FFI"],
   [sharedCoreFfi, "matrix_verification_list", "P4-S8 calls the registered Core command"],
   [udl, "VerificationInboxDto verification_list()", "P4-S8 SharedCore verification-list operation"],
@@ -1999,6 +2016,9 @@ if (sharedCoreTypingPresence.includes("SharedCore(store:")) {
 }
 if (sharedCoreRtcTransports.includes("SharedCore(store:")) {
   throw new Error("rtc-transports helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreUserStatus.includes("SharedCore(store:")) {
+  throw new Error("user-status helper must not construct-and-drop SharedCore");
 }
 if (sharedCoreVerificationList.includes("SharedCore(store:")) {
   throw new Error("P4-S8 helper must not construct-and-drop SharedCore");

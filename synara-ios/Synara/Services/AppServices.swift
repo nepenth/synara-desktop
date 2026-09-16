@@ -75,6 +75,9 @@ protocol MatrixClientServicing: AnyObject {
     func setOwnPresence(_ state: String) async -> Bool
     func rtcTransportsSnapshot() async -> SharedCoreRtcTransportsSnapshot?
     func rtcTransportsRefresh() async -> SharedCoreRtcTransportsSnapshot?
+    func userStatus(userID: String) async -> SharedCoreUserStatusSnapshot?
+    func setOwnUserStatus(emoji: String, text: String) async -> Bool
+    func clearOwnUserStatus() async -> Bool
     func ownProfile() async -> SharedCoreOwnProfileInfo?
     func setOwnDisplayName(_ displayName: String) async -> Bool
     func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool
@@ -136,6 +139,21 @@ extension MatrixClientServicing {
 
     func rtcTransportsRefresh() async -> SharedCoreRtcTransportsSnapshot? {
         nil
+    }
+
+    func userStatus(userID: String) async -> SharedCoreUserStatusSnapshot? {
+        _ = userID
+        return nil
+    }
+
+    func setOwnUserStatus(emoji: String, text: String) async -> Bool {
+        _ = emoji
+        _ = text
+        return false
+    }
+
+    func clearOwnUserStatus() async -> Bool {
+        false
     }
 
     func ownProfile() async -> SharedCoreOwnProfileInfo? {

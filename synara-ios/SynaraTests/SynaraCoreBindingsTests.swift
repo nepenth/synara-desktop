@@ -1295,6 +1295,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     isCall: false,
                     hasActiveCall: false,
                     activeCallParticipantCount: 0,
+                    directUserId: nil,
                     encryptionStatus: .encrypted
                 ),
                 SharedCoreRoomListRows.RoomRow(
@@ -1313,6 +1314,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     isCall: true,
                     hasActiveCall: true,
                     activeCallParticipantCount: 3,
+                    directUserId: nil,
                     encryptionStatus: .notEncrypted
                 ),
             ],
@@ -1704,6 +1706,42 @@ final class SynaraCoreBindingsTests: XCTestCase {
             ),
             "MatrixRTC transport: LiveKit at https://livekit.example.org"
         )
+    }
+
+    func testSharedCoreUserStatusWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        do {
+            _ = try await SharedCoreUserStatus.snapshot(core: core, userId: "@alice:example.org")
+            XCTFail("Fail-closed SharedCore must not snapshot user status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-status-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "secret-status-text", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreUserStatus.set(core: core, emoji: "☕", text: "secret-status-text")
+            XCTFail("Fail-closed SharedCore must not set user status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-status-set-no-session"))
+            for forbidden in ["password", "syt_", "secret-status-text", "☕", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreUserStatus.clear(core: core)
+            XCTFail("Fail-closed SharedCore must not clear user status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-status-clear-no-session"))
+            for forbidden in ["password", "syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
     }
 
     func testSharedCoreVerificationLiveMapsPhasesWithoutEcho() {

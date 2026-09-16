@@ -41,6 +41,8 @@ export function isRoomEncryptionStatus(value: unknown): value is RoomEncryptionS
 export type RoomHero = {
   userId: UserId;
   displayName?: string;
+  inCall?: boolean;
+  statusEmoji?: string;
 };
 
 export type RoomSummary = {
@@ -50,6 +52,7 @@ export type RoomSummary = {
   avatarUrl?: string;
   membership: Membership;
   isDirect: boolean;
+  directUserId?: string;
   isSpace: boolean;
   isCall: boolean;
   /** Live MatrixRTC membership. Distinct from `isCall` (voice-room type). */
@@ -77,8 +80,17 @@ function parseHero(value: unknown): RoomHero | null {
   if (!isObject(value)) return null;
   const userId = reqString(value, 'userId');
   const displayName = optString(value, 'displayName');
-  if (userId === null || displayName === null) return null;
-  return { userId, displayName };
+  const inCall = optBoolean(value, 'inCall');
+  const statusEmoji = optString(value, 'statusEmoji');
+  if (userId === null || displayName === null || inCall === null || statusEmoji === null) {
+    return null;
+  }
+  return {
+    userId,
+    displayName,
+    ...(inCall === undefined ? {} : { inCall }),
+    ...(statusEmoji === undefined ? {} : { statusEmoji }),
+  };
 }
 
 export function parseRoomSummary(value: unknown): RoomSummary | null {
@@ -88,6 +100,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const canonicalAlias = optString(value, 'canonicalAlias');
   const avatarUrl = optString(value, 'avatarUrl');
   const isDirect = reqBoolean(value, 'isDirect');
+  const directUserId = optString(value, 'directUserId');
   const isSpace = optBoolean(value, 'isSpace');
   const isCall = optBoolean(value, 'isCall') ?? false;
   const hasActiveCall = optBoolean(value, 'hasActiveCall') ?? false;
@@ -109,6 +122,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     canonicalAlias === null ||
     avatarUrl === null ||
     isDirect === null ||
+    directUserId === null ||
     isSpace === null ||
     activeCallParticipantCountRaw === null ||
     isEncrypted === null ||
@@ -157,6 +171,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     avatarUrl,
     membership: value.membership,
     isDirect,
+    directUserId,
     isSpace: isSpace ?? false,
     isCall: isCall ?? false,
     hasActiveCall: hasActiveCall ?? false,

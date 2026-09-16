@@ -60,6 +60,7 @@ pub(crate) mod typing_set;
 pub(crate) mod typing_snapshot;
 pub(crate) mod user_directory;
 pub(crate) mod user_image_pack;
+pub(crate) mod user_status;
 pub(crate) mod verification_accept;
 pub(crate) mod verification_begin_sas;
 pub(crate) mod verification_cancel;

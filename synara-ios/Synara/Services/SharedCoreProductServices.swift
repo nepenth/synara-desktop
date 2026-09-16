@@ -472,6 +472,31 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         return SharedCoreRtcTransports.product(from: dto)
     }
 
+    func userStatus(userID: String) async -> SharedCoreUserStatusSnapshot? {
+        guard let dto = try? await SharedCoreUserStatus.snapshot(core: host.core, userId: userID) else {
+            return nil
+        }
+        return SharedCoreUserStatus.product(from: dto)
+    }
+
+    func setOwnUserStatus(emoji: String, text: String) async -> Bool {
+        do {
+            _ = try await SharedCoreUserStatus.set(core: host.core, emoji: emoji, text: text)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    func clearOwnUserStatus() async -> Bool {
+        do {
+            _ = try await SharedCoreUserStatus.clear(core: host.core)
+            return true
+        } catch {
+            return false
+        }
+    }
+
     func setOwnPresence(_ state: String) async -> Bool {
         do {
             _ = try await SharedCoreTypingPresence.presenceSet(
@@ -684,6 +709,7 @@ final class SharedCoreRoomListService: RoomListServicing {
                         isCall: $0.isCall,
                         hasActiveCall: $0.hasActiveCall,
                         activeCallParticipantCount: Int($0.activeCallParticipantCount),
+                        directUserId: $0.directUserId,
                         encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
                     )
                 },
