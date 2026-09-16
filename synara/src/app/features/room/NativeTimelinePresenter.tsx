@@ -3266,7 +3266,12 @@ export function NativeTimelinePresenter({
         </Box>
       ) : null}
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
-        <Scroll ref={scrollRef} visibility="Hover" style={{ height: '100%' }}>
+        <Scroll
+          id="native-timeline-history"
+          ref={scrollRef}
+          visibility="Hover"
+          style={{ height: '100%' }}
+        >
           {rows.length === 0 ? (
             <Box
               alignItems="Center"

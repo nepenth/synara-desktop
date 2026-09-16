@@ -1,8 +1,7 @@
 import React from 'react';
-import { Box, Button, Spinner, Text, color, config } from 'folds';
+import { Button, Spinner, Text, color, config } from 'folds';
 import type { TimelineHistoryOverlayKind } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
-import * as depthCss from '../../styles/Depth.css';
 
 type NativeTimelineHistoryStatusProps = {
   edge: 'backward' | 'forward';
@@ -41,55 +40,50 @@ export function NativeTimelineHistoryStatus({
   if (kind === 'hidden' && !showDate) return null;
 
   return (
-    <Box
+    <div
       className={
         edge === 'backward'
           ? htmlCss.HistoryStatusOverlayBackward
           : htmlCss.HistoryStatusOverlayForward
       }
-      justifyContent="Center"
-      style={{ pointerEvents: kind === 'hidden' ? 'none' : undefined }}
+      style={{ pointerEvents: kind === 'hidden' ? 'none' : 'auto' }}
     >
       {kind === 'loading' ? (
-        <Box
-          className={`${htmlCss.HistoryStatusCard} ${depthCss.floatingSurface}`}
-          alignItems="Center"
-          gap="200"
+        <div
+          className={htmlCss.HistoryStatusCard}
           role="status"
           aria-live="polite"
           aria-label={copy.loadingLabel}
           data-timeline-history-status="loading"
           data-timeline-history-edge={edge}
         >
-          <Spinner size="200" aria-label={copy.loadingLabel} />
+          <Spinner size="200" variant="Secondary" aria-label={copy.loadingLabel} />
           <Text size="T300">{copy.loadingText}</Text>
-        </Box>
+        </div>
       ) : null}
       {kind === 'error' ? (
-        <Box
-          className={`${htmlCss.HistoryStatusCard} ${depthCss.floatingSurface}`}
-          alignItems="Center"
-          gap="200"
+        <div
+          className={`${htmlCss.HistoryStatusCard} ${htmlCss.HistoryStatusCardError}`}
           role="alert"
           data-timeline-history-status="error"
           data-timeline-history-edge={edge}
         >
-          <Box direction="Column" gap="100" style={{ minWidth: 0 }}>
-            <Text size="T300" style={{ color: color.Critical.Main }}>
+          <div style={{ minWidth: 0 }}>
+            <Text size="T300" style={{ color: color.Critical.OnContainer }}>
               {copy.errorTitle}
             </Text>
             {errorMessage ? (
-              <Text size="T200" style={{ color: color.Critical.Main }}>
+              <Text size="T200" style={{ color: color.Critical.OnContainer }}>
                 {errorMessage}
               </Text>
             ) : null}
-          </Box>
+          </div>
           {onRetry ? (
-            <Button variant="Critical" fill="Soft" size="300" onClick={onRetry}>
+            <Button variant="Critical" fill="Solid" size="300" onClick={onRetry}>
               <Text size="B300">Retry</Text>
             </Button>
           ) : null}
-        </Box>
+        </div>
       ) : null}
       {kind === 'load_more' && onLoadMore ? (
         <Button
@@ -104,14 +98,14 @@ export function NativeTimelineHistoryStatus({
         </Button>
       ) : null}
       {showDate ? (
-        <Box
-          className={`${htmlCss.HistoryStatusCard} ${depthCss.floatingSurface}`}
+        <div
+          className={htmlCss.HistoryStatusCard}
           style={{ padding: `${config.space.S100} ${config.space.S300}` }}
           data-timeline-history-status="date"
         >
           <Text size="T200">{visibleDateLabel}</Text>
-        </Box>
+        </div>
       ) : null}
-    </Box>
+    </div>
   );
 }

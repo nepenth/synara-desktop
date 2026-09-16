@@ -687,26 +687,48 @@ export const UnfurlThumb = style({
 
 const historyStatusOverlay = {
   position: 'absolute',
-  left: '50%',
-  transform: 'translateX(-50%)',
-  zIndex: 3,
-  maxWidth: `min(${toRem(420)}, calc(100% - ${toRem(72)}))`,
+  top: 0,
+  left: 0,
+  right: toRem(56),
+  zIndex: 4,
+  display: 'flex',
+  justifyContent: 'center',
+  padding: config.space.S200,
+  pointerEvents: 'none',
 } as const;
 
 export const HistoryStatusOverlayBackward = style({
   ...historyStatusOverlay,
-  top: config.space.S300,
+  top: 0,
+  background: `linear-gradient(180deg, ${color.Background.Container} 55%, transparent)`,
 });
 
 export const HistoryStatusOverlayForward = style({
   ...historyStatusOverlay,
-  bottom: config.space.S300,
+  top: 'auto',
+  bottom: 0,
+  background: `linear-gradient(0deg, ${color.Background.Container} 55%, transparent)`,
 });
 
 export const HistoryStatusCard = style({
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: config.space.S200,
   padding: `${config.space.S200} ${config.space.S300}`,
   borderRadius: config.radii.R400,
   maxWidth: '100%',
+  pointerEvents: 'auto',
+  backgroundColor: color.SurfaceVariant.Container,
+  color: color.SurfaceVariant.OnContainer,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  boxShadow: raisedShadow,
+});
+
+export const HistoryStatusCardError = style({
+  backgroundColor: color.Critical.Container,
+  border: `${config.borderWidth.B300} solid ${color.Critical.Main}`,
+  color: color.Critical.OnContainer,
 });
 
 export const DateRail = style({
@@ -714,7 +736,7 @@ export const DateRail = style({
   top: config.space.S700,
   right: config.space.S100,
   bottom: toRem(88),
-  width: toRem(44),
+  width: toRem(56),
   zIndex: 2,
   pointerEvents: 'none',
 });
@@ -722,19 +744,18 @@ export const DateRail = style({
 export const DateRailTrack = style({
   position: 'absolute',
   top: 0,
-  right: toRem(10),
+  right: toRem(14),
   bottom: 0,
-  width: toRem(8),
+  width: toRem(4),
   borderRadius: config.radii.R400,
-  background: color.SurfaceVariant.Container,
-  boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
+  background: color.SurfaceVariant.ContainerLine,
   pointerEvents: 'auto',
   cursor: 'pointer',
 });
 
 export const DateRailThumb = style({
   position: 'absolute',
-  left: toRem(-2),
+  left: toRem(-4),
   width: toRem(12),
   height: toRem(18),
   marginTop: toRem(-9),
@@ -745,30 +766,35 @@ export const DateRailThumb = style({
 
 export const DateRailTick = style({
   position: 'absolute',
-  right: toRem(6),
-  width: toRem(16),
-  height: toRem(16),
-  marginTop: toRem(-8),
+  right: toRem(10),
+  width: toRem(12),
+  height: toRem(12),
+  marginTop: toRem(-6),
   padding: 0,
-  border: 0,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   borderRadius: '50%',
   background: color.Surface.Container,
-  boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
   pointerEvents: 'auto',
   cursor: 'pointer',
   selectors: {
     '&[aria-current="true"]': {
       background: color.Primary.Main,
+      borderColor: color.Primary.Main,
     },
   },
 });
 
 export const DateRailLabel = style({
   position: 'absolute',
-  right: toRem(28),
+  right: toRem(32),
   transform: 'translateY(-50%)',
-  color: 'var(--synara-content-secondary)',
+  color: color.Surface.OnContainer,
   pointerEvents: 'none',
   whiteSpace: 'nowrap',
   textAlign: 'right',
+  padding: `${config.space.S100} ${config.space.S200}`,
+  borderRadius: config.radii.R400,
+  backgroundColor: color.Surface.Container,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  boxShadow: raisedShadow,
 });

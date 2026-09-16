@@ -651,13 +651,8 @@ Object.assign(window, { nativeTimelineFixture: api });
 // The shipped app applies the folds theme to <body> (src/index.tsx). Overlay
 // offsets like `config.space.S300` compile to CSS variables that only exist
 // under these classes; without them absolute controls collapse to the origin.
-document.body.classList.add(configClass, varsClass);
-if (polish) {
-  void import('../../src/index.css');
-  document.body.classList.add(darkTheme, 'dark-theme');
-  document.body.style.backgroundColor = '#161719';
-  document.body.style.color = '#ededed';
-}
+// Color tokens (`color.SurfaceVariant.*`) need a theme class. Await index.css
+// before paint so screenshot/polish captures are not racing the stylesheet.
 
 function App() {
   const [mounted, setMounted] = useState(true);
@@ -681,4 +676,16 @@ function App() {
     </>
   );
 }
-createRoot(document.getElementById('root')!).render(<App />);
+
+async function bootHarness() {
+  document.body.classList.add(configClass, varsClass);
+  if (polish || params.has('theme')) {
+    await import('../../src/index.css');
+    document.body.classList.add(darkTheme, 'dark-theme');
+    document.body.style.backgroundColor = '#161719';
+    document.body.style.color = '#ededed';
+  }
+  createRoot(document.getElementById('root')!).render(<App />);
+}
+
+void bootHarness();

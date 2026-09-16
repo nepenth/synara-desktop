@@ -231,7 +231,21 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(historyStatus, /Loading newer messages/);
   assert.match(historyStatus, /role="alert"/);
   assert.match(historyStatus, /Could not load older messages/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusCardError/);
+  assert.match(
+    htmlCss,
+    /export const HistoryStatusCard = style\(\{[\s\S]*?backgroundColor: color\.SurfaceVariant\.Container,/
+  );
+  assert.match(
+    htmlCss,
+    /export const HistoryStatusCard = style\(\{[\s\S]*?color: color\.SurfaceVariant\.OnContainer,/
+  );
+  assert.match(
+    htmlCss,
+    /export const HistoryStatusCardError = style\(\{[\s\S]*?backgroundColor: color\.Critical\.Container,/
+  );
   assert.match(dateRail, /Jump to a date in loaded history/);
+  assert.match(dateRail, /aria-controls="native-timeline-history"/);
   assert.match(presenter, /NativeTimelineDateRail/);
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
