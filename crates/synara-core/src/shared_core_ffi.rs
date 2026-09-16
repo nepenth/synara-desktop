@@ -236,8 +236,8 @@ use crate::app::timeline::{
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
-    NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
-    NativeVerificationSas, NativeVerificationUpdateSignal,
+    NativeVerificationOwner, NativeVerificationPhase, NativeVerificationQr,
+    NativeVerificationRequest, NativeVerificationSas, NativeVerificationUpdateSignal,
 };
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
@@ -3159,8 +3159,15 @@ pub struct VerificationSasDto {
     pub decimals: Option<Vec<u16>>,
 }
 
+/// Privacy-safe show-QR payload. SVG data-URL only; no MAC or QR bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationQrDto {
+    pub image_data_url: String,
+    pub scanned: bool,
+}
+
 /// Privacy-safe verification request row. Identity/flow fields and optional
-/// display-only SAS values; no tokens, MACs, or key material.
+/// display-only SAS / QR values; no tokens, MACs, or key material.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequestDto {
     pub flow_id: String,
@@ -3170,6 +3177,7 @@ pub struct VerificationRequestDto {
     pub phase: String,
     pub started_ts: Option<u64>,
     pub sas: Option<VerificationSasDto>,
+    pub qr: Option<VerificationQrDto>,
 }
 
 /// Privacy-safe verification inbox. No tokens or password.
@@ -3258,6 +3266,13 @@ fn verification_sas_dto(sas: NativeVerificationSas) -> VerificationSasDto {
     }
 }
 
+fn verification_qr_dto(qr: NativeVerificationQr) -> VerificationQrDto {
+    VerificationQrDto {
+        image_data_url: qr.image_data_url,
+        scanned: qr.scanned,
+    }
+}
+
 fn verification_request_dto_with_sas(request: NativeVerificationRequest) -> VerificationRequestDto {
     VerificationRequestDto {
         flow_id: request.flow_id,
@@ -3267,6 +3282,7 @@ fn verification_request_dto_with_sas(request: NativeVerificationRequest) -> Veri
         phase: verification_phase_as_str(request.phase),
         started_ts: request.started_ts,
         sas: request.sas.map(verification_sas_dto),
+        qr: request.qr.map(verification_qr_dto),
     }
 }
 
@@ -13861,6 +13877,7 @@ mod tests {
                 }]),
                 decimals: Some([1234, 5678, 9012]),
             }),
+            qr: None,
         });
 
         let sas = dto.sas.expect("sas_ready list row must carry display SAS");
