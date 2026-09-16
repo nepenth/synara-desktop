@@ -12,8 +12,17 @@ crate-type = ["lib", "staticlib", "cdylib"]
 
 [features]
 default = ["full-uniffi"]
-full-uniffi = []
+# Desktop and iOS full-app compile in automatic Megolm gossip. NSE must not:
+# NotificationClient restores the crypto store and must not answer key requests.
+full-uniffi = ["room-key-forwarding"]
 nse-preview = []
+# matrix-sdk 0.19 GossipMachine defaults both serve and request switches on
+# once this cfg is compiled. Encryption has no public setter; product stays
+# always-on. Do not put this feature on nse-preview.
+room-key-forwarding = [
+  "matrix-sdk/automatic-room-key-forwarding",
+  "matrix-sdk-crypto/automatic-room-key-forwarding",
+]
 
 [dependencies]
 # P1.4 domain DTOs (moved from src-tauri/matrix/dto, SNC-P1-2) derive serde.
@@ -34,7 +43,8 @@ tokio = { version = "1", features = ["rt", "rt-multi-thread", "macros", "time", 
 # rustls-aws-lc-rs is required with default-features=false (0.19.0 rustls provider).
 # Markdown is shared for Matrix-compatible rich composer output. QR remains a
 # desktop-only extra via src-tauri feature unification. E2E encryption still
-# arrives via matrix-sdk-ui.
+# arrives via matrix-sdk-ui. automatic-room-key-forwarding is *not* listed here:
+# NSE builds this dependency without the Core `room-key-forwarding` feature.
 matrix-sdk = { version = "=0.19.0", default-features = false, features = [
   "sqlite",
   "bundled-sqlite",
@@ -45,7 +55,9 @@ matrix-sdk-ui = { version = "=0.19.0", default-features = false, features = [
   "rustls-aws-lc-rs",
 ] }
 # Live NativeTimelineRegistry maps UTD causes from the crypto crate.
-# Pin matches src-tauri (`=0.19.0`, default-features=false).
+# Pin matches src-tauri (`=0.19.0`, default-features=false). The
+# automatic-room-key-forwarding cfg is enabled only via the Core
+# `room-key-forwarding` feature (not here), so NSE stays off.
 matrix-sdk-crypto = { version = "=0.19.0", default-features = false }
 # Password re-login peeks the leftover SQLite crypto account so the next login
 # reuses that device id. Pin and default-features match the SDK workspace.

@@ -76,5 +76,25 @@ requireText(
 for (const triple of ["aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
   requireText(productionFeatures, `"${triple}"`, `NSE production feature ${triple} query`);
 }
+requireText(
+  productionFeatures,
+  "automatic-room-key-forwarding",
+  "NSE production graph must reject automatic-room-key-forwarding",
+);
+requireText(
+  coreManifest,
+  'full-uniffi = ["room-key-forwarding"]',
+  "full-app room-key forwarding",
+);
+requireText(
+  coreManifest,
+  "matrix-sdk/automatic-room-key-forwarding",
+  "SDK forwarding feature via Core",
+);
+requireText(
+  coreManifest,
+  "matrix-sdk-crypto/automatic-room-key-forwarding",
+  "crypto forwarding feature via Core",
+);
 
 console.log("Synara NSE Core isolation scaffold checks passed.");
