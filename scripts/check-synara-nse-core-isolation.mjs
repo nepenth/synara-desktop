@@ -42,8 +42,10 @@ requireText(workspace, "[profile.nse-release]", "NSE size profile");
 requireText(workspace, 'lto = "fat"', "NSE cross-crate LTO");
 requireText(coreManifest, 'default = ["full-uniffi"]', "full Core default feature");
 requireText(coreManifest, "nse-preview = []", "NSE Core feature");
+requireText(coreManifest, 'search-index = ["matrix-sdk/experimental-search"]', "desktop search-index feature");
 requireText(nseManifest, "default-features = false", "full binding exclusion");
 requireText(nseManifest, 'features = ["nse-preview"]', "NSE-only feature");
+forbidText(nseManifest, "search-index", "NSE search-index feature");
 requireText(nseUdl, "interface NsePreviewRequest {", "cancelable request boundary");
 requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");
@@ -76,5 +78,7 @@ requireText(
 for (const triple of ["aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
   requireText(productionFeatures, `"${triple}"`, `NSE production feature ${triple} query`);
 }
+requireText(productionFeatures, "matrix-sdk-search", "NSE local-index crate leak check");
+requireText(productionFeatures, "tantivy", "NSE tantivy leak check");
 
 console.log("Synara NSE Core isolation scaffold checks passed.");

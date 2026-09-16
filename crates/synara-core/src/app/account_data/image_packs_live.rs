@@ -4,7 +4,10 @@
 
 use std::{
     future::Future,
-    sync::{Arc, Mutex, MutexGuard},
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex, MutexGuard,
+    },
     time::{Duration, Instant},
 };
 
@@ -405,6 +408,8 @@ pub async fn set_room_image_pack(
 pub struct NativeImagePackOwner {
     client: Client,
     session_generation: u64,
+    /// Desktop local-index queries. Default on. Off returns `v-search.index-disabled`.
+    indexed_message_search: AtomicBool,
     pending_threepid: Mutex<Option<crate::app::user_profile::PendingThreepid>>,
     // Matrix global account data has no conditional-write primitive. Keep the
     // v1 notes RMW route single-writer within this live Core owner.
@@ -467,6 +472,7 @@ impl NativeImagePackOwner {
         Ok(Self {
             client: client.clone(),
             session_generation,
+            indexed_message_search: AtomicBool::new(true),
             pending_threepid: Mutex::new(None),
             room_notes_mutation: AsyncMutex::new(()),
             room_notes_projection,
@@ -717,6 +723,15 @@ impl NativeImagePackOwner {
         crate::app::user_profile::search_user_directory(&self.client, term, limit).await
     }
 
+    pub fn set_indexed_message_search(&self, enabled: bool) {
+        self.indexed_message_search
+            .store(enabled, Ordering::Relaxed);
+    }
+
+    pub fn indexed_message_search(&self) -> bool {
+        self.indexed_message_search.load(Ordering::Relaxed)
+    }
+
     pub async fn search_messages(
         &self,
         term: &str,
@@ -725,8 +740,16 @@ impl NativeImagePackOwner {
         senders: Option<&[String]>,
         order: Option<&str>,
     ) -> Result<crate::app::search::MatrixMessageSearchResult, &'static str> {
-        crate::app::search::search_messages(&self.client, term, next_token, rooms, senders, order)
-            .await
+        crate::app::search::search_messages(
+            &self.client,
+            term,
+            next_token,
+            rooms,
+            senders,
+            order,
+            self.indexed_message_search(),
+        )
+        .await
     }
 
     pub async fn snapshot_push_rules(

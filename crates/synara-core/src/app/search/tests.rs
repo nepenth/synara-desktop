@@ -137,6 +137,38 @@ fn message_search_validates_without_echo() {
         parse_message_search_term("hello").unwrap().as_deref(),
         Some("hello")
     );
+    parse_message_search_order(None).expect("omitted order is rank");
+    parse_message_search_order(Some("rank")).expect("rank is accepted");
+    parse_message_search_order(Some("recent")).expect("recent is accepted as rank");
+    let secret_token = parse_message_search_next_token(Some("syt_secret")).unwrap_err();
+    assert_eq!(secret_token, "v-search.invalid-token");
+    assert!(!secret_token.contains("syt_"));
+}
+
+#[cfg(feature = "search-index")]
+#[test]
+fn message_search_offset_tokens_are_decimal_without_echo() {
+    assert_eq!(parse_message_search_offset(None).unwrap(), 0);
+    assert_eq!(parse_message_search_offset(Some("20")).unwrap(), 20);
+    assert_eq!(
+        parse_message_search_next_token(Some("20"))
+            .unwrap()
+            .as_deref(),
+        Some("20")
+    );
+    let invalid = parse_message_search_next_token(Some("nb-secret")).unwrap_err();
+    assert_eq!(invalid, "v-search.invalid-token");
+    assert!(!invalid.contains("nb-secret"));
+}
+
+#[test]
+fn desktop_index_source_never_sends_search_events() {
+    let index = include_str!("index.rs");
+    assert!(index.contains("client.search_messages"));
+    assert!(!index.contains("search::search_events"));
+    assert!(!index.contains("client.send("));
+    assert!(!index.contains("/_matrix/client"));
+    assert!(!index.contains("UnencryptedDirectory"));
 }
 
 #[test]

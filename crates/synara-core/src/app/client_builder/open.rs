@@ -6,6 +6,8 @@
 use matrix_sdk::config::RequestConfig;
 use matrix_sdk::cross_process_lock::CrossProcessLockConfig;
 use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
+#[cfg(feature = "search-index")]
+use matrix_sdk::search_index::SearchIndexStoreKind;
 use matrix_sdk::Client;
 
 use super::ClientBuilderError;
@@ -58,6 +60,11 @@ pub async fn build_unauthenticated_client(
         passphrase.as_deref(),
     );
 
+    #[cfg(feature = "search-index")]
+    {
+        builder = apply_encrypted_search_index(builder, config, passphrase.as_deref())?;
+    }
+
     if let Some(proxy) = &config.network.proxy_url {
         builder = builder.proxy(proxy);
     }
@@ -74,6 +81,28 @@ pub async fn build_unauthenticated_client(
     }
 
     builder.build().await.map_err(map_build_error)
+}
+
+#[cfg(feature = "search-index")]
+fn apply_encrypted_search_index(
+    builder: matrix_sdk::ClientBuilder,
+    config: &ClientBuildConfig,
+    passphrase: Option<&str>,
+) -> Result<matrix_sdk::ClientBuilder, ClientBuilderError> {
+    if !config.indexed_message_search() {
+        return Ok(builder);
+    }
+    // Never persist a plaintext on-disk index: decrypted bodies must not sit
+    // in a world-readable Tantivy tree. Missing passphrase skips disk persistence.
+    let Some(password) = passphrase.filter(|value| !value.is_empty()) else {
+        return Ok(builder);
+    };
+    Ok(
+        builder.search_index_store(SearchIndexStoreKind::EncryptedDirectory(
+            config.search_store_path().to_path_buf(),
+            password.to_owned(),
+        )),
+    )
 }
 
 fn map_build_error(err: matrix_sdk::ClientBuildError) -> ClientBuilderError {
@@ -154,6 +183,21 @@ mod privacy_tests {
         assert_eq!(id2, "p2.3-sdk-build-network");
         assert_eq!(cat2, MatrixIpcErrorCategory::Connectivity);
         assert_eq!(safe_build_message(id2), "network configuration failed");
+    }
+
+    #[test]
+    fn product_search_index_never_uses_unencrypted_directory() {
+        let source = include_str!("open.rs");
+        let production = source
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production client open");
+        assert!(production.contains("EncryptedDirectory"));
+        assert!(
+            !production.contains("UnencryptedDirectory"),
+            "product client open must not name the plaintext on-disk index kind"
+        );
+        assert!(!production.contains("SearchIndexStoreKind::InMemory"));
     }
 
     #[test]

@@ -1,7 +1,8 @@
-//! Search session harness plus live homeserver room-event search.
+//! Search session harness plus live message search.
 //!
-//! Live I/O uses typed ruma `search_events` through `Client::send`. It does
-//! not enable matrix-sdk `search-index` and never returns leftover-unavailable.
+//! Desktop (`search-index`) queries the 0.19 local index and never sends
+//! Client-Server `search_events`. iOS SharedCore keeps typed `/search`.
+//! Neither path returns leftover-unavailable.
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.8-search.md`
 
@@ -15,6 +16,8 @@ mod session;
 
 pub use error::SearchError;
 pub use ipc::{MatrixMessageSearchGroup, MatrixMessageSearchItem, MatrixMessageSearchResult};
+#[cfg(feature = "search-index")]
+pub use live::parse_message_search_offset;
 pub use live::{
     empty_message_search_result, parse_message_search_next_token, parse_message_search_order,
     parse_message_search_rooms, parse_message_search_senders, parse_message_search_term,

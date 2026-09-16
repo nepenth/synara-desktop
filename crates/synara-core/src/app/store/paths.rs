@@ -13,6 +13,7 @@ const STATE_SEGMENT: &str = "state";
 const CRYPTO_SEGMENT: &str = "crypto";
 const CACHE_SEGMENT: &str = "cache";
 const MEDIA_SEGMENT: &str = "media";
+const SEARCH_SEGMENT: &str = "search";
 
 /// Errors while deriving or preparing store paths (no secrets).
 #[derive(Debug)]
@@ -59,6 +60,7 @@ impl From<io::Error> for StorePathError {
 /// - `crypto/` — reserved product-managed crypto sidecar (not the sole SDK crypto dir)
 /// - `cache/` — event cache path passed to `sqlite_store_with_cache_path`
 /// - `media/` — media cache (product-managed; not always bound by Client builder)
+/// - `search/` — encrypted local message index (`EncryptedDirectory`; never plaintext)
 ///
 /// **Honest mapping (REV-006):** `Client::sqlite_store_with_cache_path(state, cache, …)`
 /// uses `state/` for both state and crypto SQLite files. `crypto_dir` and
@@ -70,6 +72,7 @@ pub struct StorePaths {
     crypto_dir: PathBuf,
     cache_dir: PathBuf,
     media_dir: PathBuf,
+    search_dir: PathBuf,
     account_segment: String,
 }
 
@@ -87,6 +90,7 @@ pub struct StoreLayout {
     pub relative_crypto_dir: String,
     pub relative_cache_dir: String,
     pub relative_media_dir: String,
+    pub relative_search_dir: String,
     /// Confirms layout is confined under the product Matrix root policy.
     pub confined_under_matrix_root: bool,
 }
@@ -133,8 +137,9 @@ impl StorePaths {
         let crypto_dir = account_root.join(CRYPTO_SEGMENT);
         let cache_dir = account_root.join(CACHE_SEGMENT);
         let media_dir = account_root.join(MEDIA_SEGMENT);
+        let search_dir = account_root.join(SEARCH_SEGMENT);
 
-        for child in [&state_dir, &crypto_dir, &cache_dir, &media_dir] {
+        for child in [&state_dir, &crypto_dir, &cache_dir, &media_dir, &search_dir] {
             ensure_under_root(&account_root, child)?;
         }
 
@@ -144,6 +149,7 @@ impl StorePaths {
             crypto_dir,
             cache_dir,
             media_dir,
+            search_dir,
             account_segment: segment,
         })
     }
@@ -170,6 +176,10 @@ impl StorePaths {
 
     pub fn media_dir(&self) -> &Path {
         &self.media_dir
+    }
+
+    pub fn search_dir(&self) -> &Path {
+        &self.search_dir
     }
 
     /// Determine whether a missing Keychain key may be generated.
@@ -219,6 +229,7 @@ impl StorePaths {
             &self.crypto_dir,
             &self.cache_dir,
             &self.media_dir,
+            &self.search_dir,
         ] {
             refuse_if_symlink(dir)?;
             fs::create_dir_all(dir)?;
@@ -249,6 +260,7 @@ impl StorePaths {
             relative_crypto_dir: CRYPTO_SEGMENT.to_owned(),
             relative_cache_dir: CACHE_SEGMENT.to_owned(),
             relative_media_dir: MEDIA_SEGMENT.to_owned(),
+            relative_search_dir: SEARCH_SEGMENT.to_owned(),
             confined_under_matrix_root: true,
         }
     }

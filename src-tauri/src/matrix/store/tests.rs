@@ -108,6 +108,15 @@ fn ensure_dirs_creates_layout_without_wiping_existing() {
     assert!(paths.crypto_dir().is_dir());
     assert!(paths.cache_dir().is_dir());
     assert!(paths.media_dir().is_dir());
+    assert!(paths.search_dir().is_dir());
+    assert!(paths.search_dir().starts_with(paths.account_root()));
+    assert_eq!(
+        paths
+            .search_dir()
+            .file_name()
+            .and_then(|name| name.to_str()),
+        Some("search")
+    );
 
     #[cfg(unix)]
     {
@@ -141,6 +150,9 @@ fn layout_serializes_without_secrets_or_absolute_paths() {
     let back: StoreLayout = serde_json::from_str(&json).unwrap();
     assert_eq!(back.account_segment, paths.account_segment());
     assert_eq!(back.relative_state_dir, "state");
+    assert_eq!(back.relative_search_dir, "search");
+    assert!(json.contains("relativeSearchDir"));
+    assert!(!json.contains(paths.search_dir().to_string_lossy().as_ref()));
     assert!(back.confined_under_matrix_root);
 }
 

@@ -29,5 +29,26 @@ for (const target of appleTargets) {
     console.error(`SynaraNseCore must not enable the full Core UniFFI feature in its production graph (${target})`);
     process.exit(1);
   }
+  if (result.stdout.includes('synara-core feature "search-index"')) {
+    console.error(`SynaraNseCore must not enable the desktop search-index feature (${target})`);
+    process.exit(1);
+  }
+  const tree = spawnSync(
+    "cargo",
+    ["tree", "--locked", "--manifest-path", manifest, "-p", "synara-nse-core",
+      "-e", "normal,build", "--target", target],
+    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+  );
+  if (tree.error || tree.status !== 0) {
+    console.error(`SynaraNseCore production crate tree query failed for ${target}.`);
+    if (tree.stderr) console.error(tree.stderr.trim());
+    process.exit(1);
+  }
+  for (const leaked of ["matrix-sdk-search", "tantivy"]) {
+    if (tree.stdout.includes(leaked)) {
+      console.error(`SynaraNseCore must not pull ${leaked} on ${target}`);
+      process.exit(1);
+    }
+  }
 }
 console.log("Synara NSE Core production feature isolation passed for all Apple slices.");

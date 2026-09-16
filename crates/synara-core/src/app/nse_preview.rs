@@ -174,6 +174,7 @@ async fn resolve_event_preview_unbounded(
                 "The notification store is unavailable.",
             )
         })?;
+    config = config.with_indexed_message_search(false);
     config.handle_refresh_tokens = false;
 
     let client = build_unauthenticated_client(&config).await.map_err(|_| {

@@ -16,6 +16,7 @@ pub async fn matrix_login_flows(
     crate::bridge::auth_probes::login_flows(core.inner().as_ref(), homeserver_url).await
 }
 
+#[allow(clippy::too_many_arguments)]
 #[tauri::command]
 pub async fn matrix_login_password(
     app: AppHandle,
@@ -24,6 +25,7 @@ pub async fn matrix_login_password(
     homeserver_url: String,
     user: String,
     password: String,
+    indexed_message_search: Option<bool>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     if session.is_some() {
@@ -53,7 +55,14 @@ pub async fn matrix_login_password(
                 return Err(error);
             }
         };
-    let client = match build_client(&app_data_root, requested_identity.clone()).await {
+    let indexed_message_search = indexed_message_search.unwrap_or(true);
+    let client = match build_client(
+        &app_data_root,
+        requested_identity.clone(),
+        indexed_message_search,
+    )
+    .await
+    {
         Ok(client) => client,
         Err(error) => {
             // The UI can only request archive-and-rebuild after one of these
@@ -117,6 +126,7 @@ pub async fn matrix_login_password(
         )
         .map_err(map_pack_read_subscribe_error)?,
     );
+    image_packs.set_indexed_message_search(indexed_message_search);
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
     let presence = Arc::new(
@@ -536,7 +546,13 @@ pub(super) async fn install_session_from_register_secrets(
         MatrixAuthCommandError::invalid_input("v-auth.4b-register-identity-invalid")
     })?;
     let app_data_root = app_data_root(app)?;
-    let client = build_client(&app_data_root, live_identity.clone()).await?;
+    let indexed_message_search = true;
+    let client = build_client(
+        &app_data_root,
+        live_identity.clone(),
+        indexed_message_search,
+    )
+    .await?;
 
     // Session install must go through lifecycle (guardrail: no Client::restore_session under matrix/auth/).
     let material = SessionMaterial::from_matrix_tokens(
@@ -578,6 +594,7 @@ pub(super) async fn install_session_from_register_secrets(
         )
         .map_err(map_pack_read_subscribe_error)?,
     );
+    image_packs.set_indexed_message_search(indexed_message_search);
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
     let presence = Arc::new(
@@ -799,6 +816,7 @@ pub async fn matrix_restore_session(
     app: AppHandle,
     state: State<'_, MatrixAuthState>,
     core: State<'_, Arc<synara_core::Core>>,
+    indexed_message_search: Option<bool>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
     if let Some(active) = session.as_ref() {
@@ -808,7 +826,8 @@ pub async fn matrix_restore_session(
     let app_data_root = app_data_root(&app)?;
     let identity = read_active_identity(&app_data_root)?;
     let account = account_identity(&identity)?;
-    let client = build_client(&app_data_root, account.clone()).await?;
+    let indexed_message_search = indexed_message_search.unwrap_or(true);
+    let client = build_client(&app_data_root, account.clone(), indexed_message_search).await?;
     let restored =
         restore_session_from_vault(&client, &account, &KeyringSessionMaterialVault::new())
             .await
@@ -849,6 +868,7 @@ pub async fn matrix_restore_session(
         )
         .map_err(map_pack_read_subscribe_error)?,
     );
+    image_packs.set_indexed_message_search(indexed_message_search);
     let typing =
         Arc::new(NativeTypingOwner::start(&client, session_generation).map_err(map_typing_error)?);
     let presence = Arc::new(
@@ -1118,6 +1138,7 @@ fn map_store_client_build_error(error: ClientBuilderError) -> MatrixAuthCommandE
 pub(super) async fn build_client(
     app_data_root: &Path,
     identity: AccountIdentity,
+    indexed_message_search: bool,
 ) -> Result<Client, MatrixAuthCommandError> {
     // Probe before migration creates the account layout or revision manifest.
     // Once an account root already exists, a Keychain miss must fail closed:
@@ -1142,9 +1163,8 @@ pub(super) async fn build_client(
     migrate_store_to_current(&store_paths).map_err(map_store_migration_error)?;
     let config =
         ClientBuildConfig::product_default(app_data_root, identity.clone(), Some(store_key))
-            .map_err(|_| {
-                MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed")
-            })?;
+            .map_err(|_| MatrixAuthCommandError::unavailable("p3.2-login-store-migration-failed"))?
+            .with_indexed_message_search(indexed_message_search);
     let client = build_unauthenticated_client(&config)
         .await
         .map_err(map_store_client_build_error)?;
