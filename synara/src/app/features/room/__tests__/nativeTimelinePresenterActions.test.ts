@@ -237,6 +237,7 @@ test('thread chip and reply-in-thread open a dedicated thread timeline with Back
   assert.match(presenter, /onOpenThread=\{openThread\}/);
   assert.match(presenter, /activeThreadRoot=\{threadRootId\}/);
   assert.match(presenter, /setPreferLiveBottom\(true\)/);
+  assert.match(presenter, /publishNativeThreadRoot\(roomId, threadRootId\)/);
   assert.doesNotMatch(presenter, /hide_threaded_events:\s*true/);
 });
 

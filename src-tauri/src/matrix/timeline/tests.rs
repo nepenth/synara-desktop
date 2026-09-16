@@ -904,12 +904,12 @@ mod composer_pure {
             thread_root_event_id: None,
         };
         let draft = registry.set("!room:example.org".into(), draft);
-        assert_eq!(registry.get("!room:example.org"), Some(&draft));
-        assert!(registry.get("!other:example.org").is_none());
+        assert_eq!(registry.get("!room:example.org", None), Some(&draft));
+        assert!(registry.get("!other:example.org", None).is_none());
         assert!(registry
-            .compare_and_clear("!room:example.org", draft.draft_revision)
+            .compare_and_clear("!room:example.org", None, draft.draft_revision)
             .is_none());
-        assert!(registry.get("!room:example.org").is_none());
+        assert!(registry.get("!room:example.org", None).is_none());
         assert_eq!(
             reply_draft_readback("!room:example.org".into(), "cleared", None).status,
             "cleared"

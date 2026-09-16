@@ -26,6 +26,9 @@ pub struct NativeComposerSetReplyDraftRequest {
 #[serde(rename_all = "camelCase")]
 pub struct NativeComposerReplyDraftRoomRequest {
     pub room_id: String,
+    /// Live drafts omit this; thread-view drafts key the same room separately.
+    #[serde(default)]
+    pub thread_root_event_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
@@ -35,6 +38,9 @@ pub struct NativeComposerClearReplyDraftRequest {
     /// Core-issued opaque identity of the exact draft the actor consumed.
     /// A different current draft is returned unchanged as authoritative readback.
     pub expected_draft_revision: u64,
+    /// Live drafts omit this; thread-view drafts key the same room separately.
+    #[serde(default)]
+    pub thread_root_event_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,9 +85,25 @@ where
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct ComposerDraftKey {
+    room_id: String,
+    thread_root: Option<String>,
+}
+
+fn composer_draft_key(room_id: &str, thread_root: Option<&str>) -> ComposerDraftKey {
+    ComposerDraftKey {
+        room_id: room_id.to_owned(),
+        thread_root: thread_root
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(str::to_owned),
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ComposerDraftRegistry {
-    by_room: HashMap<String, NativeComposerReplyDraft>,
+    by_slot: HashMap<ComposerDraftKey, NativeComposerReplyDraft>,
     next_revision: u64,
 }
 
@@ -99,30 +121,38 @@ impl ComposerDraftRegistry {
         // which is reserved for an unregistered draft assembled by the loader.
         self.next_revision = self.next_revision.checked_add(1).unwrap_or(1);
         draft.draft_revision = self.next_revision;
-        self.by_room.insert(room_id, draft.clone());
+        let key = composer_draft_key(&room_id, draft.thread_root_event_id.as_deref());
+        self.by_slot.insert(key, draft.clone());
         draft
     }
 
-    pub fn get(&self, room_id: &str) -> Option<&NativeComposerReplyDraft> {
-        self.by_room.get(room_id)
+    pub fn get(
+        &self,
+        room_id: &str,
+        thread_root: Option<&str>,
+    ) -> Option<&NativeComposerReplyDraft> {
+        self.by_slot.get(&composer_draft_key(room_id, thread_root))
     }
 
-    /// Atomically clears the room draft only when the send-time target is still
-    /// current. The Core-issued revision distinguishes repeated selections and
-    /// classic versus threaded replies to the same event. Returns the newer
-    /// current draft when the expected draft was superseded while an operation
-    /// was in flight.
+    /// Atomically clears the room (or thread) draft only when the send-time
+    /// target is still current. The Core-issued revision distinguishes repeated
+    /// selections in the same slot. Live and thread slots do not share a key, so
+    /// a classic room reply cannot clobber or clear a thread reply. Returns the
+    /// newer current draft when the expected draft was superseded while an
+    /// operation was in flight.
     pub fn compare_and_clear(
         &mut self,
         room_id: &str,
+        thread_root: Option<&str>,
         expected_draft_revision: u64,
     ) -> Option<NativeComposerReplyDraft> {
-        if let Some(current) = self.by_room.get(room_id) {
+        let key = composer_draft_key(room_id, thread_root);
+        if let Some(current) = self.by_slot.get(&key) {
             if current.draft_revision != expected_draft_revision {
                 return Some(current.clone());
             }
         }
-        self.by_room.remove(room_id);
+        self.by_slot.remove(&key);
         None
     }
 }
@@ -157,12 +187,12 @@ mod tests {
         };
         let draft = registry.set("!room:example.org".into(), draft);
         assert_eq!(draft.draft_revision, 1);
-        assert_eq!(registry.get("!room:example.org"), Some(&draft));
-        assert!(registry.get("!other:example.org").is_none());
+        assert_eq!(registry.get("!room:example.org", None), Some(&draft));
+        assert!(registry.get("!other:example.org", None).is_none());
         assert!(registry
-            .compare_and_clear("!room:example.org", draft.draft_revision)
+            .compare_and_clear("!room:example.org", None, draft.draft_revision)
             .is_none());
-        assert!(registry.get("!room:example.org").is_none());
+        assert!(registry.get("!room:example.org", None).is_none());
         assert_eq!(
             reply_draft_readback("!room:example.org".into(), "cleared", None).status,
             "cleared"
@@ -194,33 +224,22 @@ mod tests {
         let newer_draft = registry.set(room_id.into(), newer_draft);
 
         assert_eq!(
-            registry.compare_and_clear(room_id, sent_draft.draft_revision),
+            registry.compare_and_clear(room_id, None, sent_draft.draft_revision),
             Some(newer_draft.clone())
         );
-        assert_eq!(registry.get(room_id), Some(&newer_draft));
+        assert_eq!(registry.get(room_id, None), Some(&newer_draft));
         assert_eq!(
-            registry.compare_and_clear(room_id, newer_draft.draft_revision),
+            registry.compare_and_clear(room_id, None, newer_draft.draft_revision),
             None
         );
-        assert!(registry.get(room_id).is_none());
+        assert!(registry.get(room_id, None).is_none());
     }
 
     #[test]
-    fn compare_and_clear_preserves_same_event_with_a_new_relation_or_revision() {
+    fn compare_and_clear_preserves_a_newer_revision_in_the_same_slot() {
         let mut registry = ComposerDraftRegistry::new();
         let room_id = "!room:example.org";
-        let classic = registry.set(
-            room_id.into(),
-            NativeComposerReplyDraft {
-                draft_revision: 0,
-                event_id: "$same:example.org".into(),
-                sender_id: "@alice:example.org".into(),
-                body: "same target".into(),
-                formatted_body: None,
-                thread_root_event_id: None,
-            },
-        );
-        let threaded = registry.set(
+        let first = registry.set(
             room_id.into(),
             NativeComposerReplyDraft {
                 draft_revision: 0,
@@ -231,26 +250,64 @@ mod tests {
                 thread_root_event_id: Some("$same:example.org".into()),
             },
         );
-
-        assert_eq!(
-            registry.compare_and_clear(room_id, classic.draft_revision),
-            Some(threaded.clone())
-        );
-        assert_eq!(registry.get(room_id), Some(&threaded));
-
         let repeated = registry.set(
             room_id.into(),
             NativeComposerReplyDraft {
                 draft_revision: 0,
-                ..threaded.clone()
+                ..first.clone()
             },
         );
-        assert_ne!(threaded.draft_revision, repeated.draft_revision);
+        assert_ne!(first.draft_revision, repeated.draft_revision);
         assert_eq!(
-            registry.compare_and_clear(room_id, threaded.draft_revision),
+            registry.compare_and_clear(room_id, Some("$same:example.org"), first.draft_revision),
             Some(repeated.clone())
         );
-        assert_eq!(registry.get(room_id), Some(&repeated));
+        assert_eq!(
+            registry.get(room_id, Some("$same:example.org")),
+            Some(&repeated)
+        );
+    }
+
+    #[test]
+    fn live_and_thread_drafts_do_not_clobber() {
+        let mut registry = ComposerDraftRegistry::new();
+        let room_id = "!room:example.org";
+        let live = registry.set(
+            room_id.into(),
+            NativeComposerReplyDraft {
+                draft_revision: 0,
+                event_id: "$live:example.org".into(),
+                sender_id: "@alice:example.org".into(),
+                body: "live target".into(),
+                formatted_body: None,
+                thread_root_event_id: None,
+            },
+        );
+        let threaded = registry.set(
+            room_id.into(),
+            NativeComposerReplyDraft {
+                draft_revision: 0,
+                event_id: "$same:example.org".into(),
+                sender_id: "@alice:example.org".into(),
+                body: "thread target".into(),
+                formatted_body: None,
+                thread_root_event_id: Some("$same:example.org".into()),
+            },
+        );
+
+        assert_eq!(registry.get(room_id, None), Some(&live));
+        assert_eq!(
+            registry.get(room_id, Some("$same:example.org")),
+            Some(&threaded)
+        );
+        assert!(registry
+            .compare_and_clear(room_id, None, live.draft_revision)
+            .is_none());
+        assert!(registry.get(room_id, None).is_none());
+        assert_eq!(
+            registry.get(room_id, Some("$same:example.org")),
+            Some(&threaded)
+        );
     }
 
     #[test]
@@ -264,5 +321,33 @@ mod tests {
             .unwrap();
         assert!(request.start_thread);
         assert_eq!(request.event_id, "$evt:example.org");
+    }
+
+    #[test]
+    fn get_and_clear_requests_accept_optional_thread_root() {
+        let get: NativeComposerReplyDraftRoomRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "threadRootEventId": "$root:example.org"
+        }))
+        .unwrap();
+        assert_eq!(
+            get.thread_root_event_id.as_deref(),
+            Some("$root:example.org")
+        );
+        let live_get: NativeComposerReplyDraftRoomRequest =
+            serde_json::from_value(serde_json::json!({ "roomId": "!room:example.org" })).unwrap();
+        assert!(live_get.thread_root_event_id.is_none());
+        let clear: NativeComposerClearReplyDraftRequest =
+            serde_json::from_value(serde_json::json!({
+                "roomId": "!room:example.org",
+                "expectedDraftRevision": 3u64,
+                "threadRootEventId": "$root:example.org"
+            }))
+            .unwrap();
+        assert_eq!(clear.expected_draft_revision, 3);
+        assert_eq!(
+            clear.thread_root_event_id.as_deref(),
+            Some("$root:example.org")
+        );
     }
 }

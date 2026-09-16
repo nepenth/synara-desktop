@@ -1007,6 +1007,8 @@ struct MatrixComposerSetReplyDraftRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixComposerReplyDraftRoomRequest {
     room_id: String,
+    #[serde(default)]
+    thread_root_event_id: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for composer compare-and-clear.
@@ -1015,6 +1017,8 @@ struct MatrixComposerReplyDraftRoomRequest {
 struct MatrixComposerClearReplyDraftRequest {
     room_id: String,
     expected_draft_revision: u64,
+    #[serde(default)]
+    thread_root_event_id: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
@@ -3441,7 +3445,11 @@ fn matrix_composer_clear_reply_draft(
                 .with_diagnostic("p2-composer-clear-reply-draft-no-session")
         })?;
         let readback: NativeComposerReplyDraftReadback = owner
-            .clear_reply_draft(&payload.room_id, payload.expected_draft_revision)
+            .clear_reply_draft(
+                &payload.room_id,
+                payload.expected_draft_revision,
+                payload.thread_root_event_id.as_deref(),
+            )
             .await
             .map_err(timeline_action_owner_error)?;
         serde_json::to_value(readback)
@@ -3461,7 +3469,7 @@ fn matrix_composer_get_reply_draft(
                 .with_diagnostic("p2-composer-get-reply-draft-no-session")
         })?;
         let readback: NativeComposerReplyDraftReadback = owner
-            .get_reply_draft(&payload.room_id)
+            .get_reply_draft(&payload.room_id, payload.thread_root_event_id.as_deref())
             .await
             .map_err(timeline_action_owner_error)?;
         serde_json::to_value(readback)

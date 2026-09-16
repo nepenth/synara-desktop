@@ -109,6 +109,31 @@ const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+/// Live and permalink Event timelines hide in-thread replies now that
+/// `NativeTimelineOpenPosition::Thread` owns the threaded stream.
+const HIDE_THREADED_EVENTS: bool = true;
+
+fn permalink_event_thread_mode() -> TimelineEventFocusThreadMode {
+    TimelineEventFocusThreadMode::Automatic {
+        hide_threaded_events: HIDE_THREADED_EVENTS,
+    }
+}
+
+fn optional_draft_thread_root(
+    thread_root_event_id: Option<&str>,
+) -> Result<Option<&str>, &'static str> {
+    match thread_root_event_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        None => Ok(None),
+        Some(thread_root) => {
+            parse_action_event_id(thread_root, "v-timeline-reply-draft-invalid-event-id")?;
+            Ok(Some(thread_root))
+        }
+    }
+}
+
 const AGENT_APPROVAL_SIDE_EFFECT_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_TIMELINE_ACTION_REASON_CHARS: usize = 512;
 
@@ -778,9 +803,7 @@ impl NativeTimelineOwner {
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
                     num_context_events: 0,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
@@ -1651,14 +1674,16 @@ impl NativeTimelineOwner {
         &self,
         room_id: &str,
         expected_draft_revision: u64,
+        thread_root_event_id: Option<&str>,
     ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
+        let thread_root = optional_draft_thread_root(thread_root_event_id)?;
         let room_id_string = room_id.to_string();
-        let superseding_draft = self
-            .drafts
-            .lock()
-            .await
-            .compare_and_clear(&room_id_string, expected_draft_revision);
+        let superseding_draft = self.drafts.lock().await.compare_and_clear(
+            &room_id_string,
+            thread_root,
+            expected_draft_revision,
+        );
         Ok(match superseding_draft {
             Some(draft) => reply_draft_readback(room_id_string, "set", Some(draft)),
             None => reply_draft_readback(room_id_string, "cleared", None),
@@ -1668,10 +1693,17 @@ impl NativeTimelineOwner {
     pub async fn get_reply_draft(
         &self,
         room_id: &str,
+        thread_root_event_id: Option<&str>,
     ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
+        let thread_root = optional_draft_thread_root(thread_root_event_id)?;
         let room_id_string = room_id.to_string();
-        let draft = self.drafts.lock().await.get(&room_id_string).cloned();
+        let draft = self
+            .drafts
+            .lock()
+            .await
+            .get(&room_id_string, thread_root)
+            .cloned();
         Ok(reply_draft_readback(
             room_id_string,
             if draft.is_some() { "set" } else { "empty" },
@@ -1716,6 +1748,9 @@ impl NativeTimelineRegistry {
             // encryption state before performing network writes.
             let is_encrypted = room.encryption_state().is_encrypted();
             let timeline = TimelineBuilder::new(&room)
+                .with_focus(TimelineFocus::Live {
+                    hide_threaded_events: HIDE_THREADED_EVENTS,
+                })
                 .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
                 .build()
                 .await
@@ -1892,9 +1927,7 @@ impl NativeTimelineRegistry {
                         .with_focus(TimelineFocus::Event {
                             target: event_id.clone(),
                             num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                            thread_mode: TimelineEventFocusThreadMode::Automatic {
-                                hide_threaded_events: false,
-                            },
+                            thread_mode: permalink_event_thread_mode(),
                         })
                         .build()
                         .await
@@ -2426,9 +2459,7 @@ impl NativeTimelineRegistry {
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
                     num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
@@ -2570,9 +2601,7 @@ impl NativeTimelineRegistry {
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
                     num_context_events: 0,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
@@ -2780,9 +2809,7 @@ impl NativeTimelineRegistry {
                 .with_focus(TimelineFocus::Event {
                     target: target_event_id.clone(),
                     num_context_events: 0,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await

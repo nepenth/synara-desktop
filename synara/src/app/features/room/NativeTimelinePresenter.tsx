@@ -30,6 +30,7 @@ import {
 import { EmojiBoard } from '../../components/emoji-board';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
 import { setNativeComposerReplyDraft } from './nativeComposerDraft';
+import { publishNativeThreadRoot } from './nativeThreadViewContext';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
 import {
   nativeReactionViewFromEventReadback,
@@ -2178,6 +2179,15 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     setThreadScrollEventId(undefined);
     setPreferLiveBottom(false);
   }, [eventId, roomId]);
+  useEffect(() => {
+    publishNativeThreadRoot(roomId, threadRootId);
+  }, [roomId, threadRootId]);
+  useEffect(
+    () => () => {
+      publishNativeThreadRoot(roomId, undefined);
+    },
+    [roomId]
+  );
 
   const openingViewport = useMemo(
     () =>
