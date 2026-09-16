@@ -875,6 +875,10 @@ pub async fn matrix_logout(
     let _remote_logout_succeeded = active.client.matrix_auth().logout().await.is_ok();
     active.join_rules.retire();
     active.notification_observations.retire();
+    // TM-T10: cancel every WidgetDriver::run and destroy every widget webview
+    // before the session is dropped. The owner's Drop is a best-effort
+    // `try_lock` fallback, not the logout guarantee.
+    active.widgets.retire_and_close().await;
     active
         .sync
         .stop()
