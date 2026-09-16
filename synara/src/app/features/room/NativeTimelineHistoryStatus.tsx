@@ -28,7 +28,10 @@ const copyForEdge = (edge: 'backward' | 'forward') =>
         loadMore: 'Load newer messages',
       };
 
-export function NativeTimelineHistoryStatus({
+const edgeInsetStyle = (reserveRail?: boolean): React.CSSProperties | undefined =>
+  reserveRail ? undefined : { right: 0 };
+
+function NativeTimelineHistoryStatusView({
   edge,
   kind,
   errorMessage,
@@ -41,6 +44,20 @@ export function NativeTimelineHistoryStatus({
   const showDate = Boolean(visibleDateLabel) && kind === 'hidden';
   if (kind === 'hidden' && !showDate) return null;
 
+  if (kind === 'hidden' && showDate) {
+    return (
+      <div className={htmlCss.HistoryStatusDateChip} style={edgeInsetStyle(reserveRail)}>
+        <div
+          className={htmlCss.HistoryStatusCard}
+          style={{ padding: `${config.space.S100} ${config.space.S300}` }}
+          data-timeline-history-status="date"
+        >
+          <Text size="T200">{visibleDateLabel}</Text>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className={
@@ -49,8 +66,8 @@ export function NativeTimelineHistoryStatus({
           : htmlCss.HistoryStatusOverlayForward
       }
       style={{
-        pointerEvents: kind === 'hidden' ? 'none' : 'auto',
-        ...(reserveRail ? undefined : { right: 0 }),
+        pointerEvents: 'auto',
+        ...edgeInsetStyle(reserveRail),
       }}
     >
       {kind === 'loading' ? (
@@ -102,15 +119,8 @@ export function NativeTimelineHistoryStatus({
           <Text size="B300">{copy.loadMore}</Text>
         </Button>
       ) : null}
-      {showDate ? (
-        <div
-          className={htmlCss.HistoryStatusCard}
-          style={{ padding: `${config.space.S100} ${config.space.S300}` }}
-          data-timeline-history-status="date"
-        >
-          <Text size="T200">{visibleDateLabel}</Text>
-        </div>
-      ) : null}
     </div>
   );
 }
+
+export const NativeTimelineHistoryStatus = React.memo(NativeTimelineHistoryStatusView);

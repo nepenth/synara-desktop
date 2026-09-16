@@ -826,5 +826,9 @@ mod localhost_port_tests {
             timeline_media_content_type(b"arbitrary file bytes", None),
             None
         );
+        assert_eq!(
+            timeline_media_content_type(b"# heading\n", Some("text/markdown")),
+            None
+        );
     }
 }

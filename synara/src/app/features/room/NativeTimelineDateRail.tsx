@@ -1,6 +1,7 @@
-import React, { useCallback, useRef, useState } from 'react';
-import { Text, Tooltip, TooltipProvider } from 'folds';
+import React, { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { Text } from 'folds';
 import {
+  activeTimelineHistoryMarkIndex,
   formatTimelineHistoryMarkLabel,
   rowIndexForRailRatio,
   type TimelineHistoryMark,
@@ -10,9 +11,9 @@ import * as htmlCss from './nativeTimelineHtml.css';
 type NativeTimelineDateRailProps = {
   marks: readonly TimelineHistoryMark[];
   rowCount: number;
-  visibleStartIndex: number;
-  activeMarkIndex: number;
   hour24Clock: boolean;
+  scrollRef: React.RefObject<HTMLDivElement | null>;
+  getVisibleStartIndex: () => number;
   onJumpToIndex: (index: number) => void;
 };
 
@@ -28,18 +29,64 @@ const markAtOrBefore = (
   return current;
 };
 
-export function NativeTimelineDateRail({
+export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail({
   marks,
   rowCount,
-  visibleStartIndex,
-  activeMarkIndex,
   hour24Clock,
+  scrollRef,
+  getVisibleStartIndex,
   onJumpToIndex,
 }: NativeTimelineDateRailProps) {
   const trackRef = useRef<HTMLDivElement>(null);
+  const thumbRef = useRef<HTMLDivElement>(null);
+  const labelRef = useRef<HTMLDivElement>(null);
+  const ticksRef = useRef<Array<HTMLButtonElement | null>>([]);
+  const lastActiveMarkRef = useRef(-1);
   const [hoverLabel, setHoverLabel] = useState<string>();
-  const activeMark = activeMarkIndex >= 0 ? marks[activeMarkIndex] : undefined;
-  const thumbRatio = rowCount <= 1 ? 0 : visibleStartIndex / Math.max(1, rowCount - 1);
+
+  const paintThumb = useCallback(
+    (index: number, updateAria: boolean) => {
+      const track = trackRef.current;
+      const thumb = thumbRef.current;
+      if (!track || !thumb || rowCount <= 0) return;
+      const ratio = rowCount <= 1 ? 0 : index / Math.max(1, rowCount - 1);
+      const y = ratio * track.clientHeight;
+      thumb.style.transform = `translate3d(0, ${y}px, 0)`;
+      if (labelRef.current) {
+        labelRef.current.style.transform = `translate3d(0, ${y}px, 0) translateY(-50%)`;
+      }
+      const active = activeTimelineHistoryMarkIndex(marks, index);
+      if (!updateAria && active === lastActiveMarkRef.current) return;
+      lastActiveMarkRef.current = active;
+      track.setAttribute('aria-valuenow', String(index));
+      const mark = active >= 0 ? marks[active] : markAtOrBefore(marks, index);
+      const label = mark ? formatTimelineHistoryMarkLabel(mark, hour24Clock) : undefined;
+      if (label) track.setAttribute('aria-valuetext', label);
+      else track.removeAttribute('aria-valuetext');
+      ticksRef.current.forEach((tick, tickIndex) => {
+        if (!tick) return;
+        if (tickIndex === active) tick.setAttribute('aria-current', 'true');
+        else tick.removeAttribute('aria-current');
+      });
+    },
+    [hour24Clock, marks, rowCount]
+  );
+
+  useLayoutEffect(() => {
+    const scrollEl = scrollRef.current;
+    const sync = () => paintThumb(getVisibleStartIndex(), false);
+    sync();
+    if (!scrollEl) return undefined;
+    const onScroll = () => paintThumb(getVisibleStartIndex(), false);
+    scrollEl.addEventListener('scroll', onScroll, { passive: true });
+    const track = trackRef.current;
+    const observer = track ? new ResizeObserver(sync) : undefined;
+    if (track) observer?.observe(track);
+    return () => {
+      scrollEl.removeEventListener('scroll', onScroll);
+      observer?.disconnect();
+    };
+  }, [getVisibleStartIndex, paintThumb, scrollRef]);
 
   const jumpFromClientY = useCallback(
     (clientY: number) => {
@@ -51,8 +98,9 @@ export function NativeTimelineDateRail({
       onJumpToIndex(index);
       const mark = markAtOrBefore(marks, index);
       setHoverLabel(mark ? formatTimelineHistoryMarkLabel(mark, hour24Clock) : undefined);
+      paintThumb(index, true);
     },
-    [hour24Clock, marks, onJumpToIndex, rowCount]
+    [hour24Clock, marks, onJumpToIndex, paintThumb, rowCount]
   );
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -68,6 +116,7 @@ export function NativeTimelineDateRail({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
+    setHoverLabel(undefined);
   };
 
   return (
@@ -81,66 +130,51 @@ export function NativeTimelineDateRail({
         aria-orientation="vertical"
         aria-valuemin={0}
         aria-valuemax={Math.max(0, rowCount - 1)}
-        aria-valuenow={visibleStartIndex}
-        aria-valuetext={
-          activeMark ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock) : undefined
-        }
+        aria-valuenow={0}
         tabIndex={0}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         onKeyDown={(event) => {
+          const startIndex = getVisibleStartIndex();
           if (event.key === 'ArrowUp' || event.key === 'Home') {
             event.preventDefault();
-            onJumpToIndex(Math.max(0, visibleStartIndex - (event.key === 'Home' ? rowCount : 8)));
+            onJumpToIndex(Math.max(0, startIndex - (event.key === 'Home' ? rowCount : 8)));
           }
           if (event.key === 'ArrowDown' || event.key === 'End') {
             event.preventDefault();
             onJumpToIndex(
-              Math.min(rowCount - 1, visibleStartIndex + (event.key === 'End' ? rowCount : 8))
+              Math.min(rowCount - 1, startIndex + (event.key === 'End' ? rowCount : 8))
             );
           }
         }}
       >
-        <div className={htmlCss.DateRailThumb} style={{ top: `${thumbRatio * 100}%` }} />
+        <div ref={thumbRef} className={htmlCss.DateRailThumb} />
       </div>
       {marks.map((mark, index) => {
         const ratio = rowCount <= 1 ? 0 : mark.index / Math.max(1, rowCount - 1);
         const label = formatTimelineHistoryMarkLabel(mark, hour24Clock);
         return (
-          <TooltipProvider
+          <button
             key={mark.key}
-            position="Left"
-            offset={8}
-            tooltip={
-              <Tooltip>
-                <Text size="T200">{label}</Text>
-              </Tooltip>
-            }
-          >
-            {(triggerRef) => (
-              <button
-                ref={triggerRef}
-                type="button"
-                className={htmlCss.DateRailTick}
-                style={{ top: `${ratio * 100}%` }}
-                aria-label={`Jump to ${label}`}
-                aria-current={index === activeMarkIndex ? 'true' : undefined}
-                onClick={() => onJumpToIndex(mark.index)}
-              />
-            )}
-          </TooltipProvider>
+            ref={(node) => {
+              ticksRef.current[index] = node;
+            }}
+            type="button"
+            className={htmlCss.DateRailTick}
+            style={{ top: `${ratio * 100}%` }}
+            title={label}
+            aria-label={`Jump to ${label}`}
+            onClick={() => onJumpToIndex(mark.index)}
+          />
         );
       })}
-      {hoverLabel || activeMark ? (
-        <div className={htmlCss.DateRailLabel} style={{ top: `${thumbRatio * 100}%` }}>
-          <Text size="T200">
-            {hoverLabel ??
-              (activeMark ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock) : '')}
-          </Text>
+      {hoverLabel ? (
+        <div ref={labelRef} className={htmlCss.DateRailLabel}>
+          <Text size="T200">{hoverLabel}</Text>
         </div>
       ) : null}
     </div>
   );
-}
+});

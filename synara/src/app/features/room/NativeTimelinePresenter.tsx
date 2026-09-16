@@ -61,6 +61,7 @@ import {
   selectNativeTimelinePinAction,
   toggleNativePollSelection,
 } from './nativeTimelineActions';
+import { saveNativeTimelineFileAttachment } from './nativeTimelineFileSave';
 import {
   editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
@@ -1140,6 +1141,41 @@ const NativeTimelineRowActionSurface = ({
   );
 };
 
+const NativeTimelineFileDownload = ({
+  handleId,
+  filename,
+  mimeType,
+  onActionError,
+}: {
+  handleId: string;
+  filename?: string;
+  mimeType?: string;
+  onActionError?: (message: string) => void;
+}) => {
+  const [busy, setBusy] = useState(false);
+  const label = filename?.trim() || 'Download file';
+  return (
+    <button
+      type="button"
+      className={htmlCss.FileDownload}
+      data-native-timeline-file-download="true"
+      aria-label={`Download ${label}`}
+      disabled={busy}
+      onClick={() => {
+        if (busy) return;
+        setBusy(true);
+        void saveNativeTimelineFileAttachment({ handleId, filename, mimeType })
+          .catch((error) => {
+            onActionError?.(error instanceof Error ? error.message : 'Could not download file.');
+          })
+          .finally(() => setBusy(false));
+      }}
+    >
+      {busy ? 'Downloading…' : label}
+    </button>
+  );
+};
+
 const NativeTimelineMedia = ({
   media,
   messageType,
@@ -1147,6 +1183,7 @@ const NativeTimelineMedia = ({
   caption,
   formattedCaption,
   sticker,
+  onActionError,
 }: {
   media?: NativeTimelineMediaHandle;
   messageType?: string;
@@ -1154,9 +1191,38 @@ const NativeTimelineMedia = ({
   caption?: string;
   formattedCaption?: string;
   sticker?: boolean;
+  onActionError?: (message: string) => void;
 }) => {
   const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
   const reservedBox = sticker ? NATIVE_TIMELINE_STICKER_MAX_PX : NATIVE_TIMELINE_MEDIA_MAX_PX;
+  const captionView = caption ? (
+    formattedCaption ? (
+      <NativeFormattedBody html={formattedCaption} fallbackBody={caption} />
+    ) : (
+      <Text size="T300" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+        {caption}
+      </Text>
+    )
+  ) : null;
+  if (messageType === 'file') {
+    if (!media?.handleId) return captionView;
+    return (
+      <Box direction="Column" gap="100">
+        <NativeTimelineFileDownload
+          handleId={media.handleId}
+          filename={filename}
+          mimeType={media.mimeType}
+          onActionError={onActionError}
+        />
+        {captionView}
+        {media.mimeType ? (
+          <Text size="T200" className={htmlCss.Metadata}>
+            {media.mimeType}
+          </Text>
+        ) : null}
+      </Box>
+    );
+  }
   if (!mediaSrc) {
     if (sticker) return <Text size="T300">Sticker media is unavailable.</Text>;
     const reserved = reservedNativeTimelineMediaSize(
@@ -1173,15 +1239,6 @@ const NativeTimelineMedia = ({
   if (sticker) {
     return <img src={mediaSrc} alt="Sticker" style={mediaStyle(media, reservedBox)} />;
   }
-  const captionView = caption ? (
-    formattedCaption ? (
-      <NativeFormattedBody html={formattedCaption} fallbackBody={caption} />
-    ) : (
-      <Text size="T300" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
-        {caption}
-      </Text>
-    )
-  ) : null;
   if (messageType === 'image') {
     return (
       <Box direction="Column" gap="100">
@@ -1216,21 +1273,6 @@ const NativeTimelineMedia = ({
           {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
         />
         {captionView}
-      </Box>
-    );
-  }
-  if (messageType === 'file') {
-    return (
-      <Box direction="Column" gap="100">
-        <a href={mediaSrc} download>
-          {filename || 'Download file'}
-        </a>
-        {captionView}
-        {media?.mimeType ? (
-          <Text size="T200" className={htmlCss.Metadata}>
-            {media.mimeType}
-          </Text>
-        ) : null}
       </Box>
     );
   }
@@ -1890,6 +1932,7 @@ const NativeTimelineRow = ({
                     filename={row.mediaFilename}
                     caption={row.mediaCaption}
                     formattedCaption={row.formattedBody}
+                    onActionError={onActionError}
                   />
                   <NativeTimelineReactionPills
                     reactions={row.reactions}
@@ -2431,6 +2474,10 @@ export function NativeTimelinePresenter({
     overscan: 8,
   });
   const historyMarks = useMemo(() => collectTimelineHistoryMarks(rows), [rows]);
+  const getVisibleStartIndex = useCallback(
+    () => virtualizer.getVirtualItems()[0]?.index ?? 0,
+    [virtualizer]
+  );
   const jumpToHistoryIndex = useCallback(
     (index: number) => {
       followingLiveRef.current = false;
@@ -3362,9 +3409,9 @@ export function NativeTimelinePresenter({
           <NativeTimelineDateRail
             marks={historyMarks}
             rowCount={rows.length}
-            visibleStartIndex={visibleStartIndex}
-            activeMarkIndex={activeMarkIndex}
             hour24Clock={hour24Clock}
+            scrollRef={scrollRef}
+            getVisibleStartIndex={getVisibleStartIndex}
             onJumpToIndex={jumpToHistoryIndex}
           />
         ) : null}

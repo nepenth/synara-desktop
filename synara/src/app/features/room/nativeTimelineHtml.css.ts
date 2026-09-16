@@ -251,6 +251,28 @@ export const Metadata = style({
   color: 'var(--synara-content-secondary)',
 });
 
+export const FileDownload = style({
+  appearance: 'none',
+  background: 'none',
+  border: 0,
+  padding: 0,
+  color: color.Primary.Main,
+  cursor: 'pointer',
+  textAlign: 'left',
+  textDecoration: 'underline',
+  font: 'inherit',
+  selectors: {
+    '&:disabled': {
+      cursor: 'progress',
+      textDecoration: 'none',
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: toRem(2),
+    },
+  },
+});
+
 export const ReplySurface = style({
   width: '100%',
   maxWidth: '100%',
@@ -731,6 +753,19 @@ export const HistoryStatusCardError = style({
   color: color.Critical.OnContainer,
 });
 
+export const HistoryStatusDateChip = style({
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: toRem(56),
+  zIndex: 4,
+  display: 'flex',
+  justifyContent: 'center',
+  padding: config.space.S200,
+  pointerEvents: 'none',
+  contain: 'layout style',
+});
+
 export const DateRail = style({
   position: 'absolute',
   top: config.space.S700,
@@ -739,6 +774,8 @@ export const DateRail = style({
   width: toRem(56),
   zIndex: 2,
   pointerEvents: 'none',
+  contain: 'layout style',
+  isolation: 'isolate',
 });
 
 export const DateRailTrack = style({
@@ -755,6 +792,7 @@ export const DateRailTrack = style({
 
 export const DateRailThumb = style({
   position: 'absolute',
+  top: 0,
   left: toRem(-4),
   width: toRem(12),
   height: toRem(18),
@@ -762,6 +800,7 @@ export const DateRailThumb = style({
   borderRadius: config.radii.R400,
   background: color.Primary.Main,
   pointerEvents: 'none',
+  willChange: 'transform',
 });
 
 export const DateRailTick = style({
@@ -786,8 +825,8 @@ export const DateRailTick = style({
 
 export const DateRailLabel = style({
   position: 'absolute',
+  top: 0,
   right: toRem(32),
-  transform: 'translateY(-50%)',
   color: color.Surface.OnContainer,
   pointerEvents: 'none',
   whiteSpace: 'nowrap',
