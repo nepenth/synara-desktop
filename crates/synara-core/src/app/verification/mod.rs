@@ -16,6 +16,8 @@ mod native;
 mod publication;
 #[cfg(test)]
 mod publication_tests;
+#[cfg(test)]
+mod two_device_tests;
 
 pub use error::VerificationError;
 pub use inbox::{

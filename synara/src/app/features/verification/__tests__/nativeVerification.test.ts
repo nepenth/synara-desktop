@@ -39,6 +39,18 @@ test('SAS start projection follows Matrix request ownership', () => {
   );
   assert.equal(
     verificationRequestNeedsSasStart({
+      ...request('outgoing', 'started'),
+      qr: { imageDataUrl: "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>", scanned: false },
+    }),
+    false
+  );
+  assert.equal(
+    verificationRequestNeedsSasStart(request('outgoing', 'started')),
+    false,
+    'desktop auto-start is Ready-only; Core falls back to SAS when a QR image cannot be shown'
+  );
+  assert.equal(
+    verificationRequestNeedsSasStart({
       ...request('outgoing', 'sas_ready'),
       sas: { emoji: [{ symbol: '🐶', description: 'Dog' }] },
     }),

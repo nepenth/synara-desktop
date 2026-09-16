@@ -1745,9 +1745,16 @@ final class SynaraCoreBindingsTests: XCTestCase {
             .failed
         )
         XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
+        XCTAssertTrue(
+            SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"),
+            "Outgoing Started must still offer SAS when iOS cannot show QR"
+        )
+        XCTAssertTrue(
+            SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing", hasShownQr: true),
+            "A QR DTO must not skip SAS start on iOS"
+        )
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
-        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
         XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "done"))
         XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "cancelled"))
@@ -1823,7 +1830,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
             ),
-            .sasStarted
+            .accepted,
+            "Outgoing Started still offers Start Comparison because iOS cannot render QR"
         )
     }
 

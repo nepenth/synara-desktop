@@ -3797,10 +3797,13 @@ impl SharedCore {
                 push_owner_update(&queue, "verification", update.session_generation, None);
             })
         };
-        let verification = Arc::new(NativeVerificationOwner::with_emit(
+        // SharedCore is the iOS host. It cannot render the show-QR SVG, so
+        // advertise SAS only and never generate a code the sheet cannot show.
+        let verification = Arc::new(NativeVerificationOwner::with_show_qr(
             &client,
             verification_emit,
             generation,
+            false,
         ));
         let devices_emit = {
             let queue = Arc::clone(&owner_updates);

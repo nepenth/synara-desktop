@@ -80,6 +80,9 @@ pub struct NativeVerificationOwner {
     watches: Arc<StdMutex<HashMap<String, JoinHandle<()>>>>,
     emit: VerificationUpdateEmit,
     session_generation: u64,
+    /// Desktop can render the show-QR SVG. SharedCore / iOS cannot, so that
+    /// host advertises SAS only and never calls `generate_qr_code()`.
+    show_qr: bool,
     _request_handler: EventHandlerHandle,
     _wake_handler: EventHandlerHandle,
 }
@@ -94,6 +97,17 @@ impl NativeVerificationOwner {
         emit: VerificationUpdateEmit,
         session_generation: u64,
     ) -> Self {
+        Self::with_show_qr(client, emit, session_generation, true)
+    }
+
+    /// `show_qr` must be true only when the host can render `VerificationQrDto`.
+    /// iOS SharedCore passes false and stays SAS-only.
+    pub fn with_show_qr(
+        client: &Client,
+        emit: VerificationUpdateEmit,
+        session_generation: u64,
+        show_qr: bool,
+    ) -> Self {
         let registry = Arc::new(Mutex::new(VerificationRegistry {
             session_generation,
             requests: HashMap::new(),
@@ -107,12 +121,14 @@ impl NativeVerificationOwner {
         let handler_registrations = Arc::clone(&registrations);
         let handler_watches = Arc::clone(&watches);
         let handler_emit = Arc::clone(&emit);
+        let handler_show_qr = show_qr;
         let request_handler = client.add_event_handler(
             move |event: ToDeviceKeyVerificationRequestEvent, client: Client| {
                 let registry = handler_registry.clone();
                 let registrations = Arc::clone(&handler_registrations);
                 let watches = Arc::clone(&handler_watches);
                 let emit = Arc::clone(&handler_emit);
+                let show_qr = handler_show_qr;
                 async move {
                     let flow_id = event.content.transaction_id.to_string();
                     verification_trace(&flow_id, "incoming_event", None, None);
@@ -143,6 +159,7 @@ impl NativeVerificationOwner {
                                     registry,
                                     Arc::clone(&emit),
                                     session_generation,
+                                    show_qr,
                                 );
                                 verification_trace(&flow_id, "incoming_registered", None, None);
                                 emit(NativeVerificationUpdateSignal { session_generation });
@@ -197,6 +214,7 @@ impl NativeVerificationOwner {
             watches,
             emit,
             session_generation,
+            show_qr,
             _request_handler: request_handler,
             _wake_handler: wake_handler,
         }
@@ -246,12 +264,12 @@ impl NativeVerificationOwner {
                     .map_err(|_| "v-crypto.1-device-query-failed")?
                     .ok_or("v-crypto.1-device-not-found")?;
                 let request = device
-                    .request_verification_with_methods(advertised_verification_methods())
+                    .request_verification_with_methods(self.advertised_methods())
                     .await
                     .map_err(|_| "v-crypto.1-device-request-failed")?;
                 (request, Some(device_id))
             }
-            None => start_self_verification(&self.client, user_id).await?,
+            None => start_self_verification(&self.client, user_id, self.advertised_methods()).await?,
         };
 
         let flow_id = request.flow_id().to_owned();
@@ -291,6 +309,7 @@ impl NativeVerificationOwner {
             self.registry.clone(),
             Arc::clone(&self.emit),
             self.session_generation,
+            self.show_qr,
         );
         self.signal();
         Ok(projected)
@@ -305,10 +324,10 @@ impl NativeVerificationOwner {
             None,
         );
         request
-            .accept_with_methods(advertised_verification_methods())
+            .accept_with_methods(self.advertised_methods())
             .await
             .map_err(|_| "v-crypto.1-accept-failed")?;
-        try_generate_show_qr(&self.registry, flow_id).await;
+        try_generate_show_qr(&self.registry, flow_id, self.show_qr).await;
         let snapshot = self.snapshot(flow_id).await?;
         self.signal();
         Ok(snapshot)
@@ -357,6 +376,9 @@ impl NativeVerificationOwner {
         managed.other_device_id = Some(sas.other_device().device_id().to_owned());
         let request_for_watch = managed.request.clone();
         managed.sas = Some(sas);
+        // SAS is now the active comparison. Drop the show-QR image so the host
+        // cannot display a now-invalid code next to emoji.
+        managed.qr_image_data_url = None;
         let projected = project_request(managed);
         drop(registry);
         arm_watch(
@@ -366,6 +388,7 @@ impl NativeVerificationOwner {
             self.registry.clone(),
             Arc::clone(&self.emit),
             self.session_generation,
+            self.show_qr,
         );
         self.signal();
         Ok(projected)
@@ -496,6 +519,10 @@ impl NativeVerificationOwner {
             .map(project_request)
             .ok_or("v-crypto.1-flow-not-found")
     }
+
+    fn advertised_methods(&self) -> Vec<VerificationMethod> {
+        advertised_verification_methods(self.show_qr)
+    }
 }
 
 impl Drop for NativeVerificationOwner {
@@ -523,6 +550,7 @@ fn retire_registration_tasks(registrations: &StdMutex<VerificationRegistrationTa
 async fn start_self_verification(
     client: &Client,
     user_id: &matrix_sdk::ruma::UserId,
+    methods: Vec<VerificationMethod>,
 ) -> Result<(VerificationRequest, Option<OwnedDeviceId>), &'static str> {
     let encryption = client.encryption();
     // "Verify this device" is an own-identity operation. The SDK broadcasts
@@ -538,7 +566,7 @@ async fn start_self_verification(
         .map_err(|_| "v-crypto.1-own-identity-query-failed")?
         .ok_or("v-crypto.1-own-identity-not-found")?;
     let request = identity
-        .request_verification_with_methods(advertised_verification_methods())
+        .request_verification_with_methods(methods)
         .await
         .map_err(|_| "v-crypto.1-own-request-failed")?;
     Ok((request, None))
@@ -624,10 +652,11 @@ fn arm_watch(
     registry: Arc<Mutex<VerificationRegistry>>,
     emit: VerificationUpdateEmit,
     session_generation: u64,
+    show_qr: bool,
 ) {
     let watch_id = flow_id.clone();
     let handle = tokio::spawn(async move {
-        watch_request(request, registry, emit, session_generation, watch_id).await;
+        watch_request(request, registry, emit, session_generation, watch_id, show_qr).await;
     });
     if let Ok(mut watches) = watches.lock() {
         if let Some(previous) = watches.insert(flow_id, handle) {
@@ -642,6 +671,7 @@ async fn watch_request(
     emit: VerificationUpdateEmit,
     session_generation: u64,
     flow_id: String,
+    show_qr: bool,
 ) {
     let mut request_changes = request.changes();
     let mut sas_stream = None;
@@ -681,7 +711,7 @@ async fn watch_request(
                 );
                 match &state {
                     VerificationRequestState::Ready { .. } => {
-                        try_generate_show_qr(&registry, &flow_id).await;
+                        try_generate_show_qr(&registry, &flow_id, show_qr).await;
                     }
                     VerificationRequestState::Transitioned {
                         verification: Verification::SasV1(sas),
@@ -810,7 +840,11 @@ async fn mark_owner_failed(registry: &Arc<Mutex<VerificationRegistry>>, flow_id:
 fn project_request(managed: &mut ManagedVerification) -> NativeVerificationRequest {
     refresh_sas(managed);
     refresh_qr(managed);
-    let qr = project_qr(managed);
+    let qr = if managed.sas.is_some() {
+        None
+    } else {
+        project_qr(managed)
+    };
     let (phase, sas) = if managed.owner_failed {
         (NativeVerificationPhase::Failed, None)
     } else if let Some(sas) = managed.sas.as_ref() {
@@ -919,15 +953,26 @@ fn refresh_qr(managed: &mut ManagedVerification) {
     }
 }
 
-fn advertised_verification_methods() -> Vec<VerificationMethod> {
-    vec![
-        VerificationMethod::SasV1,
-        VerificationMethod::QrCodeShowV1,
-        VerificationMethod::ReciprocateV1,
-    ]
+fn advertised_verification_methods(show_qr: bool) -> Vec<VerificationMethod> {
+    if show_qr {
+        vec![
+            VerificationMethod::SasV1,
+            VerificationMethod::QrCodeShowV1,
+            VerificationMethod::ReciprocateV1,
+        ]
+    } else {
+        vec![VerificationMethod::SasV1]
+    }
 }
 
-async fn try_generate_show_qr(registry: &Arc<Mutex<VerificationRegistry>>, flow_id: &str) {
+async fn try_generate_show_qr(
+    registry: &Arc<Mutex<VerificationRegistry>>,
+    flow_id: &str,
+    show_qr: bool,
+) {
+    if !show_qr {
+        return;
+    }
     let request = {
         let registry = registry.lock().await;
         registry
@@ -941,6 +986,16 @@ async fn try_generate_show_qr(registry: &Arc<Mutex<VerificationRegistry>>, flow_
     let Ok(Some(qr)) = request.generate_qr_code().await else {
         return;
     };
+    let image_data_url = qr_svg_data_url(&qr);
+    if image_data_url.is_none() {
+        // Generating transitions the request out of Ready. If the host cannot
+        // render the image, start SAS immediately instead of stalling.
+        verification_trace(flow_id, "qr_image_dropped_sas_fallback", None, None);
+        if request.start_sas().await.is_err() {
+            mark_owner_failed(registry, flow_id).await;
+        }
+        return;
+    }
     retain_show_qr(registry, flow_id, &qr).await;
 }
 
@@ -1107,12 +1162,16 @@ mod registration_lifecycle_tests {
     #[test]
     fn advertised_methods_are_show_qr_not_scan() {
         assert_eq!(
-            advertised_verification_methods(),
+            advertised_verification_methods(true),
             vec![
                 VerificationMethod::SasV1,
                 VerificationMethod::QrCodeShowV1,
                 VerificationMethod::ReciprocateV1,
             ]
+        );
+        assert_eq!(
+            advertised_verification_methods(false),
+            vec![VerificationMethod::SasV1]
         );
     }
 
