@@ -17,6 +17,7 @@ import {
   NativeDeviceDeleteChallenge,
   NativeDeviceDeleteResult,
   startNativeDeviceDelete,
+  isNativeDeviceSelectableForLogout,
 } from './nativeDevices';
 import { RefreshDeviceList } from '../../../hooks/useDeviceList';
 
@@ -60,14 +61,19 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
     [authMetadata, accountManagementActions]
   );
 
-  const handleToggleDelete = useCallback((deviceId: string) => {
-    setDeleted((deviceIds) => {
-      const next = new Set(deviceIds);
-      if (next.has(deviceId)) next.delete(deviceId);
-      else next.add(deviceId);
-      return next;
-    });
-  }, []);
+  const handleToggleDelete = useCallback(
+    (deviceId: string) => {
+      const device = devices.find((item) => item.deviceId === deviceId);
+      if (!device || !isNativeDeviceSelectableForLogout(device)) return;
+      setDeleted((deviceIds) => {
+        const next = new Set(deviceIds);
+        if (next.has(deviceId)) next.delete(deviceId);
+        else next.add(deviceId);
+        return next;
+      });
+    },
+    [devices]
+  );
 
   const applyDeleteResult = useCallback(
     async (result: NativeDeviceDeleteResult) => {
@@ -90,17 +96,20 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
   );
 
   const startDelete = useCallback(async () => {
-    if (working || deleted.size === 0) return;
+    const selected = devices
+      .filter((device) => deleted.has(device.deviceId) && isNativeDeviceSelectableForLogout(device))
+      .map((device) => device.deviceId);
+    if (working || selected.length === 0) return;
     setWorking(true);
     setDeleteFailed(false);
     try {
-      await applyDeleteResult(await startNativeDeviceDelete(Array.from(deleted)));
+      await applyDeleteResult(await startNativeDeviceDelete(selected));
     } catch {
       setDeleteFailed(true);
     } finally {
       setWorking(false);
     }
-  }, [applyDeleteResult, deleted, working]);
+  }, [applyDeleteResult, deleted, devices, working]);
 
   const submitPassword: FormEventHandler<HTMLFormElement> = async (event) => {
     event.preventDefault();
@@ -203,20 +212,22 @@ export function OtherDevices({ devices, refreshDeviceList, showVerification }: O
               refreshDeviceList={refreshDeviceList}
               disabled={working || challenge !== undefined}
               options={
-                authMetadata ? (
-                  <DeviceDeleteBtn
-                    deviceId={device.deviceId}
-                    deleted={false}
-                    onDeleteToggle={handleDeleteOIDC}
-                  />
-                ) : (
-                  <DeviceDeleteBtn
-                    deviceId={device.deviceId}
-                    deleted={deleted.has(device.deviceId)}
-                    onDeleteToggle={handleToggleDelete}
-                    disabled={working || challenge !== undefined}
-                  />
-                )
+                isNativeDeviceSelectableForLogout(device) ? (
+                  authMetadata ? (
+                    <DeviceDeleteBtn
+                      deviceId={device.deviceId}
+                      deleted={false}
+                      onDeleteToggle={handleDeleteOIDC}
+                    />
+                  ) : (
+                    <DeviceDeleteBtn
+                      deviceId={device.deviceId}
+                      deleted={deleted.has(device.deviceId)}
+                      onDeleteToggle={handleToggleDelete}
+                      disabled={working || challenge !== undefined}
+                    />
+                  )
+                ) : undefined
               }
             />
             {showVerification && device.trust === 'unverified' && (

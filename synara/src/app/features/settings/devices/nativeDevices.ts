@@ -102,6 +102,9 @@ export const nativeDeviceTrustLabel = (trust: NativeDeviceTrust): string => {
   return 'Not encrypted';
 };
 
+export const isNativeDeviceSelectableForLogout = (device: NativeDevice): boolean =>
+  !device.isCurrent && device.trust !== 'dehydrated';
+
 const parseOwnVerification = (value: unknown): NativeOwnDeviceVerification | undefined => {
   if (value === 'unknown' || value === 'unverified' || value === 'verified') return value;
   return undefined;

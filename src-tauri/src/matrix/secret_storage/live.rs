@@ -118,6 +118,7 @@ pub async fn bootstrap(
         .wait_for_backups_to_upload()
         .await
         .map_err(map_bootstrap_error)?;
+    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
     let save_result = save_recovery_document(&recovery_key);
     recovery_key.zeroize();
     save_result?;
@@ -145,6 +146,7 @@ pub async fn unlock(
                 "v-crypto.4-unlock-rejected",
             )
         })?;
+    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
     Ok(operation_result(
         NativeSecretStorageOutcome::Complete,
         false,
@@ -177,6 +179,7 @@ pub async fn reset(
                 "v-crypto.4-reset-failed",
             )
         })?;
+    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
     let save_result = save_recovery_document(&recovery_key);
     recovery_key.zeroize();
     save_result?;

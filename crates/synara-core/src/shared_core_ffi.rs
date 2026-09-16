@@ -193,6 +193,7 @@ use crate::app::auth::{
     DevicePlatform, LoginOptions,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig, TimeoutPolicy};
+use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::app::devices::{
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
@@ -370,6 +371,7 @@ const ATTACHED_OWNER_NAMES: &[&str] = &[
     "presence",
     "verification",
     "devices",
+    "dehydrated_devices",
     "join_rules",
     "image_packs",
     "http_pusher",
@@ -3795,6 +3797,15 @@ impl SharedCore {
                 .await
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let dehydrated_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeDeviceUpdateSignal| {
+                push_owner_update(&queue, "devices", update.session_generation, None);
+            })
+        };
+        let dehydrated_devices = Arc::new(
+            NativeDehydratedDevicesOwner::start(&client, dehydrated_emit, generation).await,
+        );
         let join_rules_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeRoomJoinRuleUpdate| {
@@ -3859,6 +3870,9 @@ impl SharedCore {
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_devices(devices)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_dehydrated_devices(dehydrated_devices)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_join_rules(join_rules)
