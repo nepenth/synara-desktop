@@ -172,9 +172,12 @@ impl NativeWidgetOwner {
         if !is_safe_widget_url(&webview_url, allow_loopback) {
             return Err("experimental-widgets-url-rejected");
         }
+        // `WidgetSettings::base_url` clears the path, so its string form keeps a
+        // trailing `/`. `postMessage` `event.origin` never has one, so the origin
+        // has to go through the same normalizer the webview comparison uses.
         let target_origin = settings
             .base_url()
-            .map(|url| url.to_string())
+            .and_then(|base_url| widget_target_origin(base_url.as_str()))
             .or_else(|| widget_target_origin(&webview_url))
             .ok_or("experimental-widgets-url-rejected")?;
 
@@ -216,13 +219,10 @@ impl NativeWidgetOwner {
                 }
             }
         });
-        self.drivers.lock().await.insert(
-            session_id.clone(),
-            LiveDriver {
-                handle,
-                join,
-            },
-        );
+        self.drivers
+            .lock()
+            .await
+            .insert(session_id.clone(), LiveDriver { handle, join });
 
         Ok(WidgetOpenResult {
             session_id,

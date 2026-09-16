@@ -27,9 +27,8 @@ pub fn deliver_to_widget_window(app: &AppHandle, session_id: &str, message: &str
     let Ok(encoded) = serde_json::to_string(message) else {
         return;
     };
-    let script = format!(
-        "window.__synaraDeliverToWidget && window.__synaraDeliverToWidget({encoded});"
-    );
+    let script =
+        format!("window.__synaraDeliverToWidget && window.__synaraDeliverToWidget({encoded});");
     if let Some(window) = app.get_webview_window(&widget_window_label(session_id)) {
         let _ = window.eval(&script);
     }
@@ -60,7 +59,9 @@ pub fn open_widget_window(
             "experimental-widgets-url-rejected",
         )
     })?;
-    let target_origin = opened.target_origin.clone();
+    // `postMessage` `event.origin` is scheme + authority with no trailing slash;
+    // the script compares against this string verbatim.
+    let target_origin = opened.target_origin.trim_end_matches('/').to_owned();
     let label = widget_window_label(&opened.session_id);
     if let Some(existing) = app.get_webview_window(&label) {
         let _ = existing.close();
@@ -160,5 +161,13 @@ mod tests {
             "https://widgets.example.org",
             "javascript:alert(1)"
         ));
+    }
+
+    #[test]
+    fn bridge_script_compares_against_a_slashless_origin() {
+        let script = widget_bridge_script("w1", "https://widgets.example.org");
+        assert!(script.contains("\"https://widgets.example.org\""));
+        assert!(!script.contains("\"https://widgets.example.org/\""));
+        assert!(script.contains("event.origin !== targetOrigin"));
     }
 }

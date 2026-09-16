@@ -190,3 +190,25 @@ fn target_origin_is_scheme_and_authority_only() {
         Some("http://127.0.0.1:8765")
     );
 }
+
+/// `WidgetSettings::base_url()` serializes with a trailing `/`. `postMessage`
+/// `event.origin` never does, so the normalizer must strip it or every
+/// widget→driver message is dropped by the origin check.
+#[test]
+fn target_origin_drops_the_base_url_trailing_slash() {
+    for base_url in [
+        "https://widgets.example.org/",
+        "http://127.0.0.1:8765/",
+        "http://localhost:3000/",
+    ] {
+        let origin = widget_target_origin(base_url).expect("base url yields an origin");
+        assert!(
+            !origin.ends_with('/'),
+            "{base_url} must normalize without a trailing slash, got {origin}"
+        );
+    }
+    assert_eq!(
+        widget_target_origin("https://widgets.example.org/").as_deref(),
+        Some("https://widgets.example.org")
+    );
+}
