@@ -3024,7 +3024,12 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
       {actionError && <Text size="T300">{actionError}</Text>}
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
-        <Scroll ref={scrollRef} visibility="Hover" style={{ height: '100%' }}>
+        <Scroll
+          id="native-timeline-history"
+          ref={scrollRef}
+          visibility="Hover"
+          style={{ height: '100%' }}
+        >
           {rows.length === 0 ? (
             <Box
               alignItems="Center"

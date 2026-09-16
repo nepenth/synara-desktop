@@ -1,5 +1,5 @@
 import React, { useCallback, useRef, useState } from 'react';
-import { Box, Text, Tooltip, TooltipProvider } from 'folds';
+import { Text, Tooltip, TooltipProvider } from 'folds';
 import {
   formatTimelineHistoryMarkLabel,
   rowIndexForRailRatio,
@@ -71,12 +71,13 @@ export function NativeTimelineDateRail({
   };
 
   return (
-    <Box className={htmlCss.DateRail} data-timeline-date-rail="true">
+    <div className={htmlCss.DateRail} data-timeline-date-rail="true">
       <div
         ref={trackRef}
         className={htmlCss.DateRailTrack}
         role="scrollbar"
         aria-label="Jump to a date in loaded history"
+        aria-controls="native-timeline-history"
         aria-orientation="vertical"
         aria-valuemin={0}
         aria-valuemax={Math.max(0, rowCount - 1)}
@@ -133,11 +134,13 @@ export function NativeTimelineDateRail({
         );
       })}
       {hoverLabel || activeMark ? (
-        <Text className={htmlCss.DateRailLabel} size="T200" style={{ top: `${thumbRatio * 100}%` }}>
-          {hoverLabel ??
-            (activeMark ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock) : '')}
-        </Text>
+        <div className={htmlCss.DateRailLabel} style={{ top: `${thumbRatio * 100}%` }}>
+          <Text size="T200">
+            {hoverLabel ??
+              (activeMark ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock) : '')}
+          </Text>
+        </div>
       ) : null}
-    </Box>
+    </div>
   );
 }

@@ -195,7 +195,9 @@ for (const operation of ['paginate', 'read', 'follow', 'poll']) {
       expect(pageErrors).toEqual([]);
       if (result === 'success') await expect(page.getByText(/lost synchronization/)).toBeHidden();
       if (operation === 'paginate') {
-        await page.getByRole('button', { name: 'Load older messages' }).click();
+        const retry = page.getByRole('button', { name: 'Retry', exact: true });
+        if (await retry.isVisible()) await retry.click();
+        else await page.getByRole('button', { name: 'Load older messages' }).click();
         await expect.poll(() => commandCount(page, command)).toBe(2);
         await expect(changed).toBeVisible();
       }
@@ -492,6 +494,9 @@ test('older-history pagination failure is an error with retry, not a spinner', a
   await expect(alert).toContainText('Could not load older messages');
   await expect(alert).toContainText('Superseded operation rejected');
   await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect.poll(() => commandCount(page, 'matrix_timeline_paginate')).toBe(2);
+  await expect(page.getByRole('alert')).toHaveCount(0);
 });
 
 test('date rail jumps toward an earlier loaded message', async ({ page }) => {
