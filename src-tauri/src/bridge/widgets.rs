@@ -38,6 +38,7 @@ pub(crate) async fn widgets_list(
     serde_json::from_value(response.payload).map_err(|_| widget_response_error())
 }
 
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub(crate) async fn widget_open(
     core: &Core,
     experimental_widgets_enabled: bool,

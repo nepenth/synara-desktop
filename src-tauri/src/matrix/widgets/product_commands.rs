@@ -25,6 +25,7 @@ pub async fn matrix_widgets_list(
 }
 
 #[tauri::command]
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub async fn matrix_widget_open(
     app: AppHandle,
     core: State<'_, Arc<synara_core::Core>>,
