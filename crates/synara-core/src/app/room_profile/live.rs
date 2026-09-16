@@ -7,51 +7,51 @@
 //! boundary.
 
 use std::sync::{
-    Arc,
     atomic::{AtomicBool, Ordering},
+    Arc,
 };
 
 use tokio::sync::Mutex as AsyncMutex;
 
 use matrix_sdk::{
-    Client, Room, RoomMemberships, RoomState,
     deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
     ruma::{
-        Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
         api::client::{
             membership::joined_members, room::Visibility, state::get_state_event_for_key,
         },
         events::{
-            StateEventType,
             room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
+            StateEventType,
         },
         room::{AllowRule, JoinRule, Restricted},
+        Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
     },
+    Client, Room, RoomMemberships, RoomState,
 };
 
 use crate::app::members::{
+    parse_room_members_room_id, project_room_creators, project_room_member,
+    validate_power_level_tags_content, validate_power_level_tags_snapshot_content,
+    validate_power_levels_snapshot_content, validate_room_power_levels_content,
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
-    ROOM_POWER_LEVEL_TAGS_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, parse_room_members_room_id,
-    project_room_creators, project_room_member, validate_power_level_tags_content,
-    validate_power_level_tags_snapshot_content, validate_power_levels_snapshot_content,
-    validate_room_power_levels_content,
+    ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
-use crate::app::room_ops::{MatrixRoomCreateRequest, build_room_create_request};
+use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
 use crate::app::spaces::{
-    NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
-    NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
     remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
-    snapshot_space_hierarchy, snapshot_space_parents,
+    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
+    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot,
+    NativeSpaceParentsSnapshot,
 };
 use crate::app::user_profile::MatrixProfileWriteResult;
 use crate::dto::{Membership, RoomMember as ProductRoomMember};
 
 use super::{
-    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,
-    retention_snapshot,
+    retention_snapshot, MatrixRoomDirectoryVisibilityResult,
+    MatrixRoomDirectoryVisibilityWriteResult, MatrixRoomJoinRuleSnapshot,
+    MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,
 };
 use crate::app::media_cache::shortest_joined_room_max_lifetime;
 
@@ -987,9 +987,9 @@ impl NativeRoomJoinRuleOwner {
         if room_version.rules().is_none() {
             return Err("v-send.r-room-profile-directory-visibility-permission-state-unavailable");
         }
-        let power_levels = room.power_levels().await.map_err(
-            |_| "v-send.r-room-profile-directory-visibility-permission-state-unavailable",
-        )?;
+        let power_levels = room.power_levels().await.map_err(|_| {
+            "v-send.r-room-profile-directory-visibility-permission-state-unavailable"
+        })?;
         let user_id = self
             .client
             .user_id()

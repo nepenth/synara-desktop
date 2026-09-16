@@ -39,22 +39,22 @@ mod sort;
 mod summary;
 
 pub use crate::dto::RoomEncryptionStatus;
-pub use activity_recovery::{RoomActivityPreviousState, room_activity_recovery_required};
+pub use activity_recovery::{room_activity_recovery_required, RoomActivityPreviousState};
 pub use counts::{
-    RoomListBadgeCounts, RoomUnreadMembership, RoomUnreadPresentationDto, SdkUnreadChecksumRoom,
-    SynaraUnreadChecksumRoom, client_total_unread_notifications, room_unread_presentation,
-    sdk_joined_notification_checksum, synara_joined_unread_presentation_sum,
+    client_total_unread_notifications, room_unread_presentation, sdk_joined_notification_checksum,
+    synara_joined_unread_presentation_sum, RoomListBadgeCounts, RoomUnreadMembership,
+    RoomUnreadPresentationDto, SdkUnreadChecksumRoom, SynaraUnreadChecksumRoom,
 };
 pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
-pub use dm_avatar::{DmAvatarSourceKind, dm_avatar_source, select_dm_avatar_source};
+pub use dm_avatar::{dm_avatar_source, select_dm_avatar_source, DmAvatarSourceKind};
 pub use error::RoomListError;
 pub use filters::{
-    RoomListScope, filter_rooms_by_scope, partition_favorite_rooms, room_matches_scope,
-    select_rooms_by_scope, select_rooms_in_folder,
+    filter_rooms_by_scope, partition_favorite_rooms, room_matches_scope, select_rooms_by_scope,
+    select_rooms_in_folder, RoomListScope,
 };
 pub use invite_avatars::{InviteAvatarHandles, InviteAvatarSource, MAX_INVITE_AVATAR_HANDLES};
 pub use invites::{
-    NativeInvite, NativeInviteSnapshot, NativeInviteTriage, contains_bad_word, snapshot_invites,
+    contains_bad_word, snapshot_invites, NativeInvite, NativeInviteSnapshot, NativeInviteTriage,
 };
 pub use last_message::{
     last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
@@ -62,11 +62,11 @@ pub use last_message::{
     last_message_preview_from_invite, sanitize_last_message_preview,
 };
 pub use live::{
-    NativeRoomListOwner, NativeRoomListSnapshot, NativeRoomListUpdateSignal, RoomListUpdateEmit,
-    snapshot_from_sync_owner,
+    snapshot_from_sync_owner, NativeRoomListOwner, NativeRoomListSnapshot,
+    NativeRoomListUpdateSignal, RoomListUpdateEmit,
 };
-pub use projection::{RoomListProjection, reconstruct};
-pub use sort::{RoomListSort, sort_rooms, sort_rooms_in_place};
+pub use projection::{reconstruct, RoomListProjection};
+pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;
 
 /// Static marker for link / schema smoke.
