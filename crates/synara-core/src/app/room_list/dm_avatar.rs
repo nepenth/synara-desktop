@@ -5,8 +5,8 @@
 //! peer MXC. `human_member_ids_no_sync` includes self — callers must exclude it.
 
 use matrix_sdk::{
-    Room, RoomMemberships,
     ruma::{OwnedMxcUri, UserId},
+    Room, RoomMemberships,
 };
 
 /// Which MXC source a DM / invite projection should use.

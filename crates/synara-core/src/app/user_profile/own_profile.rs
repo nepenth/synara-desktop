@@ -3,8 +3,8 @@
 use std::sync::{Arc, Mutex};
 
 use futures_util::StreamExt;
-use matrix_sdk::Client;
 use matrix_sdk::ruma::api::client::profile::{AvatarUrl, DisplayName};
+use matrix_sdk::Client;
 use tokio::task::JoinHandle;
 
 use super::live::{get_own_profile, parse_own_avatar_mxc, parse_own_display_name};

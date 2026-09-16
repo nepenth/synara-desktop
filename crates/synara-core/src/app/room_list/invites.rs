@@ -7,19 +7,19 @@
 use std::{collections::BTreeSet, sync::OnceLock};
 
 use matrix_sdk::{
-    Client, Room, RoomState,
     deserialized_responses::RawSyncOrStrippedState,
     ruma::{
-        OwnedUserId, UserId,
         events::{
             ignored_user_list::IgnoredUserListEventContent,
             room::{member::MembershipState, topic::RoomTopicEventContent},
         },
+        OwnedUserId, UserId,
     },
+    Client, Room, RoomState,
 };
 use serde::{Deserialize, Serialize};
 
-use super::{InviteAvatarHandles, dm_avatar_source};
+use super::{dm_avatar_source, InviteAvatarHandles};
 
 const BAD_WORDS_JSON: &str = include_str!("invite_bad_words.json");
 const SYNARA_BAD_WORD_ADDITIONS: &[&str] = &["torture", "t0rture"];

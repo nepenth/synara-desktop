@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::dto::{Membership, RoomSummary};
 
-use super::filters::{RoomListScope, room_matches_scope};
+use super::filters::{room_matches_scope, RoomListScope};
 
 /// Closed membership input for the scalar room-unread projection exported to
 /// iOS. It intentionally carries no room identifier or SDK value.

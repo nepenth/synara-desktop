@@ -15,7 +15,7 @@ use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::app::room_list::counts::{RoomUnreadMembership, room_unread_presentation};
+use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
 use crate::app::room_list::dm_avatar::dm_avatar_source;
 use crate::app::room_list::last_message::{
     last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
