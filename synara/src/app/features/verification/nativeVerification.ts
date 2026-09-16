@@ -81,6 +81,7 @@ export const verificationRequestHasSasCodes = (request: NativeVerificationReques
 export const verificationRequestHasQr = (request: NativeVerificationRequest): boolean =>
   typeof request.qr?.imageDataUrl === 'string' && request.qr.imageDataUrl.startsWith('data:image/');
 
+/** Skip SAS auto-start only when a renderable QR is actually shown. */
 export const verificationRequestNeedsSasStart = (request: NativeVerificationRequest): boolean =>
   request.direction === 'outgoing' && request.phase === 'ready' && !verificationRequestHasQr(request);
 

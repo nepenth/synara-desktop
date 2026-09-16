@@ -17,6 +17,7 @@ pub use synara_core::app::verification::{
 };
 
 /// Start the Core owner and emit verification inbox wakeups on the Tauri event.
+/// Desktop can render show-QR, so the owner advertises and generates a code.
 pub fn start(client: &Client, app: AppHandle, session_generation: u64) -> NativeVerificationOwner {
     NativeVerificationOwner::with_emit(
         client,

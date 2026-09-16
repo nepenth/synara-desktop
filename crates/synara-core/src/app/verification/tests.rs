@@ -197,9 +197,20 @@ fn advertised_methods_include_show_qr_and_sas_without_camera_scan() {
     assert!(helper.contains("VerificationMethod::QrCodeShowV1"));
     assert!(helper.contains("VerificationMethod::ReciprocateV1"));
     assert!(!helper.contains("QrCodeScanV1"));
-    assert!(source.contains("request_verification_with_methods(advertised_verification_methods())"));
-    assert!(source.contains("accept_with_methods(advertised_verification_methods())"));
+    assert!(source.contains("request_verification_with_methods(self.advertised_methods())"));
+    assert!(source.contains("accept_with_methods(self.advertised_methods())"));
     assert!(source.contains("VerificationRequestState::Transitioned { .. }"));
+    assert!(source.contains("with_show_qr"));
+    assert!(source.contains("qr_image_dropped_sas_fallback"));
+    let ffi = include_str!("../../shared_core_ffi.rs");
+    assert!(
+        ffi.contains("NativeVerificationOwner::with_show_qr("),
+        "SharedCore must construct the verification owner with an explicit show-QR gate"
+    );
+    assert!(
+        ffi.contains("false,") && ffi.contains("iOS host"),
+        "SharedCore must disable show-QR for iOS"
+    );
     let watcher = source
         .split("async fn watch_request")
         .nth(1)
