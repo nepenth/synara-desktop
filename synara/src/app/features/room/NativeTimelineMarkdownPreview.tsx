@@ -110,12 +110,13 @@ export function NativeTimelineMarkdownPreview({
         >
           <Modal
             className={htmlCss.FilePreviewModal}
+            variant="Surface"
             size="500"
             aria-label={`Preview ${label}`}
             data-native-timeline-file-preview="true"
           >
             <Box direction="Column" style={{ maxHeight: '88vh' }}>
-              <Header className={htmlCss.FilePreviewHeader} size="400">
+              <Header className={htmlCss.FilePreviewHeader} variant="Surface" size="400">
                 <Box grow="Yes" alignItems="Center" gap="200">
                   <IconButton size="300" radii="300" onClick={onClose} aria-label="Close preview">
                     <Icon size="50" src={Icons.ArrowLeft} />

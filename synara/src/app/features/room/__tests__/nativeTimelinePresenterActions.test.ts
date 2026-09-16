@@ -335,6 +335,8 @@ test('native timeline file attachments save through download+save, not protocol 
   assert.match(presenter, /onActionError=\{onActionError\}/);
   assert.match(htmlCss, /export const FileDownload = style\(/);
   assert.match(htmlCss, /export const FilePreviewModal = style\(/);
+  const previewUi = readFileSync('src/app/features/room/NativeTimelineMarkdownPreview.tsx', 'utf8');
+  assert.match(previewUi, /variant="Surface"/);
   assert.doesNotMatch(presenter, /<a href=\{mediaSrc\} download/);
   assert.doesNotMatch(presenter, /href=\{mediaSrc\}/);
   assert.doesNotMatch(presenter, /text\/markdown/);
