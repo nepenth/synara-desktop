@@ -6,6 +6,7 @@ import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
+import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
 import {
   applyNativeTimelineViewDelta,
@@ -709,6 +710,9 @@ const api = {
   },
 };
 Object.assign(window, { nativeTimelineFixture: api });
+const mx = {
+  getUserId: () => '@reader0:example.test',
+} as React.ComponentProps<typeof MatrixClientProvider>['value'];
 // The shipped app applies the folds theme to <body> (src/index.tsx). Overlay
 // offsets like `config.space.S300` compile to CSS variables that only exist
 // under these classes; without them absolute controls collapse to the origin.
@@ -733,15 +737,17 @@ function App() {
         }}
       >
         {mounted && (
-          <NativeTimelinePresenter
-            roomId={room}
-            eventId={focusedEventId}
-            roomCreatedTs={
-              params.has('roomCreated')
-                ? Number(params.get('roomCreated')) || 1_600_000_000_000
-                : undefined
-            }
-          />
+          <MatrixClientProvider value={mx}>
+            <NativeTimelinePresenter
+              roomId={room}
+              eventId={focusedEventId}
+              roomCreatedTs={
+                params.has('roomCreated')
+                  ? Number(params.get('roomCreated')) || 1_600_000_000_000
+                  : undefined
+              }
+            />
+          </MatrixClientProvider>
         )}
       </div>
     </>
