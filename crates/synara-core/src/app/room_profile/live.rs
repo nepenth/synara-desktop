@@ -84,6 +84,7 @@ pub struct NativeRoomJoinRuleOwner {
     retired: Arc<AtomicBool>,
     _handler: EventHandlerDropGuard,
     invite_avatars: Arc<AsyncMutex<crate::app::room_list::InviteAvatarHandles>>,
+    preview_cache: Arc<AsyncMutex<crate::app::media::MediaPreviewCache>>,
 }
 
 impl NativeRoomJoinRuleOwner {
@@ -138,6 +139,9 @@ impl NativeRoomJoinRuleOwner {
             invite_avatars: Arc::new(AsyncMutex::new(
                 crate::app::room_list::InviteAvatarHandles::new(session_generation),
             )),
+            preview_cache: Arc::new(AsyncMutex::new(crate::app::media::MediaPreviewCache::new(
+                session_generation,
+            ))),
         })
     }
 
@@ -963,6 +967,37 @@ impl NativeRoomJoinRuleOwner {
         ))
     }
 
+    pub async fn get_media_preview(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+        url: &str,
+        ts: Option<u64>,
+    ) -> Result<crate::app::media::MatrixMediaPreviewSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-media-preview-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-media-preview-stale-generation");
+        }
+        let room_id = parse_preview_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-media-preview-room-not-found")?;
+        crate::app::media::room_media_preview(
+            &self.client,
+            room.encryption_state(),
+            Arc::clone(&self.invite_avatars),
+            Arc::clone(&self.preview_cache),
+            room_id.as_str(),
+            self.session_generation,
+            url,
+            ts,
+        )
+        .await
+    }
+
     pub async fn set_directory_visibility(
         &self,
         room_id: &str,
@@ -1204,6 +1239,12 @@ fn parse_retention_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     room_id
         .parse()
         .map_err(|_| "v-send.r-room-profile-retention-invalid")
+}
+
+fn parse_preview_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .parse()
+        .map_err(|_| "v-send.r-media-preview-invalid")
 }
 
 fn parse_directory_visibility(

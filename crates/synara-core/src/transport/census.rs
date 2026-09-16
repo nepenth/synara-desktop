@@ -57,6 +57,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_mdirect_snapshot",
     "matrix_media_config",
     "matrix_media_download",
+    "matrix_media_preview",
     "matrix_message_search",
     "matrix_notification_decide",
     "matrix_notification_dismiss",

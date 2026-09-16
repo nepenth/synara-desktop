@@ -111,6 +111,25 @@ pub async fn matrix_media_download(
     Ok(MatrixMediaDownloadResult { bytes })
 }
 
+/// Read-only URL preview. Encrypted and unknown rooms skip the homeserver call.
+#[tauri::command]
+pub async fn matrix_media_preview(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    session_generation: u64,
+    url: String,
+    ts: Option<u64>,
+) -> Result<MatrixMediaPreviewSnapshot, MatrixAuthCommandError> {
+    crate::bridge::media_preview::media_preview(
+        core.inner().as_ref(),
+        room_id,
+        session_generation,
+        url,
+        ts,
+    )
+    .await
+}
+
 async fn download_timeline_media_handle(
     state: &State<'_, MatrixAuthState>,
     handle: &str,

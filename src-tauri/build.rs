@@ -131,6 +131,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_upload_media",
     "matrix_media_config",
     "matrix_media_download",
+    "matrix_media_preview",
     "matrix_set_own_avatar",
     "matrix_set_own_display_name",
     "matrix_get_own_profile",

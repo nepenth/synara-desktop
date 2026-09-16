@@ -655,3 +655,32 @@ globalStyle(`${FormattedBody} code .token.keyword`, {
 globalStyle(`${FormattedBody} code .token.regex, ${FormattedBody} code .token.important`, {
   color: syntaxRegex,
 });
+
+export const UnfurlCard = style({
+  display: 'flex',
+  alignItems: 'stretch',
+  maxWidth: toRem(420),
+  minWidth: 0,
+  marginTop: config.space.S200,
+  border: `1px solid ${color.Surface.ContainerLine}`,
+  borderRadius: config.radii.R400,
+  overflow: 'hidden',
+  background: color.Surface.Container,
+});
+
+export const UnfurlLink = style({
+  display: 'flex',
+  alignItems: 'stretch',
+  minWidth: 0,
+  flex: 1,
+  color: 'inherit',
+  textDecoration: 'none',
+});
+
+export const UnfurlThumb = style({
+  width: toRem(96),
+  height: toRem(96),
+  objectFit: 'cover',
+  flexShrink: 0,
+  background: color.Surface.ContainerHover,
+});

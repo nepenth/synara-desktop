@@ -155,6 +155,15 @@ import {
   nativeComposerSendRelation,
   useNativeComposerReplyDraft,
 } from './nativeComposerDraft';
+import {
+  COMPOSER_UNFURL_DEBOUNCE_MS,
+  fetchMediaPreviewWithNativeOwner,
+  trailingComposerPreviewUrl,
+  type NativeMediaPreview,
+} from './nativeLinkUnfurl';
+import { NativeLinkUnfurlCard } from './nativeLinkUnfurlCard';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
   completeAttachmentSendStep,
@@ -276,6 +285,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [gifSendError, setGifSendError] = useState<string>();
     const [sendingMessage, setSendingMessage] = useState(false);
     const [sendError, setSendError] = useState<string>();
+    const [composerPreviewUrl, setComposerPreviewUrl] = useState<string>();
+    const [composerPreview, setComposerPreview] = useState<NativeMediaPreview | null>(null);
+    const [composerPreviewDismissed, setComposerPreviewDismissed] = useState<string>();
+    const nativeRoomList = useNativeRoomListSnapshot();
+    const composerEncryptionStatus = nativeRoomList.rooms.find(
+      (nativeRoom) => nativeRoom.roomId === roomId
+    )?.encryptionStatus;
     const [pollAnchor, setPollAnchor] = useState<RectCords>();
     const [pollQuestion, setPollQuestion] = useState('');
     const [pollAnswers, setPollAnswers] = useState(['', '']);
@@ -463,12 +479,50 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       (value: Parameters<EditorChangeHandler>[0]) => {
         if (isEmptyEditor(editor)) {
           clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          setComposerPreviewUrl(undefined);
+          setComposerPreview(null);
           return;
         }
         saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, value);
+        const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
+        setComposerPreviewUrl(nextUrl);
+        if (!nextUrl) setComposerPreview(null);
       },
-      [mx, roomId, editor]
+      [mx, roomId, editor, isMarkdown]
     );
+
+    useEffect(() => {
+      if (!composerPreviewUrl) {
+        setComposerPreviewDismissed(undefined);
+        setComposerPreview(null);
+        return undefined;
+      }
+      if (
+        composerPreviewUrl === composerPreviewDismissed ||
+        composerEncryptionStatus !== 'not_encrypted'
+      ) {
+        if (composerPreviewUrl !== composerPreviewDismissed) {
+          setComposerPreview(null);
+        }
+        return undefined;
+      }
+      let cancelled = false;
+      const timer = window.setTimeout(() => {
+        void fetchMediaPreviewWithNativeOwner({
+          roomId,
+          url: composerPreviewUrl,
+          encryptionStatus: composerEncryptionStatus,
+          desktopAvailable: isSynaraDesktop(),
+          invoke: invokeDesktopWithAvailability,
+        }).then((preview) => {
+          if (!cancelled) setComposerPreview(preview);
+        });
+      }, COMPOSER_UNFURL_DEBOUNCE_MS);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }, [composerEncryptionStatus, composerPreviewDismissed, composerPreviewUrl, roomId]);
 
     const handleFileMetadata = useCallback(
       (fileItem: TUploadItem, metadata: TUploadMetadata) => {
@@ -1050,6 +1104,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 </Box>
               </div>
             )
+          }
+          linkPreview={
+            composerPreview &&
+            composerPreview.url === composerPreviewUrl &&
+            composerPreview.url !== composerPreviewDismissed ? (
+              <div style={{ padding: `0 ${config.space.S300} ${config.space.S200}` }}>
+                <NativeLinkUnfurlCard
+                  preview={composerPreview}
+                  onDismiss={() => {
+                    setComposerPreviewDismissed(composerPreview.url);
+                    setComposerPreview(null);
+                  }}
+                />
+              </div>
+            ) : undefined
           }
           leadingAction={
             <PopOut

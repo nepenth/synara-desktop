@@ -186,7 +186,7 @@ pub struct MatrixAuthCommandError {
 
 pub use synara_core::app::media::{
     MatrixMediaConfigResult, MatrixMediaDownloadRequest, MatrixMediaDownloadResult,
-    MatrixUploadMediaResult,
+    MatrixMediaPreviewSnapshot, MatrixUploadMediaResult,
 };
 pub use synara_core::app::members::NativeRoomMembersSnapshot;
 pub use synara_core::app::send::{

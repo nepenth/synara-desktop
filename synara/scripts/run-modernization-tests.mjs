@@ -97,6 +97,7 @@ const tests = [
   'src/app/features/native-client/__tests__/nativeClientFacade.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomJoinRuleOwner.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomRetentionOwner.test.ts',
+  'src/app/features/room/__tests__/nativeLinkUnfurl.test.ts',
   'src/app/features/common-settings/general/__tests__/roomPublishSourceGuard.test.ts',
   'src/app/components/__tests__/nativeRoomLeaveOwner.test.ts',
   'src/app/components/__tests__/nativeRoomFavoriteOwner.test.ts',
