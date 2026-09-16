@@ -247,6 +247,7 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(dateRail, /Jump to a date in loaded history/);
   assert.match(dateRail, /aria-controls="native-timeline-history"/);
   assert.match(presenter, /NativeTimelineDateRail/);
+  assert.match(presenter, /reserveRail=\{showDateRail\}/);
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
   assert.doesNotMatch(presenter, />\s*Mark unread\s*</);

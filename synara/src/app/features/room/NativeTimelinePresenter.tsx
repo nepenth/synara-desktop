@@ -3346,6 +3346,7 @@ export function NativeTimelinePresenter({
           kind={backwardOverlay.kind}
           errorMessage={backwardOverlay.message}
           visibleDateLabel={visibleDateLabel}
+          reserveRail={showDateRail}
           onRetry={() => requestPagination('backwards')}
           onLoadMore={() => requestPagination('backwards')}
         />
@@ -3353,6 +3354,7 @@ export function NativeTimelinePresenter({
           edge="forward"
           kind={forwardOverlay.kind}
           errorMessage={forwardOverlay.message}
+          reserveRail={showDateRail}
           onRetry={() => requestPagination('forwards')}
           onLoadMore={() => requestPagination('forwards')}
         />
