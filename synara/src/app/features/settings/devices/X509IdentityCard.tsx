@@ -108,12 +108,7 @@ export function X509IdentityCard() {
           <Text size="B300">{status.signerImported ? 'Replace signer' : 'Import signer'}</Text>
         </Button>
         {status.reloadRequired && (
-          <Button
-            size="300"
-            radii="300"
-            variant="Primary"
-            onClick={() => reloadNativeSession()}
-          >
+          <Button size="300" radii="300" variant="Primary" onClick={() => reloadNativeSession()}>
             <Text size="B300">Reload session</Text>
           </Button>
         )}
