@@ -52,7 +52,9 @@ fn marker_stable() {
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"sqlite"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"bundled-sqlite"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
-    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-send-custom-to-device"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
 }
 
