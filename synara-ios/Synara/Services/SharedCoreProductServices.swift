@@ -458,6 +458,20 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         )
     }
 
+    func rtcTransportsSnapshot() async -> SharedCoreRtcTransportsSnapshot? {
+        guard let dto = try? await SharedCoreRtcTransports.snapshot(core: host.core) else {
+            return nil
+        }
+        return SharedCoreRtcTransports.product(from: dto)
+    }
+
+    func rtcTransportsRefresh() async -> SharedCoreRtcTransportsSnapshot? {
+        guard let dto = try? await SharedCoreRtcTransports.refresh(core: host.core) else {
+            return nil
+        }
+        return SharedCoreRtcTransports.product(from: dto)
+    }
+
     func setOwnPresence(_ state: String) async -> Bool {
         do {
             _ = try await SharedCoreTypingPresence.presenceSet(
@@ -667,6 +681,9 @@ final class SharedCoreRoomListService: RoomListServicing {
                         lastMessagePreview: $0.lastMessagePreview,
                         lastMessageIsAgentApproval: $0.lastMessageIsAgentApproval,
                         isFavorite: $0.isFavorite,
+                        isCall: $0.isCall,
+                        hasActiveCall: $0.hasActiveCall,
+                        activeCallParticipantCount: Int($0.activeCallParticipantCount),
                         encryptionStatus: SharedCoreRoomListRows.encryptionStatus($0.encryptionStatus)
                     )
                 },

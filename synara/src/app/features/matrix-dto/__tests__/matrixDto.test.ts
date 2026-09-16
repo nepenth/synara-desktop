@@ -183,7 +183,26 @@ test('valid_room_summary parses', () => {
   assert.equal(r.lastMessageIsAgentApproval, false);
   assert.equal(r.heroes?.length, 1);
   assert.equal(r.isFavorite, false);
+  assert.equal(r.isCall, false);
+  assert.equal(r.hasActiveCall, false);
+  assert.equal(r.activeCallParticipantCount, 0);
   assert.equal(r.encryptionStatus, 'encrypted');
+});
+
+test('room summary live-call fields do not overload isCall', () => {
+  const valid = loadFixture('valid_room_summary.json') as Record<string, unknown>;
+  assert.equal(parseRoomSummary({ ...valid, isCall: true })?.hasActiveCall, false);
+  assert.equal(parseRoomSummary({ ...valid, isCall: true })?.isCall, true);
+  const live = parseRoomSummary({
+    ...valid,
+    isCall: false,
+    hasActiveCall: true,
+    activeCallParticipantCount: 3,
+  });
+  assert.equal(live?.isCall, false);
+  assert.equal(live?.hasActiveCall, true);
+  assert.equal(live?.activeCallParticipantCount, 3);
+  assert.equal(parseRoomSummary({ ...valid, activeCallParticipantCount: -1 }), null);
 });
 
 test('room summary requires a closed authoritative encryption status', () => {

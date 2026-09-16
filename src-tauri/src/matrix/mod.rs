@@ -87,6 +87,7 @@ pub mod room_keys;
 pub mod room_list;
 pub mod room_ops;
 pub mod room_profile;
+pub mod rtc_transports;
 pub mod routes;
 pub mod search;
 pub mod secret_storage;
@@ -152,6 +153,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _typing = typing::matrix_typing_markers();
     let _utd_recovery = utd_recovery::matrix_utd_recovery_markers();
     let _presence = presence::matrix_presence_markers();
+    let _rtc_transports = rtc_transports::matrix_rtc_transports_markers();
     let _media = media::matrix_media_markers();
     let _media_cache = media_cache::matrix_media_cache_markers();
     let _media_export = media_export::matrix_media_export_markers();
@@ -207,6 +209,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_utd_recovery, utd_recovery::MATRIX_UTD_RECOVERY_MARKER);
     debug_assert_eq!(_presence, presence::MATRIX_PRESENCE_MARKER);
+    debug_assert_eq!(_rtc_transports, rtc_transports::RTC_TRANSPORTS_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_media_cache, media_cache::MATRIX_MEDIA_CACHE_MARKER);
     debug_assert_eq!(_media_export, media_export::MATRIX_MEDIA_EXPORT_MARKER);

@@ -48,6 +48,7 @@ import { useRoomName } from '../../hooks/useRoomMeta';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { LiveCallChip } from './LiveCallChip';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -330,6 +331,9 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
                 {roomName}
               </Text>
             </Box>
+            {nativeRoom?.hasActiveCall && (
+              <LiveCallChip participantCount={nativeRoom.activeCallParticipantCount} />
+            )}
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
                 <TypingIndicator size="300" disableAnimation />

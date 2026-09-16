@@ -67,6 +67,7 @@ import {
   useNativeTimelineView,
 } from './nativeTimelineView';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
+import { incomingCallLabel } from '../matrix-rtc/liveCallChrome';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
@@ -1866,7 +1867,7 @@ const NativeTimelineRow = ({
           onReaction={runReaction}
         >
           <Box direction="Column" gap="100" className={rowClassName}>
-            <Text size="T300">{row.callKind}</Text>
+            <Text size="T300">{incomingCallLabel(row.callKind)}</Text>
             {capabilities?.declineCall && (
               <Button
                 size="300"

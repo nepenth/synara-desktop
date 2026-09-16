@@ -34,6 +34,9 @@ enum SharedCoreRoomListRows {
         let lastMessagePreview: String?
         let lastMessageIsAgentApproval: Bool
         let isFavorite: Bool
+        let isCall: Bool
+        let hasActiveCall: Bool
+        let activeCallParticipantCount: Int
         let encryptionStatus: SynaraRoomEncryptionStatus
     }
 
@@ -83,6 +86,9 @@ enum SharedCoreRoomListRows {
                 ),
                 avatarURL: room.avatarUrl.flatMap(URL.init(string:)),
                 isFavorite: room.isFavorite,
+                isCall: room.isCall,
+                hasActiveCall: room.hasActiveCall,
+                activeCallParticipantCount: room.activeCallParticipantCount,
                 encryptionStatus: room.encryptionStatus
             )
         }

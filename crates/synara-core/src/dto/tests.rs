@@ -99,6 +99,8 @@ fn room_summary_round_trip_and_fixture() {
         is_direct: false,
         is_space: false,
         is_call: false,
+        has_active_call: false,
+        active_call_participant_count: 0,
         is_favorite: false,
         is_low_priority: false,
         folder_id: None,
@@ -376,6 +378,8 @@ fn room_summary_is_call_defaults_and_round_trips() {
         membership: Membership::Join,
         is_direct: false,
         is_call: false,
+        has_active_call: false,
+        active_call_participant_count: 0,
         is_space: false,
         is_favorite: false,
         is_low_priority: false,
@@ -402,4 +406,30 @@ fn room_summary_is_call_defaults_and_round_trips() {
     assert!(wire.contains("\"isCall\":true"));
     let back: RoomSummary = serde_json::from_str(&wire).expect("deserialize");
     assert!(back.is_call);
+    assert!(!back.has_active_call);
+    assert_eq!(back.active_call_participant_count, 0);
+}
+
+#[test]
+fn room_summary_has_active_call_defaults_and_does_not_overload_is_call() {
+    let raw = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": true, "encryptionStatus": "encrypted", "unreadCount": 0, "highlightCount": 0, "markedUnread": false, "isCall": true }"#;
+    let parsed: RoomSummary = serde_json::from_str(raw).expect("default hasActiveCall");
+    assert!(parsed.is_call);
+    assert!(!parsed.has_active_call);
+    assert_eq!(parsed.active_call_participant_count, 0);
+
+    let live = RoomSummary {
+        has_active_call: true,
+        active_call_participant_count: 3,
+        is_call: false,
+        ..parsed
+    };
+    let wire = serde_json::to_string(&live).expect("serialize");
+    assert!(wire.contains("\"hasActiveCall\":true"));
+    assert!(wire.contains("\"activeCallParticipantCount\":3"));
+    assert!(wire.contains("\"isCall\":false"));
+    let back: RoomSummary = serde_json::from_str(&wire).expect("deserialize");
+    assert!(!back.is_call);
+    assert!(back.has_active_call);
+    assert_eq!(back.active_call_participant_count, 3);
 }

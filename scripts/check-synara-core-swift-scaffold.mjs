@@ -31,6 +31,7 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreInvites.swift",
   "synara-ios/Synara/Services/SharedCoreTimeline.swift",
   "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
+  "synara-ios/Synara/Services/SharedCoreRtcTransports.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
   "synara-ios/Synara/Services/SharedCoreDevices.swift",
@@ -118,6 +119,10 @@ const sharedCoreTimeline = readFileSync(
 );
 const sharedCoreTypingPresence = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTypingPresence.swift"),
+  "utf8"
+);
+const sharedCoreRtcTransports = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRtcTransports.swift"),
   "utf8"
 );
 const sharedCoreVerificationList = readFileSync(
@@ -444,6 +449,16 @@ const assertions = [
   [sharedCoreTypingPresence, "presenceSubscribe", "P4-S7 product presence-subscribe helper"],
   [sharedCoreTypingPresence, "core: SharedCore", "P4-S7 helper takes an already-constructed SharedCore"],
   [sharedCoreTypingPresence, "core.typingSnapshot", "P4-S7 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "rtc_transports_snapshot", "MatrixRTC typed transport-snapshot FFI"],
+  [sharedCoreFfi, "matrix_rtc_transports_snapshot", "MatrixRTC calls the registered transport snapshot"],
+  [sharedCoreFfi, "matrix_rtc_transports_refresh", "MatrixRTC calls the registered transport refresh"],
+  [udl, "RtcTransportsSnapshotDto rtc_transports_snapshot()", "SharedCore rtc-transports-snapshot operation"],
+  [udl, "RtcTransportsSnapshotDto rtc_transports_refresh()", "SharedCore rtc-transports-refresh operation"],
+  [udl, "interface RtcTransportsCommandError", "static rtc-transports error"],
+  [swiftBindingsTests, "testSharedCoreRtcTransportsWithoutSessionFailsClosed", "Swift fail-closed rtc-transports test"],
+  [sharedCoreRtcTransports, "rtcTransportsSnapshot", "product rtc-transports-snapshot helper"],
+  [sharedCoreRtcTransports, "core: SharedCore", "rtc helper takes an already-constructed SharedCore"],
+  [sharedCoreRtcTransports, "core.rtcTransportsSnapshot", "rtc helper reads on the caller-owned instance"],
   [sharedCoreFfi, "verification_list", "P4-S8 typed verification-list FFI"],
   [sharedCoreFfi, "matrix_verification_list", "P4-S8 calls the registered Core command"],
   [udl, "VerificationInboxDto verification_list()", "P4-S8 SharedCore verification-list operation"],
@@ -1796,6 +1811,9 @@ if (!sharedCoreBody.includes("typing_snapshot") || !sharedCoreBody.includes("typ
 if (!sharedCoreBody.includes("presence_snapshot") || !sharedCoreBody.includes("presence_subscribe") || !sharedCoreBody.includes("presence_unsubscribe")) {
   throw new Error("P4-S7 SharedCore must expose presence_snapshot/subscribe/unsubscribe");
 }
+if (!sharedCoreBody.includes("rtc_transports_snapshot") || !sharedCoreBody.includes("rtc_transports_refresh")) {
+  throw new Error("SharedCore must expose rtc_transports_snapshot/refresh");
+}
 if (!sharedCoreBody.includes("verification_list")) {
   throw new Error("P4-S8 SharedCore must expose verification_list");
 }
@@ -1978,6 +1996,9 @@ if (sharedCoreTimeline.includes("SharedCore(store:")) {
 }
 if (sharedCoreTypingPresence.includes("SharedCore(store:")) {
   throw new Error("P4-S7 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRtcTransports.includes("SharedCore(store:")) {
+  throw new Error("rtc-transports helper must not construct-and-drop SharedCore");
 }
 if (sharedCoreVerificationList.includes("SharedCore(store:")) {
   throw new Error("P4-S8 helper must not construct-and-drop SharedCore");

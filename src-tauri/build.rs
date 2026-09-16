@@ -100,6 +100,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_presence_snapshot",
     "matrix_presence_subscribe",
     "matrix_presence_unsubscribe",
+    "matrix_rtc_transports_refresh",
+    "matrix_rtc_transports_snapshot",
     "matrix_push_rules_add_keyword",
     "matrix_push_rules_remove_keyword",
     "matrix_push_rules_set_default",

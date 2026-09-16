@@ -39,6 +39,7 @@ use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceSubscription,
     NativePresenceWriteResult,
 };
+use crate::app::rtc_transports::{NativeRtcTransportsOwner, NativeRtcTransportsSnapshot};
 use crate::app::room_directory::{
     DirectoryRoomTypeFilter, DirectorySearchInput, NativeRoomDirectoryProtocols,
     NativeRoomDirectorySearchResponse,
@@ -1368,6 +1369,7 @@ pub struct CoreState {
     session: Mutex<Option<SessionSnapshot>>,
     typing: Mutex<Option<Arc<NativeTypingOwner>>>,
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
+    rtc_transports: Mutex<Option<Arc<NativeRtcTransportsOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
@@ -1399,6 +1401,13 @@ impl CoreState {
 
     fn presence_owner(&self) -> Result<Option<Arc<NativePresenceOwner>>, MatrixIpcError> {
         self.presence
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn rtc_transports_owner(&self) -> Result<Option<Arc<NativeRtcTransportsOwner>>, MatrixIpcError> {
+        self.rtc_transports
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -1484,6 +1493,7 @@ impl Core {
                 session: Mutex::new(None),
                 typing: Mutex::new(None),
                 presence: Mutex::new(None),
+                rtc_transports: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
@@ -1551,6 +1561,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *presence = None;
         drop(presence);
+        let mut rtc_transports = self
+            .state
+            .rtc_transports
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *rtc_transports = None;
+        drop(rtc_transports);
         let mut verification = self
             .state
             .verification
@@ -1633,6 +1650,21 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *presence = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live MatrixRTC transport owner created after login/restore.
+    /// Core snapshots it for `matrix_rtc_transports_snapshot` / refresh.
+    pub fn attach_rtc_transports(
+        &self,
+        owner: Arc<NativeRtcTransportsOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut rtc_transports = self
+            .state
+            .rtc_transports
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *rtc_transports = Some(owner);
         Ok(())
     }
 
@@ -2118,6 +2150,18 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_presence_unsubscribe", matrix_presence_unsubscribe)
         .expect("built-in matrix_presence_unsubscribe must remain in the command census");
+    registry
+        .register(
+            "matrix_rtc_transports_refresh",
+            matrix_rtc_transports_refresh,
+        )
+        .expect("built-in matrix_rtc_transports_refresh must remain in the command census");
+    registry
+        .register(
+            "matrix_rtc_transports_snapshot",
+            matrix_rtc_transports_snapshot,
+        )
+        .expect("built-in matrix_rtc_transports_snapshot must remain in the command census");
     registry
         .register("matrix_verification_accept", matrix_verification_accept)
         .expect("built-in matrix_verification_accept must remain in the command census");
@@ -3394,6 +3438,43 @@ fn matrix_presence_set(state: Arc<CoreState>, request: CommandEnvelope) -> Comma
             .map_err(presence_set_owner_error)?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-presence-set-serialization-failed"))
+    })
+}
+
+fn matrix_rtc_transports_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-rtc-transports-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.rtc_transports_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-rtc-transports-snapshot-no-session")
+        })?;
+        let snapshot: NativeRtcTransportsSnapshot = owner.snapshot().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-rtc-transports-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_rtc_transports_refresh(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-rtc-transports-refresh-invalid-payload",
+            ));
+        }
+        let owner = state.rtc_transports_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-rtc-transports-refresh-no-session")
+        })?;
+        let snapshot: NativeRtcTransportsSnapshot = owner.refresh().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-rtc-transports-refresh-serialization-failed"))
     })
 }
 
@@ -6402,6 +6483,8 @@ mod tests {
                 "matrix_room_set_power_levels",
                 "matrix_room_set_read_state",
                 "matrix_room_unban",
+                "matrix_rtc_transports_refresh",
+                "matrix_rtc_transports_snapshot",
                 "matrix_secret_storage_status",
                 "matrix_send_poll",
                 "matrix_send_text",
@@ -7734,6 +7817,78 @@ mod tests {
         );
         let text = format!("{error:?}");
         assert!(!text.contains("token"));
+    }
+
+    #[tokio::test]
+    async fn matrix_rtc_transports_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_rtc_transports_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("rtc transport snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-rtc-transports-snapshot-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("widget"));
+        assert!(!text.contains("livekit"));
+    }
+
+    #[tokio::test]
+    async fn matrix_rtc_transports_snapshot_rejects_unknown_payload() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_rtc_transports_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"token":"no"}),
+            })
+            .await
+            .expect_err("rtc transport snapshot must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-rtc-transports-snapshot-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_rtc_transports_snapshot_static_unsupported_without_homeserver() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let owner = NativeRtcTransportsOwner::from_static_snapshot(
+            7,
+            NativeRtcTransportsSnapshot::unsupported(7),
+        );
+        core.attach_rtc_transports(Arc::new(owner))
+            .expect("attach static rtc owner");
+        let response = core
+            .command(CommandEnvelope {
+                command: "matrix_rtc_transports_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect("static unsupported snapshot");
+        let snapshot: NativeRtcTransportsSnapshot =
+            serde_json::from_value(response.payload).expect("snapshot payload");
+        assert_eq!(
+            snapshot.status,
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Unsupported
+        );
+        assert!(snapshot.transports.is_empty());
+        let raw = serde_json::to_string(&snapshot).expect("serialize");
+        for forbidden in ["widget", "jwt", "accessToken", "password"] {
+            assert!(!raw.contains(forbidden), "{raw}");
+        }
     }
 
     #[tokio::test]

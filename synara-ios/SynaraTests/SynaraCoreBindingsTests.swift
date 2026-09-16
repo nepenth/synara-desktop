@@ -562,6 +562,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
+                rowKind: "call",
+                body: "notification",
+                formattedBody: nil
+            ),
+            .text("Incoming call")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
                 rowKind: "sticker",
                 body: "",
                 formattedBody: nil
@@ -1284,6 +1292,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     lastMessagePreview: nil,
                     lastMessageIsAgentApproval: false,
                     isFavorite: false,
+                    isCall: false,
+                    hasActiveCall: false,
+                    activeCallParticipantCount: 0,
                     encryptionStatus: .encrypted
                 ),
                 SharedCoreRoomListRows.RoomRow(
@@ -1299,6 +1310,9 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     lastMessagePreview: "Hello from Alice",
                     lastMessageIsAgentApproval: true,
                     isFavorite: true,
+                    isCall: true,
+                    hasActiveCall: true,
+                    activeCallParticipantCount: 3,
                     encryptionStatus: .notEncrypted
                 ),
             ],
@@ -1326,6 +1340,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.first?.membership, .invited)
         XCTAssertEqual(rooms.first?.isFavorite, false)
         XCTAssertEqual(rooms.last?.isFavorite, true)
+        XCTAssertEqual(rooms.first?.isCall, false)
+        XCTAssertEqual(rooms.last?.isCall, true)
+        XCTAssertEqual(rooms.first?.hasActiveCall, false)
+        XCTAssertEqual(rooms.last?.hasActiveCall, true)
+        XCTAssertEqual(rooms.last?.activeCallParticipantCount, 3)
+        XCTAssertEqual(rooms.last?.liveCallChipLabel, "3 live")
         XCTAssertEqual(rooms.first?.isEncrypted, true)
         XCTAssertEqual(rooms.last?.isEncrypted, false)
         XCTAssertEqual(rooms.first?.encryptionStatus, .encrypted)
@@ -1643,6 +1663,47 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 XCTAssertFalse(publicError.contains(forbidden))
             }
         }
+    }
+
+    func testSharedCoreRtcTransportsWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        do {
+            _ = try await SharedCoreRtcTransports.snapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot RTC transports without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-rtc-transports-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "widget", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+        do {
+            _ = try await SharedCoreRtcTransports.refresh(core: core)
+            XCTFail("Fail-closed SharedCore must not refresh RTC transports without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-rtc-transports-refresh-no-session"))
+            for forbidden in ["password", "syt_", "widget", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+        XCTAssertEqual(
+            SharedCoreRtcTransports.diagnosticCopy(
+                SharedCoreRtcTransportsSnapshot(status: "unsupported", transports: [])
+            ),
+            "This homeserver does not advertise a call transport"
+        )
+        XCTAssertEqual(
+            SharedCoreRtcTransports.diagnosticCopy(
+                SharedCoreRtcTransportsSnapshot(
+                    status: "ready",
+                    transports: [
+                        SharedCoreRtcTransport(kind: "livekit", serviceURL: "https://livekit.example.org")
+                    ]
+                )
+            ),
+            "MatrixRTC transport: LiveKit at https://livekit.example.org"
+        )
     }
 
     func testSharedCoreVerificationLiveMapsPhasesWithoutEcho() {

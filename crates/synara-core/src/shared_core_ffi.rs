@@ -207,6 +207,9 @@ use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
     NativePresenceSubscription, NativePresenceUpdate, NativePresenceWriteResult,
 };
+use crate::app::rtc_transports::{
+    NativeRtcTransport, NativeRtcTransportsOwner, NativeRtcTransportsSnapshot,
+};
 use crate::app::room_list::{
     NativeInvite, NativeInviteSnapshot, NativeInviteTriage, NativeRoomListOwner,
     NativeRoomListSnapshot, NativeRoomListUpdateSignal,
@@ -368,6 +371,7 @@ const LEFTOVER_STATUS_GENERATION: u64 = 0;
 const ATTACHED_OWNER_NAMES: &[&str] = &[
     "typing",
     "presence",
+    "rtc_transports",
     "verification",
     "devices",
     "join_rules",
@@ -419,6 +423,13 @@ const PRESENCE_SNAPSHOT_COMMAND: &str = "matrix_presence_snapshot";
 const PRESENCE_SUBSCRIBE_COMMAND: &str = "matrix_presence_subscribe";
 const PRESENCE_UNSUBSCRIBE_COMMAND: &str = "matrix_presence_unsubscribe";
 const PRESENCE_SET_COMMAND: &str = "matrix_presence_set";
+const RTC_TRANSPORTS_SNAPSHOT_COMMAND: &str = "matrix_rtc_transports_snapshot";
+const RTC_TRANSPORTS_REFRESH_COMMAND: &str = "matrix_rtc_transports_refresh";
+const RTC_TRANSPORTS_NO_SESSION_CODE: &str = "p2-rtc-transports-snapshot-no-session";
+const RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE: &str = "p2-rtc-transports-refresh-no-session";
+const RTC_TRANSPORTS_NO_SESSION_DESCRIPTION: &str = "No MatrixRTC transport session is available.";
+const RTC_TRANSPORTS_FAILED_CODE: &str = "p4-rtc-transports-snapshot-failed";
+const RTC_TRANSPORTS_FAILED_DESCRIPTION: &str = "MatrixRTC transports could not be loaded.";
 const TYPING_SNAPSHOT_NO_SESSION_CODE: &str = "p2-typing-snapshot-no-session";
 const TYPING_SET_NO_SESSION_CODE: &str = "p2-typing-set-no-session";
 const PRESENCE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-presence-snapshot-no-session";
@@ -1283,6 +1294,9 @@ pub struct RoomListRoomDto {
     pub is_direct: bool,
     pub is_space: bool,
     pub is_favorite: bool,
+    pub is_call: bool,
+    pub has_active_call: bool,
+    pub active_call_participant_count: u32,
     pub unread_count: u32,
     pub highlight_count: u32,
     pub marked_unread: bool,
@@ -3011,6 +3025,88 @@ pub struct PresenceWriteDto {
     pub status: String,
 }
 
+/// Privacy-safe MatrixRTC transport. URLs only; no JWTs or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RtcTransportDto {
+    pub kind: String,
+    pub service_url: Option<String>,
+}
+
+/// Privacy-safe MatrixRTC discovery snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RtcTransportsSnapshotDto {
+    pub session_generation: u64,
+    pub status: String,
+    pub transports: Vec<RtcTransportDto>,
+}
+
+/// Static fail-closed RTC transport error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RtcTransportsCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RtcTransportsCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RtcTransportsCommandError {}
+
+fn rtc_transports_failed(
+    code: &'static str,
+    description: &'static str,
+) -> RtcTransportsCommandError {
+    RtcTransportsCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_rtc_transports_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RtcTransportsCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => rtc_transports_failed(
+            no_session,
+            RTC_TRANSPORTS_NO_SESSION_DESCRIPTION,
+        ),
+        _ => rtc_transports_failed(
+            RTC_TRANSPORTS_FAILED_CODE,
+            RTC_TRANSPORTS_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn rtc_transports_snapshot_dto(
+    snapshot: NativeRtcTransportsSnapshot,
+) -> RtcTransportsSnapshotDto {
+    RtcTransportsSnapshotDto {
+        session_generation: snapshot.session_generation,
+        status: match snapshot.status {
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Ready => "ready".to_owned(),
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Unsupported => {
+                "unsupported".to_owned()
+            }
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Unavailable => {
+                "unavailable".to_owned()
+            }
+        },
+        transports: snapshot
+            .transports
+            .into_iter()
+            .map(|transport: NativeRtcTransport| RtcTransportDto {
+                kind: transport.kind.as_str().to_owned(),
+                service_url: transport.service_url,
+            })
+            .collect(),
+    }
+}
+
 /// Static fail-closed presence error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresenceCommandError {
@@ -3773,6 +3869,7 @@ impl SharedCore {
             NativePresenceOwner::start(&client, presence_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let rtc_transports = Arc::new(NativeRtcTransportsOwner::start(&client, generation));
         let verification_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeVerificationUpdateSignal| {
@@ -3853,6 +3950,9 @@ impl SharedCore {
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_presence(presence)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_rtc_transports(rtc_transports)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_verification(verification)
@@ -4134,6 +4234,9 @@ impl SharedCore {
                     is_direct: room.is_direct,
                     is_space: room.is_space,
                     is_favorite: room.is_favorite,
+                    is_call: room.is_call,
+                    has_active_call: room.has_active_call,
+                    active_call_participant_count: room.active_call_participant_count,
                     unread_count: room.unread_count,
                     highlight_count: room.highlight_count,
                     marked_unread: room.marked_unread,
@@ -4405,6 +4508,51 @@ impl SharedCore {
         Ok(PresenceWriteDto {
             status: result.status,
         })
+    }
+
+    pub async fn rtc_transports_snapshot(
+        &self,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        self.rtc_transports_command(
+            RTC_TRANSPORTS_SNAPSHOT_COMMAND,
+            RTC_TRANSPORTS_NO_SESSION_CODE,
+        )
+        .await
+    }
+
+    pub async fn rtc_transports_refresh(
+        &self,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        self.rtc_transports_command(
+            RTC_TRANSPORTS_REFRESH_COMMAND,
+            RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE,
+        )
+        .await
+    }
+
+    async fn rtc_transports_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_rtc_transports_core_error(no_session, error))?;
+        let snapshot: NativeRtcTransportsSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                rtc_transports_failed(
+                    RTC_TRANSPORTS_FAILED_CODE,
+                    RTC_TRANSPORTS_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(rtc_transports_snapshot_dto(snapshot))
     }
 
     pub async fn verification_list(&self) -> Result<VerificationInboxDto, VerificationListError> {
