@@ -1011,6 +1011,8 @@ mod user_status;
 mod verification;
 #[path = "../widgets/product_commands.rs"]
 mod widgets;
+#[path = "../x509/product_commands.rs"]
+mod x509_identity;
 pub use account_data::*;
 pub use auth_commands::*;
 pub use backup::*;
@@ -1035,6 +1037,7 @@ pub use user_profile::*;
 pub use user_status::*;
 pub use verification::*;
 pub use widgets::*;
+pub use x509_identity::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]

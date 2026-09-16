@@ -23,6 +23,7 @@ import { BackupRestoreTile } from '../../../components/BackupRestore';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { canOfferNativeDeviceVerification } from '../../cross-signing/nativeCrossSigning';
 import { NativeSecretStorageTile } from '../../../components/SecretStorage';
+import { X509IdentityCard } from './X509IdentityCard';
 
 function DevicesPlaceholder() {
   return (
@@ -160,7 +161,17 @@ export function Devices({ requestClose }: DevicesProps) {
                       onVerified={() => void refreshDeviceList()}
                     />
                   )}
-                </SequenceCard>
+                  </SequenceCard>
+                {nativeSession && (
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                    gap="400"
+                  >
+                    <X509IdentityCard />
+                  </SequenceCard>
+                )}
                 {nativeSession && (
                   <SequenceCard
                     className={SequenceCardStyle}

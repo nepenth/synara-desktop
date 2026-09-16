@@ -45,6 +45,7 @@ final class AppEnvironmentTests: XCTestCase {
         XCTAssertEqual(device.displayName, "MacBook")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName(device.trust), "Verified")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("verified_locally_only"), "Verified")
+        XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("verified_by_certificate"), "Verified (certificate)")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("unverified"), "Unverified")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("no_encryption"), "Not encrypted")
         XCTAssertEqual(SharedCoreDevicesLive.trustDisplayName("dehydrated"), "Backup device")

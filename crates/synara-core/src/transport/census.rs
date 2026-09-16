@@ -194,6 +194,11 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_widget_post",
     "matrix_widget_subscribe",
     "matrix_widgets_list",
+    "matrix_x509_identity_import_ca",
+    "matrix_x509_identity_import_signer",
+    "matrix_x509_identity_remove_ca",
+    "matrix_x509_identity_set_enabled",
+    "matrix_x509_identity_status",
 ];
 
 /// Whether `command` is an exact React-facing Matrix invoke command.

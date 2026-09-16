@@ -5503,6 +5503,66 @@
           "type": "string",
           "const": "window-state:deny-save-window-state",
           "markdownDescription": "Denies the save_window_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_import_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-import-ca",
+          "markdownDescription": "Enables the matrix_x509_identity_import_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_import_signer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-import-signer",
+          "markdownDescription": "Enables the matrix_x509_identity_import_signer command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_remove_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-remove-ca",
+          "markdownDescription": "Enables the matrix_x509_identity_remove_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-set-enabled",
+          "markdownDescription": "Enables the matrix_x509_identity_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-status",
+          "markdownDescription": "Enables the matrix_x509_identity_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_import_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-import-ca",
+          "markdownDescription": "Denies the matrix_x509_identity_import_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_import_signer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-import-signer",
+          "markdownDescription": "Denies the matrix_x509_identity_import_signer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_remove_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-remove-ca",
+          "markdownDescription": "Denies the matrix_x509_identity_remove_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-set-enabled",
+          "markdownDescription": "Denies the matrix_x509_identity_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-status",
+          "markdownDescription": "Denies the matrix_x509_identity_status command without any pre-configured scope."
         }
       ]
     },

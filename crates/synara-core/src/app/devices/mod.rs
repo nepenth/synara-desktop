@@ -16,14 +16,17 @@ pub use live::{
 /// Signal only — never carries device keys or tokens.
 pub const DEVICE_LIST_UPDATED_EVENT: &str = "matrix-device-list-updated";
 
-/// Per-session crypto trust. `verified` is cross-signing trust only.
-/// Direct SAS without cross-signing is `verified_locally_only`. The previous
-/// `unsupported` wire value deserializes as `no_encryption`.
+/// Per-session crypto trust. `verified` is cross-signing / USK trust only.
+/// Direct SAS without cross-signing is `verified_locally_only`.
+/// CA-trusted peers (io.element.x509) are `verified_by_certificate` and must
+/// not be labeled as emoji-verified. The previous `unsupported` wire value
+/// deserializes as `no_encryption`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum NativeDeviceTrust {
     Verified,
     VerifiedLocallyOnly,
+    VerifiedByCertificate,
     Unverified,
     #[serde(alias = "unsupported")]
     NoEncryption,
@@ -36,6 +39,9 @@ pub struct NativeDeviceTrustSignals {
     pub is_dehydrated: bool,
     pub is_verified_with_cross_signing: bool,
     pub is_verified: bool,
+    /// True when trust comes from an `io.element.x509` CA signature rather than
+    /// USK / interactive SAS. Own-account session rows leave this false.
+    pub is_verified_by_certificate: bool,
 }
 
 /// Password multi-select logout is `/devices` DELETE. That destroys the
@@ -52,6 +58,9 @@ pub fn project_native_device_trust(signals: NativeDeviceTrustSignals) -> NativeD
     }
     if signals.is_dehydrated {
         return NativeDeviceTrust::Dehydrated;
+    }
+    if signals.is_verified_by_certificate {
+        return NativeDeviceTrust::VerifiedByCertificate;
     }
     if signals.is_verified_with_cross_signing {
         return NativeDeviceTrust::Verified;
@@ -328,6 +337,7 @@ mod tests {
                 is_dehydrated: false,
                 is_verified_with_cross_signing: false,
                 is_verified: false,
+                is_verified_by_certificate: false,
             }),
             NativeDeviceTrust::NoEncryption
         );
@@ -337,6 +347,7 @@ mod tests {
                 is_dehydrated: true,
                 is_verified_with_cross_signing: false,
                 is_verified: false,
+                is_verified_by_certificate: false,
             }),
             NativeDeviceTrust::Dehydrated
         );
@@ -346,6 +357,7 @@ mod tests {
                 is_dehydrated: false,
                 is_verified_with_cross_signing: true,
                 is_verified: true,
+                is_verified_by_certificate: false,
             }),
             NativeDeviceTrust::Verified
         );
@@ -355,6 +367,7 @@ mod tests {
                 is_dehydrated: false,
                 is_verified_with_cross_signing: false,
                 is_verified: true,
+                is_verified_by_certificate: false,
             }),
             NativeDeviceTrust::VerifiedLocallyOnly
         );
@@ -362,8 +375,30 @@ mod tests {
             project_native_device_trust(NativeDeviceTrustSignals {
                 has_crypto_device: true,
                 is_dehydrated: false,
+                is_verified_with_cross_signing: true,
+                is_verified: true,
+                is_verified_by_certificate: true,
+            }),
+            NativeDeviceTrust::VerifiedByCertificate
+        );
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: true,
+                is_dehydrated: false,
+                is_verified_with_cross_signing: false,
+                is_verified: true,
+                is_verified_by_certificate: true,
+            }),
+            NativeDeviceTrust::VerifiedByCertificate,
+            "CA-verified / is_verified without USK must not become verified_locally_only"
+        );
+        assert_eq!(
+            project_native_device_trust(NativeDeviceTrustSignals {
+                has_crypto_device: true,
+                is_dehydrated: false,
                 is_verified_with_cross_signing: false,
                 is_verified: false,
+                is_verified_by_certificate: false,
             }),
             NativeDeviceTrust::Unverified
         );
@@ -413,6 +448,10 @@ mod tests {
         assert_eq!(
             serde_json::to_string(&NativeDeviceTrust::VerifiedLocallyOnly).unwrap(),
             "\"verified_locally_only\""
+        );
+        assert_eq!(
+            serde_json::to_string(&NativeDeviceTrust::VerifiedByCertificate).unwrap(),
+            "\"verified_by_certificate\""
         );
     }
 

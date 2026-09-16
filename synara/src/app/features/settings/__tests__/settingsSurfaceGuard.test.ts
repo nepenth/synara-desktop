@@ -105,3 +105,27 @@ test('native Notifications owns homeserver push rules instead of a unavailable s
   );
   assert.equal(nativeBranch.includes('Account > Block'), false);
 });
+
+const devices = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/devices/Devices.tsx'),
+  'utf8'
+);
+const developerTools = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
+  'utf8'
+);
+
+test('X.509 identity settings live on Devices, not Developer Tools', () => {
+  assert.match(devices, /X509IdentityCard/);
+  assert.match(devices, /isNativeMatrixSession/);
+  assert.equal(developerTools.includes('X509'), false);
+  assert.equal(developerTools.includes('x509'), false);
+  assert.equal(developerTools.includes('X.509'), false);
+  const x509Card = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/devices/X509IdentityCard.tsx'),
+    'utf8'
+  );
+  assert.match(x509Card, /shares encrypted room keys/);
+  assert.match(x509Card, /Reload session/);
+  assert.equal(x509Card.includes('settingsAtom'), false);
+});

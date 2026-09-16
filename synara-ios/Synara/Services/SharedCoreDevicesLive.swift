@@ -44,6 +44,8 @@ enum SharedCoreDevicesLive {
         switch trust {
         case "verified", "verified_locally_only":
             return "Verified"
+        case "verified_by_certificate":
+            return "Verified (certificate)"
         case "unverified":
             return "Unverified"
         case "dehydrated":

@@ -288,6 +288,9 @@ impl ClientBuildConfig {
                 .map(|s| (*s).to_owned())
                 .collect(),
             matrix_sdk_version: super::MATRIX_SDK_PIN_VERSION.to_owned(),
+            x509_verifier_configured: crate::app::x509::should_inject_verifier(
+                self.store_paths.account_root(),
+            ),
         }
     }
 
@@ -334,6 +337,9 @@ pub struct ClientBuildPlan {
     pub store_layout: StoreLayout,
     pub approved_features: Vec<String>,
     pub matrix_sdk_version: String,
+    /// Whether this build would inject an X.509 verifier. Never PEM / CMS.
+    #[serde(default)]
+    pub x509_verifier_configured: bool,
 }
 
 #[cfg(test)]
@@ -393,5 +399,17 @@ mod tests {
             .iter()
             .any(|feature| feature == "experimental-search"));
         assert_eq!(plan.store_layout.relative_search_dir, "search");
+    }
+
+    #[test]
+    fn plan_x509_flag_defaults_false_and_omits_pem() {
+        let config = make_config();
+        let plan = config.plan();
+        assert!(!plan.x509_verifier_configured);
+        let json = serde_json::to_string(&plan).expect("plan json");
+        assert!(json.contains("x509VerifierConfigured"));
+        assert!(!json.to_ascii_lowercase().contains("begin certificate"));
+        assert!(!json.to_ascii_lowercase().contains("private key"));
+        assert!(!json.contains("io.element.x509"));
     }
 }

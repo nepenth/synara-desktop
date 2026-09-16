@@ -21,6 +21,9 @@ pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.0";
 ///   synara-core `search-index` feature. NSE / iOS SharedCore must not enable it.
 /// - `experimental-encrypted-state-events` — MSC4362 encrypted state. Compile-in
 ///   decrypt is always on; product create/opt-in stays behind the account setting.
+/// - `experimental-x509-identity-verification` — compiled via Core
+///   `x509-identity` from **desktop `src-tauri` only**. Runtime-inert until a
+///   verifier is injected (Devices setting on **and** a CA PEM imported).
 ///
 /// `e2e-encryption` continues to arrive via `matrix-sdk-ui` feature unification
 /// (documented in P1.2) and enables the crypto store when combined with `sqlite`.
@@ -37,6 +40,7 @@ pub const APPROVED_MATRIX_SDK_FEATURES: &[&str] = &[
     "experimental-widgets",
     "experimental-search",
     "experimental-encrypted-state-events",
+    "experimental-x509-identity-verification",
 ];
 
 /// Features that must **not** be enabled on the product dependency line.
@@ -49,7 +53,6 @@ pub const FORBIDDEN_MATRIX_SDK_FEATURES: &[&str] = &[
     "experimental-element-recent-emojis",
     "experimental-push-secrets",
     "experimental-send-custom-to-device",
-    "experimental-x509-identity-verification",
     "indexeddb",
     "js",
     "uniffi",
@@ -145,16 +148,18 @@ mod tests {
 
     #[test]
     fn forbidden_features_keep_remaining_experimentals() {
-        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-element-recent-emojis"));
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
     }
 
     #[test]
     fn automatic_room_key_forwarding_is_approved_not_forbidden() {
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
-        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"testing"));
         assert!(!APPROVED_MATRIX_SDK_FEATURES.contains(&"testing"));
     }
@@ -225,7 +230,7 @@ mod tests {
     fn experimental_search_is_approved_for_desktop_index() {
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
-        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
     }
 
@@ -238,8 +243,15 @@ mod tests {
         assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
-        assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
         assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+    }
+
+    #[test]
+    fn x509_identity_is_approved_not_forbidden() {
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+        assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
     }
 
     #[test]
@@ -270,12 +282,12 @@ mod tests {
         let cargo = r#"
 matrix-sdk = { version = "=0.19.0", features = [
   "sqlite",
-  "experimental-x509-identity-verification",
+  "experimental-element-recent-emojis",
 ] }
 "#;
         assert_eq!(
             forbidden_requested_features(cargo),
-            vec!["experimental-x509-identity-verification".to_owned()]
+            vec!["experimental-element-recent-emojis".to_owned()]
         );
     }
 }

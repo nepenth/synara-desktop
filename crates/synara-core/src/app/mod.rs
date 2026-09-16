@@ -53,3 +53,4 @@ pub mod user_status;
 pub mod utd_recovery;
 pub mod verification;
 pub mod widgets;
+pub mod x509;

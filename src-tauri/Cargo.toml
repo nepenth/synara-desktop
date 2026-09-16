@@ -18,11 +18,13 @@ tauri-build = { version = "2", features = [] }
 serde_json = "1.0.109"
 serde = { version = "1.0.193", features = ["derive"] }
 # SNC-P1-2: matrix/dto lives in the shared native core; src-tauri (excluded
+# SNC-P1-2: matrix/dto lives in the shared native core; src-tauri (excluded
 # from the workspace) consumes it as a plain path dependency. Default features
 # include full-uniffi → room-key-forwarding (desktop compile-in). Search index
-# is desktop-only (Tantivy); NSE / iOS SharedCore must not enable it.
+# and X.509 identity are desktop-only; NSE / iOS SharedCore must not enable them.
 synara-core = { path = "../crates/synara-core", version = "0.1.0", features = [
   "search-index",
+  "x509-identity",
 ] }
 keyring = { version = "3.6.3", default-features = false, features = [
   "apple-native",

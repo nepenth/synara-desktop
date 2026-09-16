@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-x509-identity-import-signer"
+description = "Enables the matrix_x509_identity_import_signer command without any pre-configured scope."
+commands.allow = ["matrix_x509_identity_import_signer"]
+
+[[permission]]
+identifier = "deny-matrix-x509-identity-import-signer"
+description = "Denies the matrix_x509_identity_import_signer command without any pre-configured scope."
+commands.deny = ["matrix_x509_identity_import_signer"]

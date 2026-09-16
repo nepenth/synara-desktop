@@ -13524,6 +13524,7 @@ fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
     match trust {
         NativeDeviceTrust::Verified => "verified",
         NativeDeviceTrust::VerifiedLocallyOnly => "verified_locally_only",
+        NativeDeviceTrust::VerifiedByCertificate => "verified_by_certificate",
         NativeDeviceTrust::Unverified => "unverified",
         NativeDeviceTrust::NoEncryption => "no_encryption",
         NativeDeviceTrust::Dehydrated => "dehydrated",

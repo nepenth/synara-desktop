@@ -37,6 +37,7 @@ const PRODUCT_SOURCE: &str = concat!(
     include_str!("../user_profile/product_commands.rs"),
     include_str!("../verification/product_commands.rs"),
     include_str!("../widgets/product_commands.rs"),
+    include_str!("../x509/product_commands.rs"),
     include_str!("product.rs"),
 );
 

@@ -33,6 +33,14 @@ for (const target of appleTargets) {
     console.error(`SynaraNseCore must not enable the desktop search-index feature (${target})`);
     process.exit(1);
   }
+  if (
+    result.stdout.includes("x509-identity")
+    || result.stdout.includes("experimental-x509-identity-verification")
+    || result.stdout.includes("rust-x509-verifier-impl")
+  ) {
+    console.error(`SynaraNseCore must not enable X.509 identity verification (${target})`);
+    process.exit(1);
+  }
   // Inverse synara-core readback does not list matrix-sdk-crypto features.
   // Query the production graph and fail if gossip is compiled into NSE.
   const forwarding = spawnSync(

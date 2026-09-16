@@ -71,6 +71,9 @@ function deviceTrustChip(trust: NativeDevice['trust']): {
   if (trust === 'verified' || trust === 'verified_locally_only') {
     return { variant: 'Success', label: nativeDeviceTrustLabel(trust) };
   }
+  if (trust === 'verified_by_certificate') {
+    return { variant: 'Success', label: nativeDeviceTrustLabel(trust) };
+  }
   if (trust === 'unverified') {
     return { variant: 'Critical', label: nativeDeviceTrustLabel(trust) };
   }
