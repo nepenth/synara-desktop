@@ -152,6 +152,14 @@ const rowEventId = (row: NativeTimelineViewRow): string | undefined => {
   return undefined;
 };
 
+// Only message/sticker/poll rows carry `NativeTimelineRelationPresentation`;
+// other row kinds never set `threadRoot`. `'threadRoot' in row` narrows those
+// kinds to `T & Record<'threadRoot', unknown>`, so the cast keeps this typed
+// as the real wire shape without weakening the accessor for rows that do
+// declare the field.
+const rowThreadRoot = (row: NativeTimelineViewRow): string | undefined =>
+  'threadRoot' in row ? (row.threadRoot as string | undefined) : undefined;
+
 const findAnchorIndex = (
   rows: NativeTimelineViewRow[],
   anchor: Pick<NonNullable<NativeTimelineViewport['anchor']>, 'itemId' | 'eventId'>
@@ -1680,7 +1688,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -1822,7 +1830,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -1843,7 +1851,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -1891,7 +1899,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -1953,7 +1961,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -1974,7 +1982,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -1996,7 +2004,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
@@ -2018,7 +2026,7 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
-            threadRoot: 'threadRoot' in row ? row.threadRoot : undefined,
+            threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
           onReaction={runReaction}
