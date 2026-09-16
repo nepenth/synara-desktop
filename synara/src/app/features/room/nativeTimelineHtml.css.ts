@@ -655,3 +655,91 @@ globalStyle(`${FormattedBody} code .token.keyword`, {
 globalStyle(`${FormattedBody} code .token.regex, ${FormattedBody} code .token.important`, {
   color: syntaxRegex,
 });
+
+const historyStatusOverlay = {
+  position: 'absolute',
+  left: '50%',
+  transform: 'translateX(-50%)',
+  zIndex: 3,
+  maxWidth: `min(${toRem(420)}, calc(100% - ${toRem(72)}))`,
+} as const;
+
+export const HistoryStatusOverlayBackward = style({
+  ...historyStatusOverlay,
+  top: config.space.S300,
+});
+
+export const HistoryStatusOverlayForward = style({
+  ...historyStatusOverlay,
+  bottom: config.space.S300,
+});
+
+export const HistoryStatusCard = style({
+  padding: `${config.space.S200} ${config.space.S300}`,
+  borderRadius: config.radii.R400,
+  maxWidth: '100%',
+});
+
+export const DateRail = style({
+  position: 'absolute',
+  top: config.space.S700,
+  right: config.space.S100,
+  bottom: toRem(88),
+  width: toRem(44),
+  zIndex: 2,
+  pointerEvents: 'none',
+});
+
+export const DateRailTrack = style({
+  position: 'absolute',
+  top: 0,
+  right: toRem(10),
+  bottom: 0,
+  width: toRem(8),
+  borderRadius: config.radii.R400,
+  background: color.SurfaceVariant.Container,
+  boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
+  pointerEvents: 'auto',
+  cursor: 'pointer',
+});
+
+export const DateRailThumb = style({
+  position: 'absolute',
+  left: toRem(-2),
+  width: toRem(12),
+  height: toRem(18),
+  marginTop: toRem(-9),
+  borderRadius: config.radii.R400,
+  background: color.Primary.Main,
+  pointerEvents: 'none',
+});
+
+export const DateRailTick = style({
+  position: 'absolute',
+  right: toRem(6),
+  width: toRem(16),
+  height: toRem(16),
+  marginTop: toRem(-8),
+  padding: 0,
+  border: 0,
+  borderRadius: '50%',
+  background: color.Surface.Container,
+  boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
+  pointerEvents: 'auto',
+  cursor: 'pointer',
+  selectors: {
+    '&[aria-current="true"]': {
+      background: color.Primary.Main,
+    },
+  },
+});
+
+export const DateRailLabel = style({
+  position: 'absolute',
+  right: toRem(28),
+  transform: 'translateY(-50%)',
+  color: 'var(--synara-content-secondary)',
+  pointerEvents: 'none',
+  whiteSpace: 'nowrap',
+  textAlign: 'right',
+});

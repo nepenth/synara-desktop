@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   clearTimelinePaginationError,
   createTimelinePaginationErrorMessage,
+  isTimelinePaginationLoading,
+  resolveTimelineHistoryOverlay,
   setTimelinePaginationError,
   shouldShowTimelinePaginationLoader,
 } from '../timelinePagination';
@@ -38,4 +40,67 @@ test('timeline pagination error clear removes only the requested direction', () 
 
 test('timeline pagination error message helper preserves Error text', () => {
   assert.equal(createTimelinePaginationErrorMessage(new Error('rate limited')), 'rate limited');
+});
+
+test('timeline pagination error message helper reads structured command errors', () => {
+  assert.equal(
+    createTimelinePaginationErrorMessage({ message: 'homeserver timeout' }),
+    'homeserver timeout'
+  );
+});
+
+test('pagination loading is true for local in-flight even when native is still available', () => {
+  assert.equal(
+    isTimelinePaginationLoading({ nativeState: 'available', inFlight: true, hasError: false }),
+    true
+  );
+  assert.equal(
+    isTimelinePaginationLoading({ nativeState: 'loading', inFlight: false, hasError: false }),
+    true
+  );
+  assert.equal(
+    isTimelinePaginationLoading({ nativeState: 'loading', inFlight: true, hasError: true }),
+    false
+  );
+});
+
+test('history overlay prefers error over loading and hides the spinner', () => {
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'loading',
+      inFlight: true,
+      error: 'homeserver timeout',
+      atEdge: true,
+      canPaginate: true,
+    }),
+    { kind: 'error', message: 'homeserver timeout' }
+  );
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'available',
+      inFlight: true,
+      atEdge: false,
+      canPaginate: true,
+    }),
+    { kind: 'loading' }
+  );
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'available',
+      inFlight: false,
+      atEdge: true,
+      canPaginate: true,
+    }),
+    { kind: 'load_more' }
+  );
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'available',
+      inFlight: false,
+      atEdge: true,
+      canPaginate: true,
+      hasSparseLoadButton: true,
+    }),
+    { kind: 'hidden' }
+  );
 });

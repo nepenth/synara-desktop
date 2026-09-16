@@ -55,6 +55,7 @@ const tests = [
   'src/app/utils/__tests__/syncLifecycle.test.ts',
   'src/app/utils/__tests__/syncSplashRecovery.test.ts',
   'src/app/utils/__tests__/timelinePagination.test.ts',
+  'src/app/utils/__tests__/timelineDateMarks.test.ts',
   'src/app/utils/__tests__/timelineLinks.test.ts',
   'src/app/utils/__tests__/timelineNavigation.test.ts',
   'src/app/utils/__tests__/timelineOpening.test.ts',
