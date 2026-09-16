@@ -11,7 +11,7 @@ export function HomeRouteRoomProvider({ children }: { children: ReactNode }) {
   const mx = useMatrixClient();
   const rooms = useHomeRooms();
 
-  const { roomIdOrAlias, eventId } = useParams();
+  const { roomIdOrAlias, eventId, threadRootId } = useParams();
   const viaServers = useSearchParamsViaServers();
   const roomId = useSelectedRoom();
   const room = mx.getRoom(roomId);
@@ -21,6 +21,7 @@ export function HomeRouteRoomProvider({ children }: { children: ReactNode }) {
       <JoinBeforeNavigate
         roomIdOrAlias={roomIdOrAlias!}
         eventId={eventId}
+        threadRootId={threadRootId}
         viaServers={viaServers}
       />
     );

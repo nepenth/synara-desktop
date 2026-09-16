@@ -64,6 +64,7 @@ use crate::app::spaces::{
 use crate::app::sync::{
     SyncReadiness, SyncReadinessSnapshot, SyncServiceOwner, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
+use crate::app::threads::NativeThreadListSnapshot;
 use crate::app::timeline::{
     NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -987,6 +988,14 @@ struct MatrixComposerClearReplyDraftRequest {
     expected_draft_revision: u64,
     #[serde(default)]
     thread_root_event_id: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_thread_list`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixThreadListRequest {
+    room_id: String,
+    action: String,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
@@ -2533,6 +2542,9 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_composer_get_reply_draft must remain in the command census");
     registry
+        .register("matrix_thread_list", matrix_thread_list)
+        .expect("built-in matrix_thread_list must remain in the command census");
+    registry
 }
 
 fn matrix_typing_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
@@ -3277,6 +3289,23 @@ fn matrix_composer_get_reply_draft(
     })
 }
 
+fn matrix_thread_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixThreadListRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-thread-list-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-thread-list-no-session")
+        })?;
+        let snapshot: NativeThreadListSnapshot = owner
+            .thread_list(&payload.room_id, &payload.action)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-thread-list-serialization-failed"))
+    })
+}
+
 fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
     let category = match diagnostic_id {
         "d0.4-send-invalid-room-id"
@@ -3320,7 +3349,11 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-reply-draft-event-unavailable"
         | "v-timeline-reply-draft-event-decode-failed"
         | "v-timeline-reply-draft-event-redacted"
-        | "v-timeline-reply-draft-unsupported-event" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-reply-draft-unsupported-event"
+        | "v-thread-list-invalid-room-id"
+        | "v-thread-list-room-not-found"
+        | "v-thread-list-paginate-failed"
+        | "v-thread-list-invalid-action" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -6432,6 +6465,7 @@ mod tests {
                 "matrix_space_hierarchy_snapshot",
                 "matrix_space_parents_snapshot",
                 "matrix_sync_status",
+                "matrix_thread_list",
                 "matrix_threepid_add_email",
                 "matrix_threepid_delete",
                 "matrix_threepid_request_email_token",
@@ -10701,6 +10735,28 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-composer-get-reply-draft-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_thread_list_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_thread_list".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "action":"open"
+                }),
+            })
+            .await
+            .expect_err("thread list without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-thread-list-no-session")
         );
     }
 

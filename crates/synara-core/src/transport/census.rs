@@ -142,6 +142,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_store_recovery_prepare",
     "matrix_sync_recover",
     "matrix_sync_status",
+    "matrix_thread_list",
     "matrix_threepid_add_email",
     "matrix_threepid_add_email_password",
     "matrix_threepid_delete",

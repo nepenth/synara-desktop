@@ -70,6 +70,7 @@ import { ContainerColor } from '../../styles/ContainerColor.css';
 import { getRoomNotesSummary } from '../../utils/roomNotes';
 import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
+import { RoomThreadListPanel } from './RoomThreadListPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -292,6 +293,7 @@ export function RoomViewHeader({
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [notesOverlayOpen, setNotesOverlayOpen] = useState(false);
+  const [threadsOverlayOpen, setThreadsOverlayOpen] = useState(false);
 
   const pinnedEvents = useRoomPinnedEvents(room);
   const notesContent = useAtomValue(roomNotesContentAtom);
@@ -304,6 +306,7 @@ export function RoomViewHeader({
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
   const notesOpen = activeSidePanel === 'notes' || notesOverlayOpen;
+  const threadsOpen = activeSidePanel === 'threads' || threadsOverlayOpen;
 
   const handleSearchClick = () => {
     if (onToggleSidePanel) {
@@ -337,6 +340,14 @@ export function RoomViewHeader({
       return;
     }
     setNotesOverlayOpen(true);
+  };
+
+  const handleOpenThreads = () => {
+    if (onToggleSidePanel) {
+      onToggleSidePanel('threads');
+      return;
+    }
+    setThreadsOverlayOpen(true);
   };
 
   const handleMemberToggle = () => {
@@ -441,6 +452,45 @@ export function RoomViewHeader({
                 </IconButton>
               )}
             </TooltipProvider>
+          )}
+          <TooltipProvider
+            position="Bottom"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>Threads</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton
+                className={depthCss.quietInteractiveSurface}
+                fill="None"
+                ref={triggerRef}
+                onClick={handleOpenThreads}
+                aria-label="Threads"
+                aria-pressed={threadsOpen}
+              >
+                <Icon size="400" src={Icons.Thread} filled={threadsOpen} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+          {!onToggleSidePanel && (
+            <Overlay open={threadsOverlayOpen} backdrop={<OverlayBackdrop />}>
+              <OverlayCenter>
+                <FocusTrap
+                  focusTrapOptions={{
+                    initialFocus: false,
+                    returnFocusOnDeactivate: false,
+                    onDeactivate: () => setThreadsOverlayOpen(false),
+                    clickOutsideDeactivates: true,
+                    escapeDeactivates: stopPropagation,
+                  }}
+                >
+                  <RoomThreadListPanel requestClose={() => setThreadsOverlayOpen(false)} />
+                </FocusTrap>
+              </OverlayCenter>
+            </Overlay>
           )}
           <TooltipProvider
             position="Bottom"

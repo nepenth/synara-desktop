@@ -114,6 +114,9 @@ const HermesAgentCard = React.lazy(() =>
 type NativeTimelinePresenterProps = {
   roomId: string;
   eventId?: string;
+  threadRootEventId?: string;
+  onOpenThreadRoute?: (rootEventId: string) => void;
+  onCloseThreadRoute?: () => void;
 };
 
 type NativeTimelineViewport = {
@@ -2073,17 +2076,27 @@ const NativeTimelineRow = ({
  * Active owner mounted by RoomView after V-TIMELINE.C1; JS RoomTimeline deleted
  * in V-TIMELINE.C2 (dual_backend false).
  */
-export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePresenterProps) {
+export function NativeTimelinePresenter({
+  roomId,
+  eventId,
+  threadRootEventId,
+  onOpenThreadRoute,
+  onCloseThreadRoute,
+}: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
-  const [threadRootId, setThreadRootId] = useState<string | undefined>();
+  const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
   const [threadScrollEventId, setThreadScrollEventId] = useState<string | undefined>();
   const [preferLiveBottom, setPreferLiveBottom] = useState(false);
   useEffect(() => {
     setFocusEventId(eventId);
-    setThreadRootId(undefined);
+    setThreadRootId(threadRootEventId);
+    if (threadRootEventId || eventId) {
+      setPreferLiveBottom(false);
+    }
+  }, [eventId, roomId, threadRootEventId]);
+  useEffect(() => {
     setThreadScrollEventId(undefined);
-    setPreferLiveBottom(false);
-  }, [eventId, roomId]);
+  }, [roomId]);
   useEffect(() => {
     publishNativeThreadRoot(roomId, threadRootId);
   }, [roomId, threadRootId]);
@@ -2922,15 +2935,17 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       setFocusEventId(undefined);
       setThreadRootId(rootEventId);
       setThreadScrollEventId(latestEventId);
+      onOpenThreadRoute?.(rootEventId);
     },
-    [saveViewport, threadRootId]
+    [onOpenThreadRoute, saveViewport, threadRootId]
   );
 
   const closeThread = useCallback(() => {
     setThreadRootId(undefined);
     setThreadScrollEventId(undefined);
     setPreferLiveBottom(false);
-  }, []);
+    onCloseThreadRoute?.();
+  }, [onCloseThreadRoute]);
 
   const jumpToLatest = useCallback(() => {
     setActionError(undefined);
@@ -2939,6 +2954,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       setThreadRootId(undefined);
       setThreadScrollEventId(undefined);
       setPreferLiveBottom(true);
+      onCloseThreadRoute?.();
       return;
     }
     // The new provider's layout effect places the tail. Until its geometry
@@ -2957,7 +2973,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             error instanceof Error ? error.message : 'Could not open latest messages.'
           );
       });
-  }, [input, loadLatest, threadRootId]);
+  }, [input, loadLatest, onCloseThreadRoute, threadRootId]);
   useEffect(() => observeRoomLatestAfterSend(roomId, jumpToLatest), [roomId, jumpToLatest]);
 
   const jumpToLastRead = useCallback(() => {

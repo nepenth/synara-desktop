@@ -215,6 +215,15 @@ pub async fn matrix_composer_get_reply_draft(
 }
 
 #[tauri::command]
+pub async fn matrix_thread_list(
+    core: State<'_, Arc<synara_core::Core>>,
+    request: synara_core::app::threads::NativeThreadListRequest,
+) -> Result<synara_core::app::threads::NativeThreadListSnapshot, MatrixAuthCommandError> {
+    crate::bridge::thread_list::thread_list(core.inner().as_ref(), request.room_id, request.action)
+        .await
+}
+
+#[tauri::command]
 pub async fn matrix_timeline_edit_text(
     core: State<'_, Arc<synara_core::Core>>,
     request: NativeTimelineEditTextRequest,

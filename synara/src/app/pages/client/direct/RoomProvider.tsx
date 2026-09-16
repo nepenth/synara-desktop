@@ -10,12 +10,18 @@ export function DirectRouteRoomProvider({ children }: { children: ReactNode }) {
   const mx = useMatrixClient();
   const rooms = useDirectRooms();
 
-  const { roomIdOrAlias, eventId } = useParams();
+  const { roomIdOrAlias, eventId, threadRootId } = useParams();
   const roomId = useSelectedRoom();
   const room = mx.getRoom(roomId);
 
   if (!room || !rooms.includes(room.roomId)) {
-    return <JoinBeforeNavigate roomIdOrAlias={roomIdOrAlias!} eventId={eventId} />;
+    return (
+      <JoinBeforeNavigate
+        roomIdOrAlias={roomIdOrAlias!}
+        eventId={eventId}
+        threadRootId={threadRootId}
+      />
+    );
   }
 
   return (

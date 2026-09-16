@@ -6,8 +6,9 @@ import type { EventedRoomReading } from '../../utils/roomEvents';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import { RoomPinMenu } from './room-pin-menu';
 import { MessageSearch } from '../message-search';
+import { RoomThreadListPanel } from './RoomThreadListPanel';
 
-export type RoomSidePanelType = 'notes' | 'pins' | 'search';
+export type RoomSidePanelType = 'notes' | 'pins' | 'search' | 'threads';
 
 type RoomSearchPanelProps = {
   room: EventedRoomReading;
@@ -61,12 +62,14 @@ const DEFAULT_PANEL_WIDTH: Record<RoomSidePanelType, number> = {
   notes: 380,
   pins: 420,
   search: 560,
+  threads: 380,
 };
 
 const MIN_PANEL_WIDTH: Record<RoomSidePanelType, number> = {
   notes: 300,
   pins: 340,
   search: 420,
+  threads: 300,
 };
 
 const MAX_PANEL_WIDTH = 760;
@@ -142,6 +145,7 @@ export function RoomSidePanel({ room, activePanel, requestClose }: RoomSidePanel
         />
       )}
       {activePanel === 'search' && <RoomSearchPanel room={room} requestClose={requestClose} />}
+      {activePanel === 'threads' && <RoomThreadListPanel requestClose={requestClose} />}
     </Box>
   );
 }

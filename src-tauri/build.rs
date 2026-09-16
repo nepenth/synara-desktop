@@ -180,6 +180,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_composer_set_reply_draft",
     "matrix_composer_clear_reply_draft",
     "matrix_composer_get_reply_draft",
+    "matrix_thread_list",
 ];
 
 fn git_output(repo: &Path, args: &[&str]) -> Option<String> {

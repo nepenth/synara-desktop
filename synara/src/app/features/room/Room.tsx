@@ -12,7 +12,7 @@ import { RoomViewHeader } from './RoomViewHeader';
 import { RoomSidePanel, RoomSidePanelType } from './RoomSidePanel';
 
 export function Room() {
-  const { eventId } = useParams();
+  const { eventId, threadRootId } = useParams();
   const room = useRoom();
 
   const [isDrawer, setIsDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
@@ -47,7 +47,7 @@ export function Room() {
             onToggleMembers={handleToggleMembers}
           />
           <Box grow="Yes">
-            <RoomView eventId={eventId} />
+            <RoomView eventId={eventId} threadRootEventId={threadRootId} />
           </Box>
         </Box>
 
