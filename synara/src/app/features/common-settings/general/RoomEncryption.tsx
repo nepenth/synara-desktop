@@ -29,14 +29,13 @@ import { useStateEvent } from '../../../hooks/useStateEvent';
 import { stopPropagation } from '../../../utils/keyboard';
 import { RoomPermissionsAPI } from '../../../hooks/useRoomPermissions';
 import { useSetting } from '../../../state/hooks/settings';
-import { settingsAtom } from '../../../state/settings';
+import { settingsAtom, getSharedSettings } from '../../../state/settings';
 import { useNativeRoomListSnapshot } from '../../../state/room-list/roomList';
 import {
   desktopUsesNativeStateEventOwner,
   enableRoomEncryptedStateWithNativeOwner,
 } from '../../../components/nativeStateEventOwner';
 import { pushEncryptedStateEventsSetting } from '../../settings/encryptedStateEvents';
-import { getSharedSettings } from '../../../state/settings';
 
 const ROOM_ENC_ALGO = 'm.megolm.v1.aes-sha2';
 
@@ -69,8 +68,7 @@ export function RoomEncryption({ permissions }: RoomEncryptionProps) {
   const stateEncrypted =
     encryptionContentRequestsState(content) || nativeSummary?.stateEncrypted === true;
   const isCallRoom = nativeSummary?.isCall === true;
-  const showStateOptIn =
-    enabled && !stateEncrypted && encryptedStateEventsSetting && !isCallRoom;
+  const showStateOptIn = enabled && !stateEncrypted && encryptedStateEventsSetting && !isCallRoom;
 
   const [enableState, enable] = useAsyncCallback(
     useCallback(async () => {

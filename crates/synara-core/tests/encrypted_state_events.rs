@@ -6,15 +6,15 @@ use std::sync::Arc;
 use matrix_sdk::{
     encryption::EncryptionSettings,
     ruma::{
-        RoomVersionId, device_id, event_id,
-        events::{StateEventType, room::power_levels::RoomPowerLevelsEventContent},
+        device_id, event_id,
+        events::{room::power_levels::RoomPowerLevelsEventContent, StateEventType},
         room_id,
         room_version_rules::AuthorizationRules,
-        user_id,
+        user_id, RoomVersionId,
     },
     test_utils::mocks::MatrixMockServer,
 };
-use matrix_sdk_test::{JoinedRoomBuilder, event_factory::EventFactory};
+use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder};
 use serde_json::json;
 use synara_core::app::room_profile::NativeRoomJoinRuleOwner;
 use synara_core::app::spaces::set_space_child;
@@ -99,12 +99,11 @@ async fn excluded_types_stay_plaintext_in_state_encrypted_rooms() {
         .await;
     let room_id = room_id!("!plain:example.org");
     let room = server.sync_joined_room(&client, room_id).await;
-    assert!(
-        room.latest_encryption_state()
-            .await
-            .unwrap()
-            .is_state_encrypted()
-    );
+    assert!(room
+        .latest_encryption_state()
+        .await
+        .unwrap()
+        .is_state_encrypted());
 
     server
         .mock_room_send_state()
@@ -189,9 +188,7 @@ fn native_paths_still_call_sdk_send_state_event_futures() {
     assert!(profile.contains("room.send_state_event_raw(event_type, state_key, content)"));
     assert!(profile.contains("room.set_name(name)"));
     assert!(spaces.contains("room.send_state_event_for_key(&child, content)"));
-    assert!(
-        packs.contains("room.send_state_event_raw(ROOM_EMOTES_EVENT_TYPE, state_key, content)")
-    );
+    assert!(packs.contains("room.send_state_event_raw(ROOM_EMOTES_EVENT_TYPE, state_key, content)"));
     assert!(!profile.contains("force_plaintext"));
     assert!(
         profile.contains("PowerLevelTagsReadbackSource::Store"),

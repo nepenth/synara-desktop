@@ -1071,9 +1071,9 @@ impl NativeRoomJoinRuleOwner {
         if room_version.rules().is_none() {
             return Err("v-send.r-room-profile-directory-visibility-permission-state-unavailable");
         }
-        let power_levels = room.power_levels().await.map_err(
-            |_| "v-send.r-room-profile-directory-visibility-permission-state-unavailable",
-        )?;
+        let power_levels = room.power_levels().await.map_err(|_| {
+            "v-send.r-room-profile-directory-visibility-permission-state-unavailable"
+        })?;
         let user_id = self
             .client
             .user_id()

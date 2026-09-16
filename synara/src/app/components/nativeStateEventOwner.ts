@@ -33,8 +33,7 @@ export async function sendStateEventWithNativeOwner(
   eventType: string,
   content: Record<string, unknown>,
   stateKey = '',
-  invoke: NativeStateEventInvoke = (command, args) =>
-    invokeDesktopWithAvailability(command, args),
+  invoke: NativeStateEventInvoke = (command, args) => invokeDesktopWithAvailability(command, args),
   nativeAvailable = desktopUsesNativeStateEventOwner()
 ): Promise<void> {
   if (!nativeAvailable) {
@@ -53,8 +52,7 @@ export async function sendStateEventWithNativeOwner(
 export async function enableRoomEncryptedStateWithNativeOwner(
   roomId: string,
   encryptStateEvents: boolean,
-  invoke: NativeStateEventInvoke = (command, args) =>
-    invokeDesktopWithAvailability(command, args),
+  invoke: NativeStateEventInvoke = (command, args) => invokeDesktopWithAvailability(command, args),
   nativeAvailable = desktopUsesNativeStateEventOwner()
 ): Promise<void> {
   if (!nativeAvailable) {
@@ -78,18 +76,10 @@ export async function sendLeftoverStateEvent(
   stateKey: string | undefined,
   jsSend: () => Promise<unknown>,
   nativeAvailable = desktopUsesNativeStateEventOwner(),
-  invoke: NativeStateEventInvoke = (command, args) =>
-    invokeDesktopWithAvailability(command, args)
+  invoke: NativeStateEventInvoke = (command, args) => invokeDesktopWithAvailability(command, args)
 ): Promise<void> {
   if (nativeAvailable) {
-    await sendStateEventWithNativeOwner(
-      roomId,
-      eventType,
-      content,
-      stateKey ?? '',
-      invoke,
-      true
-    );
+    await sendStateEventWithNativeOwner(roomId, eventType, content, stateKey ?? '', invoke, true);
     return;
   }
   await jsSend();
