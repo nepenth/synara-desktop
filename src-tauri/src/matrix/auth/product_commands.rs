@@ -267,9 +267,7 @@ pub async fn matrix_login_password(
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
     core.inner()
         .attach_dehydrated_devices(dehydrated_devices)
-        .map_err(|_| {
-            MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed")
-        })?;
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed"))?;
     core.inner()
         .attach_join_rules(join_rules)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
@@ -1098,9 +1096,7 @@ pub async fn matrix_restore_session(
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
     core.inner()
         .attach_dehydrated_devices(dehydrated_devices)
-        .map_err(|_| {
-            MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed")
-        })?;
+        .map_err(|_| MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed"))?;
     core.inner()
         .attach_join_rules(join_rules)
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;

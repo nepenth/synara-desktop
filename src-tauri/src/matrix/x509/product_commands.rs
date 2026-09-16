@@ -4,26 +4,22 @@ use std::path::{Path, PathBuf};
 
 use synara_core::app::store::{AccountIdentity, StorePaths};
 use synara_core::app::x509::{
-    import_ca_pem, import_signer_pems, list_certificate_verified_user_ids, load_runtime,
-    remove_ca, set_enabled, status_from_store, NativeX509IdentityStatus, X509StoreError,
+    import_ca_pem, import_signer_pems, list_certificate_verified_user_ids, load_runtime, remove_ca,
+    set_enabled, status_from_store, NativeX509IdentityStatus, X509StoreError,
 };
 
 use super::*;
 
 fn map_x509_error(error: X509StoreError) -> MatrixAuthCommandError {
     let (code, message) = match error {
-        X509StoreError::InvalidPem | X509StoreError::EmptySelection | X509StoreError::TooLarge => (
-            "InvalidRequest",
-            "The certificate could not be imported.",
-        ),
+        X509StoreError::InvalidPem | X509StoreError::EmptySelection | X509StoreError::TooLarge => {
+            ("InvalidRequest", "The certificate could not be imported.")
+        }
         X509StoreError::CaNotFound => (
             "InvalidRequest",
             "That certificate authority is not imported.",
         ),
-        X509StoreError::Io => (
-            "Unknown",
-            "X.509 identity settings are unavailable.",
-        ),
+        X509StoreError::Io => ("Unknown", "X.509 identity settings are unavailable."),
     };
     MatrixAuthCommandError::new(code, message, error.diagnostic_id())
 }
@@ -44,11 +40,9 @@ fn x509_account_root(
         .path()
         .app_data_dir()
         .map_err(|_| x509_unavailable("v-crypto.x509-app-data-unavailable"))?;
-    let identity = AccountIdentity::new(
-        &session.identity.user_id,
-        &session.identity.homeserver_url,
-    )
-    .map_err(|_| x509_unavailable("v-crypto.x509-identity-invalid"))?;
+    let identity =
+        AccountIdentity::new(&session.identity.user_id, &session.identity.homeserver_url)
+            .map_err(|_| x509_unavailable("v-crypto.x509-identity-invalid"))?;
     let paths = StorePaths::derive(&app_data_root, &identity)
         .map_err(|_| x509_unavailable("v-crypto.x509-store-path-invalid"))?;
     Ok(paths.account_root().to_path_buf())

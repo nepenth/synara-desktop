@@ -123,7 +123,10 @@ fn apply_x509_identity_hooks(
     if inject {
         if let Some(verifier) = crate::app::x509::build_verifier(&runtime.trust_anchors_pem) {
             builder = builder.with_x509_verifier(Some(verifier));
-            if let (Some(cert), Some(key)) = (runtime.signer_cert_pem.as_deref(), runtime.signer_key_pem.as_deref()) {
+            if let (Some(cert), Some(key)) = (
+                runtime.signer_cert_pem.as_deref(),
+                runtime.signer_key_pem.as_deref(),
+            ) {
                 if let Some(signer) = crate::app::x509::build_signer(cert, key) {
                     builder = builder.with_x509_signer(Some(signer));
                 }

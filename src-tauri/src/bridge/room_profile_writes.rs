@@ -1,7 +1,7 @@
 //! Desktop bridges for room name/topic/avatar writes through `Core::command`.
 
-use synara_core::Core;
 use synara_core::transport::{CommandEnvelope, MatrixIpcError, MatrixIpcErrorCategory};
+use synara_core::Core;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 use crate::matrix::auth::product::MatrixProfileWriteResult;

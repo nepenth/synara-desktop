@@ -139,7 +139,8 @@ fn ensure_x509_dir(account_root: &Path) -> Result<PathBuf, X509StoreError> {
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).map_err(|_| X509StoreError::Io)?;
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))
+            .map_err(|_| X509StoreError::Io)?;
     }
     Ok(dir)
 }
@@ -160,7 +161,8 @@ fn write_secret_file(path: &Path, contents: &str) -> Result<(), X509StoreError> 
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|_| X509StoreError::Io)?;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o600))
+            .map_err(|_| X509StoreError::Io)?;
     }
     Ok(())
 }
@@ -175,12 +177,14 @@ fn load_runtime_result(account_root: &Path) -> Result<X509Runtime, X509StoreErro
         Some(raw) => serde_json::from_str::<SettingsFile>(&raw).unwrap_or_default(),
         None => SettingsFile::default(),
     };
-    let trust_anchors_pem = read_optional(&dir.join(TRUST_ANCHORS_FILE), MAX_PEM_BYTES)?
-        .unwrap_or_default();
+    let trust_anchors_pem =
+        read_optional(&dir.join(TRUST_ANCHORS_FILE), MAX_PEM_BYTES)?.unwrap_or_default();
     let cas = summarize_cas(&trust_anchors_pem);
     let signer_cert_pem = read_optional(&dir.join(SIGNER_CERT_FILE), MAX_PEM_BYTES)?;
     let signer_key_pem = read_optional(&dir.join(SIGNER_KEY_FILE), MAX_SIGNER_KEY_BYTES)?;
-    let signer_imported = signer_cert_pem.as_ref().is_some_and(|pem| looks_like_pem(pem))
+    let signer_imported = signer_cert_pem
+        .as_ref()
+        .is_some_and(|pem| looks_like_pem(pem))
         && signer_key_pem
             .as_ref()
             .is_some_and(|pem| looks_like_private_key(pem));
@@ -257,7 +261,10 @@ pub fn import_ca_pem(account_root: &Path, pem: &str) -> Result<X509Runtime, X509
     let existing = read_optional(&path, MAX_PEM_BYTES)?.unwrap_or_default();
     let mut blocks = iter_pem_certificates(&existing);
     for cert in incoming {
-        if !blocks.iter().any(|have| fingerprint_cert(have) == fingerprint_cert(&cert)) {
+        if !blocks
+            .iter()
+            .any(|have| fingerprint_cert(have) == fingerprint_cert(&cert))
+        {
             blocks.push(cert);
         }
     }
@@ -332,7 +339,11 @@ pub fn record_applied(account_root: &Path, verifier_configured: bool) {
     };
     let applied = AppliedFile {
         enabled: runtime.enabled,
-        ca_fingerprints: runtime.cas.iter().map(|ca| ca.fingerprint.clone()).collect(),
+        ca_fingerprints: runtime
+            .cas
+            .iter()
+            .map(|ca| ca.fingerprint.clone())
+            .collect(),
         verifier_configured,
     };
     if let Ok(json) = serde_json::to_string(&applied) {
@@ -465,7 +476,8 @@ pub fn build_verifier(
     matrix_sdk_crypto::x509::RustRawX509Verifier::new_from_pem_data(pem)
         .ok()
         .map(|verifier| {
-            std::sync::Arc::new(verifier) as std::sync::Arc<dyn matrix_sdk_crypto::x509::RawX509Verifier>
+            std::sync::Arc::new(verifier)
+                as std::sync::Arc<dyn matrix_sdk_crypto::x509::RawX509Verifier>
         })
 }
 
@@ -477,7 +489,8 @@ pub fn build_signer(
     matrix_sdk_crypto::x509::RustRawX509Signer::new_from_pem_data(cert_pem, key_pem)
         .ok()
         .map(|signer| {
-            std::sync::Arc::new(signer) as std::sync::Arc<dyn matrix_sdk_crypto::x509::RawX509Signer>
+            std::sync::Arc::new(signer)
+                as std::sync::Arc<dyn matrix_sdk_crypto::x509::RawX509Signer>
         })
 }
 
@@ -502,7 +515,11 @@ pub async fn list_certificate_verified_user_ids(client: &matrix_sdk::Client) -> 
 
     let mut seen = std::collections::BTreeSet::new();
     let mut out = Vec::new();
-    for room in client.joined_rooms().into_iter().take(MAX_JOINED_ROOMS_SCANNED) {
+    for room in client
+        .joined_rooms()
+        .into_iter()
+        .take(MAX_JOINED_ROOMS_SCANNED)
+    {
         let Ok(members) = room.members_no_sync(RoomMemberships::JOIN).await else {
             continue;
         };
@@ -693,7 +710,9 @@ mod tests {
     #[test]
     fn rust_verifier_constructs_from_imported_ca_without_ring_install() {
         ensure_aws_lc_rustls_provider();
-        assert!(matrix_sdk_crypto::x509::RustRawX509Verifier::new_from_pem_data(TEST_CA_PEM).is_ok());
+        assert!(
+            matrix_sdk_crypto::x509::RustRawX509Verifier::new_from_pem_data(TEST_CA_PEM).is_ok()
+        );
         assert!(matrix_sdk_crypto::x509::RustRawX509Verifier::new_from_pem_data("nope").is_err());
         assert!(build_verifier(TEST_CA_PEM).is_some());
         assert!(build_verifier("nope").is_none());

@@ -150,8 +150,7 @@ pub use shared_core_ffi::{
     UserDirectorySearchError, UserImagePackSnapshotDto, UserInCallDto, UserStatusCommandError,
     UserStatusFieldDto, UserStatusSnapshotDto, UserStatusWriteDto, VerificationEmojiDto,
     VerificationInboxDto, VerificationListError, VerificationQrDto, VerificationRequestDto,
-    VerificationSasDto,
-    VerificationSasError,
+    VerificationSasDto, VerificationSasError,
 };
 
 mod core;

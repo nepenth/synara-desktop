@@ -269,7 +269,9 @@ impl NativeVerificationOwner {
                     .map_err(|_| "v-crypto.1-device-request-failed")?;
                 (request, Some(device_id))
             }
-            None => start_self_verification(&self.client, user_id, self.advertised_methods()).await?,
+            None => {
+                start_self_verification(&self.client, user_id, self.advertised_methods()).await?
+            }
         };
 
         let flow_id = request.flow_id().to_owned();
@@ -656,7 +658,15 @@ fn arm_watch(
 ) {
     let watch_id = flow_id.clone();
     let handle = tokio::spawn(async move {
-        watch_request(request, registry, emit, session_generation, watch_id, show_qr).await;
+        watch_request(
+            request,
+            registry,
+            emit,
+            session_generation,
+            watch_id,
+            show_qr,
+        )
+        .await;
     });
     if let Ok(mut watches) = watches.lock() {
         if let Some(previous) = watches.insert(flow_id, handle) {

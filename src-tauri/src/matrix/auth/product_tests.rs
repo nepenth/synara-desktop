@@ -220,7 +220,11 @@ fn encrypted_state_leftover_commands_register_native_owners() {
 
     for (command, permission, source) in [
         ("matrix_send_state_event", send, product_profile),
-        ("matrix_enable_room_encrypted_state", enable, product_profile),
+        (
+            "matrix_enable_room_encrypted_state",
+            enable,
+            product_profile,
+        ),
         (
             "matrix_set_encrypted_state_events_setting",
             setting,
@@ -233,7 +237,10 @@ fn encrypted_state_leftover_commands_register_native_owners() {
             "{command} product command"
         );
         assert!(lib.contains(command), "{command} lib register");
-        assert!(build.contains(&format!("\"{command}\"")), "{command} build.rs");
+        assert!(
+            build.contains(&format!("\"{command}\"")),
+            "{command} build.rs"
+        );
         assert!(
             capability.contains(&format!("allow-{capability_id}")),
             "{command} capability"
