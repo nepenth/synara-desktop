@@ -160,12 +160,17 @@ pub async fn send_room_attachment(
         request.mention_user_ids,
         request.mention_room,
     )?;
-    let event_id = room
-        .send_attachment(filename, &mime_type, request.payload, config)
-        .await
-        .map_err(|_| "v-send.1-attachment-sdk-failed")?
-        .event_id
-        .to_string();
+    let event_id =
+        super::send_attachment_via_room_queue(&room, filename, mime_type, request.payload, config)
+            .await
+            .map_err(|error| {
+                if error.wedged {
+                    "d0.4-send-queue-wedged"
+                } else {
+                    "v-send.1-attachment-sdk-failed"
+                }
+            })?
+            .event_id;
     Ok(MatrixSendRoomAttachmentResult {
         event_id,
         status: "sent",

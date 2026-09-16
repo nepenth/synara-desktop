@@ -26,8 +26,8 @@ mod live;
 mod media;
 mod native;
 mod pagination;
-mod reactions;
 mod projection;
+mod reactions;
 mod registry;
 mod utd;
 mod view;
@@ -88,11 +88,10 @@ pub use view::{
     TimelineForwardTransport, TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow,
     TimelineOtherRow, TimelinePageState, TimelinePaginationState, TimelinePollAnswer,
     TimelinePollRow, TimelineReaction, TimelineReactionSender, TimelineReadState,
-    TimelineRedactedRow,
-    TimelineReplyPreview, TimelineRoomActionAuthority, TimelineRowCapabilities, TimelineStateRow,
-    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
-    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
-    NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelineRedactedRow, TimelineReplyPreview, TimelineRoomActionAuthority,
+    TimelineRowCapabilities, TimelineStateRow, TimelineThreadSummary, TimelineViewCapabilities,
+    TimelineViewDeltaBatch, TimelineViewDeltaOp, TimelineViewPosition, TimelineViewRow,
+    TimelineViewSnapshot, NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 pub use view_emit::{TimelineViewUpdateEmit, ViewDeltaEmitter};
 

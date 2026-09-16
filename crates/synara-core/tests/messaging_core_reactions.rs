@@ -67,14 +67,12 @@ async fn remote_reaction_ids_recover_for_other_sender_and_toggle_unreact_stays_i
             JoinedRoomBuilder::new(room_id)
                 .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
                 .add_timeline_event(
-                    f.text_msg("earlier").sender(*BOB).event_id(event_id!("$earlier")),
+                    f.text_msg("earlier")
+                        .sender(*BOB)
+                        .event_id(event_id!("$earlier")),
                 )
                 .add_timeline_event(f.text_msg("target").sender(*BOB).event_id(target))
-                .add_timeline_event(
-                    f.reaction(target, "👍")
-                        .sender(*BOB)
-                        .event_id(bob_reaction),
-                ),
+                .add_timeline_event(f.reaction(target, "👍").sender(*BOB).event_id(bob_reaction)),
         )
         .await;
     server.mock_room_state_encryption().plain().mount().await;
@@ -169,12 +167,7 @@ async fn remote_reaction_ids_recover_for_other_sender_and_toggle_unreact_stays_i
     assert_eq!(bob_id, bob_reaction.as_str());
 
     let redacted = owner
-        .redact_reaction(
-            room_id.as_str(),
-            target.as_str(),
-            bob_id.as_str(),
-            "👍",
-        )
+        .redact_reaction(room_id.as_str(), target.as_str(), bob_id.as_str(), "👍")
         .await
         .expect("redact recovered annotation");
     assert_eq!(redacted.mutation, NativeReactionMutation::Redacted);

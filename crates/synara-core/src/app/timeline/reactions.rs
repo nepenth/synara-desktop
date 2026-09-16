@@ -13,7 +13,8 @@ use matrix_sdk::{
     room::{IncludeRelations, RelationsOptions},
     ruma::{
         events::{
-            relation::RelationType, AnySyncMessageLikeEvent, AnySyncTimelineEvent, TimelineEventType,
+            relation::RelationType, AnySyncMessageLikeEvent, AnySyncTimelineEvent,
+            TimelineEventType,
         },
         uint, EventId, OwnedEventId,
     },
@@ -83,7 +84,10 @@ pub fn fill_sender_event_id(
     }
 }
 
-pub fn fill_native_items_reaction_ids(items: &mut [NativeTimelineItem], recovered: &AnnotationIdMap) {
+pub fn fill_native_items_reaction_ids(
+    items: &mut [NativeTimelineItem],
+    recovered: &AnnotationIdMap,
+) {
     for item in items {
         fill_native_reactions(&item.event_id, &mut item.reactions, recovered);
     }
@@ -220,7 +224,9 @@ pub fn view_delta_ops_reaction_targets(ops: &[TimelineViewDeltaOp]) -> HashSet<S
 fn collect_view_row_targets(rows: &[TimelineViewRow], targets: &mut HashSet<String>) {
     for row in rows {
         let (event_id, reactions) = match row {
-            TimelineViewRow::Message(row) => (row.event.event_id.as_deref(), row.reactions.as_slice()),
+            TimelineViewRow::Message(row) => {
+                (row.event.event_id.as_deref(), row.reactions.as_slice())
+            }
             TimelineViewRow::Poll(row) => (row.event.event_id.as_deref(), row.reactions.as_slice()),
             TimelineViewRow::Sticker {
                 event, reactions, ..
@@ -363,11 +369,7 @@ pub async fn recover_missing_annotation_ids(
     recovered
 }
 
-pub async fn enrich_native_items(
-    room: &Room,
-    items: &mut [NativeTimelineItem],
-    network: bool,
-) {
+pub async fn enrich_native_items(room: &Room, items: &mut [NativeTimelineItem], network: bool) {
     let targets = native_items_reaction_targets(items);
     if targets.is_empty() {
         return;
@@ -431,9 +433,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use matrix_sdk::ruma::{
-        serde::Raw, MilliSecondsSinceUnixEpoch, OwnedEventId, UInt,
-    };
+    use matrix_sdk::ruma::{serde::Raw, MilliSecondsSinceUnixEpoch, OwnedEventId, UInt};
     use matrix_sdk_ui::timeline::{EventSendState, ReactionInfo};
     use serde_json::json;
 

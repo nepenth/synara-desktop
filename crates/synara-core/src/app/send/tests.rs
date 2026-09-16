@@ -211,11 +211,49 @@ fn mark_sent_invalid_when_failed() {
 }
 
 #[test]
-fn clear_wipes_queue() {
+fn mark_wedged_blocks_until_retry() {
     let mut q = SendQueue::new(1);
-    q.enqueue_text("!r:example.org", "x").unwrap();
-    q.clear();
-    assert!(q.is_empty());
+    let id = q
+        .enqueue_text("!r:example.org", "ping")
+        .unwrap()
+        .local_txn_id
+        .clone();
+    q.mark_wedged(&id, "d0.4-send-queue-wedged").unwrap();
+    let item = q.get(&id).unwrap();
+    assert_eq!(item.state, LocalEchoState::Wedged);
+    assert!(!item.is_terminal());
+    assert_eq!(q.prune_terminal(), 0);
+    q.retry(&id).unwrap();
+    assert_eq!(q.get(&id).unwrap().state, LocalEchoState::Sending);
+}
+
+#[test]
+fn enqueue_text_with_txn_projects_sdk_transaction_id() {
+    let mut q = SendQueue::new(1);
+    let item = q
+        .enqueue_text_with_txn("!r:example.org", "hello", "sdk-txn-1")
+        .unwrap();
+    assert_eq!(item.local_txn_id, "sdk-txn-1");
+    assert_eq!(item.state, LocalEchoState::Sending);
+}
+
+#[test]
+fn send_owner_source_uses_room_send_queue_not_room_send() {
+    let text = include_str!("text.rs");
+    let attachment = include_str!("attachment.rs");
+    let room_queue = include_str!("room_queue.rs");
+    assert!(text.contains("send_event_via_room_queue"));
+    assert!(!text.contains("room.send("));
+    assert!(attachment.contains("send_attachment_via_room_queue"));
+    assert!(!attachment.contains("room.send_attachment("));
+    assert!(room_queue.contains("room.send_queue()"));
+    assert!(room_queue.contains("send_attachment"));
+    assert!(room_queue.contains("d0.4-send-extra-content-forbidden"));
+    assert!(room_queue.contains("config.extra_content.is_some()"));
+    let tauri = include_str!("../../../../../src-tauri/src/matrix/send/product_commands.rs");
+    assert!(tauri.contains("enqueue_attachment_via_room_queue"));
+    assert!(tauri.contains("wait_for_queued_send"));
+    assert!(!tauri.contains(".send_attachment("));
 }
 
 #[test]

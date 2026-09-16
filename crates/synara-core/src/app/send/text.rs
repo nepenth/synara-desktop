@@ -1,6 +1,6 @@
 //! Native composer text-send content builder.
 //!
-//! Live `Room::send` stays on the attached timeline owner.
+//! Live sends go through `RoomSendQueue`, not `Room::send`.
 
 use std::collections::BTreeSet;
 
@@ -152,19 +152,16 @@ pub fn validated_mentions(
 pub async fn send_message_to_room(
     room: &Room,
     content: RoomMessageEventContent,
-    txn_id: Option<OwnedTransactionId>,
-) -> Result<String, &'static str> {
-    let send = room.send(content);
-    let result = match txn_id {
-        Some(txn_id) => send.with_transaction_id(txn_id).await,
-        None => send.await,
-    };
-    result
-        .map(|result| result.response.event_id.to_string())
-        .map_err(|error| send_message_error_diagnostic(&error))
+    _txn_id: Option<OwnedTransactionId>,
+) -> Result<super::QueuedSendAck, &'static str> {
+    // `RoomSendQueue::send` does not take a caller transaction id. The SDK
+    // txn becomes the product local echo id after enqueue.
+    super::send_event_via_room_queue(room, content.into())
+        .await
+        .map_err(|error| error.diagnostic_id)
 }
 
-fn send_message_error_diagnostic(error: &matrix_sdk::Error) -> &'static str {
+pub(super) fn send_message_error_diagnostic(error: &matrix_sdk::Error) -> &'static str {
     match error {
         matrix_sdk::Error::Http(error) => send_http_error_diagnostic(error),
         matrix_sdk::Error::AuthenticationRequired => "d0.4-send-sdk-auth-required",
