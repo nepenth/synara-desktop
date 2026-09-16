@@ -338,7 +338,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           throw new Error('Native Matrix session is required to send polls on desktop.');
         }
       },
-      [clearReplyDraftAfterSend, replyDraft, roomId, t]
+      [clearReplyDraftAfterSend, replyDraft, roomId, t, threadRootEventId]
     );
     const commands = useCommands(
       mx,
@@ -455,7 +455,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
 
       return relation;
-    }, [replyDraft]);
+    }, [replyDraft, threadRootEventId]);
 
     useEffect(() => {
       const storedDraft = loadRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
@@ -806,6 +806,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       sendingMessage,
       selectedFiles,
       t,
+      threadRootEventId,
     ]);
 
     const handlePollAnswerChange: ChangeEventHandler<HTMLInputElement> = (evt) => {

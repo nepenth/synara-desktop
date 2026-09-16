@@ -207,7 +207,8 @@ export const sanitizeNativeVerificationRequest = (
   if (!request.qr) return request;
   const qr = parseNativeVerificationQr(request.qr);
   if (!qr) {
-    const { qr: _dropped, ...rest } = request;
+    const rest = { ...request };
+    delete rest.qr;
     return rest;
   }
   return { ...request, qr };
