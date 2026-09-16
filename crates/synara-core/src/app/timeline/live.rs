@@ -2913,13 +2913,11 @@ impl NativeTimelineRegistry {
         network: bool,
     ) -> Result<Option<NativeTimelineReaction>, &'static str> {
         self.open(client, room_id).await?;
-        let (items, _updates) = {
-            let entry = self
-                .entries
-                .get(room_id)
-                .ok_or("v-send.2-reaction-timeline-not-open")?;
-            entry.timeline.subscribe().await
-        };
+        let entry = self
+            .entries
+            .get(room_id)
+            .ok_or("v-send.2-reaction-timeline-not-open")?;
+        let (items, _updates) = entry.timeline.subscribe().await;
         if let Some(item) = items
             .iter()
             .filter_map(|item| project_item(item, client.user_id()))
@@ -2929,10 +2927,8 @@ impl NativeTimelineRegistry {
             // can correctly omit the key while a focused Event timeline still
             // projects the previous aggregation (event-cache / local Sent echo).
             // Falling through made `ensure_reaction` report AlreadyPresent and
-            // skip the re-add. Drop the focused cache so a later out-of-viewport
-            // readback rebuilds instead of serving that snapshot.
-            self.focused_entries
-                .remove(&(room_id.to_owned(), target_event_id.to_string()));
+            // skip the re-add. Keep the focused timeline; dropping it here
+            // desyncs the live room timeline's local annotation echo.
             let mut reaction = item
                 .reactions
                 .into_iter()

@@ -22,7 +22,7 @@ use ruma::{
 };
 use synara_core::app::timeline::{
     NativeReactionMutation, NativeTimelineOpenPosition, NativeTimelineOpenRequest,
-    NativeTimelineOwner, TimelineReaction, TimelineViewRow,
+    NativeTimelineOwner, TimelineReaction, TimelineViewRow, TimelineViewSnapshot,
 };
 
 fn message_reactions<'a>(rows: &'a [TimelineViewRow], event_id: &str) -> &'a [TimelineReaction] {
@@ -47,6 +47,38 @@ fn sender_reaction_id(reactions: &[TimelineReaction], key: &str, user_id: &str) 
                 .find(|sender| sender.user_id == user_id)
                 .and_then(|sender| sender.reaction_event_id.clone())
         })
+}
+
+fn own_reaction_present(rows: &[TimelineViewRow], event_id: &str, key: &str) -> bool {
+    message_reactions(rows, event_id)
+        .iter()
+        .any(|reaction| reaction.key == key && reaction.own == Some(true))
+}
+
+async fn wait_for_own_reaction(
+    owner: &NativeTimelineOwner,
+    stream_id: &str,
+    fallback: &TimelineViewSnapshot,
+    event_id: &str,
+    key: &str,
+    want_own: bool,
+) {
+    tokio::time::timeout(Duration::from_secs(8), async {
+        loop {
+            let snapshot = owner
+                .snapshot(stream_id)
+                .await
+                .unwrap_or_else(|_| fallback.clone());
+            if own_reaction_present(&snapshot.rows, event_id, key) == want_own {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        panic!("timed out waiting for own={want_own} reaction {key} on {event_id}")
+    });
 }
 
 #[tokio::test]
@@ -177,11 +209,30 @@ async fn remote_reaction_ids_recover_for_other_sender_and_toggle_unreact_stays_i
         .await
         .expect("toggle add");
     assert_eq!(added.mutation, NativeReactionMutation::Added);
+    wait_for_own_reaction(
+        &owner,
+        &opened.stream_id,
+        &opened.snapshot,
+        target.as_str(),
+        "🎉",
+        true,
+    )
+    .await;
+
     let removed = owner
         .toggle_reaction(room_id.as_str(), target.as_str(), "🎉")
         .await
         .expect("toggle remove without waiting for a remote id");
     assert_eq!(removed.mutation, NativeReactionMutation::Removed);
+    wait_for_own_reaction(
+        &owner,
+        &opened.stream_id,
+        &opened.snapshot,
+        target.as_str(),
+        "🎉",
+        false,
+    )
+    .await;
 
     let readded = owner
         .ensure_reaction(room_id.as_str(), target.as_str(), "🎉")
