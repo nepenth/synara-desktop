@@ -184,3 +184,43 @@ export function redactReactionWithNativeOwner(
     new Set(['redacted'])
   );
 }
+
+export function nativeReactionsForViewer(
+  reactions:
+    | ReadonlyArray<{
+        key: string;
+        count: number;
+        own?: boolean;
+        me?: boolean;
+        senders?: NativeReactionReadback['senders'];
+      }>
+    | undefined
+): NativeReactionReadback[] {
+  return (reactions ?? []).map((reaction) => ({
+    key: reaction.key,
+    count: reaction.count,
+    me: reaction.me ?? Boolean(reaction.own),
+    senders: reaction.senders ?? [],
+  }));
+}
+
+type NativeEventReadbackValue = {
+  roomId?: string;
+  eventId?: string;
+  item?: { reactions?: NativeReactionReadback[] };
+};
+
+/** Viewer-open recovery: event readback fills missing annotation ids via /relations. */
+export async function nativeReactionViewFromEventReadback(input: {
+  roomId: string;
+  eventId: string;
+}): Promise<NativeReactionReadback[] | undefined> {
+  const result = await invokeDesktopWithAvailability<NativeEventReadbackValue>(
+    'matrix_timeline_event_readback',
+    { roomId: input.roomId, eventId: input.eventId }
+  );
+  if (!result.available || result.value.roomId !== input.roomId) return undefined;
+  const reactions = result.value.item?.reactions;
+  if (!Array.isArray(reactions)) return undefined;
+  return nativeReactionsForViewer(reactions);
+}

@@ -55,10 +55,16 @@ export type NativeTimelineThreadSummary = {
   latestEventId?: string;
 };
 
+export type NativeTimelineReactionSender = {
+  userId: string;
+  reactionEventId?: string;
+};
+
 export type NativeTimelineReaction = {
   key: string;
   count: number;
   own?: boolean;
+  senders?: NativeTimelineReactionSender[];
 };
 
 export type NativeTimelineRelationPresentation = {
@@ -214,6 +220,8 @@ export type NativeTimelineViewSnapshot = {
     markUnread: boolean;
     paginateBackward: boolean;
     paginateForward: boolean;
+    canRedactOwn?: boolean;
+    canRedactOther?: boolean;
   };
 };
 

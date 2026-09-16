@@ -704,7 +704,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 isAgentApproval: false,
                 mediaFilename: nil,
                 mediaCaption: nil,
-                reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true)],
+                reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true, senders: [])],
                 mediaHandleId: nil,
                 mediaMimeType: nil,
                 mediaWidth: nil,
@@ -802,14 +802,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
         XCTAssertEqual(
             SharedCoreTimelineRows.reactionOwnership(from: [
-                TimelineViewReactionDto(key: "👍", count: 2, own: true),
-                TimelineViewReactionDto(key: "🎉", count: 1, own: false),
+                TimelineViewReactionDto(key: "👍", count: 2, own: true, senders: []),
+                TimelineViewReactionDto(key: "🎉", count: 1, own: false, senders: []),
             ]),
             .known(["👍"])
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.reactionOwnership(from: [
-                TimelineViewReactionDto(key: "👍", count: 2, own: nil),
+                TimelineViewReactionDto(key: "👍", count: 2, own: nil, senders: []),
             ]),
             .unknown
         )

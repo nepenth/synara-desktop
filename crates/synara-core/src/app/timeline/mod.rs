@@ -26,6 +26,7 @@ mod live;
 mod media;
 mod native;
 mod pagination;
+mod reactions;
 mod projection;
 mod registry;
 mod utd;
@@ -86,7 +87,8 @@ pub use view::{
     TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase,
     TimelineForwardTransport, TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow,
     TimelineOtherRow, TimelinePageState, TimelinePaginationState, TimelinePollAnswer,
-    TimelinePollRow, TimelineReaction, TimelineReadState, TimelineRedactedRow,
+    TimelinePollRow, TimelineReaction, TimelineReactionSender, TimelineReadState,
+    TimelineRedactedRow,
     TimelineReplyPreview, TimelineRoomActionAuthority, TimelineRowCapabilities, TimelineStateRow,
     TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
     TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,

@@ -13,11 +13,11 @@
 //! `NativeTimelineRegistry::{toggle,ensure}_reaction` (add, idempotent ensure,
 //! toggle remove, ensure re-add) → aggregation readback.
 //!
-//! matrix-sdk 0.19 `ReactionInfo` does not project remote annotation event ids,
-//! so this proof does not wait for `reaction_event_id` then call
-//! `redact_reaction`. Product self-unreact is `Timeline::toggle_reaction`.
-//! Recovering those ids for viewer/moderator redact is a messaging-core
-//! follow-up, not this bump.
+//! matrix-sdk 0.19 `ReactionInfo` does not project remote annotation event ids.
+//! This proof does not wait for a missing `reaction_event_id` and does not
+//! drive `redact_reaction` from a missing id. Product self-unreact is
+//! `Timeline::toggle_reaction`. Viewer/moderator redact-from-id recovery is
+//! the messaging-core mock-server + native viewer path, not this Synapse proof.
 //!
 //! JS two-client Synapse CI is not this proof. WebView click-through is not required.
 
@@ -349,11 +349,10 @@ async fn live_native_reaction_paths_against_disposable_synapse_when_configured()
     assert_eq!(ensured.mutation, NativeReactionMutation::AlreadyPresent);
     assert!(ensured.readback.as_ref().is_some_and(|r| r.me));
 
-    // Path 3: unreact via toggle. 0.19 `ReactionInfo.send_state` is `None`
-    // after remote echo, so native readback cannot supply an annotation id for
-    // `redact_reaction`. A local `Sent { event_id }` echo is not remote-id
-    // recovery; this bump does not pretend it is. Viewer/moderator redact by
-    // id stays a messaging-core follow-up.
+    // Path 3: unreact via toggle. Do not wait for a remote annotation id and do
+    // not call `redact_reaction` when the id is missing. A local `Sent`
+    // echo is not remote-id recovery. Viewer/moderator redact uses recovered
+    // ids from the messaging-core cache/`/relations` path.
     let projected_annotation_ids = after_toggle
         .senders
         .iter()
