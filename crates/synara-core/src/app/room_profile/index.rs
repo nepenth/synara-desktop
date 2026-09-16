@@ -150,6 +150,10 @@ pub struct RoomProfile {
     pub predecessor_room_id: Option<RoomId>,
     /// Tombstone successor (this room was upgraded to).
     pub successor_room_id: Option<RoomId>,
+    /// Effective MSC1763 max_lifetime in milliseconds, when advertised.
+    pub max_lifetime_ms: Option<u64>,
+    /// Effective MSC1763 min_lifetime in milliseconds, when advertised.
+    pub min_lifetime_ms: Option<u64>,
 }
 
 /// Session-generation-stamped room profile index.
@@ -305,6 +309,8 @@ impl RoomProfileIndex {
             directory_visibility: existing.directory_visibility,
             predecessor_room_id: existing.predecessor_room_id.clone(),
             successor_room_id: existing.successor_room_id.clone(),
+            max_lifetime_ms: existing.max_lifetime_ms,
+            min_lifetime_ms: existing.min_lifetime_ms,
         };
 
         if let Err(e) = self.register_aliases(&trial) {

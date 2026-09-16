@@ -129,9 +129,11 @@ use crate::matrix::timeline::{
     TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
+use crate::matrix::user_profile::NativeOwnProfileOwner;
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
+use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";
@@ -259,6 +261,8 @@ struct ManagedMatrixSession {
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
+    _own_profile: NativeOwnProfileOwner,
+    _media_retention: NativeMediaRetentionOwner,
     /// Core→renderer observation stream; retired on logout, dropped with
     /// the session.
     notification_observations: Arc<NativeNotificationObservationOwner>,

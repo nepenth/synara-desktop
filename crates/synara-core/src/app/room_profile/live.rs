@@ -7,51 +7,53 @@
 //! boundary.
 
 use std::sync::{
-    atomic::{AtomicBool, Ordering},
     Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 use tokio::sync::Mutex as AsyncMutex;
 
 use matrix_sdk::{
+    Client, Room, RoomMemberships, RoomState,
     deserialized_responses::RawSyncOrStrippedState,
     event_handler::EventHandlerDropGuard,
     ruma::{
+        Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
         api::client::{
             membership::joined_members, room::Visibility, state::get_state_event_for_key,
         },
         events::{
-            room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
             StateEventType,
+            room::join_rules::{RoomJoinRulesEventContent, SyncRoomJoinRulesEvent},
         },
         room::{AllowRule, JoinRule, Restricted},
-        Int, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
     },
-    Client, Room, RoomMemberships, RoomState,
 };
 
 use crate::app::members::{
-    parse_room_members_room_id, project_room_creators, project_room_member,
-    validate_power_level_tags_content, validate_power_level_tags_snapshot_content,
-    validate_power_levels_snapshot_content, validate_room_power_levels_content,
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
-    ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
+    ROOM_POWER_LEVEL_TAGS_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, parse_room_members_room_id,
+    project_room_creators, project_room_member, validate_power_level_tags_content,
+    validate_power_level_tags_snapshot_content, validate_power_levels_snapshot_content,
+    validate_room_power_levels_content,
 };
-use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
+use crate::app::room_ops::{MatrixRoomCreateRequest, build_room_create_request};
 use crate::app::spaces::{
+    NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
+    NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
     remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
-    snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
-    NativeSpaceChildMutationResult, NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot,
-    NativeSpaceParentsSnapshot,
+    snapshot_space_hierarchy, snapshot_space_parents,
 };
 use crate::app::user_profile::MatrixProfileWriteResult;
 use crate::dto::{Membership, RoomMember as ProductRoomMember};
 
 use super::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate,
+    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,
+    retention_snapshot,
 };
+use crate::app::media_cache::shortest_joined_room_max_lifetime;
 
 /// Shell-supplied sink for join-rule updates. Desktop maps this to the
 /// existing Tauri event; iOS can map it to a UniFFI callback later.
@@ -929,6 +931,38 @@ impl NativeRoomJoinRuleOwner {
         })
     }
 
+    pub async fn get_retention(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+    ) -> Result<MatrixRoomRetentionSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-retention-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-room-profile-retention-stale-generation");
+        }
+        let room_id = parse_retention_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-retention-room-not-found")?;
+        // SDK maps unimplemented retention-config to `Ok(None)` (unknown, not forever).
+        let (max_lifetime, min_lifetime) = match room.effective_retention().await {
+            Ok(Some(policy)) => (policy.max_lifetime(), policy.min_lifetime()),
+            Ok(None) => (None, None),
+            Err(_) => return Err("v-send.r-room-profile-retention-sdk-failed"),
+        };
+        let shortest = shortest_joined_room_max_lifetime(&self.client).await;
+        Ok(retention_snapshot(
+            room_id.to_string(),
+            self.session_generation,
+            max_lifetime,
+            min_lifetime,
+            shortest,
+        ))
+    }
+
     pub async fn set_directory_visibility(
         &self,
         room_id: &str,
@@ -953,9 +987,9 @@ impl NativeRoomJoinRuleOwner {
         if room_version.rules().is_none() {
             return Err("v-send.r-room-profile-directory-visibility-permission-state-unavailable");
         }
-        let power_levels = room.power_levels().await.map_err(|_| {
-            "v-send.r-room-profile-directory-visibility-permission-state-unavailable"
-        })?;
+        let power_levels = room.power_levels().await.map_err(
+            |_| "v-send.r-room-profile-directory-visibility-permission-state-unavailable",
+        )?;
         let user_id = self
             .client
             .user_id()
@@ -1164,6 +1198,12 @@ fn parse_directory_visibility_room_id(room_id: &str) -> Result<OwnedRoomId, &'st
     room_id
         .parse()
         .map_err(|_| "v-send.r-room-profile-directory-visibility-invalid")
+}
+
+fn parse_retention_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .parse()
+        .map_err(|_| "v-send.r-room-profile-retention-invalid")
 }
 
 fn parse_directory_visibility(

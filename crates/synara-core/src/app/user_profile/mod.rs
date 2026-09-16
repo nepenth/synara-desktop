@@ -12,11 +12,12 @@ mod error;
 mod index;
 mod ipc;
 mod live;
+mod own_profile;
 
 pub use error::UserProfileError;
 pub use index::{
-    UserProfile, UserProfileIndex, MAX_AVATAR_URL_CHARS, MAX_CACHED_PROFILES,
-    MAX_DISPLAY_NAME_CHARS, MAX_IGNORED_USERS,
+    MAX_AVATAR_URL_CHARS, MAX_CACHED_PROFILES, MAX_DISPLAY_NAME_CHARS, MAX_IGNORED_USERS,
+    UserProfile, UserProfileIndex,
 };
 pub use ipc::{
     MatrixIgnoredUsersSnapshot, MatrixIgnoredUsersWriteResult, MatrixOwnProfile,
@@ -25,13 +26,17 @@ pub use ipc::{
     MatrixUploadAvatarResult, MatrixUserDirectoryHit, MatrixUserDirectorySearchResult,
 };
 pub use live::{
-    add_threepid_email, add_threepid_email_password, delete_threepid_email, get_own_profile,
-    ignore_user, parse_avatar_upload_mime, parse_own_avatar_mxc, parse_own_display_name,
+    DEFAULT_USER_DIRECTORY_LIMIT, MAX_AVATAR_UPLOAD_BYTES, MAX_USER_DIRECTORY_LIMIT,
+    MAX_USER_DIRECTORY_TERM_CHARS, PendingThreepid, add_threepid_email,
+    add_threepid_email_password, delete_threepid_email, get_own_profile, ignore_user,
+    parse_avatar_upload_mime, parse_own_avatar_mxc, parse_own_display_name,
     parse_user_directory_limit, parse_user_directory_term, request_threepid_email_token,
     search_user_directory, set_own_avatar, set_own_display_name, snapshot_ignored_users,
-    snapshot_threepids, unignore_user, upload_avatar, PendingThreepid,
-    DEFAULT_USER_DIRECTORY_LIMIT, MAX_AVATAR_UPLOAD_BYTES, MAX_USER_DIRECTORY_LIMIT,
-    MAX_USER_DIRECTORY_TERM_CHARS,
+    snapshot_threepids, unignore_user, upload_avatar,
+};
+pub use own_profile::{
+    NativeOwnProfileOwner, OWN_PROFILE_CHANGED_EVENT, OwnProfileStreamMap, OwnProfileUpdateEmit,
+    map_own_profile_stream_fields,
 };
 
 /// Static marker for link / schema smoke.

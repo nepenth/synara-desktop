@@ -117,6 +117,7 @@
     "allow-matrix-room-set-power-level-tags",
     "allow-matrix-room-members-snapshot",
     "allow-matrix-room-power-levels-snapshot",
+    "allow-matrix-room-retention",
     "allow-matrix-room-creators-snapshot",
     "allow-matrix-room-power-level-tags-snapshot",
     "allow-matrix-room-directory-protocols",

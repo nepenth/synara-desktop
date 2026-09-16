@@ -15,7 +15,8 @@ use matrix_sdk_ui::room_list_service::filters;
 use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
-use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
+use crate::app::room_list::counts::{RoomUnreadMembership, room_unread_presentation};
+use crate::app::room_list::dm_avatar::dm_avatar_source;
 use crate::app::room_list::last_message::{
     last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
@@ -192,13 +193,24 @@ async fn project_room(room: &Room) -> RoomSummary {
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
     // `notable_tags` derived from the room's m.tag account data.
     let encryption_status = project_encryption_status(room.latest_encryption_state().await);
+    let is_direct = room.is_direct().await.unwrap_or(false);
+    let avatar_url = {
+        let room_avatar = room.avatar_url();
+        if is_direct && room_avatar.is_none() {
+            dm_avatar_source(room, room.own_user_id(), true)
+                .await
+                .map(|uri| uri.to_string())
+        } else {
+            room_avatar.map(|uri| uri.to_string())
+        }
+    };
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
         canonical_alias: room.canonical_alias().map(|alias| alias.to_string()),
-        avatar_url: room.avatar_url().map(|uri| uri.to_string()),
+        avatar_url,
         membership,
-        is_direct: room.is_direct().await.unwrap_or(false),
+        is_direct,
         is_space: room.is_space(),
         is_call: room.is_call(),
         is_favorite: room.is_favourite(),
@@ -406,6 +418,8 @@ mod tests {
         assert!(source.contains("pending_approval_unread_boost"));
         assert!(source.contains("room_has_unread("));
         assert!(source.contains("room.is_marked_unread()"));
+        assert!(source.contains("dm_avatar_source"));
+        assert!(source.contains("is_direct && room_avatar.is_none()"));
         let truncated_viewport = concat!("ROOM_LIST_SUBSCRIPTION", "_LIMIT");
         assert_eq!(
             source.matches(truncated_viewport).count(),

@@ -595,6 +595,22 @@ mod internal_mirror {
         assert!(!contains_bad_word("ambitious"));
     }
 
+    #[test]
+    fn dm_avatar_helper_table_matches_core_selection() {
+        assert_eq!(
+            select_dm_avatar_source(false, 2),
+            DmAvatarSourceKind::RoomAvatar
+        );
+        assert_eq!(
+            select_dm_avatar_source(true, 2),
+            DmAvatarSourceKind::PeerMember
+        );
+        assert_eq!(
+            select_dm_avatar_source(true, 3),
+            DmAvatarSourceKind::RoomAvatar
+        );
+    }
+
     // ---- live.rs (product-contract mirrors via the public surface) ----
 
     #[test]

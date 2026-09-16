@@ -39,6 +39,7 @@ pub(crate) mod room_notification;
 pub(crate) mod room_power_levels;
 pub(crate) mod room_profile_writes;
 pub(crate) mod room_read_state;
+pub(crate) mod room_retention;
 pub(crate) mod secret_storage_status;
 pub(crate) mod send_poll;
 pub(crate) mod send_text;

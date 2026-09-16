@@ -387,6 +387,18 @@ test('avatar helpers delegate mxc conversion to the client projection', () => {
   assert.equal(getDirectRoomAvatarUrl(client, room, 96), 'http://img/96x96/crop/mxc://room/avatar');
 });
 
+test('getDirectRoomAvatarUrl uses native summary peer mxc when fallback member is stubbed', () => {
+  const room = makeRoom({}, { avatarUrl: 'mxc://example.org/peer' });
+  const client = makeClient({
+    mxcUrlToHttp: (mxc, w, h, mode) => `http://img/${w}x${h}/${mode}/${mxc}`,
+  });
+  assert.equal(room.getAvatarFallbackMember(), undefined);
+  assert.equal(
+    getDirectRoomAvatarUrl(client, room, 96),
+    'http://img/96x96/crop/mxc://example.org/peer'
+  );
+});
+
 test('getMentionContent builds mentions content only for populated inputs', () => {
   assert.deepEqual(getMentionContent(['@bob:example.org'], false), {
     user_ids: ['@bob:example.org'],

@@ -8,6 +8,7 @@ import {
   uploadMediaWithNativeOwner,
   type NativeInvoke,
 } from '../nativeProfileOwner';
+import { parseOwnProfilePush } from '../nativeProfile';
 
 const loggedIn: DesktopInvokeResult<unknown> = {
   available: true,
@@ -116,4 +117,27 @@ test('upload media returns mxc on native path', async () => {
   };
   const result = await uploadMediaWithNativeOwner('image/png', [1, 2, 3], true, invoke);
   assert.deepEqual(result, { mxc: 'mxc://ex/abc' });
+});
+
+test('own-profile push parser keeps mxc only and drops javascript avatars', () => {
+  assert.deepEqual(
+    parseOwnProfilePush({
+      userId: '@alice:example.org',
+      displayName: 'Alice',
+      avatarUrl: 'mxc://example.org/abc',
+    }),
+    {
+      userId: '@alice:example.org',
+      displayName: 'Alice',
+      avatarUrl: 'mxc://example.org/abc',
+    }
+  );
+  assert.equal(
+    parseOwnProfilePush({
+      userId: '@alice:example.org',
+      displayName: 'Alice',
+      avatarUrl: 'javascript:alert(1)',
+    })?.avatarUrl,
+    undefined
+  );
 });

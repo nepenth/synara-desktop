@@ -28,6 +28,7 @@ test('user Settings avatar uses the native profile mxc instead of an HTTP thumbn
   assert.equal(profile.includes('resolveMatrixThumbnailUrl'), false);
   assert.match(hook, /getOwnProfileNative/);
   assert.match(hook, /OWN_PROFILE_CHANGED_EVENT/);
+  assert.match(hook, /subscribeOwnProfileNativePush/);
   assert.match(profile, /profile\.avatarUrl/);
   assert.match(profile, /notifyOwnProfileChanged/);
 });

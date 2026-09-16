@@ -108,6 +108,7 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_room_notifications_snapshot",
     "matrix_room_power_level_tags_snapshot",
     "matrix_room_power_levels_snapshot",
+    "matrix_room_retention",
     "matrix_room_set_favorite",
     "matrix_room_set_join_rule",
     "matrix_room_set_power_level",

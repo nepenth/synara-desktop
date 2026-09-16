@@ -51,7 +51,7 @@ use crate::app::room_list::{
 use crate::app::room_ops::MatrixRoomCreateRequest;
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
+    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleOwner,
 };
 use crate::app::search::MatrixMessageSearchResult;
 use crate::app::send::{
@@ -1339,6 +1339,14 @@ struct MatrixGetRoomDirectoryVisibilityRequest {
     session_generation: u64,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_retention`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomRetentionRequest {
+    room_id: String,
+    session_generation: u64,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_directory_visibility`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -2237,6 +2245,9 @@ fn built_in_registry() -> CommandRegistry {
             matrix_room_power_levels_snapshot,
         )
         .expect("built-in matrix_room_power_levels_snapshot must remain in the command census");
+    registry
+        .register("matrix_room_retention", matrix_room_retention)
+        .expect("built-in matrix_room_retention must remain in the command census");
     registry
         .register(
             "matrix_room_creators_snapshot",
@@ -4604,6 +4615,36 @@ fn matrix_get_room_directory_visibility(
     })
 }
 
+fn matrix_room_retention(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomRetentionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-retention-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-retention-no-session")
+        })?;
+        let result: MatrixRoomRetentionSnapshot = owner
+            .get_retention(&payload.room_id, payload.session_generation)
+            .await
+            .map_err(room_retention_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-retention-serialization-failed"))
+    })
+}
+
+fn room_retention_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-room-profile-retention-invalid"
+        | "v-send.r-room-profile-retention-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-retention-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-send.r-room-profile-retention-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_set_room_directory_visibility(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -6433,6 +6474,7 @@ mod tests {
                 "matrix_room_notifications_snapshot",
                 "matrix_room_power_level_tags_snapshot",
                 "matrix_room_power_levels_snapshot",
+                "matrix_room_retention",
                 "matrix_room_set_favorite",
                 "matrix_room_set_join_rule",
                 "matrix_room_set_power_level",
@@ -9083,6 +9125,25 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-get-room-directory-visibility-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_retention_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_retention".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","sessionGeneration":1}),
+            })
+            .await
+            .expect_err("room retention without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-retention-no-session")
         );
     }
 
