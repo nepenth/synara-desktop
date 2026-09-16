@@ -164,7 +164,7 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
   );
   assert.match(
     uploadHandler,
-    /const \{ draftRevision, replyTo, threadRoot \} = nativeComposerSendRelation\(replyDraft, threadRootEventId\)/,
+    /const \{ draftRevision, replyTo, threadRoot \} = nativeComposerSendRelation\(\s*replyDraft,\s*threadRootEventId\s*\)/,
     'the upload route must declare its clear revision from the same relation snapshot it sends'
   );
   assert.match(
@@ -190,7 +190,7 @@ test('preview, cancellation, and successful sends consume only the Core reply ow
     (roomInput.match(/clearReplyDraft\(replyDraft\.draftRevision\)/g) ?? []).length >= 2,
     'keyboard and button cancellation must compare the displayed Core revision'
   );
-  assert.match(roomInput, /nativeComposerSendRelation\(replyDraft, threadRootEventId\)/);
+  assert.match(roomInput, /nativeComposerSendRelation\(\s*replyDraft,\s*threadRootEventId\s*\)/);
   assert.match(roomInput, /sendPollCommandWithNativeDesktopOwner/);
   assert.match(roomInput, /useCommands\([\s\S]*sendSlashPoll[\s\S]*\)/);
   assert.ok(
