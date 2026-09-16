@@ -2552,9 +2552,7 @@ export function NativeTimelinePresenter({
     const index = virtualizer.getVirtualItems()[0]?.index ?? 0;
     const row = rowsRef.current[index];
     return (
-      (row ? rowTimestampMs(row) : undefined) ??
-      railContextRef.current.axis?.endMs ??
-      Date.now()
+      (row ? rowTimestampMs(row) : undefined) ?? railContextRef.current.axis?.endMs ?? Date.now()
     );
   }, [virtualizer]);
   const scrollToHistoryTimestamp = useCallback(
@@ -2607,9 +2605,7 @@ export function NativeTimelinePresenter({
         })
         .catch((error) => {
           if (mountedRoomRef.current === navigation) {
-            setActionError(
-              error instanceof Error ? error.message : 'Could not jump to that time.'
-            );
+            setActionError(error instanceof Error ? error.message : 'Could not jump to that time.');
           }
         })
         .finally(() => {
