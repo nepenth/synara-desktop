@@ -470,6 +470,7 @@ const assertions = [
   [udl, "VerificationRequestDto verification_cancel(", "P4-S9 SharedCore verification-cancel operation"],
   [udl, "void verification_dismiss(", "P4-S9 SharedCore verification-dismiss operation"],
   [udl, "dictionary VerificationSasDto", "P4-S9 privacy-safe SAS DTO"],
+  [udl, "dictionary VerificationQrDto", "P4-S9 privacy-safe QR DTO"],
   [udl, "interface VerificationSasError", "P4-S9 static verification-SAS error"],
   [swiftBindingsTests, "testSharedCoreVerificationSasWithoutSessionFailsClosed", "Swift P4-S9 fail-closed verification-SAS test"],
   [sharedCoreVerificationSas, "verificationStart", "P4-S9 product verification-start helper"],
@@ -2360,6 +2361,11 @@ const verificationSasDto = udl.match(/dictionary VerificationSasDto \{([\s\S]*?)
 if (!verificationSasDto) throw new Error("missing VerificationSasDto");
 if (/\bpassword\b/.test(verificationSasDto[1]) || /\btoken\b/.test(verificationSasDto[1])) {
   throw new Error("VerificationSasDto must not carry password or token fields");
+}
+const verificationQrDto = udl.match(/dictionary VerificationQrDto \{([\s\S]*?)\};/);
+if (!verificationQrDto) throw new Error("missing VerificationQrDto");
+if (/\bpassword\b/.test(verificationQrDto[1]) || /\btoken\b/.test(verificationQrDto[1]) || /\bmac\b/.test(verificationQrDto[1])) {
+  throw new Error("VerificationQrDto must not carry password, token, or mac fields");
 }
 const deviceSnapshotDto = udl.match(/dictionary DeviceSnapshotDto \{([\s\S]*?)\};/);
 if (!deviceSnapshotDto) throw new Error("missing DeviceSnapshotDto");

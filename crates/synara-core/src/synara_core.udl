@@ -941,6 +941,12 @@ dictionary VerificationSasDto {
   sequence<u16>? decimals;
 };
 
+// Privacy-safe show-QR payload. SVG data-URL only; no MAC or QR bytes.
+dictionary VerificationQrDto {
+  string image_data_url;
+  boolean scanned;
+};
+
 // Privacy-safe verification request row. Identity/flow fields only; no tokens.
 // S8 list omits SAS. S9 mutation returns may include optional SAS comparison.
 dictionary VerificationRequestDto {
@@ -951,6 +957,7 @@ dictionary VerificationRequestDto {
   string phase;
   u64? started_ts;
   VerificationSasDto? sas;
+  VerificationQrDto? qr;
 };
 
 // Privacy-safe verification inbox from the registered Core command.

@@ -42,6 +42,17 @@ pub struct NativeVerificationSas {
     pub decimals: Option<[u16; 3]>,
 }
 
+/// Show-QR payload. Renderable SVG data-URL only; no MAC, shared secret, or
+/// raw QR payload bytes. Oversized images are dropped rather than truncated.
+pub const MAX_QR_IMAGE_DATA_URL_CHARS: usize = 12_288;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeVerificationQr {
+    pub image_data_url: String,
+    pub scanned: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeVerificationRequest {
@@ -52,6 +63,8 @@ pub struct NativeVerificationRequest {
     pub phase: NativeVerificationPhase,
     pub started_ts: Option<u64>,
     pub sas: Option<NativeVerificationSas>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub qr: Option<NativeVerificationQr>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +102,14 @@ pub fn compare_for_inbox(
         .then_with(|| left.flow_id.cmp(&right.flow_id))
 }
 
+pub fn capped_qr_image_data_url(image_data_url: &str) -> Option<String> {
+    if image_data_url.is_empty() || image_data_url.chars().count() > MAX_QR_IMAGE_DATA_URL_CHARS {
+        None
+    } else {
+        Some(image_data_url.to_owned())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -118,6 +139,7 @@ mod tests {
             phase: NativeVerificationPhase::Requested,
             started_ts: Some(started_ts),
             sas: None,
+            qr: None,
         };
         let mut requests = [request("older", 1), request("newer", 2)];
         requests.sort_by(compare_for_inbox);
@@ -140,12 +162,31 @@ mod tests {
                 }]),
                 decimals: Some([1234, 5678, 9012]),
             }),
+            qr: Some(NativeVerificationQr {
+                image_data_url:
+                    "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>"
+                        .to_owned(),
+                scanned: false,
+            }),
         };
         let value = serde_json::to_value(request).expect("serialize projection");
         assert_eq!(value["phase"], "sas_ready");
+        assert_eq!(value["qr"]["scanned"], false);
+        assert!(value["qr"]["imageDataUrl"]
+            .as_str()
+            .unwrap()
+            .starts_with("data:image/svg+xml"));
         let serialized = value.to_string();
         for forbidden in ["key", "token", "mac", "secret", "ciphertext", "recovery"] {
             assert!(!serialized.to_ascii_lowercase().contains(forbidden));
         }
+    }
+
+    #[test]
+    fn qr_payload_is_dropped_when_oversized() {
+        let oversized = "x".repeat(MAX_QR_IMAGE_DATA_URL_CHARS + 1);
+        assert!(capped_qr_image_data_url(&oversized).is_none());
+        let ok = "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>";
+        assert_eq!(capped_qr_image_data_url(ok).as_deref(), Some(ok));
     }
 }

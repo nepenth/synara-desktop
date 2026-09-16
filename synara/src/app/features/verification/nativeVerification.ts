@@ -24,6 +24,11 @@ export type NativeVerificationSas = {
   decimals?: [number, number, number];
 };
 
+export type NativeVerificationQr = {
+  imageDataUrl: string;
+  scanned: boolean;
+};
+
 export type NativeVerificationRequest = {
   flowId: string;
   otherUserId: string;
@@ -32,6 +37,7 @@ export type NativeVerificationRequest = {
   phase: NativeVerificationPhase;
   startedTs?: number;
   sas?: NativeVerificationSas;
+  qr?: NativeVerificationQr;
 };
 
 export type NativeVerificationInbox = {
@@ -72,8 +78,16 @@ export const verificationRequestHasSasCodes = (request: NativeVerificationReques
   return Array.isArray(decimals) && decimals.length === 3;
 };
 
+export const verificationRequestHasQr = (request: NativeVerificationRequest): boolean =>
+  typeof request.qr?.imageDataUrl === 'string' && request.qr.imageDataUrl.startsWith('data:image/');
+
 export const verificationRequestNeedsSasStart = (request: NativeVerificationRequest): boolean =>
-  request.direction === 'outgoing' && request.phase === 'ready';
+  request.direction === 'outgoing' && request.phase === 'ready' && !verificationRequestHasQr(request);
+
+export const verificationRequestCanFallbackToSas = (request: NativeVerificationRequest): boolean =>
+  verificationRequestHasQr(request) &&
+  !verificationRequestHasSasCodes(request) &&
+  !isNativeVerificationTerminal(request.phase);
 
 export const announceNativeVerificationChanged = (): void => {
   if (typeof window !== 'undefined') {
@@ -126,8 +140,10 @@ const invokeNativeVerification = async <T>(
   return result.value;
 };
 
-export const listNativeVerificationRequests = (): Promise<NativeVerificationInbox> =>
-  invokeNativeVerification('matrix_verification_list');
+export const listNativeVerificationRequests = async (): Promise<NativeVerificationInbox> => {
+  const inbox = await invokeNativeVerification<NativeVerificationInbox>('matrix_verification_list');
+  return parseNativeVerificationInbox(inbox) ?? inbox;
+};
 
 const mutateNativeVerification = async <T>(
   command: string,
@@ -135,6 +151,9 @@ const mutateNativeVerification = async <T>(
 ): Promise<T> => {
   const value = await invokeNativeVerification<T>(command, args);
   announceNativeVerificationChanged();
+  if (isRecord(value) && typeof value.flowId === 'string') {
+    return sanitizeNativeVerificationRequest(value as unknown as NativeVerificationRequest) as T;
+  }
   return value;
 };
 
@@ -161,3 +180,47 @@ export const dismissNativeVerification = (flowId: string): Promise<void> =>
 
 export const getNativeCryptoStatus = (): Promise<NativeCryptoStatus> =>
   invokeNativeVerification('matrix_crypto_status');
+
+export const MAX_QR_IMAGE_DATA_URL_CHARS = 12288;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+export const parseNativeVerificationQr = (value: unknown): NativeVerificationQr | undefined => {
+  if (!isRecord(value)) return undefined;
+  const imageDataUrl = value.imageDataUrl;
+  if (typeof imageDataUrl !== 'string' || !imageDataUrl.startsWith('data:image/svg+xml')) {
+    return undefined;
+  }
+  if (imageDataUrl.length === 0 || [...imageDataUrl].length > MAX_QR_IMAGE_DATA_URL_CHARS) {
+    return undefined;
+  }
+  return { imageDataUrl, scanned: value.scanned === true };
+};
+
+export const sanitizeNativeVerificationRequest = (
+  request: NativeVerificationRequest
+): NativeVerificationRequest => {
+  if (!request.qr) return request;
+  const qr = parseNativeVerificationQr(request.qr);
+  if (!qr) {
+    const { qr: _dropped, ...rest } = request;
+    return rest;
+  }
+  return { ...request, qr };
+};
+
+export const parseNativeVerificationInbox = (value: unknown): NativeVerificationInbox | undefined => {
+  if (!isRecord(value)) return undefined;
+  if (typeof value.sessionGeneration !== 'number' || !Array.isArray(value.requests)) {
+    return undefined;
+  }
+  return {
+    sessionGeneration: value.sessionGeneration,
+    requests: value.requests.flatMap((item) => {
+      if (!isRecord(item) || typeof item.flowId !== 'string') return [];
+      const request = item as unknown as NativeVerificationRequest;
+      return [sanitizeNativeVerificationRequest(request)];
+    }),
+  };
+};

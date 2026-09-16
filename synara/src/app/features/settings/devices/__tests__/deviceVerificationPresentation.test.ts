@@ -41,7 +41,7 @@ test('current-device verification uses authoritative snapshot metadata, never pe
 });
 
 test('verification availability copy distinguishes ready, absent, and unknown peer authority', () => {
-  assert.match(currentDeviceVerificationAvailabilityMessage(true), /Compare emoji/);
+  assert.match(currentDeviceVerificationAvailabilityMessage(true), /Compare emoji, number, or QR/);
   assert.match(currentDeviceVerificationAvailabilityMessage(false), /No eligible verified session/);
   assert.match(currentDeviceVerificationAvailabilityMessage(null), /could not check/);
 });

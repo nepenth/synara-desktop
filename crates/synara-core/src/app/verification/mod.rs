@@ -24,9 +24,10 @@ pub use inbox::{
 };
 pub use live::{NativeVerificationOwner, NativeVerificationUpdateSignal, VerificationUpdateEmit};
 pub use native::{
-    compare_for_inbox, phase_rank, NativeVerificationDirection, NativeVerificationEmoji,
-    NativeVerificationInbox, NativeVerificationPhase, NativeVerificationRequest,
-    NativeVerificationSas,
+    capped_qr_image_data_url, compare_for_inbox, phase_rank, NativeVerificationDirection,
+    NativeVerificationEmoji, NativeVerificationInbox, NativeVerificationPhase,
+    NativeVerificationQr, NativeVerificationRequest, NativeVerificationSas,
+    MAX_QR_IMAGE_DATA_URL_CHARS,
 };
 
 /// Tauri event: verification inbox/SAS may have changed. Signal only; UI
