@@ -5168,6 +5168,6 @@ mod tests {
         assert!(source.contains("snapshot_pinned_events"));
         assert!(source.contains("room.pin_event"));
         assert!(source.contains("room.unpin_event"));
-        assert!(!source.contains("TimelineFocus::PinnedEvents"));
+        assert!(!source.contains(&format!("{}{}", "TimelineFocus::", "PinnedEvents")));
     }
 }

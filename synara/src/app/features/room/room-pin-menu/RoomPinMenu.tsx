@@ -20,10 +20,7 @@ import { Opts as LinkifyOpts } from 'linkifyjs';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
-import {
-  type NativePinnedEventItem,
-  useNativePinnedEvents,
-} from '../nativePinnedEvents';
+import { type NativePinnedEventItem, useNativePinnedEvents } from '../nativePinnedEvents';
 import * as css from './RoomPinMenu.css';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useRoomEvent } from '../../../hooks/useRoomEvent';

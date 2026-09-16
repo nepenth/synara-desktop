@@ -266,7 +266,8 @@ mod tests {
         assert!(source.contains("pinned_events("));
         assert!(source.contains("PinnedEventsCache"));
         assert!(source.contains("recover_missing_annotation_ids"));
-        assert!(!source.contains("TimelineFocus::PinnedEvents"));
+        let invented_focus = concat!("TimelineFocus::", "PinnedEvents");
+        assert!(!source.contains(invented_focus));
     }
 
     #[test]

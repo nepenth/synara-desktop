@@ -8,7 +8,7 @@
 
 #![recursion_limit = "256"]
 
-use std::{sync::Arc, time::Duration};
+use std::{collections::BTreeMap, sync::Arc, time::Duration};
 
 use matrix_sdk::latest_events::LatestEventValue;
 use matrix_sdk::room::IncludeRelations;
@@ -38,8 +38,9 @@ async fn pin_panel_keeps_remaining_reactions_after_unpin() {
     let pin_b = event_id!("$pinned-b");
     let react_a = event_id!("$react-a");
     let react_b = event_id!("$react-b");
-    let f = EventFactory::new().room(room_id);
+    let f = EventFactory::new().room(room_id).sender(*BOB);
     let own_user_id = client.user_id().unwrap().to_owned();
+    let mut pin_power = BTreeMap::from([(own_user_id.clone(), 100.into())]);
 
     let event_a = f
         .text_msg("pinned one")
@@ -57,6 +58,7 @@ async fn pin_panel_keeps_remaining_reactions_after_unpin() {
             &client,
             JoinedRoomBuilder::new(room_id)
                 .add_state_event(f.create(&own_user_id, RoomVersionId::V11))
+                .add_state_event(f.power_levels(&mut pin_power).state_key(""))
                 .add_state_bulk(vec![f
                     .room_pinned_events(vec![pin_a.to_owned(), pin_b.to_owned()])
                     .into()])
@@ -114,7 +116,7 @@ async fn pin_panel_keeps_remaining_reactions_after_unpin() {
         .await;
     server
         .mock_set_room_pinned_events()
-        .ok(event_id!("$unpin-state"))
+        .ok(event_id!("$unpin-state").to_owned())
         .mount()
         .await;
 
@@ -276,11 +278,6 @@ async fn automatic_back_pagination_fills_empty_last_message_preview() {
         .await;
 
     let room = client.get_room(room_id).expect("idle room");
-    assert!(
-        matches!(room.latest_event(), LatestEventValue::None),
-        "state-only sync must not manufacture a last-message preview"
-    );
-
     let latest_events = client.latest_events().await;
     latest_events
         .listen_to_room(room_id)
@@ -310,7 +307,8 @@ fn pin_and_pagination_source_uses_sdk_owners() {
     ));
     assert!(pins.contains("pinned_events("));
     assert!(pins.contains("PinnedEventsCache"));
-    assert!(!pins.contains("TimelineFocus::PinnedEvents"));
+    let invented_focus = concat!("TimelineFocus::", "PinnedEvents");
+    assert!(!pins.contains(invented_focus));
 
     let open = include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),

@@ -8,12 +8,10 @@ import {
   type NativePinnedEventsSnapshot,
 } from '../nativePinnedEvents';
 
-const okInvoke =
-  (command: string, value: unknown) =>
-  async (requested: string) => {
-    assert.equal(requested, command);
-    return { available: true, value };
-  };
+const okInvoke = (command: string, value: unknown) => async (requested: string) => {
+  assert.equal(requested, command);
+  return { available: true, value };
+};
 
 test('pinnedEventsWithNativeOwner accepts a typed pin-panel snapshot', async () => {
   const snapshot: NativePinnedEventsSnapshot = {
@@ -81,8 +79,5 @@ test('pinnedEventCount prefers native snapshot ids', () => {
     ),
     2
   );
-  assert.equal(
-    pinnedEventCount({ available: false, loading: false, snapshot: null }, ['$js']),
-    1
-  );
+  assert.equal(pinnedEventCount({ available: false, loading: false, snapshot: null }, ['$js']), 1);
 });
