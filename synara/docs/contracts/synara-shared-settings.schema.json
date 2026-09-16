@@ -32,7 +32,9 @@
     "hour24Clock",
     "dateFormatString",
     "developerTools",
-    "experimentalWidgetsEnabled"
+    "experimentalWidgetsEnabled",
+    "indexedMessageSearch",
+    "encryptedStateEvents"
   ],
   "properties": {
     "themeId": { "type": "string" },
@@ -87,6 +89,8 @@
     "hour24Clock": { "type": "boolean" },
     "dateFormatString": { "type": "string" },
     "developerTools": { "type": "boolean" },
-    "experimentalWidgetsEnabled": { "type": "boolean" }
+    "experimentalWidgetsEnabled": { "type": "boolean" },
+    "indexedMessageSearch": { "type": "boolean" },
+    "encryptedStateEvents": { "type": "boolean" }
   }
 }

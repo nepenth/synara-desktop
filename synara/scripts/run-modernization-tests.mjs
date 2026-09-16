@@ -108,6 +108,8 @@ const tests = [
   'src/app/pages/client/home/__tests__/homeRoomList.test.ts',
   'src/app/components/__tests__/nativeRoomJoinOwner.test.ts',
   'src/app/components/__tests__/nativeRoomCreateOwner.test.ts',
+  'src/app/components/__tests__/nativeStateEventOwner.test.ts',
+  'src/app/features/common-settings/developer-tools/__tests__/leftoverStateWriteGuard.test.ts',
   'src/app/components/__tests__/nativeRoomModerationOwner.test.ts',
   'src/app/components/user-profile/__tests__/memberActions.test.ts',
   'src/app/features/room/__tests__/nativeEditMessageOwner.test.ts',
