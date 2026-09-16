@@ -16,6 +16,9 @@ pub enum LocalEchoState {
     Sent,
     Failed,
     Cancelled,
+    /// Unrecoverable `RoomSendQueue` failure. Later sends in this room wait
+    /// until `SendHandle::unwedge` or `abort`.
+    Wedged,
 }
 
 /// Product timeline row (exhaustive tagged union).

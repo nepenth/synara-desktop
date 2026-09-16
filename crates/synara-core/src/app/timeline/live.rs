@@ -16,6 +16,7 @@ use matrix_sdk::{
     room::{calls::CallError, edit::EditedContent, Receipts},
     ruma::{
         events::{
+            poll::unstable_start::UnstablePollStartEventContent,
             reaction::ReactionEventContent,
             relation::Annotation,
             room::message::{
@@ -51,22 +52,25 @@ use crate::app::agent_approvals::{
     AGENT_APPROVAL_TTL_MS,
 };
 use crate::app::send::{
-    apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
-    parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
-    parse_transaction_id, poll_response_content, poll_start_content, send_message_to_room,
-    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult, SendQueue,
+    abort_queued_send, apply_poll_start_relations, edit_message_content,
+    enqueue_event_via_room_queue, message_content, normalize_poll, parse_edit_event_id,
+    parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
+    poll_response_content, poll_start_content, send_event_via_room_queue, unwedge_queued_send,
+    wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult,
+    SendQueue,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::{RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
 
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
-    project_timeline_item_with_media, reply_draft_readback, should_attach_formatted_body,
+    project_timeline_item_with_media,
     reactions::{
         enrich_native_items, enrich_native_reactions, enrich_view_delta_ops, enrich_view_rows,
         reaction_event_id_from_send_state,
     },
-    ComposerDraftRegistry, NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
+    reply_draft_readback, should_attach_formatted_body, ComposerDraftRegistry,
+    NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
     NativeTimelineActionReadback, NativeTimelineCloseRequest, NativeTimelineDirection,
@@ -976,7 +980,7 @@ impl NativeTimelineOwner {
         let parsed_room = parse_send_room_id(&room_id)?;
         let reply_to = parse_reply_event_id(reply_to)?;
         let thread_root = parse_thread_root_event_id(thread_root)?;
-        let txn_id = parse_transaction_id(txn_id)?;
+        let _txn_id = parse_transaction_id(txn_id)?;
         let content = message_content(
             body.clone(),
             msg_type,
@@ -990,30 +994,101 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("d0.4-send-room-not-found")?;
-        let local_txn_id = {
-            let mut sends = self.sends.lock().await;
-            sends
-                .enqueue_text(parsed_room.to_string(), body)
-                .map_err(|error| error.diagnostic_id())?
-                .local_txn_id
-                .clone()
-        };
-        let send_result = send_message_to_room(&room, content, txn_id).await;
+        self.send_text_via_queue(room, parsed_room.to_string(), body, content)
+            .await
+    }
+
+    async fn send_text_via_queue(
+        &self,
+        room: matrix_sdk::Room,
+        room_id: String,
+        body: String,
+        content: RoomMessageEventContent,
+    ) -> Result<MatrixSendTextResult, &'static str> {
+        let mut session = enqueue_event_via_room_queue(&room, content.into())
+            .await
+            .map_err(|error| error.diagnostic_id)?;
+        let local_txn_id = session.transaction_id.clone();
         {
             let mut sends = self.sends.lock().await;
-            if send_result.is_ok() {
-                let _ = sends.mark_sent(&local_txn_id);
-            } else {
-                let _ = sends.mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
+            sends
+                .enqueue_text_with_txn(room_id.clone(), body, local_txn_id.clone())
+                .map_err(|error| error.diagnostic_id())?;
+        }
+        let send_result = wait_for_queued_send(&mut session).await;
+        {
+            let mut sends = self.sends.lock().await;
+            match &send_result {
+                Ok(_) => {
+                    let _ = sends.mark_sent(&local_txn_id);
+                }
+                Err(error) if error.wedged => {
+                    let _ = sends.mark_wedged(&local_txn_id, error.diagnostic_id);
+                }
+                Err(error) if error.cancelled => {
+                    let _ = sends.cancel(&local_txn_id);
+                }
+                Err(error) => {
+                    let _ = sends.mark_failed(&local_txn_id, error.diagnostic_id);
+                }
             }
         }
-        let event_id = send_result?;
+        let ack = send_result.map_err(|error| error.diagnostic_id)?;
         Ok(MatrixSendTextResult {
-            room_id: parsed_room.to_string(),
-            event_id,
+            room_id,
+            event_id: ack.event_id,
             local_txn_id,
             status: "sent",
         })
+    }
+
+    pub async fn unwedge_send(
+        &self,
+        room_id: &str,
+        local_txn_id: &str,
+    ) -> Result<(), &'static str> {
+        let parsed_room = parse_send_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("d0.4-send-room-not-found")?;
+        unwedge_queued_send(&room, local_txn_id)
+            .await
+            .map_err(|error| error.diagnostic_id)?;
+        let mut sends = self.sends.lock().await;
+        let _ = sends.retry(local_txn_id);
+        Ok(())
+    }
+
+    pub async fn abort_send(
+        &self,
+        room_id: &str,
+        local_txn_id: &str,
+    ) -> Result<bool, &'static str> {
+        let parsed_room = parse_send_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("d0.4-send-room-not-found")?;
+        let aborted = abort_queued_send(&room, local_txn_id)
+            .await
+            .map_err(|error| error.diagnostic_id)?;
+        let mut sends = self.sends.lock().await;
+        let _ = sends.cancel(local_txn_id);
+        Ok(aborted)
+    }
+
+    pub async fn outbound_text_for_room(
+        &self,
+        room_id: &str,
+    ) -> Vec<crate::app::send::OutboundTextMessage> {
+        self.sends
+            .lock()
+            .await
+            .list_for_room(room_id)
+            .into_iter()
+            .cloned()
+            .collect()
     }
 
     pub async fn send_poll(
@@ -1036,13 +1111,13 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.3-poll-room-not-found")?;
-        let response = room
-            .send(content)
-            .await
-            .map_err(|_| "v-send.3-poll-sdk-failed")?;
+        let ack =
+            send_event_via_room_queue(&room, UnstablePollStartEventContent::New(content).into())
+                .await
+                .map_err(|error| error.diagnostic_id)?;
         Ok(MatrixSendPollResult {
             room_id: parsed_room.to_string(),
-            event_id: response.response.event_id.to_string(),
+            event_id: ack.event_id,
             status: "sent",
         })
     }
@@ -1060,14 +1135,13 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.3-poll-room-not-found")?;
-        let response = room
-            .send(content)
+        let ack = send_event_via_room_queue(&room, content.into())
             .await
-            .map_err(|_| "v-send.3-poll-response-sdk-failed")?;
+            .map_err(|error| error.diagnostic_id)?;
         Ok(MatrixPollRespondResult {
             room_id: parsed_room.to_string(),
             poll_event_id,
-            event_id: response.response.event_id.to_string(),
+            event_id: ack.event_id,
             status: "sent",
         })
     }
@@ -1086,7 +1160,7 @@ impl NativeTimelineOwner {
     ) -> Result<MatrixSendTextResult, &'static str> {
         let parsed_room = parse_send_room_id(&room_id)?;
         let parsed_event = parse_edit_event_id(&event_id)?;
-        let txn_id = parse_transaction_id(txn_id)?;
+        let _txn_id = parse_transaction_id(txn_id)?;
         let content = edit_message_content(
             body.clone(),
             msg_type,
@@ -1099,32 +1173,17 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.r-edit-room-not-found")?;
-        let local_txn_id = {
-            let mut sends = self.sends.lock().await;
-            sends
-                .enqueue_text(parsed_room.to_string(), body)
-                .map_err(|error| error.diagnostic_id())?
-                .local_txn_id
-                .clone()
-        };
-        let send_result = send_message_to_room(&room, content, txn_id)
+        self.send_text_via_queue(room, parsed_room.to_string(), body, content)
             .await
-            .map_err(|_| "v-send.r-edit-sdk-failed");
-        {
-            let mut sends = self.sends.lock().await;
-            if send_result.is_ok() {
-                let _ = sends.mark_sent(&local_txn_id);
-            } else {
-                let _ = sends.mark_failed(&local_txn_id, "v-send.r-edit-sdk-failed");
-            }
-        }
-        let event_id = send_result?;
-        Ok(MatrixSendTextResult {
-            room_id: parsed_room.to_string(),
-            event_id,
-            local_txn_id,
-            status: "sent",
-        })
+            .map_err(|diagnostic| {
+                if diagnostic == "d0.4-send-queue-wedged" {
+                    diagnostic
+                } else if diagnostic.starts_with("d0.4-") || diagnostic.starts_with("p6.1-") {
+                    "v-send.r-edit-sdk-failed"
+                } else {
+                    diagnostic
+                }
+            })
     }
 
     pub async fn edit_text(
@@ -1153,7 +1212,7 @@ impl NativeTimelineOwner {
             .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
             .await
             .map_err(|_| "v-timeline-edit-prepare-failed")?;
-        room.send(edit_content)
+        send_event_via_room_queue(&room, edit_content)
             .await
             .map_err(|_| "v-timeline-edit-send-failed")?;
         Ok(NativeTimelineActionReadback {
@@ -1412,7 +1471,7 @@ impl NativeTimelineOwner {
         )?;
         let content = poll_response_content(event_id.as_str(), &answer_ids)
             .map_err(|_| "v-timeline-poll-vote-invalid-answer")?;
-        room.send(content)
+        send_event_via_room_queue(&room, content.into())
             .await
             .map_err(|_| "v-timeline-poll-vote-send-failed")?;
         Ok(NativeTimelineActionReadback {
@@ -1480,13 +1539,10 @@ impl NativeTimelineOwner {
         let forwarded_body = format_forwarded_plain_body(&sender_label, &body, as_quote);
         let mut content = RoomMessageEventContent::text_plain(forwarded_body);
         content.mentions = Some(Mentions::new());
-        let sent_event_id = target_room
-            .send(content)
+        let sent_event_id = send_event_via_room_queue(&target_room, content.into())
             .await
             .map_err(|_| "v-timeline-forward-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .event_id;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::ForwardText,
@@ -1518,13 +1574,10 @@ impl NativeTimelineOwner {
         validate_forward_encryption(&source_room, &target_room, confirmed_encryption_downgrade)
             .await?;
         let content = load_forwardable_media(&source_room, &event_id).await?;
-        let sent_event_id = target_room
-            .send(content)
+        let sent_event_id = send_event_via_room_queue(&target_room, content)
             .await
             .map_err(|_| "v-timeline-forward-media-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .event_id;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::ForwardMedia,
@@ -2441,13 +2494,7 @@ impl NativeTimelineRegistry {
             .find(|item| item.event_id == event_id.as_str())
             .ok_or("v-crypto.6-event-not-found")?;
         if let Some(room) = client.get_room(parse_room_id(&room_id)?.as_ref()) {
-            enrich_native_reactions(
-                &room,
-                event_id.as_str(),
-                &mut item.reactions,
-                true,
-            )
-            .await;
+            enrich_native_reactions(&room, event_id.as_str(), &mut item.reactions, true).await;
         }
         Ok(NativeTimelineEventReadback {
             session_generation: self.session_generation,
@@ -2524,10 +2571,11 @@ impl NativeTimelineRegistry {
         let room = client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-send.2-reaction-room-not-found")?;
-        room.send(ReactionEventContent::from(Annotation::new(
-            target_event_id.clone(),
-            key.to_owned(),
-        )))
+        send_event_via_room_queue(
+            &room,
+            ReactionEventContent::from(Annotation::new(target_event_id.clone(), key.to_owned()))
+                .into(),
+        )
         .await
         .map_err(|_| "v-send.2-reaction-ensure-failed")?;
 
@@ -5060,5 +5108,39 @@ mod tests {
 
         assert!(!registry.in_flight.contains_key(&old_key));
         assert!(registry.in_flight.contains_key(&new_key));
+    }
+
+    #[test]
+    fn composer_send_owner_uses_room_send_queue_without_extra_content() {
+        let source = include_str!("live.rs");
+        for marker in [
+            "enqueue_event_via_room_queue",
+            "send_event_via_room_queue",
+            "wait_for_queued_send",
+            "unwedge_queued_send",
+            "abort_queued_send",
+        ] {
+            assert!(
+                source.contains(marker),
+                "native send owner must use {marker}"
+            );
+        }
+        let send_text_start = source.find("pub async fn send_text(").unwrap();
+        let send_poll_start = source.find("pub async fn send_poll(").unwrap();
+        let send_text = &source[send_text_start..send_poll_start];
+        assert!(send_text.contains("send_text_via_queue"));
+        assert!(!send_text.contains(&format!("{}{}", "room.", "send(")));
+        assert!(!send_text.contains("send_message_to_room"));
+        assert!(!source.contains(&format!("{}{}", "send().", "with_extra")));
+
+        let ensure_start = source
+            .find("Idempotently ensure an approval annotation exists.")
+            .unwrap();
+        let redact_start = source
+            .find("Redact any reaction annotation selected in the viewer.")
+            .unwrap();
+        let ensure = &source[ensure_start..redact_start];
+        assert!(ensure.contains("send_event_via_room_queue"));
+        assert!(!ensure.contains(&format!("{}{}", "room.", "send(")));
     }
 }

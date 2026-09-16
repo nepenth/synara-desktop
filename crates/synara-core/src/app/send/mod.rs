@@ -1,9 +1,10 @@
 //! P6.1 — Outbound text send queue + local-echo foundation (harness).
 //! P7.4 — Outbound attachment / media send queue foundation (harness).
 //!
-//! Tracks plain-text and attachment outbound messages with [`LocalEchoState`]
-//! and session generation stamps. Attachment queue uses **media handle ids
-//! only** (no file bytes). No SDK `Room::send`, no dual-backend.
+//! Product `SendQueue` / `AttachmentSendQueue` project `RoomSendQueue` /
+//! `SendHandle` state (Sending / Sent / Failed / Wedged / Cancelled).
+//! Network I/O is `RoomSendQueue::send` / `send_attachment`. No
+//! `AttachmentConfig.extra_content`. No dual-backend.
 //!
 //! Authoritative design notes:
 //! - `docs/matrix-rust-sdk/p6.1-send-queue.md`
@@ -18,6 +19,7 @@ mod error;
 mod ipc;
 mod poll;
 mod queue;
+mod room_queue;
 mod text;
 
 pub use attachment::{
@@ -39,6 +41,11 @@ pub use poll::{
     NormalizedPoll, PollSendError,
 };
 pub use queue::{LocalTxnId, OutboundTextMessage, SendQueue};
+pub use room_queue::{
+    abort_queued_send, enqueue_attachment_via_room_queue, enqueue_event_via_room_queue,
+    queued_send_is_wedged, send_attachment_via_room_queue, send_event_via_room_queue,
+    unwedge_queued_send, wait_for_queued_send, QueuedSendAck, QueuedSendError, QueuedSendSession,
+};
 pub use text::{
     edit_message_content, message_content, parse_edit_event_id, parse_reply_event_id,
     parse_send_room_id, parse_thread_root_event_id, parse_transaction_id, send_message_to_room,

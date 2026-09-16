@@ -194,6 +194,30 @@ impl AttachmentSendQueue {
         Ok(self.items.get(&local_txn_id).expect("just inserted"))
     }
 
+    /// Project a `RoomSendQueue` attachment echo using the SDK transaction id.
+    pub fn enqueue_with_txn(
+        &mut self,
+        req: AttachmentEnqueue,
+        local_txn_id: impl Into<String>,
+    ) -> Result<&OutboundAttachment, SendError> {
+        let local_txn_id = local_txn_id.into();
+        if local_txn_id.is_empty() {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p7.4-invalid-txn-id",
+            });
+        }
+        if self.items.contains_key(&local_txn_id) {
+            return Ok(self.items.get(&local_txn_id).expect("contains"));
+        }
+        let old_id = self.enqueue(req)?.local_txn_id.clone();
+        let mut item = self.items.remove(&old_id).expect("just inserted");
+        self.order.retain(|id| id != &old_id);
+        item.local_txn_id = local_txn_id.clone();
+        self.order.push(local_txn_id.clone());
+        self.items.insert(local_txn_id.clone(), item);
+        Ok(self.items.get(&local_txn_id).expect("rebinding txn"))
+    }
+
     pub fn get(&self, local_txn_id: &str) -> Option<&OutboundAttachment> {
         self.items.get(local_txn_id)
     }
@@ -246,6 +270,23 @@ impl AttachmentSendQueue {
         Ok(item)
     }
 
+    /// Mark send wedged (unrecoverable `RoomSendQueue` error).
+    pub fn mark_wedged(
+        &mut self,
+        local_txn_id: &str,
+        diagnostic_id: &'static str,
+    ) -> Result<&OutboundAttachment, SendError> {
+        let item = self.get_mut_checked(local_txn_id)?;
+        if !matches!(item.state, LocalEchoState::Sending | LocalEchoState::Failed) {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p7.4-mark-wedged-invalid-state",
+            });
+        }
+        item.state = LocalEchoState::Wedged;
+        item.failure_diagnostic_id = Some(diagnostic_id);
+        Ok(item)
+    }
+
     pub fn cancel(&mut self, local_txn_id: &str) -> Result<&OutboundAttachment, SendError> {
         let item = self.get_mut_checked(local_txn_id)?;
         if matches!(item.state, LocalEchoState::Sent | LocalEchoState::Cancelled) {
@@ -266,7 +307,7 @@ impl AttachmentSendQueue {
                 diagnostic_id: "p7.4-send-not-found",
             })?
             .state;
-        if state != LocalEchoState::Failed {
+        if !matches!(state, LocalEchoState::Failed | LocalEchoState::Wedged) {
             return Err(SendError::Invalid {
                 diagnostic_id: "p7.4-retry-not-failed",
             });
@@ -311,7 +352,7 @@ impl AttachmentSendQueue {
     pub fn retire_generation(&mut self, new_generation: u64) {
         self.session_generation = new_generation;
         for item in self.items.values_mut() {
-            if item.state == LocalEchoState::Sending {
+            if matches!(item.state, LocalEchoState::Sending | LocalEchoState::Wedged) {
                 item.state = LocalEchoState::Cancelled;
                 item.failure_diagnostic_id = Some("p7.4-stale-generation-cancelled");
             }
