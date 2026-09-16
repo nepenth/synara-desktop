@@ -153,8 +153,8 @@ export class UserStatusWriteError extends Error {
       kind === 'unsupported'
         ? 'This homeserver does not support user status.'
         : kind === 'invalid'
-          ? 'Status emoji or text is too long.'
-          : 'Native user status is unavailable.'
+        ? 'Status emoji or text is too long.'
+        : 'Native user status is unavailable.'
     );
     this.kind = kind;
   }
@@ -214,7 +214,10 @@ export async function setOwnUserStatusNative(
   text: string,
   deps: Partial<NativeUserStatusDependencies> = {}
 ): Promise<void> {
-  if (utf8ByteLength(emoji) > MAX_STATUS_EMOJI_BYTES || utf8ByteLength(text) > MAX_STATUS_TEXT_BYTES) {
+  if (
+    utf8ByteLength(emoji) > MAX_STATUS_EMOJI_BYTES ||
+    utf8ByteLength(text) > MAX_STATUS_TEXT_BYTES
+  ) {
     throw new UserStatusWriteError('invalid');
   }
   const resolved = resolveDependencies(deps);
@@ -235,7 +238,9 @@ export async function clearOwnUserStatusNative(
 }
 
 /** Lazy peer/own snapshot. Missing fields stay absent; never presence. */
-export function useNativeUserStatus(userId: string | undefined): NativeUserStatusSnapshot | undefined {
+export function useNativeUserStatus(
+  userId: string | undefined
+): NativeUserStatusSnapshot | undefined {
   const [snapshot, setSnapshot] = useState<NativeUserStatusSnapshot | undefined>();
 
   useEffect(() => {

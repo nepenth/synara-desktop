@@ -89,11 +89,7 @@ test('snapshot and writes stay on native commands and never echo secrets', async
   await clearOwnUserStatusNative({ desktopNativeSession: true, invoke });
   assert.deepEqual(
     calls.map((row) => row.command),
-    [
-      'matrix_user_status_snapshot',
-      'matrix_user_status_set',
-      'matrix_user_status_clear',
-    ]
+    ['matrix_user_status_snapshot', 'matrix_user_status_set', 'matrix_user_status_clear']
   );
   assert.deepEqual(calls[1]?.args, { emoji: '☕', text: 'in a meeting' });
 });
