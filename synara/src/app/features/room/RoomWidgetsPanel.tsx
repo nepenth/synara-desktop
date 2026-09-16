@@ -103,8 +103,8 @@ export function RoomWidgetsPanel({ roomId, requestClose }: RoomWidgetsPanelProps
             <Box direction="Column" gap="200">
               <Text size="T300">Open {pending.name}?</Text>
               <Text size="T200" priority="300">
-                Origin: {pending.origin}. Receive room events the user already sees. Send is
-                limited to m.room.message after an explicit grant.
+                Origin: {pending.origin}. Receive room events the user already sees. Send is limited
+                to m.room.message after an explicit grant.
               </Text>
               <Button
                 size="300"
@@ -120,7 +120,12 @@ export function RoomWidgetsPanel({ roomId, requestClose }: RoomWidgetsPanelProps
                 <Button size="300" variant="Primary" onClick={() => void handleConfirmOpen()}>
                   <Text size="B300">Open widget</Text>
                 </Button>
-                <Button size="300" variant="Secondary" fill="Soft" onClick={() => setPending(undefined)}>
+                <Button
+                  size="300"
+                  variant="Secondary"
+                  fill="Soft"
+                  onClick={() => setPending(undefined)}
+                >
                   <Text size="B300">Cancel</Text>
                 </Button>
               </Box>

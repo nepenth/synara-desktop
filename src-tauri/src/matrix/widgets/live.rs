@@ -5,7 +5,7 @@ use std::sync::Arc;
 use matrix_sdk::Client;
 use tauri::AppHandle;
 
-use super::host::{destroy_widget_window, deliver_to_widget_window};
+use super::host::{deliver_to_widget_window, destroy_widget_window};
 pub use synara_core::app::widgets::NativeWidgetOwner;
 
 /// Start the Core owner and map driver JSON onto the isolated widget webview.

@@ -173,7 +173,10 @@ mod tests {
             ("experimental-widgets-disabled", "Forbidden"),
             ("experimental-widgets-session-not-live", "Forbidden"),
             ("experimental-widgets-url-rejected", "InvalidRequest"),
-            ("experimental-widgets-room-state-url-rejected", "InvalidRequest"),
+            (
+                "experimental-widgets-room-state-url-rejected",
+                "InvalidRequest",
+            ),
             ("experimental-widgets-unavailable", "Unknown"),
         ];
         for (diagnostic_id, expected_code) in cases {

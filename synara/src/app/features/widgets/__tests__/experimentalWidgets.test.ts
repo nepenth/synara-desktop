@@ -19,10 +19,7 @@ test('token query markers are rejected', () => {
     isSafeWidgetUrl('https://widgets.example.org/app?access_token=secret', false),
     false
   );
-  assert.equal(
-    isSafeWidgetUrl('https://widgets.example.org/app?loginToken=secret', true),
-    false
-  );
+  assert.equal(isSafeWidgetUrl('https://widgets.example.org/app?loginToken=secret', true), false);
 });
 
 test('loopback is agent-list only', () => {

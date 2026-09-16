@@ -151,7 +151,7 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                       />
                     }
                   />
-                    </SequenceCard>
+                </SequenceCard>
                 {isSynaraDesktop() && (
                   <SequenceCard
                     className={SequenceCardStyle}
@@ -182,7 +182,12 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                           room-state widgets cannot load localhost.
                         </Text>
                         {agentWidgetEntries.map((entry) => (
-                          <Box key={entry.id} justifyContent="SpaceBetween" alignItems="Center" gap="200">
+                          <Box
+                            key={entry.id}
+                            justifyContent="SpaceBetween"
+                            alignItems="Center"
+                            gap="200"
+                          >
                             <Box direction="Column" grow="Yes">
                               <Text size="T300">{entry.name}</Text>
                               <Text size="T200" priority="300">

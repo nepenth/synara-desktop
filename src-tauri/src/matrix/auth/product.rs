@@ -81,7 +81,6 @@ use crate::matrix::lifecycle::{
 };
 use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
-use crate::matrix::widgets::NativeWidgetOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -137,7 +136,11 @@ use crate::matrix::user_status::NativeUserStatusOwner;
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
+<<<<<<< HEAD
 use synara_core::app::media_cache::NativeMediaRetentionOwner;
+=======
+use crate::matrix::widgets::NativeWidgetOwner;
+>>>>>>> 97c701ba (Apply rustfmt and prettier to the widget host slice.)
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";
