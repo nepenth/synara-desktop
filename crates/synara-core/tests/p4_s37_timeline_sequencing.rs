@@ -5,6 +5,8 @@
 //! `project_timeline_diffs`. They prove deterministic adapter behavior, not
 //! live homeserver or two-client interoperability.
 
+#![recursion_limit = "256"]
+
 use std::{collections::BTreeMap, io::Cursor, sync::Arc, time::Duration};
 
 use eyeball_im::VectorDiff;

@@ -1,8 +1,8 @@
-//! Compile-only linkage smoke for Matrix Rust SDK 0.18.0 (P1.2).
+//! Compile-only linkage smoke for Matrix Rust SDK 0.19.0 (P1.2).
 //!
 //! Proves `matrix-sdk` / `matrix-sdk-ui` type paths resolve in the production
 //! Tauri crate. Does **not** construct a live Client, open network, start sync,
-//! login, or register Tauri commands. Product runtime remains matrix-js-sdk.
+//! login, or register Tauri commands.
 
 use matrix_sdk::Client;
 use matrix_sdk_ui::timeline::Timeline;
@@ -17,7 +17,7 @@ fn matrix_sdk_link_markers() -> &'static str {
     let _timeline: Option<Timeline> = None;
     let _client_name = std::any::type_name::<Client>();
     let _timeline_name = std::any::type_name::<Timeline>();
-    "matrix-sdk=0.18.0+matrix-sdk-ui=0.18.0 link-smoke"
+    "matrix-sdk=0.19.0+matrix-sdk-ui=0.19.0 link-smoke"
 }
 
 #[cfg(test)]
@@ -25,10 +25,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn compiles_with_matrix_sdk_0_18() {
+    fn compiles_with_matrix_sdk_0_19() {
         let marker = matrix_sdk_link_markers();
         assert!(
-            marker.contains("matrix-sdk=0.18.0"),
+            marker.contains("matrix-sdk=0.19.0"),
             "expected version marker, got {marker}"
         );
         assert!(

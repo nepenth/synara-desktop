@@ -107,8 +107,9 @@ impl SyncServiceOwner {
     }
 
     /// Keep the SDK's latest-event calculation active for the current room-list
-    /// viewport. The SDK replaces the complete subscription set on each call,
-    /// so this is coordinated with the active-room subscription below.
+    /// viewport. `RoomListService::set_room_subscriptions` makes the subscription
+    /// set exactly `room_ids` without marking remaining rooms' members unsynced.
+    /// This is coordinated with the active-room subscription below.
     pub async fn subscribe_to_room_list(&self, room_ids: &[OwnedRoomId]) {
         let mut subscriptions = self.room_subscriptions.lock().await;
         if viewport_ids_equivalent(&subscriptions.viewport, room_ids) {
@@ -135,7 +136,7 @@ impl SyncServiceOwner {
         let room_id_refs = room_ids.iter().map(OwnedRoomId::as_ref).collect::<Vec<_>>();
         self.service
             .room_list_service()
-            .subscribe_to_rooms(&room_id_refs)
+            .set_room_subscriptions(&room_id_refs)
             .await;
     }
 }

@@ -8,10 +8,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use matrix_sdk::{
     event_handler::EventHandlerDropGuard,
-    ruma::{
-        api::client::presence::set_presence::v3::Request as SetPresenceRequest,
-        events::presence::PresenceEvent, presence::PresenceState as RumaPresenceState, UserId,
-    },
+    ruma::{events::presence::PresenceEvent, presence::PresenceState as RumaPresenceState, UserId},
     Client, StateStore,
 };
 use tokio::sync::Mutex;
@@ -219,23 +216,25 @@ impl NativePresenceOwner {
     /// PUT own presence through the managed client. Own user id is taken from
     /// the live session; callers never supply a user id. Empty `status_msg`
     /// becomes `None`. Failures stay static and must not echo status text.
+    ///
+    /// Uses `Client::set_presence(..., immediate: true)` so the value is both
+    /// sent now and stored as the default for later sliding-sync requests.
+    /// A raw presence HTTP call would be overwritten by the next sync, which
+    /// defaults to `Online`.
     pub async fn set(
         &self,
         state: &str,
         status_msg: Option<String>,
     ) -> Result<NativePresenceWriteResult, &'static str> {
         self.ensure_live()?;
-        let user_id = self
+        let _user_id = self
             .client
             .user_id()
-            .ok_or("v-presence-user-owner-missing")?
-            .to_owned();
+            .ok_or("v-presence-user-owner-missing")?;
         let presence = parse_presence_write_state(state)?;
         let status_msg = parse_presence_write_status_msg(status_msg)?;
-        let mut request = SetPresenceRequest::new(user_id, presence);
-        request.status_msg = status_msg;
         self.client
-            .send(request)
+            .set_presence(presence, status_msg, true)
             .await
             .map_err(|_| "v-presence-set-sdk-failed")?;
         Ok(NativePresenceWriteResult {

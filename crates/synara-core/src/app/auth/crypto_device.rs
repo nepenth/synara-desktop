@@ -1,8 +1,8 @@
 //! Peek the leftover SQLite crypto account before password login.
 //!
 //! Logout does not wipe the per-account crypto store. The next password login
-//! must reuse that account's device id so `OlmMachine::with_store` does not
-//! see `MismatchedAccount`. This helper is read-only: it never logs, wipes, or
+//! must reuse that account's device id so `OlmMachineBuilder` does not see
+//! `MismatchedAccount`. This helper is read-only: it never logs, wipes, or
 //! returns account identifiers other than the device id needed for login.
 
 use std::path::Path;
@@ -80,7 +80,9 @@ mod tests {
         let store = SqliteCryptoStore::open(&dir, Some(passphrase))
             .await
             .expect("open leftover store");
-        let machine = matrix_sdk_crypto::OlmMachine::with_store(&user, device, store, None)
+        let machine = matrix_sdk_crypto::OlmMachineBuilder::new(&user, device)
+            .with_crypto_store(store)
+            .build()
             .await
             .expect("create leftover olm account");
         drop(machine);

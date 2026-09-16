@@ -45,10 +45,11 @@ impl RoomHistory {
         self.protection.send_modify(|count| *count += 1);
         let guard = HistoryProtection(self.clone());
         let _quiescent = self.operation.lock().await;
-        // SDK 0.18 retains a spawned shared pagination task after its caller is
-        // dropped. Wait for the *cache's* status, not just our caller's mutex.
-        // Waiting is correct; failing the user's room open is not. After the
-        // timeout the view proceeds and the inbox defers while this guard lives.
+        // SDK 0.19 still retains a spawned shared pagination task after its
+        // caller is dropped. Wait for the *cache's* status, not just our
+        // caller's mutex. Waiting is correct; failing the user's room open
+        // is not. After the timeout the view proceeds and the inbox defers
+        // while this guard lives.
         let _ = timeout(Duration::from_secs(10), wait_for_cache_pagination(room)).await;
         guard
     }

@@ -31,7 +31,7 @@ impl HttpLoginFlowTransport {
         Self::new_with_user_agent(concat!(
             "Synara-Core/",
             env!("CARGO_PKG_VERSION"),
-            " (matrix-sdk/0.18.0)"
+            " (matrix-sdk/0.19.0)"
         ))
     }
 
@@ -66,7 +66,7 @@ impl HttpRegisterFlowTransport {
         Self::new_with_user_agent(concat!(
             "Synara-Core/",
             env!("CARGO_PKG_VERSION"),
-            " (matrix-sdk/0.18.0)"
+            " (matrix-sdk/0.19.0)"
         ))
     }
 
@@ -90,7 +90,7 @@ impl HttpDiscoveryTransport {
         Self::new_with_user_agent(concat!(
             "Synara-Core/",
             env!("CARGO_PKG_VERSION"),
-            " (matrix-sdk/0.18.0)"
+            " (matrix-sdk/0.19.0)"
         ))
     }
 

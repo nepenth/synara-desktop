@@ -482,7 +482,7 @@ impl NativeRoomJoinRuleOwner {
         user_id: &str,
         reason: Option<String>,
     ) -> Result<(), &'static str> {
-        // matrix-sdk 0.18's invite_user_by_id API does not expose a reason field.
+        // matrix-sdk 0.19's invite_user_by_id API does not expose a reason field.
         let _reason = normalize_moderation_reason(reason);
         let room = self.moderation_room(room_id)?;
         let user_id = parse_room_moderation_user_id(user_id)?;

@@ -215,7 +215,7 @@ async fn invite_avatar_source(
         return room_avatar;
     }
 
-    for hero in room.heroes() {
+    for hero in room.heroes().await {
         if hero.avatar_url.is_some() || hero.display_name.is_some() {
             return hero.avatar_url;
         }

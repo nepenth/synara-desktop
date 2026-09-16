@@ -71,9 +71,10 @@ be ≥ 20 Gi before bindgen.
 
 ## 5.5 Version-pinning policy
 
-- `matrix-sdk = "=0.18.0"`, `matrix-sdk-ui = "=0.18.0"`,
-  `matrix-sdk-crypto = "=0.18.0"` move into `synara-core/Cargo.toml`.
-- `src-tauri` re-exports them from the core (no separate pins).
-- Feature set is centralized: `sqlite`, `markdown`, `qrcode`, e2e (via ui).
+- `matrix-sdk = "=0.19.0"`, `matrix-sdk-ui = "=0.19.0"`,
+  `matrix-sdk-crypto = "=0.19.0"` live in `synara-core/Cargo.toml` and
+  `src-tauri/Cargo.toml`.
+- Feature set is centralized: `sqlite`, `bundled-sqlite`, `rustls-aws-lc-rs`,
+  `markdown`, `qrcode`, e2e (via ui).
 - Any future SDK bump is a single-crate change, tested once against the shared
   suite.

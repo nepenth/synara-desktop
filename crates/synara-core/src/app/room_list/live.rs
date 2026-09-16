@@ -120,10 +120,11 @@ pub async fn snapshot_from_sync_owner(
         })
         .ok_or("d0.2-room-list-reset-missing")?;
 
-    // Sliding-sync `subscribe_to_rooms` replaces the previous set and is how
-    // encrypted rooms receive events for client-side unread math. A 20-row
-    // viewport left every other room at server notification_count=0, which
-    // is typically zero for E2EE — Element (full /sync) still showed badges.
+    // Sliding-sync `set_room_subscriptions` makes the subscription set
+    // exactly these rooms and is how encrypted rooms receive events for
+    // client-side unread math. A 20-row viewport left every other room at
+    // server notification_count=0, which is typically zero for E2EE —
+    // Element (full /sync) still showed badges.
     let subscribed_room_ids = values
         .iter()
         .map(|room| room.room_id().to_owned())
@@ -409,7 +410,7 @@ mod tests {
         assert_eq!(
             source.matches(truncated_viewport).count(),
             0,
-            "encrypted rooms only get client-side unreads after subscribe_to_rooms"
+            "encrypted rooms only get client-side unreads after set_room_subscriptions"
         );
     }
 }

@@ -452,10 +452,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
           components: rustfmt, clippy
 
       - name: Cache Rust build artifacts
@@ -514,10 +514,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install cargo-audit
         run: cargo install cargo-audit --locked
@@ -637,10 +637,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93 and Apple targets
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -685,10 +685,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93 and Apple targets
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -739,10 +739,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93 and Apple targets
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96 and Apple targets
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -786,10 +786,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -821,10 +821,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -856,10 +856,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -891,10 +891,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -926,10 +926,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -961,10 +961,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install Rust 1.93
-        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.93
+      - name: Install Rust 1.96
+        uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
-          toolchain: 1.93
+          toolchain: 1.96
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh

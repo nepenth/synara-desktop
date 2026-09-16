@@ -32,7 +32,7 @@ use matrix_sdk::{
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    EncryptedMessage, MsgLikeKind, ReactionStatus, Timeline, TimelineBuilder, TimelineDetails,
+    EncryptedMessage, EventSendState, MsgLikeKind, Timeline, TimelineBuilder, TimelineDetails,
     TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
     TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
     TimelineReadReceiptTracking,
@@ -222,7 +222,7 @@ async fn mark_live_timeline_read(
         }
         LiveReadTargetPlan::Send(event_id) => {
             timeline
-                // Pinned matrix-sdk-ui 0.18 invariant: `Timeline::send_multiple_receipts`
+                // Pinned matrix-sdk-ui 0.19 invariant: `Timeline::send_multiple_receipts`
                 // clears the SDK room's unread flag after a submitted marker update and
                 // also when receipt deduplication removes every unchanged marker. Keep
                 // this evidence in the adjacent regression test when upgrading the SDK.
@@ -3851,9 +3851,12 @@ fn project_reactions(
                 .iter()
                 .map(|(user_id, info)| NativeTimelineReactionSender {
                     user_id: user_id.to_string(),
-                    reaction_event_id: match &info.status {
-                        ReactionStatus::RemoteToRemote(event_id) => Some(event_id.to_string()),
-                        ReactionStatus::LocalToLocal(_) | ReactionStatus::LocalToRemote(_) => None,
+                    // 0.19 dropped ReactionStatus. Local echoes that have been
+                    // accepted expose Sent { event_id }. Remote reactions
+                    // (send_state: None) no longer carry an event id here.
+                    reaction_event_id: match &info.send_state {
+                        Some(EventSendState::Sent { event_id }) => Some(event_id.to_string()),
+                        _ => None,
                     },
                 })
                 .collect(),
@@ -4709,9 +4712,9 @@ mod tests {
         assert!(receipts.public_read_receipt.is_none());
 
         let cargo_lock = include_str!("../../../../../Cargo.lock");
-        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.18.0\""));
+        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.19.0\""));
         let source = include_str!("live.rs");
-        assert!(source.contains("Pinned matrix-sdk-ui 0.18 invariant"));
+        assert!(source.contains("Pinned matrix-sdk-ui 0.19 invariant"));
         assert!(source.contains("also when receipt deduplication removes every unchanged marker"));
         let mark_read_start = source.find("async fn mark_live_timeline_read").unwrap();
         let mark_read_end = source[mark_read_start..]

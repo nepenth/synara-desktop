@@ -98,19 +98,18 @@ Element X does not implement call UI natively. It:
    exchanges media keys without ever holding the user's Matrix keys.
 5. Ringing/incoming-call UX uses MSC4075 `m.rtc.notification` events and push.
 
-### What is available in our pinned SDK (`matrix-sdk = 0.18.0`)
+### What is available in our pinned SDK (`matrix-sdk = 0.19.0`)
 
-Verified against the vendored crate source:
+Verified against the published crate source:
 
 - `matrix_sdk::widget` module exists behind the **`experimental-widgets`**
   cargo feature (we do not enable it today): `WidgetSettings`,
   `WidgetDriver`, `WidgetDriverHandle`, `Capabilities`/`CapabilitiesProvider`,
   Element Call virtual-widget helpers (`widget/settings/element_call.rs`),
   to-device capability support for `io.element.call.encryption_keys`.
-- `Client::rtc_foci()` reads the well-known `rtc_foci` list. The newer
-  `Client::rtc_transports()` (authenticated MSC4519 endpoint, merged upstream
-  July 2026) is **not** in 0.18.0; we would need to bump the SDK or add a
-  small typed request ourselves. Both are cheap.
+- `Client::rtc_transports()` queries the authenticated MSC4519
+  `GET /_matrix/client/v1/rtc/transports` API (with cache helpers).
+  `Client::rtc_foci()` remains as a deprecated well-known fallback.
 - There is **no** native (non-widget) MatrixRTC session state machine in the
   Rust SDK and no LiveKit client in Rust that Element ships. Element's native
   clients all delegate WebRTC to the Element Call web app.
