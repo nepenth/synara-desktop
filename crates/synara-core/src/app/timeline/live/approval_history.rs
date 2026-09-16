@@ -77,7 +77,8 @@ impl RoomHistory {
 }
 
 async fn wait_for_cache_pagination(room: &Room) -> Result<(), &'static str> {
-    let event_cache = room.client().event_cache();
+    let client = room.client();
+    let event_cache = client.event_cache();
     event_cache
         .subscribe()
         .map_err(|_| "approval-history-cache-unavailable")?;
