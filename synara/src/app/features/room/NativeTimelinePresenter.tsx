@@ -2530,10 +2530,6 @@ export function NativeTimelinePresenter({
     backwardAvailable: readyState?.snapshot.pagination.backward === 'available',
     forwardAvailable: readyState?.snapshot.pagination.forward === 'available',
   };
-  const getVisibleStartIndex = useCallback(
-    () => virtualizer.getVirtualItems()[0]?.index ?? 0,
-    [virtualizer]
-  );
   const getVisibleTimestamp = useCallback(() => {
     const index = virtualizer.getVirtualItems()[0]?.index ?? 0;
     const row = rowsRef.current[index];
@@ -2598,7 +2594,7 @@ export function NativeTimelinePresenter({
           dateJumpInFlightRef.current = false;
         });
     },
-    [roomId, virtualizer]
+    [roomId, scrollToHistoryTimestamp, virtualizer]
   );
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
