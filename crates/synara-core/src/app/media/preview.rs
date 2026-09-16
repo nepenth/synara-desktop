@@ -355,10 +355,9 @@ async fn fetch_unencrypted_media_preview(
     }
     if let Some(CachedPreview::Ok(mapped)) = cached {
         let thumbnail_handle_id =
-            match issue_thumbnail_handle(invite_avatars, room_id, mapped.image_mxc.clone()).await {
-                Ok(handle) => handle,
-                Err(_) => None,
-            };
+            issue_thumbnail_handle(invite_avatars, room_id, mapped.image_mxc.clone())
+                .await
+                .unwrap_or_default();
         return Ok(snapshot_from_mapped(
             room_id.to_owned(),
             session_generation,
@@ -404,10 +403,9 @@ async fn fetch_unencrypted_media_preview(
         guard.insert(session_generation, url, CachedPreview::Ok(mapped.clone()));
     }
     let thumbnail_handle_id =
-        match issue_thumbnail_handle(invite_avatars, room_id, mapped.image_mxc.clone()).await {
-            Ok(handle) => handle,
-            Err(_) => None,
-        };
+        issue_thumbnail_handle(invite_avatars, room_id, mapped.image_mxc.clone())
+            .await
+            .unwrap_or_default();
     Ok(snapshot_from_mapped(
         room_id.to_owned(),
         session_generation,
@@ -419,6 +417,7 @@ async fn fetch_unencrypted_media_preview(
 
 /// Sole production preview entry. Encrypted/unknown rooms return `skipped`
 /// without touching `Media::get_media_preview`.
+#[allow(clippy::too_many_arguments)] // Explicit session/room/URL/ts fields mirror the IPC contract.
 pub async fn room_media_preview(
     client: &Client,
     encryption: EncryptionState,
