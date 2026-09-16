@@ -167,9 +167,7 @@ const sanitizeAgentWidgetEntries = (value: unknown): AgentWidgetEntry[] => {
   return entries;
 };
 
-const sanitizePlatformSettings = (
-  settings: DesktopPlatformSettings
-): DesktopPlatformSettings => ({
+const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPlatformSettings => ({
   ...settings,
   agentWidgetEntries: sanitizeAgentWidgetEntries(settings.agentWidgetEntries),
 });

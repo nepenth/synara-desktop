@@ -82,9 +82,8 @@ fn is_safe_public_https_host(host: &str) -> bool {
 }
 
 fn has_token_query(url: &Url) -> bool {
-    url.query_pairs().any(|(key, _)| {
-        TOKEN_QUERY_KEYS.contains(&key.to_ascii_lowercase().as_str())
-    })
+    url.query_pairs()
+        .any(|(key, _)| TOKEN_QUERY_KEYS.contains(&key.to_ascii_lowercase().as_str()))
 }
 
 /// Returns whether `value` may be loaded as a widget URL.
@@ -126,5 +125,9 @@ pub fn widget_target_origin(value: &str) -> Option<String> {
     if let Ok(mut segments) = origin.path_segments_mut() {
         segments.clear();
     }
-    Some(origin[..url::Position::BeforePath].trim_end_matches('/').to_owned())
+    Some(
+        origin[..url::Position::BeforePath]
+            .trim_end_matches('/')
+            .to_owned(),
+    )
 }

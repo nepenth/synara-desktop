@@ -80,7 +80,6 @@ use crate::matrix::lifecycle::{
 };
 use crate::matrix::notifications::NativeNotificationObservationOwner;
 use crate::matrix::presence::NativePresenceOwner;
-use crate::matrix::widgets::NativeWidgetOwner;
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -132,6 +131,7 @@ use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSn
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
+use crate::matrix::widgets::NativeWidgetOwner;
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";

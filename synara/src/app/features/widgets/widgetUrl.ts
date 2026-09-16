@@ -1,7 +1,10 @@
 const TOKEN_QUERY_KEYS = new Set(['access_token', 'logintoken', 'accesstoken']);
 
 const normalizeHost = (host: string): string =>
-  host.replace(/^\[|\]$/g, '').replace(/\.$/, '').toLowerCase();
+  host
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '')
+    .toLowerCase();
 
 const isLoopbackHost = (host: string): boolean => {
   const normalized = normalizeHost(host);

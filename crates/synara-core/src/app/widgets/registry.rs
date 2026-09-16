@@ -58,7 +58,8 @@ impl WidgetRegistry {
         if self.retired {
             return Err("experimental-widgets-session-not-live");
         }
-        if self.sessions.len() >= MAX_WIDGET_SESSIONS && !self.sessions.contains_key(&record.session_id)
+        if self.sessions.len() >= MAX_WIDGET_SESSIONS
+            && !self.sessions.contains_key(&record.session_id)
         {
             return Err("experimental-widgets-registry-full");
         }

@@ -555,8 +555,10 @@ pub fn run() {
             if let Some(session_id) =
                 crate::matrix::widgets::host::session_id_from_widget_label(window.label())
             {
-                if matches!(event, WindowEvent::Destroyed | WindowEvent::CloseRequested { .. })
-                {
+                if matches!(
+                    event,
+                    WindowEvent::Destroyed | WindowEvent::CloseRequested { .. }
+                ) {
                     if let Some(core) = window.try_state::<Arc<synara_core::Core>>() {
                         let core = Arc::clone(core.inner());
                         let session_id = session_id.to_owned();
