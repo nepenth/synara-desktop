@@ -94,11 +94,18 @@ export function MessageSearch({
 
     return {
       term: searchPathSearchParams.term,
-      order: nativeSession ? 'rank' : (searchPathSearchParams.order ?? 'recent'),
+      order: nativeSession ? 'rank' : searchPathSearchParams.order ?? 'recent',
       rooms: searchParamRooms ?? defaultRooms,
       senders: searchParamsSenders ?? senders,
     };
-  }, [searchPathSearchParams, searchParamRooms, searchParamsSenders, rooms, senders, nativeSession]);
+  }, [
+    searchPathSearchParams,
+    searchParamRooms,
+    searchParamsSenders,
+    rooms,
+    senders,
+    nativeSession,
+  ]);
 
   const searchMessages = useMessageSearch(msgSearchParams);
 

@@ -563,7 +563,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[], options?: UploadSendOptions) => {
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(
+        replyDraft,
+        threadRootEventId
+      );
       const nativeInputs = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
@@ -932,7 +935,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleGifSelect = async (gif: GifResult) => {
       setGifSending(true);
       setGifSendError(undefined);
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(
+        replyDraft,
+        threadRootEventId
+      );
       try {
         await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
         await clearReplyDraftAfterSend(draftRevision, () => {

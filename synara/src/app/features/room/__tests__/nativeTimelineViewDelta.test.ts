@@ -523,10 +523,7 @@ test('native timeline open maps a thread root to a distinct Core position', () =
   const source = readFileSync('src/app/features/room/nativeTimelineView.ts', 'utf8');
   assert.match(source, /\| \{ kind: 'thread'; root_event_id: string \}/);
   assert.match(source, /\| \{ kind: 'thread'; rootEventId: string \}/);
-  assert.match(
-    source,
-    /kind: 'thread' as const, root_event_id: position.rootEventId/
-  );
+  assert.match(source, /kind: 'thread' as const, root_event_id: position.rootEventId/);
   assert.match(source, /positionKind === 'thread' && threadRootEventId/);
 });
 

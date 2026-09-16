@@ -1382,11 +1382,7 @@ const NativeTimelineThreadSurface = ({
   if (activeThreadRoot === rootEventId) return null;
   const latestEventId = nativeThreadFocusEventId(thread);
   return (
-    <Button
-      size="300"
-      fill="Soft"
-      onClick={() => onOpenThread(rootEventId, latestEventId)}
-    >
+    <Button size="300" fill="Soft" onClick={() => onOpenThread(rootEventId, latestEventId)}>
       {thread ? (
         <>
           Thread · {thread.replyCount} {thread.replyCount === 1 ? 'reply' : 'replies'}
@@ -1815,9 +1811,7 @@ const NativeTimelineRow = ({
       nativeTimelineActionsInFlight.delete(completed);
     }
   }, [eventId, roomId, row, sessionGeneration]);
-  const rowViewReactions = nativeReactionsForViewer(
-    'reactions' in row ? row.reactions : undefined
-  );
+  const rowViewReactions = nativeReactionsForViewer('reactions' in row ? row.reactions : undefined);
   const openReactionViewer = (initialKey?: string) => {
     if (!eventId) return;
     onViewReactions({
@@ -1848,8 +1842,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2005,8 +1998,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2029,8 +2021,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2081,8 +2072,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2146,8 +2136,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2170,8 +2159,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2195,8 +2183,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}
@@ -2220,8 +2207,7 @@ const NativeTimelineRow = ({
             sourceEncryptionStatus,
             onActionError,
             hasReactions: rowViewReactions.length > 0,
-            onViewReactions:
-              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
             threadRoot: rowThreadRoot(row),
             onOpenThread,
           }}

@@ -19,19 +19,22 @@ export function RoomThreadListPanel({ requestClose }: RoomThreadListPanelProps) 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>();
 
-  const applySnapshot = useCallback(async (action: 'open' | 'paginate') => {
-    setError(undefined);
-    setLoading(true);
-    const snapshot = await nativeThreadList(room.roomId, action);
-    setLoading(false);
-    if (snapshot === 'unavailable') {
-      setError('Thread list is unavailable.');
-      return;
-    }
-    setThreads(snapshot.threads);
-    setEndReached(snapshot.endReached);
-    setTruncated(snapshot.truncated);
-  }, [room.roomId]);
+  const applySnapshot = useCallback(
+    async (action: 'open' | 'paginate') => {
+      setError(undefined);
+      setLoading(true);
+      const snapshot = await nativeThreadList(room.roomId, action);
+      setLoading(false);
+      if (snapshot === 'unavailable') {
+        setError('Thread list is unavailable.');
+        return;
+      }
+      setThreads(snapshot.threads);
+      setEndReached(snapshot.endReached);
+      setTruncated(snapshot.truncated);
+    },
+    [room.roomId]
+  );
 
   useEffect(() => {
     void applySnapshot('open');

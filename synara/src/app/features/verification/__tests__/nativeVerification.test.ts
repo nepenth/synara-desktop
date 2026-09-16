@@ -33,14 +33,20 @@ test('SAS start projection follows Matrix request ownership', () => {
   assert.equal(
     verificationRequestNeedsSasStart({
       ...request('outgoing', 'ready'),
-      qr: { imageDataUrl: "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>", scanned: false },
+      qr: {
+        imageDataUrl: "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>",
+        scanned: false,
+      },
     }),
     false
   );
   assert.equal(
     verificationRequestNeedsSasStart({
       ...request('outgoing', 'started'),
-      qr: { imageDataUrl: "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>", scanned: false },
+      qr: {
+        imageDataUrl: "data:image/svg+xml;charset=utf-8,<svg xmlns='http://www.w3.org/2000/svg'/>",
+        scanned: false,
+      },
     }),
     false
   );
@@ -116,7 +122,10 @@ test('QR parser accepts a bounded SVG data URL and rejects huge payloads', () =>
     scanned: false,
   });
   assert.equal(parseNativeVerificationQr({ imageDataUrl: svg, scanned: true })?.scanned, true);
-  assert.equal(parseNativeVerificationQr({ imageDataUrl: 'not-an-image', scanned: false }), undefined);
+  assert.equal(
+    parseNativeVerificationQr({ imageDataUrl: 'not-an-image', scanned: false }),
+    undefined
+  );
   assert.equal(
     parseNativeVerificationQr({
       imageDataUrl: `data:image/svg+xml;charset=utf-8,${'x'.repeat(MAX_QR_IMAGE_DATA_URL_CHARS)}`,
@@ -129,7 +138,13 @@ test('QR parser accepts a bounded SVG data URL and rejects huge payloads', () =>
     qr: { imageDataUrl: 'https://evil.example/qr.png', scanned: false },
   });
   assert.equal(dropped.qr, undefined);
-  assert.equal(verificationRequestHasQr({ ...request('outgoing', 'started'), qr: { imageDataUrl: svg, scanned: false } }), true);
+  assert.equal(
+    verificationRequestHasQr({
+      ...request('outgoing', 'started'),
+      qr: { imageDataUrl: svg, scanned: false },
+    }),
+    true
+  );
   assert.equal(
     verificationRequestCanFallbackToSas({
       ...request('outgoing', 'started'),

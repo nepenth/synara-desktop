@@ -83,7 +83,9 @@ export const verificationRequestHasQr = (request: NativeVerificationRequest): bo
 
 /** Skip SAS auto-start only when a renderable QR is actually shown. */
 export const verificationRequestNeedsSasStart = (request: NativeVerificationRequest): boolean =>
-  request.direction === 'outgoing' && request.phase === 'ready' && !verificationRequestHasQr(request);
+  request.direction === 'outgoing' &&
+  request.phase === 'ready' &&
+  !verificationRequestHasQr(request);
 
 export const verificationRequestCanFallbackToSas = (request: NativeVerificationRequest): boolean =>
   verificationRequestHasQr(request) &&
@@ -211,7 +213,9 @@ export const sanitizeNativeVerificationRequest = (
   return { ...request, qr };
 };
 
-export const parseNativeVerificationInbox = (value: unknown): NativeVerificationInbox | undefined => {
+export const parseNativeVerificationInbox = (
+  value: unknown
+): NativeVerificationInbox | undefined => {
   if (!isRecord(value)) return undefined;
   if (typeof value.sessionGeneration !== 'number' || !Array.isArray(value.requests)) {
     return undefined;

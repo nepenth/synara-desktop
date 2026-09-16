@@ -302,9 +302,13 @@ test('reply projection isolates live and thread slots for the same room', () => 
   projection.subscribe(roomId, () => {
     liveChanges += 1;
   });
-  projection.subscribe(roomId, () => {
-    threadChanges += 1;
-  }, '$root:example.org');
+  projection.subscribe(
+    roomId,
+    () => {
+      threadChanges += 1;
+    },
+    '$root:example.org'
+  );
 
   projection.apply({
     schemaVersion: NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,

@@ -115,7 +115,11 @@ export const shouldSkipMessageUnfurl = (input: {
   hasMedia?: boolean;
   skip?: boolean;
 }): boolean =>
-  Boolean(input.skip || input.hasMedia || (input.messageType && ATTACHMENT_MESSAGE_TYPES.has(input.messageType)));
+  Boolean(
+    input.skip ||
+      input.hasMedia ||
+      (input.messageType && ATTACHMENT_MESSAGE_TYPES.has(input.messageType))
+  );
 
 const requirePreviewSession = async (invoke: NativeInvoke): Promise<number | undefined> => {
   const result = await invokeSafely('matrix_session_snapshot', undefined, invoke);

@@ -46,5 +46,8 @@ test('react router honors /thread/ before the optional event permalink', () => {
   assert.match(navigate, /getDirectRoomThreadPath/);
   assert.match(navigate, /getSpaceRoomThreadPath/);
   assert.match(roomView, /threadRootEventId=\{threadRootEventId\}/);
-  assert.match(roomView, /onOpenThreadRoute=\{\(rootEventId\) => navigateThread\(roomId, rootEventId\)\}/);
+  assert.match(
+    roomView,
+    /onOpenThreadRoute=\{\(rootEventId\) => navigateThread\(roomId, rootEventId\)\}/
+  );
 });

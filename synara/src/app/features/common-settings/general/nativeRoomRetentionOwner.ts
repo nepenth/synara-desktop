@@ -150,11 +150,7 @@ export async function getRoomRetentionWithNativeOwner(
     throw new Error(unavailableMessage);
   }
   const sessionGeneration = await requireRetentionSession(invoke);
-  const result = await invokeSafely(
-    'matrix_room_retention',
-    { roomId, sessionGeneration },
-    invoke
-  );
+  const result = await invokeSafely('matrix_room_retention', { roomId, sessionGeneration }, invoke);
   if (!result.available) throw new Error(unavailableMessage);
   return parseRoomRetentionSnapshot(result.value, roomId, sessionGeneration);
 }

@@ -106,10 +106,8 @@ export const nativeComposerSendRelation = (
   threadRoot: draft?.threadRootEventId ?? viewThreadRoot,
 });
 
-export const nativeComposerDraftSlotKey = (
-  roomId: string,
-  threadRootEventId?: string
-): string => (threadRootEventId ? `${roomId}\0${threadRootEventId}` : roomId);
+export const nativeComposerDraftSlotKey = (roomId: string, threadRootEventId?: string): string =>
+  threadRootEventId ? `${roomId}\0${threadRootEventId}` : roomId;
 
 type ReplyDraftListener = () => void;
 
@@ -144,11 +142,7 @@ export class NativeComposerReplyDraftProjection {
     this.listeners.get(key)?.forEach((listener) => listener());
   }
 
-  subscribe(
-    roomId: string,
-    listener: ReplyDraftListener,
-    threadRootEventId?: string
-  ): () => void {
+  subscribe(roomId: string, listener: ReplyDraftListener, threadRootEventId?: string): () => void {
     const key = nativeComposerDraftSlotKey(roomId, threadRootEventId);
     const roomListeners = this.listeners.get(key) ?? new Set<ReplyDraftListener>();
     roomListeners.add(listener);

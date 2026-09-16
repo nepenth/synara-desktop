@@ -29,10 +29,7 @@ const snapshot = {
 };
 
 test('retention parser rejects forever copy and history-visibility reuse', () => {
-  assert.equal(
-    parseRoomRetentionSnapshot(snapshot, '!room:example.org', 7).advertised,
-    false
-  );
+  assert.equal(parseRoomRetentionSnapshot(snapshot, '!room:example.org', 7).advertised, false);
   assert.throws(() =>
     parseRoomRetentionSnapshot(
       { ...snapshot, summary: 'Messages are kept forever.' },

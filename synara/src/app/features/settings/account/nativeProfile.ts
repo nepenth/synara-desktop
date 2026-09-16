@@ -68,4 +68,3 @@ export const uploadMediaNative = (
 
 export const getOwnProfileNative = (): Promise<NativeOwnProfile | 'legacy'> =>
   getOwnProfileWithNativeOwner(isSynaraDesktop(), invoke);
-

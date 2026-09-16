@@ -43,8 +43,7 @@ export const setNativeComposerReplyDraft = async (
   const guessedSlot = input.startThread ? input.eventId : undefined;
   const revision = beginMutation(input.roomId, guessedSlot);
   const result = await setReplyDraftWithNativeComposerOwner(input, isSynaraDesktop(), invoke);
-  const slotThreadRoot =
-    result !== 'unavailable' ? result.draft?.threadRootEventId : guessedSlot;
+  const slotThreadRoot = result !== 'unavailable' ? result.draft?.threadRootEventId : guessedSlot;
   if (slotThreadRoot !== guessedSlot) {
     beginMutation(input.roomId, slotThreadRoot);
     return applyReadback(result, slotThreadRoot);

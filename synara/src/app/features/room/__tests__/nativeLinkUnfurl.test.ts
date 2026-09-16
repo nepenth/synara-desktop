@@ -46,10 +46,7 @@ test('composer trailing URL requires a single URL at the end', () => {
     trailingComposerPreviewUrl('check this https://example.org/x'),
     'https://example.org/x'
   );
-  assert.equal(
-    trailingComposerPreviewUrl('https://example.org/x and more'),
-    undefined
-  );
+  assert.equal(trailingComposerPreviewUrl('https://example.org/x and more'), undefined);
   assert.equal(
     trailingComposerPreviewUrl('https://example.org/a https://example.org/b'),
     undefined

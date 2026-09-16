@@ -38,11 +38,9 @@ test('all room destinations encode Matrix room and event identifiers exactly onc
 });
 
 test('thread destinations encode the room and root and survive parse', async () => {
-  const {
-    getHomeRoomThreadPath,
-    getDirectRoomThreadPath,
-    getSpaceRoomThreadPath,
-  } = await import('../pathUtils');
+  const { getHomeRoomThreadPath, getDirectRoomThreadPath, getSpaceRoomThreadPath } = await import(
+    '../pathUtils'
+  );
   const { parseSynaraRouteDestination } = await import('../../routes/synaraRoutes');
   const room = '#agent room/%25:example.test';
   const root = '$root/+?%25:example.test';
