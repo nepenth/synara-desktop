@@ -8,7 +8,14 @@ type LiveCallChipProps = {
 
 export function LiveCallChip({ participantCount }: LiveCallChipProps) {
   return (
-    <Badge size="300" variant="Success" fill="Soft" radii="Pill" outlined data-testid="live-call-chip">
+    <Badge
+      size="300"
+      variant="Success"
+      fill="Soft"
+      radii="Pill"
+      outlined
+      data-testid="live-call-chip"
+    >
       <Text size="T200">{liveCallChipLabel(participantCount)}</Text>
     </Badge>
   );

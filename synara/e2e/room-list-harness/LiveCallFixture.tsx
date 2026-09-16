@@ -44,7 +44,9 @@ export function LiveCallFixture() {
         >
           <span># {room.name}</span>
           {room.hasActiveCall && (
-            <span data-testid="live-call-chip">{liveCallChipLabel(room.activeCallParticipantCount)}</span>
+            <span data-testid="live-call-chip">
+              {liveCallChipLabel(room.activeCallParticipantCount)}
+            </span>
           )}
         </div>
       ))}
