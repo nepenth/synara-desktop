@@ -53,9 +53,18 @@ fn marker_stable() {
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"bundled-sqlite"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"unstable-msc4426"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
     assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+}
+
+#[test]
+fn desktop_manifest_requests_automatic_room_key_forwarding() {
+    let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+    assert!(manifest.contains(r#""automatic-room-key-forwarding""#));
+    assert!(manifest.contains("room-key-forwarding"));
 }
 
 #[test]
@@ -145,6 +154,10 @@ fn product_default_config_plan_has_no_secrets() {
     assert_eq!(plan.homeserver_mode, "explicit_url");
     assert_eq!(plan.matrix_sdk_version, MATRIX_SDK_PIN_VERSION);
     assert!(plan.approved_features.iter().any(|f| f == "sqlite"));
+    assert!(plan
+        .approved_features
+        .iter()
+        .any(|f| f == "automatic-room-key-forwarding"));
     assert!(plan.store_layout.confined_under_matrix_root);
     assert_eq!(plan.store_layout.relative_state_dir, "state");
     let _ = fs::remove_dir_all(&root);

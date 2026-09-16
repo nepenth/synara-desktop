@@ -53,6 +53,24 @@ test('Devices does not leave Device Verification spinning after identity is know
   assert.doesNotMatch(devices, /resolveDeviceVerificationStatus\(\s*currentDevice\?\.trust/);
 });
 
+test('Devices Security shows always-on room-key forwarding status, not a Switch or Developer Tools control', () => {
+  assert.match(devices, /title="Share room keys with my verified devices"/);
+  assert.match(devices, /nativeSession && \(/);
+  assert.match(devices, /your verified sessions/);
+  assert.match(devices, /Unverified logins stay undecryptable/);
+  assert.match(devices, />\s*On\s*</);
+  assert.doesNotMatch(devices, /set_room_key_forwarding_enabled/);
+  assert.doesNotMatch(devices, /settingsAtom/);
+  // No Switch in this file: verification and forwarding are status, not toggles.
+  assert.doesNotMatch(devices, /\bSwitch\b/);
+  const developerTools = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
+    'utf8'
+  );
+  assert.doesNotMatch(developerTools, /Share room keys with my verified devices/);
+  assert.doesNotMatch(developerTools, /automatic-room-key-forwarding/);
+});
+
 test('Devices only offers current-device verification from a loaded snapshot and surfaces load failures', () => {
   // A missing snapshot must render as loading or as a retryable failure, never
   // as the "could not check eligible verified sessions" verification prompt.

@@ -159,6 +159,20 @@ mod privacy_tests {
     }
 
     #[test]
+    fn product_encryption_settings_only_override_backup_download() {
+        let settings = EncryptionSettings {
+            backup_download_strategy: BackupDownloadStrategy::OneShot,
+            ..EncryptionSettings::default()
+        };
+        assert_eq!(
+            settings.backup_download_strategy,
+            BackupDownloadStrategy::OneShot
+        );
+        assert!(!settings.auto_enable_cross_signing);
+        assert!(!settings.auto_enable_backups);
+    }
+
+    #[test]
     fn local_store_lock_is_distinct_before_generic_store_classification() {
         let (category, id) = classify_build_error(
             "sqlite store lock held at /Users/alice/Library/Application Support/Synara/matrix",
