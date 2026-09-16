@@ -115,6 +115,20 @@ import {
   type NativeTimelineRowSizeHint,
 } from './nativeTimelineViewportPolicy';
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
+import { NativeTimelineHistoryStatus } from './NativeTimelineHistoryStatus';
+import { NativeTimelineDateRail } from './NativeTimelineDateRail';
+import {
+  activeTimelineHistoryMarkIndex,
+  collectTimelineHistoryMarks,
+  formatTimelineHistoryMarkLabel,
+  shouldShowTimelineDateRail,
+} from '../../utils/timelineDateMarks';
+import {
+  clearTimelinePaginationError,
+  resolveTimelineHistoryOverlay,
+  setTimelinePaginationError,
+  type TimelinePaginationErrors,
+} from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -2270,6 +2284,15 @@ export function NativeTimelinePresenter({
   )?.encryptionStatus;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
+  const [paginationInFlight, setPaginationInFlight] = useState<'backwards' | 'forwards'>();
+  const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
+  const [atHistoryEdge, setAtHistoryEdge] = useState({ backward: false, forward: false });
+  useEffect(() => {
+    paginationInFlightRef.current = undefined;
+    setPaginationInFlight(undefined);
+    setPaginationErrors({});
+    setAtHistoryEdge({ backward: false, forward: false });
+  }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
   const lastClientHeightRef = useRef(0);
@@ -2305,6 +2328,7 @@ export function NativeTimelinePresenter({
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
+  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const timelineReady = readyState !== undefined;
   useEffect(() => {
     const element = scrollRef.current;
@@ -2406,6 +2430,16 @@ export function NativeTimelinePresenter({
     measureElement,
     overscan: 8,
   });
+  const historyMarks = useMemo(() => collectTimelineHistoryMarks(rows), [rows]);
+  const jumpToHistoryIndex = useCallback(
+    (index: number) => {
+      followingLiveRef.current = false;
+      userInitiatedScrollRef.current = true;
+      programmaticScrollUntilRef.current = 0;
+      virtualizer.scrollToIndex(index, { align: 'start', behavior: 'auto' });
+    },
+    [virtualizer]
+  );
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
@@ -2640,6 +2674,42 @@ export function NativeTimelinePresenter({
   const readyStateRef = useRef(readyState);
   readyStateRef.current = readyState;
   const hasReadyState = readyState !== undefined;
+  const requestPagination = useCallback(
+    (direction: 'backwards' | 'forwards') => {
+      const current = readyStateRef.current;
+      if (!current || paginationInFlightRef.current) return;
+      const pageState =
+        direction === 'backwards'
+          ? current.snapshot.pagination.backward
+          : current.snapshot.pagination.forward;
+      const permitted =
+        direction === 'backwards'
+          ? current.snapshot.capabilities.paginateBackward
+          : current.snapshot.capabilities.paginateForward;
+      if (!permitted || pageState === 'exhausted' || pageState === 'unavailable') return;
+      if (pageState === 'loading') return;
+      paginationInFlightRef.current = direction;
+      setPaginationInFlight(direction);
+      if (direction === 'backwards') pendingBackwardGrowRef.current = true;
+      const errorDirection = direction === 'backwards' ? 'backward' : 'forward';
+      setPaginationErrors((errors) => clearTimelinePaginationError(errors, errorDirection));
+      void paginate(direction)
+        .catch((error) => {
+          setPaginationErrors((errors) =>
+            setTimelinePaginationError(errors, errorDirection, error)
+          );
+        })
+        .finally(() => {
+          if (paginationInFlightRef.current === direction) {
+            paginationInFlightRef.current = undefined;
+            setPaginationInFlight(undefined);
+          }
+        });
+    },
+    [paginate]
+  );
+  const requestPaginationRef = useRef(requestPagination);
+  requestPaginationRef.current = requestPagination;
   useEffect(() => {
     if (!hasReadyState) {
       scrollHandlersRef.current = undefined;
@@ -2663,23 +2733,21 @@ export function NativeTimelinePresenter({
           ? 'forwards'
           : undefined;
       if (!direction) return;
-
-      paginationInFlightRef.current = direction;
-      if (direction === 'backwards') pendingBackwardGrowRef.current = true;
-      setActionError(undefined);
-      void paginate(direction)
-        .catch((error) => {
-          setActionError(
-            error instanceof Error ? error.message : 'Native timeline pagination failed.'
-          );
-        })
-        .finally(() => {
-          paginationInFlightRef.current = undefined;
-        });
+      requestPaginationRef.current(direction);
+    };
+    const updateHistoryEdge = (distanceFromBottom: number) => {
+      const next = {
+        backward: scrollEl.scrollTop <= 96,
+        forward: distanceFromBottom <= 96,
+      };
+      setAtHistoryEdge((previous) =>
+        previous.backward === next.backward && previous.forward === next.forward ? previous : next
+      );
     };
     const onScroll = () => {
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
+      updateHistoryEdge(distanceFromBottom);
       if (applyingStickRef.current) {
         lastDistanceFromBottomRef.current = distanceFromBottom;
         setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
@@ -2742,6 +2810,7 @@ export function NativeTimelinePresenter({
         const el = scrollRef.current;
         if (el) el.scrollTo({ top: el.scrollTop, behavior: 'auto' });
       }
+      if (event instanceof WheelEvent) paginateAtEdge();
       // A click is not a departure from the live tail. Actual scrolling below
       // recomputes ownership from geometry, including during drag/scroll input.
     };
@@ -3149,6 +3218,36 @@ export function NativeTimelinePresenter({
   const { snapshot } = readyState;
   const showJumpToLastRead = shouldShowJumpToLastRead(pendingLastRead);
   const showJumpToLatest = shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom);
+  const eventRowCount = rows.filter((row) => rowEventId(row)).length;
+  const hasSparseLoadButton =
+    eventRowCount <= 1 &&
+    snapshot.pagination.backward === 'available' &&
+    paginationInFlight !== 'backwards' &&
+    !paginationErrors.backward;
+  const backwardOverlay = resolveTimelineHistoryOverlay({
+    nativeState: snapshot.pagination.backward,
+    inFlight: paginationInFlight === 'backwards',
+    error: paginationErrors.backward,
+    atEdge: atHistoryEdge.backward,
+    canPaginate: snapshot.capabilities.paginateBackward,
+    hasSparseLoadButton,
+  });
+  const forwardOverlay = resolveTimelineHistoryOverlay({
+    nativeState: snapshot.pagination.forward,
+    inFlight: paginationInFlight === 'forwards',
+    error: paginationErrors.forward,
+    atEdge: atHistoryEdge.forward,
+    canPaginate: snapshot.capabilities.paginateForward,
+    hasSparseLoadButton: true,
+  });
+  const visibleStartIndex = virtualizer.getVirtualItems()[0]?.index ?? 0;
+  const activeMarkIndex = activeTimelineHistoryMarkIndex(historyMarks, visibleStartIndex);
+  const activeMark = activeMarkIndex >= 0 ? historyMarks[activeMarkIndex] : undefined;
+  const visibleDateLabel =
+    !atLiveBottom && activeMark
+      ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock)
+      : undefined;
+  const showDateRail = shouldShowTimelineDateRail(rows.length, historyMarks.length);
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
@@ -3168,11 +3267,6 @@ export function NativeTimelinePresenter({
       ) : null}
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
         <Scroll ref={scrollRef} visibility="Hover" style={{ height: '100%' }}>
-          {snapshot.pagination.backward === 'loading' && (
-            <Box justifyContent="Center" style={{ padding: config.space.S200 }}>
-              <Spinner size="200" aria-label="Loading older messages" />
-            </Box>
-          )}
           {rows.length === 0 ? (
             <Box
               alignItems="Center"
@@ -3241,26 +3335,39 @@ export function NativeTimelinePresenter({
               );
             })}
           </div>
-          {snapshot.pagination.forward === 'loading' && (
-            <Box justifyContent="Center" style={{ padding: config.space.S200 }}>
-              <Spinner size="200" aria-label="Loading newer messages" />
-            </Box>
-          )}
         </Scroll>
-        {rows.filter((row) => rowEventId(row)).length <= 1 &&
-          snapshot.pagination.backward === 'available' && (
-            <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
-              <Button
-                onClick={() => {
-                  void controller
-                    .paginate('backwards')
-                    .catch((error) => setActionError(String(error)));
-                }}
-              >
-                <Text>Load older messages</Text>
-              </Button>
-            </Box>
-          )}
+        <NativeTimelineHistoryStatus
+          edge="backward"
+          kind={backwardOverlay.kind}
+          errorMessage={backwardOverlay.message}
+          visibleDateLabel={visibleDateLabel}
+          onRetry={() => requestPagination('backwards')}
+          onLoadMore={() => requestPagination('backwards')}
+        />
+        <NativeTimelineHistoryStatus
+          edge="forward"
+          kind={forwardOverlay.kind}
+          errorMessage={forwardOverlay.message}
+          onRetry={() => requestPagination('forwards')}
+          onLoadMore={() => requestPagination('forwards')}
+        />
+        {showDateRail ? (
+          <NativeTimelineDateRail
+            marks={historyMarks}
+            rowCount={rows.length}
+            visibleStartIndex={visibleStartIndex}
+            activeMarkIndex={activeMarkIndex}
+            hour24Clock={hour24Clock}
+            onJumpToIndex={jumpToHistoryIndex}
+          />
+        ) : null}
+        {hasSparseLoadButton && (
+          <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
+            <Button onClick={() => requestPagination('backwards')}>
+              <Text>Load older messages</Text>
+            </Button>
+          </Box>
+        )}
         {(showJumpToLastRead || showJumpToLatest) && (
           <Box
             direction="Column"

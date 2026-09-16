@@ -469,6 +469,40 @@ test('delayed latest result cannot scroll a newer focused event in the same room
   await expect(page.locator('[data-native-timeline-event-id="$30"]')).toBeInViewport();
 });
 
+test('older-history pagination shows a loading status until the request finishes', async ({
+  page,
+}) => {
+  await open(page, 'sparse-missing&delayOperation=paginate');
+  await page.getByRole('button', { name: 'Load older messages', exact: true }).click();
+  const loading = page.getByRole('status', { name: 'Loading older messages' });
+  await expect(loading).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await fixture(page, 'releaseOperation');
+  await expect(loading).toBeHidden();
+});
+
+test('older-history pagination failure is an error with retry, not a spinner', async ({ page }) => {
+  await open(page, 'sparse-missing&delayOperation=paginate&operationResult=reject');
+  await page.getByRole('button', { name: 'Load older messages', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Loading older messages' })).toBeVisible();
+  await fixture(page, 'releaseOperation');
+  const alert = page.getByRole('alert');
+  await expect(page.getByRole('status', { name: 'Loading older messages' })).toBeHidden();
+  await expect(alert).toBeVisible();
+  await expect(alert).toContainText('Could not load older messages');
+  await expect(alert).toContainText('Superseded operation rejected');
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+});
+
+test('date rail jumps toward an earlier loaded message', async ({ page }) => {
+  await open(page, 'live');
+  const rail = page.locator('[data-timeline-date-rail="true"]');
+  await expect(rail).toBeVisible();
+  const before = await geometry(page);
+  await rail.getByRole('button').first().click();
+  await expect.poll(async () => (await geometry(page)).top).toBeLessThan(before.top);
+});
+
 test('sparse history and missing last-read recovery controls are separately clickable', async ({
   page,
 }) => {

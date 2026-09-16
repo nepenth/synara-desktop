@@ -219,8 +219,20 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /followingLiveRef\.current = true/);
   assert.match(presenter, /onClick=\{jumpToLatest\}/);
   assert.doesNotMatch(presenter, /snapshot\.position\.kind !== 'live_bottom'/);
-  assert.match(presenter, /aria-label="Loading older messages"/);
-  assert.match(presenter, /aria-label="Loading newer messages"/);
+  const historyStatus = readFileSync(
+    'src/app/features/room/NativeTimelineHistoryStatus.tsx',
+    'utf8'
+  );
+  const dateRail = readFileSync('src/app/features/room/NativeTimelineDateRail.tsx', 'utf8');
+  assert.match(presenter, /NativeTimelineHistoryStatus/);
+  assert.match(presenter, /requestPagination\('backwards'\)/);
+  assert.match(presenter, /event instanceof WheelEvent/);
+  assert.match(historyStatus, /Loading older messages/);
+  assert.match(historyStatus, /Loading newer messages/);
+  assert.match(historyStatus, /role="alert"/);
+  assert.match(historyStatus, /Could not load older messages/);
+  assert.match(dateRail, /Jump to a date in loaded history/);
+  assert.match(presenter, /NativeTimelineDateRail/);
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
   assert.doesNotMatch(presenter, />\s*Mark unread\s*</);
