@@ -280,7 +280,13 @@ mod tests {
     }
 
     fn source_mentions_forbidden_call_writes() -> bool {
-        let source = include_str!("live.rs");
-        source.contains("set_call(") || source.contains("enable_automatic_call_status")
+        let impl_source = include_str!("live.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("implementation source");
+        let native = include_str!("native.rs");
+        let combined = format!("{impl_source}\n{native}");
+        combined.contains(concat!("set_call", "("))
+            || combined.contains(concat!("enable_automatic_call_status", "("))
     }
 }

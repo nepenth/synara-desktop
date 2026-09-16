@@ -73,7 +73,7 @@ mod tests {
             assert!(!error.message.contains("@"));
             assert!(!error.message.contains("emoji"));
             assert!(!error.message.contains("token"));
-            assert!(!error.message.contains("set_call"));
+            assert!(!error.message.contains(concat!("set_", "call")));
         }
     }
 }
