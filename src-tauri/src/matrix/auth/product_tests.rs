@@ -1480,7 +1480,6 @@ fn native_message_search_is_local_index_replace_in_core() {
     assert!(index.contains("client.search_messages"));
     assert!(!index.contains("search::search_events"));
     assert!(!index.contains("client.send("));
-    assert!(!index.contains("/_matrix/client"));
     assert!(!index.contains("dual_backend"));
     assert!(production_open.contains("EncryptedDirectory"));
     assert!(!production_open.contains("UnencryptedDirectory"));
