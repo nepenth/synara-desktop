@@ -79,4 +79,6 @@ test('preview owner keeps MIME tables out of the presenter', () => {
   assert.match(presenter, /isNativeTimelineMarkdownAttachment/);
   assert.match(presenter, /NativeTimelineMarkdownPreview/);
   assert.doesNotMatch(presenter, /text\/markdown|\.md['"]/);
+  const previewUi = readFileSync('src/app/features/room/NativeTimelineMarkdownPreview.tsx', 'utf8');
+  assert.equal([...previewUi.matchAll(/data-native-timeline-file-preview="true"/g)].length, 1);
 });
