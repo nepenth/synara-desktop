@@ -135,12 +135,10 @@ mod tests {
         assert!(!copy.advertised);
         assert_eq!(copy.summary, RETENTION_UNKNOWN_SUMMARY);
         assert!(!copy.summary.to_ascii_lowercase().contains("forever"));
-        assert!(
-            !copy
-                .summary
-                .to_ascii_lowercase()
-                .contains("history visibility")
-        );
+        assert!(!copy
+            .summary
+            .to_ascii_lowercase()
+            .contains("history visibility"));
         assert_eq!(copy.distinction, RETENTION_HISTORY_VISIBILITY_DISTINCTION);
         assert_eq!(copy.media_cache_summary, MEDIA_CACHE_DEFAULT_SUMMARY);
     }

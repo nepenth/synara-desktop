@@ -15,13 +15,13 @@ mod live;
 mod policy;
 
 pub use error::MediaCacheError;
-pub use index::{CacheEntry, MAX_CACHE_ENTRIES, MAX_ID_CHARS, MAX_TOTAL_BYTES, MediaCacheIndex};
+pub use index::{CacheEntry, MediaCacheIndex, MAX_CACHE_ENTRIES, MAX_ID_CHARS, MAX_TOTAL_BYTES};
 pub use live::{
-    NativeMediaRetentionOwner, joined_room_max_lifetimes, shortest_joined_room_max_lifetime,
+    joined_room_max_lifetimes, shortest_joined_room_max_lifetime, NativeMediaRetentionOwner,
 };
 pub use policy::{
-    DEFAULT_CLEANUP_FREQUENCY, DEFAULT_LAST_ACCESS_EXPIRY, MediaRetentionPolicySpec,
-    build_media_retention_policy_spec, shortest_joined_max_lifetime,
+    build_media_retention_policy_spec, shortest_joined_max_lifetime, MediaRetentionPolicySpec,
+    DEFAULT_CLEANUP_FREQUENCY, DEFAULT_LAST_ACCESS_EXPIRY,
 };
 
 /// Static marker for link / schema smoke.
