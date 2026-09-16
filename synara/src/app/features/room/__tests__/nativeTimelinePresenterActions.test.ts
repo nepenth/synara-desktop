@@ -319,9 +319,13 @@ test('native timeline file attachments save through download+save, not protocol 
   assert.ok(fileBranch >= 0, 'file attachments must have a dedicated branch');
   assert.ok(fileBranch < missingSrc, 'file chips must not depend on protocol mediaSrc');
   assert.match(presenter, /saveNativeTimelineFileAttachment/);
-  assert.match(presenter, /data-native-timeline-file-download="true"/);
+  assert.match(presenter, /isNativeTimelineMarkdownAttachment/);
+  assert.match(presenter, /NativeTimelineMarkdownPreview/);
+  assert.match(presenter, /data-native-timeline-file-download/);
+  assert.match(presenter, /data-native-timeline-file-open/);
   assert.match(presenter, /onActionError=\{onActionError\}/);
   assert.match(htmlCss, /export const FileDownload = style\(/);
+  assert.match(htmlCss, /export const FilePreviewModal = style\(/);
   assert.doesNotMatch(presenter, /<a href=\{mediaSrc\} download/);
   assert.doesNotMatch(presenter, /href=\{mediaSrc\}/);
   assert.doesNotMatch(presenter, /text\/markdown/);

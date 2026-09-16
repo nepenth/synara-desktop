@@ -119,6 +119,7 @@ const tests = [
   'src/app/features/room/__tests__/messageFormatCorpus.test.ts',
   'src/app/features/room/__tests__/nativeTimelinePresenterActions.test.ts',
   'src/app/features/room/__tests__/nativeTimelineFileSave.test.ts',
+  'src/app/features/room/__tests__/nativeTimelineFilePreview.test.ts',
   'src/app/features/room/__tests__/nativeTimelineGrouping.test.ts',
   'src/app/features/room/__tests__/timelinePresentationRegression.test.ts',
   'src/app/features/room/__tests__/roomViewTypingLayout.test.ts',

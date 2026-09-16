@@ -552,14 +552,17 @@ test('sparse history and missing last-read recovery controls are separately clic
     .toBe(2);
 });
 
-test('markdown file attachments download through native save instead of protocol href', async ({
-  page,
-}) => {
+test('markdown file attachments preview in-client and still download', async ({ page }) => {
   await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-md');
-  const chip = page.getByRole('button', { name: 'Download notes.md' });
+  const chip = page.getByRole('button', { name: 'Preview notes.md' });
   await expect(chip).toBeVisible();
   await expect(page.locator('a[download]')).toHaveCount(0);
   await chip.click();
+  const preview = page.locator('[data-native-timeline-file-preview="true"]');
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole('heading', { name: 'Agent notes' })).toBeVisible();
+  await expect(preview.locator('strong')).toContainText('bold');
+  await preview.getByRole('button', { name: 'Download notes.md' }).click();
   await expect
     .poll(() =>
       page.evaluate(() => {
@@ -580,6 +583,43 @@ test('markdown file attachments download through native save instead of protocol
           filename: (
             save?.args as { payload?: { filename?: string; bytes?: number[] } } | undefined
           )?.payload?.filename,
+        };
+      })
+    )
+    .toEqual({
+      downloadCount: 2,
+      saveCount: 1,
+      contentUri: `timeline-media-${'ab'.repeat(32)}`,
+      filename: 'notes.md',
+    });
+});
+
+test('generic file attachments download on click without a preview', async ({ page }) => {
+  await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-zip');
+  const chip = page.getByRole('button', { name: 'Download archive.zip' });
+  await expect(chip).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview archive.zip' })).toHaveCount(0);
+  await chip.click();
+  await expect(page.locator('[data-native-timeline-file-preview="true"]')).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const commands = (
+          window as unknown as {
+            nativeTimelineFixture: {
+              commands: { command: string; args?: Record<string, unknown> }[];
+            };
+          }
+        ).nativeTimelineFixture.commands;
+        const save = commands.find((entry) => entry.command === 'desktop_save_file');
+        return {
+          downloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
+            .length,
+          saveCount: commands.filter((entry) => entry.command === 'desktop_save_file').length,
+          contentUri: commands.find((entry) => entry.command === 'matrix_media_download')?.args
+            ?.contentUri,
+          filename: (save?.args as { payload?: { filename?: string } } | undefined)?.payload
+            ?.filename,
           bytes: (save?.args as { payload?: { bytes?: number[] } } | undefined)?.payload?.bytes,
         };
       })
@@ -587,9 +627,8 @@ test('markdown file attachments download through native save instead of protocol
     .toEqual({
       downloadCount: 1,
       saveCount: 1,
-      contentUri: `timeline-media-${'ab'.repeat(32)}`,
-      filename: 'notes.md',
-      bytes: Array.from(new TextEncoder().encode('# heading\n')),
+      contentUri: `timeline-media-${'cd'.repeat(32)}`,
+      filename: 'archive.zip',
+      bytes: [80, 75, 3, 4],
     });
-  await expect(chip).toBeEnabled();
 });
