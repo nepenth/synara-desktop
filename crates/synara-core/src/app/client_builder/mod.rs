@@ -19,5 +19,6 @@ pub use config::{
 pub use error::ClientBuilderError;
 pub use features::{
     APPROVED_MATRIX_SDK_FEATURES, FORBIDDEN_MATRIX_SDK_FEATURES, MATRIX_SDK_PIN_VERSION,
+    forbidden_requested_features, requested_cargo_features,
 };
 pub use open::build_unauthenticated_client;

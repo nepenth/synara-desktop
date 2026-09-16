@@ -3,6 +3,8 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { setSpaceChild } from '../../features/lobby/nativeSpaceChild';
 import { createRoomWithNativeOwner, type NativeRoomCreateRequest } from '../nativeRoomCreateOwner';
 import { CreateRoomAccess } from './types';
+import { pushEncryptedStateEventsSetting } from '../../features/settings/encryptedStateEvents';
+import { getSharedSettings } from '../../state/settings';
 
 export const createRoomCreationContent = (
   type: RoomType | undefined,
@@ -44,6 +46,7 @@ export type CreateRoomData = {
   topic?: string;
   aliasLocalPart?: string;
   encryption?: boolean;
+  encryptStateEvents?: boolean;
   knock: boolean;
   allowFederation: boolean;
   additionalCreators?: string[];
@@ -65,6 +68,7 @@ export const createRoom = async (data: CreateRoomData): Promise<string> => {
       data.additionalCreators
     ),
     encryption: data.encryption,
+    encryptStateEvents: data.encryptStateEvents,
     joinRule: createRoomJoinRule(data.access, data.parentRoomId, data.knock),
     knock: data.access !== CreateRoomAccess.Public && data.knock,
     parentRoomId: data.parentRoomId,
@@ -75,6 +79,8 @@ export const createRoom = async (data: CreateRoomData): Promise<string> => {
         ? { events: { 'org.matrix.msc3401.call.member': 0 } }
         : undefined,
   };
+
+  await pushEncryptedStateEventsSetting(getSharedSettings().encryptedStateEvents);
 
   const roomId = await createRoomWithNativeOwner(request, isSynaraDesktop(), (command, args) =>
     invokeDesktopWithAvailability(command, args)

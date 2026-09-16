@@ -160,6 +160,43 @@ pub async fn matrix_room_retention(
     .await
 }
 
+/// Leftover encryptable state writes (canonical alias, ACL, developer-tools).
+/// Fail-closed: native sessions must not JS-plaintext PUT these types.
+#[tauri::command]
+pub async fn matrix_send_state_event(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    event_type: String,
+    state_key: Option<String>,
+    content: serde_json::Value,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    crate::bridge::room_profile_writes::send_state_event(
+        core.inner().as_ref(),
+        room_id,
+        event_type,
+        state_key.unwrap_or_default(),
+        content,
+    )
+    .await
+}
+
+/// Enable room encryption and/or opt an already-E2EE room into MSC4362.
+/// Native send of `m.room.encryption` (excluded type). Setting-off and call
+/// rooms never write the flag.
+#[tauri::command]
+pub async fn matrix_enable_room_encrypted_state(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    encrypt_state_events: Option<bool>,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    crate::bridge::room_profile_writes::enable_room_encrypted_state(
+        core.inner().as_ref(),
+        room_id,
+        encrypt_state_events.unwrap_or(false),
+    )
+    .await
+}
+
 pub(super) fn parse_room_directory_visibility_room_id(
     room_id: &str,
 ) -> Result<OwnedRoomId, MatrixAuthCommandError> {

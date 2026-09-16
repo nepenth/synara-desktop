@@ -54,6 +54,26 @@ test('room create invokes the sole native owner with the SDK-neutral request', a
   ]);
 });
 
+test('room create forwards encryptStateEvents on the native request', async () => {
+  const flagged: NativeRoomCreateRequest = {
+    ...request,
+    encryption: true,
+    encryptStateEvents: true,
+  };
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const invoke: NativeInvoke = async (command, args) => {
+    calls.push({ command, args });
+    return command === 'matrix_session_snapshot'
+      ? { available: true, value: { status: 'logged_in' } }
+      : { available: true, value: '!created:example.org' };
+  };
+  await createRoomWithNativeOwner(flagged, true, invoke);
+  assert.equal(
+    (calls[1]?.args?.request as NativeRoomCreateRequest).encryptStateEvents,
+    true
+  );
+});
+
 test('room create throws when the native command is unavailable or returns no room id', async () => {
   const missingCommand: NativeInvoke = async (command) =>
     command === 'matrix_session_snapshot'

@@ -106,6 +106,7 @@ fn room_summary_round_trip_and_fixture() {
         is_low_priority: false,
         folder_id: None,
         encryption_status: RoomEncryptionStatus::Encrypted,
+        state_encrypted: false,
         join_rule: Some("invite".into()),
         unread_count: 2,
         highlight_count: 1,
@@ -153,6 +154,20 @@ fn room_summary_rejects_missing_or_contradictory_encryption_authority() {
     let encoded = serde_json::to_value(decoded).expect("unknown serializes");
     assert_eq!(encoded["isEncrypted"], false);
     assert_eq!(encoded["encryptionStatus"], "unknown");
+}
+
+#[test]
+fn room_summary_state_encrypted_is_optional_and_requires_encrypted_status() {
+    let extra = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": true, "encryptionStatus": "encrypted", "stateEncrypted": true, "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    let decoded: RoomSummary = serde_json::from_str(extra).expect("optional flag");
+    assert!(decoded.state_encrypted);
+    assert!(decoded.encryption_status.is_encrypted());
+    let encoded = serde_json::to_value(&decoded).expect("serialize");
+    assert_eq!(encoded["isEncrypted"], true);
+    assert_eq!(encoded["stateEncrypted"], true);
+
+    let mismatch = r#"{ "roomId": "!room:example.org", "membership": "join", "isDirect": false, "isEncrypted": false, "encryptionStatus": "not_encrypted", "stateEncrypted": true, "unreadCount": 0, "highlightCount": 0, "markedUnread": false }"#;
+    assert!(serde_json::from_str::<RoomSummary>(mismatch).is_err());
 }
 
 #[test]
@@ -389,6 +404,7 @@ fn room_summary_is_call_defaults_and_round_trips() {
         is_low_priority: false,
         folder_id: None,
         encryption_status: RoomEncryptionStatus::Encrypted,
+        state_encrypted: false,
         join_rule: Some("invite".into()),
         unread_count: 3,
         highlight_count: 0,

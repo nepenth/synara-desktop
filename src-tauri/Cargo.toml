@@ -73,9 +73,11 @@ matrix-sdk = { version = "=0.19.0", default-features = false, features = [
   "experimental-widgets",
   # Desktop-only local message index. Do not enable on NSE / iOS SharedCore.
   "experimental-search",
+  "experimental-encrypted-state-events",
 ] }
 matrix-sdk-ui = { version = "=0.19.0", default-features = false, features = [
   "rustls-aws-lc-rs",
+  "experimental-encrypted-state-events",
 ] }
 matrix-sdk-crypto = { version = "=0.19.0", default-features = false, features = [
   "automatic-room-key-forwarding",
@@ -131,5 +133,6 @@ matrix-sdk = { version = "=0.19.0", default-features = false, features = [
   "markdown",
   "qrcode",
   "experimental-search",
+  "experimental-encrypted-state-events",
 ] }
 matrix-sdk-test = "=0.19.0"

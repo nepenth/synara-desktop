@@ -76,7 +76,7 @@ pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String>
     match event_type {
         "m.room.message" => preview_from_room_message(content),
         "m.sticker" => Some("Sticker".to_owned()),
-        "m.room.encrypted" => Some("Encrypted message".to_owned()),
+        "m.room.encrypted" => encrypted_event_preview(value),
         "m.poll.start" | "org.matrix.msc3381.poll.start" => {
             preview_from_poll(content).or_else(|| Some("Poll".to_owned()))
         }
@@ -94,6 +94,15 @@ pub fn last_message_preview_from_event_json(value: &JsonValue) -> Option<String>
             .or_else(|| Some("Name updated".to_owned())),
         _ => None,
     }
+}
+
+fn encrypted_event_preview(value: &JsonValue) -> Option<String> {
+    if crate::app::room_ops::event_is_undecrypted_encrypted_state(value) {
+        // UTD encrypted *state* must not be labeled as a message. Packed keys
+        // stay off the preview.
+        return Some("Encrypted room update".to_owned());
+    }
+    Some("Encrypted message".to_owned())
 }
 
 fn preview_from_room_message(content: &JsonValue) -> Option<String> {
@@ -273,6 +282,23 @@ mod tests {
             }))
             .as_deref(),
             Some("Encrypted message")
+        );
+        assert_eq!(
+            last_message_preview_from_event_json(&json!({
+                "type": "m.room.encrypted",
+                "state_key": "m.room.name:",
+                "content": { "algorithm": "m.megolm.v1.aes-sha2" }
+            }))
+            .as_deref(),
+            Some("Encrypted room update")
+        );
+        assert_eq!(
+            last_message_preview_from_event_json(&json!({
+                "type": "m.room.name",
+                "content": { "name": "General" }
+            }))
+            .as_deref(),
+            Some("General")
         );
     }
 

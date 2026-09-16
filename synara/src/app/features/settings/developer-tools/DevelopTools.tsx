@@ -11,6 +11,7 @@ import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { closeExperimentalWidgets } from '../../widgets/experimentalWidgets';
 import { isSafeWidgetUrl } from '../../widgets/widgetUrl';
 import { isSynaraDesktop } from '../../../utils/desktop';
+import { pushEncryptedStateEventsSetting } from '../encryptedStateEvents';
 import {
   AccountDataEditor,
   AccountDataSubmitCallback,
@@ -84,8 +85,20 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   );
   const [agentName, setAgentName] = useState('');
   const [agentUrl, setAgentUrl] = useState('');
+  const [encryptedStateEvents, setEncryptedStateEventsSetting] = useSetting(
+    settingsAtom,
+    'encryptedStateEvents'
+  );
   const [expand, setExpend] = useState(false);
   const [accountDataType, setAccountDataType] = useState<string | null>();
+
+  useEffect(() => {
+    void pushEncryptedStateEventsSetting(encryptedStateEvents);
+  }, [encryptedStateEvents]);
+
+  const setEncryptedStateEvents = (value: boolean) => {
+    setEncryptedStateEventsSetting(value);
+  };
 
   const submitAccountData: AccountDataSubmitCallback = useCallback(
     async (type, content) => {
@@ -148,6 +161,17 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                         variant="Primary"
                         value={developerTools}
                         onChange={setDeveloperTools}
+                      />
+                    }
+                  />
+                  <SettingTile
+                    title="Encrypted state events (experimental)"
+                    description="MSC4362. Older clients will not see room name, topic, or avatar. This cannot be turned off for rooms that already opted in; this device will still decrypt those rooms."
+                    after={
+                      <Switch
+                        variant="Primary"
+                        value={encryptedStateEvents}
+                        onChange={setEncryptedStateEvents}
                       />
                     }
                   />

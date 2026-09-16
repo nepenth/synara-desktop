@@ -61,6 +61,8 @@ export interface SharedSettings {
 
   developerTools: boolean;
   experimentalWidgetsEnabled: boolean;
+  /** MSC4362 create/opt-in only. Already-flagged rooms still decrypt. Default on. */
+  encryptedStateEvents: boolean;
 }
 
 export type AgentWidgetEntry = {
@@ -138,6 +140,7 @@ export const defaultSharedSettings: SharedSettings = {
 
   developerTools: false,
   experimentalWidgetsEnabled: false,
+  encryptedStateEvents: true,
 };
 
 const MAX_AGENT_WIDGET_ENTRIES = 32;
