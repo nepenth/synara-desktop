@@ -273,6 +273,28 @@ export const FileDownload = style({
   },
 });
 
+export const FilePreviewModal = style({
+  width: 'min(52rem, 92vw)',
+  maxHeight: '88vh',
+  display: 'flex',
+  flexDirection: 'column',
+  backgroundColor: color.Surface.Container,
+  color: color.Surface.OnContainer,
+});
+
+export const FilePreviewHeader = style({
+  paddingLeft: config.space.S200,
+  paddingRight: config.space.S200,
+  borderBottomWidth: config.borderWidth.B300,
+  flexShrink: 0,
+  gap: config.space.S200,
+});
+
+export const FilePreviewBody = style({
+  padding: config.space.S400,
+  minHeight: toRem(160),
+});
+
 export const ReplySurface = style({
   width: '100%',
   maxWidth: '100%',

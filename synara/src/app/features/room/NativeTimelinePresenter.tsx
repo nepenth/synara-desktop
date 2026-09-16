@@ -62,6 +62,11 @@ import {
   toggleNativePollSelection,
 } from './nativeTimelineActions';
 import { saveNativeTimelineFileAttachment } from './nativeTimelineFileSave';
+import { NativeTimelineMarkdownPreview } from './NativeTimelineMarkdownPreview';
+import {
+  isNativeTimelineMarkdownAttachment,
+  type NativeTimelineFilePreviewTarget,
+} from './nativeTimelineFilePreview';
 import {
   editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
@@ -367,6 +372,7 @@ type NativeTimelineRowProps = {
   }) => void;
   onOpenThread: (rootEventId: string, latestEventId?: string) => void;
   activeThreadRoot?: string;
+  onOpenMarkdownPreview: (file: NativeTimelineFilePreviewTarget) => void;
 };
 
 // Popout menus can unmount while a Core write is still running. Keep the
@@ -1141,38 +1147,63 @@ const NativeTimelineRowActionSurface = ({
   );
 };
 
-const NativeTimelineFileDownload = ({
+const NativeTimelineFileChip = ({
   handleId,
   filename,
   mimeType,
   onActionError,
+  onOpenMarkdownPreview,
 }: {
   handleId: string;
   filename?: string;
   mimeType?: string;
   onActionError?: (message: string) => void;
+  onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
 }) => {
   const [busy, setBusy] = useState(false);
   const label = filename?.trim() || 'Download file';
+  const markdown = isNativeTimelineMarkdownAttachment({ filename, mimeType });
+  const download = () => {
+    if (busy) return;
+    setBusy(true);
+    void saveNativeTimelineFileAttachment({ handleId, filename, mimeType })
+      .catch((error) => {
+        onActionError?.(error instanceof Error ? error.message : 'Could not download file.');
+      })
+      .finally(() => setBusy(false));
+  };
   return (
-    <button
-      type="button"
-      className={htmlCss.FileDownload}
-      data-native-timeline-file-download="true"
-      aria-label={`Download ${label}`}
-      disabled={busy}
-      onClick={() => {
-        if (busy) return;
-        setBusy(true);
-        void saveNativeTimelineFileAttachment({ handleId, filename, mimeType })
-          .catch((error) => {
-            onActionError?.(error instanceof Error ? error.message : 'Could not download file.');
-          })
-          .finally(() => setBusy(false));
-      }}
-    >
-      {busy ? 'Downloading…' : label}
-    </button>
+    <Box gap="200" alignItems="Baseline" wrap="Wrap">
+      <button
+        type="button"
+        className={htmlCss.FileDownload}
+        data-native-timeline-file-open={markdown ? 'preview' : 'download'}
+        data-native-timeline-file-download={markdown ? undefined : 'true'}
+        aria-label={markdown ? `Preview ${label}` : `Download ${label}`}
+        disabled={busy}
+        onClick={() => {
+          if (markdown) {
+            onOpenMarkdownPreview?.({ handleId, filename, mimeType });
+            return;
+          }
+          download();
+        }}
+      >
+        {busy && !markdown ? 'Downloading…' : label}
+      </button>
+      {markdown ? (
+        <button
+          type="button"
+          className={htmlCss.FileDownload}
+          data-native-timeline-file-download="true"
+          aria-label={`Download ${label}`}
+          disabled={busy}
+          onClick={download}
+        >
+          {busy ? 'Downloading…' : 'Download'}
+        </button>
+      ) : null}
+    </Box>
   );
 };
 
@@ -1184,6 +1215,7 @@ const NativeTimelineMedia = ({
   formattedCaption,
   sticker,
   onActionError,
+  onOpenMarkdownPreview,
 }: {
   media?: NativeTimelineMediaHandle;
   messageType?: string;
@@ -1192,6 +1224,7 @@ const NativeTimelineMedia = ({
   formattedCaption?: string;
   sticker?: boolean;
   onActionError?: (message: string) => void;
+  onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
 }) => {
   const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
   const reservedBox = sticker ? NATIVE_TIMELINE_STICKER_MAX_PX : NATIVE_TIMELINE_MEDIA_MAX_PX;
@@ -1208,11 +1241,12 @@ const NativeTimelineMedia = ({
     if (!media?.handleId) return captionView;
     return (
       <Box direction="Column" gap="100">
-        <NativeTimelineFileDownload
+        <NativeTimelineFileChip
           handleId={media.handleId}
           filename={filename}
           mimeType={media.mimeType}
           onActionError={onActionError}
+          onOpenMarkdownPreview={onOpenMarkdownPreview}
         />
         {captionView}
         {media.mimeType ? (
@@ -1542,6 +1576,7 @@ const NativeTimelineRow = ({
   onViewReactions,
   onOpenThread,
   activeThreadRoot,
+  onOpenMarkdownPreview,
 }: NativeTimelineRowProps) => {
   const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
   const [declinePending, setDeclinePending] = useState(false);
@@ -1933,6 +1968,7 @@ const NativeTimelineRow = ({
                     caption={row.mediaCaption}
                     formattedCaption={row.formattedBody}
                     onActionError={onActionError}
+                    onOpenMarkdownPreview={onOpenMarkdownPreview}
                   />
                   <NativeTimelineReactionPills
                     reactions={row.reactions}
@@ -2298,6 +2334,7 @@ export function NativeTimelinePresenter({
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const activeSessionGeneration = readyState?.snapshot.sessionGeneration;
   const [actionError, setActionError] = useState<string>();
+  const [filePreview, setFilePreview] = useState<NativeTimelineFilePreviewTarget>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [pendingLastRead, setPendingLastRead] = useState<string>();
   const [latestPlacementRequest, setLatestPlacementRequest] = useState(0);
@@ -2335,6 +2372,7 @@ export function NativeTimelinePresenter({
     setPaginationInFlight(undefined);
     setPaginationErrors({});
     setAtHistoryEdge({ backward: false, forward: false });
+    setFilePreview(undefined);
   }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
@@ -3382,6 +3420,7 @@ export function NativeTimelinePresenter({
                     }}
                     onOpenThread={openThread}
                     activeThreadRoot={threadRootId}
+                    onOpenMarkdownPreview={setFilePreview}
                   />
                 </div>
               );
@@ -3504,6 +3543,13 @@ export function NativeTimelinePresenter({
           </FocusTrap>
         </OverlayCenter>
       </Overlay>
+      {filePreview ? (
+        <NativeTimelineMarkdownPreview
+          target={filePreview}
+          onClose={() => setFilePreview(undefined)}
+          onActionError={setActionError}
+        />
+      ) : null}
     </Box>
   );
 }

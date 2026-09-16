@@ -20,9 +20,11 @@ const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
 const jank = params.has('jank');
 const FILE_MD_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
+const FILE_ZIP_HANDLE = `timeline-media-${'cd'.repeat(32)}`;
+const FILE_MD_BYTES = '# Agent notes\n\nUse **bold** for emphasis.\n';
 let sequence = polish
   ? 4
-  : scenario === 'sparse-missing' || scenario === 'file-md'
+  : scenario === 'sparse-missing' || scenario === 'file-md' || scenario === 'file-zip'
   ? 1
   : scenario === 'short'
   ? 2
@@ -52,6 +54,8 @@ const makeRow = (index: number) => ({
   body:
     scenario === 'file-md'
       ? 'notes.md'
+      : scenario === 'file-zip'
+      ? 'archive.zip'
       : jank
       ? `Message ${index}\n${Array.from(
           { length: 1 + (index % 6) },
@@ -67,6 +71,15 @@ const makeRow = (index: number) => ({
         media: {
           handleId: FILE_MD_HANDLE,
           mimeType: 'text/markdown',
+        },
+      }
+    : scenario === 'file-zip'
+    ? {
+        messageType: 'file' as const,
+        mediaFilename: 'archive.zip',
+        media: {
+          handleId: FILE_ZIP_HANDLE,
+          mimeType: 'application/zip',
         },
       }
     : {}),
@@ -294,10 +307,15 @@ window.__SYNARA_DESKTOP__ = {
     }
     if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
     if (command === 'matrix_media_download') {
-      return { bytes: Array.from(new TextEncoder().encode('# heading\n')) } as T;
+      const contentUri = args?.contentUri;
+      if (contentUri === FILE_ZIP_HANDLE) {
+        return { bytes: [80, 75, 3, 4] } as T;
+      }
+      return { bytes: Array.from(new TextEncoder().encode(FILE_MD_BYTES)) } as T;
     }
     if (command === 'desktop_save_file') {
-      return '/tmp/synara-e2e-notes.md' as T;
+      const filename = (args?.payload as { filename?: string } | undefined)?.filename;
+      return `/tmp/synara-e2e-${filename || 'download'}` as T;
     }
     return undefined as T;
   },
