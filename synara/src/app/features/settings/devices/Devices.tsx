@@ -161,7 +161,7 @@ export function Devices({ requestClose }: DevicesProps) {
                       onVerified={() => void refreshDeviceList()}
                     />
                   )}
-                  </SequenceCard>
+                </SequenceCard>
                 {nativeSession && (
                   <SequenceCard
                     className={SequenceCardStyle}
