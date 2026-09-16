@@ -14,6 +14,10 @@ import {
   Menu,
   MenuItem,
   Line,
+  Modal,
+  Overlay,
+  OverlayBackdrop,
+  OverlayCenter,
   PopOut,
   RectCords,
   Scroll,
@@ -27,7 +31,14 @@ import { EmojiBoard } from '../../components/emoji-board';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
 import { setNativeComposerReplyDraft } from './nativeComposerDraft';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
-import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
+import {
+  nativeReactionViewFromEventReadback,
+  nativeReactionsForViewer,
+  toggleReactionWithNativeOwner,
+  type NativeReactionReadback,
+} from './nativeReactionOwner';
+import { ReactionViewer } from './reaction-viewer';
+import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
 import {
   editTextWithNativeTimelineAction,
@@ -320,6 +331,11 @@ type NativeTimelineRowProps = {
   sourceEncryptionStatus?: RoomEncryptionStatus;
   onActionError: (message: string) => void;
   onFocusEvent: (eventId: string) => void;
+  onViewReactions: (request: {
+    eventId: string;
+    initialKey?: string;
+    reactions: NativeReactionReadback[];
+  }) => void;
 };
 
 // Popout menus can unmount while a Core write is still running. Keep the
@@ -398,6 +414,8 @@ type NativeTimelineRowActionsProps = {
   onActionError: (message: string) => void;
   /** Close the transient row menu after a completed one-shot action. */
   onRequestClose?: () => void;
+  onViewReactions?: () => void;
+  hasReactions?: boolean;
 };
 
 const NativeTimelineRowActions = ({
@@ -412,6 +430,8 @@ const NativeTimelineRowActions = ({
   sourceEncryptionStatus,
   onActionError,
   onRequestClose,
+  onViewReactions,
+  hasReactions,
 }: NativeTimelineRowActionsProps) => {
   const roomList = useNativeRoomListSnapshot();
   const [editing, setEditing] = useState(false);
@@ -483,6 +503,23 @@ const NativeTimelineRowActions = ({
         }}
       >
         Copy Message
+      </MenuItem>
+    );
+  }
+  if (hasReactions && onViewReactions) {
+    buttons.push(
+      <MenuItem
+        key="view-reactions"
+        size="300"
+        fill="None"
+        radii="300"
+        after={<Icon size="100" src={Icons.Smile} />}
+        onClick={() => {
+          onViewReactions();
+          closeAfterOneShotAction();
+        }}
+      >
+        View Reactions
       </MenuItem>
     );
   }
@@ -1238,10 +1275,12 @@ const NativeTimelineReactionPills = ({
   reactions,
   enabled,
   onReaction,
+  onViewReactions,
 }: {
   reactions?: NativeTimelineReaction[];
   enabled: boolean;
   onReaction: (key: string) => void;
+  onViewReactions?: (key: string) => void;
 }) =>
   reactions?.length ? (
     <Box gap="100" wrap="Wrap">
@@ -1252,7 +1291,13 @@ const NativeTimelineReactionPills = ({
           variant={reaction.own ? 'Primary' : 'Secondary'}
           fill="Soft"
           disabled={!enabled}
-          onClick={() => onReaction(reaction.key)}
+          onClick={() => enabled && onReaction(reaction.key)}
+          onContextMenu={(event) => {
+            if (!onViewReactions) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onViewReactions(reaction.key);
+          }}
         >
           {reaction.key} {reaction.count}
         </Button>
@@ -1409,6 +1454,7 @@ const NativeTimelineRow = ({
   sourceEncryptionStatus,
   onActionError,
   onFocusEvent,
+  onViewReactions,
 }: NativeTimelineRowProps) => {
   const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
   const [declinePending, setDeclinePending] = useState(false);
@@ -1638,6 +1684,17 @@ const NativeTimelineRow = ({
       nativeTimelineActionsInFlight.delete(completed);
     }
   }, [eventId, roomId, row, sessionGeneration]);
+  const rowViewReactions = nativeReactionsForViewer(
+    'reactions' in row ? row.reactions : undefined
+  );
+  const openReactionViewer = (initialKey?: string) => {
+    if (!eventId) return;
+    onViewReactions({
+      eventId,
+      initialKey,
+      reactions: rowViewReactions,
+    });
+  };
 
   switch (row.kind) {
     case 'message': {
@@ -1659,6 +1716,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1778,6 +1838,7 @@ const NativeTimelineRow = ({
                     reactions={row.reactions}
                     enabled={Boolean(genericReactionCapabilities?.react)}
                     onReaction={runReaction}
+                    onViewReactions={openReactionViewer}
                   />
                 </Box>
               </Box>
@@ -1798,6 +1859,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1817,6 +1881,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1847,6 +1914,7 @@ const NativeTimelineRow = ({
               reactions={row.reactions}
               enabled={Boolean(genericReactionCapabilities?.react)}
               onReaction={runReaction}
+              onViewReactions={openReactionViewer}
             />
           </Box>
         </NativeTimelineRowActionSurface>
@@ -1862,6 +1930,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1922,6 +1993,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1941,6 +2015,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1961,6 +2038,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -1981,6 +2061,9 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions:
+              rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
           }}
           onReaction={runReaction}
         >
@@ -2013,6 +2096,7 @@ const NativeTimelineRow = ({
               reactions={row.reactions}
               enabled={Boolean(genericReactionCapabilities?.react)}
               onReaction={runReaction}
+              onViewReactions={openReactionViewer}
             />
           </Box>
         </NativeTimelineRowActionSurface>
@@ -2082,6 +2166,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       document.visibilityState === 'visible' &&
       document.hasFocus()
   );
+  const mx = useMatrixClient();
+  const ownUserId = mx.getUserId() ?? undefined;
+  const [reactionViewer, setReactionViewer] = useState<{
+    eventId: string;
+    initialKey?: string;
+    reactions: NativeReactionReadback[];
+  } | null>(null);
   const roomList = useNativeRoomListSnapshot();
   const sourceEncryptionStatus = roomList.rooms.find(
     (room) => room.roomId === roomId
@@ -2978,6 +3069,20 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                     sourceEncryptionStatus={sourceEncryptionStatus}
                     onActionError={setActionError}
                     onFocusEvent={onFocusEvent}
+                    onViewReactions={(request) => {
+                      setReactionViewer(request);
+                      void nativeReactionViewFromEventReadback({
+                        roomId,
+                        eventId: request.eventId,
+                      }).then((refreshed) => {
+                        if (!refreshed) return;
+                        setReactionViewer((current) =>
+                          current?.eventId === request.eventId
+                            ? { ...current, reactions: refreshed }
+                            : current
+                        );
+                      });
+                    }}
                   />
                 </div>
               );
@@ -3053,6 +3158,38 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           </Box>
         )}
       </Box>
+      <Overlay
+        open={Boolean(reactionViewer)}
+        backdrop={<OverlayBackdrop />}
+        onContextMenu={(event: React.MouseEvent) => event.stopPropagation()}
+      >
+        <OverlayCenter>
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              returnFocusOnDeactivate: false,
+              onDeactivate: () => setReactionViewer(null),
+              clickOutsideDeactivates: true,
+              escapeDeactivates: stopPropagation,
+            }}
+          >
+            <Modal variant="Surface" size="300">
+              {reactionViewer ? (
+                <ReactionViewer
+                  roomId={roomId}
+                  targetEventId={reactionViewer.eventId}
+                  reactions={reactionViewer.reactions}
+                  initialKey={reactionViewer.initialKey}
+                  ownUserId={ownUserId}
+                  canRedactOwn={Boolean(snapshot.capabilities.canRedactOwn)}
+                  canRedactOther={Boolean(snapshot.capabilities.canRedactOther)}
+                  requestClose={() => setReactionViewer(null)}
+                />
+              ) : null}
+            </Modal>
+          </FocusTrap>
+        </OverlayCenter>
+      </Overlay>
     </Box>
   );
 }

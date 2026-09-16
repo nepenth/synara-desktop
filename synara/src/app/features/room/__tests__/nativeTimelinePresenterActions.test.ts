@@ -74,6 +74,7 @@ test('native timeline rows retain hover/focus action access without restoring th
     'Report',
     'Pin',
     'Save for later',
+    'View Reactions',
   ]) {
     assert.equal(presenter.includes(action), true, `missing ${action} action`);
   }
@@ -87,6 +88,7 @@ test('native timeline rows retain hover/focus action access without restoring th
     'reportWithNativeTimelineAction',
     'pinWithNativeTimelineAction',
     'upsertLaterWithNativeOwner',
+    'ReactionViewer',
   ]) {
     assert.match(presenter, new RegExp(nativeOwner));
   }
@@ -111,6 +113,19 @@ test('message, poll, and sticker rows share Core relation and reaction presentat
   }
   assert.match(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
   assert.match(presenter, /variant=\{reaction\.own \? 'Primary' : 'Secondary'\}/);
+  assert.match(presenter, /onViewReactions=\{openReactionViewer\}/);
+  assert.match(presenter, /nativeReactionViewFromEventReadback/);
+  assert.match(presenter, /canRedactOwn=\{Boolean\(snapshot\.capabilities\.canRedactOwn\)\}/);
+  assert.match(presenter, /canRedactOther=\{Boolean\(snapshot\.capabilities\.canRedactOther\)\}/);
+});
+
+test('reaction viewer remove stays gated on recovered annotation id and redact authority', () => {
+  const viewer = readFileSync('src/app/features/room/reaction-viewer/ReactionViewer.tsx', 'utf8');
+  assert.match(viewer, /Boolean\(reactionEventId\)/);
+  assert.match(viewer, /canRedactOwn \?\? canRedact/);
+  assert.match(viewer, /canRedactOther \?\? canRedact/);
+  assert.match(viewer, /redactReactionWithNativeOwner/);
+  assert.doesNotMatch(viewer, /matrix-js-sdk/);
 });
 
 test('poll and call actions consume Core capabilities with accessible pending controls', () => {

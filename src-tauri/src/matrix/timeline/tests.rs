@@ -1223,6 +1223,8 @@ mod view_pure {
                 mark_unread: true,
                 paginate_backward: true,
                 paginate_forward: true,
+                can_redact_own: false,
+                can_redact_other: false,
             },
         };
         let json = serde_json::to_string(&snapshot).unwrap();

@@ -124,6 +124,8 @@ const update = () => {
       markUnread: true,
       paginateBackward: true,
       paginateForward: true,
+      canRedactOwn: true,
+      canRedactOther: false,
     },
   };
   for (const [id, current] of snapshots) {
@@ -557,7 +559,20 @@ const api = {
             index,
             row: {
               ...row,
-              reactions: [...(row.reactions ?? []), { key: '✅', count: 1, own: true }],
+              reactions: [
+                ...(row.reactions ?? []),
+                {
+                  key: '✅',
+                  count: 1,
+                  own: true,
+                  senders: [
+                    {
+                      userId: '@alice:example.org',
+                      reactionEventId: '$alice-reaction:example.org',
+                    },
+                  ],
+                },
+              ],
             },
           },
         ],

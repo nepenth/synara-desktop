@@ -1458,6 +1458,8 @@ pub struct TimelineSnapshotDto {
     pub mark_unread: bool,
     pub paginate_backward: bool,
     pub paginate_forward: bool,
+    pub can_redact_own: bool,
+    pub can_redact_other: bool,
     pub rows: Vec<TimelineViewRowDto>,
 }
 
@@ -1499,12 +1501,14 @@ pub struct TimelineViewRowDto {
     pub media_duration_ms: Option<u64>,
 }
 
-/// Privacy-safe reaction count on a view row. No user ids.
+/// Privacy-safe reaction count on a view row. Senders are user ids and
+/// optional annotation ids only; no tokens or ciphertext.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimelineViewReactionDto {
     pub key: String,
     pub count: u32,
     pub own: Option<bool>,
+    pub senders: Vec<TimelineReactionSenderDto>,
 }
 
 /// Privacy-safe reply preview projected by Core. No raw event content.
@@ -2411,6 +2415,8 @@ fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto 
         mark_unread: snapshot.capabilities.mark_unread,
         paginate_backward: snapshot.capabilities.paginate_backward,
         paginate_forward: snapshot.capabilities.paginate_forward,
+        can_redact_own: snapshot.capabilities.can_redact_own,
+        can_redact_other: snapshot.capabilities.can_redact_other,
         rows: snapshot
             .rows
             .into_iter()
@@ -2426,6 +2432,14 @@ fn view_reaction_dtos(reactions: Vec<TimelineReaction>) -> Vec<TimelineViewReact
             key: reaction.key,
             count: reaction.count,
             own: reaction.own,
+            senders: reaction
+                .senders
+                .into_iter()
+                .map(|sender| TimelineReactionSenderDto {
+                    user_id: sender.user_id,
+                    reaction_event_id: sender.reaction_event_id,
+                })
+                .collect(),
         })
         .collect()
 }
@@ -14266,11 +14280,13 @@ mod tests {
                     key: "👍".to_owned(),
                     count: 2,
                     own: Some(true),
+                    senders: vec![],
                 },
                 TimelineReaction {
                     key: "🎉".to_owned(),
                     count: 1,
                     own: None,
+                    senders: vec![],
                 },
             ],
             media: None,
@@ -14383,6 +14399,7 @@ mod tests {
                     key: "👍".to_owned(),
                     count: 2,
                     own: Some(true),
+                    senders: vec![],
                 }],
             })
         };
@@ -14454,6 +14471,7 @@ mod tests {
                 key: "🎉".to_owned(),
                 count: 3,
                 own: Some(false),
+                senders: vec![],
             }],
         };
 

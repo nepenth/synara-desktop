@@ -462,6 +462,8 @@ mod tests {
                     mark_unread: false,
                     paginate_backward: true,
                     paginate_forward: true,
+                    can_redact_own: false,
+                    can_redact_other: false,
                 },
             },
         };

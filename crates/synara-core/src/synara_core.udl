@@ -370,11 +370,19 @@ dictionary TimelineViewPositionDto {
   string? event_id;
 };
 
-// Privacy-safe reaction count on a view row. Key and count only; no user ids.
+// Privacy-safe reaction sender. No tokens or password.
+dictionary TimelineReactionSenderDto {
+  string user_id;
+  string? reaction_event_id;
+};
+
+// Privacy-safe reaction count on a view row. Senders carry user id and
+// optional annotation id only; no tokens or ciphertext.
 dictionary TimelineViewReactionDto {
   string key;
   u32 count;
   boolean? own;
+  sequence<TimelineReactionSenderDto> senders;
 };
 
 // Privacy-safe Core-owned reply preview. No raw event content.
@@ -478,6 +486,8 @@ dictionary TimelineSnapshotDto {
   boolean mark_unread;
   boolean paginate_backward;
   boolean paginate_forward;
+  boolean can_redact_own;
+  boolean can_redact_other;
   sequence<TimelineViewRowDto> rows;
 };
 
@@ -532,12 +542,6 @@ interface TimelineMediaError {
 [Error]
 interface TimelineReadStateError {
   Failed(string code, string description);
-};
-
-// Privacy-safe reaction sender. No tokens or password.
-dictionary TimelineReactionSenderDto {
-  string user_id;
-  string? reaction_event_id;
 };
 
 // Privacy-safe aggregated reaction. No tokens or password.
