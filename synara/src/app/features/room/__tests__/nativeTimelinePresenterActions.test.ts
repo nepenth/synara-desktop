@@ -397,7 +397,8 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
   assert.match(invite, /quietInteractiveSurface/);
   assert.match(invite, /disabled=\{!canInvite\}/);
   assert.doesNotMatch(invite, /variant="Primary"/);
-  assert.doesNotMatch(invite, /fill="None"/);
+  assert.match(invite, /fill="None"/);
+  assert.match(invite, /variant="Surface"/);
 });
 
 test('native timeline file attachments save through download+save, not protocol href', () => {

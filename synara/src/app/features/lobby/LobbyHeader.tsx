@@ -79,6 +79,8 @@ const LobbyMenu = forwardRef<HTMLDivElement, LobbyMenuProps>(
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <MenuItem
             onClick={handleInvite}
+            variant="Surface"
+            fill="None"
             size="300"
             after={<Icon size="100" src={Icons.UserPlus} />}
             radii="300"

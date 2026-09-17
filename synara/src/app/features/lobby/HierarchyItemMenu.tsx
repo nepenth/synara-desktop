@@ -134,6 +134,8 @@ function InviteMenuItem({
     <>
       <MenuItem
         onClick={handleInvite}
+        variant="Surface"
+        fill="None"
         size="300"
         radii="300"
         className={depthCss.quietInteractiveSurface}

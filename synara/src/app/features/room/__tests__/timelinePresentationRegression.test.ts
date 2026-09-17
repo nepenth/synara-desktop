@@ -38,7 +38,8 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
   assert.match(invite, /quietInteractiveSurface/);
   assert.match(invite, /disabled=\{!canInvite\}/);
   assert.doesNotMatch(invite, /variant="Primary"/);
-  assert.doesNotMatch(invite, /fill="None"/);
+  assert.match(invite, /fill="None"/);
+  assert.match(invite, /variant="Surface"/);
 
   const nav = readFileSync('src/app/features/room-nav/RoomNavItem.tsx', 'utf8');
   const navInviteStart = nav.indexOf('onClick={handleInvite}');
@@ -47,7 +48,7 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
     nav.indexOf('onClick={handleCopyLink}', navInviteStart)
   );
   assert.match(navInvite, /quietInteractiveSurface/);
-  assert.doesNotMatch(navInvite, /fill="None"/);
+  assert.match(navInvite, /fill="None"/);
   assert.doesNotMatch(navInvite, /variant="Primary"/);
 
   const space = readFileSync('src/app/pages/client/space/Space.tsx', 'utf8');
@@ -57,7 +58,7 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
     space.indexOf('onClick={handleCopyLink}', spaceInviteStart)
   );
   assert.match(spaceInvite, /quietInteractiveSurface/);
-  assert.doesNotMatch(spaceInvite, /fill="None"/);
+  assert.match(spaceInvite, /fill="None"/);
   assert.doesNotMatch(spaceInvite, /variant="Primary"/);
 
   const hierarchy = readFileSync('src/app/features/lobby/HierarchyItemMenu.tsx', 'utf8');
@@ -67,7 +68,7 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
     hierarchy.indexOf('disabled={disabled || !room}', hierarchyInviteStart) + 80
   );
   assert.match(hierarchyInvite, /quietInteractiveSurface/);
-  assert.doesNotMatch(hierarchyInvite, /fill="None"/);
+  assert.match(hierarchyInvite, /fill="None"/);
 
   const lobby = readFileSync('src/app/features/lobby/LobbyHeader.tsx', 'utf8');
   const lobbyInviteStart = lobby.indexOf('onClick={handleInvite}');
@@ -76,7 +77,7 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
     lobby.indexOf('onClick={handleRoomSettings}', lobbyInviteStart)
   );
   assert.match(lobbyInvite, /quietInteractiveSurface/);
-  assert.doesNotMatch(lobbyInvite, /fill="None"/);
+  assert.match(lobbyInvite, /fill="None"/);
   assert.doesNotMatch(lobbyInvite, /variant="Primary"/);
 
   const tabs = readFileSync('src/app/pages/client/sidebar/SpaceTabs.tsx', 'utf8');
@@ -86,7 +87,7 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
     tabs.indexOf('onClick={handleCopyLink}', tabsInviteStart)
   );
   assert.match(tabsInvite, /quietInteractiveSurface/);
-  assert.doesNotMatch(tabsInvite, /fill="None"/);
+  assert.match(tabsInvite, /fill="None"/);
   assert.doesNotMatch(tabsInvite, /variant="Primary"/);
 });
 
