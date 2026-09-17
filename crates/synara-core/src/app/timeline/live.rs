@@ -20,6 +20,7 @@ use matrix_sdk::{
         events::{
             poll::unstable_start::UnstablePollStartEventContent,
             reaction::ReactionEventContent,
+            receipt::{ReceiptThread, ReceiptType as EventReceiptType},
             relation::Annotation,
             room::message::{
                 MessageFormat, MessageType, Relation, RoomMessageEventContent,
@@ -3279,6 +3280,25 @@ fn visible_predecessor(raw_ids: &[String], visible_ids: &[String], marker: &str)
         .cloned()
 }
 
+/// Room-level last-read candidates. Live timelines set
+/// `hide_threaded_events`, so `Timeline::latest_user_read_receipt` only
+/// loads `ReceiptThread::Main`. Other clients (and this test fixture) still
+/// write unthreaded receipts; restoration must compare both.
+async fn own_unthreaded_and_main_receipt_event_ids(room: &Room, user: &UserId) -> Vec<String> {
+    let mut ids = Vec::new();
+    for receipt_type in [EventReceiptType::Read, EventReceiptType::ReadPrivate] {
+        for thread in [&ReceiptThread::Unthreaded, &ReceiptThread::Main] {
+            if let Ok(Some((event_id, _))) = room
+                .load_user_receipt(receipt_type.clone(), thread, user)
+                .await
+            {
+                ids.push(event_id.to_string());
+            }
+        }
+    }
+    ids
+}
+
 async fn navigation_read_state(
     timeline: &Timeline,
     own_user_id: Option<&UserId>,
@@ -3315,29 +3335,41 @@ async fn navigation_read_state(
         .room()
         .fully_read_event_id()
         .map(|id| id.to_string());
-    let (receipt, receipt_anchor) = match own_user_id {
-        Some(user) => (
-            timeline
+    let (receipt_ids, timeline_receipt, receipt_anchor) = match own_user_id {
+        Some(user) => {
+            let receipt_ids =
+                own_unthreaded_and_main_receipt_event_ids(timeline.room(), user).await;
+            let timeline_receipt = timeline
                 .latest_user_read_receipt(user)
                 .await
-                .map(|(id, _)| id.to_string()),
-            timeline
+                .map(|(id, _)| id.to_string());
+            let receipt_anchor = timeline
                 .latest_user_read_receipt_timeline_event_id(user)
                 .await
-                .map(|id| id.to_string()),
-        ),
-        None => (None, None),
+                .map(|id| id.to_string());
+            (receipt_ids, timeline_receipt, receipt_anchor)
+        }
+        None => (Vec::new(), None, None),
     };
     let raw = newest_frontier_in_live(
         &raw_ids,
-        fully_read.iter().chain(receipt.iter()).map(String::as_str),
+        fully_read
+            .iter()
+            .chain(receipt_ids.iter())
+            .chain(timeline_receipt.iter())
+            .map(String::as_str),
     )
-    .or_else(|| receipt.clone())
+    .or_else(|| timeline_receipt.clone())
+    .or_else(|| receipt_ids.into_iter().next())
     .or(fully_read);
     let anchor = raw
         .as_deref()
         .and_then(|marker| visible_predecessor(&raw_ids, &visible_ids, marker))
-        .or_else(|| (raw == receipt).then_some(receipt_anchor).flatten());
+        .or_else(|| {
+            (raw == timeline_receipt)
+                .then_some(receipt_anchor)
+                .flatten()
+        });
     (raw, anchor)
 }
 
@@ -5120,6 +5152,36 @@ mod tests {
             plan_live_read_target(None, NativeTimelineReadIntent::ExplicitUser, None),
             Ok(LiveReadTargetPlan::ClearUnreadFlag)
         );
+    }
+
+    #[test]
+    fn newest_frontier_in_live_picks_the_later_comparable_candidate() {
+        let live = ["$follow-live-older".into(), "$follow-live-newer".into()];
+        assert_eq!(
+            newest_frontier_in_live(&live, ["$follow-live-older", "$follow-live-newer"]),
+            Some("$follow-live-newer".into())
+        );
+    }
+
+    #[test]
+    fn restoration_frontier_loads_unthreaded_and_main_receipts() {
+        let source = include_str!("live.rs");
+        let helper = source
+            .split("async fn own_unthreaded_and_main_receipt_event_ids")
+            .nth(1)
+            .and_then(|rest| rest.split("async fn navigation_read_state").next())
+            .expect("own receipt helper");
+        assert!(helper.contains("load_user_receipt"));
+        assert!(helper.contains("ReceiptThread::Unthreaded"));
+        assert!(helper.contains("ReceiptThread::Main"));
+        assert!(helper.contains("EventReceiptType::ReadPrivate"));
+        let mark_read_start = source.find("async fn mark_live_timeline_read").unwrap();
+        let mark_read_end = source[mark_read_start..]
+            .find("fn remember_agent_approval_decision")
+            .map(|offset| mark_read_start + offset)
+            .unwrap();
+        let mark_read_source = &source[mark_read_start..mark_read_end];
+        assert!(!mark_read_source.contains("ReceiptThread::Unthreaded"));
     }
 
     #[test]
