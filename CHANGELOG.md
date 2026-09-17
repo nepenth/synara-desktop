@@ -2,20 +2,58 @@
 
 ## Unreleased
 
+## [2.1.38] - 2026-09-17
+
 - Adopt Matrix Rust SDK 0.19.0 (`matrix-sdk`, `matrix-sdk-ui`,
   `matrix-sdk-crypto`, `matrix-sdk-sqlite`) and Ruma 0.17. Pin the desktop
   toolchain to Rust 1.96 (upstream MSRV). Enable `rustls-aws-lc-rs` because
   0.19.0 no longer installs a rustls provider when default features are off.
   Map room-list subscriptions onto `set_room_subscriptions`, and write
   presence through `Client::set_presence` so sliding sync keeps the chosen
-  state.
-- Reaction snapshots now take an event id only from a local `Sent` echo.
-  Remote reactions no longer expose an annotation id on the 0.19 timeline
-  item, so the reaction viewer cannot offer per-sender redaction until a
-  follow-up recovers that id. Toggling your own reaction still uses the SDK
-  toggle path and does not need the id.
-- Apply Dependabot rust-updates in `src-tauri`: tauri 2.11.5, getrandom
-  0.4.3, reqwest 0.13.5.
+  state. Apply Dependabot rust-updates in `src-tauri`: tauri 2.11.5,
+  getrandom 0.4.3, reqwest 0.13.5.
+- Recover remote reaction annotation ids from the room event cache and a lazy
+  `/relations` fetch so the native viewer can redact other senders. Self
+  unreact still uses `Timeline::toggle_reaction` and does not wait on a missing
+  id. After a recoverable RoomSendQueue failure, re-enable the queue so later
+  sends are not stuck behind a silent disable. Pin panel, last-message
+  pagination, and event-cache subscribe use the 0.19 cache APIs.
+- Jump the native room date rail across the whole room with
+  `timestamp_to_event` / `get_event_by_timestamp` Forward. Skip the center
+  date chip while the rail is shown. Generic file chips download through
+  `matrix_media_download`; markdown attachments open an in-client preview
+  with Download still available.
+- Open native thread timelines from the chip and Reply in thread. Live
+  timelines use `TimelineFocus::Live` with `hide_threaded_events`. A room
+  Threads panel lists threads; mark-read on a thread stream sends a threaded
+  private receipt and overlays unread counts without clearing the room unread
+  flag from an empty thread.
+- Fill joined DM avatars from the peer MXC, subscribe to own-profile updates,
+  show honest MSC1763 retention copy, and apply a global MediaRetentionPolicy.
+  Link unfurls use `get_media_preview` for a single safe http(s) URL and skip
+  encrypted or unknown rooms.
+- Discover MatrixRTC transports after login and show live-call chrome without
+  Join/Leave or widgets. MSC4426 user status and in-call fields are
+  display-only; writes fail closed and `set_call` / automatic call status stay
+  unused.
+- Attach an MSC3814 dehydrated-device backup Olm catcher after session
+  install; stop it on logout without deleting backup rows.
+- Offer show-QR device verification with SAS fallback on hosts that can render
+  the QR SVG. iOS stays SAS-only. QR login / MSC4388 is not in this release.
+- Host experimental widgets in an isolated default-off webview with a
+  deny-by-default capability filter. Compile-in of `experimental-widgets` is
+  not user enablement.
+- Replace native `/search` with the 0.19 EncryptedDirectory local index on
+  desktop (`search-index` feature). Off disables product search with no
+  Client-Server fallback. NSE and iOS keep typed `/search` and must not pull
+  Tantivy.
+- Enable experimental MSC4362 encrypted state events. The account setting
+  gates create/opt-in only; already flagged rooms still decrypt. Call rooms
+  never opt in.
+- Offer experimental X.509 identity verification beside SAS, default off.
+  CA-trusted peers get a distinct `verified_by_certificate` chip.
+- Enable automatic room-key forwarding on desktop and iOS full-app. NSE stays
+  off.
 
 ## [2.1.37] - 2026-09-15
 
