@@ -54,6 +54,8 @@ fn expected_owners() -> Vec<String> {
     vec![
         "typing".to_owned(),
         "presence".to_owned(),
+        "rtc_transports".to_owned(),
+        "user_status".to_owned(),
         "verification".to_owned(),
         "devices".to_owned(),
         "dehydrated_devices".to_owned(),
