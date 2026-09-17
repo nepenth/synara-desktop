@@ -41,14 +41,14 @@ function NativeTimelineHistoryStatusView({
   onLoadMore,
 }: NativeTimelineHistoryStatusProps) {
   const copy = copyForEdge(edge);
-  const showDate = Boolean(visibleDateLabel) && kind === 'hidden';
+  const showDate = Boolean(visibleDateLabel) && kind === 'hidden' && !reserveRail;
   if (kind === 'hidden' && !showDate) return null;
 
   if (kind === 'hidden' && showDate) {
     return (
-      <div className={htmlCss.HistoryStatusDateChip} style={edgeInsetStyle(reserveRail)}>
+      <div className={htmlCss.HistoryStatusDateChip}>
         <div
-          className={htmlCss.HistoryStatusCard}
+          className={htmlCss.HistoryStatusDateChipCard}
           style={{ padding: `${config.space.S100} ${config.space.S300}` }}
           data-timeline-history-status="date"
         >

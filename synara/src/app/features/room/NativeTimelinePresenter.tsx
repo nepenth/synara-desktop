@@ -3396,14 +3396,17 @@ export function NativeTimelinePresenter({
     canPaginate: snapshot.capabilities.paginateForward,
     hasSparseLoadButton: true,
   });
-  const visibleStartIndex = virtualizer.getVirtualItems()[0]?.index ?? 0;
-  const activeMarkIndex = activeTimelineHistoryMarkIndex(historyMarks, visibleStartIndex);
-  const activeMark = activeMarkIndex >= 0 ? historyMarks[activeMarkIndex] : undefined;
-  const visibleDateLabel =
-    !atLiveBottom && activeMark
-      ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock)
-      : undefined;
+  // One date chrome at a time: the rail already labels loaded history.
   const showDateRail = shouldShowTimelineDateRail(rows.length, historyMarks.length);
+  const visibleStartIndex = virtualizer.getVirtualItems()[0]?.index ?? 0;
+  const activeMarkIndex =
+    showDateRail || atLiveBottom
+      ? -1
+      : activeTimelineHistoryMarkIndex(historyMarks, visibleStartIndex);
+  const activeMark = activeMarkIndex >= 0 ? historyMarks[activeMarkIndex] : undefined;
+  const visibleDateLabel = activeMark
+    ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock)
+    : undefined;
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>

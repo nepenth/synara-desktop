@@ -783,13 +783,26 @@ export const HistoryStatusDateChip = style({
   position: 'absolute',
   top: 0,
   left: 0,
-  right: toRem(56),
+  right: 0,
   zIndex: 4,
   display: 'flex',
   justifyContent: 'center',
   padding: config.space.S200,
   pointerEvents: 'none',
-  contain: 'layout style',
+  contain: 'layout style paint',
+});
+
+export const HistoryStatusDateChipCard = style({
+  display: 'flex',
+  alignItems: 'center',
+  padding: `${config.space.S100} ${config.space.S300}`,
+  borderRadius: config.radii.R400,
+  maxWidth: '100%',
+  pointerEvents: 'none',
+  backgroundColor: color.SurfaceVariant.Container,
+  color: color.SurfaceVariant.OnContainer,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  contain: 'layout style paint',
 });
 
 export const DateRail = style({
@@ -800,7 +813,7 @@ export const DateRail = style({
   width: toRem(56),
   zIndex: 2,
   pointerEvents: 'none',
-  contain: 'layout style',
+  contain: 'layout style paint',
   isolation: 'isolate',
 });
 

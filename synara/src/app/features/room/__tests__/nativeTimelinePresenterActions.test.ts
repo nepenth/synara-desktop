@@ -256,7 +256,10 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.doesNotMatch(dateRail, /TooltipProvider/);
   assert.doesNotMatch(dateRail, /visibleStartIndex/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusDateChip/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusDateChipCard/);
+  assert.match(historyStatus, /kind === 'hidden' && !reserveRail/);
   assert.match(htmlCss, /export const HistoryStatusDateChip = style\(/);
+  assert.match(htmlCss, /export const HistoryStatusDateChipCard = style\(/);
   assert.doesNotMatch(
     htmlCss.slice(
       htmlCss.indexOf('export const HistoryStatusDateChip'),
@@ -264,7 +267,16 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     ),
     /linear-gradient/
   );
+  assert.doesNotMatch(
+    htmlCss.slice(
+      htmlCss.indexOf('export const HistoryStatusDateChipCard'),
+      htmlCss.indexOf('export const DateRail')
+    ),
+    /raisedShadow/
+  );
   assert.match(presenter, /NativeTimelineDateRail/);
+  assert.match(presenter, /const showDateRail = shouldShowTimelineDateRail/);
+  assert.match(presenter, /showDateRail \|\| atLiveBottom/);
   assert.match(presenter, /reserveRail=\{showDateRail\}/);
   assert.match(htmlCss, /export const HistoryStatusHitTarget = style\(/);
   assert.doesNotMatch(historyStatus, /pointerEvents: 'auto'/);
