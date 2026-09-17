@@ -58,10 +58,10 @@ Repository, Rust, package, and release validation runs from the parent. See the
 
 ## Documentation
 
-- [Codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md)
+- [Documentation index](../docs/README.md)
+- [Shared native core ADR](../docs/adr/0003-shared-native-rust-core.md)
 - [Shared contracts](docs/synara-contracts.md)
 - [Synara namespaces](docs/synara-namespaces.md)
-- [Documentation index](../docs/README.md)
 
 Plans and audit records under `../docs/matrix-rust-sdk/` describe the completed
 JavaScript-to-Rust Matrix migration. They are historical evidence unless a file

@@ -9,7 +9,6 @@ const repositoryRoot = path.resolve(
 
 const livingDocuments = [
   "README.md",
-  "CODEBASE_KNOWLEDGE_BASE.md",
   "docs/README.md",
   "docs/build-and-release.md",
   "docs/repository-layout.md",

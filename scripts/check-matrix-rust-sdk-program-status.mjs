@@ -540,7 +540,7 @@ export function renderProgramStatus(status) {
     "",
     "> Generated from `program-status.json` by `scripts/check-matrix-rust-sdk-program-status.mjs`.",
     "> Do not hand-edit. This is a frozen migration-program snapshot, not current product architecture.",
-    "> The replacement has landed; see [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) and [the 2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).",
+    "> The replacement has landed; see [ADR 0003](../adr/0003-shared-native-rust-core.md) and [the 2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).",
     "",
     `As of: ${status.as_of_date}`,
     "",

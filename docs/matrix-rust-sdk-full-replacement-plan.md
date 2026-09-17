@@ -5,7 +5,7 @@ Date: 2026-07-25
 > **Historical migration plan.** The replacement has since landed on `main`.
 > The branch, runtime, queue, and acceptance statements below describe the
 > migration program at its recorded snapshots, not the current product. See
-> [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) and
+> [ADR 0003](adr/0003-shared-native-rust-core.md) and
 > [the 2026-08-17 local proof](shared-native-core/15-2026-08-17-local-proof.md)
 > for the current architecture and latest consolidated evidence.
 

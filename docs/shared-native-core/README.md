@@ -3,7 +3,7 @@
 > **Historical program record.** The shared core is now the production Matrix
 > application engine for desktop and iOS. Commit IDs, phase labels, and
 > incomplete-state claims below are retained as dated migration evidence. See
-> [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) and
+> [ADR 0003](../adr/0003-shared-native-rust-core.md) and
 > [the 2026-08-17 local proof](15-2026-08-17-local-proof.md) for current
 > architecture and the latest consolidated validation.
 

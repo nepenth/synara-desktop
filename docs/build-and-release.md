@@ -88,7 +88,9 @@ npm run tauri build -- --bundles app
 ```
 
 macOS workstation tasks requiring `xcodebuild`, Swift, simulator execution, or
-full app launch smoke are tracked in [../MACOS_WORKSTATION_HANDOFF.md](../MACOS_WORKSTATION_HANDOFF.md).
+full app launch smoke are tracked in
+[iOS validation status](../synara-ios/docs/ios-validation-status.md) and
+[desktop validation status](desktop-validation-status.md).
 
 ## Release Branch Flow
 
@@ -158,17 +160,17 @@ https://github.com/nepenth/synara-desktop/releases/download/apt-repo/Packages
    - Linux updates through `sudo apt upgrade`, `paru -Syu`, or
      `sudo pacman -Syu`; the app may only notify/instruct.
 
-The updater implementation plan and required GitHub variables/secrets live in
-[../GITHUB_RELEASE_UPDATER_PLAN.md](../GITHUB_RELEASE_UPDATER_PLAN.md). The
-release-branch CI strategy lives in [../RELEASE_BRANCH_CI_PLAN.md](../RELEASE_BRANCH_CI_PLAN.md).
+Updater secrets, endpoint names, and publication rules live in this runbook.
+Release-branch PRs into `main` from `release/vX.Y.Z` run Quality gate including
+iOS simulator unit and UI suites, plus Desktop Package Smoke. Ordinary feature
+PRs skip those iOS suites.
 
 ## Required Release Secrets
 
 macOS releases require Apple Developer ID and notarization secrets consumed by
 the protected release workflow. The expected variable names and validation
-rules are documented in
-[the GitHub release updater plan](../GITHUB_RELEASE_UPDATER_PLAN.md); values
-must remain in GitHub Secrets or permission-restricted local storage.
+rules are listed below; values must remain in GitHub Secrets or
+permission-restricted local storage.
 
 Updater-enabled releases require:
 
@@ -215,8 +217,9 @@ Branch-protection status checks remain appropriate for `main` and release
 branches where their workflows actually run.
 
 If a release job fails with `incorrect updater private key password`, rotate the
-Tauri updater keypair and GitHub secrets together. The full command sequence is
-tracked in [../GITHUB_RELEASE_UPDATER_PLAN.md](../GITHUB_RELEASE_UPDATER_PLAN.md#rotate-updater-signing-key-material).
+Tauri updater keypair and GitHub secrets `TAURI_SIGNING_PRIVATE_KEY`,
+`TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, and repository variable
+`SYNARA_UPDATER_PUBKEY` together.
 
 ## Linux Pacman Repo
 

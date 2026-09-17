@@ -3,7 +3,7 @@
 > **Historical program plan.** The shared core has since become the production
 > Matrix engine. The status block below is intentionally frozen migration
 > evidence, not current release status. See
-> [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) and
+> [ADR 0003](../adr/0003-shared-native-rust-core.md) and
 > [the latest consolidated local proof](15-2026-08-17-local-proof.md).
 
 **Status at `main`

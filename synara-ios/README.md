@@ -19,7 +19,7 @@ by old phase labels in planning files.
 - `SynaraCore` build products are generated locally and remain ignored.
 - Cross-platform schemas and fixtures live in `../synara/docs/contracts/`.
 
-Start with the [codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md),
+Start with the [documentation index](../docs/README.md),
 [iOS architecture ADR](../docs/adr/0002-ios-architecture.md), and
 [Rust language boundaries ADR](../docs/adr/0004-rust-language-boundaries.md).
 
