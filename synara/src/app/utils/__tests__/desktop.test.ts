@@ -99,6 +99,28 @@ test('setDesktopBadgeCount invokes the desktop bridge with a clamped count', asy
   ]);
 });
 
+test('setDesktopBadgeCount still sends zero so native can clear dock and Linux tray count', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    await setDesktopBadgeCount(0);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [{ command: 'desktop_set_badge_count', args: { count: 0 } }]);
+});
+
 test('enableDesktopSpellcheck invokes the native command when the bridge supports it', async () => {
   const calls: string[] = [];
   const originalWindow = globalThis.window;

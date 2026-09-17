@@ -516,6 +516,101 @@ final class RoomListServiceTests: XCTestCase {
         XCTAssertEqual(badges.rooms, 13)
     }
 
+    func testAppIconBadgeCountMatchesDesktopSummaryAndOmitsInvitesAndAgent() {
+        let rooms = [
+            RoomSummary(
+                id: "!mentions:matrix.org",
+                name: "Mentions",
+                lastMessagePreview: "ping",
+                unreadCount: 4,
+                hasHighlight: true,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!unread:matrix.org",
+                name: "Unread",
+                lastMessagePreview: "hello",
+                unreadCount: 3,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: RoomListFixtures.now
+            ),
+            RoomSummary(
+                id: "!invite:matrix.org",
+                name: "Invite",
+                lastMessagePreview: "Invite",
+                unreadCount: 1,
+                hasHighlight: true,
+                kind: .room,
+                membership: .invited,
+                lastActivityAt: RoomListFixtures.now
+            ),
+        ]
+        let laterItems = [
+            SynaraLaterListItem(
+                id: "saved-active",
+                roomID: "!unread:matrix.org",
+                eventID: "$one",
+                kind: .saved,
+                dueTs: nil,
+                completedAt: nil,
+                createdAt: 1,
+                isCompleted: false
+            ),
+            SynaraLaterListItem(
+                id: "saved-done",
+                roomID: "!unread:matrix.org",
+                eventID: "$two",
+                kind: .saved,
+                dueTs: nil,
+                completedAt: 2,
+                createdAt: 1,
+                isCompleted: true
+            ),
+        ]
+
+        XCTAssertEqual(NotificationBadgeSummary.laterActiveCount(from: laterItems), 1)
+        XCTAssertEqual(
+            NotificationBadgeSummary.appBadgeCount(from: rooms, laterActiveCount: 1),
+            5
+        )
+        XCTAssertEqual(
+            NotificationBadgeSummary.summarizeNotifications(
+                NotificationSummaryInput(
+                    unreadCounts: NotificationBadgeSummary.unreadSources(from: rooms),
+                    laterActiveCount: 1,
+                    inviteCount: 8,
+                    agentApprovalCount: 9
+                )
+            )?.inboxBadgeCount,
+            18
+        )
+        XCTAssertEqual(
+            NotificationBadgeSummary.appIconBadgeCount(
+                roomListState: .loaded(rooms),
+                laterItems: laterItems
+            ),
+            5
+        )
+        XCTAssertNil(
+            NotificationBadgeSummary.appIconBadgeCount(
+                roomListState: .loading,
+                laterItems: laterItems
+            )
+        )
+        XCTAssertEqual(
+            NotificationBadgeSummary.appIconBadgeCount(
+                roomListState: .empty,
+                laterItems: []
+            ),
+            0
+        )
+        XCTAssertEqual(NotificationBadgeSummary.roomsTabBadgeCount(from: rooms), 4)
+    }
+
     func testAgentPendingInboxBuildsRowsFromLatestAgentCard() {
         let rooms = RoomListFixtures.small()
         let pending = AgentPendingInbox.pendingApprovals(from: rooms)

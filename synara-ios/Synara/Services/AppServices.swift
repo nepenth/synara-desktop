@@ -241,6 +241,7 @@ protocol PushServicing {
     func resolveRoute(from notificationPayload: [AnyHashable: Any]) async -> AppRoute?
     func parseBadgeCount(from notificationPayload: [AnyHashable: Any]) -> Int?
     func applyIncomingBadge(from notificationPayload: [AnyHashable: Any])
+    func applyAppIconBadge(_ count: Int)
 }
 
 enum NotificationPermissionStatus: Equatable {
@@ -956,6 +957,10 @@ final class PlaceholderPushService: PushServicing {
     }
 
     func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {}
+
+    func applyAppIconBadge(_ count: Int) {
+        _ = count
+    }
 }
 
 struct MockCryptoStatusService: CryptoStatusServicing {
@@ -1546,6 +1551,8 @@ final class MockPushService: PushServicing {
     private(set) var routeCallCount = 0
     private(set) var badgeParseCallCount = 0
     private(set) var badgeApplyCallCount = 0
+    private(set) var appIconBadgeApplyCallCount = 0
+    private(set) var lastAppIconBadgeCount: Int?
     private(set) var tokenCallCount = 0
     private(set) var registrationFailureCallCount = 0
     private(set) var completeRegistrationTeardownCallCount = 0
@@ -1643,6 +1650,14 @@ final class MockPushService: PushServicing {
 
     func applyIncomingBadge(from notificationPayload: [AnyHashable: Any]) {
         badgeApplyCallCount += 1
+        if let badge = parseBadgeCount(from: notificationPayload) {
+            applyAppIconBadge(badge)
+        }
+    }
+
+    func applyAppIconBadge(_ count: Int) {
+        appIconBadgeApplyCallCount += 1
+        lastAppIconBadgeCount = max(0, count)
     }
 }
 

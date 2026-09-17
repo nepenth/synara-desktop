@@ -352,6 +352,59 @@ final class PushServiceTests: XCTestCase {
         XCTAssertFalse(first.contains(key))
     }
 
+    func testApplyIncomingBadgeUsesAppIconOwnerInsteadOfClearingToZero() {
+        let push = MockPushService()
+        push.applyIncomingBadge(from: ["badge": 7])
+        XCTAssertEqual(push.badgeApplyCallCount, 1)
+        XCTAssertEqual(push.lastAppIconBadgeCount, 7)
+        XCTAssertNotEqual(push.lastAppIconBadgeCount, 0)
+
+        push.applyAppIconBadge(0)
+        XCTAssertEqual(push.lastAppIconBadgeCount, 0)
+        XCTAssertEqual(push.appIconBadgeApplyCallCount, 2)
+    }
+
+    func testApplyCurrentSummaryUsesRoomListLaterAndSkipsUnreadySnapshots() async {
+        let push = MockPushService()
+        let rooms = [
+            RoomSummary(
+                id: "!unread:matrix.org",
+                name: "Unread",
+                lastMessagePreview: "hello",
+                unreadCount: 4,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: Date()
+            )
+        ]
+        let later = MockLaterService(
+            items: [
+                SynaraLaterListItem(
+                    id: "saved",
+                    roomID: "!unread:matrix.org",
+                    eventID: "$one",
+                    kind: .saved,
+                    dueTs: nil,
+                    completedAt: nil,
+                    createdAt: 1,
+                    isCompleted: false
+                )
+            ]
+        )
+
+        await AppIconBadge.applyCurrentSummary(rooms: rooms, later: later, push: push)
+        XCTAssertEqual(push.lastAppIconBadgeCount, 5)
+
+        await AppIconBadge.applyCurrentSummary(
+            roomList: MockRoomListService(state: .loading),
+            later: later,
+            push: push
+        )
+        XCTAssertEqual(push.lastAppIconBadgeCount, 5)
+        XCTAssertEqual(push.appIconBadgeApplyCallCount, 1)
+    }
+
     func testBadgeCountParsesApsBadgeAndSummaryFormats() {
         let service = SynaraPushService(
             logger: MockLoggingService(),
