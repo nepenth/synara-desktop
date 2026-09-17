@@ -29,7 +29,9 @@ export type TimelineRailAxis = {
 };
 
 const MAX_SAMPLED_MARKS = 6;
-const INTRA_DAY_AXIS_MS = 36 * 60 * 60 * 1000;
+const RECENT_DAY_HOURS = [8, 12, 17] as const;
+const RECENT_DAY_COUNT = 3;
+const OLDER_DAY_SPAN = 6;
 
 export const rowTimestampMs = (row: TimelineDateMarkSource): number | undefined => {
   if (typeof row.timestampMs === 'number' && Number.isFinite(row.timestampMs)) {
@@ -148,6 +150,63 @@ export const timelineRailAxis = (
   };
 };
 
+const localDayStartOn = (timestampMs: number, dayOffset: number): number => {
+  const date = new Date(timestampMs);
+  date.setHours(0, 0, 0, 0);
+  date.setDate(date.getDate() + dayOffset);
+  return date.getTime();
+};
+
+const localTimeOnDay = (dayStartMs: number, hour: number): number => {
+  const date = new Date(dayStartMs);
+  date.setHours(hour, 0, 0, 0);
+  return date.getTime();
+};
+
+/** Calendar axis for the past 7 local days. Ticks do not require loaded rows. */
+export const sevenDayRailAxis = (
+  nowMs: number,
+  timed: readonly TimedTimelineRow[] = []
+): TimelineRailAxis => {
+  const startMs = localDayStartOn(nowMs, -OLDER_DAY_SPAN);
+  const loadedMinMs = timed[0]?.timestampMs ?? startMs;
+  const loadedMaxMs = timed[timed.length - 1]?.timestampMs ?? nowMs;
+  return {
+    startMs,
+    endMs: nowMs,
+    loadedMinMs,
+    loadedMaxMs,
+    fullRoom: false,
+  };
+};
+
+export const collectSevenDayRailMarks = (nowMs: number): TimelineHistoryMark[] => {
+  const marks: TimelineHistoryMark[] = [];
+  for (let daysAgo = OLDER_DAY_SPAN; daysAgo >= 0; daysAgo -= 1) {
+    const dayStart = localDayStartOn(nowMs, -daysAgo);
+    if (daysAgo >= RECENT_DAY_COUNT) {
+      marks.push({
+        key: `day:${localDayKey(dayStart)}`,
+        index: -1,
+        timestampMs: dayStart,
+        kind: 'day',
+      });
+      continue;
+    }
+    for (const hour of RECENT_DAY_HOURS) {
+      const timestampMs = localTimeOnDay(dayStart, hour);
+      if (timestampMs > nowMs) continue;
+      marks.push({
+        key: `time:${localDayKey(dayStart)}:${hour}`,
+        index: -1,
+        timestampMs,
+        kind: 'time',
+      });
+    }
+  }
+  return marks;
+};
+
 export const withRoomBeginningMark = (
   marks: readonly TimelineHistoryMark[],
   axis: TimelineRailAxis | undefined
@@ -176,18 +235,8 @@ export const formatTimelineHistoryMarkLabel = (
   return timeDayMonthYear(mark.timestampMs);
 };
 
-export const formatTimelineRailTimestamp = (
-  timestampMs: number,
-  hour24Clock: boolean,
-  axis: Pick<TimelineRailAxis, 'startMs' | 'endMs'>
-): string => {
-  if (axis.endMs - axis.startMs < INTRA_DAY_AXIS_MS) {
-    return timeHourMinute(timestampMs, hour24Clock);
-  }
-  if (today(timestampMs)) return 'Today';
-  if (yesterday(timestampMs)) return 'Yesterday';
-  return timeDayMonthYear(timestampMs);
-};
+export const formatTimelineRailTimestamp = (timestampMs: number, hour24Clock: boolean): string =>
+  `${timeDayMonthYear(timestampMs)} ${timeHourMinute(timestampMs, hour24Clock)}`;
 
 export const activeTimelineHistoryMarkIndex = (
   marks: readonly TimelineHistoryMark[],
@@ -269,4 +318,4 @@ export const isTimestampInLoadedWindow = (
 };
 
 export const shouldShowTimelineDateRail = (rowCount: number, markCount: number): boolean =>
-  markCount >= 2 && rowCount >= 8;
+  markCount >= 2 && rowCount > 0;

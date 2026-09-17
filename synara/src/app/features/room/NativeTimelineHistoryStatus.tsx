@@ -1,7 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Spinner, Text, color, config } from 'folds';
 import type { TimelineHistoryOverlayKind } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
+
+const LOADING_CHROME_DELAY_MS = 120;
 
 type NativeTimelineHistoryStatusProps = {
   edge: 'backward' | 'forward';
@@ -40,11 +42,21 @@ function NativeTimelineHistoryStatusView({
   onRetry,
   onLoadMore,
 }: NativeTimelineHistoryStatusProps) {
+  const [loadingVisible, setLoadingVisible] = useState(false);
+  useEffect(() => {
+    if (kind !== 'loading') {
+      setLoadingVisible(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setLoadingVisible(true), LOADING_CHROME_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [kind]);
+  const paintedKind = kind === 'loading' && !loadingVisible ? 'hidden' : kind;
   const copy = copyForEdge(edge);
   const showDate = Boolean(visibleDateLabel) && kind === 'hidden' && !reserveRail;
-  if (kind === 'hidden' && !showDate) return null;
+  if (paintedKind === 'hidden' && !showDate) return null;
 
-  if (kind === 'hidden' && showDate) {
+  if (paintedKind === 'hidden' && showDate) {
     return (
       <div className={htmlCss.HistoryStatusDateChip}>
         <div
@@ -67,7 +79,7 @@ function NativeTimelineHistoryStatusView({
       }
       style={edgeInsetStyle(reserveRail)}
     >
-      {kind === 'loading' ? (
+      {paintedKind === 'loading' ? (
         <div
           className={htmlCss.HistoryStatusCard}
           role="status"
@@ -80,7 +92,7 @@ function NativeTimelineHistoryStatusView({
           <Text size="T300">{copy.loadingText}</Text>
         </div>
       ) : null}
-      {kind === 'error' ? (
+      {paintedKind === 'error' ? (
         <div
           className={`${htmlCss.HistoryStatusCard} ${htmlCss.HistoryStatusCardError}`}
           role="alert"
@@ -104,7 +116,7 @@ function NativeTimelineHistoryStatusView({
           ) : null}
         </div>
       ) : null}
-      {kind === 'load_more' && onLoadMore ? (
+      {paintedKind === 'load_more' && onLoadMore ? (
         <div className={htmlCss.HistoryStatusHitTarget}>
           <Button
             variant="Secondary"

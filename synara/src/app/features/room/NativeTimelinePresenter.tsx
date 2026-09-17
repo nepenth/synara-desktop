@@ -126,17 +126,17 @@ import { NativeTimelineDateRail } from './NativeTimelineDateRail';
 import { timestampToEventWithNativeOwner } from './nativeTimelineTimestampToEvent';
 import {
   activeTimelineHistoryMarkIndex,
+  collectSevenDayRailMarks,
   collectTimedTimelineRows,
-  collectTimelineHistoryMarks,
   formatTimelineHistoryMarkLabel,
   isTimestampInLoadedWindow,
   rowIndexForTimestamp,
   rowTimestampMs,
+  sevenDayRailAxis,
   shouldShowTimelineDateRail,
-  timelineRailAxis,
-  withRoomBeginningMark,
 } from '../../utils/timelineDateMarks';
 import {
+  canPaginateTimelineForward,
   clearTimelinePaginationError,
   resolveTimelineHistoryOverlay,
   setTimelinePaginationError,
@@ -157,7 +157,7 @@ type NativeTimelinePresenterProps = {
   threadRootEventId?: string;
   onOpenThreadRoute?: (rootEventId: string) => void;
   onCloseThreadRoute?: () => void;
-  /** `m.room.create` origin timestamp; enables a full-room date-rail axis. */
+  /** `m.room.create` origin timestamp; retained for callers of the presenter. */
   roomCreatedTs?: number;
 };
 
@@ -541,6 +541,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key="copy"
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -560,6 +562,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key="view-reactions"
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -577,6 +581,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key="reply"
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -600,6 +606,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key="reply-thread"
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -630,6 +638,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key="edit"
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -649,6 +659,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key="forward"
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -668,6 +680,7 @@ const NativeTimelineRowActions = ({
     moderationButtons.push(
       <MenuItem
         key="redact"
+        className={depthCss.quietInteractiveSurface}
         variant="Critical"
         size="300"
         fill="None"
@@ -691,6 +704,7 @@ const NativeTimelineRowActions = ({
     moderationButtons.push(
       <MenuItem
         key="report"
+        className={depthCss.quietInteractiveSurface}
         variant="Critical"
         size="300"
         fill="None"
@@ -711,6 +725,8 @@ const NativeTimelineRowActions = ({
     buttons.push(
       <MenuItem
         key={pinAction}
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         fill="None"
         radii="300"
@@ -736,6 +752,8 @@ const NativeTimelineRowActions = ({
   buttons.push(
     <MenuItem
       key="later"
+      className={depthCss.quietInteractiveSurface}
+      variant="Surface"
       size="300"
       fill="None"
       radii="300"
@@ -2273,7 +2291,6 @@ export function NativeTimelinePresenter({
   threadRootEventId,
   onOpenThreadRoute,
   onCloseThreadRoute,
-  roomCreatedTs,
 }: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
   const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
@@ -2511,12 +2528,12 @@ export function NativeTimelinePresenter({
   });
   const timedRows = useMemo(() => collectTimedTimelineRows(rows), [rows]);
   const railAxis = useMemo(
-    () => timelineRailAxis(timedRows, roomCreatedTs, Date.now()),
-    [roomCreatedTs, timedRows]
+    () => (rows.length === 0 ? undefined : sevenDayRailAxis(Date.now(), timedRows)),
+    [rows.length, timedRows]
   );
   const historyMarks = useMemo(
-    () => withRoomBeginningMark(collectTimelineHistoryMarks(rows), railAxis),
-    [railAxis, rows]
+    () => collectSevenDayRailMarks(railAxis?.endMs ?? Date.now()),
+    [railAxis]
   );
   const railContextRef = useRef({
     axis: railAxis,
@@ -2830,6 +2847,8 @@ export function NativeTimelinePresenter({
   const readyStateRef = useRef(readyState);
   readyStateRef.current = readyState;
   const hasReadyState = readyState !== undefined;
+  const atLiveBottomRef = useRef(atLiveBottom);
+  atLiveBottomRef.current = atLiveBottom;
   const requestPagination = useCallback(
     (direction: 'backwards' | 'forwards') => {
       const current = readyStateRef.current;
@@ -2844,6 +2863,15 @@ export function NativeTimelinePresenter({
           : current.snapshot.capabilities.paginateForward;
       if (!permitted || pageState === 'exhausted' || pageState === 'unavailable') return;
       if (pageState === 'loading') return;
+      if (
+        direction === 'forwards' &&
+        !canPaginateTimelineForward({
+          atLiveBottom: atLiveBottomRef.current,
+          positionKind: current.selectedPosition.kind,
+        })
+      ) {
+        return;
+      }
       paginationInFlightRef.current = direction;
       setPaginationInFlight(direction);
       if (direction === 'backwards') pendingBackwardGrowRef.current = true;
@@ -2885,7 +2913,11 @@ export function NativeTimelinePresenter({
           ? 'backwards'
           : distanceFromBottom <= 96 &&
             snapshot.capabilities.paginateForward &&
-            snapshot.pagination.forward === 'available'
+            snapshot.pagination.forward === 'available' &&
+            canPaginateTimelineForward({
+              atLiveBottom: atLiveBottomRef.current,
+              positionKind: current.selectedPosition.kind,
+            })
           ? 'forwards'
           : undefined;
       if (!direction) return;
@@ -3393,7 +3425,12 @@ export function NativeTimelinePresenter({
     inFlight: paginationInFlight === 'forwards',
     error: paginationErrors.forward,
     atEdge: atHistoryEdge.forward,
-    canPaginate: snapshot.capabilities.paginateForward,
+    canPaginate:
+      snapshot.capabilities.paginateForward &&
+      canPaginateTimelineForward({
+        atLiveBottom,
+        positionKind: readyState.selectedPosition.kind,
+      }),
     hasSparseLoadButton: true,
   });
   // One date chrome at a time: the rail already labels loaded history.

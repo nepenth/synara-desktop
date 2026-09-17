@@ -248,6 +248,9 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(dateRail, /Jump to a date in room history/);
   assert.match(dateRail, /onCommitTimestamp/);
   assert.match(presenter, /timestampToEventWithNativeOwner/);
+  assert.match(presenter, /sevenDayRailAxis/);
+  assert.match(presenter, /collectSevenDayRailMarks/);
+  assert.match(presenter, /canPaginateTimelineForward/);
   assert.match(presenter, /roomCreatedTs/);
   assert.doesNotMatch(presenter, /mx\.timestampToEvent/);
   assert.match(dateRail, /aria-controls="native-timeline-history"/);
@@ -478,4 +481,20 @@ test('formatted messages use the available timeline measure, body size, and laye
   assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-odd\)'/);
   assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-header\)'/);
   assert.match(htmlCss, /tbody tr:nth-child\(even\) td/);
+});
+
+test('native timeline row action menu items use quiet dimensionality', () => {
+  const start = presenter.indexOf('const NativeTimelineRowActions');
+  const end = presenter.indexOf('const NativeTimelineRowActionSurface');
+  assert.ok(start >= 0 && end > start);
+  const actions = presenter.slice(start, end);
+  const items = actions.match(/<MenuItem\b/g) ?? [];
+  const quiet = actions.match(/className=\{depthCss\.quietInteractiveSurface\}/g) ?? [];
+  assert.ok(items.length >= 8, `expected row action MenuItems, found ${items.length}`);
+  assert.ok(
+    quiet.length >= items.length,
+    `row actions have ${items.length} MenuItems but only ${quiet.length} quiet-depth classes`
+  );
+  assert.match(actions, /variant="Surface"/);
+  assert.match(actions, /variant="Critical"/);
 });

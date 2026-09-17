@@ -64,6 +64,27 @@ test('markdown preview projects headings through the shared markdown parser', ()
   assert.match(projected.plain, /Agent notes/);
 });
 
+test('dash and star bullets both produce unordered lists in preview', () => {
+  const dash = projectNativeTimelineMarkdownPreview('- dash');
+  const star = projectNativeTimelineMarkdownPreview('* star');
+  assert.match(dash.html, /<ul[\s>][\s\S]*dash/);
+  assert.doesNotMatch(dash.html, /<ol[\s>]/);
+  assert.match(star.html, /<ul[\s>][\s\S]*star/);
+});
+
+test('ordered lists still produce ol in preview', () => {
+  const projected = projectNativeTimelineMarkdownPreview('1. ordered');
+  assert.match(projected.html, /<ol[\s>][\s\S]*ordered/);
+});
+
+test('a simple two-column table produces table markup', () => {
+  const projected = projectNativeTimelineMarkdownPreview(
+    '| Name | Role |\n| --- | --- |\n| Ada | Lead |\n'
+  );
+  assert.equal(projected.tooLarge, false);
+  assert.match(projected.html, /<table[\s\S]*<th[\s\S]*Name/);
+});
+
 test('oversized markdown preview fails closed without parsing', () => {
   const projected = projectNativeTimelineMarkdownPreview(
     `# ${'x'.repeat(MAX_NATIVE_MARKDOWN_PREVIEW_BYTES)}`
@@ -82,4 +103,6 @@ test('preview owner keeps MIME tables out of the presenter', () => {
   const previewUi = readFileSync('src/app/features/room/NativeTimelineMarkdownPreview.tsx', 'utf8');
   assert.equal([...previewUi.matchAll(/data-native-timeline-file-preview="true"/g)].length, 1);
   assert.match(previewUi, /variant="Surface"/);
+  assert.match(previewUi, /Copy markdown/);
+  assert.match(previewUi, /copyToClipboard/);
 });

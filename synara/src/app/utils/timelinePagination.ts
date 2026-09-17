@@ -60,10 +60,24 @@ export const isTimelinePaginationLoading = ({
   hasError: boolean;
 }): boolean => !hasError && (inFlight || nativeState === 'loading');
 
+/** Live tail has nothing newer unless the window is focused/unread with a gap. */
+export const canPaginateTimelineForward = ({
+  atLiveBottom,
+  positionKind,
+}: {
+  atLiveBottom: boolean;
+  positionKind: string;
+}): boolean => {
+  if (positionKind === 'live_bottom') return false;
+  if (atLiveBottom && positionKind !== 'focused' && positionKind !== 'unread') return false;
+  return true;
+};
+
 /**
  * Sticky history-edge chrome. Errors win over loading so a failed fetch is
- * never mistaken for an in-progress spinner. `load_more` is only for a large
- * loaded window sitting on the history edge; sparse rooms keep their own button.
+ * never mistaken for an in-progress spinner. Loading only paints while the
+ * viewport is actually on that edge. `load_more` is only for a large loaded
+ * window sitting on the history edge; sparse rooms keep their own button.
  */
 export const resolveTimelineHistoryOverlay = ({
   nativeState,
@@ -81,7 +95,7 @@ export const resolveTimelineHistoryOverlay = ({
   hasSparseLoadButton?: boolean;
 }): TimelineHistoryOverlay => {
   if (error) return { kind: 'error', message: error };
-  if (inFlight || nativeState === 'loading') return { kind: 'loading' };
+  if (atEdge && (inFlight || nativeState === 'loading')) return { kind: 'loading' };
   if (atEdge && canPaginate && nativeState === 'available' && !hasSparseLoadButton) {
     return { kind: 'load_more' };
   }

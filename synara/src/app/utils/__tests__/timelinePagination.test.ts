@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  canPaginateTimelineForward,
   clearTimelinePaginationError,
   createTimelinePaginationErrorMessage,
   isTimelinePaginationLoading,
@@ -82,7 +83,7 @@ test('history overlay prefers error over loading and hides the spinner', () => {
       atEdge: false,
       canPaginate: true,
     }),
-    { kind: 'loading' }
+    { kind: 'hidden' }
   );
   assert.deepEqual(
     resolveTimelineHistoryOverlay({
@@ -100,6 +101,38 @@ test('history overlay prefers error over loading and hides the spinner', () => {
       atEdge: true,
       canPaginate: true,
       hasSparseLoadButton: true,
+    }),
+    { kind: 'hidden' }
+  );
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'loading',
+      inFlight: true,
+      atEdge: true,
+      canPaginate: true,
+    }),
+    { kind: 'loading' }
+  );
+});
+
+test('live bottom never requests forward pagination', () => {
+  assert.equal(
+    canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'live_bottom' }),
+    false
+  );
+  assert.equal(
+    canPaginateTimelineForward({ atLiveBottom: false, positionKind: 'live_bottom' }),
+    false
+  );
+  assert.equal(canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'restored' }), false);
+  assert.equal(canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'focused' }), true);
+  assert.equal(canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'unread' }), true);
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'available',
+      inFlight: true,
+      atEdge: false,
+      canPaginate: true,
     }),
     { kind: 'hidden' }
   );

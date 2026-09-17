@@ -291,8 +291,17 @@ export const FilePreviewHeader = style({
 });
 
 export const FilePreviewBody = style({
-  padding: config.space.S400,
+  padding: `${config.space.S500} ${config.space.S600}`,
   minHeight: toRem(160),
+  maxWidth: toRem(760),
+  marginInline: 'auto',
+  color: color.Surface.OnContainer,
+  backgroundColor: color.Surface.Container,
+});
+
+globalStyle(`${FilePreviewBody} ${FormattedBody}`, {
+  fontSize: toRem(16),
+  lineHeight: 1.65,
 });
 
 export const ReplySurface = style({
@@ -811,9 +820,10 @@ export const DateRail = style({
   right: config.space.S100,
   bottom: toRem(88),
   width: toRem(56),
-  zIndex: 2,
+  zIndex: 24,
   pointerEvents: 'none',
-  contain: 'layout style paint',
+  overflow: 'visible',
+  contain: 'layout style',
   isolation: 'isolate',
 });
 
@@ -866,6 +876,7 @@ export const DateRailLabel = style({
   position: 'absolute',
   top: 0,
   right: toRem(32),
+  zIndex: 26,
   color: color.Surface.OnContainer,
   pointerEvents: 'none',
   whiteSpace: 'nowrap',
