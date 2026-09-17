@@ -17,6 +17,12 @@ import {
 import { useSearchParams } from 'react-router-dom';
 import { type NotificationEventReading, type NotificationReading } from './notificationResponse';
 import { fetchNativeInboxNotifications } from './nativeInboxNotifications';
+import {
+  groupNotifications,
+  notificationGroupsEquivalent,
+  shouldResetNotificationTimeline,
+  type NotificationTimeline,
+} from './notificationTimeline';
 type NotificationsRoomReading = EventedRoomReading & {
   findEventById(eventId: string): MatrixEventReading | undefined;
 };
@@ -110,45 +116,20 @@ import {
   useRoomsNotificationPreferencesContext,
 } from '../../../hooks/useRoomsNotificationPreferences';
 
-type RoomNotificationsGroup = {
-  roomId: string;
-  notifications: NotificationReading[];
-};
-type NotificationTimeline = {
-  nextToken?: string;
-  groups: RoomNotificationsGroup[];
-};
 type LoadTimeline = (from?: string) => Promise<void>;
 type SilentReloadTimeline = () => Promise<void>;
-
-const groupNotifications = (
-  notifications: NotificationReading[],
-  allowRooms: Set<string>
-): RoomNotificationsGroup[] => {
-  const groups: RoomNotificationsGroup[] = [];
-  notifications.forEach((notification) => {
-    if (!allowRooms.has(notification.room_id)) return;
-
-    const groupIndex = groups.length - 1;
-    const lastAddedGroup: RoomNotificationsGroup | undefined = groups[groupIndex];
-    if (lastAddedGroup && notification.room_id === lastAddedGroup.roomId) {
-      lastAddedGroup.notifications.push(notification);
-      return;
-    }
-    groups.push({
-      roomId: notification.room_id,
-      notifications: [notification],
-    });
-  });
-  return groups;
-};
 
 const useNotificationTimeline = (
   paginationLimit: number,
   onlyHighlight?: boolean
 ): [NotificationTimeline, LoadTimeline, SilentReloadTimeline] => {
   const allRooms = useAtomValue(allRoomsAtom);
-  const allJoinedRooms = useMemo(() => new Set(allRooms), [allRooms]);
+  const allRoomsRef = useRef(allRooms);
+  const prevHighlightRef = useRef(onlyHighlight);
+
+  useEffect(() => {
+    allRoomsRef.current = allRooms;
+  }, [allRooms]);
 
   const [notificationTimeline, setNotificationTimeline] = useState<NotificationTimeline>({
     groups: [],
@@ -162,27 +143,53 @@ const useNotificationTimeline = (
 
   const loadTimeline: LoadTimeline = useCallback(
     async (from) => {
-      if (!from) {
-        setNotificationTimeline({ groups: [] });
-      }
+      const highlightFilterChanged = prevHighlightRef.current !== onlyHighlight;
+      prevHighlightRef.current = onlyHighlight;
+
+      setNotificationTimeline((currentTimeline) => {
+        if (
+          shouldResetNotificationTimeline({
+            from,
+            hasGroups: currentTimeline.groups.length > 0,
+            highlightFilterChanged,
+          }) &&
+          (currentTimeline.groups.length > 0 || currentTimeline.nextToken !== undefined)
+        ) {
+          return { groups: [] };
+        }
+        return currentTimeline;
+      });
+
       const data = await fetchNotifications(
         from,
         paginationLimit,
         onlyHighlight ? 'highlight' : undefined
       );
-      const groups = groupNotifications(data.notifications, allJoinedRooms);
+      const groups = groupNotifications(data.notifications, new Set(allRoomsRef.current));
 
       setNotificationTimeline((currentTimeline) => {
-        if (currentTimeline.nextToken === from) {
+        if (from) {
+          if (currentTimeline.nextToken !== from) {
+            return currentTimeline;
+          }
           return {
             nextToken: data.next_token,
-            groups: from ? currentTimeline.groups.concat(groups) : groups,
+            groups: currentTimeline.groups.concat(groups),
           };
         }
-        return currentTimeline;
+        if (
+          currentTimeline.nextToken === data.next_token &&
+          notificationGroupsEquivalent(currentTimeline.groups, groups)
+        ) {
+          return currentTimeline;
+        }
+        return {
+          nextToken: data.next_token,
+          groups,
+        };
       });
     },
-    [paginationLimit, onlyHighlight, fetchNotifications, allJoinedRooms]
+    [paginationLimit, onlyHighlight, fetchNotifications]
   );
 
   /**
@@ -195,12 +202,20 @@ const useNotificationTimeline = (
       paginationLimit,
       onlyHighlight ? 'highlight' : undefined
     );
-    const groups = groupNotifications(data.notifications, allJoinedRooms);
-    setNotificationTimeline({
-      nextToken: data.next_token,
-      groups,
+    const groups = groupNotifications(data.notifications, new Set(allRoomsRef.current));
+    setNotificationTimeline((currentTimeline) => {
+      if (
+        currentTimeline.nextToken === data.next_token &&
+        notificationGroupsEquivalent(currentTimeline.groups, groups)
+      ) {
+        return currentTimeline;
+      }
+      return {
+        nextToken: data.next_token,
+        groups,
+      };
     });
-  }, [paginationLimit, onlyHighlight, fetchNotifications, allJoinedRooms]);
+  }, [paginationLimit, onlyHighlight, fetchNotifications]);
 
   return [notificationTimeline, loadTimeline, silentReloadTimeline];
 };

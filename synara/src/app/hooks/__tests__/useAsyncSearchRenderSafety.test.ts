@@ -4,13 +4,13 @@ import test from 'node:test';
 
 const read = (relativePath: string): string => readFileSync(relativePath, 'utf8');
 
-test('async search invalidates stale results after commit, not during render', () => {
+test('async search preserves an active query after commit, not during render', () => {
   const source = read('src/app/hooks/useAsyncSearch.ts');
   const factoryStart = source.indexOf('const [searchCallback, terminateSearch] = useMemo');
   const invalidationEffect = source.indexOf('useEffect(() => {', factoryStart);
 
   assert.notEqual(factoryStart, -1, 'expected the memoized AsyncSearch factory');
-  assert.notEqual(invalidationEffect, -1, 'expected post-commit result invalidation');
+  assert.notEqual(invalidationEffect, -1, 'expected post-commit source replacement effect');
   assert.doesNotMatch(
     source.slice(factoryStart, invalidationEffect),
     /setResult\(undefined\)/,
@@ -21,8 +21,16 @@ test('async search invalidates stale results after commit, not during render', (
     invalidationEffect,
     source.indexOf('const searchHandler', invalidationEffect)
   );
-  assert.match(effect, /setResult\(undefined\)/);
-  assert.match(effect, /\[terminateSearch\]/);
+  assert.doesNotMatch(
+    effect,
+    /setResult\(undefined\)/,
+    'source replacement must not flash empty results while a query is active'
+  );
+  assert.match(effect, /shouldPreserveQueryOnListChange/);
+  assert.match(effect, /searchCallback\(query\)/);
+  assert.match(effect, /terminateSearch\(\)/);
+  assert.match(effect, /\[searchCallback, terminateSearch\]/);
+  assert.match(source, /lastQueryRef\.current = ''/);
 });
 
 test('member search restoration invokes search from an effect, never the render body', () => {

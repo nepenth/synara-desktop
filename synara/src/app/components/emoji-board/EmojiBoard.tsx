@@ -23,7 +23,11 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../hooks/useRecentEmoji';
 import { isUserId } from '../../utils/matrix';
 import { editableActiveElement, targetFromEvent } from '../../utils/dom';
-import { useAsyncSearch, UseAsyncSearchOptions } from '../../hooks/useAsyncSearch';
+import {
+  stabilizeListIdentity,
+  useAsyncSearch,
+  UseAsyncSearchOptions,
+} from '../../hooks/useAsyncSearch';
 import { useDebounce } from '../../hooks/useDebounce';
 import { useThrottle } from '../../hooks/useThrottle';
 import { addRecentEmoji } from '../../plugins/recent-emoji';
@@ -123,9 +127,15 @@ const useItemRenderer = () => {
 type EmojiSidebarProps = {
   activeGroupAtom: PrimitiveAtom<string | undefined>;
   packs: ImagePack[];
+  searchActive?: boolean;
   onScrollToGroup: (groupId: string) => void;
 };
-function EmojiSidebar({ activeGroupAtom, packs, onScrollToGroup }: EmojiSidebarProps) {
+function EmojiSidebar({
+  activeGroupAtom,
+  packs,
+  searchActive,
+  onScrollToGroup,
+}: EmojiSidebarProps) {
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
 
@@ -138,6 +148,22 @@ function EmojiSidebar({ activeGroupAtom, packs, onScrollToGroup }: EmojiSidebarP
     setActiveGroupId(groupId);
     onScrollToGroup(groupId);
   };
+
+  if (searchActive) {
+    return (
+      <Sidebar>
+        <SidebarStack>
+          <GroupIcon
+            active={activeGroupId === SEARCH_GROUP_ID}
+            id={SEARCH_GROUP_ID}
+            label="Search Results"
+            icon={Icons.Search}
+            onClick={handleScrollToGroup}
+          />
+        </SidebarStack>
+      </Sidebar>
+    );
+  }
 
   return (
     <Sidebar>
@@ -295,12 +321,13 @@ export function EmojiBoard({
   const groups = useGroups(imagePacks);
   const renderItem = useItemRenderer();
 
-  const searchList = useMemo(() => {
-    let list: Array<PackImageReader | IEmoji> = [];
-    list = list.concat(imagePacks.flatMap((pack) => pack.getImages(usage)));
-    list = list.concat(emojis);
-    return list;
+  const nextSearchList = useMemo(() => {
+    const custom = imagePacks.flatMap((pack) => pack.getImages(usage));
+    return custom.length === 0 ? emojis : custom.concat(emojis);
   }, [usage, imagePacks]);
+  const searchListRef = useRef(nextSearchList);
+  const searchList = stabilizeListIdentity(searchListRef.current, nextSearchList);
+  searchListRef.current = searchList;
 
   const [result, search, resetSearch] = useAsyncSearch(
     searchList,
@@ -325,7 +352,7 @@ export function EmojiBoard({
   const contentScrollRef = useRef<HTMLDivElement>(null);
   const virtualBaseRef = useRef<HTMLDivElement>(null);
   const virtualizer = useVirtualizer({
-    count: groups.length,
+    count: result ? 0 : groups.length,
     getScrollElement: () => contentScrollRef.current,
     estimateSize: () => 40,
     overscan: VIRTUAL_OVER_SCAN,
@@ -355,12 +382,21 @@ export function EmojiBoard({
   };
 
   const handleScrollToGroup = (groupId: string) => {
+    if (groupId === SEARCH_GROUP_ID) {
+      contentScrollRef.current?.scrollTo({ top: 0 });
+      return;
+    }
     const groupIndex = groups.findIndex((group) => group.id === groupId);
+    if (groupIndex < 0) return;
     virtualizer.scrollToIndex(groupIndex, { align: 'start' });
   };
 
   // sync active sidebar tab with scroll
   useEffect(() => {
+    if (result) {
+      setActiveGroupId(SEARCH_GROUP_ID);
+      return;
+    }
     const scrollElement = contentScrollRef.current;
     if (scrollElement) {
       const scrollTop = scrollElement.offsetTop + scrollElement.scrollTop;
@@ -370,7 +406,7 @@ export function EmojiBoard({
       const group = inViewVItem ? groups[inViewVItem?.index] : undefined;
       setActiveGroupId(group?.id);
     }
-  }, [vItems, groups, setActiveGroupId, result?.query]);
+  }, [vItems, groups, setActiveGroupId, result]);
 
   // reset scroll position on search
   useEffect(() => {
@@ -408,6 +444,7 @@ export function EmojiBoard({
           <EmojiSidebar
             activeGroupAtom={activeGroupIdAtom}
             packs={imagePacks}
+            searchActive={Boolean(result)}
             onScrollToGroup={handleScrollToGroup}
           />
         }
@@ -419,38 +456,41 @@ export function EmojiBoard({
             previewAtom={previewAtom}
             onGroupItemClick={handleGroupItemClick}
           >
-            {searchedItems && (
+            {result ? (
               <EmojiGroup
                 id={SEARCH_GROUP_ID}
-                label={searchedItems.length ? 'Search Results' : 'No Results found'}
+                label={
+                  searchedItems && searchedItems.length ? 'Search Results' : 'No Results found'
+                }
               >
-                {searchedItems.map(renderItem)}
+                {searchedItems?.map(renderItem)}
               </EmojiGroup>
-            )}
-            <div
-              ref={virtualBaseRef}
-              style={{
-                position: 'relative',
-                height: virtualizer.getTotalSize(),
-              }}
-            >
-              {vItems.map((vItem) => {
-                const group = groups[vItem.index];
+            ) : (
+              <div
+                ref={virtualBaseRef}
+                style={{
+                  position: 'relative',
+                  height: virtualizer.getTotalSize(),
+                }}
+              >
+                {vItems.map((vItem) => {
+                  const group = groups[vItem.index];
 
-                return (
-                  <VirtualTile
-                    virtualItem={vItem}
-                    style={{ paddingTop: config.space.S200 }}
-                    ref={virtualizer.measureElement}
-                    key={vItem.index}
-                  >
-                    <EmojiGroup key={group.id} id={group.id} label={group.name}>
-                      {group.items.map(renderItem)}
-                    </EmojiGroup>
-                  </VirtualTile>
-                );
-              })}
-            </div>
+                  return (
+                    <VirtualTile
+                      virtualItem={vItem}
+                      style={{ paddingTop: config.space.S200 }}
+                      ref={virtualizer.measureElement}
+                      key={vItem.index}
+                    >
+                      <EmojiGroup key={group.id} id={group.id} label={group.name}>
+                        {group.items.map(renderItem)}
+                      </EmojiGroup>
+                    </VirtualTile>
+                  );
+                })}
+              </div>
+            )}
           </EmojiGroupHolder>
         </Box>
         <Preview previewAtom={previewAtom} />

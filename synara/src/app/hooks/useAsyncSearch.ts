@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   MatchHandler,
   AsyncSearch,
@@ -28,6 +28,22 @@ export type UseAsyncSearchResult<TSearchItem extends object | string | number> =
 };
 
 export type SearchResetHandler = () => void;
+
+/** Keep last results when the search source is replaced while a query is active. */
+export const shouldPreserveQueryOnListChange = (query: string | undefined): boolean =>
+  Boolean(query);
+
+/** Reuse the previous array when item identities are unchanged. */
+export const stabilizeListIdentity = <T>(previous: T[] | undefined, next: T[]): T[] => {
+  if (
+    previous &&
+    previous.length === next.length &&
+    previous.every((item, index) => item === next[index])
+  ) {
+    return previous;
+  }
+  return next;
+};
 
 const performMatch = (
   target: string | string[],
@@ -110,6 +126,7 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
   options?: UseAsyncSearchOptions
 ): [UseAsyncSearchResult<TSearchItem> | undefined, AsyncSearchHandler, SearchResetHandler] => {
   const [result, setResult] = useState<UseAsyncSearchResult<TSearchItem>>();
+  const lastQueryRef = useRef('');
 
   const [searchCallback, terminateSearch] = useMemo(() => {
     const handleMatch: MatchHandler<TSearchItem> = (item, query) => {
@@ -120,34 +137,54 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
     };
 
     const handleResult: ResultHandler<TSearchItem> = (results, query) =>
-      setResult({
-        query,
-        items: orderSearchItems(query, results, getItemStr, options),
+      setResult((current) => {
+        const items = orderSearchItems(query, results, getItemStr, options);
+        if (
+          current &&
+          current.query === query &&
+          current.items.length === items.length &&
+          current.items.every((item, index) => item === items[index])
+        ) {
+          return current;
+        }
+        return { query, items };
       });
 
     return AsyncSearch(list, handleMatch, handleResult, options);
   }, [list, options, getItemStr]);
 
-  // Source changes invalidate a prior result after React commits. Doing this in
-  // the useMemo above is a render-phase state update: callers with an unstable
-  // list (for example native room creators while loading) would retry forever.
+  // Re-run the last query against a replaced source after commit. Clearing in
+  // this effect flashes empty results while the input still shows the query
+  // (emoji packs). Doing the same setState in the useMemo above is a
+  // render-phase update: callers with an unstable list (for example native
+  // room creators while loading) would retry forever.
   useEffect(() => {
-    setResult(undefined);
+    const query = lastQueryRef.current;
+    if (shouldPreserveQueryOnListChange(query)) {
+      searchCallback(query);
+    }
     return () => {
       // Terminate the previous source's pending search on replacement/unmount.
       terminateSearch();
     };
-  }, [terminateSearch]);
+  }, [searchCallback, terminateSearch]);
 
   const searchHandler: AsyncSearchHandler = useCallback(
     (query) => {
       const normalizedQuery = normalize(query, options?.normalizeOptions);
+      lastQueryRef.current = normalizedQuery;
+      if (!normalizedQuery) {
+        terminateSearch();
+        setResult(undefined);
+        return;
+      }
       searchCallback(normalizedQuery);
     },
-    [searchCallback, options?.normalizeOptions]
+    [searchCallback, options?.normalizeOptions, terminateSearch]
   );
 
   const resetHandler: SearchResetHandler = useCallback(() => {
+    lastQueryRef.current = '';
     terminateSearch();
     setResult(undefined);
   }, [terminateSearch]);
