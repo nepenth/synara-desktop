@@ -42,7 +42,6 @@ export function Room() {
   useEffect(() => {
     if (!experimentalWidgetsEnabled) {
       void closeExperimentalWidgets();
-      setRoomSidePanel((current) => (current === 'widgets' ? undefined : current));
     }
   }, [experimentalWidgetsEnabled]);
 

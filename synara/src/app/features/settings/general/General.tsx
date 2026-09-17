@@ -59,6 +59,17 @@ import {
   shouldSurfaceNativeStoreErrorWarning,
 } from '../../../state/sessionBootstrap';
 import { UpdateSettingsTile } from '../../desktop-updater/DesktopUpdaterProvider';
+import { isSynaraDesktop } from '../../../utils/desktop';
+import {
+  closeExperimentalWidgets,
+  widgetsSettingsDescription,
+} from '../../widgets/experimentalWidgets';
+import { isSafeWidgetUrl } from '../../widgets/widgetUrl';
+import {
+  snapshotRtcTransportsNative,
+  type NativeRtcTransportsSnapshot,
+} from '../../matrix-rtc/nativeRtcTransports';
+import { rtcCallAvailabilityCopy } from '../../matrix-rtc/liveCallChrome';
 
 type DateHintProps = {
   hasChanges: boolean;
@@ -899,6 +910,150 @@ function SoftwareUpdatesSection() {
   );
 }
 
+function WidgetsSection() {
+  const [experimentalWidgetsEnabled, setExperimentalWidgetsEnabled] = useSetting(
+    settingsAtom,
+    'experimentalWidgetsEnabled'
+  );
+  const [agentWidgetEntries, setAgentWidgetEntries] = useSetting(
+    settingsAtom,
+    'agentWidgetEntries'
+  );
+  const [agentName, setAgentName] = useState('');
+  const [agentUrl, setAgentUrl] = useState('');
+
+  if (!isSynaraDesktop()) return null;
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Widgets</Text>
+      <SequenceCard
+        className={SequenceCardStyle}
+        variant="SurfaceVariant"
+        direction="Column"
+        gap="400"
+      >
+        <SettingTile
+          title="Experimental Widgets"
+          description={widgetsSettingsDescription}
+          after={
+            <Switch
+              variant="Primary"
+              value={experimentalWidgetsEnabled}
+              onChange={(value) => {
+                if (!value) {
+                  void closeExperimentalWidgets();
+                }
+                setExperimentalWidgetsEnabled(value);
+              }}
+            />
+          }
+        />
+        {experimentalWidgetsEnabled && (
+          <Box direction="Column" gap="200">
+            <Text size="T200" priority="300">
+              Agent widget URLs stay on this device. Loopback is allowed only here; room-state
+              widgets cannot load localhost.
+            </Text>
+            {agentWidgetEntries.map((entry) => (
+              <Box key={entry.id} justifyContent="SpaceBetween" alignItems="Center" gap="200">
+                <Box direction="Column" grow="Yes">
+                  <Text size="T300">{entry.name}</Text>
+                  <Text size="T200" priority="300">
+                    {entry.url}
+                  </Text>
+                </Box>
+                <Button
+                  className={SettingsQuietControl}
+                  size="300"
+                  variant="Critical"
+                  fill="Soft"
+                  onClick={() =>
+                    setAgentWidgetEntries(agentWidgetEntries.filter((item) => item.id !== entry.id))
+                  }
+                >
+                  <Text size="B300">Remove</Text>
+                </Button>
+              </Box>
+            ))}
+            <Box direction="Column" gap="200">
+              <Input
+                variant="Background"
+                size="400"
+                placeholder="Agent name"
+                value={agentName}
+                onChange={(evt) => setAgentName(evt.currentTarget.value)}
+              />
+              <Input
+                variant="Background"
+                size="400"
+                placeholder="https://… or http://127.0.0.1:…"
+                value={agentUrl}
+                onChange={(evt) => setAgentUrl(evt.currentTarget.value)}
+              />
+              <Button
+                className={SettingsQuietControl}
+                size="300"
+                variant="Secondary"
+                fill="Soft"
+                disabled={!agentName.trim() || !isSafeWidgetUrl(agentUrl.trim(), true)}
+                onClick={() => {
+                  const name = agentName.trim();
+                  const url = agentUrl.trim();
+                  if (!name || !url || !isSafeWidgetUrl(url, true)) return;
+                  setAgentWidgetEntries([
+                    ...agentWidgetEntries,
+                    { id: `agent-${Date.now()}`, name, url },
+                  ]);
+                  setAgentName('');
+                  setAgentUrl('');
+                }}
+              >
+                <Text size="B300">Add agent widget</Text>
+              </Button>
+            </Box>
+          </Box>
+        )}
+      </SequenceCard>
+    </Box>
+  );
+}
+
+function CallsSection() {
+  const [snapshot, setSnapshot] = useState<NativeRtcTransportsSnapshot | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    snapshotRtcTransportsNative()
+      .then((next) => {
+        if (!cancelled) setSnapshot(next);
+      })
+      .catch(() => {
+        if (!cancelled) setSnapshot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  if (!isSynaraDesktop()) return null;
+
+  return (
+    <Box direction="Column" gap="100">
+      <Text size="L400">Calls</Text>
+      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+        <SettingTile
+          title="MatrixRTC"
+          description={rtcCallAvailabilityCopy({
+            status: snapshot?.status ?? null,
+            transports: snapshot?.transports,
+          })}
+        />
+      </SequenceCard>
+    </Box>
+  );
+}
+
 function DateAndTime() {
   const [hour24Clock, setHour24Clock] = useSetting(settingsAtom, 'hour24Clock');
 
@@ -1092,6 +1247,8 @@ export function General({ requestClose }: GeneralProps) {
         <Scroll hideTrack visibility="Hover">
           <PageContent>
             <Box direction="Column" gap="700">
+              <WidgetsSection />
+              <CallsSection />
               <DateAndTime />
               <Editor />
               <Messages />

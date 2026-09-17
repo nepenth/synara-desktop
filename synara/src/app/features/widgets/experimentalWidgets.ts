@@ -116,3 +116,19 @@ export const closeExperimentalWidgets = async (sessionId?: string): Promise<void
     // Teardown is best-effort and idempotent.
   }
 };
+
+export const WIDGETS_SETTINGS_PATH = 'Settings → General → Widgets';
+
+export const widgetsSettingsDescription =
+  'Default off. This device only — not synced to the account or other devices. Widgets run third-party or local web code as you. Room-state widgets cannot load localhost; agent URLs may use loopback.';
+
+export function widgetsPanelEmptyCopy(experimentalWidgetsEnabled: boolean): string {
+  if (!experimentalWidgetsEnabled) {
+    return `Experimental Widgets are off. Enable them in ${WIDGETS_SETTINGS_PATH}.`;
+  }
+  return `No room widgets or agent URLs yet. Add an agent URL in ${WIDGETS_SETTINGS_PATH}, or wait for a room-state widget (m.widget).`;
+}
+
+export function widgetsAgentHowToCopy(): string {
+  return 'Agents: add a name and an https or http://127.0.0.1 URL in Settings, Open from this panel, then optionally grant send m.room.message.';
+}

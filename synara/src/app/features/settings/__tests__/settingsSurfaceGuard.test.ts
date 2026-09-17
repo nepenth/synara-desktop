@@ -61,7 +61,7 @@ test('settings left nav stacks categories with a gap on the reading plane', () =
     settings.indexOf('<PageNavContent>'),
     settings.indexOf('<Text size="B400">Logout</Text>')
   );
-  assert.match(nav, /<Box direction="Column" gap="(?:100|200)"/);
+  assert.match(nav, /<Box direction="Column" gap="(?:100|200|300|400)"/);
   assert.match(nav, /fill="None"/);
   assert.match(nav, /quietInteractiveSurface/);
   assert.match(nav, /variant="Surface"/);
@@ -138,6 +138,25 @@ const developerTools = readFileSync(
   join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
   'utf8'
 );
+
+test('General hosts the first-class Widgets card and Developer Tools does not duplicate it', () => {
+  assert.match(general, /<Text size="L400">Widgets<\/Text>/);
+  assert.match(general, /experimentalWidgetsEnabled/);
+  assert.match(general, /agentWidgetEntries/);
+  assert.match(general, /widgetsSettingsDescription/);
+  assert.match(general, /Add agent widget/);
+  assert.match(developerTools, /Widgets are configured under General/);
+  assert.equal(developerTools.includes('Add agent widget'), false);
+  assert.equal(developerTools.includes('setAgentWidgetEntries'), false);
+  assert.equal(developerTools.includes('setExperimentalWidgetsEnabled'), false);
+});
+
+test('General hosts a Calls card with honest MatrixRTC transport status', () => {
+  assert.match(general, /<Text size="L400">Calls<\/Text>/);
+  assert.match(general, /rtcCallAvailabilityCopy/);
+  assert.match(general, /snapshotRtcTransportsNative/);
+  assert.equal(general.includes('set_call'), false);
+});
 
 test('X.509 identity settings live on Devices, not Developer Tools', () => {
   assert.match(devices, /X509IdentityCard/);

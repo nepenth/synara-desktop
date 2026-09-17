@@ -1,4 +1,4 @@
-import React, { MouseEventHandler, forwardRef, useState } from 'react';
+import React, { MouseEventHandler, forwardRef, useEffect, useState } from 'react';
 import { useAtomValue } from 'jotai';
 import FocusTrap from 'focus-trap-react';
 import {
@@ -23,11 +23,9 @@ import {
   Spinner,
 } from 'folds';
 import { useNavigate } from 'react-router-dom';
-import { useStateEvent } from '../../hooks/useStateEvent';
 import { PageHeader } from '../../components/page';
 import { UseStateProvider } from '../../components/UseStateProvider';
 import { RoomTopicViewer } from '../../components/room-topic-viewer';
-import { StateEvent } from '../../../types/matrix/room';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { useRoom } from '../../hooks/useRoom';
 import { useSetting } from '../../state/hooks/settings';
@@ -75,6 +73,16 @@ import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
 import { RoomThreadListPanel } from './RoomThreadListPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 import * as depthCss from '../../styles/Depth.css';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import {
+  snapshotRtcTransportsNative,
+  type NativeRtcTransportsSnapshot,
+} from '../matrix-rtc/nativeRtcTransports';
+import {
+  activeCallChromeCopy,
+  rtcCallAvailabilityCopy,
+  startCallDisabledReason,
+} from '../matrix-rtc/liveCallChrome';
 
 type Room = ReturnType<typeof useRoom>;
 
@@ -178,7 +186,6 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
           onClick={handleInvite}
-          fill="None"
           size="300"
           after={<Icon size="100" src={Icons.UserPlus} />}
           radii="300"
@@ -275,6 +282,73 @@ const RoomMenu = forwardRef<HTMLDivElement, RoomMenuProps>(({ room, requestClose
   );
 });
 
+const RoomCallMenu = forwardRef<HTMLDivElement>((_, ref) => {
+  const room = useRoom();
+  const nativeRooms = useNativeRoomListSnapshot();
+  const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
+  const [snapshot, setSnapshot] = useState<NativeRtcTransportsSnapshot | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    snapshotRtcTransportsNative()
+      .then((next) => {
+        if (!cancelled) setSnapshot(next);
+      })
+      .catch(() => {
+        if (!cancelled) setSnapshot(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const status = snapshot?.status ?? null;
+  const activeCopy = activeCallChromeCopy({
+    hasActiveCall: nativeRoom?.hasActiveCall === true,
+    liveParticipantCount: nativeRoom?.activeCallParticipantCount ?? 0,
+  });
+
+  return (
+    <Menu
+      ref={ref}
+      className={depthCss.floatingSurface}
+      style={{ maxWidth: toRem(320), width: '100vw' }}
+    >
+      <Box direction="Column" gap="200" style={{ padding: config.space.S200 }}>
+        <Text size="L400">Call</Text>
+        <Text size="T200" priority="300">
+          {rtcCallAvailabilityCopy({
+            status,
+            transports: snapshot?.transports,
+          })}
+        </Text>
+        {activeCopy && (
+          <Text size="T200" priority="300">
+            {activeCopy}
+          </Text>
+        )}
+      </Box>
+      <Line variant="Surface" size="300" />
+      <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
+        <MenuItem
+          size="300"
+          radii="300"
+          disabled
+          className={depthCss.quietInteractiveSurface}
+          after={<Icon size="100" src={Icons.Phone} />}
+        >
+          <Text style={{ flexGrow: 1 }} as="span" size="T300" truncate>
+            Start call
+          </Text>
+        </MenuItem>
+        <Text size="T200" priority="300" style={{ padding: `0 ${config.space.S100}` }}>
+          {startCallDisabledReason({ status })}
+        </Text>
+      </Box>
+    </Menu>
+  );
+});
+
 type RoomViewHeaderProps = {
   activeSidePanel?: RoomSidePanelType | 'members';
   onToggleSidePanel?: (panel: RoomSidePanelType) => void;
@@ -292,6 +366,7 @@ export function RoomViewHeader({
   const room = useRoom();
   const space = useSpaceOptionally();
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
+  const [callMenuAnchor, setCallMenuAnchor] = useState<RectCords>();
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [notesOverlayOpen, setNotesOverlayOpen] = useState(false);
   const [threadsOverlayOpen, setThreadsOverlayOpen] = useState(false);
@@ -301,13 +376,10 @@ export function RoomViewHeader({
   const pinnedCount = pinnedEventCount(nativePinned, jsPinnedEvents);
   const notesContent = useAtomValue(roomNotesContentAtom);
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
-  const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
-  const encryptedRoom = !!encryptionEvent;
   const name = useRoomName(room);
   const topic = useRoomTopic(room);
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
-  const [experimentalWidgetsEnabled] = useSetting(settingsAtom, 'experimentalWidgetsEnabled');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
   const notesOpen = activeSidePanel === 'notes' || notesOverlayOpen;
   const threadsOpen = activeSidePanel === 'threads' || threadsOverlayOpen;
@@ -329,6 +401,10 @@ export function RoomViewHeader({
 
   const handleOpenMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
     setMenuAnchor(evt.currentTarget.getBoundingClientRect());
+  };
+
+  const handleOpenCallMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
+    setCallMenuAnchor(evt.currentTarget.getBoundingClientRect());
   };
 
   const handleOpenPinMenu: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -436,7 +512,48 @@ export function RoomViewHeader({
         </Box>
 
         <Box shrink="No">
-          {experimentalWidgetsEnabled && isSynaraDesktop() && onToggleSidePanel && (
+          <TooltipProvider
+            position="Bottom"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>Call</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton
+                className={depthCss.quietInteractiveSurface}
+                fill="None"
+                ref={triggerRef}
+                onClick={handleOpenCallMenu}
+                aria-label="Call"
+                aria-pressed={!!callMenuAnchor}
+              >
+                <Icon size="400" src={Icons.Phone} filled={!!callMenuAnchor} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+          <PopOut
+            anchor={callMenuAnchor}
+            position="Bottom"
+            content={
+              <FocusTrap
+                focusTrapOptions={{
+                  initialFocus: false,
+                  returnFocusOnDeactivate: false,
+                  onDeactivate: () => setCallMenuAnchor(undefined),
+                  clickOutsideDeactivates: true,
+                  isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                  isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                  escapeDeactivates: stopPropagation,
+                }}
+              >
+                <RoomCallMenu />
+              </FocusTrap>
+            }
+          />
+          {isSynaraDesktop() && onToggleSidePanel && (
             <TooltipProvider
               position="Bottom"
               offset={4}
@@ -459,28 +576,26 @@ export function RoomViewHeader({
               )}
             </TooltipProvider>
           )}
-          {!encryptedRoom && (
-            <TooltipProvider
-              position="Bottom"
-              offset={4}
-              tooltip={
-                <Tooltip>
-                  <Text>Search</Text>
-                </Tooltip>
-              }
-            >
-              {(triggerRef) => (
-                <IconButton
-                  className={depthCss.quietInteractiveSurface}
-                  fill="None"
-                  ref={triggerRef}
-                  onClick={handleSearchClick}
-                >
-                  <Icon size="400" src={Icons.Search} />
-                </IconButton>
-              )}
-            </TooltipProvider>
-          )}
+          <TooltipProvider
+            position="Bottom"
+            offset={4}
+            tooltip={
+              <Tooltip>
+                <Text>Search</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton
+                className={depthCss.quietInteractiveSurface}
+                fill="None"
+                ref={triggerRef}
+                onClick={handleSearchClick}
+              >
+                <Icon size="400" src={Icons.Search} />
+              </IconButton>
+            )}
+          </TooltipProvider>
           <TooltipProvider
             position="Bottom"
             offset={4}

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch, Button, Input } from 'folds';
+import { Badge, Box, Text, IconButton, Icon, Icons, Scroll, Switch } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
@@ -8,8 +8,6 @@ import { useSetting } from '../../../state/hooks/settings';
 import { settingsAtom } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
-import { closeExperimentalWidgets } from '../../widgets/experimentalWidgets';
-import { isSafeWidgetUrl } from '../../widgets/widgetUrl';
 import { isSynaraDesktop } from '../../../utils/desktop';
 import { pushEncryptedStateEventsSetting } from '../encryptedStateEvents';
 import {
@@ -75,16 +73,6 @@ type DeveloperToolsProps = {
 export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
   const mx = useMatrixClient();
   const [developerTools, setDeveloperTools] = useSetting(settingsAtom, 'developerTools');
-  const [experimentalWidgetsEnabled, setExperimentalWidgetsEnabled] = useSetting(
-    settingsAtom,
-    'experimentalWidgetsEnabled'
-  );
-  const [agentWidgetEntries, setAgentWidgetEntries] = useSetting(
-    settingsAtom,
-    'agentWidgetEntries'
-  );
-  const [agentName, setAgentName] = useState('');
-  const [agentUrl, setAgentUrl] = useState('');
   const [encryptedStateEvents, setEncryptedStateEventsSetting] = useSetting(
     settingsAtom,
     'encryptedStateEvents'
@@ -185,90 +173,8 @@ export function DeveloperTools({ requestClose }: DeveloperToolsProps) {
                   >
                     <SettingTile
                       title="Experimental Widgets"
-                      description="Widgets run third-party or local web code as the logged-in user for any granted capabilities. Default off."
-                      after={
-                        <Switch
-                          variant="Primary"
-                          value={experimentalWidgetsEnabled}
-                          onChange={(value) => {
-                            if (!value) {
-                              void closeExperimentalWidgets();
-                            }
-                            setExperimentalWidgetsEnabled(value);
-                          }}
-                        />
-                      }
+                      description="Widgets are configured under General."
                     />
-                    {experimentalWidgetsEnabled && (
-                      <Box direction="Column" gap="200">
-                        <Text size="T200" priority="300">
-                          Agent widget URLs stay on this device. Loopback is allowed only here;
-                          room-state widgets cannot load localhost.
-                        </Text>
-                        {agentWidgetEntries.map((entry) => (
-                          <Box
-                            key={entry.id}
-                            justifyContent="SpaceBetween"
-                            alignItems="Center"
-                            gap="200"
-                          >
-                            <Box direction="Column" grow="Yes">
-                              <Text size="T300">{entry.name}</Text>
-                              <Text size="T200" priority="300">
-                                {entry.url}
-                              </Text>
-                            </Box>
-                            <Button
-                              size="300"
-                              variant="Critical"
-                              fill="Soft"
-                              onClick={() =>
-                                setAgentWidgetEntries(
-                                  agentWidgetEntries.filter((item) => item.id !== entry.id)
-                                )
-                              }
-                            >
-                              <Text size="B300">Remove</Text>
-                            </Button>
-                          </Box>
-                        ))}
-                        <Box direction="Column" gap="200">
-                          <Input
-                            variant="Background"
-                            size="400"
-                            placeholder="Agent name"
-                            value={agentName}
-                            onChange={(evt) => setAgentName(evt.currentTarget.value)}
-                          />
-                          <Input
-                            variant="Background"
-                            size="400"
-                            placeholder="https://… or http://127.0.0.1:…"
-                            value={agentUrl}
-                            onChange={(evt) => setAgentUrl(evt.currentTarget.value)}
-                          />
-                          <Button
-                            size="300"
-                            variant="Secondary"
-                            fill="Soft"
-                            disabled={!agentName.trim() || !isSafeWidgetUrl(agentUrl.trim(), true)}
-                            onClick={() => {
-                              const name = agentName.trim();
-                              const url = agentUrl.trim();
-                              if (!name || !url || !isSafeWidgetUrl(url, true)) return;
-                              setAgentWidgetEntries([
-                                ...agentWidgetEntries,
-                                { id: `agent-${Date.now()}`, name, url },
-                              ]);
-                              setAgentName('');
-                              setAgentUrl('');
-                            }}
-                          >
-                            <Text size="B300">Add agent widget</Text>
-                          </Button>
-                        </Box>
-                      </Box>
-                    )}
                   </SequenceCard>
                 )}
                 {developerTools && (
