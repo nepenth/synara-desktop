@@ -199,7 +199,6 @@ const RoomNavItemMenu = forwardRef<HTMLDivElement, RoomNavItemMenuProps>(
         <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
           <MenuItem
             onClick={handleInvite}
-            variant="Primary"
             fill="None"
             size="300"
             after={<Icon size="100" src={Icons.UserPlus} />}

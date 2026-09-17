@@ -755,19 +755,11 @@ function MessageDisplay() {
   return (
     <Box direction="Column" gap="100">
       <Text size="L400">Messages</Text>
-      <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
-        <SettingTile
-          title="Message Layout"
-          description={
-            isNativeMatrixSession()
-              ? 'The native timeline uses a single Element-like layout. Compact and Bubble apply only to the retired JS timeline.'
-              : undefined
-          }
-          after={
-            isNativeMatrixSession() ? <Text size="T300">Modern</Text> : <SelectMessageLayout />
-          }
-        />
-      </SequenceCard>
+      {!isNativeMatrixSession() && (
+        <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
+          <SettingTile title="Message Layout" after={<SelectMessageLayout />} />
+        </SequenceCard>
+      )}
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile title="Message Spacing" after={<SelectMessageSpacing />} />
       </SequenceCard>

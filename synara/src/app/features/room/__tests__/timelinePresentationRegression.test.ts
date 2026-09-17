@@ -15,6 +15,30 @@ test('composer leading action uses one circular affordance', () => {
   assert.doesNotMatch(action, /PlusCircle/);
 });
 
+test('composer plus menu dismisses on outside click', () => {
+  const input = readFileSync('src/app/features/room/RoomInput.tsx', 'utf8');
+  const tools = input.slice(
+    input.indexOf('anchor={composerToolsAnchor}'),
+    input.indexOf('ref={composerToolsBtnRef}')
+  );
+
+  assert.match(tools, /<FocusTrap/);
+  assert.match(tools, /clickOutsideDeactivates: true/);
+  assert.match(tools, /onDeactivate: \(\) => setComposerToolsAnchor\(undefined\)/);
+  assert.match(tools, /returnFocusOnDeactivate: false/);
+});
+
+test('room overflow Invite is a quiet surface option, not an accent-selected Primary item', () => {
+  const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
+  const inviteStart = header.indexOf('onClick={handleInvite}');
+  const invite = header.slice(inviteStart, header.indexOf('onClick={handleCopyLink}', inviteStart));
+
+  assert.match(invite, /fill="None"/);
+  assert.match(invite, /quietInteractiveSurface/);
+  assert.match(invite, /disabled=\{!canInvite\}/);
+  assert.doesNotMatch(invite, /variant="Primary"/);
+});
+
 test('native timeline owner hydrates unresolved sender profiles without blocking diffs', () => {
   const live = readFileSync('../crates/synara-core/src/app/timeline/live.rs', 'utf8');
 

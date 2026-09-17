@@ -135,7 +135,6 @@ function InviteMenuItem({
         onClick={handleInvite}
         size="300"
         radii="300"
-        variant="Primary"
         fill="None"
         aria-pressed={invitePrompt}
         disabled={disabled || !room}

@@ -380,6 +380,17 @@ test('room read state stays a single contextual overflow action', () => {
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
 });
 
+test('room overflow Invite is a quiet surface option, not an accent-selected Primary item', () => {
+  const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
+  const inviteStart = header.indexOf('onClick={handleInvite}');
+  const invite = header.slice(inviteStart, header.indexOf('onClick={handleCopyLink}', inviteStart));
+
+  assert.match(invite, /fill="None"/);
+  assert.match(invite, /quietInteractiveSurface/);
+  assert.match(invite, /disabled=\{!canInvite\}/);
+  assert.doesNotMatch(invite, /variant="Primary"/);
+});
+
 test('native timeline file attachments save through download+save, not protocol href', () => {
   const mediaFn = presenter.slice(
     presenter.indexOf('const NativeTimelineMedia'),

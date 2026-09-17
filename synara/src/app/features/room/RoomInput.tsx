@@ -43,6 +43,7 @@ import {
   config,
   toRem,
 } from 'folds';
+import FocusTrap from 'focus-trap-react';
 
 import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -110,6 +111,7 @@ import { safeFile } from '../../utils/mimeTypes';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { getMemberDisplayName, getMentionContent, trimReplyFromBody } from '../../utils/room';
+import { stopPropagation } from '../../utils/keyboard';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
 import { mobileOrTablet } from '../../utils/user-agent';
@@ -1140,47 +1142,62 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               align="Start"
               offset={12}
               content={
-                <Menu className={depthCss.floatingSurface} style={{ width: toRem(196) }}>
-                  <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-                    <MenuItem
-                      size="300"
-                      radii="300"
-                      after={<Icon src={Icons.File} size="100" />}
-                      onClick={() => {
-                        setComposerToolsAnchor(undefined);
-                        pickFile('*');
-                      }}
-                    >
-                      <Text size="T300">Attach file</Text>
-                    </MenuItem>
-                    {(gifPickerAvailable || gifOnboardingVisible) && (
+                <FocusTrap
+                  focusTrapOptions={{
+                    initialFocus: false,
+                    onDeactivate: () => setComposerToolsAnchor(undefined),
+                    clickOutsideDeactivates: true,
+                    isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                    isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                    escapeDeactivates: stopPropagation,
+                    returnFocusOnDeactivate: false,
+                  }}
+                >
+                  <Menu className={depthCss.floatingSurface} style={{ width: toRem(196) }}>
+                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                       <MenuItem
+                        className={depthCss.quietInteractiveSurface}
                         size="300"
                         radii="300"
-                        after={<Icon src={Icons.Photo} size="100" />}
+                        after={<Icon src={Icons.File} size="100" />}
+                        onClick={() => {
+                          setComposerToolsAnchor(undefined);
+                          pickFile('*');
+                        }}
+                      >
+                        <Text size="T300">Attach file</Text>
+                      </MenuItem>
+                      {(gifPickerAvailable || gifOnboardingVisible) && (
+                        <MenuItem
+                          className={depthCss.quietInteractiveSurface}
+                          size="300"
+                          radii="300"
+                          after={<Icon src={Icons.Photo} size="100" />}
+                          onClick={() => {
+                            const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
+                            setComposerToolsAnchor(undefined);
+                            setGifPickerAnchor(anchor);
+                          }}
+                        >
+                          <Text size="T300">GIF</Text>
+                        </MenuItem>
+                      )}
+                      <MenuItem
+                        className={depthCss.quietInteractiveSurface}
+                        size="300"
+                        radii="300"
+                        after={<Icon src={Icons.Message} size="100" />}
                         onClick={() => {
                           const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
                           setComposerToolsAnchor(undefined);
-                          setGifPickerAnchor(anchor);
+                          setPollAnchor(anchor);
                         }}
                       >
-                        <Text size="T300">GIF</Text>
+                        <Text size="T300">Poll</Text>
                       </MenuItem>
-                    )}
-                    <MenuItem
-                      size="300"
-                      radii="300"
-                      after={<Icon src={Icons.Message} size="100" />}
-                      onClick={() => {
-                        const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
-                        setComposerToolsAnchor(undefined);
-                        setPollAnchor(anchor);
-                      }}
-                    >
-                      <Text size="T300">Poll</Text>
-                    </MenuItem>
-                  </Box>
-                </Menu>
+                    </Box>
+                  </Menu>
+                </FocusTrap>
               }
             >
               <IconButton
