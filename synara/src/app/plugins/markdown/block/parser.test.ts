@@ -34,6 +34,13 @@ test('thematic breaks produce hr', () => {
   assert.match(parse('***'), /<hr/);
 });
 
+test('inline images, strike, and code render through the shared parser', () => {
+  const html = parse('See ![diagram](https://example.org/a.png) and ~~old~~ plus `code`.');
+  assert.match(html, /<img data-md="image" alt="diagram" src="https:\/\/example\.org\/a\.png"/);
+  assert.match(html, /<s data-md[\s\S]*old/);
+  assert.match(html, /<code data-md[\s\S]*code/);
+});
+
 test('task list items keep a sanitizer-safe checkbox prefix', () => {
   const html = parse('- [ ] open\n- [x] done\n');
   assert.match(html, /<ul[\s>]/);

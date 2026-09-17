@@ -33,6 +33,19 @@ export type SearchResetHandler = () => void;
 export const shouldPreserveQueryOnListChange = (query: string | undefined): boolean =>
   Boolean(query);
 
+/** Ignore chunked restarts that would replace a full result set with a prefix. */
+export const shouldKeepPreviousSearchItems = (
+  current: { query: string; items: readonly unknown[] } | undefined,
+  query: string,
+  items: readonly unknown[]
+): boolean =>
+  Boolean(
+    current &&
+      current.query === query &&
+      current.items.length > 0 &&
+      items.length < current.items.length
+  );
+
 /** Reuse the previous array when item identities are unchanged. */
 export const stabilizeListIdentity = <T>(previous: T[] | undefined, next: T[]): T[] => {
   if (
@@ -139,6 +152,9 @@ export const useAsyncSearch = <TSearchItem extends object | string | number>(
     const handleResult: ResultHandler<TSearchItem> = (results, query) =>
       setResult((current) => {
         const items = orderSearchItems(query, results, getItemStr, options);
+        if (shouldKeepPreviousSearchItems(current, query, items)) {
+          return current;
+        }
         if (
           current &&
           current.query === query &&

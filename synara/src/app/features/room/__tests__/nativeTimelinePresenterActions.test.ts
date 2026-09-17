@@ -229,6 +229,8 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /event instanceof WheelEvent/);
   assert.match(historyStatus, /Loading older messages/);
   assert.match(historyStatus, /Loading newer messages/);
+  assert.match(historyStatus, /edge === 'backward'/);
+  assert.match(historyStatus, /LOADING_CHROME_DELAY_MS/);
   assert.match(historyStatus, /role="alert"/);
   assert.match(historyStatus, /Could not load older messages/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusCardError/);
@@ -246,10 +248,12 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   );
   assert.match(dateRail, /Jump to a date in loaded history/);
   assert.match(dateRail, /Jump to a date in room history/);
-  assert.match(dateRail, /onCommitTimestamp/);
+  assert.match(dateRail, /hasPointerCapture/);
+  assert.match(dateRail, /previewFromClientY\(event\.clientY, true\)/);
   assert.match(presenter, /timestampToEventWithNativeOwner/);
   assert.match(presenter, /sevenDayRailAxis/);
   assert.match(presenter, /collectSevenDayRailMarks/);
+  assert.match(presenter, /needsSevenDayHistoryFill/);
   assert.match(presenter, /canPaginateTimelineForward/);
   assert.match(presenter, /roomCreatedTs/);
   assert.doesNotMatch(presenter, /mx\.timestampToEvent/);
@@ -385,10 +389,10 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
   const inviteStart = header.indexOf('onClick={handleInvite}');
   const invite = header.slice(inviteStart, header.indexOf('onClick={handleCopyLink}', inviteStart));
 
-  assert.match(invite, /fill="None"/);
   assert.match(invite, /quietInteractiveSurface/);
   assert.match(invite, /disabled=\{!canInvite\}/);
   assert.doesNotMatch(invite, /variant="Primary"/);
+  assert.doesNotMatch(invite, /fill="None"/);
 });
 
 test('native timeline file attachments save through download+save, not protocol href', () => {

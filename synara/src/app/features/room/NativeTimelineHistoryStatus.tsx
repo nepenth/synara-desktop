@@ -3,7 +3,8 @@ import { Button, Spinner, Text, color, config } from 'folds';
 import type { TimelineHistoryOverlayKind } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
 
-const LOADING_CHROME_DELAY_MS = 120;
+const LOADING_CHROME_DELAY_MS = 320;
+const LOADING_CHROME_HOLD_MS = 480;
 
 type NativeTimelineHistoryStatusProps = {
   edge: 'backward' | 'forward';
@@ -44,14 +45,29 @@ function NativeTimelineHistoryStatusView({
 }: NativeTimelineHistoryStatusProps) {
   const [loadingVisible, setLoadingVisible] = useState(false);
   useEffect(() => {
-    if (kind !== 'loading') {
-      setLoadingVisible(false);
-      return undefined;
+    if (kind === 'loading') {
+      // Historical (top) loading should be visible immediately. Newer-message
+      // chrome at the live tail is delayed so a single wheel tick cannot flash.
+      if (edge === 'backward') {
+        setLoadingVisible(true);
+        return undefined;
+      }
+      const timer = window.setTimeout(() => setLoadingVisible(true), LOADING_CHROME_DELAY_MS);
+      return () => window.clearTimeout(timer);
     }
-    const timer = window.setTimeout(() => setLoadingVisible(true), LOADING_CHROME_DELAY_MS);
+    const timer = window.setTimeout(() => setLoadingVisible(false), LOADING_CHROME_HOLD_MS);
     return () => window.clearTimeout(timer);
-  }, [kind]);
-  const paintedKind = kind === 'loading' && !loadingVisible ? 'hidden' : kind;
+  }, [kind, edge]);
+  const paintedKind: TimelineHistoryOverlayKind =
+    kind === 'error'
+      ? 'error'
+      : kind === 'loading' && edge === 'backward'
+      ? 'loading'
+      : loadingVisible
+      ? 'loading'
+      : kind === 'loading'
+      ? 'hidden'
+      : kind;
   const copy = copyForEdge(edge);
   const showDate = Boolean(visibleDateLabel) && kind === 'hidden' && !reserveRail;
   if (paintedKind === 'hidden' && !showDate) return null;

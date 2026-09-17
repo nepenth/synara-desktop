@@ -85,6 +85,15 @@ test('a simple two-column table produces table markup', () => {
   assert.match(projected.html, /<table[\s\S]*<th[\s\S]*Name/);
 });
 
+test('preview projects images, strike, and inline code', () => {
+  const projected = projectNativeTimelineMarkdownPreview(
+    'See ![diagram](https://example.org/a.png) and ~~old~~ plus `code`.'
+  );
+  assert.match(projected.html, /<img data-md="image" alt="diagram"/);
+  assert.match(projected.html, /<s data-md[\s\S]*old/);
+  assert.match(projected.html, /<code data-md[\s\S]*code/);
+});
+
 test('oversized markdown preview fails closed without parsing', () => {
   const projected = projectNativeTimelineMarkdownPreview(
     `# ${'x'.repeat(MAX_NATIVE_MARKDOWN_PREVIEW_BYTES)}`

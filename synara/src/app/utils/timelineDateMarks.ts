@@ -317,5 +317,13 @@ export const isTimestampInLoadedWindow = (
   return false;
 };
 
+export const needsSevenDayHistoryFill = (
+  axis: TimelineRailAxis | undefined,
+  pagination: { backwardAvailable: boolean }
+): boolean => {
+  if (!axis || !pagination.backwardAvailable) return false;
+  return axis.loadedMinMs > axis.startMs;
+};
+
 export const shouldShowTimelineDateRail = (rowCount: number, markCount: number): boolean =>
   markCount >= 2 && rowCount > 0;

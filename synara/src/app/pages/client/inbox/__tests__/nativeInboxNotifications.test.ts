@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { fetchNativeInboxNotifications } from '../nativeInboxNotifications';
 import { InvalidNotificationsResponseError } from '../notificationResponse';
 
@@ -51,4 +52,12 @@ test('native empty Inbox is valid while unavailable, malformed, and server error
     }),
     (error) => error === failure
   );
+});
+
+test('inbox timeline reloads keep current groups until the native page returns', () => {
+  const source = readFileSync('src/app/pages/client/inbox/Notifications.tsx', 'utf8');
+  assert.doesNotMatch(source, /if \(!from\) \{\s*setNotificationTimeline\(\{ groups: \[\] \}\)/);
+  assert.match(source, /sameNotificationTimeline/);
+  assert.match(source, /allRoomsKey/);
+  assert.match(source, /notificationTimeline\.groups\.length === 0/);
 });

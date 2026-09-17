@@ -164,7 +164,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
             </PageNavHeader>
             <Box grow="Yes" direction="Column">
               <PageNavContent>
-                <Box direction="Column" gap="200" style={{ flexGrow: 1 }}>
+                <Box direction="Column" gap="400" style={{ flexGrow: 1 }}>
                   {menuItems.map((item) => (
                     <MenuItem
                       className={depthCss.quietInteractiveSurface}

@@ -48,6 +48,14 @@ export const notificationGroupsEquivalent = (
   });
 };
 
+export const sameNotificationTimeline = (
+  left: NotificationTimeline,
+  right: NotificationTimeline
+): boolean =>
+  left.nextToken === right.nextToken && notificationGroupsEquivalent(left.groups, right.groups);
+
+export const allRoomsKey = (rooms: readonly string[]): string => rooms.join('\0');
+
 export const shouldResetNotificationTimeline = ({
   from,
   hasGroups,

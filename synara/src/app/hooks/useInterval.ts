@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useRef } from 'react';
 
 export type IntervalCallback = () => void;
 
@@ -8,17 +8,22 @@ export type IntervalCallback = () => void;
  * @returns interval id or undefined if not running.
  */
 export const useInterval = (callback: IntervalCallback, ms: number): number | undefined => {
-  const id = useMemo(() => {
-    if (ms < 0) return undefined;
-    return window.setInterval(callback, ms);
-  }, [callback, ms]);
+  const callbackRef = useRef(callback);
+  callbackRef.current = callback;
+  const idRef = useRef<number | undefined>(undefined);
 
-  useEffect(
-    () => () => {
+  useEffect(() => {
+    if (ms < 0) {
+      idRef.current = undefined;
+      return undefined;
+    }
+    const id = window.setInterval(() => callbackRef.current(), ms);
+    idRef.current = id;
+    return () => {
       window.clearInterval(id);
-    },
-    [id]
-  );
+      if (idRef.current === id) idRef.current = undefined;
+    };
+  }, [ms]);
 
-  return id;
+  return idRef.current;
 };

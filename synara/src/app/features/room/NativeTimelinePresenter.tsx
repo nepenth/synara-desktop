@@ -134,6 +134,7 @@ import {
   rowTimestampMs,
   sevenDayRailAxis,
   shouldShowTimelineDateRail,
+  needsSevenDayHistoryFill,
 } from '../../utils/timelineDateMarks';
 import {
   canPaginateTimelineForward,
@@ -1077,6 +1078,7 @@ const NativeTimelineRowActionSurface = ({
     const target = event.currentTarget.parentElement?.parentElement ?? event.currentTarget;
     setEmojiBoardAnchor(target.getBoundingClientRect());
   };
+  const reactionImagePackRooms = useMemo(() => [actionProps.roomId], [actionProps.roomId]);
 
   return (
     <div
@@ -1098,7 +1100,7 @@ const NativeTimelineRowActionSurface = ({
                   align="End"
                   content={
                     <EmojiBoard
-                      imagePackRooms={[actionProps.roomId]}
+                      imagePackRooms={reactionImagePackRooms}
                       returnFocusOnDeactivate={false}
                       addToRecentEmoji={false}
                       onEmojiSelect={(unicode) => {
@@ -2381,6 +2383,7 @@ export function NativeTimelinePresenter({
   const [paginationInFlight, setPaginationInFlight] = useState<'backwards' | 'forwards'>();
   const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
   const [atHistoryEdge, setAtHistoryEdge] = useState({ backward: false, forward: false });
+  const sevenDayFillAttemptsRef = useRef(0);
   useEffect(() => {
     paginationInFlightRef.current = undefined;
     setPaginationInFlight(undefined);
@@ -2388,6 +2391,7 @@ export function NativeTimelinePresenter({
     setAtHistoryEdge({ backward: false, forward: false });
     setFilePreview(undefined);
     dateJumpInFlightRef.current = false;
+    sevenDayFillAttemptsRef.current = 0;
   }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
@@ -2524,7 +2528,7 @@ export function NativeTimelinePresenter({
     ),
     estimateSize,
     measureElement,
-    overscan: 8,
+    overscan: 16,
   });
   const timedRows = useMemo(() => collectTimedTimelineRows(rows), [rows]);
   const railAxis = useMemo(
@@ -2894,6 +2898,20 @@ export function NativeTimelinePresenter({
   );
   const requestPaginationRef = useRef(requestPagination);
   requestPaginationRef.current = requestPagination;
+  const SEVEN_DAY_FILL_MAX_PAGES = 24;
+  useEffect(() => {
+    if (!hasReadyState || !railAxis) return;
+    const current = readyStateRef.current;
+    if (!current || dateJumpInFlightRef.current || paginationInFlight) return;
+    if (paginationErrors.backward) return;
+    if (sevenDayFillAttemptsRef.current >= SEVEN_DAY_FILL_MAX_PAGES) return;
+    const backwardAvailable =
+      current.snapshot.capabilities.paginateBackward &&
+      current.snapshot.pagination.backward === 'available';
+    if (!needsSevenDayHistoryFill(railAxis, { backwardAvailable })) return;
+    sevenDayFillAttemptsRef.current += 1;
+    requestPagination('backwards');
+  }, [hasReadyState, paginationErrors.backward, paginationInFlight, railAxis, requestPagination]);
   useEffect(() => {
     if (!hasReadyState) {
       scrollHandlersRef.current = undefined;
@@ -2924,9 +2942,15 @@ export function NativeTimelinePresenter({
       requestPaginationRef.current(direction);
     };
     const updateHistoryEdge = (distanceFromBottom: number) => {
+      const positionKind = readyStateRef.current?.selectedPosition.kind ?? '';
       const next = {
         backward: scrollEl.scrollTop <= 96,
-        forward: distanceFromBottom <= 96,
+        forward:
+          distanceFromBottom <= 96 &&
+          canPaginateTimelineForward({
+            atLiveBottom: atLiveBottomRef.current || distanceFromBottom <= 8,
+            positionKind,
+          }),
       };
       setAtHistoryEdge((previous) =>
         previous.backward === next.backward && previous.forward === next.forward ? previous : next

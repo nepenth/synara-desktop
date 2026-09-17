@@ -95,8 +95,11 @@ export const resolveTimelineHistoryOverlay = ({
   hasSparseLoadButton?: boolean;
 }): TimelineHistoryOverlay => {
   if (error) return { kind: 'error', message: error };
+  // Live tail has nothing newer. Do not paint "Loading newer messages" just
+  // because the viewport is on the bottom edge or native forward is idle-loading.
+  if (!canPaginate) return { kind: 'hidden' };
   if (atEdge && (inFlight || nativeState === 'loading')) return { kind: 'loading' };
-  if (atEdge && canPaginate && nativeState === 'available' && !hasSparseLoadButton) {
+  if (atEdge && nativeState === 'available' && !hasSparseLoadButton) {
     return { kind: 'load_more' };
   }
   return { kind: 'hidden' };

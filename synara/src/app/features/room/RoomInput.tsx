@@ -285,6 +285,22 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
     const [composerToolsAnchor, setComposerToolsAnchor] = useState<RectCords>();
+    useEffect(() => {
+      if (!composerToolsAnchor) return undefined;
+      const onPointerDown = (event: PointerEvent) => {
+        const target = event.target;
+        if (!(target instanceof Node)) {
+          setComposerToolsAnchor(undefined);
+          return;
+        }
+        if (composerToolsBtnRef.current?.contains(target)) return;
+        const menu = document.querySelector('[data-composer-tools-menu="true"]');
+        if (menu?.contains(target)) return;
+        setComposerToolsAnchor(undefined);
+      };
+      document.addEventListener('pointerdown', onPointerDown, true);
+      return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    }, [composerToolsAnchor]);
     const [emojiBoardOpen, setEmojiBoardOpen] = useState(false);
     const [autocompleteQuery, setAutocompleteQuery] =
       useState<AutocompleteQuery<AutocompletePrefix>>();
@@ -1153,7 +1169,11 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                     returnFocusOnDeactivate: false,
                   }}
                 >
-                  <Menu className={depthCss.floatingSurface} style={{ width: toRem(196) }}>
+                  <Menu
+                    className={depthCss.floatingSurface}
+                    style={{ width: toRem(196) }}
+                    data-composer-tools-menu="true"
+                  >
                     <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                       <MenuItem
                         className={depthCss.quietInteractiveSurface}

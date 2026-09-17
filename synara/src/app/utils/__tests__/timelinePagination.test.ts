@@ -137,3 +137,24 @@ test('live bottom never requests forward pagination', () => {
     { kind: 'hidden' }
   );
 });
+
+test('live tail hides forward overlay even when native forward is loading at the edge', () => {
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'loading',
+      inFlight: false,
+      atEdge: true,
+      canPaginate: false,
+    }),
+    { kind: 'hidden' }
+  );
+  assert.deepEqual(
+    resolveTimelineHistoryOverlay({
+      nativeState: 'loading',
+      inFlight: true,
+      atEdge: true,
+      canPaginate: false,
+    }),
+    { kind: 'hidden' }
+  );
+});

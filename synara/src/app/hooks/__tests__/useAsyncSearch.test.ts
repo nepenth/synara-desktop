@@ -1,12 +1,24 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
-import { shouldPreserveQueryOnListChange, stabilizeListIdentity } from '../useAsyncSearch';
+import {
+  shouldKeepPreviousSearchItems,
+  shouldPreserveQueryOnListChange,
+  stabilizeListIdentity,
+} from '../useAsyncSearch';
 
 test('shouldPreserveQueryOnListChange keeps results only while a query is active', () => {
   assert.equal(shouldPreserveQueryOnListChange('thumb'), true);
   assert.equal(shouldPreserveQueryOnListChange(''), false);
   assert.equal(shouldPreserveQueryOnListChange(undefined), false);
+});
+
+test('shouldKeepPreviousSearchItems ignores a shorter same-query replacement', () => {
+  const current = { query: 'thumb', items: ['👍', '👎', '👍'] };
+  assert.equal(shouldKeepPreviousSearchItems(current, 'thumb', ['👍']), true);
+  assert.equal(shouldKeepPreviousSearchItems(current, 'thumb', ['👍', '👎', '👍']), false);
+  assert.equal(shouldKeepPreviousSearchItems(current, 'heart', ['❤️']), false);
+  assert.equal(shouldKeepPreviousSearchItems(undefined, 'thumb', []), false);
 });
 
 test('stabilizeListIdentity reuses the previous array when item identities match', () => {

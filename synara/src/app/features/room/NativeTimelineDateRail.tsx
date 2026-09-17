@@ -85,14 +85,14 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
   }, [getVisibleTimestamp, paintThumb, scrollRef]);
 
   const previewFromClientY = useCallback(
-    (clientY: number) => {
+    (clientY: number, commitPreview: boolean) => {
       const track = trackRef.current;
       if (!track) return;
       const rect = track.getBoundingClientRect();
       const ratio = rect.height <= 0 ? 0 : (clientY - rect.top) / rect.height;
       const timestampMs = timestampForRailRatio(ratio, axis.startMs, axis.endMs);
       lastTimestampRef.current = timestampMs;
-      onPreviewTimestamp(timestampMs);
+      if (commitPreview) onPreviewTimestamp(timestampMs);
       setHoverLabel(formatTimelineRailTimestamp(timestampMs, hour24Clock));
       paintThumb(timestampMs, true);
     },
@@ -102,17 +102,16 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    previewFromClientY(event.clientY);
+    previewFromClientY(event.clientY, true);
   };
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    previewFromClientY(event.clientY);
+    previewFromClientY(event.clientY, event.currentTarget.hasPointerCapture(event.pointerId));
   };
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
+      onCommitTimestamp(lastTimestampRef.current);
     }
-    onCommitTimestamp(lastTimestampRef.current);
     setHoverLabel(undefined);
   };
 
@@ -135,6 +134,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={() => setHoverLabel(undefined)}
         onKeyDown={(event) => {
           const current = getVisibleTimestamp();
           const span = Math.max(1, axis.endMs - axis.startMs);

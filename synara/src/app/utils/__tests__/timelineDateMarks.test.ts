@@ -7,6 +7,7 @@ import {
   formatTimelineHistoryMarkLabel,
   formatTimelineRailTimestamp,
   isTimestampInLoadedWindow,
+  needsSevenDayHistoryFill,
   rowIndexForRailRatio,
   rowIndexForTimestamp,
   sevenDayRailAxis,
@@ -183,4 +184,14 @@ test('seven-day rail samples older day starts and recent 8am/noon/5pm marks', ()
   const hover = formatTimelineRailTimestamp(now, true);
   assert.match(hover, /2026/);
   assert.match(hover, /18:00/);
+});
+
+test('seven-day history fill is needed while loaded min is after the axis start', () => {
+  const now = new Date(2026, 8, 17, 18, 0, 0).getTime();
+  const axis = sevenDayRailAxis(now, [{ index: 0, timestampMs: now }]);
+  assert.equal(needsSevenDayHistoryFill(axis, { backwardAvailable: true }), true);
+  assert.equal(needsSevenDayHistoryFill(axis, { backwardAvailable: false }), false);
+  const filled = sevenDayRailAxis(now, [{ index: 0, timestampMs: axis.startMs }]);
+  assert.equal(needsSevenDayHistoryFill(filled, { backwardAvailable: true }), false);
+  assert.equal(needsSevenDayHistoryFill(undefined, { backwardAvailable: true }), false);
 });

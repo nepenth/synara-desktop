@@ -18,8 +18,9 @@ import { useSearchParams } from 'react-router-dom';
 import { type NotificationEventReading, type NotificationReading } from './notificationResponse';
 import { fetchNativeInboxNotifications } from './nativeInboxNotifications';
 import {
+  allRoomsKey,
   groupNotifications,
-  notificationGroupsEquivalent,
+  sameNotificationTimeline,
   shouldResetNotificationTimeline,
   type NotificationTimeline,
 } from './notificationTimeline';
@@ -125,11 +126,12 @@ const useNotificationTimeline = (
 ): [NotificationTimeline, LoadTimeline, SilentReloadTimeline] => {
   const allRooms = useAtomValue(allRoomsAtom);
   const allRoomsRef = useRef(allRooms);
+  const roomsKey = allRoomsKey(allRooms);
   const prevHighlightRef = useRef(onlyHighlight);
 
   useEffect(() => {
     allRoomsRef.current = allRooms;
-  }, [allRooms]);
+  }, [allRooms, roomsKey]);
 
   const [notificationTimeline, setNotificationTimeline] = useState<NotificationTimeline>({
     groups: [],
@@ -178,8 +180,10 @@ const useNotificationTimeline = (
           };
         }
         if (
-          currentTimeline.nextToken === data.next_token &&
-          notificationGroupsEquivalent(currentTimeline.groups, groups)
+          sameNotificationTimeline(currentTimeline, {
+            nextToken: data.next_token,
+            groups,
+          })
         ) {
           return currentTimeline;
         }
@@ -205,8 +209,10 @@ const useNotificationTimeline = (
     const groups = groupNotifications(data.notifications, new Set(allRoomsRef.current));
     setNotificationTimeline((currentTimeline) => {
       if (
-        currentTimeline.nextToken === data.next_token &&
-        notificationGroupsEquivalent(currentTimeline.groups, groups)
+        sameNotificationTimeline(currentTimeline, {
+          nextToken: data.next_token,
+          groups,
+        })
       ) {
         return currentTimeline;
       }
@@ -681,6 +687,7 @@ export function Notifications() {
   useEffect(() => {
     if (
       timelineState.status === AsyncStatus.Success &&
+      timelineState.status !== AsyncStatus.Loading &&
       notificationTimeline.groups.length - 1 === lastVItemIndex &&
       notificationTimeline.nextToken
     ) {
@@ -829,7 +836,8 @@ export function Notifications() {
                     </Box>
                   )}
 
-                {timelineState.status === AsyncStatus.Loading && (
+                {timelineState.status === AsyncStatus.Loading &&
+                  notificationTimeline.groups.length === 0 && (
                   <Box direction="Column" gap="100">
                     {[...Array(8).keys()].map((key) => (
                       <SequenceCard

@@ -3,8 +3,10 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import type { NotificationReading } from '../notificationResponse';
 import {
+  allRoomsKey,
   groupNotifications,
   notificationGroupsEquivalent,
+  sameNotificationTimeline,
   shouldResetNotificationTimeline,
 } from '../notificationTimeline';
 
@@ -75,6 +77,20 @@ test('notificationGroupsEquivalent compares room ids and event ids in order', ()
   assert.equal(notificationGroupsEquivalent(left, same), true);
   assert.equal(notificationGroupsEquivalent(left, reordered), false);
   assert.equal(notificationGroupsEquivalent(left, differentEvent), false);
+});
+
+test('sameNotificationTimeline includes nextToken and allRoomsKey is order-sensitive', () => {
+  const groups = groupNotifications([reading('!a:ex', '$1')], new Set(['!a:ex']));
+  assert.equal(
+    sameNotificationTimeline({ groups, nextToken: 'a' }, { groups, nextToken: 'a' }),
+    true
+  );
+  assert.equal(
+    sameNotificationTimeline({ groups, nextToken: 'a' }, { groups, nextToken: 'b' }),
+    false
+  );
+  assert.equal(allRoomsKey(['!a', '!b']), '!a\0!b');
+  assert.notEqual(allRoomsKey(['!a', '!b']), allRoomsKey(['!b', '!a']));
 });
 
 test('groupNotifications drops rooms that are not currently joined', () => {

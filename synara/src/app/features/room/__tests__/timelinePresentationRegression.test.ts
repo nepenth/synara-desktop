@@ -26,6 +26,8 @@ test('composer plus menu dismisses on outside click', () => {
   assert.match(tools, /clickOutsideDeactivates: true/);
   assert.match(tools, /onDeactivate: \(\) => setComposerToolsAnchor\(undefined\)/);
   assert.match(tools, /returnFocusOnDeactivate: false/);
+  assert.match(input, /data-composer-tools-menu="true"/);
+  assert.match(input, /document\.addEventListener\('pointerdown', onPointerDown, true\)/);
 });
 
 test('room overflow Invite is a quiet surface option, not an accent-selected Primary item', () => {
@@ -33,10 +35,10 @@ test('room overflow Invite is a quiet surface option, not an accent-selected Pri
   const inviteStart = header.indexOf('onClick={handleInvite}');
   const invite = header.slice(inviteStart, header.indexOf('onClick={handleCopyLink}', inviteStart));
 
-  assert.match(invite, /fill="None"/);
   assert.match(invite, /quietInteractiveSurface/);
   assert.match(invite, /disabled=\{!canInvite\}/);
   assert.doesNotMatch(invite, /variant="Primary"/);
+  assert.doesNotMatch(invite, /fill="None"/);
 });
 
 test('native timeline owner hydrates unresolved sender profiles without blocking diffs', () => {

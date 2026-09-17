@@ -111,6 +111,19 @@ export const LinkRule: InlineMDRule = {
   },
 };
 
+const IMAGE_REG_1 = new RegExp(`!${LINK_ALT}${LINK_URL}`);
+const escapeMdAttr = (value: string): string =>
+  value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+export const ImageRule: InlineMDRule = {
+  match: (text) => text.match(IMAGE_REG_1),
+  html: (_parse, match) => {
+    const [, g1, g2] = match;
+    const alt = escapeMdAttr(g1 ?? '');
+    const src = escapeMdAttr(g2 ?? '');
+    return `<img data-md="image" alt="${alt}" src="${src}"/>`;
+  },
+};
+
 export const INLINE_SEQUENCE_SET = '[*_~`|]';
 export const CAP_INLINE_SEQ = `${URL_NEG_LB}${INLINE_SEQUENCE_SET}`;
 const ESC_SEQ_1 = `\\\\(${INLINE_SEQUENCE_SET})`;
