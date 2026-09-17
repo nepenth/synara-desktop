@@ -519,9 +519,7 @@ test('date rail jumps toward an earlier loaded message', async ({ page }) => {
   await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(0);
 });
 
-test('date rail older tick jumps via timestamp_to_event then focused open', async ({
-  page,
-}) => {
+test('date rail older tick jumps via timestamp_to_event then focused open', async ({ page }) => {
   await page.goto(
     '/e2e/native-timeline-harness/index.html?scenario=live&roomCreated=1600000000000'
   );

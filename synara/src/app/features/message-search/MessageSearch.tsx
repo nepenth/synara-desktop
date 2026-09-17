@@ -388,7 +388,7 @@ export function MessageSearch({
                 No results found for <b>{`"${requestedTerm}"`}</b>
               </>
             ) : (
-              'No matching attachments in this date range. Adjust From/To or use Last 7 days.'
+              'No matching attachments in the scanned window (this room, this date range, recent history). Adjust From/To or use Last 7 days.'
             )}
           </Text>
         </Box>

@@ -130,7 +130,7 @@ export function NativeTimelineMarkdownPreview({
                 </Box>
                 <Box shrink="No" alignItems="Center" gap="200">
                   <Button
-                    variant="Surface"
+                    variant="Secondary"
                     fill="Soft"
                     size="300"
                     radii="300"

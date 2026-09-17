@@ -121,9 +121,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         ref={trackRef}
         className={htmlCss.DateRailTrack}
         role="scrollbar"
-        aria-label={
-          axis.fullRoom ? 'Jump to a date in room history' : 'Jump to a date in loaded history'
-        }
+        aria-label="Jump to a date in the last 7 days"
         aria-controls="native-timeline-history"
         aria-orientation="vertical"
         aria-valuemin={axis.startMs}

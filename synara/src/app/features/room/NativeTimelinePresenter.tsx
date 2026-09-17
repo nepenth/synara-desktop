@@ -141,6 +141,7 @@ import {
   clearTimelinePaginationError,
   resolveTimelineHistoryOverlay,
   setTimelinePaginationError,
+  shouldPaginateOnWheel,
   type TimelinePaginationErrors,
 } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
@@ -1709,6 +1710,8 @@ const NativeTimelineRow = ({
           setGroupedTimestampOffset((current) => clampGroupedTimestampOffset(current - deltaX));
           scheduleGroupedTimestampReset();
         },
+        onMouseEnter: () => setGroupedTimestampOffset(-groupedTimestampRevealWidth),
+        onMouseLeave: () => setGroupedTimestampOffset(0),
       }
     : {};
   const runReaction = (key: string) => {
@@ -2872,6 +2875,7 @@ export function NativeTimelinePresenter({
         !canPaginateTimelineForward({
           atLiveBottom: atLiveBottomRef.current,
           positionKind: current.selectedPosition.kind,
+          followingLive: followingLiveRef.current,
         })
       ) {
         return;
@@ -2935,6 +2939,7 @@ export function NativeTimelinePresenter({
             canPaginateTimelineForward({
               atLiveBottom: atLiveBottomRef.current,
               positionKind: current.selectedPosition.kind,
+              followingLive: followingLiveRef.current,
             })
           ? 'forwards'
           : undefined;
@@ -2950,6 +2955,7 @@ export function NativeTimelinePresenter({
           canPaginateTimelineForward({
             atLiveBottom: atLiveBottomRef.current || distanceFromBottom <= 8,
             positionKind,
+            followingLive: followingLiveRef.current,
           }),
       };
       setAtHistoryEdge((previous) =>
@@ -3022,7 +3028,16 @@ export function NativeTimelinePresenter({
         const el = scrollRef.current;
         if (el) el.scrollTo({ top: el.scrollTop, behavior: 'auto' });
       }
-      if (event instanceof WheelEvent) paginateAtEdge();
+      if (
+        event instanceof WheelEvent &&
+        shouldPaginateOnWheel({
+          deltaY: event.deltaY,
+          atLiveBottom: atLiveBottomRef.current,
+          positionKind: readyStateRef.current?.selectedPosition.kind ?? '',
+        })
+      ) {
+        paginateAtEdge();
+      }
       // A click is not a departure from the live tail. Actual scrolling below
       // recomputes ownership from geometry, including during drag/scroll input.
     };
@@ -3454,6 +3469,7 @@ export function NativeTimelinePresenter({
       canPaginateTimelineForward({
         atLiveBottom,
         positionKind: readyState.selectedPosition.kind,
+        followingLive: followingLiveRef.current,
       }),
     hasSparseLoadButton: true,
   });
@@ -3497,7 +3513,7 @@ export function NativeTimelinePresenter({
           id="native-timeline-history"
           ref={scrollRef}
           visibility="Hover"
-          style={{ height: '100%' }}
+          style={{ height: '100%', overscrollBehavior: 'contain' }}
         >
           {rows.length === 0 ? (
             <Box

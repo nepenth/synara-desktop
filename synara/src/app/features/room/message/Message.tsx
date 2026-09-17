@@ -85,6 +85,8 @@ import {
   unpinWithNativeTimelineAction,
 } from '../nativeTimelineAction';
 
+const EMPTY_IMAGE_PACK_ROOMS: string[] = [];
+
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
 /**
@@ -1163,7 +1165,7 @@ export const Message = as<'div', MessageProps>(
                     anchor={emojiBoardAnchor}
                     content={
                       <EmojiBoard
-                        imagePackRooms={imagePackRooms ?? []}
+                        imagePackRooms={imagePackRooms ?? EMPTY_IMAGE_PACK_ROOMS}
                         returnFocusOnDeactivate={false}
                         allowTextCustomEmoji
                         onEmojiSelect={(key) => {

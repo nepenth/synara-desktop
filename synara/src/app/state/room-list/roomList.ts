@@ -26,6 +26,54 @@ const emptyRoomListSnapshot: NativeRoomListSnapshot = {
   rooms: [],
 };
 
+export const sameStringList = (left: readonly string[], right: readonly string[]): boolean =>
+  left.length === right.length && left.every((value, index) => value === right[index]);
+
+const sameRoomSummary = (left: RoomSummary, right: RoomSummary): boolean =>
+  left.roomId === right.roomId &&
+  left.unreadCount === right.unreadCount &&
+  left.highlightCount === right.highlightCount &&
+  left.markedUnread === right.markedUnread &&
+  left.name === right.name &&
+  left.lastActivityTs === right.lastActivityTs &&
+  left.lastMessagePreview === right.lastMessagePreview &&
+  left.hasActiveCall === right.hasActiveCall &&
+  left.activeCallParticipantCount === right.activeCallParticipantCount &&
+  left.membership === right.membership &&
+  left.isFavorite === right.isFavorite &&
+  left.notificationMode === right.notificationMode &&
+  left.avatarUrl === right.avatarUrl &&
+  left.directUserId === right.directUserId &&
+  left.isDirect === right.isDirect &&
+  left.isSpace === right.isSpace &&
+  left.encryptionStatus === right.encryptionStatus &&
+  left.joinRule === right.joinRule &&
+  sameHeroes(left.heroes, right.heroes);
+
+const sameHeroes = (left: RoomSummary['heroes'], right: RoomSummary['heroes']): boolean => {
+  const leftHeroes = left ?? [];
+  const rightHeroes = right ?? [];
+  return (
+    leftHeroes.length === rightHeroes.length &&
+    leftHeroes.every(
+      (hero, index) =>
+        hero.userId === rightHeroes[index]?.userId &&
+        hero.inCall === rightHeroes[index]?.inCall &&
+        hero.displayName === rightHeroes[index]?.displayName
+    )
+  );
+};
+
+export const sameNativeRoomListSnapshot = (
+  left: NativeRoomListSnapshot,
+  right: NativeRoomListSnapshot
+): boolean => {
+  if (left.sessionGeneration !== right.sessionGeneration) return false;
+  if (!sameStringList(left.orderedRoomIds, right.orderedRoomIds)) return false;
+  if (left.rooms.length !== right.rooms.length) return false;
+  return left.rooms.every((room, index) => sameRoomSummary(room, right.rooms[index]));
+};
+
 const nativeRoomListSnapshotAtom = atom<NativeRoomListSnapshot>(emptyRoomListSnapshot);
 let latestNativeRoomListSnapshot = emptyRoomListSnapshot;
 
@@ -34,6 +82,8 @@ export const allRoomsAtom = atom<string[], [RoomsAction], undefined>(
   (get) => get(baseRoomsAtom),
   (get, set, action) => {
     if (action.type === 'INITIALIZE') {
+      const current = get(baseRoomsAtom);
+      if (sameStringList(current, action.rooms)) return;
       set(baseRoomsAtom, action.rooms);
       return;
     }
@@ -135,6 +185,7 @@ export const useBindAllRoomsAtom = (
         if (disposed || !result.available || !result.value) return;
         const snapshot = parseNativeRoomListSnapshot(result.value);
         if (!snapshot || snapshot.sessionGeneration !== session.sessionGeneration) return;
+        if (sameNativeRoomListSnapshot(latestNativeRoomListSnapshot, snapshot)) return;
         latestNativeRoomListSnapshot = snapshot;
         // Hydrate the synchronous facade before either atom setter can schedule
         // selectors that combine a fresh room id with mx.getRoom().

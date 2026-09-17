@@ -93,6 +93,7 @@ import { ContainerColor } from '../../../styles/ContainerColor.css';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
 import { BreakWord } from '../../../styles/Text.css';
 import { InviteUserPrompt } from '../../../components/invite-user-prompt';
+import * as depthCss from '../../../styles/Depth.css';
 
 type SpaceMenuProps = {
   room: EventedRoomReading;
@@ -175,10 +176,10 @@ const SpaceMenu = forwardRef<HTMLDivElement, SpaceMenuProps>(({ room, requestClo
       <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
         <MenuItem
           onClick={handleInvite}
-          fill="None"
           size="300"
           after={<Icon size="100" src={Icons.UserPlus} />}
           radii="300"
+          className={depthCss.quietInteractiveSurface}
           aria-pressed={invitePrompt}
           disabled={!canInvite}
         >

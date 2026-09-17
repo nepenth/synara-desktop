@@ -60,4 +60,7 @@ test('inbox timeline reloads keep current groups until the native page returns',
   assert.match(source, /sameNotificationTimeline/);
   assert.match(source, /allRoomsKey/);
   assert.match(source, /notificationTimeline\.groups\.length === 0/);
+  const rooms = readFileSync('src/app/state/room-list/roomList.ts', 'utf8');
+  assert.match(rooms, /sameNativeRoomListSnapshot/);
+  assert.match(rooms, /if \(sameStringList\(current, action\.rooms\)\) return/);
 });

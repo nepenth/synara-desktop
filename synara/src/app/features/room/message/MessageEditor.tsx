@@ -61,6 +61,8 @@ import { getEditedEvent, getMentionContent, trimReplyFromFormattedBody } from '.
 import { mobileOrTablet } from '../../../utils/user-agent';
 import { useComposingCheck } from '../../../hooks/useComposingCheck';
 
+const EMPTY_IMAGE_PACK_ROOMS: string[] = [];
+
 type MessageEditorProps = {
   roomId: string;
   room: RoomReading & {
@@ -293,7 +295,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
         )}
         {autocompleteQuery?.prefix === AutocompletePrefix.Emoticon && (
           <EmoticonAutocomplete
-            imagePackRooms={imagePackRooms || []}
+            imagePackRooms={imagePackRooms || EMPTY_IMAGE_PACK_ROOMS}
             editor={editor}
             query={autocompleteQuery}
             requestClose={handleCloseAutocomplete}
@@ -356,7 +358,7 @@ export const MessageEditor = as<'div', MessageEditorProps>(
                         align="End"
                         content={
                           <EmojiBoard
-                            imagePackRooms={imagePackRooms ?? []}
+                            imagePackRooms={imagePackRooms ?? EMPTY_IMAGE_PACK_ROOMS}
                             returnFocusOnDeactivate={false}
                             onEmojiSelect={handleEmoticonSelect}
                             onCustomEmojiSelect={handleEmoticonSelect}

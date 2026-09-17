@@ -227,10 +227,16 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /NativeTimelineHistoryStatus/);
   assert.match(presenter, /requestPagination\('backwards'\)/);
   assert.match(presenter, /event instanceof WheelEvent/);
+  assert.match(presenter, /shouldPaginateOnWheel/);
+  assert.match(presenter, /followingLive: followingLiveRef\.current/);
+  assert.match(presenter, /overscrollBehavior: 'contain'/);
+  assert.match(htmlCss, /zIndex: 80/);
   assert.match(historyStatus, /Loading older messages/);
   assert.match(historyStatus, /Loading newer messages/);
   assert.match(historyStatus, /edge === 'backward'/);
   assert.match(historyStatus, /LOADING_CHROME_DELAY_MS/);
+  assert.match(historyStatus, /edge === 'forward'/);
+  assert.match(historyStatus, /setLoadingVisible\(false\)/);
   assert.match(historyStatus, /role="alert"/);
   assert.match(historyStatus, /Could not load older messages/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusCardError/);
@@ -246,8 +252,7 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     htmlCss,
     /export const HistoryStatusCardError = style\(\{[\s\S]*?backgroundColor: color\.Critical\.Container,/
   );
-  assert.match(dateRail, /Jump to a date in loaded history/);
-  assert.match(dateRail, /Jump to a date in room history/);
+  assert.match(dateRail, /Jump to a date in the last 7 days/);
   assert.match(dateRail, /hasPointerCapture/);
   assert.match(dateRail, /previewFromClientY\(event\.clientY, true\)/);
   assert.match(presenter, /timestampToEventWithNativeOwner/);

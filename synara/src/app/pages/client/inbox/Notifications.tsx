@@ -687,7 +687,6 @@ export function Notifications() {
   useEffect(() => {
     if (
       timelineState.status === AsyncStatus.Success &&
-      timelineState.status !== AsyncStatus.Loading &&
       notificationTimeline.groups.length - 1 === lastVItemIndex &&
       notificationTimeline.nextToken
     ) {
@@ -838,16 +837,16 @@ export function Notifications() {
 
                 {timelineState.status === AsyncStatus.Loading &&
                   notificationTimeline.groups.length === 0 && (
-                  <Box direction="Column" gap="100">
-                    {[...Array(8).keys()].map((key) => (
-                      <SequenceCard
-                        variant="SurfaceVariant"
-                        key={key}
-                        style={{ minHeight: toRem(80) }}
-                      />
-                    ))}
-                  </Box>
-                )}
+                    <Box direction="Column" gap="100">
+                      {[...Array(8).keys()].map((key) => (
+                        <SequenceCard
+                          variant="SurfaceVariant"
+                          key={key}
+                          style={{ minHeight: toRem(80) }}
+                        />
+                      ))}
+                    </Box>
+                  )}
                 {timelineState.status === AsyncStatus.Error && (
                   <Box
                     className={ContainerColor({ variant: 'Critical' })}

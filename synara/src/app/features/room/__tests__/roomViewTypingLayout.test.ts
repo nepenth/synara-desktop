@@ -26,5 +26,5 @@ test('typing indicator sits in layout flow instead of overlaying the last messag
 test('native timeline scroll still shrinks with the in-flow typing bar', () => {
   assert.match(presenter, /<Box grow="Yes" direction="Column" style=\{\{ minHeight: 0 \}\}>/);
   assert.match(presenter, /style=\{\{ minHeight: 0, position: 'relative' \}\}/);
-  assert.match(presenter, /style=\{\{ height: '100%' \}\}/);
+  assert.match(presenter, /style=\{\{ height: '100%', overscrollBehavior: 'contain' \}\}/);
 });

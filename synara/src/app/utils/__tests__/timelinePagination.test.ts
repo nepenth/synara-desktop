@@ -7,6 +7,7 @@ import {
   isTimelinePaginationLoading,
   resolveTimelineHistoryOverlay,
   setTimelinePaginationError,
+  shouldPaginateOnWheel,
   shouldShowTimelinePaginationLoader,
 } from '../timelinePagination';
 
@@ -127,6 +128,38 @@ test('live bottom never requests forward pagination', () => {
   assert.equal(canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'restored' }), false);
   assert.equal(canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'focused' }), true);
   assert.equal(canPaginateTimelineForward({ atLiveBottom: true, positionKind: 'unread' }), true);
+  assert.equal(
+    canPaginateTimelineForward({
+      atLiveBottom: false,
+      positionKind: 'restored',
+      followingLive: true,
+    }),
+    false
+  );
+  assert.equal(
+    shouldPaginateOnWheel({
+      deltaY: 120,
+      atLiveBottom: true,
+      positionKind: 'restored',
+    }),
+    false
+  );
+  assert.equal(
+    shouldPaginateOnWheel({
+      deltaY: -120,
+      atLiveBottom: true,
+      positionKind: 'live_bottom',
+    }),
+    true
+  );
+  assert.equal(
+    shouldPaginateOnWheel({
+      deltaY: 120,
+      atLiveBottom: false,
+      positionKind: 'focused',
+    }),
+    true
+  );
   assert.deepEqual(
     resolveTimelineHistoryOverlay({
       nativeState: 'available',

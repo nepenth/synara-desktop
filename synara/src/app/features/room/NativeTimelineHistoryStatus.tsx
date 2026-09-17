@@ -55,6 +55,12 @@ function NativeTimelineHistoryStatusView({
       const timer = window.setTimeout(() => setLoadingVisible(true), LOADING_CHROME_DELAY_MS);
       return () => window.clearTimeout(timer);
     }
+    // Live-tail chrome must drop immediately. Holding it after a rejected
+    // forward page is what made "Loading newer messages" strobe on overscroll.
+    if (edge === 'forward') {
+      setLoadingVisible(false);
+      return undefined;
+    }
     const timer = window.setTimeout(() => setLoadingVisible(false), LOADING_CHROME_HOLD_MS);
     return () => window.clearTimeout(timer);
   }, [kind, edge]);

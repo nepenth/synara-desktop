@@ -64,12 +64,29 @@ export const isTimelinePaginationLoading = ({
 export const canPaginateTimelineForward = ({
   atLiveBottom,
   positionKind,
+  followingLive,
 }: {
   atLiveBottom: boolean;
   positionKind: string;
+  followingLive?: boolean;
 }): boolean => {
   if (positionKind === 'live_bottom') return false;
+  if (followingLive) return false;
   if (atLiveBottom && positionKind !== 'focused' && positionKind !== 'unread') return false;
+  return true;
+};
+
+/** Wheel past the newest row must not start a forward page. History wheels still can. */
+export const shouldPaginateOnWheel = ({
+  deltaY,
+  atLiveBottom,
+  positionKind,
+}: {
+  deltaY: number;
+  atLiveBottom: boolean;
+  positionKind: string;
+}): boolean => {
+  if (deltaY > 0 && (atLiveBottom || positionKind === 'live_bottom')) return false;
   return true;
 };
 

@@ -321,9 +321,9 @@ export function EmojiBoard({
   const groups = useGroups(imagePacks);
   const renderItem = useItemRenderer();
 
-  const nextSearchList = useMemo(() => {
+  const nextSearchList = useMemo((): Array<PackImageReader | IEmoji> => {
     const custom = imagePacks.flatMap((pack) => pack.getImages(usage));
-    return custom.length === 0 ? emojis : custom.concat(emojis);
+    return custom.length === 0 ? emojis : [...custom, ...emojis];
   }, [usage, imagePacks]);
   const searchListRef = useRef(nextSearchList);
   const searchList = stabilizeListIdentity(searchListRef.current, nextSearchList);
