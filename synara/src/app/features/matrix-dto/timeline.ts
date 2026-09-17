@@ -13,7 +13,7 @@ import {
   reqString,
 } from './parseUtil';
 
-export const LOCAL_ECHO_STATES = ['sending', 'sent', 'failed', 'cancelled'] as const;
+export const LOCAL_ECHO_STATES = ['sending', 'sent', 'failed', 'cancelled', 'wedged'] as const;
 export type LocalEchoState = typeof LOCAL_ECHO_STATES[number];
 const LOCAL_ECHO_SET = new Set<string>(LOCAL_ECHO_STATES);
 

@@ -129,7 +129,16 @@ enum SharedCoreTimelineRows {
                 return .formattedText(body: body, html: html)
             }
             return .text(body)
-        case "poll", "membership", "state", "call", "other", "sticker":
+        case "call":
+            if body == "notification" {
+                return .text("Incoming call")
+            }
+            let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty == false {
+                return .text(trimmed)
+            }
+            return .unknown(type: rowKind)
+        case "poll", "membership", "state", "other", "sticker":
             let trimmed = body.trimmingCharacters(in: .whitespacesAndNewlines)
             if trimmed.isEmpty == false {
                 return .text(trimmed)

@@ -14,6 +14,7 @@ const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
 const productionFeatures = read("scripts/check-synara-nse-core-production-features.mjs");
+const archiveExports = read("scripts/check-synara-nse-core-archive-exports.sh");
 const iosCiBuild = read("synara-ios/scripts/ci-build.sh");
 const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
 const generatorSyntax = spawnSync(
@@ -24,6 +25,16 @@ const generatorSyntax = spawnSync(
 if (generatorSyntax.status !== 0) {
   throw new Error(
     `SynaraNseCore generator shell syntax failed: ${generatorSyntax.stderr || generatorSyntax.stdout}`,
+  );
+}
+const archiveExportsSyntax = spawnSync(
+  "bash",
+  ["-n", resolve(root, "scripts/check-synara-nse-core-archive-exports.sh")],
+  { encoding: "utf8" },
+);
+if (archiveExportsSyntax.status !== 0) {
+  throw new Error(
+    `SynaraNseCore archive export checker shell syntax failed: ${archiveExportsSyntax.stderr || archiveExportsSyntax.stdout}`,
   );
 }
 const notificationService = read(
@@ -42,8 +53,13 @@ requireText(workspace, "[profile.nse-release]", "NSE size profile");
 requireText(workspace, 'lto = "fat"', "NSE cross-crate LTO");
 requireText(coreManifest, 'default = ["full-uniffi"]', "full Core default feature");
 requireText(coreManifest, "nse-preview = []", "NSE Core feature");
+requireText(coreManifest, 'search-index = ["matrix-sdk/experimental-search"]', "desktop search-index feature");
 requireText(nseManifest, "default-features = false", "full binding exclusion");
 requireText(nseManifest, 'features = ["nse-preview"]', "NSE-only feature");
+forbidText(nseManifest, "search-index", "NSE search-index feature");
+forbidText(nseManifest, "x509-identity", "NSE X.509 Core feature");
+forbidText(coreManifest, 'default = ["full-uniffi", "x509-identity"]', "X.509 must not be Core default");
+requireText(coreManifest, "x509-identity = [", "desktop-optional X.509 feature");
 requireText(nseUdl, "interface NsePreviewRequest {", "cancelable request boundary");
 requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");
@@ -73,8 +89,39 @@ requireText(
   'node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"',
   "NSE production feature CI invocation",
 );
+requireText(
+  iosCiBuild,
+  '"$nse_archive_checker" "${nse_archives[@]}"',
+  "NSE archive export CI invocation",
+);
+requireText(archiveExports, "_uniffi_synara_core_", "NSE archive full-Core export needle");
+requireText(archiveExports, "Unknown attribute kind", "rustc 1.96 LLVM22 nm mismatch handling");
 for (const triple of ["aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
   requireText(productionFeatures, `"${triple}"`, `NSE production feature ${triple} query`);
 }
+requireText(
+  productionFeatures,
+  "automatic-room-key-forwarding",
+  "NSE production graph must reject automatic-room-key-forwarding",
+);
+requireText(
+  coreManifest,
+  'full-uniffi = ["room-key-forwarding"]',
+  "full-app room-key forwarding",
+);
+requireText(
+  coreManifest,
+  "matrix-sdk/automatic-room-key-forwarding",
+  "SDK forwarding feature via Core",
+);
+requireText(
+  coreManifest,
+  "matrix-sdk-crypto/automatic-room-key-forwarding",
+  "crypto forwarding feature via Core",
+);
+requireText(productionFeatures, "matrix-sdk-search", "NSE local-index crate leak check");
+requireText(productionFeatures, "tantivy", "NSE tantivy leak check");
+requireText(productionFeatures, "x509-identity", "NSE X.509 leak check");
+requireText(productionFeatures, "rust-x509-verifier-impl", "NSE X.509 verifier leak check");
 
 console.log("Synara NSE Core isolation scaffold checks passed.");

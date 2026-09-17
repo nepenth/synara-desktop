@@ -9,8 +9,8 @@
 //!
 //! Exercises the native composer attachment owner end-to-end:
 //! register/login → create room → `AttachmentSendQueue` enqueue →
-//! `Room::send_attachment` (same SDK path as `matrix_send_attachment`) →
-//! mark sent → native timeline readback of the media event.
+//! `Room::send_queue().send_attachment` (same SDK path as `matrix_send_attachment`)
+//! → wait for `SentEvent` → native timeline readback of the media event.
 //!
 //! JS two-client Synapse CI is not this proof. WebView click-through is not required.
 
@@ -26,7 +26,10 @@ use sha1::Sha1;
 
 use crate::matrix::auth::{login_with_password, LoginOptions};
 use crate::matrix::client_builder::{build_unauthenticated_client, ClientBuildConfig};
-use crate::matrix::send::{AttachmentEnqueue, AttachmentKind, AttachmentSendQueue};
+use crate::matrix::send::{
+    send_attachment_via_room_queue, send_event_via_room_queue, AttachmentEnqueue, AttachmentKind,
+    AttachmentSendQueue,
+};
 use crate::matrix::store::{AccountIdentity, StoreKeyMaterial};
 use crate::matrix::timeline::{NativeTimelineDirection, NativeTimelineRegistry};
 
@@ -281,17 +284,17 @@ async fn live_native_attachment_send_against_disposable_synapse_when_configured(
         .expect("enqueue native attachment");
     let local_txn_id = enqueued.local_txn_id.clone();
 
-    // Same SDK owner path as `matrix_send_attachment` in product.rs.
-    let response = room
-        .send_attachment(
-            filename,
-            &mime_type,
-            TINY_PNG.to_vec(),
-            AttachmentConfig::new(),
-        )
-        .await
-        .expect("send_attachment via managed client");
-    let event_id = response.event_id.to_string();
+    // Same SDK owner path as `matrix_send_attachment`.
+    let ack = send_attachment_via_room_queue(
+        &room,
+        filename,
+        mime_type.clone(),
+        TINY_PNG.to_vec(),
+        AttachmentConfig::new(),
+    )
+    .await
+    .expect("send_attachment via RoomSendQueue");
+    let event_id = ack.event_id;
     queue
         .mark_sent(&local_txn_id)
         .expect("mark attachment sent");
@@ -329,11 +332,16 @@ async fn live_native_attachment_send_against_disposable_synapse_when_configured(
         })
         .expect("enqueue file attachment");
     let file_txn = file_enqueued.local_txn_id.clone();
-    let file_response = room
-        .send_attachment(file_name, &file_mime, file_bytes, AttachmentConfig::new())
-        .await
-        .expect("send file attachment");
-    let file_event_id = file_response.event_id.to_string();
+    let file_ack = send_attachment_via_room_queue(
+        &room,
+        file_name,
+        file_mime,
+        file_bytes,
+        AttachmentConfig::new(),
+    )
+    .await
+    .expect("send file attachment via RoomSendQueue");
+    let file_event_id = file_ack.event_id;
     queue.mark_sent(&file_txn).expect("mark file sent");
     wait_for_event_in_open_timeline(&mut registry, &client, &room_id, &file_event_id).await;
 
@@ -408,7 +416,7 @@ async fn live_native_poll_send_and_respond_against_disposable_synapse_when_confi
         .expect("post-create sync");
 
     // Send-path proof: native timeline DTO projection of poll kinds is a later
-    // V-TIMELINE residual. Authoritative V-SEND.3 evidence is Room::send plus
+    // V-TIMELINE residual. Authoritative V-SEND.3 evidence is RoomSendQueue plus
     // managed-client fetch of the resulting events from Synapse.
     let normalized = crate::matrix::send::normalize_poll(
         "V-SEND.3 proof?",
@@ -417,22 +425,26 @@ async fn live_native_poll_send_and_respond_against_disposable_synapse_when_confi
     )
     .expect("normalize poll");
     let start = crate::matrix::send::poll_start_content(&normalized).expect("poll start content");
-    let start_response = room
-        .send(start)
-        .await
-        .expect("send poll start via managed client");
-    let poll_event_id = start_response.response.event_id.clone();
+    let start_ack = send_event_via_room_queue(
+        &room,
+        matrix_sdk::ruma::events::poll::unstable_start::UnstablePollStartEventContent::New(start)
+            .into(),
+    )
+    .await
+    .expect("send poll start via RoomSendQueue");
+    let poll_event_id: matrix_sdk::ruma::OwnedEventId =
+        start_ack.event_id.parse().expect("poll start event id");
     wait_for_room_event(&client, &room, &poll_event_id).await;
 
     let answer_id = normalized.answers[0].0.clone();
     let response_content =
         crate::matrix::send::poll_response_content(poll_event_id.as_str(), &[answer_id])
             .expect("poll response content");
-    let vote_response = room
-        .send(response_content)
+    let vote_ack = send_event_via_room_queue(&room, response_content.into())
         .await
-        .expect("send poll response via managed client");
-    let vote_event_id = vote_response.response.event_id.clone();
+        .expect("send poll response via RoomSendQueue");
+    let vote_event_id: matrix_sdk::ruma::OwnedEventId =
+        vote_ack.event_id.parse().expect("poll vote event id");
     wait_for_room_event(&client, &room, &vote_event_id).await;
 
     let _ = std::fs::remove_dir_all(&store_root);
@@ -509,11 +521,12 @@ async fn live_native_rich_message_send_against_disposable_synapse_when_configure
         None,
     )
     .expect("build native rich message content");
-    let response = room
-        .send(content)
+    let ack = send_event_via_room_queue(&room, content.into())
         .await
-        .expect("send rich message via managed client");
-    let value = wait_for_message_event(&client, &room, &response.response.event_id).await;
+        .expect("send rich message via RoomSendQueue");
+    let event_id: matrix_sdk::ruma::OwnedEventId =
+        ack.event_id.parse().expect("rich message event id");
+    let value = wait_for_message_event(&client, &room, &event_id).await;
     let content = &value["content"];
     assert_eq!(content["msgtype"], "m.emote");
     assert_eq!(content["format"], "org.matrix.custom.html");
@@ -601,11 +614,11 @@ async fn live_native_thread_send_against_disposable_synapse_when_configured() {
         None,
     )
     .expect("build root message");
-    let root_response = room
-        .send(root_content)
+    let root_ack = send_event_via_room_queue(&room, root_content.into())
         .await
-        .expect("send thread root via managed client");
-    let root_event_id = root_response.response.event_id.clone();
+        .expect("send thread root via RoomSendQueue");
+    let root_event_id: matrix_sdk::ruma::OwnedEventId =
+        root_ack.event_id.parse().expect("thread root event id");
     wait_for_message_event(&client, &room, &root_event_id).await;
 
     // Start thread + genuine reply in one step: root == reply target.
@@ -619,11 +632,12 @@ async fn live_native_thread_send_against_disposable_synapse_when_configured() {
         Some(root_event_id.clone()),
     )
     .expect("build in-thread reply content");
-    let thread_response = room
-        .send(thread_content)
+    let thread_ack = send_event_via_room_queue(&room, thread_content.into())
         .await
-        .expect("send thread reply via managed client");
-    let value = wait_for_message_event(&client, &room, &thread_response.response.event_id).await;
+        .expect("send thread reply via RoomSendQueue");
+    let thread_event_id: matrix_sdk::ruma::OwnedEventId =
+        thread_ack.event_id.parse().expect("thread reply event id");
+    let value = wait_for_message_event(&client, &room, &thread_event_id).await;
     let relates = &value["content"]["m.relates_to"];
     assert_eq!(relates["rel_type"], "m.thread");
     assert_eq!(relates["event_id"], root_event_id.as_str());
@@ -637,7 +651,7 @@ async fn live_native_thread_send_against_disposable_synapse_when_configured() {
     );
 
     // Reply to the first thread reply, still under the same root.
-    let child_event_id = thread_response.response.event_id.clone();
+    let child_event_id = thread_event_id.clone();
     let nested = crate::matrix::auth::product::message_content(
         "nested reply".into(),
         Some("m.text".into()),
@@ -648,9 +662,12 @@ async fn live_native_thread_send_against_disposable_synapse_when_configured() {
         Some(root_event_id.clone()),
     )
     .expect("build nested in-thread reply");
-    let nested_response = room.send(nested).await.expect("send nested thread reply");
-    let nested_value =
-        wait_for_message_event(&client, &room, &nested_response.response.event_id).await;
+    let nested_ack = send_event_via_room_queue(&room, nested.into())
+        .await
+        .expect("send nested thread reply via RoomSendQueue");
+    let nested_event_id: matrix_sdk::ruma::OwnedEventId =
+        nested_ack.event_id.parse().expect("nested thread event id");
+    let nested_value = wait_for_message_event(&client, &room, &nested_event_id).await;
     let nested_relates = &nested_value["content"]["m.relates_to"];
     assert_eq!(nested_relates["rel_type"], "m.thread");
     assert_eq!(nested_relates["event_id"], root_event_id.as_str());

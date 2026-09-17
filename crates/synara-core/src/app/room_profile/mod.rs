@@ -12,6 +12,7 @@ mod error;
 mod index;
 mod live;
 mod native;
+mod retention;
 
 pub use error::RoomProfileError;
 pub use index::{
@@ -22,7 +23,13 @@ pub use index::{
 pub use live::{project_join_rule, JoinRuleUpdateEmit, NativeRoomJoinRuleOwner};
 pub use native::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate, ROOM_JOIN_RULE_UPDATED_EVENT,
+    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,
+    ROOM_JOIN_RULE_UPDATED_EVENT,
+};
+pub use retention::{
+    format_media_cache_summary, format_retention_copy, format_retention_duration,
+    retention_snapshot, RetentionCopy, MEDIA_CACHE_DEFAULT_SUMMARY,
+    RETENTION_HISTORY_VISIBILITY_DISTINCTION, RETENTION_NO_LOCAL_COPY, RETENTION_UNKNOWN_SUMMARY,
 };
 
 /// Static marker for link / schema smoke.

@@ -941,31 +941,41 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return Promise.resolve(null);
     },
 
-    /** F3 — room state setters for the covered types; else GAP null. */
+    /** F3 — specialized name/topic/avatar plus leftover native state send. */
     async sendStateEvent(
       roomId: RoomId,
       type: string,
       content: FacadeSendStateEventContent,
       stateKey?: string
     ): Promise<FacadeSendStateEventResult | null> {
-      const stateKeyApplied = stateKey ?? ''; // eslint-disable-line @typescript-eslint/no-unused-vars
-      const command =
-        type === 'm.room.name'
-          ? 'matrix_set_room_name'
-          : type === 'm.room.topic'
-          ? 'matrix_set_room_topic'
-          : type === 'm.room.avatar'
-          ? 'matrix_set_room_avatar'
-          : null;
-      if (!command) return null; // GAP: no generic state-event command
-      const result = await invoke(command, {
+      const stateKeyApplied = stateKey ?? '';
+      if (type === 'm.room.name' || type === 'm.room.topic' || type === 'm.room.avatar') {
+        const command =
+          type === 'm.room.name'
+            ? 'matrix_set_room_name'
+            : type === 'm.room.topic'
+            ? 'matrix_set_room_topic'
+            : 'matrix_set_room_avatar';
+        const result = await invoke(command, {
+          roomId,
+          name: content.name,
+          topic: content.topic,
+          mxc: content.url,
+          avatarUrl: content.url,
+        });
+        if (!result.available) return null;
+        return isObject(result.value) ? (result.value as FacadeSendStateEventResult) : null;
+      }
+      const result = await invoke('matrix_send_state_event', {
         roomId,
-        name: content.name,
-        avatarUrl: content.url,
-        stateKey,
+        eventType: type,
+        stateKey: stateKeyApplied,
+        content,
       });
       if (!result.available) return null;
-      return isObject(result.value) ? (result.value as FacadeSendStateEventResult) : null;
+      return isObject(result.value)
+        ? (result.value as FacadeSendStateEventResult)
+        : { status: 'ok' };
     },
 
     /** F3 — account-data is a documented GAP (no native command yet); fail-closed undefined. */

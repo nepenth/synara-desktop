@@ -28,6 +28,7 @@ test('user Settings avatar uses the native profile mxc instead of an HTTP thumbn
   assert.equal(profile.includes('resolveMatrixThumbnailUrl'), false);
   assert.match(hook, /getOwnProfileNative/);
   assert.match(hook, /OWN_PROFILE_CHANGED_EVENT/);
+  assert.match(hook, /subscribeOwnProfileNativePush/);
   assert.match(profile, /profile\.avatarUrl/);
   assert.match(profile, /notifyOwnProfileChanged/);
 });
@@ -88,6 +89,12 @@ test('General settings use positive phrasing for media loading', () => {
   assert.equal(general.includes('Disable Media Auto Load'), false);
 });
 
+test('General hosts Indexed message search with a session-reload note', () => {
+  assert.match(general, /Indexed message search/);
+  assert.match(general, /indexedMessageSearch/);
+  assert.match(general, /session reload/);
+});
+
 test('native Notifications owns homeserver push rules instead of a unavailable stub', () => {
   assert.match(notifications, /isNativeMatrixSession/);
   assert.match(notifications, /NativePushRulesEditor/);
@@ -97,4 +104,28 @@ test('native Notifications owns homeserver push rules instead of a unavailable s
     notifications.indexOf(') : (')
   );
   assert.equal(nativeBranch.includes('Account > Block'), false);
+});
+
+const devices = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/devices/Devices.tsx'),
+  'utf8'
+);
+const developerTools = readFileSync(
+  join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
+  'utf8'
+);
+
+test('X.509 identity settings live on Devices, not Developer Tools', () => {
+  assert.match(devices, /X509IdentityCard/);
+  assert.match(devices, /isNativeMatrixSession/);
+  assert.equal(developerTools.includes('X509'), false);
+  assert.equal(developerTools.includes('x509'), false);
+  assert.equal(developerTools.includes('X.509'), false);
+  const x509Card = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/devices/X509IdentityCard.tsx'),
+    'utf8'
+  );
+  assert.match(x509Card, /shares encrypted room keys/);
+  assert.match(x509Card, /Reload session/);
+  assert.equal(x509Card.includes('settingsAtom'), false);
 });

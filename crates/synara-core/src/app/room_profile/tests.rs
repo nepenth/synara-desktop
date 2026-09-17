@@ -15,6 +15,8 @@ fn sample_profile(room_id: &str) -> RoomProfile {
         directory_visibility: Some(DirectoryVisibility::Private),
         predecessor_room_id: None,
         successor_room_id: None,
+        max_lifetime_ms: None,
+        min_lifetime_ms: None,
     }
 }
 
@@ -79,6 +81,8 @@ fn set_aliases_and_conflict() {
         directory_visibility: None,
         predecessor_room_id: None,
         successor_room_id: None,
+        max_lifetime_ms: None,
+        min_lifetime_ms: None,
     })
     .unwrap();
 
@@ -124,6 +128,8 @@ fn upgrade_chain_and_self_links_forbidden() {
             directory_visibility: None,
             predecessor_room_id: None,
             successor_room_id: None,
+            max_lifetime_ms: None,
+            min_lifetime_ms: None,
         })
         .unwrap();
     }
@@ -159,6 +165,8 @@ fn forbids_data_avatar_and_bad_ids() {
             directory_visibility: None,
             predecessor_room_id: None,
             successor_room_id: None,
+            max_lifetime_ms: None,
+            min_lifetime_ms: None,
         })
         .unwrap_err();
     assert_eq!(err.diagnostic_id(), "p6.5-invalid-room-id");
@@ -176,6 +184,8 @@ fn forbids_data_avatar_and_bad_ids() {
             directory_visibility: None,
             predecessor_room_id: None,
             successor_room_id: None,
+            max_lifetime_ms: None,
+            min_lifetime_ms: None,
         })
         .unwrap_err();
     assert_eq!(err.diagnostic_id(), "p6.5-forbidden-avatar-scheme");

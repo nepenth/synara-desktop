@@ -28,6 +28,7 @@ use serde_json::Value as JsonValue;
 use crate::app::agent_approvals::is_eligible_agent_approval_prompt;
 use crate::dto::{EventId, RoomId, TimelineItemId, UserId};
 
+use super::reactions::project_view_reaction_senders;
 use super::TimelineMediaRegistry;
 
 pub const TIMELINE_VIEW_SCHEMA_VERSION: u32 = 1;
@@ -44,9 +45,20 @@ const AGENT_CARD_CONTENT_KEYS: [&str; 4] = [
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum TimelineViewPosition {
     LiveBottom,
-    Unread { anchor_event_id: EventId },
-    Focused { target_event_id: EventId },
-    Restored { anchor_event_id: Option<EventId> },
+    Unread {
+        anchor_event_id: EventId,
+    },
+    Focused {
+        target_event_id: EventId,
+    },
+    Restored {
+        anchor_event_id: Option<EventId>,
+    },
+    /// Durable thread timeline. Must not share a stream key with a permalink
+    /// `Focused` open of the same root event id.
+    Thread {
+        root_event_id: EventId,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -101,6 +113,15 @@ pub struct TimelineMediaHandle {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct TimelineReactionSender {
+    pub user_id: String,
+    /// Remote annotations can be redacted by this id. Local echoes omit it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reaction_event_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TimelineReaction {
     pub key: String,
     pub count: u32,
@@ -108,6 +129,9 @@ pub struct TimelineReaction {
     /// presenter must not represent unknown ownership as an unreacted state.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub own: Option<bool>,
+    /// Per-sender annotation ids. Poll voter identities stay off this DTO.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub senders: Vec<TimelineReactionSender>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -152,6 +176,11 @@ pub struct TimelineViewCapabilities {
     pub mark_unread: bool,
     pub paginate_backward: bool,
     pub paginate_forward: bool,
+    /// Room-level reaction redact authority for the native viewer.
+    #[serde(default)]
+    pub can_redact_own: bool,
+    #[serde(default)]
+    pub can_redact_other: bool,
 }
 
 /// Current room-power authorization used to project server-mutating row
@@ -834,6 +863,7 @@ fn project_reactions(
             key: key.clone(),
             count: reactions.len().try_into().unwrap_or(u32::MAX),
             own: own_user_id.map(|user_id| reactions.contains_key(user_id)),
+            senders: project_view_reaction_senders(reactions.iter()),
         })
         .collect()
 }
@@ -1633,6 +1663,7 @@ mod tests {
                 key: "👍".into(),
                 count: 2,
                 own: Some(true),
+                senders: Vec::new(),
             }],
         };
         let json = serde_json::to_string(&row).unwrap();
@@ -1642,6 +1673,32 @@ mod tests {
         assert!(!json.contains("@carol:example.org"));
         assert!(!json.contains("token"));
         assert!(!json.contains("ciphertext"));
+    }
+
+    #[test]
+    fn reaction_senders_serialize_without_tokens_or_ciphertext() {
+        let reaction = TimelineReaction {
+            key: "👍".into(),
+            count: 2,
+            own: Some(true),
+            senders: vec![
+                TimelineReactionSender {
+                    user_id: "@alice:example.org".into(),
+                    reaction_event_id: Some("$reaction:example.org".into()),
+                },
+                TimelineReactionSender {
+                    user_id: "@bob:example.org".into(),
+                    reaction_event_id: None,
+                },
+            ],
+        };
+        let json = serde_json::to_string(&reaction).unwrap();
+        assert!(json.contains("\"userId\":\"@alice:example.org\""));
+        assert!(json.contains("\"reactionEventId\":\"$reaction:example.org\""));
+        assert!(json.contains("\"userId\":\"@bob:example.org\""));
+        assert!(!json.contains("token"));
+        assert!(!json.contains("ciphertext"));
+        assert!(!json.contains("access_token"));
     }
 
     #[test]
@@ -1782,6 +1839,8 @@ mod tests {
                 mark_unread: true,
                 paginate_backward: true,
                 paginate_forward: true,
+                can_redact_own: false,
+                can_redact_other: false,
             },
         };
         let json = serde_json::to_string(&snapshot).unwrap();

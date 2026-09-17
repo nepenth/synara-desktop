@@ -14,6 +14,10 @@ import {
   Menu,
   MenuItem,
   Line,
+  Modal,
+  Overlay,
+  OverlayBackdrop,
+  OverlayCenter,
   PopOut,
   RectCords,
   Scroll,
@@ -26,8 +30,16 @@ import {
 import { EmojiBoard } from '../../components/emoji-board';
 import { AgentApprovalCard } from '../../components/agent-approval/AgentApprovalCard';
 import { setNativeComposerReplyDraft } from './nativeComposerDraft';
+import { publishNativeThreadRoot } from './nativeThreadViewContext';
 import { createLaterItemFromIds, upsertLaterWithNativeOwner } from './nativeLaterOwner';
-import { toggleReactionWithNativeOwner } from './nativeReactionOwner';
+import {
+  nativeReactionViewFromEventReadback,
+  nativeReactionsForViewer,
+  toggleReactionWithNativeOwner,
+  type NativeReactionReadback,
+} from './nativeReactionOwner';
+import { ReactionViewer } from './reaction-viewer';
+import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { observeNativeTimelineBottom } from './nativeTimelineVisibility';
 import {
   editTextWithNativeTimelineAction,
@@ -49,6 +61,12 @@ import {
   selectNativeTimelinePinAction,
   toggleNativePollSelection,
 } from './nativeTimelineActions';
+import { saveNativeTimelineFileAttachment } from './nativeTimelineFileSave';
+import { NativeTimelineMarkdownPreview } from './NativeTimelineMarkdownPreview';
+import {
+  isNativeTimelineMarkdownAttachment,
+  type NativeTimelineFilePreviewTarget,
+} from './nativeTimelineFilePreview';
 import {
   editedFormattedBodyForSubmit,
   filterNativeForwardTargets,
@@ -67,6 +85,7 @@ import {
   useNativeTimelineView,
 } from './nativeTimelineView';
 import type { RoomEncryptionStatus } from '../matrix-dto/room';
+import { incomingCallLabel } from '../matrix-rtc/liveCallChrome';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
@@ -78,6 +97,7 @@ import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desk
 import { stopPropagation } from '../../utils/keyboard';
 import { formatCoreAgentApprovalPrompt } from '../../utils/agentApprovals';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
+import { NativePlainMessageBody, NativeTimelineLinkUnfurl } from './nativeLinkUnfurlCard';
 import { copyRichTextToClipboard } from '../../utils/dom';
 import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 import {
@@ -101,6 +121,27 @@ import {
   type NativeTimelineRowSizeHint,
 } from './nativeTimelineViewportPolicy';
 import { shouldGroupNativeTimelineRows } from './nativeTimelineGrouping';
+import { NativeTimelineHistoryStatus } from './NativeTimelineHistoryStatus';
+import { NativeTimelineDateRail } from './NativeTimelineDateRail';
+import { timestampToEventWithNativeOwner } from './nativeTimelineTimestampToEvent';
+import {
+  activeTimelineHistoryMarkIndex,
+  collectTimedTimelineRows,
+  collectTimelineHistoryMarks,
+  formatTimelineHistoryMarkLabel,
+  isTimestampInLoadedWindow,
+  rowIndexForTimestamp,
+  rowTimestampMs,
+  shouldShowTimelineDateRail,
+  timelineRailAxis,
+  withRoomBeginningMark,
+} from '../../utils/timelineDateMarks';
+import {
+  clearTimelinePaginationError,
+  resolveTimelineHistoryOverlay,
+  setTimelinePaginationError,
+  type TimelinePaginationErrors,
+} from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -113,6 +154,11 @@ const HermesAgentCard = React.lazy(() =>
 type NativeTimelinePresenterProps = {
   roomId: string;
   eventId?: string;
+  threadRootEventId?: string;
+  onOpenThreadRoute?: (rootEventId: string) => void;
+  onCloseThreadRoute?: () => void;
+  /** `m.room.create` origin timestamp; enables a full-room date-rail axis. */
+  roomCreatedTs?: number;
 };
 
 type NativeTimelineViewport = {
@@ -147,6 +193,14 @@ const rowEventId = (row: NativeTimelineViewRow): string | undefined => {
   if ('eventId' in row) return row.eventId;
   return undefined;
 };
+
+// Only message/sticker/poll rows carry `NativeTimelineRelationPresentation`;
+// other row kinds never set `threadRoot`. `'threadRoot' in row` narrows those
+// kinds to `T & Record<'threadRoot', unknown>`, so the cast keeps this typed
+// as the real wire shape without weakening the accessor for rows that do
+// declare the field.
+const rowThreadRoot = (row: NativeTimelineViewRow): string | undefined =>
+  'threadRoot' in row ? (row.threadRoot as string | undefined) : undefined;
 
 const findAnchorIndex = (
   rows: NativeTimelineViewRow[],
@@ -320,6 +374,14 @@ type NativeTimelineRowProps = {
   sourceEncryptionStatus?: RoomEncryptionStatus;
   onActionError: (message: string) => void;
   onFocusEvent: (eventId: string) => void;
+  onViewReactions: (request: {
+    eventId: string;
+    initialKey?: string;
+    reactions: NativeReactionReadback[];
+  }) => void;
+  onOpenThread: (rootEventId: string, latestEventId?: string) => void;
+  activeThreadRoot?: string;
+  onOpenMarkdownPreview: (file: NativeTimelineFilePreviewTarget) => void;
 };
 
 // Popout menus can unmount while a Core write is still running. Keep the
@@ -395,9 +457,13 @@ type NativeTimelineRowActionsProps = {
   capabilities?: NativeTimelineRowCapabilities;
   pinned?: boolean;
   sourceEncryptionStatus?: RoomEncryptionStatus;
+  threadRoot?: string;
+  onOpenThread?: (rootEventId: string, latestEventId?: string) => void;
   onActionError: (message: string) => void;
   /** Close the transient row menu after a completed one-shot action. */
   onRequestClose?: () => void;
+  onViewReactions?: () => void;
+  hasReactions?: boolean;
 };
 
 const NativeTimelineRowActions = ({
@@ -410,8 +476,12 @@ const NativeTimelineRowActions = ({
   capabilities,
   pinned,
   sourceEncryptionStatus,
+  threadRoot,
+  onOpenThread,
   onActionError,
   onRequestClose,
+  onViewReactions,
+  hasReactions,
 }: NativeTimelineRowActionsProps) => {
   const roomList = useNativeRoomListSnapshot();
   const [editing, setEditing] = useState(false);
@@ -486,6 +556,23 @@ const NativeTimelineRowActions = ({
       </MenuItem>
     );
   }
+  if (hasReactions && onViewReactions) {
+    buttons.push(
+      <MenuItem
+        key="view-reactions"
+        size="300"
+        fill="None"
+        radii="300"
+        after={<Icon size="100" src={Icons.Smile} />}
+        onClick={() => {
+          onViewReactions();
+          closeAfterOneShotAction();
+        }}
+      >
+        View Reactions
+      </MenuItem>
+    );
+  }
   if (capabilities.reply) {
     buttons.push(
       <MenuItem
@@ -527,6 +614,7 @@ const NativeTimelineRowActions = ({
               if (result === 'unavailable') {
                 throw new Error('Native thread reply draft is unavailable.');
               }
+              onOpenThread?.(threadRoot ?? eventId);
             },
             onActionError,
             'Native thread reply draft failed.'
@@ -1068,6 +1156,66 @@ const NativeTimelineRowActionSurface = ({
   );
 };
 
+const NativeTimelineFileChip = ({
+  handleId,
+  filename,
+  mimeType,
+  onActionError,
+  onOpenMarkdownPreview,
+}: {
+  handleId: string;
+  filename?: string;
+  mimeType?: string;
+  onActionError?: (message: string) => void;
+  onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
+}) => {
+  const [busy, setBusy] = useState(false);
+  const label = filename?.trim() || 'Download file';
+  const markdown = isNativeTimelineMarkdownAttachment({ filename, mimeType });
+  const download = () => {
+    if (busy) return;
+    setBusy(true);
+    void saveNativeTimelineFileAttachment({ handleId, filename, mimeType })
+      .catch((error) => {
+        onActionError?.(error instanceof Error ? error.message : 'Could not download file.');
+      })
+      .finally(() => setBusy(false));
+  };
+  return (
+    <Box gap="200" alignItems="Baseline" wrap="Wrap">
+      <button
+        type="button"
+        className={htmlCss.FileDownload}
+        data-native-timeline-file-open={markdown ? 'preview' : 'download'}
+        data-native-timeline-file-download={markdown ? undefined : 'true'}
+        aria-label={markdown ? `Preview ${label}` : `Download ${label}`}
+        disabled={busy}
+        onClick={() => {
+          if (markdown) {
+            onOpenMarkdownPreview?.({ handleId, filename, mimeType });
+            return;
+          }
+          download();
+        }}
+      >
+        {busy && !markdown ? 'Downloading…' : label}
+      </button>
+      {markdown ? (
+        <button
+          type="button"
+          className={htmlCss.FileDownload}
+          data-native-timeline-file-download="true"
+          aria-label={`Download ${label}`}
+          disabled={busy}
+          onClick={download}
+        >
+          {busy ? 'Downloading…' : 'Download'}
+        </button>
+      ) : null}
+    </Box>
+  );
+};
+
 const NativeTimelineMedia = ({
   media,
   messageType,
@@ -1075,6 +1223,8 @@ const NativeTimelineMedia = ({
   caption,
   formattedCaption,
   sticker,
+  onActionError,
+  onOpenMarkdownPreview,
 }: {
   media?: NativeTimelineMediaHandle;
   messageType?: string;
@@ -1082,9 +1232,40 @@ const NativeTimelineMedia = ({
   caption?: string;
   formattedCaption?: string;
   sticker?: boolean;
+  onActionError?: (message: string) => void;
+  onOpenMarkdownPreview?: (file: NativeTimelineFilePreviewTarget) => void;
 }) => {
   const mediaSrc = media ? nativeTimelineMediaSrc(media) : undefined;
   const reservedBox = sticker ? NATIVE_TIMELINE_STICKER_MAX_PX : NATIVE_TIMELINE_MEDIA_MAX_PX;
+  const captionView = caption ? (
+    formattedCaption ? (
+      <NativeFormattedBody html={formattedCaption} fallbackBody={caption} />
+    ) : (
+      <Text size="T300" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
+        {caption}
+      </Text>
+    )
+  ) : null;
+  if (messageType === 'file') {
+    if (!media?.handleId) return captionView;
+    return (
+      <Box direction="Column" gap="100">
+        <NativeTimelineFileChip
+          handleId={media.handleId}
+          filename={filename}
+          mimeType={media.mimeType}
+          onActionError={onActionError}
+          onOpenMarkdownPreview={onOpenMarkdownPreview}
+        />
+        {captionView}
+        {media.mimeType ? (
+          <Text size="T200" className={htmlCss.Metadata}>
+            {media.mimeType}
+          </Text>
+        ) : null}
+      </Box>
+    );
+  }
   if (!mediaSrc) {
     if (sticker) return <Text size="T300">Sticker media is unavailable.</Text>;
     const reserved = reservedNativeTimelineMediaSize(
@@ -1101,15 +1282,6 @@ const NativeTimelineMedia = ({
   if (sticker) {
     return <img src={mediaSrc} alt="Sticker" style={mediaStyle(media, reservedBox)} />;
   }
-  const captionView = caption ? (
-    formattedCaption ? (
-      <NativeFormattedBody html={formattedCaption} fallbackBody={caption} />
-    ) : (
-      <Text size="T300" style={{ whiteSpace: 'pre-wrap', lineHeight: 1.55 }}>
-        {caption}
-      </Text>
-    )
-  ) : null;
   if (messageType === 'image') {
     return (
       <Box direction="Column" gap="100">
@@ -1144,21 +1316,6 @@ const NativeTimelineMedia = ({
           {...(media?.durationMs ? { 'data-duration-ms': String(media.durationMs) } : {})}
         />
         {captionView}
-      </Box>
-    );
-  }
-  if (messageType === 'file') {
-    return (
-      <Box direction="Column" gap="100">
-        <a href={mediaSrc} download>
-          {filename || 'Download file'}
-        </a>
-        {captionView}
-        {media?.mimeType ? (
-          <Text size="T200" className={htmlCss.Metadata}>
-            {media.mimeType}
-          </Text>
-        ) : null}
       </Box>
     );
   }
@@ -1212,16 +1369,20 @@ const NativeTimelineReplySurface = ({
 const NativeTimelineThreadSurface = ({
   threadRoot,
   thread,
-  onFocusEvent,
+  activeThreadRoot,
+  onOpenThread,
 }: {
   threadRoot?: string;
   thread?: NativeTimelineThreadSummary;
-  onFocusEvent: (eventId: string) => void;
+  activeThreadRoot?: string;
+  onOpenThread: (rootEventId: string, latestEventId?: string) => void;
 }) => {
-  const focusEventId = nativeThreadFocusEventId(thread) ?? threadRoot;
-  if (!focusEventId) return null;
+  const rootEventId = thread?.rootEventId ?? threadRoot;
+  if (!rootEventId) return null;
+  if (activeThreadRoot === rootEventId) return null;
+  const latestEventId = nativeThreadFocusEventId(thread);
   return (
-    <Button size="300" fill="Soft" onClick={() => onFocusEvent(focusEventId)}>
+    <Button size="300" fill="Soft" onClick={() => onOpenThread(rootEventId, latestEventId)}>
       {thread ? (
         <>
           Thread · {thread.replyCount} {thread.replyCount === 1 ? 'reply' : 'replies'}
@@ -1238,10 +1399,12 @@ const NativeTimelineReactionPills = ({
   reactions,
   enabled,
   onReaction,
+  onViewReactions,
 }: {
   reactions?: NativeTimelineReaction[];
   enabled: boolean;
   onReaction: (key: string) => void;
+  onViewReactions?: (key: string) => void;
 }) =>
   reactions?.length ? (
     <Box gap="100" wrap="Wrap">
@@ -1252,7 +1415,13 @@ const NativeTimelineReactionPills = ({
           variant={reaction.own ? 'Primary' : 'Secondary'}
           fill="Soft"
           disabled={!enabled}
-          onClick={() => onReaction(reaction.key)}
+          onClick={() => enabled && onReaction(reaction.key)}
+          onContextMenu={(event) => {
+            if (!onViewReactions) return;
+            event.preventDefault();
+            event.stopPropagation();
+            onViewReactions(reaction.key);
+          }}
         >
           {reaction.key} {reaction.count}
         </Button>
@@ -1409,6 +1578,10 @@ const NativeTimelineRow = ({
   sourceEncryptionStatus,
   onActionError,
   onFocusEvent,
+  onViewReactions,
+  onOpenThread,
+  activeThreadRoot,
+  onOpenMarkdownPreview,
 }: NativeTimelineRowProps) => {
   const [groupedTimestampOffset, setGroupedTimestampOffset] = useState(0);
   const [declinePending, setDeclinePending] = useState(false);
@@ -1638,6 +1811,15 @@ const NativeTimelineRow = ({
       nativeTimelineActionsInFlight.delete(completed);
     }
   }, [eventId, roomId, row, sessionGeneration]);
+  const rowViewReactions = nativeReactionsForViewer('reactions' in row ? row.reactions : undefined);
+  const openReactionViewer = (initialKey?: string) => {
+    if (!eventId) return;
+    onViewReactions({
+      eventId,
+      initialKey,
+      reactions: rowViewReactions,
+    });
+  };
 
   switch (row.kind) {
     case 'message': {
@@ -1659,6 +1841,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -1743,17 +1929,15 @@ const NativeTimelineRow = ({
                           }}
                         />
                       ) : (
-                        <Text
-                          size="T300"
+                        <NativePlainMessageBody
+                          body={isEmote ? `* ${row.body}` : row.body}
                           style={{
                             whiteSpace: 'pre-wrap',
                             fontWeight: 400,
                             lineHeight: 1.55,
                             fontStyle: isEmote ? 'italic' : undefined,
                           }}
-                        >
-                          {isEmote ? `* ${row.body}` : row.body}
-                        </Text>
+                        />
                       )}
                       {row.edited ? (
                         <Text size="T200" className={htmlCss.Metadata}>
@@ -1762,10 +1946,22 @@ const NativeTimelineRow = ({
                       ) : null}
                     </div>
                   )}
+                  <NativeTimelineLinkUnfurl
+                    roomId={roomId}
+                    sessionGeneration={sessionGeneration}
+                    encryptionStatus={sourceEncryptionStatus}
+                    body={row.body}
+                    formattedBody={row.formattedBody}
+                    messageType={row.messageType}
+                    hasMedia={Boolean(row.media)}
+                    skip={Boolean(approvalPrompt || agentPayload)}
+                    originServerTs={originServerTs}
+                  />
                   <NativeTimelineThreadSurface
                     threadRoot={row.threadRoot}
                     thread={row.thread}
-                    onFocusEvent={onFocusEvent}
+                    activeThreadRoot={activeThreadRoot}
+                    onOpenThread={onOpenThread}
                   />
                   <NativeTimelineMedia
                     media={row.media}
@@ -1773,11 +1969,14 @@ const NativeTimelineRow = ({
                     filename={row.mediaFilename}
                     caption={row.mediaCaption}
                     formattedCaption={row.formattedBody}
+                    onActionError={onActionError}
+                    onOpenMarkdownPreview={onOpenMarkdownPreview}
                   />
                   <NativeTimelineReactionPills
                     reactions={row.reactions}
                     enabled={Boolean(genericReactionCapabilities?.react)}
                     onReaction={runReaction}
+                    onViewReactions={openReactionViewer}
                   />
                 </Box>
               </Box>
@@ -1798,6 +1997,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -1817,6 +2020,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -1841,12 +2048,14 @@ const NativeTimelineRow = ({
             <NativeTimelineThreadSurface
               threadRoot={row.threadRoot}
               thread={row.thread}
-              onFocusEvent={onFocusEvent}
+              activeThreadRoot={activeThreadRoot}
+              onOpenThread={onOpenThread}
             />
             <NativeTimelineReactionPills
               reactions={row.reactions}
               enabled={Boolean(genericReactionCapabilities?.react)}
               onReaction={runReaction}
+              onViewReactions={openReactionViewer}
             />
           </Box>
         </NativeTimelineRowActionSurface>
@@ -1862,11 +2071,15 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
           <Box direction="Column" gap="100" className={rowClassName}>
-            <Text size="T300">{row.callKind}</Text>
+            <Text size="T300">{incomingCallLabel(row.callKind)}</Text>
             {capabilities?.declineCall && (
               <Button
                 size="300"
@@ -1922,6 +2135,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -1941,6 +2158,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -1961,6 +2182,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -1981,6 +2206,10 @@ const NativeTimelineRow = ({
             pinned,
             sourceEncryptionStatus,
             onActionError,
+            hasReactions: rowViewReactions.length > 0,
+            onViewReactions: rowViewReactions.length > 0 ? () => openReactionViewer() : undefined,
+            threadRoot: rowThreadRoot(row),
+            onOpenThread,
           }}
           onReaction={runReaction}
         >
@@ -2007,12 +2236,14 @@ const NativeTimelineRow = ({
             <NativeTimelineThreadSurface
               threadRoot={row.threadRoot}
               thread={row.thread}
-              onFocusEvent={onFocusEvent}
+              activeThreadRoot={activeThreadRoot}
+              onOpenThread={onOpenThread}
             />
             <NativeTimelineReactionPills
               reactions={row.reactions}
               enabled={Boolean(genericReactionCapabilities?.react)}
               onReaction={runReaction}
+              onViewReactions={openReactionViewer}
             />
           </Box>
         </NativeTimelineRowActionSurface>
@@ -2036,20 +2267,53 @@ const NativeTimelineRow = ({
  * Active owner mounted by RoomView after V-TIMELINE.C1; JS RoomTimeline deleted
  * in V-TIMELINE.C2 (dual_backend false).
  */
-export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePresenterProps) {
+export function NativeTimelinePresenter({
+  roomId,
+  eventId,
+  threadRootEventId,
+  onOpenThreadRoute,
+  onCloseThreadRoute,
+  roomCreatedTs,
+}: NativeTimelinePresenterProps) {
   const [focusEventId, setFocusEventId] = useState(eventId);
+  const [threadRootId, setThreadRootId] = useState<string | undefined>(threadRootEventId);
+  const [threadScrollEventId, setThreadScrollEventId] = useState<string | undefined>();
+  const [preferLiveBottom, setPreferLiveBottom] = useState(false);
   useEffect(() => {
     setFocusEventId(eventId);
-  }, [eventId, roomId]);
+    setThreadRootId(threadRootEventId);
+    if (threadRootEventId || eventId) {
+      setPreferLiveBottom(false);
+    }
+  }, [eventId, roomId, threadRootEventId]);
+  useEffect(() => {
+    setThreadScrollEventId(undefined);
+  }, [roomId]);
+  useEffect(() => {
+    publishNativeThreadRoot(roomId, threadRootId);
+  }, [roomId, threadRootId]);
+  useEffect(
+    () => () => {
+      publishNativeThreadRoot(roomId, undefined);
+    },
+    [roomId]
+  );
 
   const openingViewport = useMemo(
-    () => (focusEventId ? undefined : nativeTimelineViewports.get(roomId)),
-    [focusEventId, roomId]
+    () =>
+      focusEventId || threadRootId || preferLiveBottom
+        ? undefined
+        : nativeTimelineViewports.get(roomId),
+    [focusEventId, preferLiveBottom, threadRootId, roomId]
   );
   const input = useMemo(
     () => ({
       roomId,
-      position: focusEventId
+      position: threadRootId
+        ? ({ kind: 'thread', rootEventId: threadRootId } as const)
+        : preferLiveBottom
+        ? ({ kind: 'live_bottom' } as const)
+        : focusEventId
         ? ({ kind: 'focused', eventId: focusEventId } as const)
         : ({
             kind: 'normal',
@@ -2058,7 +2322,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
               : openingViewport?.anchor?.eventId,
           } as const),
     }),
-    [focusEventId, openingViewport, roomId]
+    [focusEventId, openingViewport, preferLiveBottom, roomId, threadRootId]
   );
   const controller = useNativeTimelineView(input);
   const { setReadState, followLive, jumpLatest: loadLatest, restoreLastRead } = controller;
@@ -2066,6 +2330,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const readyState = timelineState.status === 'ready' ? timelineState : undefined;
   const activeSessionGeneration = readyState?.snapshot.sessionGeneration;
   const [actionError, setActionError] = useState<string>();
+  const [filePreview, setFilePreview] = useState<NativeTimelineFilePreviewTarget>();
   const [atLiveBottom, setAtLiveBottom] = useState(false);
   const [pendingLastRead, setPendingLastRead] = useState<string>();
   const [latestPlacementRequest, setLatestPlacementRequest] = useState(0);
@@ -2082,12 +2347,31 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       document.visibilityState === 'visible' &&
       document.hasFocus()
   );
+  const mx = useMatrixClient();
+  const ownUserId = mx.getUserId() ?? undefined;
+  const [reactionViewer, setReactionViewer] = useState<{
+    eventId: string;
+    initialKey?: string;
+    reactions: NativeReactionReadback[];
+  } | null>(null);
   const roomList = useNativeRoomListSnapshot();
   const sourceEncryptionStatus = roomList.rooms.find(
     (room) => room.roomId === roomId
   )?.encryptionStatus;
   const scrollRef = useRef<HTMLDivElement>(null);
   const paginationInFlightRef = useRef<'backwards' | 'forwards' | undefined>(undefined);
+  const dateJumpInFlightRef = useRef(false);
+  const [paginationInFlight, setPaginationInFlight] = useState<'backwards' | 'forwards'>();
+  const [paginationErrors, setPaginationErrors] = useState<TimelinePaginationErrors>({});
+  const [atHistoryEdge, setAtHistoryEdge] = useState({ backward: false, forward: false });
+  useEffect(() => {
+    paginationInFlightRef.current = undefined;
+    setPaginationInFlight(undefined);
+    setPaginationErrors({});
+    setAtHistoryEdge({ backward: false, forward: false });
+    setFilePreview(undefined);
+    dateJumpInFlightRef.current = false;
+  }, [eventId, roomId]);
   const pendingBackwardGrowRef = useRef(false);
   const lastParkedStartRef = useRef(-1);
   const lastClientHeightRef = useRef(0);
@@ -2123,6 +2407,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const [hideNickAvatarEvents] = useSetting(settingsAtom, 'hideNickAvatarEvents');
   const [hideActivity] = useSetting(settingsAtom, 'hideActivity');
   const [messageSpacing] = useSetting(settingsAtom, 'messageSpacing');
+  const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const timelineReady = readyState !== undefined;
   useEffect(() => {
     const element = scrollRef.current;
@@ -2224,9 +2509,99 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     measureElement,
     overscan: 8,
   });
+  const timedRows = useMemo(() => collectTimedTimelineRows(rows), [rows]);
+  const railAxis = useMemo(
+    () => timelineRailAxis(timedRows, roomCreatedTs, Date.now()),
+    [roomCreatedTs, timedRows]
+  );
+  const historyMarks = useMemo(
+    () => withRoomBeginningMark(collectTimelineHistoryMarks(rows), railAxis),
+    [railAxis, rows]
+  );
+  const railContextRef = useRef({
+    axis: railAxis,
+    timed: timedRows,
+    backwardAvailable: false,
+    forwardAvailable: false,
+  });
+  railContextRef.current = {
+    axis: railAxis,
+    timed: timedRows,
+    backwardAvailable: readyState?.snapshot.pagination.backward === 'available',
+    forwardAvailable: readyState?.snapshot.pagination.forward === 'available',
+  };
+  const getVisibleTimestamp = useCallback(() => {
+    const index = virtualizer.getVirtualItems()[0]?.index ?? 0;
+    const row = rowsRef.current[index];
+    return (
+      (row ? rowTimestampMs(row) : undefined) ?? railContextRef.current.axis?.endMs ?? Date.now()
+    );
+  }, [virtualizer]);
+  const scrollToHistoryTimestamp = useCallback(
+    (timestampMs: number) => {
+      followingLiveRef.current = false;
+      userInitiatedScrollRef.current = true;
+      programmaticScrollUntilRef.current = 0;
+      virtualizer.scrollToIndex(rowIndexForTimestamp(railContextRef.current.timed, timestampMs), {
+        align: 'start',
+        behavior: 'auto',
+      });
+    },
+    [virtualizer]
+  );
+  const previewHistoryTimestamp = useCallback(
+    (timestampMs: number) => {
+      const { axis, backwardAvailable, forwardAvailable } = railContextRef.current;
+      if (!axis) return;
+      if (isTimestampInLoadedWindow(timestampMs, axis, { backwardAvailable, forwardAvailable })) {
+        scrollToHistoryTimestamp(timestampMs);
+      }
+    },
+    [scrollToHistoryTimestamp]
+  );
+  const commitHistoryTimestamp = useCallback(
+    (timestampMs: number) => {
+      const { axis, backwardAvailable, forwardAvailable } = railContextRef.current;
+      if (!axis) return;
+      if (isTimestampInLoadedWindow(timestampMs, axis, { backwardAvailable, forwardAvailable })) {
+        scrollToHistoryTimestamp(timestampMs);
+        return;
+      }
+      if (dateJumpInFlightRef.current) return;
+      dateJumpInFlightRef.current = true;
+      setActionError(undefined);
+      const navigation = roomId;
+      void timestampToEventWithNativeOwner(roomId, timestampMs)
+        .then((found) => {
+          if (mountedRoomRef.current !== navigation) return;
+          const index = findAnchorIndex(rowsRef.current, {
+            itemId: found.eventId,
+            eventId: found.eventId,
+          });
+          if (index >= 0) {
+            smoothScrollActiveRef.current = true;
+            virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
+            return;
+          }
+          setFocusEventId(found.eventId);
+        })
+        .catch((error) => {
+          if (mountedRoomRef.current === navigation) {
+            setActionError(error instanceof Error ? error.message : 'Could not jump to that time.');
+          }
+        })
+        .finally(() => {
+          dateJumpInFlightRef.current = false;
+        });
+    },
+    [roomId, scrollToHistoryTimestamp, virtualizer]
+  );
 
   const initialPlacementRef = useRef<string | undefined>(undefined);
   const saveViewport = useCallback(() => {
+    // Thread geometry must not overwrite the parked live room viewport.
+    // Back restores that live location; Jump to latest opens live tail.
+    if (threadRootId) return;
     // Programmatic prepend/stick/placement must not snapshot in-flight
     // geometry. A rows-change effect used to call this while the parked
     // event was still off the virtual window, which cleared visualTopPx
@@ -2260,7 +2635,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         visualTopPx: visualTop ?? parkedVisualTopRef.current,
       },
     });
-  }, [roomId, rows, virtualizer]);
+  }, [roomId, rows, threadRootId, virtualizer]);
 
   const liveTailSubmittedKeyRef = useRef<string | undefined>(undefined);
   const liveTailMarkGenerationRef = useRef(0);
@@ -2306,6 +2681,13 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     setPendingLastRead(undefined);
     setAtLiveBottom(false);
   }, [roomId]);
+
+  useEffect(() => {
+    followingLiveRef.current = false;
+    initialPlacementRef.current = undefined;
+    lastParkedStartRef.current = -1;
+    parkedVisualTopRef.current = undefined;
+  }, [threadRootId]);
 
   const liveTailReadTarget = readyState
     ? nativeLiveReadTarget({
@@ -2448,6 +2830,42 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const readyStateRef = useRef(readyState);
   readyStateRef.current = readyState;
   const hasReadyState = readyState !== undefined;
+  const requestPagination = useCallback(
+    (direction: 'backwards' | 'forwards') => {
+      const current = readyStateRef.current;
+      if (!current || paginationInFlightRef.current) return;
+      const pageState =
+        direction === 'backwards'
+          ? current.snapshot.pagination.backward
+          : current.snapshot.pagination.forward;
+      const permitted =
+        direction === 'backwards'
+          ? current.snapshot.capabilities.paginateBackward
+          : current.snapshot.capabilities.paginateForward;
+      if (!permitted || pageState === 'exhausted' || pageState === 'unavailable') return;
+      if (pageState === 'loading') return;
+      paginationInFlightRef.current = direction;
+      setPaginationInFlight(direction);
+      if (direction === 'backwards') pendingBackwardGrowRef.current = true;
+      const errorDirection = direction === 'backwards' ? 'backward' : 'forward';
+      setPaginationErrors((errors) => clearTimelinePaginationError(errors, errorDirection));
+      void paginate(direction)
+        .catch((error) => {
+          setPaginationErrors((errors) =>
+            setTimelinePaginationError(errors, errorDirection, error)
+          );
+        })
+        .finally(() => {
+          if (paginationInFlightRef.current === direction) {
+            paginationInFlightRef.current = undefined;
+            setPaginationInFlight(undefined);
+          }
+        });
+    },
+    [paginate]
+  );
+  const requestPaginationRef = useRef(requestPagination);
+  requestPaginationRef.current = requestPagination;
   useEffect(() => {
     if (!hasReadyState) {
       scrollHandlersRef.current = undefined;
@@ -2471,23 +2889,21 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           ? 'forwards'
           : undefined;
       if (!direction) return;
-
-      paginationInFlightRef.current = direction;
-      if (direction === 'backwards') pendingBackwardGrowRef.current = true;
-      setActionError(undefined);
-      void paginate(direction)
-        .catch((error) => {
-          setActionError(
-            error instanceof Error ? error.message : 'Native timeline pagination failed.'
-          );
-        })
-        .finally(() => {
-          paginationInFlightRef.current = undefined;
-        });
+      requestPaginationRef.current(direction);
+    };
+    const updateHistoryEdge = (distanceFromBottom: number) => {
+      const next = {
+        backward: scrollEl.scrollTop <= 96,
+        forward: distanceFromBottom <= 96,
+      };
+      setAtHistoryEdge((previous) =>
+        previous.backward === next.backward && previous.forward === next.forward ? previous : next
+      );
     };
     const onScroll = () => {
       const distanceFromBottom = scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight;
       const atBottom = distanceFromBottom <= 8;
+      updateHistoryEdge(distanceFromBottom);
       if (applyingStickRef.current) {
         lastDistanceFromBottomRef.current = distanceFromBottom;
         setAtLiveBottom((previous) => (previous === atBottom ? previous : atBottom));
@@ -2550,6 +2966,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
         const el = scrollRef.current;
         if (el) el.scrollTo({ top: el.scrollTop, behavior: 'auto' });
       }
+      if (event instanceof WheelEvent) paginateAtEdge();
       // A click is not a departure from the live tail. Actual scrolling below
       // recomputes ownership from geometry, including during drag/scroll input.
     };
@@ -2670,6 +3087,10 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     const selectedAnchor =
       selectedPosition.kind === 'focused'
         ? { eventId: selectedPosition.target_event_id, itemId: selectedPosition.target_event_id }
+        : selectedPosition.kind === 'thread'
+        ? threadScrollEventId
+          ? { eventId: threadScrollEventId, itemId: threadScrollEventId }
+          : undefined
         : selectedPosition.kind === 'unread'
         ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
         : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
@@ -2679,12 +3100,16 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           }
         : undefined;
     const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${
-      selectedAnchor?.eventId ?? ''
+      selectedAnchor?.eventId ??
+      (selectedPosition.kind === 'thread' ? selectedPosition.root_event_id : '')
     }`;
     const initialPlacement = initialPlacementRef.current !== placementKey;
-    const savedViewport = initialPlacement
-      ? openingViewport ?? nativeTimelineViewports.get(roomId)
-      : nativeTimelineViewports.get(roomId);
+    const savedViewport =
+      selectedPosition.kind === 'thread'
+        ? undefined
+        : initialPlacement
+        ? openingViewport ?? nativeTimelineViewports.get(roomId)
+        : nativeTimelineViewports.get(roomId);
     const parkedIndex = savedViewport?.anchor ? findAnchorIndex(rows, savedViewport.anchor) : -1;
     const explicitLatest = latestPlacementRequest !== appliedLatestPlacementRef.current;
     appliedLatestPlacementRef.current = latestPlacementRequest;
@@ -2711,10 +3136,11 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
       // Passive live promotion must preserve an unresolved last-read action.
       if (
         selectedPosition.kind === 'live_bottom' ||
+        (selectedPosition.kind === 'thread' && anchorIndex < 0) ||
         explicitLatest ||
         (missingLastRead && anchorIndex < 0)
       ) {
-        followingLiveRef.current = true;
+        followingLiveRef.current = selectedPosition.kind !== 'thread';
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(rows.length - 1, { align: 'end', behavior: 'auto' });
       } else if (anchorIndex >= 0) {
@@ -2787,6 +3213,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     openingViewport,
     pinParkedHistory,
     stickToLiveTail,
+    threadScrollEventId,
   ]);
 
   // Sticking to the live tail from the rows effect uses estimated heights for
@@ -2835,9 +3262,36 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
     [rows, virtualizer]
   );
 
+  const openThread = useCallback(
+    (rootEventId: string, latestEventId?: string) => {
+      if (!rootEventId.startsWith('$') || rootEventId.length <= 1) return;
+      if (!threadRootId) saveViewport();
+      setPreferLiveBottom(false);
+      setFocusEventId(undefined);
+      setThreadRootId(rootEventId);
+      setThreadScrollEventId(latestEventId);
+      onOpenThreadRoute?.(rootEventId);
+    },
+    [onOpenThreadRoute, saveViewport, threadRootId]
+  );
+
+  const closeThread = useCallback(() => {
+    setThreadRootId(undefined);
+    setThreadScrollEventId(undefined);
+    setPreferLiveBottom(false);
+    onCloseThreadRoute?.();
+  }, [onCloseThreadRoute]);
+
   const jumpToLatest = useCallback(() => {
     setActionError(undefined);
     setPendingLastRead(undefined);
+    if (threadRootId) {
+      setThreadRootId(undefined);
+      setThreadScrollEventId(undefined);
+      setPreferLiveBottom(true);
+      onCloseThreadRoute?.();
+      return;
+    }
     // The new provider's layout effect places the tail. Until its geometry
     // confirms the bottom, preserve the control and do not claim visibility.
     const navigation = input;
@@ -2854,7 +3308,7 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
             error instanceof Error ? error.message : 'Could not open latest messages.'
           );
       });
-  }, [input, loadLatest]);
+  }, [input, loadLatest, onCloseThreadRoute, threadRootId]);
   useEffect(() => observeRoomLatestAfterSend(roomId, jumpToLatest), [roomId, jumpToLatest]);
 
   const jumpToLastRead = useCallback(() => {
@@ -2920,17 +3374,70 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
   const { snapshot } = readyState;
   const showJumpToLastRead = shouldShowJumpToLastRead(pendingLastRead);
   const showJumpToLatest = shouldShowJumpToLatest(readyState.selectedPosition.kind, atLiveBottom);
+  const eventRowCount = rows.filter((row) => rowEventId(row)).length;
+  const hasSparseLoadButton =
+    eventRowCount <= 1 &&
+    snapshot.pagination.backward === 'available' &&
+    paginationInFlight !== 'backwards' &&
+    !paginationErrors.backward;
+  const backwardOverlay = resolveTimelineHistoryOverlay({
+    nativeState: snapshot.pagination.backward,
+    inFlight: paginationInFlight === 'backwards',
+    error: paginationErrors.backward,
+    atEdge: atHistoryEdge.backward,
+    canPaginate: snapshot.capabilities.paginateBackward,
+    hasSparseLoadButton,
+  });
+  const forwardOverlay = resolveTimelineHistoryOverlay({
+    nativeState: snapshot.pagination.forward,
+    inFlight: paginationInFlight === 'forwards',
+    error: paginationErrors.forward,
+    atEdge: atHistoryEdge.forward,
+    canPaginate: snapshot.capabilities.paginateForward,
+    hasSparseLoadButton: true,
+  });
+  // One date chrome at a time: the rail already labels loaded history.
+  const showDateRail = shouldShowTimelineDateRail(rows.length, historyMarks.length);
+  const visibleStartIndex = virtualizer.getVirtualItems()[0]?.index ?? 0;
+  const activeMarkIndex =
+    showDateRail || atLiveBottom
+      ? -1
+      : activeTimelineHistoryMarkIndex(historyMarks, visibleStartIndex);
+  const activeMark = activeMarkIndex >= 0 ? historyMarks[activeMarkIndex] : undefined;
+  const visibleDateLabel = activeMark
+    ? formatTimelineHistoryMarkLabel(activeMark, hour24Clock)
+    : undefined;
 
   return (
     <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
       {actionError && <Text size="T300">{actionError}</Text>}
+      {threadRootId ? (
+        <Box style={{ padding: config.space.S200 }} alignItems="Start">
+          <Button
+            size="300"
+            fill="Soft"
+            before={<Icon src={Icons.ArrowLeft} size="100" />}
+            onClick={closeThread}
+            aria-label="Back to room"
+          >
+            Back
+          </Button>
+        </Box>
+      ) : null}
+      {hasSparseLoadButton ? (
+        <Box shrink="No" style={{ padding: `${config.space.S200} ${config.space.S400}` }}>
+          <Button onClick={() => requestPagination('backwards')}>
+            <Text>Load older messages</Text>
+          </Button>
+        </Box>
+      ) : null}
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
-        <Scroll ref={scrollRef} visibility="Hover" style={{ height: '100%' }}>
-          {snapshot.pagination.backward === 'loading' && (
-            <Box justifyContent="Center" style={{ padding: config.space.S200 }}>
-              <Spinner size="200" aria-label="Loading older messages" />
-            </Box>
-          )}
+        <Scroll
+          id="native-timeline-history"
+          ref={scrollRef}
+          visibility="Hover"
+          style={{ height: '100%' }}
+        >
           {rows.length === 0 ? (
             <Box
               alignItems="Center"
@@ -2978,31 +3485,57 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
                     sourceEncryptionStatus={sourceEncryptionStatus}
                     onActionError={setActionError}
                     onFocusEvent={onFocusEvent}
+                    onViewReactions={(request) => {
+                      setReactionViewer(request);
+                      void nativeReactionViewFromEventReadback({
+                        roomId,
+                        eventId: request.eventId,
+                      }).then((refreshed) => {
+                        if (!refreshed) return;
+                        setReactionViewer((current) =>
+                          current?.eventId === request.eventId
+                            ? { ...current, reactions: refreshed }
+                            : current
+                        );
+                      });
+                    }}
+                    onOpenThread={openThread}
+                    activeThreadRoot={threadRootId}
+                    onOpenMarkdownPreview={setFilePreview}
                   />
                 </div>
               );
             })}
           </div>
-          {snapshot.pagination.forward === 'loading' && (
-            <Box justifyContent="Center" style={{ padding: config.space.S200 }}>
-              <Spinner size="200" aria-label="Loading newer messages" />
-            </Box>
-          )}
         </Scroll>
-        {rows.filter((row) => rowEventId(row)).length <= 1 &&
-          snapshot.pagination.backward === 'available' && (
-            <Box style={{ position: 'absolute', left: config.space.S400, top: config.space.S300 }}>
-              <Button
-                onClick={() => {
-                  void controller
-                    .paginate('backwards')
-                    .catch((error) => setActionError(String(error)));
-                }}
-              >
-                <Text>Load older messages</Text>
-              </Button>
-            </Box>
-          )}
+        <NativeTimelineHistoryStatus
+          edge="backward"
+          kind={backwardOverlay.kind}
+          errorMessage={backwardOverlay.message}
+          visibleDateLabel={visibleDateLabel}
+          reserveRail={showDateRail}
+          onRetry={() => requestPagination('backwards')}
+          onLoadMore={() => requestPagination('backwards')}
+        />
+        <NativeTimelineHistoryStatus
+          edge="forward"
+          kind={forwardOverlay.kind}
+          errorMessage={forwardOverlay.message}
+          reserveRail={showDateRail}
+          onRetry={() => requestPagination('forwards')}
+          onLoadMore={() => requestPagination('forwards')}
+        />
+        {showDateRail && railAxis ? (
+          <NativeTimelineDateRail
+            marks={historyMarks}
+            axis={railAxis}
+            hour24Clock={hour24Clock}
+            scrollRef={scrollRef}
+            getVisibleTimestamp={getVisibleTimestamp}
+            onPreviewTimestamp={previewHistoryTimestamp}
+            onCommitTimestamp={commitHistoryTimestamp}
+          />
+        ) : null}
         {(showJumpToLastRead || showJumpToLatest) && (
           <Box
             direction="Column"
@@ -3053,6 +3586,45 @@ export function NativeTimelinePresenter({ roomId, eventId }: NativeTimelinePrese
           </Box>
         )}
       </Box>
+      <Overlay
+        open={Boolean(reactionViewer)}
+        backdrop={<OverlayBackdrop />}
+        onContextMenu={(event: React.MouseEvent) => event.stopPropagation()}
+      >
+        <OverlayCenter>
+          <FocusTrap
+            focusTrapOptions={{
+              initialFocus: false,
+              returnFocusOnDeactivate: false,
+              onDeactivate: () => setReactionViewer(null),
+              clickOutsideDeactivates: true,
+              escapeDeactivates: stopPropagation,
+            }}
+          >
+            <Modal variant="Surface" size="300">
+              {reactionViewer ? (
+                <ReactionViewer
+                  roomId={roomId}
+                  targetEventId={reactionViewer.eventId}
+                  reactions={reactionViewer.reactions}
+                  initialKey={reactionViewer.initialKey}
+                  ownUserId={ownUserId}
+                  canRedactOwn={Boolean(snapshot.capabilities.canRedactOwn)}
+                  canRedactOther={Boolean(snapshot.capabilities.canRedactOther)}
+                  requestClose={() => setReactionViewer(null)}
+                />
+              ) : null}
+            </Modal>
+          </FocusTrap>
+        </OverlayCenter>
+      </Overlay>
+      {filePreview ? (
+        <NativeTimelineMarkdownPreview
+          target={filePreview}
+          onClose={() => setFilePreview(undefined)}
+          onActionError={setActionError}
+        />
+      ) : null}
     </Box>
   );
 }

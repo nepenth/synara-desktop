@@ -31,7 +31,10 @@
     "isNotificationSounds",
     "hour24Clock",
     "dateFormatString",
-    "developerTools"
+    "developerTools",
+    "experimentalWidgetsEnabled",
+    "indexedMessageSearch",
+    "encryptedStateEvents"
   ],
   "properties": {
     "themeId": { "type": "string" },
@@ -85,6 +88,9 @@
     "isNotificationSounds": { "type": "boolean" },
     "hour24Clock": { "type": "boolean" },
     "dateFormatString": { "type": "string" },
-    "developerTools": { "type": "boolean" }
+    "developerTools": { "type": "boolean" },
+    "experimentalWidgetsEnabled": { "type": "boolean" },
+    "indexedMessageSearch": { "type": "boolean" },
+    "encryptedStateEvents": { "type": "boolean" }
   }
 }

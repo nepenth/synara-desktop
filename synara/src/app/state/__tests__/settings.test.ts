@@ -30,13 +30,28 @@ const createMemoryStorage = (initialValues: Record<string, string> = {}): Memory
   };
 };
 
+test('encrypted state events setting defaults on and is shared', () => {
+  const store = createLocalStorageSettingsStore(createMemoryStorage());
+  assert.equal(defaultSharedSettings.encryptedStateEvents, true);
+  assert.equal(defaultSettings.encryptedStateEvents, true);
+  assert.equal(store.getSharedSettings().encryptedStateEvents, true);
+  store.setSettings({ ...defaultSettings, encryptedStateEvents: false });
+  assert.equal(store.getSharedSettings().encryptedStateEvents, false);
+});
+
 test('modernization opt-in settings default off', () => {
   const store = createLocalStorageSettingsStore(createMemoryStorage());
 
   assert.equal(defaultSettings.gifSearchEnabled, false);
+  assert.equal(defaultSettings.experimentalWidgetsEnabled, false);
+  assert.deepEqual(defaultSettings.agentWidgetEntries, []);
+  assert.equal(store.getSettings().experimentalWidgetsEnabled, false);
+  assert.deepEqual(store.getSettings().agentWidgetEntries, []);
+  assert.equal(defaultSettings.indexedMessageSearch, true);
   assert.equal(defaultSettings.gifOnboardingDismissed, false);
   assert.equal(defaultSettings.timelineVirtualizationEnabled, true);
   assert.equal(store.getSettings().gifSearchEnabled, false);
+  assert.equal(store.getSettings().indexedMessageSearch, true);
   assert.equal(store.getSettings().timelineVirtualizationEnabled, true);
   assert.equal(defaultSettings.desktopDiagnosticsEnabled, false);
   assert.equal(defaultSettings.desktopDiagnosticsPerformance, false);
@@ -78,6 +93,7 @@ test('settings store reads legacy desktop shortcuts from the shared settings blo
     desktopDiagnosticsSession: false,
     desktopDiagnosticsRoomState: false,
     desktopDiagnosticsOverlay: false,
+    agentWidgetEntries: [],
   });
   assert.equal(store.getSettings().desktopShortcutNotifications, 'CmdOrCtrl+3');
 });
@@ -113,6 +129,7 @@ test('settings store writes shared and desktop platform settings separately', ()
     desktopDiagnosticsSession: true,
     desktopDiagnosticsRoomState: true,
     desktopDiagnosticsOverlay: true,
+    agentWidgetEntries: [],
   });
 });
 

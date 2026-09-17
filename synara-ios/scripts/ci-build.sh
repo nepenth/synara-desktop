@@ -158,18 +158,23 @@ done
 # The live test fixture enables full Core only as a dev dependency. Validate
 # the same normal/build feature graph used by the generated shipping archive.
 node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"
+nse_archive_checker="$repo_root/scripts/check-synara-nse-core-archive-exports.sh"
+if [[ ! -x "$nse_archive_checker" ]]; then
+  echo "SynaraNseCore archive export checker is required at $nse_archive_checker" >&2
+  exit 127
+fi
+nse_archives=()
 while IFS= read -r nse_archive; do
-  # Capture completed nm output. A grep -q pipeline can SIGPIPE nm and treat a
-  # failed inspection as a clean archive.
-  if ! nse_nm_output="$(nm -gU "$nse_archive")"; then
-    echo "SynaraNseCore archive symbol inspection failed: $nse_archive" >&2
-    exit 1
-  fi
-  if [[ "$nse_nm_output" == *'_uniffi_synara_core_'* ]]; then
-    echo "SynaraNseCore archive contains forbidden full Core exports: $nse_archive" >&2
-    exit 1
-  fi
+  nse_archives+=("$nse_archive")
 done < <(find "SynaraNseCore/Artifacts/SynaraNseCore.xcframework" -name 'libsynara_nse_core*.a' -type f)
+if [[ "${#nse_archives[@]}" -eq 0 ]]; then
+  echo "SynaraNseCore XCFramework is missing libsynara_nse_core archives" >&2
+  exit 1
+fi
+# Capture completed inspection output. Apple nm cannot read rustc 1.96 /
+# LLVM 22 bitcode; the checker skips that reader mismatch without treating it
+# as a failed compile, and still rejects full-Core UniFFI exports.
+"$nse_archive_checker" "${nse_archives[@]}"
 for generated_ffi_file in synara_coreFFI.h module.modulemap; do
   if ! find "SynaraCore/Artifacts/SynaraCore.xcframework" \
     -path "*/Headers/$generated_ffi_file" -print -quit | grep -q .; then

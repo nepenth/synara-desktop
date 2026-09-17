@@ -181,7 +181,7 @@ function hasAppleRustToolchainStep(jobLines) {
   return parseSteps(jobLines ?? []).some((step) => {
     const uses = getScalar(step, "uses", 8) ?? "";
     if (!uses.startsWith("dtolnay/rust-toolchain@")) return false;
-    if (getNestedScalar(step, "with", "toolchain", 8) !== "1.93") return false;
+    if (getNestedScalar(step, "with", "toolchain", 8) !== "1.96") return false;
     const targets = (getNestedScalar(step, "with", "targets", 8) ?? "")
       .split(",")
       .map((target) => target.trim())
@@ -713,7 +713,7 @@ export function inspectQualityGates({
 
   if (!hasAppleRustToolchainStep(testflightUpload)) {
     errors.push(
-      "TestFlight upload must install Rust 1.93 with aarch64-apple-ios before archive."
+      "TestFlight upload must install Rust 1.96 with aarch64-apple-ios before archive."
     );
   }
 

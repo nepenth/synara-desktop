@@ -183,7 +183,34 @@ test('valid_room_summary parses', () => {
   assert.equal(r.lastMessageIsAgentApproval, false);
   assert.equal(r.heroes?.length, 1);
   assert.equal(r.isFavorite, false);
+  assert.equal(r.isCall, false);
+  assert.equal(r.hasActiveCall, false);
+  assert.equal(r.activeCallParticipantCount, 0);
+  assert.equal(r.directUserId, undefined);
   assert.equal(r.encryptionStatus, 'encrypted');
+});
+
+test('room summary live-call fields do not overload isCall', () => {
+  const valid = loadFixture('valid_room_summary.json') as Record<string, unknown>;
+  assert.equal(parseRoomSummary({ ...valid, isCall: true })?.hasActiveCall, false);
+  assert.equal(parseRoomSummary({ ...valid, isCall: true })?.isCall, true);
+  const live = parseRoomSummary({
+    ...valid,
+    isCall: false,
+    hasActiveCall: true,
+    activeCallParticipantCount: 3,
+  });
+  assert.equal(live?.isCall, false);
+  assert.equal(live?.hasActiveCall, true);
+  assert.equal(live?.activeCallParticipantCount, 3);
+  assert.equal(parseRoomSummary({ ...valid, activeCallParticipantCount: -1 }), null);
+  const dm = parseRoomSummary({
+    ...valid,
+    isDirect: true,
+    directUserId: '@bob:example.org',
+  });
+  assert.equal(dm?.directUserId, '@bob:example.org');
+  assert.equal(parseRoomSummary({ ...valid, directUserId: 1 }), null);
 });
 
 test('room summary requires a closed authoritative encryption status', () => {
@@ -211,6 +238,22 @@ test('room summary lastMessageIsAgentApproval defaults false and accepts true', 
     true
   );
   assert.equal(parseRoomSummary({ ...valid, lastMessageIsAgentApproval: 'yes' }), null);
+});
+
+test('room summary optional stateEncrypted must not break isEncrypted consistency', () => {
+  const valid = loadFixture('valid_room_summary.json') as Record<string, unknown>;
+  assert.equal(parseRoomSummary(valid)?.stateEncrypted, false);
+  assert.equal(parseRoomSummary({ ...valid, stateEncrypted: true })?.stateEncrypted, true);
+  assert.equal(
+    parseRoomSummary({
+      ...valid,
+      isEncrypted: false,
+      encryptionStatus: 'not_encrypted',
+      stateEncrypted: true,
+    }),
+    null
+  );
+  assert.equal(parseRoomSummary({ ...valid, stateEncrypted: 'yes' }), null);
 });
 
 test('room summary rejects invalid membership', () => {

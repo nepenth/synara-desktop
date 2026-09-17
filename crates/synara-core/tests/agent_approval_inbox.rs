@@ -1,5 +1,7 @@
 //! The real SDK supplies unopened room state, reaction aggregation and redaction
 //! diffs. Only its homeserver HTTP transport is deterministic test data.
+#![recursion_limit = "256"]
+
 use matrix_sdk::test_utils::mocks::{MatrixMockServer, RoomMessagesResponseTemplate};
 use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, LeftRoomBuilder, BOB};
 use ruma::{event_id, room_id, RoomVersionId};
@@ -206,48 +208,70 @@ async fn limited_sync_gap_invalidates_coverage_until_recent_history_is_recovered
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
     client.event_cache().subscribe().unwrap();
-    let room_id = room_id!("!approval-gap:example.org");
-    let f = EventFactory::new().room(room_id);
+    let room_a = room_id!("!approval-gap:example.org");
+    let room_b = room_id!("!approval-gap-b:example.org");
+    let own_user = client.user_id().unwrap().to_owned();
     let now = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .unwrap()
         .as_millis() as u64;
     let older = event_id!("$gap-boundary");
     let prompt = event_id!("$gap-prompt");
+    let prompt_b = event_id!("$gap-prompt-b");
+    let f_a = EventFactory::new().room(room_a);
+    let f_b = EventFactory::new().room(room_b);
     server
         .sync_room(
             &client,
-            JoinedRoomBuilder::new(room_id)
-                .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11))
+            JoinedRoomBuilder::new(room_a)
+                .add_state_event(f_a.create(&own_user, RoomVersionId::V11))
                 .add_timeline_event(
-                    f.text_msg("before the window")
+                    f_a.text_msg("before the window")
                         .sender(*BOB)
                         .event_id(older)
                         .server_ts(now - 360_000),
                 )
                 .add_timeline_event(
-                    f.text_msg(PROMPT)
+                    f_a.text_msg(PROMPT)
                         .sender(*BOB)
                         .event_id(prompt)
                         .server_ts(now - 60_000),
                 ),
         )
         .await;
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_b)
+                .add_state_event(f_b.create(&own_user, RoomVersionId::V11))
+                .add_timeline_event(
+                    f_b.text_msg(PROMPT)
+                        .sender(*BOB)
+                        .event_id(prompt_b)
+                        .server_ts(now - 60_000),
+                ),
+        )
+        .await;
     let owner = NativeTimelineOwner::new(&client, Arc::new(|_| {}), 5);
     wait_for(&owner, |s| {
-        !s.loading && !s.incomplete && s.items.len() == 1
+        !s.loading
+            && !s.incomplete
+            && s.items.iter().any(|item| item.event_id == prompt.as_str())
+            && s.items
+                .iter()
+                .any(|item| item.event_id == prompt_b.as_str())
     })
     .await;
     server
         .mock_room_messages()
         .ok(RoomMessagesResponseTemplate::default()
             .events(vec![
-                f.text_msg(PROMPT)
+                f_a.text_msg(PROMPT)
                     .sender(*BOB)
                     .event_id(prompt)
                     .server_ts(now - 60_000)
                     .into_raw_timeline(),
-                f.text_msg("before the window")
+                f_a.text_msg("before the window")
                     .sender(*BOB)
                     .event_id(older)
                     .server_ts(now - 360_000)
@@ -259,19 +283,48 @@ async fn limited_sync_gap_invalidates_coverage_until_recent_history_is_recovered
     server
         .sync_room(
             &client,
-            JoinedRoomBuilder::new(room_id)
+            JoinedRoomBuilder::new(room_a)
                 .set_timeline_limited()
                 .set_timeline_prev_batch("gap-to-recover")
-                .add_timeline_event(f.text_msg("after a sync gap").sender(*BOB).server_ts(now)),
+                .add_timeline_event(f_a.text_msg("after a sync gap").sender(*BOB).server_ts(now)),
         )
         .await;
-    let gap = wait_for(&owner, |s| s.incomplete).await;
+    let gap = wait_for(&owner, |s| {
+        s.incomplete
+            && !s
+                .items
+                .iter()
+                .any(|item| item.room_id == room_a.as_str() && item.event_id == prompt.as_str())
+    })
+    .await;
     assert!(
-        gap.items.is_empty(),
+        !gap.items
+            .iter()
+            .any(|item| item.room_id == room_a.as_str() && item.event_id == prompt.as_str()),
         "old coverage cannot survive a cache reset"
     );
-    let recovered = wait_for(&owner, |s| !s.incomplete && s.items.len() == 1).await;
-    assert_eq!(recovered.items[0].event_id, prompt.as_str());
+    let recovered = wait_for(&owner, |s| {
+        !s.incomplete
+            && s.items.iter().any(|item| item.event_id == prompt.as_str())
+            && s.items
+                .iter()
+                .any(|item| item.event_id == prompt_b.as_str())
+    })
+    .await;
+    assert!(
+        recovered
+            .items
+            .iter()
+            .any(|item| item.event_id == prompt_b.as_str()),
+        "invalidating room A must not leave room B on mixed stale/fresh chunks"
+    );
+    assert!(
+        !recovered
+            .items
+            .iter()
+            .any(|item| item.body.contains("after a sync gap")),
+        "room B must not absorb room A's post-gap timeline"
+    );
 }
 
 #[tokio::test]

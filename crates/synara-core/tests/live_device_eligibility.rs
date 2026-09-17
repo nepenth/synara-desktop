@@ -1,6 +1,8 @@
 //! Opt-in proof of the production fresh/restored session → device snapshot route.
 //! Creates/revokes one dedicated test-account device; never changes device trust.
 
+#![recursion_limit = "256"]
+
 use std::{
     collections::HashMap,
     path::Path,

@@ -1,19 +1,20 @@
-//! Live Client-Server `/search` via typed ruma `search_events`.
+//! Live message search.
 //!
-//! Does not enable matrix-sdk `search-index`. Failed diagnostics never echo
-//! term, room id, event id, or tokens.
+//! Desktop (`search-index`) queries the 0.19 local index and never sends
+//! Client-Server `search_events`. iOS SharedCore keeps typed `/search`.
+//! Failed diagnostics never echo term, room id, event id, or tokens.
 
-use matrix_sdk::ruma::{
-    api::client::{
-        filter::RoomEventFilter,
-        search::search_events::v3::{Categories, Criteria, EventContext, OrderBy, Request},
-    },
-    uint, OwnedRoomId, OwnedUserId, UInt,
-};
+use matrix_sdk::ruma::{OwnedRoomId, OwnedUserId};
 use matrix_sdk::Client;
-use serde::Deserialize;
 
 use super::{MatrixMessageSearchGroup, MatrixMessageSearchItem, MatrixMessageSearchResult};
+
+#[cfg(not(feature = "search-index"))]
+#[path = "cs.rs"]
+mod cs;
+#[cfg(feature = "search-index")]
+#[path = "index.rs"]
+mod index;
 
 pub const MAX_MESSAGE_SEARCH_TERM_CHARS: usize = 256;
 pub const MAX_MESSAGE_SEARCH_BODY_CHARS: usize = 512;
@@ -26,19 +27,13 @@ pub const MAX_MESSAGE_SEARCH_SENDERS: usize = 64;
 pub const MAX_MESSAGE_SEARCH_NEXT_TOKEN_CHARS: usize = 1024;
 pub const MESSAGE_SEARCH_LIMIT: u16 = 20;
 
-#[derive(Deserialize)]
+#[derive(serde::Deserialize)]
 struct HitEvent {
     event_id: Option<String>,
     sender: Option<String>,
     origin_server_ts: Option<u64>,
     room_id: Option<String>,
-    content: Option<HitContent>,
-}
-
-#[derive(Deserialize)]
-struct HitContent {
-    #[serde(default)]
-    body: Option<String>,
+    content: Option<serde_json::Value>,
 }
 
 pub fn parse_message_search_term(term: &str) -> Result<Option<String>, &'static str> {
@@ -67,13 +62,29 @@ pub fn parse_message_search_next_token(
     if contains_secret_marker(token) {
         return Err("v-search.invalid-token");
     }
+    #[cfg(feature = "search-index")]
+    {
+        if !token.bytes().all(|byte| byte.is_ascii_digit()) {
+            return Err("v-search.invalid-token");
+        }
+        let _offset: usize = token.parse().map_err(|_| "v-search.invalid-token")?;
+    }
     Ok(Some(token.to_owned()))
 }
 
-pub fn parse_message_search_order(order: Option<&str>) -> Result<OrderBy, &'static str> {
+#[cfg(feature = "search-index")]
+pub fn parse_message_search_offset(next_token: Option<&str>) -> Result<usize, &'static str> {
+    match parse_message_search_next_token(next_token)? {
+        None => Ok(0),
+        Some(token) => token.parse().map_err(|_| "v-search.invalid-token"),
+    }
+}
+
+/// Local index is relevance-only. Omitted, `rank`, and `recent` are accepted as
+/// rank so leftover UI that still sends Recent does not fail closed.
+pub fn parse_message_search_order(order: Option<&str>) -> Result<(), &'static str> {
     match order.map(str::trim).filter(|value| !value.is_empty()) {
-        None | Some("recent") => Ok(OrderBy::Recent),
-        Some("rank") => Ok(OrderBy::Rank),
+        None | Some("rank") | Some("recent") => Ok(()),
         _ => Err("v-search.invalid-order"),
     }
 }
@@ -133,90 +144,49 @@ pub async fn search_messages(
     rooms: Option<&[String]>,
     senders: Option<&[String]>,
     order: Option<&str>,
+    indexed_message_search: bool,
 ) -> Result<MatrixMessageSearchResult, &'static str> {
     let _ = client.user_id().ok_or("v-search.no-session")?;
     let Some(term) = parse_message_search_term(term)? else {
         return Ok(empty_message_search_result());
     };
-    let next_batch = parse_message_search_next_token(next_token)?;
-    let order_by = parse_message_search_order(order)?;
+    parse_message_search_order(order)?;
     let rooms = parse_message_search_rooms(rooms)?;
     let senders = parse_message_search_senders(senders)?;
 
-    let mut filter = RoomEventFilter::default();
-    filter.limit = Some(UInt::from(MESSAGE_SEARCH_LIMIT));
-    filter.rooms = rooms;
-    filter.senders = senders;
-
-    let mut event_context = EventContext::new();
-    event_context.before_limit = uint!(0);
-    event_context.after_limit = uint!(0);
-    event_context.include_profile = false;
-
-    let mut criteria = Criteria::new(term);
-    criteria.filter = filter;
-    criteria.order_by = Some(order_by);
-    criteria.event_context = event_context;
-    criteria.include_state = Some(false);
-
-    let mut categories = Categories::new();
-    categories.room_events = Some(criteria);
-    let mut request = Request::new(categories);
-    request.next_batch = next_batch;
-
-    let response = client
-        .send(request)
-        .await
-        .map_err(|_| "v-search.sdk-failed")?;
-    Ok(map_search_response(response.search_categories.room_events))
-}
-
-fn map_search_response(
-    room_events: matrix_sdk::ruma::api::client::search::search_events::v3::ResultRoomEvents,
-) -> MatrixMessageSearchResult {
-    let highlights = room_events
-        .highlights
-        .into_iter()
-        .filter_map(|highlight| cap_highlight(&highlight))
-        .take(MAX_MESSAGE_SEARCH_HIGHLIGHTS)
-        .collect();
-    let next_token = room_events
-        .next_batch
-        .and_then(|token| parse_message_search_next_token(Some(&token)).ok().flatten());
-
-    let mut items = Vec::new();
-    for hit in room_events.results {
-        if items.len() >= MAX_MESSAGE_SEARCH_ITEMS {
-            break;
+    #[cfg(feature = "search-index")]
+    {
+        if !indexed_message_search {
+            return Err("v-search.index-disabled");
         }
-        let Some(item) = map_search_hit(hit.rank.unwrap_or(0.0), hit.result.as_ref()) else {
-            continue;
-        };
-        items.push(item);
+        let offset = parse_message_search_offset(next_token)?;
+        return index::search_index(client, &term, offset, rooms.as_deref(), senders.as_deref())
+            .await;
     }
 
-    MatrixMessageSearchResult {
-        next_token,
-        highlights,
-        groups: group_items(items),
+    #[cfg(not(feature = "search-index"))]
+    {
+        let _ = indexed_message_search;
+        cs::search_homeserver(client, &term, next_token, rooms, senders, order).await
     }
 }
 
-fn map_search_hit(
+fn map_hit_event(
     rank: f64,
-    raw: Option<&matrix_sdk::ruma::serde::Raw<matrix_sdk::ruma::events::AnyTimelineEvent>>,
+    fallback_room_id: Option<&str>,
+    parsed: HitEvent,
 ) -> Option<MatrixMessageSearchItem> {
-    let raw = raw?;
-    let parsed: HitEvent = serde_json::from_str(raw.json().get()).ok()?;
     let event_id = parsed.event_id.filter(|value| value.starts_with('$'))?;
-    let room_id = parsed.room_id.filter(|value| value.starts_with('!'))?;
+    let room_id = parsed
+        .room_id
+        .filter(|value| value.starts_with('!'))
+        .or_else(|| {
+            fallback_room_id
+                .map(str::to_owned)
+                .filter(|value| value.starts_with('!'))
+        })?;
     let sender = parsed.sender.filter(|value| value.starts_with('@'))?;
-    let body = cap_body(
-        parsed
-            .content
-            .and_then(|content| content.body)
-            .unwrap_or_default(),
-    );
+    let body = cap_body(snippet_from_content(parsed.content.as_ref()));
     Some(MatrixMessageSearchItem {
         rank,
         event_id,
@@ -225,6 +195,36 @@ fn map_search_hit(
         body,
         room_id,
     })
+}
+
+fn snippet_from_content(content: Option<&serde_json::Value>) -> String {
+    let Some(content) = content else {
+        return String::new();
+    };
+    if let Some(body) = content.get("body").and_then(|value| value.as_str()) {
+        return body.to_owned();
+    }
+    if let Some(filename) = content.get("filename").and_then(|value| value.as_str()) {
+        return filename.to_owned();
+    }
+    if let Some(body) = content
+        .get("new_content")
+        .and_then(|value| value.get("body"))
+        .and_then(|value| value.as_str())
+    {
+        return body.to_owned();
+    }
+    for key in ["m.poll.start", "org.matrix.msc3381.poll.start"] {
+        if let Some(text) = content
+            .get(key)
+            .and_then(|value| value.get("question"))
+            .and_then(|value| value.get("text").or_else(|| value.get("body")))
+            .and_then(|value| value.as_str())
+        {
+            return text.to_owned();
+        }
+    }
+    String::new()
 }
 
 fn group_items(items: Vec<MatrixMessageSearchItem>) -> Vec<MatrixMessageSearchGroup> {
@@ -274,9 +274,26 @@ fn cap_highlight(highlight: &str) -> Option<String> {
     )
 }
 
+#[cfg(feature = "search-index")]
+fn highlights_from_term(term: &str) -> Vec<String> {
+    term.split_whitespace()
+        .filter_map(cap_highlight)
+        .take(MAX_MESSAGE_SEARCH_HIGHLIGHTS)
+        .collect()
+}
+
 fn contains_secret_marker(value: &str) -> bool {
     value.contains("access_token")
         || value.contains("refresh_token")
         || value.contains("syt_")
         || value.contains("syr_")
+}
+
+#[cfg(feature = "search-index")]
+fn encode_next_offset(offset: usize, page_len: usize, has_more: bool) -> Option<String> {
+    if has_more {
+        Some(offset.saturating_add(page_len).to_string())
+    } else {
+        None
+    }
 }

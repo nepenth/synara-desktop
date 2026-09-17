@@ -6,6 +6,7 @@ import { configClass, varsClass } from 'folds';
 import 'folds/dist/style.css';
 import { darkTheme } from '../../src/colors.css';
 import { NativeTimelinePresenter } from '../../src/app/features/room/NativeTimelinePresenter';
+import { MatrixClientProvider } from '../../src/app/hooks/useMatrixClient';
 import { requestRoomLatestAfterSend } from '../../src/app/features/room/nativeTimelineNavigation';
 import {
   applyNativeTimelineViewDelta,
@@ -19,9 +20,12 @@ const params = new URLSearchParams(location.search);
 const scenario = params.get('scenario') ?? 'live';
 const polish = params.has('polish');
 const jank = params.has('jank');
+const FILE_MD_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
+const FILE_ZIP_HANDLE = `timeline-media-${'cd'.repeat(32)}`;
+const FILE_MD_BYTES = '# Agent notes\n\nUse **bold** for emphasis.\n';
 let sequence = polish
   ? 4
-  : scenario === 'sparse-missing'
+  : scenario === 'sparse-missing' || scenario === 'file-md' || scenario === 'file-zip'
   ? 1
   : scenario === 'short'
   ? 2
@@ -48,14 +52,38 @@ const makeRow = (index: number) => ({
   senderId: `@reader${index % 2}:example.test`,
   senderName: `Reader ${index % 2}`,
   originServerTs: 1_700_000_000_000 + index * 60_000,
-  body: jank
-    ? `Message ${index}\n${Array.from(
-        { length: 1 + (index % 6) },
-        (_, line) => `Native jank fixture line ${line + 2}.`
-      ).join('\n')}`
-    : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
+  body:
+    scenario === 'file-md'
+      ? 'notes.md'
+      : scenario === 'file-zip'
+      ? 'archive.zip'
+      : jank
+      ? `Message ${index}\n${Array.from(
+          { length: 1 + (index % 6) },
+          (_, line) => `Native jank fixture line ${line + 2}.`
+        ).join('\n')}`
+      : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
   edited: false,
   forwardTransport: polish ? ('text' as const) : undefined,
+  ...(scenario === 'file-md'
+    ? {
+        messageType: 'file' as const,
+        mediaFilename: 'notes.md',
+        media: {
+          handleId: FILE_MD_HANDLE,
+          mimeType: 'text/markdown',
+        },
+      }
+    : scenario === 'file-zip'
+    ? {
+        messageType: 'file' as const,
+        mediaFilename: 'archive.zip',
+        media: {
+          handleId: FILE_ZIP_HANDLE,
+          mimeType: 'application/zip',
+        },
+      }
+    : {}),
   capabilities: {
     react: polish,
     reply: polish,
@@ -124,6 +152,8 @@ const update = () => {
       markUnread: true,
       paginateBackward: true,
       paginateForward: true,
+      canRedactOwn: true,
+      canRedactOther: false,
     },
   };
   for (const [id, current] of snapshots) {
@@ -197,6 +227,13 @@ window.__SYNARA_DESKTOP__ = {
           : oldSnapshot
       ) as T;
     }
+    if (command === 'matrix_timeline_timestamp_to_event') {
+      return {
+        roomId: room,
+        eventId: '$history-jump',
+        originServerTs: Number(args?.timestampMs) || 1_600_000_000_000,
+      } as T;
+    }
     if (command === 'matrix_timeline_open') {
       let selectedPosition = position;
       let lastRead = false;
@@ -204,6 +241,22 @@ window.__SYNARA_DESKTOP__ = {
         if (!request.position.event_id) throw new Error('Focused open requires event_id');
         selectedPosition = { kind: 'focused', target_event_id: request.position.event_id };
         lastRead = request.position.event_id === '$missing';
+        if (
+          request.position.event_id === '$history-jump' &&
+          !rows.some((row) => row.eventId === '$history-jump')
+        ) {
+          rows = [
+            {
+              ...makeRow(0),
+              itemId: '$history-jump',
+              eventId: '$history-jump',
+              originServerTs: 1_600_000_000_000,
+              body: 'History jump target',
+            },
+            ...rows,
+          ];
+          update();
+        }
       }
       if (lastRead && failLastRead) {
         failLastRead = false;
@@ -277,6 +330,17 @@ window.__SYNARA_DESKTOP__ = {
       return undefined as T;
     }
     if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
+    if (command === 'matrix_media_download') {
+      const contentUri = args?.contentUri;
+      if (contentUri === FILE_ZIP_HANDLE) {
+        return { bytes: [80, 75, 3, 4] } as T;
+      }
+      return { bytes: Array.from(new TextEncoder().encode(FILE_MD_BYTES)) } as T;
+    }
+    if (command === 'desktop_save_file') {
+      const filename = (args?.payload as { filename?: string } | undefined)?.filename;
+      return `/tmp/synara-e2e-${filename || 'download'}` as T;
+    }
     return undefined as T;
   },
 };
@@ -557,7 +621,20 @@ const api = {
             index,
             row: {
               ...row,
-              reactions: [...(row.reactions ?? []), { key: '✅', count: 1, own: true }],
+              reactions: [
+                ...(row.reactions ?? []),
+                {
+                  key: '✅',
+                  count: 1,
+                  own: true,
+                  senders: [
+                    {
+                      userId: '@alice:example.org',
+                      reactionEventId: '$alice-reaction:example.org',
+                    },
+                  ],
+                },
+              ],
             },
           },
         ],
@@ -633,16 +710,14 @@ const api = {
   },
 };
 Object.assign(window, { nativeTimelineFixture: api });
+const mx = {
+  getUserId: () => '@reader0:example.test',
+} as React.ComponentProps<typeof MatrixClientProvider>['value'];
 // The shipped app applies the folds theme to <body> (src/index.tsx). Overlay
 // offsets like `config.space.S300` compile to CSS variables that only exist
 // under these classes; without them absolute controls collapse to the origin.
-document.body.classList.add(configClass, varsClass);
-if (polish) {
-  void import('../../src/index.css');
-  document.body.classList.add(darkTheme, 'dark-theme');
-  document.body.style.backgroundColor = '#161719';
-  document.body.style.color = '#ededed';
-}
+// Color tokens (`color.SurfaceVariant.*`) need a theme class. Await index.css
+// before paint so screenshot/polish captures are not racing the stylesheet.
 
 function App() {
   const [mounted, setMounted] = useState(true);
@@ -661,9 +736,33 @@ function App() {
           border: '1px solid gray',
         }}
       >
-        {mounted && <NativeTimelinePresenter roomId={room} eventId={focusedEventId} />}
+        {mounted && (
+          <MatrixClientProvider value={mx}>
+            <NativeTimelinePresenter
+              roomId={room}
+              eventId={focusedEventId}
+              roomCreatedTs={
+                params.has('roomCreated')
+                  ? Number(params.get('roomCreated')) || 1_600_000_000_000
+                  : undefined
+              }
+            />
+          </MatrixClientProvider>
+        )}
       </div>
     </>
   );
 }
-createRoot(document.getElementById('root')!).render(<App />);
+
+async function bootHarness() {
+  document.body.classList.add(configClass, varsClass);
+  if (polish || params.has('theme')) {
+    await import('../../src/index.css');
+    document.body.classList.add(darkTheme, 'dark-theme');
+    document.body.style.backgroundColor = '#161719';
+    document.body.style.color = '#ededed';
+  }
+  createRoot(document.getElementById('root')!).render(<App />);
+}
+
+void bootHarness();

@@ -22,7 +22,7 @@ export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
   const mDirects = useAtomValue(mDirectAtom);
   const allRooms = useAtomValue(allRoomsAtom);
 
-  const { roomIdOrAlias, eventId } = useParams();
+  const { roomIdOrAlias, eventId, threadRootId } = useParams();
   const viaServers = useSearchParamsViaServers();
   const roomId = useSelectedRoom();
   const room = mx.getRoom(roomId);
@@ -33,6 +33,7 @@ export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
       <JoinBeforeNavigate
         roomIdOrAlias={roomIdOrAlias!}
         eventId={eventId}
+        threadRootId={threadRootId}
         viaServers={viaServers}
       />
     );
@@ -54,6 +55,7 @@ export function SpaceRouteRoomProvider({ children }: { children: ReactNode }) {
       <JoinBeforeNavigate
         roomIdOrAlias={roomIdOrAlias!}
         eventId={eventId}
+        threadRootId={threadRootId}
         viaServers={viaServers}
       />
     );

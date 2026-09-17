@@ -29,5 +29,51 @@ for (const target of appleTargets) {
     console.error(`SynaraNseCore must not enable the full Core UniFFI feature in its production graph (${target})`);
     process.exit(1);
   }
+  if (result.stdout.includes('synara-core feature "search-index"')) {
+    console.error(`SynaraNseCore must not enable the desktop search-index feature (${target})`);
+    process.exit(1);
+  }
+  if (
+    result.stdout.includes("x509-identity")
+    || result.stdout.includes("experimental-x509-identity-verification")
+    || result.stdout.includes("rust-x509-verifier-impl")
+  ) {
+    console.error(`SynaraNseCore must not enable X.509 identity verification (${target})`);
+    process.exit(1);
+  }
+  // Inverse synara-core readback does not list matrix-sdk-crypto features.
+  // Query the production graph and fail if gossip is compiled into NSE.
+  const forwarding = spawnSync(
+    "cargo",
+    ["tree", "--locked", "--manifest-path", manifest, "-p", "synara-nse-core",
+      "-e", "normal,build,features", "--target", target],
+    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+  );
+  if (forwarding.error || forwarding.status !== 0) {
+    console.error(`SynaraNseCore forwarding-feature query failed for ${target}.`);
+    if (forwarding.stderr) console.error(forwarding.stderr.trim());
+    process.exit(1);
+  }
+  if (forwarding.stdout.includes("automatic-room-key-forwarding")) {
+    console.error(`SynaraNseCore must not compile automatic-room-key-forwarding (${target})`);
+    process.exit(1);
+  }
+  const tree = spawnSync(
+    "cargo",
+    ["tree", "--locked", "--manifest-path", manifest, "-p", "synara-nse-core",
+      "-e", "normal,build", "--target", target],
+    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 },
+  );
+  if (tree.error || tree.status !== 0) {
+    console.error(`SynaraNseCore production crate tree query failed for ${target}.`);
+    if (tree.stderr) console.error(tree.stderr.trim());
+    process.exit(1);
+  }
+  for (const leaked of ["matrix-sdk-search", "tantivy"]) {
+    if (tree.stdout.includes(leaked)) {
+      console.error(`SynaraNseCore must not pull ${leaked} on ${target}`);
+      process.exit(1);
+    }
+  }
 }
 console.log("Synara NSE Core production feature isolation passed for all Apple slices.");

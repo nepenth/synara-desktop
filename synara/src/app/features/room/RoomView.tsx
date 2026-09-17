@@ -22,6 +22,7 @@ import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
 import { VoiceRoom } from './VoiceRoom';
 import { useRoom } from '../../hooks/useRoom';
+import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 
 const FN_KEYS_REGEX = /^F\d+$/;
 const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
@@ -54,7 +55,13 @@ const shouldFocusMessageField = (evt: KeyboardEvent): boolean => {
   return true;
 };
 
-export function RoomView({ eventId }: { eventId?: string }) {
+export function RoomView({
+  eventId,
+  threadRootEventId,
+}: {
+  eventId?: string;
+  threadRootEventId?: string;
+}) {
   const roomInputRef = useRef<HTMLDivElement>(null);
   const roomViewRef = useRef<HTMLDivElement>(null);
 
@@ -63,10 +70,13 @@ export function RoomView({ eventId }: { eventId?: string }) {
   const room = useRoom();
   const { roomId } = room;
   const editor = useEditor();
+  const { navigateRoom, navigateThread } = useRoomNavigate();
 
   const mx = useMatrixClient();
 
   const tombstoneEvent = useStateEvent(room, StateEvent.RoomTombstone);
+  const createEvent = useStateEvent(room, StateEvent.RoomCreate);
+  const roomCreatedTs = createEvent?.getTs();
   const powerLevels = usePowerLevelsContext();
   const creators = useRoomCreators(room);
 
@@ -97,7 +107,15 @@ export function RoomView({ eventId }: { eventId?: string }) {
     <Page ref={roomViewRef}>
       <Box grow="Yes" direction="Column" style={{ minHeight: 0 }}>
         {room.isCallRoom() && <VoiceRoom />}
-        <NativeTimelinePresenter key={roomId} roomId={roomId} eventId={eventId} />
+        <NativeTimelinePresenter
+          key={roomId}
+          roomId={roomId}
+          eventId={eventId}
+          threadRootEventId={threadRootEventId}
+          onOpenThreadRoute={(rootEventId) => navigateThread(roomId, rootEventId)}
+          onCloseThreadRoute={() => navigateRoom(roomId)}
+          roomCreatedTs={roomCreatedTs}
+        />
         <RoomViewTyping room={room} />
       </Box>
       <Box shrink="No" direction="Column">

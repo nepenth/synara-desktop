@@ -30,6 +30,8 @@ import {
   selectNativeVerificationRequest,
   startNativeVerification,
   subscribeNativeVerificationUpdates,
+  verificationRequestCanFallbackToSas,
+  verificationRequestHasQr,
   verificationRequestHasSasCodes,
   verificationRequestNeedsSasStart,
 } from './nativeVerification';
@@ -41,6 +43,59 @@ function Waiting({ children }: { children: string }) {
     <Box alignItems="Center" gap="200">
       <Spinner variant="Secondary" size="200" />
       <Text size="T300">{children}</Text>
+    </Box>
+  );
+}
+
+function NativeQr({
+  request,
+  update,
+  fail,
+}: {
+  request: NativeVerificationRequest;
+  update: (request: NativeVerificationRequest) => void;
+  fail: () => void;
+}) {
+  const [submitting, setSubmitting] = useState(false);
+  const imageDataUrl = request.qr?.imageDataUrl;
+  if (!imageDataUrl) return null;
+  const fallback = verificationRequestCanFallbackToSas(request);
+  return (
+    <Box direction="Column" gap="400">
+      <Text>
+        Scan this QR code with Element or another verified Synara session. You can still compare
+        emoji or number codes if the other device cannot scan.
+      </Text>
+      <Box justifyContent="Center">
+        <img
+          src={imageDataUrl}
+          alt="Device verification QR code"
+          width={220}
+          height={220}
+          style={{ imageRendering: 'pixelated', background: 'white', borderRadius: 8 }}
+        />
+      </Box>
+      {request.qr?.scanned ? (
+        <Waiting>QR code scanned. Finishing verification…</Waiting>
+      ) : (
+        <Waiting>Waiting for the other device to scan…</Waiting>
+      )}
+      {fallback && (
+        <Button
+          variant="Secondary"
+          fill="Soft"
+          disabled={submitting}
+          onClick={() => {
+            setSubmitting(true);
+            void beginNativeVerificationSas(request.flowId)
+              .then(update)
+              .catch(fail)
+              .finally(() => setSubmitting(false));
+          }}
+        >
+          <Text size="B400">Use emoji codes instead</Text>
+        </Button>
+      )}
     </Box>
   );
 }
@@ -279,16 +334,26 @@ export function NativeDeviceVerification({
                   <Waiting>Waiting for another device to accept…</Waiting>
                 ))}
               {request.phase === 'ready' &&
-                (request.direction === 'incoming' ? (
+                (verificationRequestHasQr(request) ? (
+                  <NativeQr request={request} update={setRequest} fail={() => setError(true)} />
+                ) : request.direction === 'incoming' ? (
                   <Waiting>Waiting for the other device to start comparison…</Waiting>
                 ) : (
                   <Waiting>Starting secure comparison…</Waiting>
                 ))}
-              {(request.phase === 'started' || request.phase === 'keys_exchanging') && (
-                <Waiting>Preparing comparison codes…</Waiting>
-              )}
+              {(request.phase === 'started' || request.phase === 'keys_exchanging') &&
+                (verificationRequestHasQr(request) ? (
+                  <NativeQr request={request} update={setRequest} fail={() => setError(true)} />
+                ) : (
+                  <Waiting>Preparing comparison codes…</Waiting>
+                ))}
               {request.phase === 'sas_ready' && (
-                <NativeSas request={request} update={setRequest} fail={() => setError(true)} />
+                <Box direction="Column" gap="400">
+                  {verificationRequestHasQr(request) && (
+                    <NativeQr request={request} update={setRequest} fail={() => setError(true)} />
+                  )}
+                  <NativeSas request={request} update={setRequest} fail={() => setError(true)} />
+                </Box>
               )}
               {request.phase === 'confirmed' && (
                 <Waiting>Waiting for the other device to finish…</Waiting>

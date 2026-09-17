@@ -2,6 +2,10 @@
     all(not(debug_assertions), target_os = "windows"),
     windows_subsystem = "windows"
 )]
+// Desktop `cargo clippy --all-targets` overflows rustc's default query-depth
+// limit while laying out `{async fn body of matrix_send_attachment}` (and peers).
+// NSE/Core already pin 256; keep-both dropped this crate-level attribute.
+#![recursion_limit = "256"]
 
 mod bridge;
 mod build_info;
@@ -418,9 +422,15 @@ pub fn run() {
             matrix::auth::product::matrix_device_delete_start,
             matrix::auth::product::matrix_device_delete_password,
             matrix::auth::product::matrix_device_delete_cancel,
+            matrix::auth::product::matrix_x509_identity_status,
+            matrix::auth::product::matrix_x509_identity_set_enabled,
+            matrix::auth::product::matrix_x509_identity_import_ca,
+            matrix::auth::product::matrix_x509_identity_remove_ca,
+            matrix::auth::product::matrix_x509_identity_import_signer,
             matrix::auth::product::matrix_room_list_snapshot,
             matrix::auth::product::matrix_room_members_snapshot,
             matrix::auth::product::matrix_room_power_levels_snapshot,
+            matrix::auth::product::matrix_room_retention,
             matrix::auth::product::matrix_room_creators_snapshot,
             matrix::auth::product::matrix_room_power_level_tags_snapshot,
             matrix::auth::product::matrix_room_directory_protocols,
@@ -461,6 +471,7 @@ pub fn run() {
             matrix::auth::product::matrix_set_room_image_pack,
             matrix::auth::product::matrix_media_config,
             matrix::auth::product::matrix_media_download,
+            matrix::auth::product::matrix_media_preview,
             matrix::auth::product::matrix_later_snapshot,
             matrix::auth::product::matrix_later_upsert,
             matrix::auth::product::matrix_later_complete,
@@ -478,6 +489,14 @@ pub fn run() {
             matrix::auth::product::matrix_presence_snapshot,
             matrix::auth::product::matrix_presence_subscribe,
             matrix::auth::product::matrix_presence_unsubscribe,
+            matrix::auth::product::matrix_rtc_transports_snapshot,
+            matrix::auth::product::matrix_rtc_transports_refresh,
+            matrix::auth::product::matrix_widgets_list,
+            matrix::auth::product::matrix_widget_open,
+            matrix::auth::product::matrix_widget_close,
+            matrix::auth::product::matrix_widget_post,
+            matrix::auth::product::matrix_widget_subscribe,
+            matrix::auth::product::widget_bridge_post,
             matrix::auth::product::matrix_timeline_open,
             matrix::auth::product::matrix_timeline_close,
             matrix::auth::product::matrix_timeline_jump_latest,
@@ -485,6 +504,7 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_snapshot,
             matrix::auth::product::matrix_timeline_set_read_state,
             matrix::auth::product::matrix_timeline_event_readback,
+            matrix::auth::product::matrix_timeline_timestamp_to_event,
             matrix::auth::product::matrix_timeline_follow_live,
             matrix::auth::product::matrix_timeline_reaction_toggle,
             matrix::auth::product::matrix_reaction_ensure,
@@ -498,9 +518,11 @@ pub fn run() {
             matrix::auth::product::matrix_timeline_report,
             matrix::auth::product::matrix_timeline_pin,
             matrix::auth::product::matrix_timeline_unpin,
+            matrix::auth::product::matrix_pinned_events,
             matrix::auth::product::matrix_composer_set_reply_draft,
             matrix::auth::product::matrix_composer_clear_reply_draft,
             matrix::auth::product::matrix_composer_get_reply_draft,
+            matrix::auth::product::matrix_thread_list,
             matrix::auth::product::matrix_timeline_forward_media,
             matrix::auth::product::matrix_timeline_poll_vote,
             matrix::auth::product::matrix_timeline_call_decline,
@@ -516,6 +538,9 @@ pub fn run() {
             matrix::auth::product::matrix_ignored_users_ignore,
             matrix::auth::product::matrix_ignored_users_unignore,
             matrix::auth::product::matrix_user_directory_search,
+            matrix::auth::product::matrix_user_status_clear,
+            matrix::auth::product::matrix_user_status_set,
+            matrix::auth::product::matrix_user_status_snapshot,
             matrix::auth::product::matrix_message_search,
             matrix::auth::product::matrix_notification_decide,
             matrix::auth::product::matrix_notification_dismiss,
@@ -537,6 +562,9 @@ pub fn run() {
             matrix::auth::product::matrix_set_room_name,
             matrix::auth::product::matrix_set_room_topic,
             matrix::auth::product::matrix_set_room_avatar,
+            matrix::auth::product::matrix_send_state_event,
+            matrix::auth::product::matrix_enable_room_encrypted_state,
+            matrix::auth::product::matrix_set_encrypted_state_events_setting,
             matrix::auth::product::matrix_get_room_directory_visibility,
             matrix::auth::product::matrix_set_room_directory_visibility,
             matrix::auth::product::matrix_room_join_rule_snapshot,
@@ -546,6 +574,28 @@ pub fn run() {
             matrix::auth::product::matrix_restore_session
         ])
         .on_window_event(|window, event| {
+            if let Some(session_id) =
+                crate::matrix::widgets::host::session_id_from_widget_label(window.label())
+            {
+                if matches!(
+                    event,
+                    WindowEvent::Destroyed | WindowEvent::CloseRequested { .. }
+                ) {
+                    if let Some(core) = window.try_state::<Arc<synara_core::Core>>() {
+                        let core = Arc::clone(core.inner());
+                        let session_id = session_id.to_owned();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = crate::bridge::widgets::widget_close(
+                                core.as_ref(),
+                                Some(session_id),
+                            )
+                            .await;
+                        });
+                    }
+                }
+                return;
+            }
+
             if window.label() != desktop::MAIN_WINDOW_LABEL {
                 return;
             }
@@ -779,6 +829,10 @@ mod localhost_port_tests {
         assert_eq!(timeline_media_content_type(png, Some("image/jpeg")), None);
         assert_eq!(
             timeline_media_content_type(b"arbitrary file bytes", None),
+            None
+        );
+        assert_eq!(
+            timeline_media_content_type(b"# heading\n", Some("text/markdown")),
             None
         );
     }

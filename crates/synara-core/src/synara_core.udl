@@ -295,8 +295,12 @@ dictionary RoomListRoomDto {
   string? avatar_url;
   string membership;
   boolean is_direct;
+  string? direct_user_id;
   boolean is_space;
   boolean is_favorite;
+  boolean is_call;
+  boolean has_active_call;
+  u32 active_call_participant_count;
   u32 unread_count;
   u32 highlight_count;
   boolean marked_unread;
@@ -370,11 +374,19 @@ dictionary TimelineViewPositionDto {
   string? event_id;
 };
 
-// Privacy-safe reaction count on a view row. Key and count only; no user ids.
+// Privacy-safe reaction sender. No tokens or password.
+dictionary TimelineReactionSenderDto {
+  string user_id;
+  string? reaction_event_id;
+};
+
+// Privacy-safe reaction count on a view row. Senders carry user id and
+// optional annotation id only; no tokens or ciphertext.
 dictionary TimelineViewReactionDto {
   string key;
   u32 count;
   boolean? own;
+  sequence<TimelineReactionSenderDto> senders;
 };
 
 // Privacy-safe Core-owned reply preview. No raw event content.
@@ -478,6 +490,8 @@ dictionary TimelineSnapshotDto {
   boolean mark_unread;
   boolean paginate_backward;
   boolean paginate_forward;
+  boolean can_redact_own;
+  boolean can_redact_other;
   sequence<TimelineViewRowDto> rows;
 };
 
@@ -532,12 +546,6 @@ interface TimelineMediaError {
 [Error]
 interface TimelineReadStateError {
   Failed(string code, string description);
-};
-
-// Privacy-safe reaction sender. No tokens or password.
-dictionary TimelineReactionSenderDto {
-  string user_id;
-  string? reaction_event_id;
 };
 
 // Privacy-safe aggregated reaction. No tokens or password.
@@ -923,6 +931,51 @@ dictionary PresenceWriteDto {
   string status;
 };
 
+// Privacy-safe MSC4426 status / in-call. Never echo write emoji/text.
+dictionary UserStatusFieldDto {
+  string emoji;
+  string text;
+};
+
+dictionary UserInCallDto {
+  u64? call_joined_ts;
+};
+
+dictionary UserStatusSnapshotDto {
+  u64 session_generation;
+  string user_id;
+  UserStatusFieldDto? user_status;
+  UserInCallDto? in_call;
+};
+
+dictionary UserStatusWriteDto {
+  string status;
+};
+
+// Static source constants only. Never echo emoji, text, user id, or tokens.
+[Error]
+interface UserStatusCommandError {
+  Failed(string code, string description);
+};
+
+// Privacy-safe MatrixRTC transport snapshot. URLs only; no JWTs or tokens.
+dictionary RtcTransportDto {
+  string kind;
+  string? service_url;
+};
+
+dictionary RtcTransportsSnapshotDto {
+  u64 session_generation;
+  string status;
+  sequence<RtcTransportDto> transports;
+};
+
+// Static source constants only. Never echo user id, URL, path, token, or password.
+[Error]
+interface RtcTransportsCommandError {
+  Failed(string code, string description);
+};
+
 // Static source constants only. Never echo user id, URL, path, token, or password.
 [Error]
 interface PresenceCommandError {
@@ -941,6 +994,12 @@ dictionary VerificationSasDto {
   sequence<u16>? decimals;
 };
 
+// Privacy-safe show-QR payload. SVG data-URL only; no MAC or QR bytes.
+dictionary VerificationQrDto {
+  string image_data_url;
+  boolean scanned;
+};
+
 // Privacy-safe verification request row. Identity/flow fields only; no tokens.
 // S8 list omits SAS. S9 mutation returns may include optional SAS comparison.
 dictionary VerificationRequestDto {
@@ -951,6 +1010,7 @@ dictionary VerificationRequestDto {
   string phase;
   u64? started_ts;
   VerificationSasDto? sas;
+  VerificationQrDto? qr;
 };
 
 // Privacy-safe verification inbox from the registered Core command.
@@ -1812,6 +1872,21 @@ interface SharedCore {
 
   [Async, Throws=PresenceCommandError]
   PresenceWriteDto presence_set(string state, string? status_msg);
+
+  [Async, Throws=RtcTransportsCommandError]
+  RtcTransportsSnapshotDto rtc_transports_snapshot();
+
+  [Async, Throws=RtcTransportsCommandError]
+  RtcTransportsSnapshotDto rtc_transports_refresh();
+
+  [Async, Throws=UserStatusCommandError]
+  UserStatusSnapshotDto user_status_snapshot(string user_id);
+
+  [Async, Throws=UserStatusCommandError]
+  UserStatusWriteDto user_status_set(string emoji, string text);
+
+  [Async, Throws=UserStatusCommandError]
+  UserStatusWriteDto user_status_clear();
 
   [Async, Throws=VerificationListError]
   VerificationInboxDto verification_list();

@@ -100,6 +100,13 @@ async function downloadNativeMedia(contentUri: string, mimeType: string): Promis
   return new Blob([bytes], { type: mimeType });
 }
 
+export async function downloadTimelineMediaBytes(
+  handleId: string,
+  mimeType: string
+): Promise<Blob> {
+  return downloadNativeMedia(handleId, mimeType);
+}
+
 export async function downloadMatrixMedia(
   mx: MatrixMediaClient,
   mxcUrl: string,

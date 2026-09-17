@@ -94,6 +94,10 @@ export const getHomeRoomPath = (roomIdOrAlias: string, eventId?: string): string
   const roomPath = `${trimTrailingSlash(HOME_PATH)}/${encodeURIComponent(roomIdOrAlias)}`;
   return eventId ? `${roomPath}/${encodeURIComponent(eventId)}` : roomPath;
 };
+export const getHomeRoomThreadPath = (roomIdOrAlias: string, threadRootId: string): string =>
+  `${trimTrailingSlash(HOME_PATH)}/${encodeURIComponent(roomIdOrAlias)}/thread/${encodeURIComponent(
+    threadRootId
+  )}`;
 export const getHomeRoomPathWithViaServers = (
   roomIdOrAlias: string,
   eventId?: string,
@@ -113,6 +117,10 @@ export const getDirectRoomPath = (roomIdOrAlias: string, eventId?: string): stri
   const roomPath = `${trimTrailingSlash(DIRECT_PATH)}/${encodeURIComponent(roomIdOrAlias)}`;
   return eventId ? `${roomPath}/${encodeURIComponent(eventId)}` : roomPath;
 };
+export const getDirectRoomThreadPath = (roomIdOrAlias: string, threadRootId: string): string =>
+  `${trimTrailingSlash(DIRECT_PATH)}/${encodeURIComponent(
+    roomIdOrAlias
+  )}/thread/${encodeURIComponent(threadRootId)}`;
 
 export const getSpacePath = (spaceIdOrAlias: string): string =>
   `/${encodeURIComponent(spaceIdOrAlias)}`;
@@ -128,6 +136,14 @@ export const getSpaceRoomPath = (
   const roomPath = `${getSpacePath(spaceIdOrAlias)}/${encodeURIComponent(roomIdOrAlias)}`;
   return eventId ? `${roomPath}/${encodeURIComponent(eventId)}` : roomPath;
 };
+export const getSpaceRoomThreadPath = (
+  spaceIdOrAlias: string,
+  roomIdOrAlias: string,
+  threadRootId: string
+): string =>
+  `${getSpacePath(spaceIdOrAlias)}/${encodeURIComponent(roomIdOrAlias)}/thread/${encodeURIComponent(
+    threadRootId
+  )}`;
 
 export const getExplorePath = (): string => EXPLORE_PATH;
 export const getExploreFeaturedPath = (): string => EXPLORE_FEATURED_PATH;

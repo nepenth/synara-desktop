@@ -51,7 +51,26 @@ fn marker_stable() {
     );
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"sqlite"));
     assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"bundled-sqlite"));
-    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"unstable-msc4426"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
+    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-send-custom-to-device"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
+    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
+}
+
+#[test]
+fn desktop_manifest_requests_automatic_room_key_forwarding() {
+    let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
+    assert!(manifest.contains(r#""automatic-room-key-forwarding""#));
+    assert!(manifest.contains("room-key-forwarding"));
 }
 
 #[test]
@@ -138,11 +157,22 @@ fn product_default_config_plan_has_no_secrets() {
     assert!(plan.store_key_present);
     assert!(plan.ssl_verification);
     assert!(!plan.proxy_configured);
+    assert!(!plan.x509_verifier_configured);
     assert_eq!(plan.homeserver_mode, "explicit_url");
     assert_eq!(plan.matrix_sdk_version, MATRIX_SDK_PIN_VERSION);
     assert!(plan.approved_features.iter().any(|f| f == "sqlite"));
+    assert!(plan
+        .approved_features
+        .iter()
+        .any(|f| f == "automatic-room-key-forwarding"));
     assert!(plan.store_layout.confined_under_matrix_root);
     assert_eq!(plan.store_layout.relative_state_dir, "state");
+    assert_eq!(plan.store_layout.relative_search_dir, "search");
+    assert!(plan.indexed_message_search);
+    assert!(plan
+        .approved_features
+        .iter()
+        .any(|feature| feature == "experimental-search"));
     let _ = fs::remove_dir_all(&root);
 }
 
@@ -186,6 +216,7 @@ fn build_unauthenticated_client_offline_sqlite() {
     );
     assert!(cfg.state_store_path().is_dir());
     assert!(cfg.cache_store_path().is_dir());
+    assert!(cfg.search_store_path().is_dir());
 
     drop(client);
     drop(_enter);
@@ -303,5 +334,70 @@ fn store_paths_module_still_derives_under_same_root() {
     let cfg = ClientBuildConfig::product_default(&root, id, None).unwrap();
     assert_eq!(paths.state_dir(), cfg.state_store_path());
     assert_eq!(paths.cache_dir(), cfg.cache_store_path());
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn x509_setting_off_does_not_inject_verifier() {
+    let root = temp_root("x509-off");
+    let key = StoreKeyMaterial::generate().unwrap();
+    let cfg = ClientBuildConfig::product_default(&root, alice(), Some(key)).unwrap();
+    let account = cfg.account_root().to_path_buf();
+    assert!(!synara_core::app::x509::should_inject_verifier(&account));
+    let plan = cfg.plan();
+    assert!(!plan.x509_verifier_configured);
+    let json = serde_json::to_string(&plan).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("begin certificate"));
+    assert!(!json.contains("-----"));
+
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    let client = rt
+        .block_on(build_unauthenticated_client(&cfg))
+        .expect("client open with x509 off");
+    drop(client);
+    let status = synara_core::app::x509::status_from_store(&account, Vec::new());
+    assert!(!status.verifier_configured);
+    assert!(!status.enabled);
+    drop(_enter);
+    drop(rt);
+    let _ = fs::remove_dir_all(&root);
+}
+
+#[test]
+fn x509_enable_with_ca_injects_verifier_and_keeps_https() {
+    let root = temp_root("x509-on");
+    let key = StoreKeyMaterial::generate().unwrap();
+    let cfg = ClientBuildConfig::product_default(&root, alice(), Some(key)).unwrap();
+    let account = cfg.account_root().to_path_buf();
+    synara_core::app::x509::import_ca_pem(
+        &account,
+        include_str!("../../../../crates/synara-core/src/app/x509/test_ca.pem"),
+    )
+    .expect("import test CA");
+    synara_core::app::x509::set_enabled(&account, true).expect("enable");
+    assert!(synara_core::app::x509::should_inject_verifier(&account));
+    let plan = cfg.plan();
+    assert!(plan.x509_verifier_configured);
+    let json = serde_json::to_string(&plan).unwrap();
+    assert!(!json.to_ascii_lowercase().contains("begin certificate"));
+    assert!(!json.contains("BEGIN PRIVATE"));
+    assert!(!json.contains("io.element.x509"));
+
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    let client = rt
+        .block_on(build_unauthenticated_client(&cfg))
+        .expect("client open with x509 on");
+    assert!(client.session().is_none());
+    drop(client);
+    let status = synara_core::app::x509::status_from_store(&account, Vec::new());
+    assert!(status.verifier_configured);
+    assert!(status.enabled);
+    assert!(status.has_ca);
+    let status_json = serde_json::to_string(&status).unwrap();
+    assert!(!status_json.contains("BEGIN CERTIFICATE"));
+    drop(_enter);
+    drop(rt);
     let _ = fs::remove_dir_all(&root);
 }

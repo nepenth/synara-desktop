@@ -25,6 +25,8 @@ const roomSnapshot = (
       isDirect: false,
       isSpace: false,
       isCall: false,
+      hasActiveCall: false,
+      activeCallParticipantCount: 0,
       isFavorite: false,
       isEncrypted: false,
       encryptionStatus: 'not_encrypted',
@@ -602,16 +604,19 @@ test('F3 sendEvent tunnels m.room.message to send_text and GAPs other types', as
   assert.equal(gap, null);
 });
 
-test('F3 sendStateEvent maps covered room-state types, GAPs others', async () => {
+test('F3 sendStateEvent maps covered room-state types and leftover native send', async () => {
   const { invoke, callLog } = invokingWith({
     matrix_set_room_name: { status: 'ok', roomId: '!r:example.org', sessionGeneration: 8 },
+    matrix_send_state_event: { status: 'ok' },
   });
   const client = createNativeMatrixClient(invoke);
   const name = await client.sendStateEvent('!r:example.org', 'm.room.name', { name: 'New' });
   assert.equal(name?.status, 'ok');
-  const gap = await client.sendStateEvent('!r:example.org', 'm.custom', {});
-  assert.equal(gap, null);
-  assert.deepEqual(callLog, ['matrix_set_room_name']);
+  const leftover = await client.sendStateEvent('!r:example.org', 'm.room.canonical_alias', {
+    alias: '#r:example.org',
+  });
+  assert.equal(leftover?.status, 'ok');
+  assert.deepEqual(callLog, ['matrix_set_room_name', 'matrix_send_state_event']);
 });
 
 test('F3 account-data methods are documented GAP (fail-closed)', async () => {

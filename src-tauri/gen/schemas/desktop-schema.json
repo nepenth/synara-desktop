@@ -663,6 +663,12 @@
           "markdownDescription": "Enables the matrix_edit_message command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_enable_room_encrypted_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-enable-room-encrypted-state",
+          "markdownDescription": "Enables the matrix_enable_room_encrypted_state command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_get_global_image_packs command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-get-global-image-packs",
@@ -831,6 +837,12 @@
           "markdownDescription": "Enables the matrix_media_download command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_media_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-media-preview",
+          "markdownDescription": "Enables the matrix_media_preview command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_message_search command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-message-search",
@@ -871,6 +883,12 @@
           "type": "string",
           "const": "allow-matrix-password-reset-request-email-token",
           "markdownDescription": "Enables the matrix_password_reset_request_email_token command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_pinned_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-pinned-events",
+          "markdownDescription": "Enables the matrix_pinned_events command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_poll_respond command without any pre-configured scope.",
@@ -1137,6 +1155,12 @@
           "markdownDescription": "Enables the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_room_retention command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-room-retention",
+          "markdownDescription": "Enables the matrix_room_retention command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_room_set_favorite command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-room-set-favorite",
@@ -1179,6 +1203,18 @@
           "markdownDescription": "Enables the matrix_room_unban command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_rtc_transports_refresh command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-rtc-transports-refresh",
+          "markdownDescription": "Enables the matrix_rtc_transports_refresh command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_rtc_transports_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-rtc-transports-snapshot",
+          "markdownDescription": "Enables the matrix_rtc_transports_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_secret_storage_bootstrap command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-secret-storage-bootstrap",
@@ -1215,6 +1251,12 @@
           "markdownDescription": "Enables the matrix_send_poll command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_send_state_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-send-state-event",
+          "markdownDescription": "Enables the matrix_send_state_event command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_send_text command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-send-text",
@@ -1231,6 +1273,12 @@
           "type": "string",
           "const": "allow-matrix-session-snapshot",
           "markdownDescription": "Enables the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_set_encrypted_state_events_setting command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-set-encrypted-state-events-setting",
+          "markdownDescription": "Enables the matrix_set_encrypted_state_events_setting command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_set_global_image_packs command without any pre-configured scope.",
@@ -1339,6 +1387,12 @@
           "type": "string",
           "const": "allow-matrix-sync-status",
           "markdownDescription": "Enables the matrix_sync_status command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_thread_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-thread-list",
+          "markdownDescription": "Enables the matrix_thread_list command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_threepid_add_email command without any pre-configured scope.",
@@ -1473,6 +1527,12 @@
           "markdownDescription": "Enables the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_timeline_timestamp_to_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-timeline-timestamp-to-event",
+          "markdownDescription": "Enables the matrix_timeline_timestamp_to_event command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_timeline_unpin command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-timeline-unpin",
@@ -1501,6 +1561,24 @@
           "type": "string",
           "const": "allow-matrix-user-directory-search",
           "markdownDescription": "Enables the matrix_user_directory_search command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_user_status_clear command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-user-status-clear",
+          "markdownDescription": "Enables the matrix_user_status_clear command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_user_status_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-user-status-set",
+          "markdownDescription": "Enables the matrix_user_status_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_user_status_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-user-status-snapshot",
+          "markdownDescription": "Enables the matrix_user_status_snapshot command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_verification_accept command without any pre-configured scope.",
@@ -1549,6 +1627,42 @@
           "type": "string",
           "const": "allow-matrix-verification-start",
           "markdownDescription": "Enables the matrix_verification_start command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-close",
+          "markdownDescription": "Enables the matrix_widget_close command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-open",
+          "markdownDescription": "Enables the matrix_widget_open command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-post",
+          "markdownDescription": "Enables the matrix_widget_post command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widget_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widget-subscribe",
+          "markdownDescription": "Enables the matrix_widget_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_widgets_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-widgets-list",
+          "markdownDescription": "Enables the matrix_widgets_list command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the widget_bridge_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-widget-bridge-post",
+          "markdownDescription": "Enables the widget_bridge_post command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_agent_action command without any pre-configured scope.",
@@ -1869,6 +1983,12 @@
           "markdownDescription": "Denies the matrix_edit_message command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_enable_room_encrypted_state command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-enable-room-encrypted-state",
+          "markdownDescription": "Denies the matrix_enable_room_encrypted_state command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_get_global_image_packs command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-get-global-image-packs",
@@ -2037,6 +2157,12 @@
           "markdownDescription": "Denies the matrix_media_download command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_media_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-media-preview",
+          "markdownDescription": "Denies the matrix_media_preview command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_message_search command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-message-search",
@@ -2077,6 +2203,12 @@
           "type": "string",
           "const": "deny-matrix-password-reset-request-email-token",
           "markdownDescription": "Denies the matrix_password_reset_request_email_token command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_pinned_events command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-pinned-events",
+          "markdownDescription": "Denies the matrix_pinned_events command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_poll_respond command without any pre-configured scope.",
@@ -2343,6 +2475,12 @@
           "markdownDescription": "Denies the matrix_room_power_levels_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_room_retention command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-room-retention",
+          "markdownDescription": "Denies the matrix_room_retention command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_room_set_favorite command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-room-set-favorite",
@@ -2385,6 +2523,18 @@
           "markdownDescription": "Denies the matrix_room_unban command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_rtc_transports_refresh command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-rtc-transports-refresh",
+          "markdownDescription": "Denies the matrix_rtc_transports_refresh command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_rtc_transports_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-rtc-transports-snapshot",
+          "markdownDescription": "Denies the matrix_rtc_transports_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_secret_storage_bootstrap command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-secret-storage-bootstrap",
@@ -2421,6 +2571,12 @@
           "markdownDescription": "Denies the matrix_send_poll command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_send_state_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-send-state-event",
+          "markdownDescription": "Denies the matrix_send_state_event command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_send_text command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-send-text",
@@ -2437,6 +2593,12 @@
           "type": "string",
           "const": "deny-matrix-session-snapshot",
           "markdownDescription": "Denies the matrix_session_snapshot command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_set_encrypted_state_events_setting command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-set-encrypted-state-events-setting",
+          "markdownDescription": "Denies the matrix_set_encrypted_state_events_setting command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_set_global_image_packs command without any pre-configured scope.",
@@ -2545,6 +2707,12 @@
           "type": "string",
           "const": "deny-matrix-sync-status",
           "markdownDescription": "Denies the matrix_sync_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_thread_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-thread-list",
+          "markdownDescription": "Denies the matrix_thread_list command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_threepid_add_email command without any pre-configured scope.",
@@ -2679,6 +2847,12 @@
           "markdownDescription": "Denies the matrix_timeline_snapshot command without any pre-configured scope."
         },
         {
+          "description": "Denies the matrix_timeline_timestamp_to_event command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-timeline-timestamp-to-event",
+          "markdownDescription": "Denies the matrix_timeline_timestamp_to_event command without any pre-configured scope."
+        },
+        {
           "description": "Denies the matrix_timeline_unpin command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-timeline-unpin",
@@ -2707,6 +2881,24 @@
           "type": "string",
           "const": "deny-matrix-user-directory-search",
           "markdownDescription": "Denies the matrix_user_directory_search command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_user_status_clear command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-user-status-clear",
+          "markdownDescription": "Denies the matrix_user_status_clear command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_user_status_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-user-status-set",
+          "markdownDescription": "Denies the matrix_user_status_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_user_status_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-user-status-snapshot",
+          "markdownDescription": "Denies the matrix_user_status_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_verification_accept command without any pre-configured scope.",
@@ -2755,6 +2947,42 @@
           "type": "string",
           "const": "deny-matrix-verification-start",
           "markdownDescription": "Denies the matrix_verification_start command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_close command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-close",
+          "markdownDescription": "Denies the matrix_widget_close command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_open command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-open",
+          "markdownDescription": "Denies the matrix_widget_open command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-post",
+          "markdownDescription": "Denies the matrix_widget_post command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widget_subscribe command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widget-subscribe",
+          "markdownDescription": "Denies the matrix_widget_subscribe command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_widgets_list command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-widgets-list",
+          "markdownDescription": "Denies the matrix_widgets_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the widget_bridge_post command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-widget-bridge-post",
+          "markdownDescription": "Denies the widget_bridge_post command without any pre-configured scope."
         },
         {
           "description": "No features are enabled by default, as we believe\nthe clipboard can be inherently dangerous and it is \napplication specific if read and/or write access is needed.\n\nClipboard interaction needs to be explicitly enabled.\n",
@@ -5287,6 +5515,66 @@
           "type": "string",
           "const": "window-state:deny-save-window-state",
           "markdownDescription": "Denies the save_window_state command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_import_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-import-ca",
+          "markdownDescription": "Enables the matrix_x509_identity_import_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_import_signer command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-import-signer",
+          "markdownDescription": "Enables the matrix_x509_identity_import_signer command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_remove_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-remove-ca",
+          "markdownDescription": "Enables the matrix_x509_identity_remove_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-set-enabled",
+          "markdownDescription": "Enables the matrix_x509_identity_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_x509_identity_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-x509-identity-status",
+          "markdownDescription": "Enables the matrix_x509_identity_status command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_import_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-import-ca",
+          "markdownDescription": "Denies the matrix_x509_identity_import_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_import_signer command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-import-signer",
+          "markdownDescription": "Denies the matrix_x509_identity_import_signer command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_remove_ca command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-remove-ca",
+          "markdownDescription": "Denies the matrix_x509_identity_remove_ca command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_set_enabled command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-set-enabled",
+          "markdownDescription": "Denies the matrix_x509_identity_set_enabled command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_x509_identity_status command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-x509-identity-status",
+          "markdownDescription": "Denies the matrix_x509_identity_status command without any pre-configured scope."
         }
       ]
     },

@@ -120,11 +120,11 @@ Tauri types — extraction is a packaging boundary, not a rewrite.
 - The root `Cargo.toml` now defines a workspace for `crates/synara-core` and
   `crates/synara-core-bindgen`. `src-tauri` remains deliberately excluded and
   is still a standalone package with its own committed lockfile.
-- `src-tauri/Cargo.toml` pins `matrix-sdk = "=0.18.0"` (exact),
-  `default-features = false`, with `bundled-sqlite`, `sqlite`, `markdown`
-  (ruma/markdown), `qrcode`, and e2e (via `matrix-sdk-ui` feature unification).
-  `matrix-sdk-ui = "=0.18.0"` and `matrix-sdk-crypto = "=0.18.0"` remain
-  exact pins.
+- `src-tauri/Cargo.toml` pins `matrix-sdk = "=0.19.0"` (exact),
+  `default-features = false`, with `bundled-sqlite`, `sqlite`,
+  `rustls-aws-lc-rs`, `markdown` (ruma/markdown), `qrcode`, and e2e (via
+  `matrix-sdk-ui` feature unification). `matrix-sdk-ui = "=0.19.0"` and
+  `matrix-sdk-crypto = "=0.19.0"` remain exact pins.
 - The workspace and current Core residency do not mean the desktop package has
   completed its P1/P3 transition.
 

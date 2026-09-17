@@ -15,7 +15,8 @@ use std::{
 use futures_util::StreamExt;
 use matrix_sdk::{
     encryption::verification::{
-        SasState, SasVerification, Verification, VerificationRequest, VerificationRequestState,
+        QrVerification, QrVerificationState, SasState, SasVerification, Verification,
+        VerificationRequest, VerificationRequestState,
     },
     event_handler::EventHandlerHandle,
     ruma::{
@@ -32,9 +33,9 @@ use sha2::{Digest, Sha256};
 use tokio::{sync::Mutex, task::JoinHandle};
 
 use super::{
-    compare_for_inbox, NativeVerificationDirection, NativeVerificationEmoji,
-    NativeVerificationInbox, NativeVerificationPhase, NativeVerificationRequest,
-    NativeVerificationSas,
+    capped_qr_image_data_url, compare_for_inbox, NativeVerificationDirection,
+    NativeVerificationEmoji, NativeVerificationInbox, NativeVerificationPhase,
+    NativeVerificationQr, NativeVerificationRequest, NativeVerificationSas,
 };
 
 /// Privacy-safe verification wake-up. No user ids, tokens, or SAS secrets.
@@ -55,6 +56,8 @@ struct ManagedVerification {
     direction: NativeVerificationDirection,
     started_ts: Option<u64>,
     sas: Option<SasVerification>,
+    qr: Option<QrVerification>,
+    qr_image_data_url: Option<String>,
     user_confirmed: bool,
     user_mismatched: bool,
     owner_failed: bool,
@@ -77,6 +80,9 @@ pub struct NativeVerificationOwner {
     watches: Arc<StdMutex<HashMap<String, JoinHandle<()>>>>,
     emit: VerificationUpdateEmit,
     session_generation: u64,
+    /// Desktop can render the show-QR SVG. SharedCore / iOS cannot, so that
+    /// host advertises SAS only and never calls `generate_qr_code()`.
+    show_qr: bool,
     _request_handler: EventHandlerHandle,
     _wake_handler: EventHandlerHandle,
 }
@@ -91,6 +97,17 @@ impl NativeVerificationOwner {
         emit: VerificationUpdateEmit,
         session_generation: u64,
     ) -> Self {
+        Self::with_show_qr(client, emit, session_generation, true)
+    }
+
+    /// `show_qr` must be true only when the host can render `VerificationQrDto`.
+    /// iOS SharedCore passes false and stays SAS-only.
+    pub fn with_show_qr(
+        client: &Client,
+        emit: VerificationUpdateEmit,
+        session_generation: u64,
+        show_qr: bool,
+    ) -> Self {
         let registry = Arc::new(Mutex::new(VerificationRegistry {
             session_generation,
             requests: HashMap::new(),
@@ -104,12 +121,14 @@ impl NativeVerificationOwner {
         let handler_registrations = Arc::clone(&registrations);
         let handler_watches = Arc::clone(&watches);
         let handler_emit = Arc::clone(&emit);
+        let handler_show_qr = show_qr;
         let request_handler = client.add_event_handler(
             move |event: ToDeviceKeyVerificationRequestEvent, client: Client| {
                 let registry = handler_registry.clone();
                 let registrations = Arc::clone(&handler_registrations);
                 let watches = Arc::clone(&handler_watches);
                 let emit = Arc::clone(&handler_emit);
+                let show_qr = handler_show_qr;
                 async move {
                     let flow_id = event.content.transaction_id.to_string();
                     verification_trace(&flow_id, "incoming_event", None, None);
@@ -140,6 +159,7 @@ impl NativeVerificationOwner {
                                     registry,
                                     Arc::clone(&emit),
                                     session_generation,
+                                    show_qr,
                                 );
                                 verification_trace(&flow_id, "incoming_registered", None, None);
                                 emit(NativeVerificationUpdateSignal { session_generation });
@@ -194,6 +214,7 @@ impl NativeVerificationOwner {
             watches,
             emit,
             session_generation,
+            show_qr,
             _request_handler: request_handler,
             _wake_handler: wake_handler,
         }
@@ -243,12 +264,14 @@ impl NativeVerificationOwner {
                     .map_err(|_| "v-crypto.1-device-query-failed")?
                     .ok_or("v-crypto.1-device-not-found")?;
                 let request = device
-                    .request_verification_with_methods(vec![VerificationMethod::SasV1])
+                    .request_verification_with_methods(self.advertised_methods())
                     .await
                     .map_err(|_| "v-crypto.1-device-request-failed")?;
                 (request, Some(device_id))
             }
-            None => start_self_verification(&self.client, user_id).await?,
+            None => {
+                start_self_verification(&self.client, user_id, self.advertised_methods()).await?
+            }
         };
 
         let flow_id = request.flow_id().to_owned();
@@ -265,6 +288,8 @@ impl NativeVerificationOwner {
             direction: NativeVerificationDirection::Outgoing,
             started_ts: now_ms(),
             sas: None,
+            qr: None,
+            qr_image_data_url: None,
             user_confirmed: false,
             user_mismatched: false,
             owner_failed: false,
@@ -286,6 +311,7 @@ impl NativeVerificationOwner {
             self.registry.clone(),
             Arc::clone(&self.emit),
             self.session_generation,
+            self.show_qr,
         );
         self.signal();
         Ok(projected)
@@ -300,9 +326,10 @@ impl NativeVerificationOwner {
             None,
         );
         request
-            .accept_with_methods(vec![VerificationMethod::SasV1])
+            .accept_with_methods(self.advertised_methods())
             .await
             .map_err(|_| "v-crypto.1-accept-failed")?;
+        try_generate_show_qr(&self.registry, flow_id, self.show_qr).await;
         let snapshot = self.snapshot(flow_id).await?;
         self.signal();
         Ok(snapshot)
@@ -328,6 +355,11 @@ impl NativeVerificationOwner {
             VerificationRequestState::Transitioned {
                 verification: Verification::SasV1(sas),
             } => sas,
+            VerificationRequestState::Transitioned { .. } => request
+                .start_sas()
+                .await
+                .map_err(|_| "v-crypto.1-sas-start-failed")?
+                .ok_or("v-crypto.1-sas-start-unavailable")?,
             _ => {
                 return Err("v-crypto.1-sas-invalid-state");
             }
@@ -346,6 +378,9 @@ impl NativeVerificationOwner {
         managed.other_device_id = Some(sas.other_device().device_id().to_owned());
         let request_for_watch = managed.request.clone();
         managed.sas = Some(sas);
+        // SAS is now the active comparison. Drop the show-QR image so the host
+        // cannot display a now-invalid code next to emoji.
+        managed.qr_image_data_url = None;
         let projected = project_request(managed);
         drop(registry);
         arm_watch(
@@ -355,6 +390,7 @@ impl NativeVerificationOwner {
             self.registry.clone(),
             Arc::clone(&self.emit),
             self.session_generation,
+            self.show_qr,
         );
         self.signal();
         Ok(projected)
@@ -404,18 +440,26 @@ impl NativeVerificationOwner {
     }
 
     pub async fn cancel(&self, flow_id: &str) -> Result<NativeVerificationRequest, &'static str> {
-        let (request, sas) = {
+        let (request, sas, qr) = {
             let registry = self.registry.lock().await;
             let managed = registry
                 .requests
                 .get(flow_id)
                 .ok_or("v-crypto.1-flow-not-found")?;
-            (managed.request.clone(), managed.sas.clone())
+            (
+                managed.request.clone(),
+                managed.sas.clone(),
+                managed.qr.clone(),
+            )
         };
         if let Some(sas) = sas {
             sas.cancel()
                 .await
                 .map_err(|_| "v-crypto.1-sas-cancel-failed")?;
+        } else if let Some(qr) = qr {
+            qr.cancel()
+                .await
+                .map_err(|_| "v-crypto.1-qr-cancel-failed")?;
         } else {
             request
                 .cancel()
@@ -477,6 +521,10 @@ impl NativeVerificationOwner {
             .map(project_request)
             .ok_or("v-crypto.1-flow-not-found")
     }
+
+    fn advertised_methods(&self) -> Vec<VerificationMethod> {
+        advertised_verification_methods(self.show_qr)
+    }
 }
 
 impl Drop for NativeVerificationOwner {
@@ -504,6 +552,7 @@ fn retire_registration_tasks(registrations: &StdMutex<VerificationRegistrationTa
 async fn start_self_verification(
     client: &Client,
     user_id: &matrix_sdk::ruma::UserId,
+    methods: Vec<VerificationMethod>,
 ) -> Result<(VerificationRequest, Option<OwnedDeviceId>), &'static str> {
     let encryption = client.encryption();
     // "Verify this device" is an own-identity operation. The SDK broadcasts
@@ -519,7 +568,7 @@ async fn start_self_verification(
         .map_err(|_| "v-crypto.1-own-identity-query-failed")?
         .ok_or("v-crypto.1-own-identity-not-found")?;
     let request = identity
-        .request_verification_with_methods(vec![VerificationMethod::SasV1])
+        .request_verification_with_methods(methods)
         .await
         .map_err(|_| "v-crypto.1-own-request-failed")?;
     Ok((request, None))
@@ -573,6 +622,8 @@ async fn register_incoming_request(
             direction: NativeVerificationDirection::Incoming,
             started_ts: Some(event.content.timestamp.get().into()),
             sas: None,
+            qr: None,
+            qr_image_data_url: None,
             user_confirmed: false,
             user_mismatched: false,
             owner_failed: false,
@@ -603,10 +654,19 @@ fn arm_watch(
     registry: Arc<Mutex<VerificationRegistry>>,
     emit: VerificationUpdateEmit,
     session_generation: u64,
+    show_qr: bool,
 ) {
     let watch_id = flow_id.clone();
     let handle = tokio::spawn(async move {
-        watch_request(request, registry, emit, session_generation, watch_id).await;
+        watch_request(
+            request,
+            registry,
+            emit,
+            session_generation,
+            watch_id,
+            show_qr,
+        )
+        .await;
     });
     if let Ok(mut watches) = watches.lock() {
         if let Some(previous) = watches.insert(flow_id, handle) {
@@ -621,17 +681,23 @@ async fn watch_request(
     emit: VerificationUpdateEmit,
     session_generation: u64,
     flow_id: String,
+    show_qr: bool,
 ) {
     let mut request_changes = request.changes();
     let mut sas_stream = None;
+    let mut qr_stream = None;
     let mut initial_sas = None;
     {
         let mut registry = registry.lock().await;
         if let Some(managed) = registry.requests.get_mut(&flow_id) {
             refresh_sas(managed);
+            refresh_qr(managed);
             if let Some(sas) = managed.sas.as_ref() {
                 initial_sas = Some(sas.clone());
                 sas_stream = Some(sas.changes());
+            }
+            if let Some(qr) = managed.qr.as_ref() {
+                qr_stream = Some(qr.changes());
             }
         }
     }
@@ -653,25 +719,39 @@ async fn watch_request(
                     Some(request_state_label(&state)),
                     None,
                 );
-                if let VerificationRequestState::Transitioned {
-                    verification: Verification::SasV1(sas),
-                } = &state
-                {
-                    // Protocol acceptance belongs to the owner, not a UI phase.
-                    // Either side may start SAS after Ready, so accept every
-                    // transitioned handle direction-independently. The SDK sends
-                    // m.key.verification.accept only when this handle is in the
-                    // actionable Started state and is otherwise idempotent.
-                    let accept_failed = accept_transitioned_sas(&flow_id, sas).await.is_err();
-                    let mut registry = registry.lock().await;
-                    if let Some(managed) = registry.requests.get_mut(&flow_id) {
-                        managed.owner_failed |= accept_failed;
-                        managed.other_device_id =
-                            Some(sas.other_device().device_id().to_owned());
-                        managed.sas = Some(sas.clone());
+                match &state {
+                    VerificationRequestState::Ready { .. } => {
+                        try_generate_show_qr(&registry, &flow_id, show_qr).await;
                     }
-                    drop(registry);
-                    sas_stream = Some(sas.changes());
+                    VerificationRequestState::Transitioned {
+                        verification: Verification::SasV1(sas),
+                    } => {
+                        // Protocol acceptance belongs to the owner, not a UI phase.
+                        // Either side may start SAS after Ready, so accept every
+                        // transitioned handle direction-independently. The SDK sends
+                        // m.key.verification.accept only when this handle is in the
+                        // actionable Started state and is otherwise idempotent.
+                        let accept_failed = accept_transitioned_sas(&flow_id, sas).await.is_err();
+                        let mut registry = registry.lock().await;
+                        if let Some(managed) = registry.requests.get_mut(&flow_id) {
+                            managed.owner_failed |= accept_failed;
+                            managed.other_device_id =
+                                Some(sas.other_device().device_id().to_owned());
+                            managed.sas = Some(sas.clone());
+                        }
+                        drop(registry);
+                        sas_stream = Some(sas.changes());
+                    }
+                    VerificationRequestState::Transitioned {
+                        verification: Verification::QrV1(qr),
+                    } => {
+                        retain_show_qr(&registry, &flow_id, qr).await;
+                        qr_stream = Some(qr.changes());
+                        if confirm_scanned_show_qr(&flow_id, qr).await.is_err() {
+                            mark_owner_failed(&registry, &flow_id).await;
+                        }
+                    }
+                    _ => {}
                 }
                 emit(NativeVerificationUpdateSignal { session_generation });
                 if matches!(
@@ -698,6 +778,39 @@ async fn watch_request(
                     None,
                     Some(sas_state_label(&state)),
                 );
+                emit(NativeVerificationUpdateSignal { session_generation });
+            }
+            maybe_qr = async {
+                if let Some(stream) = qr_stream.as_mut() {
+                    stream.next().await
+                } else {
+                    std::future::pending::<Option<QrVerificationState>>().await
+                }
+            } => {
+                let Some(state) = maybe_qr else {
+                    qr_stream = None;
+                    continue;
+                };
+                verification_trace(
+                    &flow_id,
+                    "qr_state",
+                    None,
+                    Some(qr_state_label(&state)),
+                );
+                if matches!(state, QrVerificationState::Scanned) {
+                    let qr = {
+                        let registry = registry.lock().await;
+                        registry
+                            .requests
+                            .get(&flow_id)
+                            .and_then(|managed| managed.qr.clone())
+                    };
+                    if let Some(qr) = qr {
+                        if confirm_scanned_show_qr(&flow_id, &qr).await.is_err() {
+                            mark_owner_failed(&registry, &flow_id).await;
+                        }
+                    }
+                }
                 emit(NativeVerificationUpdateSignal { session_generation });
             }
         }
@@ -736,6 +849,12 @@ async fn mark_owner_failed(registry: &Arc<Mutex<VerificationRegistry>>, flow_id:
 
 fn project_request(managed: &mut ManagedVerification) -> NativeVerificationRequest {
     refresh_sas(managed);
+    refresh_qr(managed);
+    let qr = if managed.sas.is_some() {
+        None
+    } else {
+        project_qr(managed)
+    };
     let (phase, sas) = if managed.owner_failed {
         (NativeVerificationPhase::Failed, None)
     } else if let Some(sas) = managed.sas.as_ref() {
@@ -768,6 +887,19 @@ fn project_request(managed: &mut ManagedVerification) -> NativeVerificationReque
         } else {
             (NativeVerificationPhase::Started, None)
         }
+    } else if let Some(qr) = managed.qr.as_ref() {
+        if qr.is_done() {
+            (NativeVerificationPhase::Done, None)
+        } else if qr.is_cancelled() {
+            (NativeVerificationPhase::Cancelled, None)
+        } else if matches!(
+            qr.state(),
+            QrVerificationState::Confirmed | QrVerificationState::Scanned
+        ) {
+            (NativeVerificationPhase::Confirmed, None)
+        } else {
+            (NativeVerificationPhase::Started, None)
+        }
     } else {
         match managed.request.state() {
             VerificationRequestState::Created { .. }
@@ -790,7 +922,16 @@ fn project_request(managed: &mut ManagedVerification) -> NativeVerificationReque
         phase,
         started_ts: managed.started_ts,
         sas,
+        qr,
     }
+}
+
+fn project_qr(managed: &ManagedVerification) -> Option<NativeVerificationQr> {
+    let image_data_url = managed.qr_image_data_url.clone()?;
+    Some(NativeVerificationQr {
+        image_data_url,
+        scanned: managed.qr.as_ref().is_some_and(|qr| qr.has_been_scanned()),
+    })
 }
 
 fn refresh_sas(managed: &mut ManagedVerification) {
@@ -804,6 +945,144 @@ fn refresh_sas(managed: &mut ManagedVerification) {
         managed.other_device_id = Some(sas.other_device().device_id().to_owned());
         managed.sas = Some(sas);
     }
+}
+
+fn refresh_qr(managed: &mut ManagedVerification) {
+    if managed.qr.is_some() {
+        return;
+    }
+    if let VerificationRequestState::Transitioned {
+        verification: Verification::QrV1(qr),
+    } = managed.request.state()
+    {
+        managed.other_device_id = Some(qr.other_device().device_id().to_owned());
+        if managed.qr_image_data_url.is_none() {
+            managed.qr_image_data_url = qr_svg_data_url(&qr);
+        }
+        managed.qr = Some(qr);
+    }
+}
+
+fn advertised_verification_methods(show_qr: bool) -> Vec<VerificationMethod> {
+    if show_qr {
+        vec![
+            VerificationMethod::SasV1,
+            VerificationMethod::QrCodeShowV1,
+            VerificationMethod::ReciprocateV1,
+        ]
+    } else {
+        vec![VerificationMethod::SasV1]
+    }
+}
+
+async fn try_generate_show_qr(
+    registry: &Arc<Mutex<VerificationRegistry>>,
+    flow_id: &str,
+    show_qr: bool,
+) {
+    if !show_qr {
+        return;
+    }
+    let request = {
+        let registry = registry.lock().await;
+        registry
+            .requests
+            .get(flow_id)
+            .map(|managed| managed.request.clone())
+    };
+    let Some(request) = request else {
+        return;
+    };
+    let Ok(Some(qr)) = request.generate_qr_code().await else {
+        return;
+    };
+    let image_data_url = qr_svg_data_url(&qr);
+    if image_data_url.is_none() {
+        // Generating transitions the request out of Ready. If the host cannot
+        // render the image, start SAS immediately instead of stalling.
+        verification_trace(flow_id, "qr_image_dropped_sas_fallback", None, None);
+        if request.start_sas().await.is_err() {
+            mark_owner_failed(registry, flow_id).await;
+        }
+        return;
+    }
+    retain_show_qr(registry, flow_id, &qr).await;
+}
+
+async fn retain_show_qr(
+    registry: &Arc<Mutex<VerificationRegistry>>,
+    flow_id: &str,
+    qr: &QrVerification,
+) {
+    let image_data_url = qr_svg_data_url(qr);
+    let mut registry = registry.lock().await;
+    if let Some(managed) = registry.requests.get_mut(flow_id) {
+        managed.other_device_id = Some(qr.other_device().device_id().to_owned());
+        managed.qr = Some(qr.clone());
+        if image_data_url.is_some() {
+            managed.qr_image_data_url = image_data_url;
+        }
+    }
+}
+
+async fn confirm_scanned_show_qr(flow_id: &str, qr: &QrVerification) -> Result<(), &'static str> {
+    if !qr.has_been_scanned() {
+        return Ok(());
+    }
+    match qr.confirm().await {
+        Ok(()) => {
+            verification_trace(flow_id, "qr_owner_confirm", None, Some("scanned"));
+            Ok(())
+        }
+        Err(_) => {
+            verification_trace(flow_id, "qr_owner_confirm_failed", None, Some("scanned"));
+            Err("v-crypto.1-qr-owner-confirm-failed")
+        }
+    }
+}
+
+fn qr_svg_data_url(qr: &QrVerification) -> Option<String> {
+    let code = qr.to_qr_code().ok()?;
+    let width = code.width();
+    if width == 0 {
+        return None;
+    }
+    let quiet = 4usize;
+    let dim = width + quiet * 2;
+    let mut path = String::new();
+    let mut run_start = None;
+    let emit_run = |x: usize, y: usize, run: usize, path: &mut String| {
+        let x = x + quiet;
+        let y = y + quiet;
+        let _ = write!(path, "M{x},{y}h{run}v1H{x}");
+    };
+    for (index, module) in code.to_colors().into_iter().enumerate() {
+        let x = index % width;
+        let y = index / width;
+        let dark = module.select(true, false);
+        match (dark, run_start) {
+            (true, None) => run_start = Some((x, y, 1)),
+            (true, Some((start_x, start_y, run))) if y == start_y && x == start_x + run => {
+                run_start = Some((start_x, start_y, run + 1));
+            }
+            (true, Some((start_x, start_y, run))) => {
+                emit_run(start_x, start_y, run, &mut path);
+                run_start = Some((x, y, 1));
+            }
+            (false, Some((start_x, start_y, run))) => {
+                emit_run(start_x, start_y, run, &mut path);
+                run_start = None;
+            }
+            (false, None) => {}
+        }
+    }
+    if let Some((start_x, start_y, run)) = run_start {
+        emit_run(start_x, start_y, run, &mut path);
+    }
+    let svg = format!(
+        "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 {dim} {dim}' shape-rendering='crispEdges'><rect width='{dim}' height='{dim}' fill='white'/><path fill='black' d='{path}'/></svg>"
+    );
+    capped_qr_image_data_url(&format!("data:image/svg+xml;charset=utf-8,{svg}"))
 }
 
 fn now_ms() -> Option<u64> {
@@ -850,6 +1129,17 @@ fn request_state_label(state: &VerificationRequestState) -> &'static str {
     }
 }
 
+fn qr_state_label(state: &QrVerificationState) -> &'static str {
+    match state {
+        QrVerificationState::Started => "started",
+        QrVerificationState::Scanned => "scanned",
+        QrVerificationState::Confirmed => "confirmed",
+        QrVerificationState::Reciprocated => "reciprocated",
+        QrVerificationState::Done { .. } => "done",
+        QrVerificationState::Cancelled(_) => "cancelled",
+    }
+}
+
 fn sas_state_label(state: &SasState) -> &'static str {
     match state {
         SasState::Created { .. } => "created",
@@ -877,6 +1167,22 @@ mod registration_lifecycle_tests {
         fn drop(&mut self) {
             self.0.store(true, Ordering::SeqCst);
         }
+    }
+
+    #[test]
+    fn advertised_methods_are_show_qr_not_scan() {
+        assert_eq!(
+            advertised_verification_methods(true),
+            vec![
+                VerificationMethod::SasV1,
+                VerificationMethod::QrCodeShowV1,
+                VerificationMethod::ReciprocateV1,
+            ]
+        );
+        assert_eq!(
+            advertised_verification_methods(false),
+            vec![VerificationMethod::SasV1]
+        );
     }
 
     #[tokio::test]

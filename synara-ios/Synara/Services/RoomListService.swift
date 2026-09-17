@@ -29,6 +29,10 @@ struct RoomSummary: Identifiable, Equatable {
     let latestAgentCardEventID: String?
     let pendingAgentApprovals: [PendingAgentCardRef]
     let isFavorite: Bool
+    let isCall: Bool
+    let hasActiveCall: Bool
+    let activeCallParticipantCount: Int
+    let directUserId: String?
     /// Authoritative Core tri-state. Security decisions must consume this value.
     let encryptionStatus: SynaraRoomEncryptionStatus
 
@@ -53,6 +57,10 @@ struct RoomSummary: Identifiable, Equatable {
         latestAgentCardEventID: String? = nil,
         pendingAgentApprovals: [PendingAgentCardRef] = [],
         isFavorite: Bool = false,
+        isCall: Bool = false,
+        hasActiveCall: Bool = false,
+        activeCallParticipantCount: Int = 0,
+        directUserId: String? = nil,
         isEncrypted: Bool? = nil,
         encryptionStatus: SynaraRoomEncryptionStatus? = nil
     ) {
@@ -73,6 +81,10 @@ struct RoomSummary: Identifiable, Equatable {
         self.latestAgentCardEventID = latestAgentCardEventID
         self.pendingAgentApprovals = pendingAgentApprovals
         self.isFavorite = isFavorite
+        self.isCall = isCall
+        self.hasActiveCall = hasActiveCall
+        self.activeCallParticipantCount = activeCallParticipantCount
+        self.directUserId = directUserId
         if let encryptionStatus {
             self.encryptionStatus = encryptionStatus
         } else if let isEncrypted {
@@ -80,6 +92,10 @@ struct RoomSummary: Identifiable, Equatable {
         } else {
             self.encryptionStatus = .unknown
         }
+    }
+
+    var liveCallChipLabel: String {
+        activeCallParticipantCount > 1 ? "\(activeCallParticipantCount) live" : "In a call"
     }
 
     var isAgentRoom: Bool {

@@ -12,7 +12,7 @@ type Fixture = {
   activeStreamCount(): number;
   emitAfterOpen(): void;
   releaseOperation(): void;
-  commands: { command: string }[];
+  commands: { command: string; args?: Record<string, unknown> }[];
 };
 const fixture = (page: Page, action: Exclude<keyof Fixture, 'commands' | 'activeStreamCount'>) =>
   page.evaluate((key) => {
@@ -22,6 +22,16 @@ const open = async (page: Page, scenario: string) => {
   await page.goto(`/e2e/native-timeline-harness/index.html?scenario=${scenario}`);
   await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
 };
+const boxesOverlap = (
+  left: { x: number; y: number; width: number; height: number },
+  right: { x: number; y: number; width: number; height: number }
+) =>
+  !(
+    left.x + left.width <= right.x ||
+    right.x + right.width <= left.x ||
+    left.y + left.height <= right.y ||
+    right.y + right.height <= left.y
+  );
 const geometry = (page: Page) =>
   page.evaluate(() => {
     const viewport = [...document.querySelectorAll<HTMLElement>('#native-timeline *')].find(
@@ -195,7 +205,9 @@ for (const operation of ['paginate', 'read', 'follow', 'poll']) {
       expect(pageErrors).toEqual([]);
       if (result === 'success') await expect(page.getByText(/lost synchronization/)).toBeHidden();
       if (operation === 'paginate') {
-        await page.getByRole('button', { name: 'Load older messages' }).click();
+        const retry = page.getByRole('button', { name: 'Retry', exact: true });
+        if (await retry.isVisible()) await retry.click();
+        else await page.getByRole('button', { name: 'Load older messages' }).click();
         await expect.poll(() => commandCount(page, command)).toBe(2);
         await expect(changed).toBeVisible();
       }
@@ -469,6 +481,62 @@ test('delayed latest result cannot scroll a newer focused event in the same room
   await expect(page.locator('[data-native-timeline-event-id="$30"]')).toBeInViewport();
 });
 
+test('older-history pagination shows a loading status until the request finishes', async ({
+  page,
+}) => {
+  await open(page, 'sparse-missing&delayOperation=paginate');
+  await page.getByRole('button', { name: 'Load older messages', exact: true }).click();
+  const loading = page.getByRole('status', { name: 'Loading older messages' });
+  await expect(loading).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await fixture(page, 'releaseOperation');
+  await expect(loading).toBeHidden();
+});
+
+test('older-history pagination failure is an error with retry, not a spinner', async ({ page }) => {
+  await open(page, 'sparse-missing&delayOperation=paginate&operationResult=reject');
+  await page.getByRole('button', { name: 'Load older messages', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Loading older messages' })).toBeVisible();
+  await fixture(page, 'releaseOperation');
+  const alert = page.getByRole('alert');
+  await expect(page.getByRole('status', { name: 'Loading older messages' })).toBeHidden();
+  await expect(alert).toBeVisible();
+  await expect(alert).toContainText('Could not load older messages');
+  await expect(alert).toContainText('Superseded operation rejected');
+  await expect(page.getByRole('button', { name: 'Retry', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect.poll(() => commandCount(page, 'matrix_timeline_paginate')).toBe(2);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+});
+
+test('date rail jumps toward an earlier loaded message', async ({ page }) => {
+  await open(page, 'live');
+  const rail = page.locator('[data-timeline-date-rail="true"]');
+  await expect(rail).toBeVisible();
+  const before = await geometry(page);
+  await rail.getByRole('button').first().click();
+  await expect.poll(async () => (await geometry(page)).top).toBeLessThan(before.top);
+  await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(0);
+});
+
+test('date rail beginning tick jumps via timestamp_to_event then focused open', async ({
+  page,
+}) => {
+  await page.goto(
+    '/e2e/native-timeline-harness/index.html?scenario=live&roomCreated=1600000000000'
+  );
+  await expect(page.locator('[data-native-timeline-event-id]').first()).toBeVisible();
+  const rail = page.locator('[data-timeline-date-rail="true"]');
+  await expect(rail).toBeVisible();
+  await expect(
+    page.getByRole('scrollbar', { name: 'Jump to a date in room history' })
+  ).toBeVisible();
+  await rail.getByRole('button', { name: 'Jump to Beginning' }).click();
+  await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(1);
+  await expect.poll(() => commandCount(page, 'matrix_timeline_open')).toBeGreaterThanOrEqual(2);
+  await expect.poll(async () => (await geometry(page)).eventId).toBe('$history-jump');
+});
+
 test('sparse history and missing last-read recovery controls are separately clickable', async ({
   page,
 }) => {
@@ -511,4 +579,99 @@ test('sparse history and missing last-read recovery controls are separately clic
       )
     )
     .toBe(2);
+});
+
+test('markdown file attachments preview in-client and still download', async ({ page }) => {
+  await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-md');
+  const chip = page.getByRole('button', { name: 'Preview notes.md' });
+  const older = page.getByRole('button', { name: 'Load older messages', exact: true });
+  await expect(chip).toBeVisible();
+  await expect(older).toBeVisible();
+  await expect(page.locator('a[download]')).toHaveCount(0);
+  const chipBox = await chip.boundingBox();
+  const olderBox = await older.boundingBox();
+  expect(chipBox).not.toBeNull();
+  expect(olderBox).not.toBeNull();
+  expect(boxesOverlap(chipBox!, olderBox!)).toBe(false);
+  await chip.click();
+  const preview = page.locator('[data-native-timeline-file-preview="true"]');
+  await expect(preview).toBeVisible();
+  await expect(preview.getByRole('heading', { name: 'Agent notes' })).toBeVisible();
+  await expect(preview.locator('strong')).toContainText('bold');
+  await preview.getByRole('button', { name: 'Download notes.md' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const commands = (
+          window as unknown as {
+            nativeTimelineFixture: {
+              commands: { command: string; args?: Record<string, unknown> }[];
+            };
+          }
+        ).nativeTimelineFixture.commands;
+        const download = commands.find((entry) => entry.command === 'matrix_media_download');
+        const save = commands.find((entry) => entry.command === 'desktop_save_file');
+        return {
+          downloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
+            .length,
+          saveCount: commands.filter((entry) => entry.command === 'desktop_save_file').length,
+          contentUri: download?.args?.contentUri,
+          filename: (
+            save?.args as { payload?: { filename?: string; bytes?: number[] } } | undefined
+          )?.payload?.filename,
+        };
+      })
+    )
+    .toEqual({
+      downloadCount: 2,
+      saveCount: 1,
+      contentUri: `timeline-media-${'ab'.repeat(32)}`,
+      filename: 'notes.md',
+    });
+});
+
+test('generic file attachments download on click without a preview', async ({ page }) => {
+  await page.goto('/e2e/native-timeline-harness/index.html?scenario=file-zip');
+  const chip = page.getByRole('button', { name: 'Download archive.zip' });
+  const older = page.getByRole('button', { name: 'Load older messages', exact: true });
+  await expect(chip).toBeVisible();
+  await expect(older).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Preview archive.zip' })).toHaveCount(0);
+  const chipBox = await chip.boundingBox();
+  const olderBox = await older.boundingBox();
+  expect(chipBox).not.toBeNull();
+  expect(olderBox).not.toBeNull();
+  expect(boxesOverlap(chipBox!, olderBox!)).toBe(false);
+  await chip.click();
+  await expect(page.locator('[data-native-timeline-file-preview="true"]')).toHaveCount(0);
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const commands = (
+          window as unknown as {
+            nativeTimelineFixture: {
+              commands: { command: string; args?: Record<string, unknown> }[];
+            };
+          }
+        ).nativeTimelineFixture.commands;
+        const save = commands.find((entry) => entry.command === 'desktop_save_file');
+        return {
+          downloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
+            .length,
+          saveCount: commands.filter((entry) => entry.command === 'desktop_save_file').length,
+          contentUri: commands.find((entry) => entry.command === 'matrix_media_download')?.args
+            ?.contentUri,
+          filename: (save?.args as { payload?: { filename?: string } } | undefined)?.payload
+            ?.filename,
+          bytes: (save?.args as { payload?: { bytes?: number[] } } | undefined)?.payload?.bytes,
+        };
+      })
+    )
+    .toEqual({
+      downloadCount: 1,
+      saveCount: 1,
+      contentUri: `timeline-media-${'cd'.repeat(32)}`,
+      filename: 'archive.zip',
+      bytes: [80, 75, 3, 4],
+    });
 });

@@ -35,6 +35,9 @@ export type ReactionViewerProps = {
   reactions?: readonly NativeReactionReadback[];
   initialKey?: string;
   canRedact?: boolean;
+  canRedactOwn?: boolean;
+  canRedactOther?: boolean;
+  ownUserId?: string;
   requestClose: () => void;
   /**
    * Compatibility fields for the retired JS message surface. They are not
@@ -53,6 +56,9 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
       reactions = [],
       initialKey,
       canRedact,
+      canRedactOwn,
+      canRedactOther,
+      ownUserId,
       requestClose,
       room,
       relations: legacyRelations,
@@ -79,7 +85,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
     const selectedShortcode = getShortcodeFor(getHexcodeForEmoji(selectedKey)) ?? selectedKey;
 
     const handleRedactReaction = async (key: string, reactionEventId: string | undefined) => {
-      if (!canRedact || !resolvedRoomId || !targetEventId || !reactionEventId) return;
+      if (!resolvedRoomId || !targetEventId || !reactionEventId) return;
       setRedactingEventId(reactionEventId);
       setRedactError(undefined);
       try {
@@ -145,6 +151,12 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                   const senderId = sender.userId;
                   const reactionEventId = sender.reactionEventId;
                   const isRedacting = redactingEventId === reactionEventId;
+                  const senderIsOwn = Boolean(ownUserId) && senderId === ownUserId;
+                  const canRemove =
+                    Boolean(reactionEventId) &&
+                    (senderIsOwn
+                      ? Boolean(canRedactOwn ?? canRedact)
+                      : Boolean(canRedactOther ?? canRedact));
 
                   return (
                     <MenuItem
@@ -172,7 +184,7 @@ export const ReactionViewer = as<'div', ReactionViewerProps>(
                         </Avatar>
                       }
                       after={
-                        canRedact && reactionEventId ? (
+                        canRemove ? (
                           <IconButton
                             size="300"
                             radii="300"

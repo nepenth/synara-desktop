@@ -92,6 +92,7 @@ pub async fn restore(
         .recover(recovery_secret)
         .await
         .map_err(|_| "v-crypto.3-restore-rejected")?;
+    let _ = crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
     let status = status(client, session_generation).await?;
     if !status.enabled || status.availability != NativeBackupAvailability::Available {
         return Err("v-crypto.3-restore-incomplete");

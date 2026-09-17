@@ -72,6 +72,7 @@ use crate::matrix::client_builder::{
     build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
 };
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
+use crate::matrix::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
 use crate::matrix::lifecycle::{
     clear_session_material, load_session_material, matrix_session_from_host_secrets,
@@ -92,6 +93,7 @@ use crate::matrix::room_list::{
     NativeRoomListSnapshot,
 };
 use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
+use crate::matrix::rtc_transports::NativeRtcTransportsOwner;
 use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeMissingSecret, NativeSecretStorageAction,
     NativeSecretStorageOperationResult, NativeSecretStorageState, NativeSecretStorageStatus,
@@ -117,20 +119,25 @@ use crate::matrix::timeline::{
     format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
     NativeComposerClearReplyDraftRequest, NativeComposerReplyDraftReadback,
     NativeComposerReplyDraftRoomRequest, NativeComposerSetReplyDraftRequest,
-    NativeReactionMutationResult, NativeTimelineActionKind, NativeTimelineActionReadback,
-    NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest, NativeTimelineDirection,
-    NativeTimelineEditTextRequest, NativeTimelineEventReadback, NativeTimelineForwardMediaRequest,
-    NativeTimelineForwardTextRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback,
-    NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelinePinRequest,
-    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadIntent,
-    NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineRedactRequest,
-    NativeTimelineReportRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
+    NativePinnedEventsRequest, NativeReactionMutationResult, NativeTimelineActionKind,
+    NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
+    NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
+    NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
+    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineReportRequest,
+    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, PinnedEventsSnapshot,
     TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
 };
 use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
+use crate::matrix::user_profile::NativeOwnProfileOwner;
+use crate::matrix::user_status::NativeUserStatusOwner;
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
+use crate::matrix::widgets::NativeWidgetOwner;
+use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
 const MATRIX_DATA_DIR: &str = "matrix";
@@ -183,7 +190,7 @@ pub struct MatrixAuthCommandError {
 
 pub use synara_core::app::media::{
     MatrixMediaConfigResult, MatrixMediaDownloadRequest, MatrixMediaDownloadResult,
-    MatrixUploadMediaResult,
+    MatrixMediaPreviewSnapshot, MatrixUploadMediaResult,
 };
 pub use synara_core::app::members::NativeRoomMembersSnapshot;
 pub use synara_core::app::send::{
@@ -253,10 +260,16 @@ struct ManagedMatrixSession {
     attachments: AttachmentSendQueue,
     verification: Arc<NativeVerificationOwner>,
     devices: Arc<NativeDeviceOwner>,
+    dehydrated_devices: Arc<NativeDehydratedDevicesOwner>,
     _image_packs: Arc<NativeImagePackOwner>,
     typing: Arc<NativeTypingOwner>,
     presence: Arc<NativePresenceOwner>,
+    rtc_transports: Arc<NativeRtcTransportsOwner>,
+    user_status: Arc<NativeUserStatusOwner>,
+    widgets: Arc<NativeWidgetOwner>,
     join_rules: Arc<NativeRoomJoinRuleOwner>,
+    _own_profile: NativeOwnProfileOwner,
+    _media_retention: NativeMediaRetentionOwner,
     /// Core→renderer observation stream; retired on logout, dropped with
     /// the session.
     notification_observations: Arc<NativeNotificationObservationOwner>,
@@ -976,6 +989,8 @@ mod room_list;
 mod room_ops;
 #[path = "../room_profile/product_commands.rs"]
 mod room_profile;
+#[path = "../rtc_transports/product_commands.rs"]
+mod rtc_transports;
 #[path = "../search/product_commands.rs"]
 mod search;
 #[path = "../secret_storage/product_commands.rs"]
@@ -990,8 +1005,14 @@ mod timeline;
 mod typing;
 #[path = "../user_profile/product_commands.rs"]
 mod user_profile;
+#[path = "../user_status/product_commands.rs"]
+mod user_status;
 #[path = "../verification/product_commands.rs"]
 mod verification;
+#[path = "../widgets/product_commands.rs"]
+mod widgets;
+#[path = "../x509/product_commands.rs"]
+mod x509_identity;
 pub use account_data::*;
 pub use auth_commands::*;
 pub use backup::*;
@@ -1005,6 +1026,7 @@ pub use room_keys::*;
 pub use room_list::*;
 pub use room_ops::*;
 pub use room_profile::*;
+pub use rtc_transports::*;
 pub use search::*;
 pub use secret_storage::*;
 pub use send::*;
@@ -1012,7 +1034,10 @@ pub use spaces::*;
 pub use timeline::*;
 pub use typing::*;
 pub use user_profile::*;
+pub use user_status::*;
 pub use verification::*;
+pub use widgets::*;
+pub use x509_identity::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]

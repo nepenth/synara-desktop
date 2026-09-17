@@ -8,7 +8,7 @@ Introduce a cargo workspace with a shared crate and keep the platform shells:
 Cargo.toml                     # workspace root (members: crates/synara-core, src-tauri)
 crates/
   synara-core/                 # transport-agnostic application logic (NEW)
-    Cargo.toml                 # pins matrix-sdk =0.18.0, matrix-sdk-ui, matrix-sdk-crypto
+    Cargo.toml                 # pins matrix-sdk =0.19.0, matrix-sdk-ui, matrix-sdk-crypto
     src/
       lib.rs                   # public API: commands, events, Platform sink trait, entry points
       app/                     # (moved 1:1) sync, room_list, timeline, ... supervisors

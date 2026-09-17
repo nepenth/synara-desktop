@@ -62,6 +62,7 @@ pub mod backup;
 pub mod client_builder;
 pub mod cross_signing;
 pub mod crypto_store;
+pub mod dehydrated_devices;
 pub mod devices;
 pub mod diagnostics;
 // SNC-P1-2: matrix/dto moved into crates/synara-core; re-export so all
@@ -88,6 +89,7 @@ pub mod room_list;
 pub mod room_ops;
 pub mod room_profile;
 pub mod routes;
+pub mod rtc_transports;
 pub mod search;
 pub mod secret_storage;
 pub mod security;
@@ -102,8 +104,11 @@ pub mod timeline;
 pub mod typing;
 pub mod unread;
 pub mod user_profile;
+pub mod user_status;
 pub mod utd_recovery;
 pub mod verification;
+pub mod widgets;
+pub mod x509;
 
 const _: fn() -> &'static str = matrix_ipc_schema_markers;
 
@@ -144,6 +149,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _backup = backup::matrix_backup_markers();
     let _devices = devices::matrix_devices_markers();
     let _verification = verification::matrix_verification_markers();
+    let _x509 = x509::matrix_x509_identity_markers();
     let _cross_signing = cross_signing::matrix_cross_signing_markers();
     let _crypto_store = crypto_store::matrix_crypto_store_markers();
     let _send = send::matrix_send_markers();
@@ -152,6 +158,9 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     let _typing = typing::matrix_typing_markers();
     let _utd_recovery = utd_recovery::matrix_utd_recovery_markers();
     let _presence = presence::matrix_presence_markers();
+    let _rtc_transports = rtc_transports::matrix_rtc_transports_markers();
+    let _user_status = user_status::matrix_user_status_markers();
+    let _widgets = widgets::matrix_widgets_markers();
     let _media = media::matrix_media_markers();
     let _media_cache = media_cache::matrix_media_cache_markers();
     let _media_export = media_export::matrix_media_export_markers();
@@ -199,6 +208,7 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_backup, backup::MATRIX_BACKUP_MARKER);
     debug_assert_eq!(_devices, devices::MATRIX_DEVICES_MARKER);
     debug_assert_eq!(_verification, verification::MATRIX_VERIFICATION_MARKER);
+    debug_assert_eq!(_x509, x509::MATRIX_X509_IDENTITY_MARKER);
     debug_assert_eq!(_cross_signing, cross_signing::MATRIX_CROSS_SIGNING_MARKER);
     debug_assert_eq!(_crypto_store, crypto_store::MATRIX_CRYPTO_STORE_MARKER);
     debug_assert_eq!(_send, send::MATRIX_SEND_MARKER);
@@ -207,6 +217,9 @@ pub fn matrix_ipc_schema_markers() -> &'static str {
     debug_assert_eq!(_typing, typing::MATRIX_TYPING_MARKER);
     debug_assert_eq!(_utd_recovery, utd_recovery::MATRIX_UTD_RECOVERY_MARKER);
     debug_assert_eq!(_presence, presence::MATRIX_PRESENCE_MARKER);
+    debug_assert_eq!(_rtc_transports, rtc_transports::RTC_TRANSPORTS_MARKER);
+    debug_assert_eq!(_user_status, user_status::USER_STATUS_MARKER);
+    debug_assert_eq!(_widgets, widgets::MATRIX_WIDGETS_EXPERIMENTAL_MARKER);
     debug_assert_eq!(_media, media::MATRIX_MEDIA_MARKER);
     debug_assert_eq!(_media_cache, media_cache::MATRIX_MEDIA_CACHE_MARKER);
     debug_assert_eq!(_media_export, media_export::MATRIX_MEDIA_EXPORT_MARKER);

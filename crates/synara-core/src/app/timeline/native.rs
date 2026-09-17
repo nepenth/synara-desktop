@@ -44,6 +44,11 @@ pub enum NativeTimelineOpenPosition {
     Focused {
         event_id: String,
     },
+    /// Dedicated `TimelineFocus::Thread` stream. Distinct from a permalink
+    /// `Focused` open of the same root event id.
+    Thread {
+        root_event_id: String,
+    },
 }
 
 /// Typed input for the native timeline-open owner.
@@ -284,6 +289,15 @@ pub struct NativeTimelineEventReadback {
     pub item: NativeTimelineItem,
 }
 
+/// Homeserver `/timestamp_to_event` result for a full-room date-rail jump.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeTimelineTimestampToEventReadback {
+    pub room_id: String,
+    pub event_id: String,
+    pub origin_server_ts: u64,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -388,6 +402,43 @@ mod tests {
     }
 
     #[test]
+    fn thread_open_request_keeps_the_root_at_the_native_boundary() {
+        let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "thread", "root_event_id": "$root:example.org" }
+        }))
+        .unwrap();
+        assert_eq!(
+            request.position,
+            NativeTimelineOpenPosition::Thread {
+                root_event_id: "$root:example.org".into()
+            }
+        );
+    }
+
+    #[test]
+    fn thread_open_request_rejects_missing_or_empty_root() {
+        assert!(
+            serde_json::from_value::<NativeTimelineOpenRequest>(serde_json::json!({
+                "roomId": "!room:example.org",
+                "position": { "kind": "thread" }
+            }))
+            .is_err()
+        );
+        let empty: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
+            "roomId": "!room:example.org",
+            "position": { "kind": "thread", "root_event_id": "" }
+        }))
+        .unwrap();
+        assert_eq!(
+            empty.position,
+            NativeTimelineOpenPosition::Thread {
+                root_event_id: "".into()
+            }
+        );
+    }
+
+    #[test]
     fn unread_open_request_stays_distinct_from_live_bottom() {
         let request: NativeTimelineOpenRequest = serde_json::from_value(serde_json::json!({
             "roomId": "!room:example.org",
@@ -462,6 +513,8 @@ mod tests {
                     mark_unread: false,
                     paginate_backward: true,
                     paginate_forward: true,
+                    can_redact_own: false,
+                    can_redact_other: false,
                 },
             },
         };

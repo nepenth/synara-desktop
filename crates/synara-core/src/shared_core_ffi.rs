@@ -193,6 +193,7 @@ use crate::app::auth::{
     DevicePlatform, LoginOptions,
 };
 use crate::app::client_builder::{build_unauthenticated_client, ClientBuildConfig, TimeoutPolicy};
+use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::app::devices::{
     NativeDeviceDeleteAuthentication, NativeDeviceDeleteResult, NativeDeviceOwner,
     NativeDeviceSnapshot, NativeDeviceTrust, NativeDeviceUpdateSignal,
@@ -202,6 +203,7 @@ use crate::app::lifecycle::{
     restore_session_from_vault, restore_session_from_vault_with_room_load_settings,
     restore_session_onto_client, SessionMaterial, SessionMaterialId, SessionMaterialVault,
 };
+use crate::app::media_cache::NativeMediaRetentionOwner;
 use crate::app::notifications::NativeHttpPusherOwner;
 use crate::app::presence::{
     NativePresenceOwner, NativePresenceSnapshotResult, NativePresenceState,
@@ -213,6 +215,9 @@ use crate::app::room_list::{
 };
 use crate::app::room_profile::{
     MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner, NativeRoomJoinRuleUpdate,
+};
+use crate::app::rtc_transports::{
+    NativeRtcTransport, NativeRtcTransportsOwner, NativeRtcTransportsSnapshot,
 };
 use crate::app::store::{
     get_or_create_store_key, AccountIdentity, StoreKeyId, StoreKeyMaterial, StoreKeyVault,
@@ -233,10 +238,15 @@ use crate::app::timeline::{
     TimelineViewRow, TimelineViewSnapshot, TimelineViewUpdateEmit, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot, NativeTypingUpdateSignal};
+use crate::app::user_profile::{NativeOwnProfileOwner, OwnProfileUpdateEmit};
+use crate::app::user_status::{
+    NativeInCall, NativeUserStatus, NativeUserStatusOwner, NativeUserStatusSnapshot,
+    NativeUserStatusWriteResult,
+};
 use crate::app::verification::{
     NativeVerificationDirection, NativeVerificationEmoji, NativeVerificationInbox,
-    NativeVerificationOwner, NativeVerificationPhase, NativeVerificationRequest,
-    NativeVerificationSas, NativeVerificationUpdateSignal,
+    NativeVerificationOwner, NativeVerificationPhase, NativeVerificationQr,
+    NativeVerificationRequest, NativeVerificationSas, NativeVerificationUpdateSignal,
 };
 use crate::core::Core;
 use crate::dto::{SessionLifecycle, SessionSnapshot};
@@ -368,8 +378,11 @@ const LEFTOVER_STATUS_GENERATION: u64 = 0;
 const ATTACHED_OWNER_NAMES: &[&str] = &[
     "typing",
     "presence",
+    "rtc_transports",
+    "user_status",
     "verification",
     "devices",
+    "dehydrated_devices",
     "join_rules",
     "image_packs",
     "http_pusher",
@@ -419,6 +432,22 @@ const PRESENCE_SNAPSHOT_COMMAND: &str = "matrix_presence_snapshot";
 const PRESENCE_SUBSCRIBE_COMMAND: &str = "matrix_presence_subscribe";
 const PRESENCE_UNSUBSCRIBE_COMMAND: &str = "matrix_presence_unsubscribe";
 const PRESENCE_SET_COMMAND: &str = "matrix_presence_set";
+const RTC_TRANSPORTS_SNAPSHOT_COMMAND: &str = "matrix_rtc_transports_snapshot";
+const RTC_TRANSPORTS_REFRESH_COMMAND: &str = "matrix_rtc_transports_refresh";
+const RTC_TRANSPORTS_NO_SESSION_CODE: &str = "p2-rtc-transports-snapshot-no-session";
+const RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE: &str = "p2-rtc-transports-refresh-no-session";
+const RTC_TRANSPORTS_NO_SESSION_DESCRIPTION: &str = "No MatrixRTC transport session is available.";
+const RTC_TRANSPORTS_FAILED_CODE: &str = "p4-rtc-transports-snapshot-failed";
+const RTC_TRANSPORTS_FAILED_DESCRIPTION: &str = "MatrixRTC transports could not be loaded.";
+const USER_STATUS_SNAPSHOT_COMMAND: &str = "matrix_user_status_snapshot";
+const USER_STATUS_SET_COMMAND: &str = "matrix_user_status_set";
+const USER_STATUS_CLEAR_COMMAND: &str = "matrix_user_status_clear";
+const USER_STATUS_SNAPSHOT_NO_SESSION_CODE: &str = "p2-user-status-snapshot-no-session";
+const USER_STATUS_SET_NO_SESSION_CODE: &str = "p2-user-status-set-no-session";
+const USER_STATUS_CLEAR_NO_SESSION_CODE: &str = "p2-user-status-clear-no-session";
+const USER_STATUS_NO_SESSION_DESCRIPTION: &str = "No user status session is available.";
+const USER_STATUS_FAILED_CODE: &str = "p4-user-status-failed";
+const USER_STATUS_FAILED_DESCRIPTION: &str = "User status could not be updated.";
 const TYPING_SNAPSHOT_NO_SESSION_CODE: &str = "p2-typing-snapshot-no-session";
 const TYPING_SET_NO_SESSION_CODE: &str = "p2-typing-set-no-session";
 const PRESENCE_SNAPSHOT_NO_SESSION_CODE: &str = "p2-presence-snapshot-no-session";
@@ -1281,8 +1310,12 @@ pub struct RoomListRoomDto {
     pub avatar_url: Option<String>,
     pub membership: String,
     pub is_direct: bool,
+    pub direct_user_id: Option<String>,
     pub is_space: bool,
     pub is_favorite: bool,
+    pub is_call: bool,
+    pub has_active_call: bool,
+    pub active_call_participant_count: u32,
     pub unread_count: u32,
     pub highlight_count: u32,
     pub marked_unread: bool,
@@ -1458,6 +1491,8 @@ pub struct TimelineSnapshotDto {
     pub mark_unread: bool,
     pub paginate_backward: bool,
     pub paginate_forward: bool,
+    pub can_redact_own: bool,
+    pub can_redact_other: bool,
     pub rows: Vec<TimelineViewRowDto>,
 }
 
@@ -1499,12 +1534,14 @@ pub struct TimelineViewRowDto {
     pub media_duration_ms: Option<u64>,
 }
 
-/// Privacy-safe reaction count on a view row. No user ids.
+/// Privacy-safe reaction count on a view row. Senders are user ids and
+/// optional annotation ids only; no tokens or ciphertext.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TimelineViewReactionDto {
     pub key: String,
     pub count: u32,
     pub own: Option<bool>,
+    pub senders: Vec<TimelineReactionSenderDto>,
 }
 
 /// Privacy-safe reply preview projected by Core. No raw event content.
@@ -2334,6 +2371,15 @@ fn open_position_from_dto(
                 })?;
             Ok(NativeTimelineOpenPosition::Focused { event_id })
         }
+        "thread" => {
+            let root_event_id = position
+                .event_id
+                .filter(|value| !value.is_empty())
+                .ok_or_else(|| {
+                    timeline_failed(TIMELINE_OPEN_FAILED_CODE, TIMELINE_OPEN_FAILED_DESCRIPTION)
+                })?;
+            Ok(NativeTimelineOpenPosition::Thread { root_event_id })
+        }
         "normal" => Ok(NativeTimelineOpenPosition::Normal {
             viewport: NativeTimelineViewportHint {
                 at_bottom: position.at_bottom,
@@ -2384,6 +2430,10 @@ fn view_position_dto(position: TimelineViewPosition) -> TimelineViewPositionDto 
             kind: "focused".to_owned(),
             event_id: Some(target_event_id),
         },
+        TimelineViewPosition::Thread { root_event_id } => TimelineViewPositionDto {
+            kind: "thread".to_owned(),
+            event_id: Some(root_event_id),
+        },
         TimelineViewPosition::Restored { anchor_event_id } => TimelineViewPositionDto {
             kind: "restored".to_owned(),
             event_id: anchor_event_id,
@@ -2411,6 +2461,8 @@ fn timeline_snapshot_dto(snapshot: TimelineViewSnapshot) -> TimelineSnapshotDto 
         mark_unread: snapshot.capabilities.mark_unread,
         paginate_backward: snapshot.capabilities.paginate_backward,
         paginate_forward: snapshot.capabilities.paginate_forward,
+        can_redact_own: snapshot.capabilities.can_redact_own,
+        can_redact_other: snapshot.capabilities.can_redact_other,
         rows: snapshot
             .rows
             .into_iter()
@@ -2426,6 +2478,14 @@ fn view_reaction_dtos(reactions: Vec<TimelineReaction>) -> Vec<TimelineViewReact
             key: reaction.key,
             count: reaction.count,
             own: reaction.own,
+            senders: reaction
+                .senders
+                .into_iter()
+                .map(|sender| TimelineReactionSenderDto {
+                    user_id: sender.user_id,
+                    reaction_event_id: sender.reaction_event_id,
+                })
+                .collect(),
         })
         .collect()
 }
@@ -3011,6 +3071,177 @@ pub struct PresenceWriteDto {
     pub status: String,
 }
 
+/// Privacy-safe MatrixRTC transport. URLs only; no JWTs or tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RtcTransportDto {
+    pub kind: String,
+    pub service_url: Option<String>,
+}
+
+/// Privacy-safe MatrixRTC discovery snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RtcTransportsSnapshotDto {
+    pub session_generation: u64,
+    pub status: String,
+    pub transports: Vec<RtcTransportDto>,
+}
+
+/// Static fail-closed RTC transport error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RtcTransportsCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for RtcTransportsCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for RtcTransportsCommandError {}
+
+fn rtc_transports_failed(
+    code: &'static str,
+    description: &'static str,
+) -> RtcTransportsCommandError {
+    RtcTransportsCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_rtc_transports_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> RtcTransportsCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            rtc_transports_failed(no_session, RTC_TRANSPORTS_NO_SESSION_DESCRIPTION)
+        }
+        _ => rtc_transports_failed(
+            RTC_TRANSPORTS_FAILED_CODE,
+            RTC_TRANSPORTS_FAILED_DESCRIPTION,
+        ),
+    }
+}
+
+fn rtc_transports_snapshot_dto(snapshot: NativeRtcTransportsSnapshot) -> RtcTransportsSnapshotDto {
+    RtcTransportsSnapshotDto {
+        session_generation: snapshot.session_generation,
+        status: match snapshot.status {
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Ready => "ready".to_owned(),
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Unsupported => {
+                "unsupported".to_owned()
+            }
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Unavailable => {
+                "unavailable".to_owned()
+            }
+        },
+        transports: snapshot
+            .transports
+            .into_iter()
+            .map(|row: NativeRtcTransport| RtcTransportDto {
+                kind: row.kind.as_str().to_owned(),
+                service_url: row.service_url,
+            })
+            .collect(),
+    }
+}
+
+/// Privacy-safe MSC4426 status field. No tokens.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStatusFieldDto {
+    pub emoji: String,
+    pub text: String,
+}
+
+/// Privacy-safe MSC4426 in-call field.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserInCallDto {
+    pub call_joined_ts: Option<u64>,
+}
+
+/// Privacy-safe MSC4426 snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStatusSnapshotDto {
+    pub session_generation: u64,
+    pub user_id: String,
+    pub user_status: Option<UserStatusFieldDto>,
+    pub in_call: Option<UserInCallDto>,
+}
+
+/// Privacy-safe MSC4426 write ack. Status only; never echo emoji or text.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UserStatusWriteDto {
+    pub status: String,
+}
+
+/// Static fail-closed user-status error. Fields are source constants only.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum UserStatusCommandError {
+    Failed { code: String, description: String },
+}
+
+impl std::fmt::Display for UserStatusCommandError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Failed { description, .. } => formatter.write_str(description),
+        }
+    }
+}
+
+impl std::error::Error for UserStatusCommandError {}
+
+fn user_status_failed(code: &'static str, description: &'static str) -> UserStatusCommandError {
+    UserStatusCommandError::Failed {
+        code: code.to_owned(),
+        description: description.to_owned(),
+    }
+}
+
+fn map_user_status_core_error(
+    no_session: &'static str,
+    error: MatrixIpcError,
+) -> UserStatusCommandError {
+    match error.diagnostic_id.as_deref() {
+        Some(code) if code == no_session => {
+            user_status_failed(no_session, USER_STATUS_NO_SESSION_DESCRIPTION)
+        }
+        Some("v-user-status-unsupported") => {
+            user_status_failed("v-user-status-unsupported", USER_STATUS_FAILED_DESCRIPTION)
+        }
+        Some("v-user-status-emoji-cap") => {
+            user_status_failed("v-user-status-emoji-cap", USER_STATUS_FAILED_DESCRIPTION)
+        }
+        Some("v-user-status-text-cap") => {
+            user_status_failed("v-user-status-text-cap", USER_STATUS_FAILED_DESCRIPTION)
+        }
+        Some("v-user-status-invalid-user-id") => user_status_failed(
+            "v-user-status-invalid-user-id",
+            USER_STATUS_FAILED_DESCRIPTION,
+        ),
+        _ => user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION),
+    }
+}
+
+fn user_status_snapshot_dto(snapshot: NativeUserStatusSnapshot) -> UserStatusSnapshotDto {
+    UserStatusSnapshotDto {
+        session_generation: snapshot.session_generation,
+        user_id: snapshot.user_id,
+        user_status: snapshot
+            .user_status
+            .map(|status: NativeUserStatus| UserStatusFieldDto {
+                emoji: status.emoji,
+                text: status.text,
+            }),
+        in_call: snapshot.in_call.map(|call: NativeInCall| UserInCallDto {
+            call_joined_ts: call.call_joined_ts,
+        }),
+    }
+}
+
 /// Static fail-closed presence error. Fields are source constants only.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PresenceCommandError {
@@ -3157,8 +3388,15 @@ pub struct VerificationSasDto {
     pub decimals: Option<Vec<u16>>,
 }
 
+/// Privacy-safe show-QR payload. SVG data-URL only; no MAC or QR bytes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct VerificationQrDto {
+    pub image_data_url: String,
+    pub scanned: bool,
+}
+
 /// Privacy-safe verification request row. Identity/flow fields and optional
-/// display-only SAS values; no tokens, MACs, or key material.
+/// display-only SAS / QR values; no tokens, MACs, or key material.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct VerificationRequestDto {
     pub flow_id: String,
@@ -3168,6 +3406,7 @@ pub struct VerificationRequestDto {
     pub phase: String,
     pub started_ts: Option<u64>,
     pub sas: Option<VerificationSasDto>,
+    pub qr: Option<VerificationQrDto>,
 }
 
 /// Privacy-safe verification inbox. No tokens or password.
@@ -3256,6 +3495,13 @@ fn verification_sas_dto(sas: NativeVerificationSas) -> VerificationSasDto {
     }
 }
 
+fn verification_qr_dto(qr: NativeVerificationQr) -> VerificationQrDto {
+    VerificationQrDto {
+        image_data_url: qr.image_data_url,
+        scanned: qr.scanned,
+    }
+}
+
 fn verification_request_dto_with_sas(request: NativeVerificationRequest) -> VerificationRequestDto {
     VerificationRequestDto {
         flow_id: request.flow_id,
@@ -3265,6 +3511,7 @@ fn verification_request_dto_with_sas(request: NativeVerificationRequest) -> Veri
         phase: verification_phase_as_str(request.phase),
         started_ts: request.started_ts,
         sas: request.sas.map(verification_sas_dto),
+        qr: request.qr.map(verification_qr_dto),
     }
 }
 
@@ -3337,6 +3584,8 @@ pub struct SharedCore {
     owner_updates: Arc<Mutex<Vec<OwnerUpdateDto>>>,
     room_list_updates: Arc<Mutex<Vec<RoomListUpdateDto>>>,
     room_list_live: Arc<Mutex<Option<NativeRoomListOwner>>>,
+    own_profile_live: Arc<Mutex<Option<NativeOwnProfileOwner>>>,
+    media_retention_live: Arc<Mutex<Option<NativeMediaRetentionOwner>>>,
 }
 
 impl Default for SharedCore {
@@ -3361,6 +3610,8 @@ impl SharedCore {
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -3380,6 +3631,8 @@ impl SharedCore {
             owner_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_updates: Arc::new(Mutex::new(Vec::new())),
             room_list_live: Arc::new(Mutex::new(None)),
+            own_profile_live: Arc::new(Mutex::new(None)),
+            media_retention_live: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -3773,16 +4026,21 @@ impl SharedCore {
             NativePresenceOwner::start(&client, presence_emit, generation)
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
         );
+        let rtc_transports = Arc::new(NativeRtcTransportsOwner::start(&client, generation));
+        let user_status = Arc::new(NativeUserStatusOwner::start(&client, generation));
         let verification_emit = {
             let queue = Arc::clone(&owner_updates);
             Arc::new(move |update: NativeVerificationUpdateSignal| {
                 push_owner_update(&queue, "verification", update.session_generation, None);
             })
         };
-        let verification = Arc::new(NativeVerificationOwner::with_emit(
+        // SharedCore is the iOS host. It cannot render the show-QR SVG, so
+        // advertise SAS only and never generate a code the sheet cannot show.
+        let verification = Arc::new(NativeVerificationOwner::with_show_qr(
             &client,
             verification_emit,
             generation,
+            false,
         ));
         let devices_emit = {
             let queue = Arc::clone(&owner_updates);
@@ -3794,6 +4052,15 @@ impl SharedCore {
             NativeDeviceOwner::start(&client, devices_emit, generation)
                 .await
                 .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?,
+        );
+        let dehydrated_emit = {
+            let queue = Arc::clone(&owner_updates);
+            Arc::new(move |update: NativeDeviceUpdateSignal| {
+                push_owner_update(&queue, "devices", update.session_generation, None);
+            })
+        };
+        let dehydrated_devices = Arc::new(
+            NativeDehydratedDevicesOwner::start(&client, dehydrated_emit, generation).await,
         );
         let join_rules_emit = {
             let queue = Arc::clone(&owner_updates);
@@ -3855,10 +4122,19 @@ impl SharedCore {
             .attach_presence(presence)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
+            .attach_rtc_transports(rtc_transports)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_user_status(user_status)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
             .attach_verification(verification)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_devices(devices)
+            .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
+        self.core
+            .attach_dehydrated_devices(dehydrated_devices)
             .map_err(|_| attach_failed(ATTACH_FAILED_CODE, ATTACH_FAILED_DESCRIPTION))?;
         self.core
             .attach_join_rules(join_rules)
@@ -3923,6 +4199,7 @@ impl SharedCore {
             }
         })?;
         self.spawn_room_list_live();
+        self.spawn_room_surface_owners();
         let snapshot = match self.core.attached_sync_owner() {
             Some(owner) => wait_for_started_readiness(owner.as_ref(), snapshot).await,
             None => snapshot,
@@ -3955,6 +4232,12 @@ impl SharedCore {
         if let Ok(mut live) = self.room_list_live.lock() {
             *live = None;
         }
+        if let Ok(mut live) = self.own_profile_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.media_retention_live.lock() {
+            *live = None;
+        }
         let snapshot = self.core.stop_attached_sync().await.map_err(|code| {
             if code == SYNC_NOT_ATTACHED_CODE {
                 sync_stop_failed(SYNC_NOT_ATTACHED_CODE, SYNC_NOT_ATTACHED_DESCRIPTION)
@@ -3982,6 +4265,30 @@ impl SharedCore {
         let live = NativeRoomListOwner::start(&owner, emit);
         if let Ok(mut guard) = self.room_list_live.lock() {
             *guard = Some(live);
+        }
+    }
+
+    fn spawn_room_surface_owners(&self) {
+        let Ok(client) = self.retained_client() else {
+            return;
+        };
+        let Ok(Some(snapshot)) = self.core.session_snapshot() else {
+            return;
+        };
+        let generation = snapshot.session_generation;
+        if generation == 0 {
+            return;
+        }
+        let emit: OwnProfileUpdateEmit = Arc::new(|_| {});
+        if let Ok(owner) = NativeOwnProfileOwner::start(&client, emit, generation) {
+            if let Ok(mut guard) = self.own_profile_live.lock() {
+                *guard = Some(owner);
+            }
+        }
+        if let Ok(owner) = NativeMediaRetentionOwner::start(&client, generation) {
+            if let Ok(mut guard) = self.media_retention_live.lock() {
+                *guard = Some(owner);
+            }
         }
     }
 
@@ -4132,8 +4439,12 @@ impl SharedCore {
                     avatar_url: room.avatar_url,
                     membership: room.membership.as_str().to_owned(),
                     is_direct: room.is_direct,
+                    direct_user_id: room.direct_user_id,
                     is_space: room.is_space,
                     is_favorite: room.is_favorite,
+                    is_call: room.is_call,
+                    has_active_call: room.has_active_call,
+                    active_call_participant_count: room.active_call_participant_count,
                     unread_count: room.unread_count,
                     highlight_count: room.highlight_count,
                     marked_unread: room.marked_unread,
@@ -4403,6 +4714,120 @@ impl SharedCore {
                 presence_failed(PRESENCE_SET_FAILED_CODE, PRESENCE_SET_FAILED_DESCRIPTION)
             })?;
         Ok(PresenceWriteDto {
+            status: result.status,
+        })
+    }
+
+    pub async fn rtc_transports_snapshot(
+        &self,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        self.rtc_transports_command(
+            RTC_TRANSPORTS_SNAPSHOT_COMMAND,
+            RTC_TRANSPORTS_NO_SESSION_CODE,
+        )
+        .await
+    }
+
+    pub async fn rtc_transports_refresh(
+        &self,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        self.rtc_transports_command(
+            RTC_TRANSPORTS_REFRESH_COMMAND,
+            RTC_TRANSPORTS_REFRESH_NO_SESSION_CODE,
+        )
+        .await
+    }
+
+    async fn rtc_transports_command(
+        &self,
+        command: &'static str,
+        no_session: &'static str,
+    ) -> Result<RtcTransportsSnapshotDto, RtcTransportsCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: command.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| map_rtc_transports_core_error(no_session, error))?;
+        let snapshot: NativeRtcTransportsSnapshot = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                rtc_transports_failed(
+                    RTC_TRANSPORTS_FAILED_CODE,
+                    RTC_TRANSPORTS_FAILED_DESCRIPTION,
+                )
+            })?;
+        Ok(rtc_transports_snapshot_dto(snapshot))
+    }
+
+    pub async fn user_status_snapshot(
+        &self,
+        user_id: String,
+    ) -> Result<UserStatusSnapshotDto, UserStatusCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_STATUS_SNAPSHOT_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "userId": user_id }),
+            })
+            .await
+            .map_err(|error| {
+                map_user_status_core_error(USER_STATUS_SNAPSHOT_NO_SESSION_CODE, error)
+            })?;
+        let snapshot: NativeUserStatusSnapshot =
+            serde_json::from_value(response.payload).map_err(|_| {
+                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
+            })?;
+        Ok(user_status_snapshot_dto(snapshot))
+    }
+
+    pub async fn user_status_set(
+        &self,
+        emoji: String,
+        text: String,
+    ) -> Result<UserStatusWriteDto, UserStatusCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_STATUS_SET_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::json!({ "emoji": emoji, "text": text }),
+            })
+            .await
+            .map_err(|error| map_user_status_core_error(USER_STATUS_SET_NO_SESSION_CODE, error))?;
+        let result: NativeUserStatusWriteResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
+            })?;
+        Ok(UserStatusWriteDto {
+            status: result.status,
+        })
+    }
+
+    pub async fn user_status_clear(&self) -> Result<UserStatusWriteDto, UserStatusCommandError> {
+        let response = self
+            .core
+            .command(CommandEnvelope {
+                command: USER_STATUS_CLEAR_COMMAND.to_owned(),
+                session_generation: TYPING_PRESENCE_GENERATION,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .map_err(|error| {
+                map_user_status_core_error(USER_STATUS_CLEAR_NO_SESSION_CODE, error)
+            })?;
+        let result: NativeUserStatusWriteResult = serde_json::from_value(response.payload)
+            .map_err(|_| {
+                user_status_failed(USER_STATUS_FAILED_CODE, USER_STATUS_FAILED_DESCRIPTION)
+            })?;
+        Ok(UserStatusWriteDto {
             status: result.status,
         })
     }
@@ -7097,6 +7522,12 @@ impl SharedCore {
             .await
             .map_err(|_| leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION))?;
         if let Ok(mut live) = self.room_list_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.own_profile_live.lock() {
+            *live = None;
+        }
+        if let Ok(mut live) = self.media_retention_live.lock() {
             *live = None;
         }
         if let Ok(mut updates) = self.timeline_view_updates.lock() {
@@ -13093,6 +13524,7 @@ fn device_trust_as_str(trust: NativeDeviceTrust) -> String {
     match trust {
         NativeDeviceTrust::Verified => "verified",
         NativeDeviceTrust::VerifiedLocallyOnly => "verified_locally_only",
+        NativeDeviceTrust::VerifiedByCertificate => "verified_by_certificate",
         NativeDeviceTrust::Unverified => "unverified",
         NativeDeviceTrust::NoEncryption => "no_encryption",
         NativeDeviceTrust::Dehydrated => "dehydrated",
@@ -13847,6 +14279,7 @@ mod tests {
                 }]),
                 decimals: Some([1234, 5678, 9012]),
             }),
+            qr: None,
         });
 
         let sas = dto.sas.expect("sas_ready list row must carry display SAS");
@@ -14266,11 +14699,13 @@ mod tests {
                     key: "👍".to_owned(),
                     count: 2,
                     own: Some(true),
+                    senders: vec![],
                 },
                 TimelineReaction {
                     key: "🎉".to_owned(),
                     count: 1,
                     own: None,
+                    senders: vec![],
                 },
             ],
             media: None,
@@ -14383,6 +14818,7 @@ mod tests {
                     key: "👍".to_owned(),
                     count: 2,
                     own: Some(true),
+                    senders: vec![],
                 }],
             })
         };
@@ -14454,6 +14890,7 @@ mod tests {
                 key: "🎉".to_owned(),
                 count: 3,
                 own: Some(false),
+                senders: vec![],
             }],
         };
 

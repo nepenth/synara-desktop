@@ -47,6 +47,57 @@ pub(crate) async fn set_room_avatar(
     .await
 }
 
+pub(crate) async fn send_state_event(
+    core: &Core,
+    room_id: String,
+    event_type: String,
+    state_key: String,
+    content: serde_json::Value,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    dispatch_write(
+        core,
+        "matrix_send_state_event",
+        serde_json::json!({
+            "roomId": room_id,
+            "eventType": event_type,
+            "stateKey": state_key,
+            "content": content,
+        }),
+    )
+    .await
+}
+
+pub(crate) async fn enable_room_encrypted_state(
+    core: &Core,
+    room_id: String,
+    encrypt_state_events: bool,
+) -> Result<MatrixProfileWriteResult, MatrixAuthCommandError> {
+    dispatch_write(
+        core,
+        "matrix_enable_room_encrypted_state",
+        serde_json::json!({
+            "roomId": room_id,
+            "encryptStateEvents": encrypt_state_events,
+        }),
+    )
+    .await
+}
+
+pub(crate) async fn set_encrypted_state_events_setting(
+    core: &Core,
+    enabled: bool,
+) -> Result<serde_json::Value, MatrixAuthCommandError> {
+    core.command(CommandEnvelope {
+        command: "matrix_set_encrypted_state_events_setting".to_owned(),
+        session_generation: READ_ONLY_SESSION_GENERATION,
+        request_id: None,
+        payload: serde_json::json!({ "enabled": enabled }),
+    })
+    .await
+    .map(|response| response.payload)
+    .map_err(map_room_profile_write_core_error)
+}
+
 async fn dispatch_write(
     core: &Core,
     command: &str,

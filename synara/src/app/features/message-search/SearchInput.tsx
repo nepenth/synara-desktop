@@ -5,13 +5,24 @@ import * as depthCss from '../../styles/Depth.css';
 type SearchProps = {
   active?: boolean;
   loading?: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
   searchInputRef: RefObject<HTMLInputElement | null>;
   onSearch: (term: string) => void;
   onReset: () => void;
 };
-export function SearchInput({ active, loading, searchInputRef, onSearch, onReset }: SearchProps) {
+export function SearchInput({
+  active,
+  loading,
+  disabled,
+  disabledReason,
+  searchInputRef,
+  onSearch,
+  onReset,
+}: SearchProps) {
   const handleSearchSubmit: FormEventHandler<HTMLFormElement> = (evt) => {
     evt.preventDefault();
+    if (disabled) return;
     const { searchInput } = evt.target as HTMLFormElement & {
       searchInput: HTMLInputElement;
     };
@@ -35,6 +46,7 @@ export function SearchInput({ active, loading, searchInputRef, onSearch, onReset
         variant="Background"
         placeholder="Search for keyword"
         autoComplete="off"
+        disabled={disabled}
         before={
           active && loading ? (
             <Spinner variant="Secondary" size="200" />
@@ -65,12 +77,18 @@ export function SearchInput({ active, loading, searchInputRef, onSearch, onReset
               size="400"
               radii="Pill"
               outlined
+              disabled={disabled}
             >
               <Text size="B300">Enter</Text>
             </Chip>
           )
         }
       />
+      {disabled && disabledReason ? (
+        <Text size="T200" style={{ opacity: 0.8 }}>
+          {disabledReason}
+        </Text>
+      ) : null}
     </Box>
   );
 }

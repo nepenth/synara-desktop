@@ -234,6 +234,11 @@ test('nativeComposerSendRelation preserves selected event and thread root', () =
     replyTo: undefined,
     threadRoot: undefined,
   });
+  assert.deepEqual(nativeComposerSendRelation(undefined, '$root:example.org'), {
+    draftRevision: undefined,
+    replyTo: undefined,
+    threadRoot: '$root:example.org',
+  });
 });
 
 test('reply projection changes only through typed Core readbacks and clears deterministically', () => {
@@ -274,6 +279,69 @@ test('reply projection changes only through typed Core readbacks and clears dete
     status: 'empty',
   });
   assert.equal(changes, 2);
+});
+
+test('reply projection isolates live and thread slots for the same room', () => {
+  const projection = new NativeComposerReplyDraftProjection();
+  const roomId = '!room:example.org';
+  const liveDraft = {
+    draftRevision: 1,
+    eventId: '$live:example.org',
+    senderId: '@alice:example.org',
+    body: 'live',
+  };
+  const threadDraft = {
+    draftRevision: 2,
+    eventId: '$thread:example.org',
+    senderId: '@bob:example.org',
+    body: 'thread',
+    threadRootEventId: '$root:example.org',
+  };
+  let liveChanges = 0;
+  let threadChanges = 0;
+  projection.subscribe(roomId, () => {
+    liveChanges += 1;
+  });
+  projection.subscribe(
+    roomId,
+    () => {
+      threadChanges += 1;
+    },
+    '$root:example.org'
+  );
+
+  projection.apply({
+    schemaVersion: NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+    roomId,
+    status: 'set',
+    draft: liveDraft,
+  });
+  projection.apply(
+    {
+      schemaVersion: NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+      roomId,
+      status: 'set',
+      draft: threadDraft,
+    },
+    '$root:example.org'
+  );
+  assert.equal(projection.get(roomId), liveDraft);
+  assert.equal(projection.get(roomId, '$root:example.org'), threadDraft);
+  assert.equal(liveChanges, 1);
+  assert.equal(threadChanges, 1);
+
+  projection.apply(
+    {
+      schemaVersion: NATIVE_COMPOSER_REPLY_DRAFT_SCHEMA_VERSION,
+      roomId,
+      status: 'cleared',
+    },
+    '$root:example.org'
+  );
+  assert.equal(projection.get(roomId), liveDraft);
+  assert.equal(projection.get(roomId, '$root:example.org'), undefined);
+  assert.equal(liveChanges, 1);
+  assert.equal(threadChanges, 2);
 });
 
 test('setReplyDraftWithNativeComposerOwner is unavailable off desktop', async () => {

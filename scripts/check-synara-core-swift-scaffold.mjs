@@ -31,6 +31,8 @@ const required = [
   "synara-ios/Synara/Services/SharedCoreInvites.swift",
   "synara-ios/Synara/Services/SharedCoreTimeline.swift",
   "synara-ios/Synara/Services/SharedCoreTypingPresence.swift",
+  "synara-ios/Synara/Services/SharedCoreRtcTransports.swift",
+  "synara-ios/Synara/Services/SharedCoreUserStatus.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationList.swift",
   "synara-ios/Synara/Services/SharedCoreVerificationSas.swift",
   "synara-ios/Synara/Services/SharedCoreDevices.swift",
@@ -65,6 +67,7 @@ const required = [
   "scripts/lib/publish-generated-apple-pair.sh",
   "scripts/__tests__/apple-pair-publication.test.mjs",
   "scripts/check-synara-nse-core-production-features.mjs",
+  "scripts/check-synara-nse-core-archive-exports.sh",
   "synara-ios/scripts/ci-build.sh",
   ".github/workflows/ci.yml",
 ];
@@ -118,6 +121,14 @@ const sharedCoreTimeline = readFileSync(
 );
 const sharedCoreTypingPresence = readFileSync(
   resolve(root, "synara-ios/Synara/Services/SharedCoreTypingPresence.swift"),
+  "utf8"
+);
+const sharedCoreRtcTransports = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreRtcTransports.swift"),
+  "utf8"
+);
+const sharedCoreUserStatus = readFileSync(
+  resolve(root, "synara-ios/Synara/Services/SharedCoreUserStatus.swift"),
   "utf8"
 );
 const sharedCoreVerificationList = readFileSync(
@@ -444,6 +455,28 @@ const assertions = [
   [sharedCoreTypingPresence, "presenceSubscribe", "P4-S7 product presence-subscribe helper"],
   [sharedCoreTypingPresence, "core: SharedCore", "P4-S7 helper takes an already-constructed SharedCore"],
   [sharedCoreTypingPresence, "core.typingSnapshot", "P4-S7 helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "rtc_transports_snapshot", "MatrixRTC typed transport-snapshot FFI"],
+  [sharedCoreFfi, "matrix_rtc_transports_snapshot", "MatrixRTC calls the registered transport snapshot"],
+  [sharedCoreFfi, "matrix_rtc_transports_refresh", "MatrixRTC calls the registered transport refresh"],
+  [udl, "RtcTransportsSnapshotDto rtc_transports_snapshot()", "SharedCore rtc-transports-snapshot operation"],
+  [udl, "RtcTransportsSnapshotDto rtc_transports_refresh()", "SharedCore rtc-transports-refresh operation"],
+  [udl, "interface RtcTransportsCommandError", "static rtc-transports error"],
+  [swiftBindingsTests, "testSharedCoreRtcTransportsWithoutSessionFailsClosed", "Swift fail-closed rtc-transports test"],
+  [sharedCoreRtcTransports, "rtcTransportsSnapshot", "product rtc-transports-snapshot helper"],
+  [sharedCoreRtcTransports, "core: SharedCore", "rtc helper takes an already-constructed SharedCore"],
+  [sharedCoreRtcTransports, "core.rtcTransportsSnapshot", "rtc helper reads on the caller-owned instance"],
+  [sharedCoreFfi, "user_status_snapshot", "MSC4426 typed user-status-snapshot FFI"],
+  [sharedCoreFfi, "matrix_user_status_snapshot", "MSC4426 calls the registered status snapshot"],
+  [sharedCoreFfi, "matrix_user_status_set", "MSC4426 calls the registered status set"],
+  [sharedCoreFfi, "matrix_user_status_clear", "MSC4426 calls the registered status clear"],
+  [udl, "UserStatusSnapshotDto user_status_snapshot(", "SharedCore user-status-snapshot operation"],
+  [udl, "UserStatusWriteDto user_status_set(", "SharedCore user-status-set operation"],
+  [udl, "UserStatusWriteDto user_status_clear()", "SharedCore user-status-clear operation"],
+  [udl, "interface UserStatusCommandError", "static user-status error"],
+  [swiftBindingsTests, "testSharedCoreUserStatusWithoutSessionFailsClosed", "Swift fail-closed user-status test"],
+  [sharedCoreUserStatus, "userStatusSnapshot", "product user-status-snapshot helper"],
+  [sharedCoreUserStatus, "core: SharedCore", "user-status helper takes an already-constructed SharedCore"],
+  [sharedCoreUserStatus, "core.userStatusSnapshot", "user-status helper reads on the caller-owned instance"],
   [sharedCoreFfi, "verification_list", "P4-S8 typed verification-list FFI"],
   [sharedCoreFfi, "matrix_verification_list", "P4-S8 calls the registered Core command"],
   [udl, "VerificationInboxDto verification_list()", "P4-S8 SharedCore verification-list operation"],
@@ -469,6 +502,7 @@ const assertions = [
   [udl, "VerificationRequestDto verification_cancel(", "P4-S9 SharedCore verification-cancel operation"],
   [udl, "void verification_dismiss(", "P4-S9 SharedCore verification-dismiss operation"],
   [udl, "dictionary VerificationSasDto", "P4-S9 privacy-safe SAS DTO"],
+  [udl, "dictionary VerificationQrDto", "P4-S9 privacy-safe QR DTO"],
   [udl, "interface VerificationSasError", "P4-S9 static verification-SAS error"],
   [swiftBindingsTests, "testSharedCoreVerificationSasWithoutSessionFailsClosed", "Swift P4-S9 fail-closed verification-SAS test"],
   [sharedCoreVerificationSas, "verificationStart", "P4-S9 product verification-start helper"],
@@ -1684,6 +1718,13 @@ if (nseProductionFeatureIndex < 0 || nseProductionFeatureIndex > ciBuildXcodebui
     "P4-4 iOS CI build must retain the NSE production feature graph guard before xcodebuild"
   );
 }
+const nseArchiveExportInvocation = '"$nse_archive_checker" "${nse_archives[@]}"';
+const nseArchiveExportIndex = iosCiBuild.indexOf(nseArchiveExportInvocation);
+if (nseArchiveExportIndex < 0 || nseArchiveExportIndex > ciBuildXcodebuildIndex) {
+  throw new Error(
+    "P4-4 iOS CI build must retain the NSE archive export guard before xcodebuild"
+  );
+}
 if (!iosCiBuild.includes("test-without-building")) {
   throw new Error("iOS CI must test the exact build-for-testing artifacts");
 }
@@ -1795,6 +1836,9 @@ if (!sharedCoreBody.includes("typing_snapshot") || !sharedCoreBody.includes("typ
 }
 if (!sharedCoreBody.includes("presence_snapshot") || !sharedCoreBody.includes("presence_subscribe") || !sharedCoreBody.includes("presence_unsubscribe")) {
   throw new Error("P4-S7 SharedCore must expose presence_snapshot/subscribe/unsubscribe");
+}
+if (!sharedCoreBody.includes("rtc_transports_snapshot") || !sharedCoreBody.includes("rtc_transports_refresh")) {
+  throw new Error("SharedCore must expose rtc_transports_snapshot/refresh");
 }
 if (!sharedCoreBody.includes("verification_list")) {
   throw new Error("P4-S8 SharedCore must expose verification_list");
@@ -1978,6 +2022,12 @@ if (sharedCoreTimeline.includes("SharedCore(store:")) {
 }
 if (sharedCoreTypingPresence.includes("SharedCore(store:")) {
   throw new Error("P4-S7 helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreRtcTransports.includes("SharedCore(store:")) {
+  throw new Error("rtc-transports helper must not construct-and-drop SharedCore");
+}
+if (sharedCoreUserStatus.includes("SharedCore(store:")) {
+  throw new Error("user-status helper must not construct-and-drop SharedCore");
 }
 if (sharedCoreVerificationList.includes("SharedCore(store:")) {
   throw new Error("P4-S8 helper must not construct-and-drop SharedCore");
@@ -2352,6 +2402,11 @@ const verificationSasDto = udl.match(/dictionary VerificationSasDto \{([\s\S]*?)
 if (!verificationSasDto) throw new Error("missing VerificationSasDto");
 if (/\bpassword\b/.test(verificationSasDto[1]) || /\btoken\b/.test(verificationSasDto[1])) {
   throw new Error("VerificationSasDto must not carry password or token fields");
+}
+const verificationQrDto = udl.match(/dictionary VerificationQrDto \{([\s\S]*?)\};/);
+if (!verificationQrDto) throw new Error("missing VerificationQrDto");
+if (/\bpassword\b/.test(verificationQrDto[1]) || /\btoken\b/.test(verificationQrDto[1]) || /\bmac\b/.test(verificationQrDto[1])) {
+  throw new Error("VerificationQrDto must not carry password, token, or mac fields");
 }
 const deviceSnapshotDto = udl.match(/dictionary DeviceSnapshotDto \{([\s\S]*?)\};/);
 if (!deviceSnapshotDto) throw new Error("missing DeviceSnapshotDto");

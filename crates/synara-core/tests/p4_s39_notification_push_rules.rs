@@ -7,6 +7,8 @@
 //! keywords, and mute semantics all come from the account's real `m.push_rules`
 //! ruleset; no TypeScript reconstruction is consulted.
 
+#![recursion_limit = "256"]
+
 use matrix_sdk::test_utils::mocks::MatrixMockServer;
 use matrix_sdk::Client;
 use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB, CAROL};

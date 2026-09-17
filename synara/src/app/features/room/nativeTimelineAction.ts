@@ -4,6 +4,7 @@
  */
 
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { notifyNativePinnedEventsChanged } from './nativePinnedEvents';
 import {
   editTextWithNativeTimelineOwner,
   forwardMediaWithNativeTimelineOwner,
@@ -49,15 +50,25 @@ export const reportWithNativeTimelineAction = (
 ): Promise<NativeTimelineActionReadback> =>
   requireNative(reportWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));
 
-export const pinWithNativeTimelineAction = (
+export const pinWithNativeTimelineAction = async (
   input: NativeTimelinePinInput
-): Promise<NativeTimelineActionReadback> =>
-  requireNative(pinWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));
+): Promise<NativeTimelineActionReadback> => {
+  const readback = await requireNative(
+    pinWithNativeTimelineOwner(input, isSynaraDesktop(), invoke)
+  );
+  notifyNativePinnedEventsChanged(input.roomId);
+  return readback;
+};
 
-export const unpinWithNativeTimelineAction = (
+export const unpinWithNativeTimelineAction = async (
   input: NativeTimelinePinInput
-): Promise<NativeTimelineActionReadback> =>
-  requireNative(unpinWithNativeTimelineOwner(input, isSynaraDesktop(), invoke));
+): Promise<NativeTimelineActionReadback> => {
+  const readback = await requireNative(
+    unpinWithNativeTimelineOwner(input, isSynaraDesktop(), invoke)
+  );
+  notifyNativePinnedEventsChanged(input.roomId);
+  return readback;
+};
 
 export const forwardTextWithNativeTimelineAction = (
   input: NativeTimelineForwardTextInput

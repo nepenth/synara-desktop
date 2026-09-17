@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-widgets-list"
+description = "Enables the matrix_widgets_list command without any pre-configured scope."
+commands.allow = ["matrix_widgets_list"]
+
+[[permission]]
+identifier = "deny-matrix-widgets-list"
+description = "Denies the matrix_widgets_list command without any pre-configured scope."
+commands.deny = ["matrix_widgets_list"]

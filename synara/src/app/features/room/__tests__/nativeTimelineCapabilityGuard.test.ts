@@ -66,3 +66,11 @@ test('desktop view contract keeps capability and transport vocabularies closed',
   assert.doesNotMatch(viewContract, /capabilit\w*\s*=\s*[^;]*mimeType/i);
   assert.doesNotMatch(viewContract, /capabilit\w*\s*=\s*[^;]*body\.includes/i);
 });
+
+test('desktop presenter does not infer file-download policy from MIME or extension', () => {
+  assert.match(presenter, /messageType === 'file'/);
+  assert.match(presenter, /saveNativeTimelineFileAttachment/);
+  assert.match(presenter, /isNativeTimelineMarkdownAttachment/);
+  assert.doesNotMatch(presenter, /text\/markdown|\.md['"]/);
+  assert.doesNotMatch(presenter, /mimeType\s*===\s*['"]file['"]/);
+});

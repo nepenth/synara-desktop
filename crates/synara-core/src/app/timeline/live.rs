@@ -15,8 +15,12 @@ use matrix_sdk::{
     event_cache::PaginationStatus,
     room::{calls::CallError, edit::EditedContent, Receipts},
     ruma::{
+        api::client::receipt::create_receipt::v3::ReceiptType,
+        api::client::room::get_event_by_timestamp,
         events::{
+            poll::unstable_start::UnstablePollStartEventContent,
             reaction::ReactionEventContent,
+            receipt::{ReceiptThread, ReceiptType as EventReceiptType},
             relation::Annotation,
             room::message::{
                 MessageFormat, MessageType, Relation, RoomMessageEventContent,
@@ -26,15 +30,15 @@ use matrix_sdk::{
             AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncStateEvent,
             AnySyncTimelineEvent, Mentions, StateEventType,
         },
-        OwnedEventId, OwnedRoomId, OwnedUserId, UserId,
+        MilliSecondsSinceUnixEpoch, OwnedEventId, OwnedRoomId, OwnedUserId, RoomId, UInt, UserId,
     },
     Client, EncryptionState, Room,
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    EncryptedMessage, MsgLikeKind, ReactionStatus, Timeline, TimelineBuilder, TimelineDetails,
-    TimelineEventFocusThreadMode, TimelineEventItemId, TimelineFocus,
-    TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
+    EncryptedMessage, EventSendState, MsgLikeKind, ThreadListPaginationState, ThreadListService,
+    Timeline, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId,
+    TimelineFocus, TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
     TimelineReadReceiptTracking,
 };
 use serde::{Deserialize, Serialize};
@@ -51,17 +55,27 @@ use crate::app::agent_approvals::{
     AGENT_APPROVAL_TTL_MS,
 };
 use crate::app::send::{
-    apply_poll_start_relations, edit_message_content, message_content, normalize_poll,
-    parse_edit_event_id, parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id,
-    parse_transaction_id, poll_response_content, poll_start_content, send_message_to_room,
-    MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult, SendQueue,
+    abort_queued_send, apply_poll_start_relations, edit_message_content,
+    enqueue_event_via_room_queue, message_content, normalize_poll, parse_edit_event_id,
+    parse_reply_event_id, parse_send_room_id, parse_thread_root_event_id, parse_transaction_id,
+    poll_response_content, poll_start_content, send_event_via_room_queue, unwedge_queued_send,
+    wait_for_queued_send, MatrixPollRespondResult, MatrixSendPollResult, MatrixSendTextResult,
+    SendQueue,
+};
+use crate::app::threads::{
+    rebuild_thread_index, NativeThreadListSnapshot, ThreadIndex, ThreadListItemProjection,
 };
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::{RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
 
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
-    project_timeline_item_with_media, reply_draft_readback, should_attach_formatted_body,
+    project_timeline_item_with_media,
+    reactions::{
+        enrich_native_items, enrich_native_reactions, enrich_view_delta_ops, enrich_view_rows,
+        reaction_event_id_from_send_state,
+    },
+    reply_draft_readback, should_attach_formatted_body, snapshot_pinned_events,
     ComposerDraftRegistry, NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraft, NativeComposerReplyDraftReadback, NativeDecryptionState,
     NativeReactionMutation, NativeReactionMutationResult, NativeTimelineActionKind,
@@ -70,14 +84,14 @@ use super::{
     NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition, NativeTimelineOpenReadback,
     NativeTimelineOpenRequest, NativeTimelineReaction, NativeTimelineReactionSender,
     NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineMediaRegistry,
-    TimelineMediaSource, TimelinePageState, TimelinePaginationState, TimelineReadState,
-    TimelineRoomActionAuthority, TimelineViewCapabilities, TimelineViewDeltaBatch,
-    TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit, UtdIndex, UtdPhase,
-    UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
-    TIMELINE_VIEW_SCHEMA_VERSION,
+    NativeTimelineReadStateRequest, NativeTimelineSnapshot, NativeTimelineTimestampToEventReadback,
+    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
+    NativeUtdStatus, PinnedEventsSnapshot, TimelineMediaRegistry, TimelineMediaSource,
+    TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
+    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
+    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
+    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
+    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 #[cfg(test)]
@@ -85,6 +99,12 @@ mod agent_approval_history_overlay_tests;
 mod approval_history;
 #[cfg(test)]
 mod approval_history_tests;
+#[cfg(test)]
+mod thread_list_tests;
+#[cfg(test)]
+mod thread_open_tests;
+#[cfg(test)]
+mod thread_receipt_tests;
 use approval_history::{ApprovalHistory, HistoryProtection};
 mod approval_inbox;
 use approval_inbox::ApprovalInboxOwner;
@@ -99,6 +119,31 @@ const UTD_PLACEHOLDER: &str = "Unable to decrypt this message";
 const UNSUPPORTED_PLACEHOLDER: &str = "Unsupported event";
 const MAX_FOCUSED_EVENT_READBACKS: usize = 256;
 const FOCUSED_CONTEXT_EVENT_COUNT: u16 = 25;
+/// Live and permalink Event timelines hide in-thread replies now that
+/// `NativeTimelineOpenPosition::Thread` owns the threaded stream.
+const HIDE_THREADED_EVENTS: bool = true;
+
+fn permalink_event_thread_mode() -> TimelineEventFocusThreadMode {
+    TimelineEventFocusThreadMode::Automatic {
+        hide_threaded_events: HIDE_THREADED_EVENTS,
+    }
+}
+
+fn optional_draft_thread_root(
+    thread_root_event_id: Option<&str>,
+) -> Result<Option<&str>, &'static str> {
+    match thread_root_event_id
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        None => Ok(None),
+        Some(thread_root) => {
+            parse_action_event_id(thread_root, "v-timeline-reply-draft-invalid-event-id")?;
+            Ok(Some(thread_root))
+        }
+    }
+}
+
 const AGENT_APPROVAL_SIDE_EFFECT_TIMEOUT: Duration = Duration::from_secs(5);
 const MAX_TIMELINE_ACTION_REASON_CHARS: usize = 512;
 
@@ -143,6 +188,28 @@ fn validate_poll_vote_selection(
         }
     }
     Ok(answer_ids)
+}
+
+fn position_allows_mark_read(position: &TimelineViewPosition) -> bool {
+    matches!(
+        position,
+        TimelineViewPosition::LiveBottom | TimelineViewPosition::Thread { .. }
+    )
+}
+
+async fn thread_unread_count(
+    client: &Client,
+    room_id: &RoomId,
+    root_event_id: &str,
+) -> Option<u32> {
+    let thread_id = OwnedEventId::try_from(root_event_id).ok()?;
+    let (cache, _drop) = client
+        .event_cache()
+        .thread(room_id, &thread_id)
+        .await
+        .ok()?;
+    let unread = cache.num_unread_messages().await.ok()?;
+    Some(unread.min(u64::from(u32::MAX)) as u32)
 }
 
 fn exact_read_receipts(event_id: OwnedEventId) -> Receipts {
@@ -212,7 +279,11 @@ async fn mark_live_timeline_read(
         LiveReadTargetPlan::NoOp => Ok(None),
         LiveReadTargetPlan::ClearUnreadFlag => {
             // Explicit Mark Read must still clear a manually marked-unread room
-            // when the room has no receipt-capable remote event.
+            // when the room has no receipt-capable remote event. A thread stream
+            // must not clear the room unread flag.
+            if timeline.is_threaded() {
+                return Ok(None);
+            }
             timeline
                 .room()
                 .set_unread_flag(false)
@@ -221,14 +292,24 @@ async fn mark_live_timeline_read(
             Ok(None)
         }
         LiveReadTargetPlan::Send(event_id) => {
-            timeline
-                // Pinned matrix-sdk-ui 0.18 invariant: `Timeline::send_multiple_receipts`
-                // clears the SDK room's unread flag after a submitted marker update and
-                // also when receipt deduplication removes every unchanged marker. Keep
-                // this evidence in the adjacent regression test when upgrading the SDK.
-                .send_multiple_receipts(exact_read_receipts(event_id.clone()))
-                .await
-                .map_err(|_| "v-timeline-send-read-markers-failed")?;
+            if timeline.is_threaded() {
+                // 0.19 FullyRead receipts are always Unthreaded. Thread streams
+                // send a private receipt so Timeline infers ReceiptThread::Thread
+                // from TimelineFocus::Thread.
+                timeline
+                    .send_single_receipt(ReceiptType::ReadPrivate, event_id.clone())
+                    .await
+                    .map_err(|_| "v-timeline-send-thread-receipt-failed")?;
+            } else {
+                timeline
+                    // Pinned matrix-sdk-ui 0.19 invariant: `Timeline::send_multiple_receipts`
+                    // clears the SDK room's unread flag after a submitted marker update and
+                    // also when receipt deduplication removes every unchanged marker. Keep
+                    // this evidence in the adjacent regression test when upgrading the SDK.
+                    .send_multiple_receipts(exact_read_receipts(event_id.clone()))
+                    .await
+                    .map_err(|_| "v-timeline-send-read-markers-failed")?;
+            }
             Ok(Some(event_id))
         }
     }
@@ -335,6 +416,10 @@ pub struct NativeTimelineRegistry {
     session_generation: u64,
     entries: HashMap<String, LiveTimelineEntry>,
     focused_entries: HashMap<(String, String), Arc<Timeline>>,
+    /// Thread timelines keyed by `(room_id, root_event_id)`. Must not share
+    /// `focused_entries`: a permalink of the root and a thread view of the
+    /// root are different SDK streams.
+    thread_entries: HashMap<(String, String), Arc<Timeline>>,
     view_streams: HashMap<String, ViewStreamEntry>,
     view_update_tasks: HashMap<String, JoinHandle<()>>,
     view_revisions: HashMap<String, Arc<AtomicU64>>,
@@ -431,6 +516,8 @@ pub struct NativeTimelineOwner {
     approval_decisions: Arc<std::sync::Mutex<ApprovalDecisionRegistry>>,
     approval_inbox: tokio::sync::Mutex<ApprovalInboxOwner>,
     drafts: tokio::sync::Mutex<ComposerDraftRegistry>,
+    thread_lists: tokio::sync::Mutex<HashMap<String, ThreadListService>>,
+    thread_index: tokio::sync::Mutex<ThreadIndex>,
     sends: tokio::sync::Mutex<SendQueue>,
     approval_history_mutation: tokio::sync::Mutex<()>,
     approval_history_pending: Mutex<Option<(Instant, Vec<SynaraAgentApprovalHistoryItem>)>>,
@@ -438,10 +525,12 @@ pub struct NativeTimelineOwner {
     /// not. `AlreadyDecided` retries drain this map so a failed history write
     /// is not stranded by completed-decision memory.
     approval_history_unconfirmed: Mutex<HashMap<(String, String), SynaraAgentApprovalHistoryItem>>,
+    pin_media: AsyncMutex<TimelineMediaRegistry>,
 }
 
 impl NativeTimelineOwner {
     pub fn new(client: &Client, emit: TimelineViewUpdateEmit, session_generation: u64) -> Self {
+        let _ = client.event_cache().subscribe();
         let registry = NativeTimelineRegistry::new(session_generation);
         let approval_history = registry.approval_history.clone();
         Self {
@@ -456,10 +545,13 @@ impl NativeTimelineOwner {
                 approval_history,
             )),
             drafts: tokio::sync::Mutex::new(ComposerDraftRegistry::new()),
+            thread_lists: tokio::sync::Mutex::new(HashMap::new()),
+            thread_index: tokio::sync::Mutex::new(ThreadIndex::new(session_generation)),
             sends: tokio::sync::Mutex::new(SendQueue::new(session_generation)),
             approval_history_mutation: tokio::sync::Mutex::new(()),
             approval_history_pending: Mutex::new(None),
             approval_history_unconfirmed: Mutex::new(HashMap::new()),
+            pin_media: AsyncMutex::new(TimelineMediaRegistry::new(session_generation, "pinned")),
         }
     }
 
@@ -609,6 +701,35 @@ impl NativeTimelineOwner {
             .await
             .event_readback(&self.client, room_id, event_id)
             .await
+    }
+
+    /// Resolve the closest event at or after `timestamp_ms` (SDK 0.18 Forward /
+    /// `since`, matching Jump to Time `'f'`). Does not paginate the open view.
+    pub async fn timestamp_to_event(
+        &self,
+        room_id: &str,
+        timestamp_ms: u64,
+    ) -> Result<NativeTimelineTimestampToEventReadback, &'static str> {
+        let room_id = parse_room_id(room_id)?;
+        self.client
+            .get_room(room_id.as_ref())
+            .ok_or("d0.3-timeline-room-not-found")?;
+        let millis = UInt::try_from(timestamp_ms)
+            .map_err(|_| "p2-timeline-timestamp-to-event-invalid-timestamp")?;
+        let request = get_event_by_timestamp::v1::Request::since(
+            room_id.clone(),
+            MilliSecondsSinceUnixEpoch(millis),
+        );
+        let response = self
+            .client
+            .send(request)
+            .await
+            .map_err(|_| "p2-timeline-timestamp-to-event-failed")?;
+        Ok(NativeTimelineTimestampToEventReadback {
+            room_id: room_id.to_string(),
+            event_id: response.event_id.to_string(),
+            origin_server_ts: response.origin_server_ts.get().into(),
+        })
     }
 
     pub async fn paginate(
@@ -761,9 +882,7 @@ impl NativeTimelineOwner {
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
                     num_context_events: 0,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
@@ -937,6 +1056,26 @@ impl NativeTimelineOwner {
             .await
     }
 
+    #[cfg(test)]
+    pub async fn debug_stream_is_threaded(&self, stream_id: &str) -> Option<bool> {
+        self.registry
+            .lock()
+            .await
+            .view_streams
+            .get(stream_id)
+            .map(|stream| stream.timeline.is_threaded())
+    }
+
+    #[cfg(test)]
+    pub async fn debug_live_is_threaded(&self, room_id: &str) -> Option<bool> {
+        self.registry
+            .lock()
+            .await
+            .entries
+            .get(room_id)
+            .map(|entry| entry.timeline.is_threaded())
+    }
+
     pub async fn jump_latest(
         &self,
         request: NativeTimelineJumpLatestRequest,
@@ -972,7 +1111,7 @@ impl NativeTimelineOwner {
         let parsed_room = parse_send_room_id(&room_id)?;
         let reply_to = parse_reply_event_id(reply_to)?;
         let thread_root = parse_thread_root_event_id(thread_root)?;
-        let txn_id = parse_transaction_id(txn_id)?;
+        let _txn_id = parse_transaction_id(txn_id)?;
         let content = message_content(
             body.clone(),
             msg_type,
@@ -986,30 +1125,101 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("d0.4-send-room-not-found")?;
-        let local_txn_id = {
-            let mut sends = self.sends.lock().await;
-            sends
-                .enqueue_text(parsed_room.to_string(), body)
-                .map_err(|error| error.diagnostic_id())?
-                .local_txn_id
-                .clone()
-        };
-        let send_result = send_message_to_room(&room, content, txn_id).await;
+        self.send_text_via_queue(room, parsed_room.to_string(), body, content)
+            .await
+    }
+
+    async fn send_text_via_queue(
+        &self,
+        room: matrix_sdk::Room,
+        room_id: String,
+        body: String,
+        content: RoomMessageEventContent,
+    ) -> Result<MatrixSendTextResult, &'static str> {
+        let mut session = enqueue_event_via_room_queue(&room, content.into())
+            .await
+            .map_err(|error| error.diagnostic_id)?;
+        let local_txn_id = session.transaction_id.clone();
         {
             let mut sends = self.sends.lock().await;
-            if send_result.is_ok() {
-                let _ = sends.mark_sent(&local_txn_id);
-            } else {
-                let _ = sends.mark_failed(&local_txn_id, "d0.4-send-sdk-failed");
+            sends
+                .enqueue_text_with_txn(room_id.clone(), body, local_txn_id.clone())
+                .map_err(|error| error.diagnostic_id())?;
+        }
+        let send_result = wait_for_queued_send(&mut session).await;
+        {
+            let mut sends = self.sends.lock().await;
+            match &send_result {
+                Ok(_) => {
+                    let _ = sends.mark_sent(&local_txn_id);
+                }
+                Err(error) if error.wedged => {
+                    let _ = sends.mark_wedged(&local_txn_id, error.diagnostic_id);
+                }
+                Err(error) if error.cancelled => {
+                    let _ = sends.cancel(&local_txn_id);
+                }
+                Err(error) => {
+                    let _ = sends.mark_failed(&local_txn_id, error.diagnostic_id);
+                }
             }
         }
-        let event_id = send_result?;
+        let ack = send_result.map_err(|error| error.diagnostic_id)?;
         Ok(MatrixSendTextResult {
-            room_id: parsed_room.to_string(),
-            event_id,
+            room_id,
+            event_id: ack.event_id,
             local_txn_id,
             status: "sent",
         })
+    }
+
+    pub async fn unwedge_send(
+        &self,
+        room_id: &str,
+        local_txn_id: &str,
+    ) -> Result<(), &'static str> {
+        let parsed_room = parse_send_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("d0.4-send-room-not-found")?;
+        unwedge_queued_send(&room, local_txn_id)
+            .await
+            .map_err(|error| error.diagnostic_id)?;
+        let mut sends = self.sends.lock().await;
+        let _ = sends.retry(local_txn_id);
+        Ok(())
+    }
+
+    pub async fn abort_send(
+        &self,
+        room_id: &str,
+        local_txn_id: &str,
+    ) -> Result<bool, &'static str> {
+        let parsed_room = parse_send_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&parsed_room)
+            .ok_or("d0.4-send-room-not-found")?;
+        let aborted = abort_queued_send(&room, local_txn_id)
+            .await
+            .map_err(|error| error.diagnostic_id)?;
+        let mut sends = self.sends.lock().await;
+        let _ = sends.cancel(local_txn_id);
+        Ok(aborted)
+    }
+
+    pub async fn outbound_text_for_room(
+        &self,
+        room_id: &str,
+    ) -> Vec<crate::app::send::OutboundTextMessage> {
+        self.sends
+            .lock()
+            .await
+            .list_for_room(room_id)
+            .into_iter()
+            .cloned()
+            .collect()
     }
 
     pub async fn send_poll(
@@ -1032,13 +1242,13 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.3-poll-room-not-found")?;
-        let response = room
-            .send(content)
-            .await
-            .map_err(|_| "v-send.3-poll-sdk-failed")?;
+        let ack =
+            send_event_via_room_queue(&room, UnstablePollStartEventContent::New(content).into())
+                .await
+                .map_err(|error| error.diagnostic_id)?;
         Ok(MatrixSendPollResult {
             room_id: parsed_room.to_string(),
-            event_id: response.response.event_id.to_string(),
+            event_id: ack.event_id,
             status: "sent",
         })
     }
@@ -1056,14 +1266,13 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.3-poll-room-not-found")?;
-        let response = room
-            .send(content)
+        let ack = send_event_via_room_queue(&room, content.into())
             .await
-            .map_err(|_| "v-send.3-poll-response-sdk-failed")?;
+            .map_err(|error| error.diagnostic_id)?;
         Ok(MatrixPollRespondResult {
             room_id: parsed_room.to_string(),
             poll_event_id,
-            event_id: response.response.event_id.to_string(),
+            event_id: ack.event_id,
             status: "sent",
         })
     }
@@ -1082,7 +1291,7 @@ impl NativeTimelineOwner {
     ) -> Result<MatrixSendTextResult, &'static str> {
         let parsed_room = parse_send_room_id(&room_id)?;
         let parsed_event = parse_edit_event_id(&event_id)?;
-        let txn_id = parse_transaction_id(txn_id)?;
+        let _txn_id = parse_transaction_id(txn_id)?;
         let content = edit_message_content(
             body.clone(),
             msg_type,
@@ -1095,32 +1304,17 @@ impl NativeTimelineOwner {
             .client
             .get_room(&parsed_room)
             .ok_or("v-send.r-edit-room-not-found")?;
-        let local_txn_id = {
-            let mut sends = self.sends.lock().await;
-            sends
-                .enqueue_text(parsed_room.to_string(), body)
-                .map_err(|error| error.diagnostic_id())?
-                .local_txn_id
-                .clone()
-        };
-        let send_result = send_message_to_room(&room, content, txn_id)
+        self.send_text_via_queue(room, parsed_room.to_string(), body, content)
             .await
-            .map_err(|_| "v-send.r-edit-sdk-failed");
-        {
-            let mut sends = self.sends.lock().await;
-            if send_result.is_ok() {
-                let _ = sends.mark_sent(&local_txn_id);
-            } else {
-                let _ = sends.mark_failed(&local_txn_id, "v-send.r-edit-sdk-failed");
-            }
-        }
-        let event_id = send_result?;
-        Ok(MatrixSendTextResult {
-            room_id: parsed_room.to_string(),
-            event_id,
-            local_txn_id,
-            status: "sent",
-        })
+            .map_err(|diagnostic| {
+                if diagnostic == "d0.4-send-queue-wedged" {
+                    diagnostic
+                } else if diagnostic.starts_with("d0.4-") || diagnostic.starts_with("p6.1-") {
+                    "v-send.r-edit-sdk-failed"
+                } else {
+                    diagnostic
+                }
+            })
     }
 
     pub async fn edit_text(
@@ -1149,7 +1343,7 @@ impl NativeTimelineOwner {
             .make_edit_event(&event_id, EditedContent::RoomMessage(new_content))
             .await
             .map_err(|_| "v-timeline-edit-prepare-failed")?;
-        room.send(edit_content)
+        send_event_via_room_queue(&room, edit_content)
             .await
             .map_err(|_| "v-timeline-edit-send-failed")?;
         Ok(NativeTimelineActionReadback {
@@ -1268,6 +1462,19 @@ impl NativeTimelineOwner {
         event_id: &str,
     ) -> Result<NativeTimelineActionReadback, &'static str> {
         self.set_pinned(room_id, event_id, false).await
+    }
+
+    pub async fn pinned_events_snapshot(
+        &self,
+        room_id: &str,
+    ) -> Result<PinnedEventsSnapshot, &'static str> {
+        let room_id = parse_action_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-timeline-pinned-room-not-found")?;
+        let mut media = self.pin_media.lock().await;
+        snapshot_pinned_events(&room, &mut media).await
     }
 
     async fn set_pinned(
@@ -1408,7 +1615,7 @@ impl NativeTimelineOwner {
         )?;
         let content = poll_response_content(event_id.as_str(), &answer_ids)
             .map_err(|_| "v-timeline-poll-vote-invalid-answer")?;
-        room.send(content)
+        send_event_via_room_queue(&room, content.into())
             .await
             .map_err(|_| "v-timeline-poll-vote-send-failed")?;
         Ok(NativeTimelineActionReadback {
@@ -1476,13 +1683,10 @@ impl NativeTimelineOwner {
         let forwarded_body = format_forwarded_plain_body(&sender_label, &body, as_quote);
         let mut content = RoomMessageEventContent::text_plain(forwarded_body);
         content.mentions = Some(Mentions::new());
-        let sent_event_id = target_room
-            .send(content)
+        let sent_event_id = send_event_via_room_queue(&target_room, content.into())
             .await
             .map_err(|_| "v-timeline-forward-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .event_id;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::ForwardText,
@@ -1514,13 +1718,10 @@ impl NativeTimelineOwner {
         validate_forward_encryption(&source_room, &target_room, confirmed_encryption_downgrade)
             .await?;
         let content = load_forwardable_media(&source_room, &event_id).await?;
-        let sent_event_id = target_room
-            .send(content)
+        let sent_event_id = send_event_via_room_queue(&target_room, content)
             .await
             .map_err(|_| "v-timeline-forward-media-send-failed")?
-            .response
-            .event_id
-            .to_string();
+            .event_id;
         Ok(NativeTimelineActionReadback {
             schema_version: NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
             action: NativeTimelineActionKind::ForwardMedia,
@@ -1552,14 +1753,16 @@ impl NativeTimelineOwner {
         &self,
         room_id: &str,
         expected_draft_revision: u64,
+        thread_root_event_id: Option<&str>,
     ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
+        let thread_root = optional_draft_thread_root(thread_root_event_id)?;
         let room_id_string = room_id.to_string();
-        let superseding_draft = self
-            .drafts
-            .lock()
-            .await
-            .compare_and_clear(&room_id_string, expected_draft_revision);
+        let superseding_draft = self.drafts.lock().await.compare_and_clear(
+            &room_id_string,
+            thread_root,
+            expected_draft_revision,
+        );
         Ok(match superseding_draft {
             Some(draft) => reply_draft_readback(room_id_string, "set", Some(draft)),
             None => reply_draft_readback(room_id_string, "cleared", None),
@@ -1569,15 +1772,92 @@ impl NativeTimelineOwner {
     pub async fn get_reply_draft(
         &self,
         room_id: &str,
+        thread_root_event_id: Option<&str>,
     ) -> Result<NativeComposerReplyDraftReadback, &'static str> {
         let room_id = parse_action_room_id(room_id)?;
+        let thread_root = optional_draft_thread_root(thread_root_event_id)?;
         let room_id_string = room_id.to_string();
-        let draft = self.drafts.lock().await.get(&room_id_string).cloned();
+        let draft = self
+            .drafts
+            .lock()
+            .await
+            .get(&room_id_string, thread_root)
+            .cloned();
         Ok(reply_draft_readback(
             room_id_string,
             if draft.is_some() { "set" } else { "empty" },
             draft,
         ))
+    }
+
+    pub async fn thread_list(
+        &self,
+        room_id: &str,
+        action: &str,
+    ) -> Result<NativeThreadListSnapshot, &'static str> {
+        let room_id = parse_action_room_id(room_id).map_err(|_| "v-thread-list-invalid-room-id")?;
+        let room_id_string = room_id.to_string();
+        match action {
+            "close" => {
+                self.thread_lists.lock().await.remove(&room_id_string);
+                self.thread_index.lock().await.clear_room(&room_id_string);
+                Ok(NativeThreadListSnapshot::empty(room_id_string))
+            }
+            "open" | "paginate" => {
+                use matrix_sdk_ui::timeline::RoomExt;
+                let room = self
+                    .client
+                    .get_room(&room_id)
+                    .ok_or("v-thread-list-room-not-found")?;
+                let mut lists = self.thread_lists.lock().await;
+                if !lists.contains_key(&room_id_string) {
+                    lists.insert(room_id_string.clone(), room.thread_list_service());
+                }
+                let service = lists
+                    .get(&room_id_string)
+                    .expect("thread list service present");
+                if action == "paginate" || service.items().is_empty() {
+                    service
+                        .paginate()
+                        .await
+                        .map_err(|_| "v-thread-list-paginate-failed")?;
+                }
+                let end_reached = matches!(
+                    service.pagination_state(),
+                    ThreadListPaginationState::Idle { end_reached: true }
+                );
+                let projections = service.items().into_iter().map(|item| {
+                    let latest = item.latest_event.as_ref();
+                    ThreadListItemProjection {
+                        root_event_id: item.root_event.event_id.to_string(),
+                        reply_count: item.num_replies,
+                        latest_event_id: latest.map(|event| event.event_id.to_string()),
+                        latest_origin_server_ts: latest
+                            .map(|event| u64::from(event.timestamp.get()))
+                            .or(Some(u64::from(item.root_event.timestamp.get()))),
+                        participated: item.root_event.is_own
+                            || latest.map(|event| event.is_own).unwrap_or(false),
+                    }
+                });
+                let mut index = self.thread_index.lock().await;
+                let (mut threads, truncated) =
+                    rebuild_thread_index(&mut index, &room_id_string, projections);
+                drop(index);
+                drop(lists);
+                for summary in &mut threads {
+                    summary.unread_count =
+                        thread_unread_count(&self.client, &room_id, &summary.root_event_id).await;
+                }
+                Ok(NativeThreadListSnapshot {
+                    schema_version: crate::app::threads::NATIVE_THREAD_LIST_SCHEMA_VERSION,
+                    room_id: room_id_string,
+                    threads,
+                    end_reached,
+                    truncated,
+                })
+            }
+            _ => Err("v-thread-list-invalid-action"),
+        }
     }
 }
 
@@ -1588,6 +1868,7 @@ impl NativeTimelineRegistry {
             session_generation,
             entries: HashMap::new(),
             focused_entries: HashMap::new(),
+            thread_entries: HashMap::new(),
             view_streams: HashMap::new(),
             view_update_tasks: HashMap::new(),
             view_revisions: HashMap::new(),
@@ -1616,6 +1897,9 @@ impl NativeTimelineRegistry {
             // encryption state before performing network writes.
             let is_encrypted = room.encryption_state().is_encrypted();
             let timeline = TimelineBuilder::new(&room)
+                .with_focus(TimelineFocus::Live {
+                    hide_threaded_events: HIDE_THREADED_EVENTS,
+                })
                 .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
                 .build()
                 .await
@@ -1751,6 +2035,7 @@ impl NativeTimelineRegistry {
                         .await?
                     }
                     TimelineViewPosition::Focused { .. }
+                    | TimelineViewPosition::Thread { .. }
                     | TimelineViewPosition::Restored {
                         anchor_event_id: None,
                     } => unreachable!("normal open only selects live, unread, or anchored restore"),
@@ -1791,9 +2076,7 @@ impl NativeTimelineRegistry {
                         .with_focus(TimelineFocus::Event {
                             target: event_id.clone(),
                             num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                            thread_mode: TimelineEventFocusThreadMode::Automatic {
-                                hide_threaded_events: false,
-                            },
+                            thread_mode: permalink_event_thread_mode(),
                         })
                         .build()
                         .await
@@ -1815,6 +2098,13 @@ impl NativeTimelineRegistry {
                         forward: TimelinePageState::Available,
                     },
                 )
+            }
+            NativeTimelineOpenPosition::Thread { root_event_id } => {
+                let room = client
+                    .get_room(&room_id)
+                    .ok_or("v-timeline-thread-room-not-found")?;
+                self.open_thread(&room, &room_id_string, root_event_id)
+                    .await?
             }
             NativeTimelineOpenPosition::Unread => {
                 let room = client
@@ -1920,6 +2210,7 @@ impl NativeTimelineRegistry {
             },
             &timeline,
             rows,
+            action_authority,
         )
         .await;
         // Publish ownership only after all awaited initialization succeeds.
@@ -2055,7 +2346,7 @@ impl NativeTimelineRegistry {
             .get(&request.stream_id)
             .ok_or("v-timeline-view-not-open")?;
         if request.action == NativeTimelineReadAction::MarkRead
-            && stream.position != TimelineViewPosition::LiveBottom
+            && !position_allows_mark_read(&stream.position)
         {
             return Err("v-timeline-read-requires-live-view");
         }
@@ -2317,9 +2608,7 @@ impl NativeTimelineRegistry {
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
                     num_context_events: FOCUSED_CONTEXT_EVENT_COUNT,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
@@ -2335,6 +2624,51 @@ impl NativeTimelineRegistry {
         Ok((
             timeline,
             TimelineViewPosition::Unread { anchor_event_id },
+            TimelinePaginationState {
+                backward: TimelinePageState::Available,
+                forward: TimelinePageState::Available,
+            },
+        ))
+    }
+
+    async fn open_thread(
+        &mut self,
+        room: &Room,
+        room_id: &str,
+        root_event_id: &str,
+    ) -> Result<(Arc<Timeline>, TimelineViewPosition, TimelinePaginationState), &'static str> {
+        let root_event_id = parse_thread_root_event_id_for_open(root_event_id)?;
+        let key = (room_id.to_owned(), root_event_id.to_string());
+        if !self.thread_entries.contains_key(&key) {
+            if self.thread_entries.len() >= MAX_FOCUSED_EVENT_READBACKS {
+                if let Some(oldest_key) = self.thread_entries.keys().next().cloned() {
+                    self.thread_entries.remove(&oldest_key);
+                }
+            }
+            let timeline = TimelineBuilder::new(room)
+                .with_focus(TimelineFocus::Thread {
+                    root_event_id: root_event_id.clone(),
+                })
+                .track_read_marker_and_receipts(TimelineReadReceiptTracking::AllEvents)
+                .build()
+                .await
+                .map_err(|_| "v-timeline-thread-open-failed")?;
+            debug_assert!(
+                timeline.is_threaded(),
+                "TimelineFocus::Thread must report is_threaded"
+            );
+            self.thread_entries.insert(key.clone(), Arc::new(timeline));
+        }
+        let timeline = self
+            .thread_entries
+            .get(&key)
+            .expect("thread timeline present")
+            .clone();
+        Ok((
+            timeline,
+            TimelineViewPosition::Thread {
+                root_event_id: root_event_id.to_string(),
+            },
             TimelinePaginationState {
                 backward: TimelinePageState::Available,
                 forward: TimelinePageState::Available,
@@ -2416,9 +2750,7 @@ impl NativeTimelineRegistry {
                 .with_focus(TimelineFocus::Event {
                     target: event_id.clone(),
                     num_context_events: 0,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
@@ -2430,11 +2762,14 @@ impl NativeTimelineRegistry {
             .get(&key)
             .expect("focused timeline inserted");
         let (items, _updates) = timeline.subscribe().await;
-        let item = items
+        let mut item = items
             .iter()
             .filter_map(|item| project_item(item, client.user_id()))
             .find(|item| item.event_id == event_id.as_str())
             .ok_or("v-crypto.6-event-not-found")?;
+        if let Some(room) = client.get_room(parse_room_id(&room_id)?.as_ref()) {
+            enrich_native_reactions(&room, event_id.as_str(), &mut item.reactions, true).await;
+        }
         Ok(NativeTimelineEventReadback {
             session_generation: self.session_generation,
             room_id,
@@ -2467,7 +2802,7 @@ impl NativeTimelineRegistry {
             .await
             .map_err(|_| "v-send.2-reaction-toggle-failed")?;
         let readback = self
-            .reaction_readback(client, &room_id, &target_event_id, key)
+            .reaction_readback(client, &room_id, &target_event_id, key, false)
             .await?;
         Ok(NativeReactionMutationResult {
             room_id,
@@ -2495,7 +2830,7 @@ impl NativeTimelineRegistry {
         let target_event_id = parse_event_id(target_event_id)?;
         validate_reaction_key(key)?;
         let before = self
-            .reaction_readback(client, &room_id, &target_event_id, key)
+            .reaction_readback(client, &room_id, &target_event_id, key, false)
             .await?;
         if before.as_ref().is_some_and(|reaction| reaction.me) {
             return Ok(NativeReactionMutationResult {
@@ -2510,15 +2845,16 @@ impl NativeTimelineRegistry {
         let room = client
             .get_room(parse_room_id(&room_id)?.as_ref())
             .ok_or("v-send.2-reaction-room-not-found")?;
-        room.send(ReactionEventContent::from(Annotation::new(
-            target_event_id.clone(),
-            key.to_owned(),
-        )))
+        send_event_via_room_queue(
+            &room,
+            ReactionEventContent::from(Annotation::new(target_event_id.clone(), key.to_owned()))
+                .into(),
+        )
         .await
         .map_err(|_| "v-send.2-reaction-ensure-failed")?;
 
         let readback = self
-            .reaction_readback(client, &room_id, &target_event_id, key)
+            .reaction_readback(client, &room_id, &target_event_id, key, false)
             .await?;
         Ok(NativeReactionMutationResult {
             room_id,
@@ -2545,7 +2881,7 @@ impl NativeTimelineRegistry {
         let reaction_event_id = parse_event_id(reaction_event_id)?;
         validate_reaction_key(key)?;
         let selected_reaction = self
-            .reaction_readback(client, &room_id, &target_event_id, key)
+            .reaction_readback(client, &room_id, &target_event_id, key, true)
             .await?
             .ok_or("v-send.2-reaction-redact-annotation-not-found")?;
         if !reaction_contains_event_id(&selected_reaction, &reaction_event_id) {
@@ -2558,7 +2894,7 @@ impl NativeTimelineRegistry {
             .await
             .map_err(|_| "v-send.2-reaction-redact-failed")?;
         let readback = self
-            .reaction_readback(client, &room_id, &target_event_id, key)
+            .reaction_readback(client, &room_id, &target_event_id, key, true)
             .await?;
         Ok(NativeReactionMutationResult {
             room_id,
@@ -2575,6 +2911,7 @@ impl NativeTimelineRegistry {
         room_id: &str,
         target_event_id: &OwnedEventId,
         key: &str,
+        network: bool,
     ) -> Result<Option<NativeTimelineReaction>, &'static str> {
         self.open(client, room_id).await?;
         let entry = self
@@ -2582,17 +2919,34 @@ impl NativeTimelineRegistry {
             .get(room_id)
             .ok_or("v-send.2-reaction-timeline-not-open")?;
         let (items, _updates) = entry.timeline.subscribe().await;
-        if let Some(reaction) = items
+        if let Some(item) = items
             .iter()
             .filter_map(|item| project_item(item, client.user_id()))
             .find(|item| item.event_id == target_event_id.as_str())
-            .and_then(|item| {
-                item.reactions
-                    .into_iter()
-                    .find(|reaction| reaction.key == key)
-            })
         {
-            return Ok(Some(reaction));
+            // Live viewport owns this event. After toggle-remove the live item
+            // can correctly omit the key while a focused Event timeline still
+            // projects the previous aggregation (event-cache / local Sent echo).
+            // Falling through made `ensure_reaction` report AlreadyPresent and
+            // skip the re-add. Keep the focused timeline; dropping it here
+            // desyncs the live room timeline's local annotation echo.
+            let mut reaction = item
+                .reactions
+                .into_iter()
+                .find(|reaction| reaction.key == key);
+            if let (Some(reaction), Some(room)) = (
+                reaction.as_mut(),
+                client.get_room(parse_room_id(room_id)?.as_ref()),
+            ) {
+                enrich_native_reactions(
+                    &room,
+                    target_event_id.as_str(),
+                    std::slice::from_mut(reaction),
+                    network,
+                )
+                .await;
+            }
+            return Ok(reaction);
         }
 
         // Notifications may target a message outside the currently open
@@ -2608,17 +2962,19 @@ impl NativeTimelineRegistry {
             let room = client
                 .get_room(parse_room_id(room_id)?.as_ref())
                 .ok_or("v-send.2-reaction-room-not-found")?;
-            let timeline = TimelineBuilder::new(&room)
+            let Ok(timeline) = TimelineBuilder::new(&room)
                 .with_focus(TimelineFocus::Event {
                     target: target_event_id.clone(),
                     num_context_events: 0,
-                    thread_mode: TimelineEventFocusThreadMode::Automatic {
-                        hide_threaded_events: false,
-                    },
+                    thread_mode: permalink_event_thread_mode(),
                 })
                 .build()
                 .await
-                .map_err(|_| "v-send.2-reaction-readback-open-failed")?;
+            else {
+                // Toggle/ensure already applied. Missing focused history must
+                // not fail the mutation; viewer open uses event_readback.
+                return Ok(None);
+            };
             self.focused_entries
                 .insert(focus_key.clone(), Arc::new(timeline));
         }
@@ -2627,7 +2983,7 @@ impl NativeTimelineRegistry {
             .get(&focus_key)
             .ok_or("v-send.2-reaction-readback-open-failed")?;
         let (items, _updates) = timeline.subscribe().await;
-        Ok(items
+        let mut reaction = items
             .iter()
             .filter_map(|item| project_item(item, client.user_id()))
             .find(|item| item.event_id == target_event_id.as_str())
@@ -2635,7 +2991,20 @@ impl NativeTimelineRegistry {
                 item.reactions
                     .into_iter()
                     .find(|reaction| reaction.key == key)
-            }))
+            });
+        if let (Some(reaction), Some(room)) = (
+            reaction.as_mut(),
+            client.get_room(parse_room_id(room_id)?.as_ref()),
+        ) {
+            enrich_native_reactions(
+                &room,
+                target_event_id.as_str(),
+                std::slice::from_mut(reaction),
+                network,
+            )
+            .await;
+        }
+        Ok(reaction)
     }
 
     fn reconcile_utd(
@@ -2679,20 +3048,18 @@ impl NativeTimelineRegistry {
                     .map_err(|_| "v-crypto.6-utd-index-failed")?;
             }
             match item.decryption_state {
-                Some(NativeDecryptionState::Unavailable) => {}
-                Some(NativeDecryptionState::Pending) => {
+                Some(NativeDecryptionState::Pending)
                     if self
                         .utd_index
                         .get(&room_id, &item.event_id)
                         .map(|e| e.phase)
-                        == Some(UtdPhase::UnableToDecrypt)
-                    {
-                        self.utd_index
-                            .begin_retry(&room_id, &item.event_id)
-                            .map_err(|_| "v-crypto.6-utd-index-failed")?;
-                    }
+                        == Some(UtdPhase::UnableToDecrypt) =>
+                {
+                    self.utd_index
+                        .begin_retry(&room_id, &item.event_id)
+                        .map_err(|_| "v-crypto.6-utd-index-failed")?;
                 }
-                None => {}
+                _ => {}
             }
         }
 
@@ -2913,6 +3280,25 @@ fn visible_predecessor(raw_ids: &[String], visible_ids: &[String], marker: &str)
         .cloned()
 }
 
+/// Room-level last-read candidates. Live timelines set
+/// `hide_threaded_events`, so `Timeline::latest_user_read_receipt` only
+/// loads `ReceiptThread::Main`. Other clients (and this test fixture) still
+/// write unthreaded receipts; restoration must compare both.
+async fn own_unthreaded_and_main_receipt_event_ids(room: &Room, user: &UserId) -> Vec<String> {
+    let mut ids = Vec::new();
+    for receipt_type in [EventReceiptType::Read, EventReceiptType::ReadPrivate] {
+        for thread in [&ReceiptThread::Unthreaded, &ReceiptThread::Main] {
+            if let Ok(Some((event_id, _))) = room
+                .load_user_receipt(receipt_type.clone(), thread, user)
+                .await
+            {
+                ids.push(event_id.to_string());
+            }
+        }
+    }
+    ids
+}
+
 async fn navigation_read_state(
     timeline: &Timeline,
     own_user_id: Option<&UserId>,
@@ -2949,29 +3335,41 @@ async fn navigation_read_state(
         .room()
         .fully_read_event_id()
         .map(|id| id.to_string());
-    let (receipt, receipt_anchor) = match own_user_id {
-        Some(user) => (
-            timeline
+    let (receipt_ids, timeline_receipt, receipt_anchor) = match own_user_id {
+        Some(user) => {
+            let receipt_ids =
+                own_unthreaded_and_main_receipt_event_ids(timeline.room(), user).await;
+            let timeline_receipt = timeline
                 .latest_user_read_receipt(user)
                 .await
-                .map(|(id, _)| id.to_string()),
-            timeline
+                .map(|(id, _)| id.to_string());
+            let receipt_anchor = timeline
                 .latest_user_read_receipt_timeline_event_id(user)
                 .await
-                .map(|id| id.to_string()),
-        ),
-        None => (None, None),
+                .map(|id| id.to_string());
+            (receipt_ids, timeline_receipt, receipt_anchor)
+        }
+        None => (Vec::new(), None, None),
     };
     let raw = newest_frontier_in_live(
         &raw_ids,
-        fully_read.iter().chain(receipt.iter()).map(String::as_str),
+        fully_read
+            .iter()
+            .chain(receipt_ids.iter())
+            .chain(timeline_receipt.iter())
+            .map(String::as_str),
     )
-    .or_else(|| receipt.clone())
+    .or_else(|| timeline_receipt.clone())
+    .or_else(|| receipt_ids.into_iter().next())
     .or(fully_read);
     let anchor = raw
         .as_deref()
         .and_then(|marker| visible_predecessor(&raw_ids, &visible_ids, marker))
-        .or_else(|| (raw == receipt).then_some(receipt_anchor).flatten());
+        .or_else(|| {
+            (raw == timeline_receipt)
+                .then_some(receipt_anchor)
+                .flatten()
+        });
     (raw, anchor)
 }
 
@@ -3058,6 +3456,9 @@ fn view_subscription_key(room_id: &str, position: &TimelineViewPosition) -> Stri
         TimelineViewPosition::Unread { .. } => format!("unread:{room_id}"),
         TimelineViewPosition::Focused { target_event_id } => {
             format!("focused:{room_id}:{target_event_id}")
+        }
+        TimelineViewPosition::Thread { root_event_id } => {
+            format!("thread:{room_id}:{root_event_id}")
         }
         TimelineViewPosition::Restored {
             anchor_event_id: Some(anchor_event_id),
@@ -3160,7 +3561,7 @@ fn spawn_view_update_owner(
                         own_user_id.as_deref(),
                     ).await;
                     apply_item_id_diffs(&mut item_ids, &diffs);
-                    let ops = {
+                    let mut ops = {
                         let mut registry = media.lock().await;
                         registry.retain_items(item_ids.iter().map(String::as_str));
                         project_timeline_diffs_with_media(
@@ -3170,6 +3571,7 @@ fn spawn_view_update_owner(
                             &mut registry,
                         )
                     };
+                    enrich_view_delta_ops(timeline.room(), &mut ops).await;
                     if ops.is_empty() {
                         continue;
                     }
@@ -3203,22 +3605,23 @@ fn spawn_view_update_owner(
                             .iter()
                             .map(|item| item.unique_id().0.clone())
                             .collect();
-                        let rows = {
-                            let mut registry = media.lock().await;
-                            registry.retain_items(item_ids.iter().map(String::as_str));
-                            items
-                                .iter()
-                                .map(|item| {
-                                    project_timeline_item_with_media(
-                                        item,
-                                        own_user_id.as_deref(),
-                                        action_authority,
-                                        &mut registry,
-                                    )
-                                })
-                                .collect()
-                        };
-                        vec![super::TimelineViewDeltaOp::Reset { rows }]
+                    let mut rows: Vec<super::TimelineViewRow> = {
+                        let mut registry = media.lock().await;
+                        registry.retain_items(item_ids.iter().map(String::as_str));
+                        items
+                            .iter()
+                            .map(|item| {
+                                project_timeline_item_with_media(
+                                    item,
+                                    own_user_id.as_deref(),
+                                    action_authority,
+                                    &mut registry,
+                                )
+                            })
+                            .collect()
+                    };
+                    enrich_view_rows(timeline.room(), &mut rows).await;
+                    vec![super::TimelineViewDeltaOp::Reset { rows }]
                     } else {
                         Vec::new()
                     };
@@ -3241,7 +3644,7 @@ fn spawn_view_update_owner(
                         .iter()
                         .map(|item| item.unique_id().0.clone())
                         .collect();
-                    let rows = {
+                    let mut rows: Vec<super::TimelineViewRow> = {
                         let mut registry = media.lock().await;
                         registry.retain_items(item_ids.iter().map(String::as_str));
                         items
@@ -3256,6 +3659,7 @@ fn spawn_view_update_owner(
                             })
                             .collect()
                     };
+                    enrich_view_rows(timeline.room(), &mut rows).await;
                     emitter.emit(
                         vec![super::TimelineViewDeltaOp::Reset { rows }],
                         None,
@@ -3382,7 +3786,7 @@ async fn view_snapshot_from_timeline(
             })
             .collect()
     };
-    view_snapshot_from_items(input, timeline, rows).await
+    view_snapshot_from_items(input, timeline, rows, action_authority).await
 }
 
 fn apply_item_id_diffs(item_ids: &mut Vec<String>, diffs: &[VectorDiff<Arc<SdkTimelineItem>>]) {
@@ -3440,8 +3844,10 @@ struct TimelineViewSnapshotInput {
 async fn view_snapshot_from_items(
     input: TimelineViewSnapshotInput,
     timeline: &Timeline,
-    rows: Vec<super::TimelineViewRow>,
+    mut rows: Vec<super::TimelineViewRow>,
+    action_authority: TimelineRoomActionAuthority,
 ) -> TimelineViewSnapshot {
+    enrich_view_rows(timeline.room(), &mut rows).await;
     let read_state =
         project_live_read_state(timeline, &input.position, input.own_user_id.as_deref()).await;
     TimelineViewSnapshot {
@@ -3459,6 +3865,8 @@ async fn view_snapshot_from_items(
             mark_unread: true,
             paginate_backward: true,
             paginate_forward: true,
+            can_redact_own: action_authority.can_redact_own,
+            can_redact_other: action_authority.can_redact_other,
         },
     }
 }
@@ -3515,6 +3923,14 @@ fn parse_action_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
 
 fn parse_event_id(event_id: &str) -> Result<OwnedEventId, &'static str> {
     OwnedEventId::try_from(event_id.trim()).map_err(|_| "v-crypto.6-invalid-event-id")
+}
+
+fn parse_thread_root_event_id_for_open(event_id: &str) -> Result<OwnedEventId, &'static str> {
+    let trimmed = event_id.trim();
+    if trimmed.is_empty() {
+        return Err("v-timeline-thread-root-invalid");
+    }
+    OwnedEventId::try_from(trimmed).map_err(|_| "v-timeline-thread-root-invalid")
 }
 
 fn parse_action_event_id(
@@ -3797,10 +4213,11 @@ async fn snapshot_from_timeline(
     local_user: Option<&matrix_sdk::ruma::UserId>,
 ) -> Result<NativeTimelineSnapshot, &'static str> {
     let (items, _updates) = timeline.subscribe().await;
-    let items = items
+    let mut items: Vec<NativeTimelineItem> = items
         .iter()
         .filter_map(|item| project_item(item, local_user))
         .collect();
+    enrich_native_items(timeline.room(), &mut items, false).await;
     Ok(NativeTimelineSnapshot {
         session_generation,
         room_id,
@@ -3851,10 +4268,10 @@ fn project_reactions(
                 .iter()
                 .map(|(user_id, info)| NativeTimelineReactionSender {
                     user_id: user_id.to_string(),
-                    reaction_event_id: match &info.status {
-                        ReactionStatus::RemoteToRemote(event_id) => Some(event_id.to_string()),
-                        ReactionStatus::LocalToLocal(_) | ReactionStatus::LocalToRemote(_) => None,
-                    },
+                    // 0.19 dropped ReactionStatus. Local echoes that have been
+                    // accepted expose Sent { event_id }. Remote reactions
+                    // (send_state: None) are filled from the room event cache.
+                    reaction_event_id: reaction_event_id_from_send_state(&info.send_state),
                 })
                 .collect(),
         })
@@ -4196,6 +4613,23 @@ mod tests {
 
         assert!(reaction_contains_event_id(&reaction, &selected));
         assert!(!reaction_contains_event_id(&reaction, &unrelated));
+    }
+
+    #[test]
+    fn recovered_remote_annotation_id_is_enough_for_redact_validation() {
+        let mut reaction = NativeTimelineReaction {
+            key: "👍".into(),
+            count: 1,
+            me: false,
+            senders: vec![NativeTimelineReactionSender {
+                user_id: "@bob:example.org".into(),
+                reaction_event_id: None,
+            }],
+        };
+        let recovered = OwnedEventId::try_from("$bob-reaction:example.org").unwrap();
+        assert!(!reaction_contains_event_id(&reaction, &recovered));
+        reaction.senders[0].reaction_event_id = Some(recovered.to_string());
+        assert!(reaction_contains_event_id(&reaction, &recovered));
     }
 
     #[test]
@@ -4567,6 +5001,41 @@ mod tests {
             ),
             "unread:!room:example.org"
         );
+        let focused = view_subscription_key(
+            "!room:example.org",
+            &TimelineViewPosition::Focused {
+                target_event_id: "$root:example.org".into(),
+            },
+        );
+        let thread = view_subscription_key(
+            "!room:example.org",
+            &TimelineViewPosition::Thread {
+                root_event_id: "$root:example.org".into(),
+            },
+        );
+        assert_eq!(focused, "focused:!room:example.org:$root:example.org");
+        assert_eq!(thread, "thread:!room:example.org:$root:example.org");
+        assert_ne!(focused, thread);
+    }
+
+    #[test]
+    fn thread_root_open_rejects_invalid_id_shapes_without_echoing_the_id() {
+        assert_eq!(
+            parse_thread_root_event_id_for_open("").unwrap_err(),
+            "v-timeline-thread-root-invalid"
+        );
+        assert_eq!(
+            parse_thread_root_event_id_for_open("   ").unwrap_err(),
+            "v-timeline-thread-root-invalid"
+        );
+        assert_eq!(
+            parse_thread_root_event_id_for_open("not-an-event").unwrap_err(),
+            "v-timeline-thread-root-invalid"
+        );
+        assert!(parse_thread_root_event_id_for_open("$root:example.org").is_ok());
+        assert!(!parse_thread_root_event_id_for_open("not-an-event")
+            .unwrap_err()
+            .contains("not-an-event"));
     }
 
     #[test]
@@ -4686,6 +5155,36 @@ mod tests {
     }
 
     #[test]
+    fn newest_frontier_in_live_picks_the_later_comparable_candidate() {
+        let live = ["$follow-live-older".into(), "$follow-live-newer".into()];
+        assert_eq!(
+            newest_frontier_in_live(&live, ["$follow-live-older", "$follow-live-newer"]),
+            Some("$follow-live-newer".into())
+        );
+    }
+
+    #[test]
+    fn restoration_frontier_loads_unthreaded_and_main_receipts() {
+        let source = include_str!("live.rs");
+        let helper = source
+            .split("async fn own_unthreaded_and_main_receipt_event_ids")
+            .nth(1)
+            .and_then(|rest| rest.split("async fn navigation_read_state").next())
+            .expect("own receipt helper");
+        assert!(helper.contains("load_user_receipt"));
+        assert!(helper.contains("ReceiptThread::Unthreaded"));
+        assert!(helper.contains("ReceiptThread::Main"));
+        assert!(helper.contains("EventReceiptType::ReadPrivate"));
+        let mark_read_start = source.find("async fn mark_live_timeline_read").unwrap();
+        let mark_read_end = source[mark_read_start..]
+            .find("fn remember_agent_approval_decision")
+            .map(|offset| mark_read_start + offset)
+            .unwrap();
+        let mark_read_source = &source[mark_read_start..mark_read_end];
+        assert!(!mark_read_source.contains("ReceiptThread::Unthreaded"));
+    }
+
+    #[test]
     fn room_read_state_sends_receipts_and_clears_marked_unread_without_a_view_stream() {
         let source = include_str!("live.rs");
         assert!(source.contains("pub async fn set_room_read_state"));
@@ -4709,9 +5208,9 @@ mod tests {
         assert!(receipts.public_read_receipt.is_none());
 
         let cargo_lock = include_str!("../../../../../Cargo.lock");
-        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.18.0\""));
+        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.19.0\""));
         let source = include_str!("live.rs");
-        assert!(source.contains("Pinned matrix-sdk-ui 0.18 invariant"));
+        assert!(source.contains("Pinned matrix-sdk-ui 0.19 invariant"));
         assert!(source.contains("also when receipt deduplication removes every unchanged marker"));
         let mark_read_start = source.find("async fn mark_live_timeline_read").unwrap();
         let mark_read_end = source[mark_read_start..]
@@ -4720,7 +5219,13 @@ mod tests {
             .unwrap();
         let mark_read_source = &source[mark_read_start..mark_read_end];
         assert!(mark_read_source.contains("timeline.latest_event_id().await"));
+        assert!(mark_read_source.contains("timeline.is_threaded()"));
+        assert!(mark_read_source.contains("send_single_receipt(ReceiptType::ReadPrivate"));
+        assert!(mark_read_source.contains("send_multiple_receipts(exact_read_receipts"));
+        assert!(!mark_read_source.contains("ReceiptThread::Unthreaded"));
         assert!(!mark_read_source.contains("items.iter().rev().find_map"));
+        assert!(source.contains("position_allows_mark_read(&stream.position)"));
+        assert!(source.contains("TimelineViewPosition::LiveBottom | TimelineViewPosition::Thread"));
     }
 
     #[test]
@@ -4996,5 +5501,50 @@ mod tests {
 
         assert!(!registry.in_flight.contains_key(&old_key));
         assert!(registry.in_flight.contains_key(&new_key));
+    }
+
+    #[test]
+    fn composer_send_owner_uses_room_send_queue_without_extra_content() {
+        let source = include_str!("live.rs");
+        for marker in [
+            "enqueue_event_via_room_queue",
+            "send_event_via_room_queue",
+            "wait_for_queued_send",
+            "unwedge_queued_send",
+            "abort_queued_send",
+        ] {
+            assert!(
+                source.contains(marker),
+                "native send owner must use {marker}"
+            );
+        }
+        let send_text_start = source.find("pub async fn send_text(").unwrap();
+        let send_poll_start = source.find("pub async fn send_poll(").unwrap();
+        let send_text = &source[send_text_start..send_poll_start];
+        assert!(send_text.contains("send_text_via_queue"));
+        assert!(!send_text.contains(&format!("{}{}", "room.", "send(")));
+        assert!(!send_text.contains("send_message_to_room"));
+        assert!(!source.contains(&format!("{}{}", "send().", "with_extra")));
+
+        let ensure_start = source
+            .find("Idempotently ensure an approval annotation exists.")
+            .unwrap();
+        let redact_start = source
+            .find("Redact any reaction annotation selected in the viewer.")
+            .unwrap();
+        let ensure = &source[ensure_start..redact_start];
+        assert!(ensure.contains("send_event_via_room_queue"));
+        assert!(!ensure.contains(&format!("{}{}", "room.", "send(")));
+    }
+
+    #[test]
+    fn session_start_subscribes_event_cache_and_pin_panel_uses_cache() {
+        let source = include_str!("live.rs");
+        assert!(source.contains("client.event_cache().subscribe()"));
+        assert!(source.contains("pinned_events_snapshot"));
+        assert!(source.contains("snapshot_pinned_events"));
+        assert!(source.contains("room.pin_event"));
+        assert!(source.contains("room.unpin_event"));
+        assert!(!source.contains(&format!("{}{}", "TimelineFocus::", "PinnedEvents")));
     }
 }

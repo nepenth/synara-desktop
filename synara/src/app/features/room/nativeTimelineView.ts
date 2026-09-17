@@ -18,7 +18,8 @@ export type NativeTimelinePosition =
   | { kind: 'live_bottom' }
   | { kind: 'unread'; anchor_event_id: string }
   | { kind: 'focused'; target_event_id: string }
-  | { kind: 'restored'; anchor_event_id?: string };
+  | { kind: 'restored'; anchor_event_id?: string }
+  | { kind: 'thread'; root_event_id: string };
 
 export type NativeTimelineRowCapabilities = {
   react: boolean;
@@ -55,10 +56,16 @@ export type NativeTimelineThreadSummary = {
   latestEventId?: string;
 };
 
+export type NativeTimelineReactionSender = {
+  userId: string;
+  reactionEventId?: string;
+};
+
 export type NativeTimelineReaction = {
   key: string;
   count: number;
   own?: boolean;
+  senders?: NativeTimelineReactionSender[];
 };
 
 export type NativeTimelineRelationPresentation = {
@@ -214,6 +221,8 @@ export type NativeTimelineViewSnapshot = {
     markUnread: boolean;
     paginateBackward: boolean;
     paginateForward: boolean;
+    canRedactOwn?: boolean;
+    canRedactOther?: boolean;
   };
 };
 
@@ -535,7 +544,8 @@ export type NativeTimelineOpenInput = {
       }
     | { kind: 'live_bottom' }
     | { kind: 'unread' }
-    | { kind: 'focused'; eventId: string };
+    | { kind: 'focused'; eventId: string }
+    | { kind: 'thread'; rootEventId: string };
 };
 
 export type NativeTimelineCommandError = {
@@ -582,6 +592,8 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
     position:
       position.kind === 'focused'
         ? { kind: 'focused' as const, event_id: position.eventId }
+        : position.kind === 'thread'
+        ? { kind: 'thread' as const, root_event_id: position.rootEventId }
         : position.kind === 'normal'
         ? {
             kind: 'normal' as const,
@@ -684,6 +696,8 @@ export const useNativeTimelineView = (
   const roomId = input?.roomId;
   const positionKind = input?.position.kind;
   const focusedEventId = input?.position.kind === 'focused' ? input.position.eventId : undefined;
+  const threadRootEventId =
+    input?.position.kind === 'thread' ? input.position.rootEventId : undefined;
   const normalPosition = input?.position.kind === 'normal' ? input.position : undefined;
   const nativeRequest = useMemo(() => {
     if (!roomId || !positionKind) return undefined;
@@ -692,6 +706,8 @@ export const useNativeTimelineView = (
       position:
         positionKind === 'focused' && focusedEventId
           ? { kind: 'focused', eventId: focusedEventId }
+          : positionKind === 'thread' && threadRootEventId
+          ? { kind: 'thread', rootEventId: threadRootEventId }
           : positionKind === 'normal'
           ? {
               kind: 'normal',
@@ -704,6 +720,7 @@ export const useNativeTimelineView = (
     } as NativeTimelineOpenInput);
   }, [
     focusedEventId,
+    threadRootEventId,
     normalPosition?.atBottom,
     normalPosition?.liveTailEventId,
     normalPosition?.restoredAnchorEventId,

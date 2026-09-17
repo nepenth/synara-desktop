@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+- Adopt Matrix Rust SDK 0.19.0 (`matrix-sdk`, `matrix-sdk-ui`,
+  `matrix-sdk-crypto`, `matrix-sdk-sqlite`) and Ruma 0.17. Pin the desktop
+  toolchain to Rust 1.96 (upstream MSRV). Enable `rustls-aws-lc-rs` because
+  0.19.0 no longer installs a rustls provider when default features are off.
+  Map room-list subscriptions onto `set_room_subscriptions`, and write
+  presence through `Client::set_presence` so sliding sync keeps the chosen
+  state.
+- Reaction snapshots now take an event id only from a local `Sent` echo.
+  Remote reactions no longer expose an annotation id on the 0.19 timeline
+  item, so the reaction viewer cannot offer per-sender redaction until a
+  follow-up recovers that id. Toggling your own reaction still uses the SDK
+  toggle path and does not need the id.
+- Apply Dependabot rust-updates in `src-tauri`: tauri 2.11.5, getrandom
+  0.4.3, reqwest 0.13.5.
+
 ## [2.1.37] - 2026-09-15
 
 - Persist decided agent approvals in `in.synara.agent_approval_history` account

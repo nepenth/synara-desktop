@@ -1,8 +1,8 @@
 //! Peek the leftover SQLite crypto account before password login.
 //!
 //! Logout does not wipe the per-account crypto store. The next password login
-//! must reuse that account's device id so `OlmMachine::with_store` does not
-//! see `MismatchedAccount`. This helper is read-only: it never logs, wipes, or
+//! must reuse that account's device id so `OlmMachineBuilder` does not see
+//! `MismatchedAccount`. This helper is read-only: it never logs, wipes, or
 //! returns account identifiers other than the device id needed for login.
 
 use std::path::Path;
@@ -80,7 +80,9 @@ mod tests {
         let store = SqliteCryptoStore::open(&dir, Some(passphrase))
             .await
             .expect("open leftover store");
-        let machine = matrix_sdk_crypto::OlmMachine::with_store(&user, device, store, None)
+        let machine = matrix_sdk_crypto::OlmMachineBuilder::new(&user, device)
+            .with_crypto_store(store)
+            .build()
             .await
             .expect("create leftover olm account");
         drop(machine);
@@ -90,6 +92,19 @@ mod tests {
             .expect("peek leftover");
         assert_eq!(peeked.as_deref(), Some("LEFTOVERDEV"));
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn leftover_store_peek_uses_live_olm_account_not_a_dehydrated_device() {
+        let production = include_str!("crypto_device.rs")
+            .split("#[cfg(test)]")
+            .next()
+            .expect("production source");
+        assert!(production.contains("CryptoStore::load_account"));
+        assert!(production.contains("account.device_id()"));
+        assert!(!production.contains("dehydrated"));
+        assert!(!production.contains("msc3814"));
+        assert!(!production.contains("LoginOptions"));
     }
 }
 

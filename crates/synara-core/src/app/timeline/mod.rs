@@ -26,7 +26,9 @@ mod live;
 mod media;
 mod native;
 mod pagination;
+mod pins;
 mod projection;
+mod reactions;
 mod registry;
 mod utd;
 mod view;
@@ -69,12 +71,17 @@ pub use native::{
     NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineReaction,
     NativeTimelineReactionSender, NativeTimelineReadAction, NativeTimelineReadIntent,
     NativeTimelineReadStateReadback, NativeTimelineReadStateRequest, NativeTimelineSnapshot,
-    NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
-    NativeUtdStatus, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeTimelineTimestampToEventReadback, NativeTimelineViewPaginationRequest,
+    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
 };
 pub use pagination::{
     DirectionStatus, PaginationDirection, PaginationOutcome, PaginationPhase, PaginationRequest,
     TimelinePagination,
+};
+pub use pins::{
+    project_pinned_items, reactions_for_target, snapshot_pinned_events, NativePinnedEventsRequest,
+    PinnedEventItem, PinnedEventsSnapshot, PINNED_EVENTS_SCHEMA_VERSION,
 };
 pub use projection::{reconstruct, TimelineProjection};
 pub use registry::{TimelineEntry, TimelineKey, TimelineLifecycle, TimelineRegistry};
@@ -86,11 +93,11 @@ pub use view::{
     TimelineCallRow, TimelineEncryptedUnavailableRow, TimelineEventRowBase,
     TimelineForwardTransport, TimelineMediaHandle, TimelineMembershipRow, TimelineMessageRow,
     TimelineOtherRow, TimelinePageState, TimelinePaginationState, TimelinePollAnswer,
-    TimelinePollRow, TimelineReaction, TimelineReadState, TimelineRedactedRow,
-    TimelineReplyPreview, TimelineRoomActionAuthority, TimelineRowCapabilities, TimelineStateRow,
-    TimelineThreadSummary, TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewDeltaOp,
-    TimelineViewPosition, TimelineViewRow, TimelineViewSnapshot,
-    NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelinePollRow, TimelineReaction, TimelineReactionSender, TimelineReadState,
+    TimelineRedactedRow, TimelineReplyPreview, TimelineRoomActionAuthority,
+    TimelineRowCapabilities, TimelineStateRow, TimelineThreadSummary, TimelineViewCapabilities,
+    TimelineViewDeltaBatch, TimelineViewDeltaOp, TimelineViewPosition, TimelineViewRow,
+    TimelineViewSnapshot, NATIVE_TIMELINE_VIEW_UPDATED_EVENT, TIMELINE_VIEW_SCHEMA_VERSION,
 };
 pub use view_emit::{TimelineViewUpdateEmit, ViewDeltaEmitter};
 

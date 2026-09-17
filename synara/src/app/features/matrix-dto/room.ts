@@ -41,6 +41,8 @@ export function isRoomEncryptionStatus(value: unknown): value is RoomEncryptionS
 export type RoomHero = {
   userId: UserId;
   displayName?: string;
+  inCall?: boolean;
+  statusEmoji?: string;
 };
 
 export type RoomSummary = {
@@ -50,12 +52,19 @@ export type RoomSummary = {
   avatarUrl?: string;
   membership: Membership;
   isDirect: boolean;
+  directUserId?: string;
   isSpace: boolean;
   isCall: boolean;
+  /** Live MatrixRTC membership. Distinct from `isCall` (voice-room type). */
+  hasActiveCall: boolean;
+  /** Unique live-call participants, capped. Zero when `hasActiveCall` is false. */
+  activeCallParticipantCount: number;
   isFavorite: boolean;
   isEncrypted: boolean;
   /** Authoritative Core projection. Security decisions must not use `isEncrypted`. */
   encryptionStatus: RoomEncryptionStatus;
+  /** Optional MSC4362 chrome. Must stay false unless `encryptionStatus` is encrypted. */
+  stateEncrypted?: boolean;
   joinRule?: string;
   unreadCount: number;
   highlightCount: number;
@@ -73,8 +82,17 @@ function parseHero(value: unknown): RoomHero | null {
   if (!isObject(value)) return null;
   const userId = reqString(value, 'userId');
   const displayName = optString(value, 'displayName');
-  if (userId === null || displayName === null) return null;
-  return { userId, displayName };
+  const inCall = optBoolean(value, 'inCall');
+  const statusEmoji = optString(value, 'statusEmoji');
+  if (userId === null || displayName === null || inCall === null || statusEmoji === null) {
+    return null;
+  }
+  return {
+    userId,
+    displayName,
+    ...(inCall === undefined ? {} : { inCall }),
+    ...(statusEmoji === undefined ? {} : { statusEmoji }),
+  };
 }
 
 export function parseRoomSummary(value: unknown): RoomSummary | null {
@@ -84,11 +102,15 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   const canonicalAlias = optString(value, 'canonicalAlias');
   const avatarUrl = optString(value, 'avatarUrl');
   const isDirect = reqBoolean(value, 'isDirect');
+  const directUserId = optString(value, 'directUserId');
   const isSpace = optBoolean(value, 'isSpace');
   const isCall = optBoolean(value, 'isCall') ?? false;
+  const hasActiveCall = optBoolean(value, 'hasActiveCall') ?? false;
+  const activeCallParticipantCountRaw = optNumber(value, 'activeCallParticipantCount');
   const isFavorite = optBoolean(value, 'isFavorite') ?? false;
   const isEncrypted = reqBoolean(value, 'isEncrypted');
   const encryptionStatus = value.encryptionStatus;
+  const stateEncryptedFlag = optBoolean(value, 'stateEncrypted');
   const joinRule = optString(value, 'joinRule');
   const unreadCount = reqNumber(value, 'unreadCount');
   const highlightCount = reqNumber(value, 'highlightCount');
@@ -103,7 +125,9 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     canonicalAlias === null ||
     avatarUrl === null ||
     isDirect === null ||
+    directUserId === null ||
     isSpace === null ||
+    activeCallParticipantCountRaw === null ||
     isEncrypted === null ||
     !isRoomEncryptionStatus(encryptionStatus) ||
     joinRule === null ||
@@ -114,6 +138,7 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     lastMessagePreview === null ||
     lastMessageIsAgentApproval === null ||
     tombstoneSuccessorRoomId === null ||
+    stateEncryptedFlag === null ||
     !isMembership(value.membership)
   ) {
     return null;
@@ -121,6 +146,12 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
   // Keep the legacy display boolean internally consistent, but never infer the
   // authoritative tri-state from it. Unknown deliberately remains fail-closed.
   if (isEncrypted !== (encryptionStatus === 'encrypted')) return null;
+  const activeCallParticipantCount = activeCallParticipantCountRaw ?? 0;
+  if (!Number.isInteger(activeCallParticipantCount) || activeCallParticipantCount < 0) {
+    return null;
+  }
+  const stateEncrypted = stateEncryptedFlag ?? false;
+  if (stateEncrypted && encryptionStatus !== 'encrypted') return null;
 
   let notificationMode: NotificationMode | undefined;
   if (value.notificationMode !== undefined) {
@@ -146,11 +177,15 @@ export function parseRoomSummary(value: unknown): RoomSummary | null {
     avatarUrl,
     membership: value.membership,
     isDirect,
+    directUserId,
     isSpace: isSpace ?? false,
     isCall: isCall ?? false,
+    hasActiveCall: hasActiveCall ?? false,
+    activeCallParticipantCount,
     isFavorite: isFavorite ?? false,
     isEncrypted,
     encryptionStatus,
+    stateEncrypted,
     joinRule,
     unreadCount,
     highlightCount,

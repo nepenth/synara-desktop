@@ -251,6 +251,50 @@ export const Metadata = style({
   color: 'var(--synara-content-secondary)',
 });
 
+export const FileDownload = style({
+  appearance: 'none',
+  background: 'none',
+  border: 0,
+  padding: 0,
+  color: color.Primary.Main,
+  cursor: 'pointer',
+  textAlign: 'left',
+  textDecoration: 'underline',
+  font: 'inherit',
+  selectors: {
+    '&:disabled': {
+      cursor: 'progress',
+      textDecoration: 'none',
+    },
+    '&:focus-visible': {
+      outline: `2px solid ${color.Primary.Main}`,
+      outlineOffset: toRem(2),
+    },
+  },
+});
+
+export const FilePreviewModal = style({
+  width: 'min(52rem, 92vw)',
+  maxHeight: '88vh',
+  display: 'flex',
+  flexDirection: 'column',
+  backgroundColor: color.Surface.Container,
+  color: color.Surface.OnContainer,
+});
+
+export const FilePreviewHeader = style({
+  paddingLeft: config.space.S200,
+  paddingRight: config.space.S200,
+  borderBottomWidth: config.borderWidth.B300,
+  flexShrink: 0,
+  gap: config.space.S200,
+});
+
+export const FilePreviewBody = style({
+  padding: config.space.S400,
+  minHeight: toRem(160),
+});
+
 export const ReplySurface = style({
   width: '100%',
   maxWidth: '100%',
@@ -654,4 +698,181 @@ globalStyle(`${FormattedBody} code .token.keyword`, {
 });
 globalStyle(`${FormattedBody} code .token.regex, ${FormattedBody} code .token.important`, {
   color: syntaxRegex,
+});
+
+export const UnfurlCard = style({
+  display: 'flex',
+  alignItems: 'stretch',
+  maxWidth: toRem(420),
+  minWidth: 0,
+  marginTop: config.space.S200,
+  border: `1px solid ${color.Surface.ContainerLine}`,
+  borderRadius: config.radii.R400,
+  overflow: 'hidden',
+  background: color.Surface.Container,
+});
+
+export const UnfurlLink = style({
+  display: 'flex',
+  alignItems: 'stretch',
+  minWidth: 0,
+  flex: 1,
+  color: 'inherit',
+  textDecoration: 'none',
+});
+
+export const UnfurlThumb = style({
+  width: toRem(96),
+  height: toRem(96),
+  objectFit: 'cover',
+  flexShrink: 0,
+  background: color.Surface.ContainerHover,
+});
+
+const historyStatusOverlay = {
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: toRem(56),
+  zIndex: 4,
+  display: 'flex',
+  justifyContent: 'center',
+  padding: config.space.S200,
+  pointerEvents: 'none',
+} as const;
+
+export const HistoryStatusOverlayBackward = style({
+  ...historyStatusOverlay,
+  top: 0,
+  background: `linear-gradient(180deg, var(--synara-rich-text-reading-surface) 55%, transparent)`,
+});
+
+export const HistoryStatusOverlayForward = style({
+  ...historyStatusOverlay,
+  top: 'auto',
+  bottom: 0,
+  background: `linear-gradient(0deg, var(--synara-rich-text-reading-surface) 55%, transparent)`,
+});
+
+export const HistoryStatusHitTarget = style({
+  pointerEvents: 'auto',
+});
+
+export const HistoryStatusCard = style({
+  display: 'flex',
+  alignItems: 'center',
+  flexWrap: 'wrap',
+  gap: config.space.S200,
+  padding: `${config.space.S200} ${config.space.S300}`,
+  borderRadius: config.radii.R400,
+  maxWidth: '100%',
+  pointerEvents: 'auto',
+  backgroundColor: color.SurfaceVariant.Container,
+  color: color.SurfaceVariant.OnContainer,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  boxShadow: raisedShadow,
+});
+
+export const HistoryStatusCardError = style({
+  backgroundColor: color.Critical.Container,
+  border: `${config.borderWidth.B300} solid ${color.Critical.Main}`,
+  color: color.Critical.OnContainer,
+});
+
+export const HistoryStatusDateChip = style({
+  position: 'absolute',
+  top: 0,
+  left: 0,
+  right: 0,
+  zIndex: 4,
+  display: 'flex',
+  justifyContent: 'center',
+  padding: config.space.S200,
+  pointerEvents: 'none',
+  contain: 'layout style paint',
+});
+
+export const HistoryStatusDateChipCard = style({
+  display: 'flex',
+  alignItems: 'center',
+  padding: `${config.space.S100} ${config.space.S300}`,
+  borderRadius: config.radii.R400,
+  maxWidth: '100%',
+  pointerEvents: 'none',
+  backgroundColor: color.SurfaceVariant.Container,
+  color: color.SurfaceVariant.OnContainer,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  contain: 'layout style paint',
+});
+
+export const DateRail = style({
+  position: 'absolute',
+  top: config.space.S700,
+  right: config.space.S100,
+  bottom: toRem(88),
+  width: toRem(56),
+  zIndex: 2,
+  pointerEvents: 'none',
+  contain: 'layout style paint',
+  isolation: 'isolate',
+});
+
+export const DateRailTrack = style({
+  position: 'absolute',
+  top: 0,
+  right: toRem(14),
+  bottom: 0,
+  width: toRem(4),
+  borderRadius: config.radii.R400,
+  background: color.SurfaceVariant.ContainerLine,
+  pointerEvents: 'auto',
+  cursor: 'pointer',
+});
+
+export const DateRailThumb = style({
+  position: 'absolute',
+  top: 0,
+  left: toRem(-4),
+  width: toRem(12),
+  height: toRem(18),
+  marginTop: toRem(-9),
+  borderRadius: config.radii.R400,
+  background: color.Primary.Main,
+  pointerEvents: 'none',
+  willChange: 'transform',
+});
+
+export const DateRailTick = style({
+  position: 'absolute',
+  right: toRem(10),
+  width: toRem(12),
+  height: toRem(12),
+  marginTop: toRem(-6),
+  padding: 0,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  borderRadius: '50%',
+  background: color.Surface.Container,
+  pointerEvents: 'auto',
+  cursor: 'pointer',
+  selectors: {
+    '&[aria-current="true"]': {
+      background: color.Primary.Main,
+      borderColor: color.Primary.Main,
+    },
+  },
+});
+
+export const DateRailLabel = style({
+  position: 'absolute',
+  top: 0,
+  right: toRem(32),
+  color: color.Surface.OnContainer,
+  pointerEvents: 'none',
+  whiteSpace: 'nowrap',
+  textAlign: 'right',
+  padding: `${config.space.S100} ${config.space.S200}`,
+  borderRadius: config.radii.R400,
+  backgroundColor: color.Surface.Container,
+  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
+  boxShadow: raisedShadow,
 });

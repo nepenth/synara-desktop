@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   decideAgentApprovalWithNativeOwner,
   ensureReactionWithNativeOwner,
+  nativeReactionsForViewer,
   redactReactionWithNativeOwner,
   toggleReactionWithNativeOwner,
   type NativeReactionMutationResult,
@@ -288,5 +289,32 @@ test('toggle accepts committed add without immediate readback but rejects the wr
       },
     })),
     /readback did not match/
+  );
+});
+
+test('nativeReactionsForViewer keeps recovered sender annotation ids', () => {
+  assert.deepEqual(
+    nativeReactionsForViewer([
+      {
+        key: '👍',
+        count: 2,
+        own: true,
+        senders: [
+          { userId: '@alice:example.org', reactionEventId: '$alice:example.org' },
+          { userId: '@bob:example.org' },
+        ],
+      },
+    ]),
+    [
+      {
+        key: '👍',
+        count: 2,
+        me: true,
+        senders: [
+          { userId: '@alice:example.org', reactionEventId: '$alice:example.org' },
+          { userId: '@bob:example.org' },
+        ],
+      },
+    ]
   );
 });

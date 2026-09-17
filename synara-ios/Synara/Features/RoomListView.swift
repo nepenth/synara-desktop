@@ -1225,6 +1225,8 @@ private struct RoomSearchField: View {
 
 private struct RoomListRow: View {
     let room: RoomSummary
+    @Environment(\.appEnvironment) private var environment
+    @State private var peerInCall = false
 
     private var accessibilityChildren: AccessibilityChildBehavior {
         // Production VoiceOver gets one concise, combined row. UI automation
@@ -1283,6 +1285,26 @@ private struct RoomListRow: View {
                             .accessibilityLabel("Favorite")
                     }
 
+                    if room.hasActiveCall {
+                        Text(room.liveCallChipLabel)
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SynaraColor.accent.opacity(0.12), in: Capsule())
+                            .accessibilityLabel(room.liveCallChipLabel)
+                            .accessibilityIdentifier("RoomRowLiveCall-\(room.id)")
+                    } else if peerInCall {
+                        Text("In a call")
+                            .font(SynaraTypography.chipLabel)
+                            .foregroundStyle(SynaraColor.accent)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(SynaraColor.accent.opacity(0.12), in: Capsule())
+                            .accessibilityLabel("In a call")
+                            .accessibilityIdentifier("RoomRowPeerInCall-\(room.id)")
+                    }
+
                     Spacer(minLength: 0)
                 }
 
@@ -1335,7 +1357,25 @@ private struct RoomListRow: View {
         }
         .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
         .accessibilityElement(children: accessibilityChildren)
-        .accessibilityLabel(room.accessibilitySummary)
+        .accessibilityLabel(rowAccessibilityLabel)
+        .task(id: room.directUserId) {
+            peerInCall = false
+            guard room.hasActiveCall == false,
+                  room.kind == .directMessage,
+                  let peerID = room.directUserId,
+                  peerID.isEmpty == false else {
+                return
+            }
+            let snapshot = await environment.matrix.userStatus(userID: peerID)
+            peerInCall = snapshot?.inCall != nil
+        }
+    }
+
+    private var rowAccessibilityLabel: String {
+        if peerInCall && room.hasActiveCall == false {
+            return room.accessibilitySummary + ", In a call"
+        }
+        return room.accessibilitySummary
     }
 }
 
@@ -1407,6 +1447,9 @@ private extension RoomSummary {
         }
         if isFavorite {
             parts.append("favorite")
+        }
+        if hasActiveCall {
+            parts.append(liveCallChipLabel)
         }
         if isSecureRoom {
             parts.append("encrypted")

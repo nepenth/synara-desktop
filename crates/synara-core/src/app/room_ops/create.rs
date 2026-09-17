@@ -13,12 +13,23 @@ use matrix_sdk::ruma::{
 };
 
 use super::{
+    encrypted_state::{
+        encrypted_state_events_setting_enabled, is_call_room_type, room_encryption_content,
+        should_create_with_encrypted_state,
+    },
     MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
     MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
 };
 
 pub fn build_room_create_request(
     input: MatrixRoomCreateRequest,
+) -> Result<create_room::v3::Request, &'static str> {
+    build_room_create_request_with_setting(input, encrypted_state_events_setting_enabled())
+}
+
+pub(crate) fn build_room_create_request_with_setting(
+    input: MatrixRoomCreateRequest,
+    setting_enabled: bool,
 ) -> Result<create_room::v3::Request, &'static str> {
     let MatrixRoomCreateRequest {
         name,
@@ -31,6 +42,7 @@ pub fn build_room_create_request(
         preset,
         creation_content,
         encryption,
+        encrypt_state_events,
         join_rule,
         knock,
         parent_room_id,
@@ -118,10 +130,16 @@ pub fn build_room_create_request(
 
     let mut initial_state = Vec::new();
     if encryption {
+        let encrypt_state = should_create_with_encrypted_state(
+            encryption,
+            encrypt_state_events,
+            setting_enabled,
+            is_call_room_type(room_type.as_deref()),
+        );
         initial_state.push(raw_room_create_state(
             "m.room.encryption",
             "",
-            serde_json::json!({ "algorithm": "m.megolm.v1.aes-sha2" }),
+            room_encryption_content(encrypt_state),
         )?);
     }
     if room_type.as_deref() == Some("org.matrix.msc3417.call") {
@@ -288,4 +306,85 @@ fn raw_room_create<T>(
     serde_json::value::to_raw_value(&value)
         .map(Raw::<T>::from_json)
         .map_err(|_| diagnostic_id)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::app::room_ops::ipc::MatrixRoomCreateContent;
+
+    fn sample(
+        encryption: bool,
+        encrypt_state_events: bool,
+        room_type: Option<&str>,
+    ) -> MatrixRoomCreateRequest {
+        MatrixRoomCreateRequest {
+            name: Some("Room".into()),
+            topic: None,
+            room_version: None,
+            room_alias_name: None,
+            is_direct: false,
+            invite: vec![],
+            visibility: None,
+            preset: None,
+            creation_content: room_type.map(|room_type| MatrixRoomCreateContent {
+                room_type: Some(room_type.to_owned()),
+                federate: None,
+                additional_creators: None,
+            }),
+            encryption,
+            encrypt_state_events,
+            join_rule: None,
+            knock: false,
+            parent_room_id: None,
+            power_level_content_override: None,
+        }
+    }
+
+    fn encryption_event(request: &create_room::v3::Request) -> Option<serde_json::Value> {
+        request.initial_state.iter().find_map(|event| {
+            let value: serde_json::Value = serde_json::from_str(event.json().get()).ok()?;
+            (value.get("type")?.as_str()? == "m.room.encryption")
+                .then_some(value["content"].clone())
+        })
+    }
+
+    #[test]
+    fn encryption_and_flag_emit_stable_and_unstable_keys() {
+        let request =
+            build_room_create_request_with_setting(sample(true, true, None), true).expect("create");
+        let content = encryption_event(&request).expect("encryption event");
+        assert_eq!(content["algorithm"], "m.megolm.v1.aes-sha2");
+        assert_eq!(content["encrypt_state_events"], true);
+        assert_eq!(content["io.element.msc4362.encrypt_state_events"], true);
+    }
+
+    #[test]
+    fn encryption_false_never_adds_the_event() {
+        let request = build_room_create_request_with_setting(sample(false, true, None), true)
+            .expect("create");
+        assert!(encryption_event(&request).is_none());
+    }
+
+    #[test]
+    fn setting_off_backstop_rejects_a_true_flag() {
+        let request = build_room_create_request_with_setting(sample(true, true, None), false)
+            .expect("create");
+        let content = encryption_event(&request).expect("encryption event");
+        assert!(content.get("encrypt_state_events").is_none());
+        assert!(content
+            .get("io.element.msc4362.encrypt_state_events")
+            .is_none());
+    }
+
+    #[test]
+    fn call_rooms_never_get_the_flag() {
+        for room_type in ["org.matrix.msc3417.call", "m.call"] {
+            let request =
+                build_room_create_request_with_setting(sample(true, true, Some(room_type)), true)
+                    .expect("create");
+            let content = encryption_event(&request).expect("encryption event");
+            assert!(content.get("encrypt_state_events").is_none(), "{room_type}");
+        }
+    }
 }

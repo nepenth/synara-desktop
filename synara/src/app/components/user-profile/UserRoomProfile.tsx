@@ -10,6 +10,7 @@ import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { usePowerLevels } from '../../hooks/usePowerLevels';
 import { useRoom } from '../../hooks/useRoom';
 import { useNativeUserPresence } from '../../features/matrix-presence/nativePresence';
+import { useNativeUserStatus } from '../../features/matrix-presence/nativeUserStatus';
 import { IgnoredUserAlert, MutualRoomsChip, OptionsChip, ServerChip, ShareChip } from './UserChips';
 import { useCloseUserRoomProfile } from '../../state/hooks/userRoomProfile';
 import { PowerChip } from './PowerChip';
@@ -115,6 +116,7 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
     : undefined;
 
   const presence = useNativeUserPresence(userId);
+  const userStatusSnapshot = useNativeUserStatus(userId);
 
   const handleMessage = () => {
     closeUserRoomProfile();
@@ -140,11 +142,17 @@ export function UserRoomProfile({ userId }: UserRoomProfileProps) {
         userId={userId}
         avatarUrl={avatarUrl}
         presence={presence && presence.lastActiveTs !== 0 ? presence : undefined}
+        userStatus={userStatusSnapshot?.userStatus}
+        inCall={userStatusSnapshot?.inCall !== undefined}
       />
       <Box direction="Column" gap="500" style={{ padding: config.space.S400 }}>
         <Box direction="Column" gap="400">
           <Box gap="400" alignItems="Start">
-            <UserHeroName displayName={displayName} userId={userId} />
+            <UserHeroName
+              displayName={displayName}
+              userId={userId}
+              userStatus={userStatusSnapshot?.userStatus}
+            />
             {visibility.sendMessage && (
               <Box shrink="No">
                 <Button

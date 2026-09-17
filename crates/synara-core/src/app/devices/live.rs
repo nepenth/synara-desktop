@@ -362,7 +362,14 @@ impl NativeDeviceOwner {
             .ok_or("v-crypto.7-device-delete-current-missing")?;
         let mut unique = BTreeSet::new();
         for device_id in device_ids {
-            if device_id.is_empty() || device_id == current || !snapshot.contains(&device_id) {
+            let selected = snapshot
+                .devices
+                .iter()
+                .find(|device| device.device_id == device_id);
+            if device_id.is_empty()
+                || device_id == current
+                || !selected.is_some_and(super::device_eligible_for_password_logout)
+            {
                 return Err("v-crypto.7-device-delete-selection-invalid");
             }
             unique.insert(OwnedDeviceId::from(device_id));
@@ -444,6 +451,7 @@ fn trust_when_crypto_device_absent(crypto_store_loaded: bool) -> NativeDeviceTru
             is_dehydrated: false,
             is_verified_with_cross_signing: false,
             is_verified: false,
+            is_verified_by_certificate: false,
         })
     } else {
         NativeDeviceTrust::Unverified
@@ -561,10 +569,13 @@ pub async fn snapshot(
     let crypto_store_loaded = crypto_devices.is_ok();
     let crypto_devices = crypto_devices.ok();
 
+    let current_device_id = current_device_id.to_owned();
     let mut devices = server_devices
         .devices
         .into_iter()
         .map(|device| {
+            let display_name =
+                bounded_optional_hs_text(device.display_name, MAX_DEVICE_DISPLAY_NAME_CHARS);
             let crypto_device = crypto_devices
                 .as_ref()
                 .and_then(|devices| devices.get(&device.device_id));
@@ -582,6 +593,9 @@ pub async fn snapshot(
                             is_verified_with_cross_signing: crypto_device
                                 .is_verified_with_cross_signing(),
                             is_verified: crypto_device.is_verified(),
+                            // Own-account session list: X.509 never stands in
+                            // for SAS / USK on this device.
+                            is_verified_by_certificate: false,
                         }),
                         crypto_device.is_cross_signed_by_owner(),
                         Some(u64::from(crypto_device.first_time_seen_ts().0)),
@@ -589,6 +603,12 @@ pub async fn snapshot(
                             .ed25519_key()
                             .and_then(|key| format_ed25519_fingerprint(&key.to_base64())),
                     ),
+                    // The creating client uploads via MSC3814 before /keys/query
+                    // has the catcher. Keep the SDK default name as Backup device
+                    // so Sessions does not offer /devices DELETE on that row.
+                    None if display_name.as_deref() == Some("Dehydrated device") => {
+                        (NativeDeviceTrust::Dehydrated, false, None, None)
+                    }
                     None => (
                         trust_when_crypto_device_absent(crypto_store_loaded),
                         false,
@@ -599,10 +619,7 @@ pub async fn snapshot(
             NativeDeviceSummary {
                 is_current: device.device_id == current_device_id,
                 device_id: device.device_id.to_string(),
-                display_name: bounded_optional_hs_text(
-                    device.display_name,
-                    MAX_DEVICE_DISPLAY_NAME_CHARS,
-                ),
+                display_name,
                 last_seen_ip: bounded_optional_hs_text(
                     device.last_seen_ip,
                     MAX_DEVICE_LAST_SEEN_IP_CHARS,

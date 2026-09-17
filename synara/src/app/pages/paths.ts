@@ -43,6 +43,7 @@ export type _RoomSearchParams = {
   viaServers?: string;
 };
 export const _ROOM_PATH = ':roomIdOrAlias/:eventId?/';
+export const _ROOM_THREAD_PATH = ':roomIdOrAlias/thread/:threadRootId/';
 
 export const HOME_PATH = '/home/';
 export const HOME_CREATE_PATH = `/home/${_CREATE_PATH}`;

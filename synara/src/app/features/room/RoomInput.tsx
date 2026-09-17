@@ -155,6 +155,16 @@ import {
   nativeComposerSendRelation,
   useNativeComposerReplyDraft,
 } from './nativeComposerDraft';
+import {
+  COMPOSER_UNFURL_DEBOUNCE_MS,
+  fetchMediaPreviewWithNativeOwner,
+  trailingComposerPreviewUrl,
+  type NativeMediaPreview,
+} from './nativeLinkUnfurl';
+import { NativeLinkUnfurlCard } from './nativeLinkUnfurlCard';
+import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
+import { useNativeThreadRoot } from './nativeThreadViewContext';
 import type { AttachmentSendPlan } from './attachmentSendPlan';
 import {
   completeAttachmentSendStep,
@@ -202,15 +212,20 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       ReactEditor.focus(editor);
       setMentionInsert(undefined);
     }, [mentionInsert, roomId, editor, mx, setMentionInsert]);
-    const replyDraft = useNativeComposerReplyDraft(roomId);
+    const threadRootEventId = useNativeThreadRoot(roomId);
+    const replyDraft = useNativeComposerReplyDraft(roomId, threadRootEventId);
     const clearReplyDraft = useCallback(
       async (expectedDraftRevision: number) => {
-        const result = await clearNativeComposerReplyDraft({ roomId, expectedDraftRevision });
+        const result = await clearNativeComposerReplyDraft({
+          roomId,
+          expectedDraftRevision,
+          threadRootEventId,
+        });
         if (result === 'unavailable') {
           throw new Error('Native reply draft clear is unavailable.');
         }
       },
-      [roomId]
+      [roomId, threadRootEventId]
     );
     const clearReplyDraftAfterSend = useCallback(
       async (expectedDraftRevision: number | undefined, onFailure: () => void) => {
@@ -276,6 +291,13 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const [gifSendError, setGifSendError] = useState<string>();
     const [sendingMessage, setSendingMessage] = useState(false);
     const [sendError, setSendError] = useState<string>();
+    const [composerPreviewUrl, setComposerPreviewUrl] = useState<string>();
+    const [composerPreview, setComposerPreview] = useState<NativeMediaPreview | null>(null);
+    const [composerPreviewDismissed, setComposerPreviewDismissed] = useState<string>();
+    const nativeRoomList = useNativeRoomListSnapshot();
+    const composerEncryptionStatus = nativeRoomList.rooms.find(
+      (nativeRoom) => nativeRoom.roomId === roomId
+    )?.encryptionStatus;
     const [pollAnchor, setPollAnchor] = useState<RectCords>();
     const [pollQuestion, setPollQuestion] = useState('');
     const [pollAnswers, setPollAnswers] = useState(['', '']);
@@ -292,7 +314,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       async (poll: ParsedPoll) => {
         // Snapshot both fields from the one visible Core draft before the
         // asynchronous send begins; no Jotai/local relation may diverge.
-        const sendRelation = nativeComposerSendRelation(replyDraft);
+        const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
         const owner = await sendPollCommandWithNativeDesktopOwner(
           {
             roomId,
@@ -316,7 +338,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
           throw new Error('Native Matrix session is required to send polls on desktop.');
         }
       },
-      [clearReplyDraftAfterSend, replyDraft, roomId, t]
+      [clearReplyDraftAfterSend, replyDraft, roomId, t, threadRootEventId]
     );
     const commands = useCommands(
       mx,
@@ -418,7 +440,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const isComposing = useComposingCheck();
 
     const getReplyRelation = useCallback(() => {
-      const { replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      const { replyTo, threadRoot } = nativeComposerSendRelation(replyDraft, threadRootEventId);
       if (!replyTo) return undefined;
 
       const relation: RelationTypeRelatesTo = {
@@ -433,7 +455,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       }
 
       return relation;
-    }, [replyDraft]);
+    }, [replyDraft, threadRootEventId]);
 
     useEffect(() => {
       const storedDraft = loadRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
@@ -463,12 +485,50 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       (value: Parameters<EditorChangeHandler>[0]) => {
         if (isEmptyEditor(editor)) {
           clearRoomDraft(window.localStorage, mx.getSafeUserId(), roomId);
+          setComposerPreviewUrl(undefined);
+          setComposerPreview(null);
           return;
         }
         saveRoomDraft(window.localStorage, mx.getSafeUserId(), roomId, value);
+        const nextUrl = trailingComposerPreviewUrl(toPlainText(editor.children, isMarkdown));
+        setComposerPreviewUrl(nextUrl);
+        if (!nextUrl) setComposerPreview(null);
       },
-      [mx, roomId, editor]
+      [mx, roomId, editor, isMarkdown]
     );
+
+    useEffect(() => {
+      if (!composerPreviewUrl) {
+        setComposerPreviewDismissed(undefined);
+        setComposerPreview(null);
+        return undefined;
+      }
+      if (
+        composerPreviewUrl === composerPreviewDismissed ||
+        composerEncryptionStatus !== 'not_encrypted'
+      ) {
+        if (composerPreviewUrl !== composerPreviewDismissed) {
+          setComposerPreview(null);
+        }
+        return undefined;
+      }
+      let cancelled = false;
+      const timer = window.setTimeout(() => {
+        void fetchMediaPreviewWithNativeOwner({
+          roomId,
+          url: composerPreviewUrl,
+          encryptionStatus: composerEncryptionStatus,
+          desktopAvailable: isSynaraDesktop(),
+          invoke: invokeDesktopWithAvailability,
+        }).then((preview) => {
+          if (!cancelled) setComposerPreview(preview);
+        });
+      }, COMPOSER_UNFURL_DEBOUNCE_MS);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+      };
+    }, [composerEncryptionStatus, composerPreviewDismissed, composerPreviewUrl, roomId]);
 
     const handleFileMetadata = useCallback(
       (fileItem: TUploadItem, metadata: TUploadMetadata) => {
@@ -503,7 +563,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     };
 
     const handleSendUpload = async (uploads: UploadSuccess[], options?: UploadSendOptions) => {
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(
+        replyDraft,
+        threadRootEventId
+      );
       const nativeInputs = await Promise.all(
         uploads.map(async (upload) => {
           const fileItem = selectedFiles.find((f) => f.file === upload.file);
@@ -644,7 +707,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       if (relation) {
         content['m.relates_to'] = relation;
       }
-      const sendRelation = nativeComposerSendRelation(replyDraft);
+      const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
       try {
         setSendingMessage(true);
         setSendError(undefined);
@@ -743,6 +806,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
       sendingMessage,
       selectedFiles,
       t,
+      threadRootEventId,
     ]);
 
     const handlePollAnswerChange: ChangeEventHandler<HTMLInputElement> = (evt) => {
@@ -779,7 +843,7 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
         return;
       }
       try {
-        const sendRelation = nativeComposerSendRelation(replyDraft);
+        const sendRelation = nativeComposerSendRelation(replyDraft, threadRootEventId);
         const owner = await sendPollWithNativeDesktopOwner({
           roomId,
           question: poll.question,
@@ -872,7 +936,10 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
     const handleGifSelect = async (gif: GifResult) => {
       setGifSending(true);
       setGifSendError(undefined);
-      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(replyDraft);
+      const { draftRevision, replyTo, threadRoot } = nativeComposerSendRelation(
+        replyDraft,
+        threadRootEventId
+      );
       try {
         await sendComposerGifWithNativeOwner(roomId, gif, replyTo, threadRoot);
         await clearReplyDraftAfterSend(draftRevision, () => {
@@ -1050,6 +1117,21 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 </Box>
               </div>
             )
+          }
+          linkPreview={
+            composerPreview &&
+            composerPreview.url === composerPreviewUrl &&
+            composerPreview.url !== composerPreviewDismissed ? (
+              <div style={{ padding: `0 ${config.space.S300} ${config.space.S200}` }}>
+                <NativeLinkUnfurlCard
+                  preview={composerPreview}
+                  onDismiss={() => {
+                    setComposerPreviewDismissed(composerPreview.url);
+                    setComposerPreview(null);
+                  }}
+                />
+              </div>
+            ) : undefined
           }
           leadingAction={
             <PopOut

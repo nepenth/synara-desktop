@@ -41,7 +41,7 @@ test('current-device verification uses authoritative snapshot metadata, never pe
 });
 
 test('verification availability copy distinguishes ready, absent, and unknown peer authority', () => {
-  assert.match(currentDeviceVerificationAvailabilityMessage(true), /Compare emoji/);
+  assert.match(currentDeviceVerificationAvailabilityMessage(true), /Compare emoji, number, or QR/);
   assert.match(currentDeviceVerificationAvailabilityMessage(false), /No eligible verified session/);
   assert.match(currentDeviceVerificationAvailabilityMessage(null), /could not check/);
 });
@@ -51,6 +51,24 @@ test('Devices does not leave Device Verification spinning after identity is know
   assert.match(devices, /offerCurrentVerification/);
   assert.match(devices, /VerifyCurrentDeviceTile/);
   assert.doesNotMatch(devices, /resolveDeviceVerificationStatus\(\s*currentDevice\?\.trust/);
+});
+
+test('Devices Security shows always-on room-key forwarding status, not a Switch or Developer Tools control', () => {
+  assert.match(devices, /title="Share room keys with my verified devices"/);
+  assert.match(devices, /nativeSession && \(/);
+  assert.match(devices, /your verified sessions/);
+  assert.match(devices, /Unverified logins stay undecryptable/);
+  assert.match(devices, />\s*On\s*</);
+  assert.doesNotMatch(devices, /set_room_key_forwarding_enabled/);
+  assert.doesNotMatch(devices, /settingsAtom/);
+  // No Switch in this file: verification and forwarding are status, not toggles.
+  assert.doesNotMatch(devices, /\bSwitch\b/);
+  const developerTools = readFileSync(
+    join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
+    'utf8'
+  );
+  assert.doesNotMatch(developerTools, /Share room keys with my verified devices/);
+  assert.doesNotMatch(developerTools, /automatic-room-key-forwarding/);
 });
 
 test('Devices only offers current-device verification from a loaded snapshot and surfaces load failures', () => {

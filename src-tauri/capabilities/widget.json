@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "widget",
+  "description": "Isolated experimental widget webview. No matrix_* commands, secret-store, or file-drop. core:default is deliberately withheld: core:event would let widget code listen to global app.emit broadcasts (timeline batches, notifications, agent actions) and emit forged events into the privileged main webview. The only IPC is the Rust-owned widget_bridge_post pump.",
+  "windows": ["widget-*"],
+  "remote": {
+    "urls": [
+      "https://*/*",
+      "http://127.0.0.1:*/*",
+      "http://localhost:*/*"
+    ]
+  },
+  "permissions": ["allow-widget-bridge-post"]
+}

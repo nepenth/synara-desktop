@@ -27,6 +27,7 @@
 mod activity_recovery;
 mod counts;
 mod delta;
+mod dm_avatar;
 mod error;
 mod filters;
 mod invite_avatars;
@@ -40,9 +41,12 @@ mod summary;
 pub use crate::dto::RoomEncryptionStatus;
 pub use activity_recovery::{room_activity_recovery_required, RoomActivityPreviousState};
 pub use counts::{
-    room_unread_presentation, RoomListBadgeCounts, RoomUnreadMembership, RoomUnreadPresentationDto,
+    client_total_unread_notifications, room_unread_presentation, sdk_joined_notification_checksum,
+    synara_joined_unread_presentation_sum, RoomListBadgeCounts, RoomUnreadMembership,
+    RoomUnreadPresentationDto, SdkUnreadChecksumRoom, SynaraUnreadChecksumRoom,
 };
 pub use delta::{RoomListDeltaBatch, RoomListDeltaOp, RoomListSnapshot};
+pub use dm_avatar::{dm_avatar_source, select_dm_avatar_source, DmAvatarSourceKind};
 pub use error::RoomListError;
 pub use filters::{
     filter_rooms_by_scope, partition_favorite_rooms, room_matches_scope, select_rooms_by_scope,

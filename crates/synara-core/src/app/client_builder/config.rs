@@ -134,6 +134,9 @@ pub struct ClientBuildConfig {
     cross_process_store_lock_holder: String,
     /// SQLite store passphrase bytes (32). Prefer `StoreKeyMaterial` from P2.2 vault.
     store_key: Option<StoreKeyMaterial>,
+    /// Persist and query the desktop local message index. Default on.
+    /// Off skips `EncryptedDirectory` and product queries (no CS `/search` fallback).
+    indexed_message_search: bool,
 }
 
 impl ClientBuildConfig {
@@ -156,6 +159,7 @@ impl ClientBuildConfig {
             handle_refresh_tokens: true,
             cross_process_store_lock_holder: DEFAULT_STORE_LOCK_HOLDER.to_owned(),
             store_key,
+            indexed_message_search: true,
         };
         cfg.validate()?;
         Ok(cfg)
@@ -185,6 +189,19 @@ impl ClientBuildConfig {
     pub fn with_store_key(mut self, key: StoreKeyMaterial) -> Self {
         self.store_key = Some(key);
         self
+    }
+
+    /// Enable or disable the local encrypted message index at client open.
+    ///
+    /// Changing this after a client is built has no effect; the store kind is
+    /// ClientBuilder-only. Product UI must reload the session.
+    pub fn with_indexed_message_search(mut self, enabled: bool) -> Self {
+        self.indexed_message_search = enabled;
+        self
+    }
+
+    pub fn indexed_message_search(&self) -> bool {
+        self.indexed_message_search
     }
 
     pub fn with_cross_process_store_lock_holder(
@@ -264,12 +281,16 @@ impl ClientBuildConfig {
             retry_limit: self.timeouts.retry_limit,
             handle_refresh_tokens: self.handle_refresh_tokens,
             store_key_present: self.store_key.is_some(),
+            indexed_message_search: self.indexed_message_search,
             store_layout: self.store_paths.layout(),
             approved_features: super::APPROVED_MATRIX_SDK_FEATURES
                 .iter()
                 .map(|s| (*s).to_owned())
                 .collect(),
             matrix_sdk_version: super::MATRIX_SDK_PIN_VERSION.to_owned(),
+            x509_verifier_configured: crate::app::x509::should_inject_verifier(
+                self.store_paths.account_root(),
+            ),
         }
     }
 
@@ -278,9 +299,14 @@ impl ClientBuildConfig {
         self.store_paths.state_dir()
     }
 
-    /// Absolute cache directory (event-cache separation).
+    /// Absolute event-cache directory.
     pub fn cache_store_path(&self) -> &Path {
         self.store_paths.cache_dir()
+    }
+
+    /// Absolute encrypted local-index directory (`search/` under the account root).
+    pub fn search_store_path(&self) -> &Path {
+        self.store_paths.search_dir()
     }
 
     pub fn account_root(&self) -> &Path {
@@ -307,9 +333,13 @@ pub struct ClientBuildPlan {
     pub retry_limit: usize,
     pub handle_refresh_tokens: bool,
     pub store_key_present: bool,
+    pub indexed_message_search: bool,
     pub store_layout: StoreLayout,
     pub approved_features: Vec<String>,
     pub matrix_sdk_version: String,
+    /// Whether this build would inject an X.509 verifier. Never PEM / CMS.
+    #[serde(default)]
+    pub x509_verifier_configured: bool,
 }
 
 #[cfg(test)]
@@ -349,5 +379,37 @@ mod tests {
         assert!(make_config()
             .with_cross_process_store_lock_holder("x".repeat(65))
             .is_err());
+    }
+
+    #[test]
+    fn indexed_message_search_defaults_on_and_plan_has_no_secrets() {
+        let config = make_config();
+        assert!(config.indexed_message_search());
+        let off = config.with_indexed_message_search(false);
+        assert!(!off.indexed_message_search());
+        let plan = off.plan();
+        let json = serde_json::to_string(&plan).expect("plan serializes");
+        assert!(!plan.indexed_message_search);
+        assert!(!json.contains("passphrase"));
+        assert!(!json.contains("password"));
+        assert!(!json.contains("/tmp/"));
+        assert!(!json.contains("search/"));
+        assert!(plan
+            .approved_features
+            .iter()
+            .any(|feature| feature == "experimental-search"));
+        assert_eq!(plan.store_layout.relative_search_dir, "search");
+    }
+
+    #[test]
+    fn plan_x509_flag_defaults_false_and_omits_pem() {
+        let config = make_config();
+        let plan = config.plan();
+        assert!(!plan.x509_verifier_configured);
+        let json = serde_json::to_string(&plan).expect("plan json");
+        assert!(json.contains("x509VerifierConfigured"));
+        assert!(!json.to_ascii_lowercase().contains("begin certificate"));
+        assert!(!json.to_ascii_lowercase().contains("private key"));
+        assert!(!json.contains("io.element.x509"));
     }
 }

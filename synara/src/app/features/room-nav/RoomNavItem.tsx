@@ -48,6 +48,8 @@ import { useRoomName } from '../../hooks/useRoomMeta';
 import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { setRoomFavoriteWithNativeOwner } from '../../components/nativeRoomFavoriteOwner';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
+import { LiveCallChip } from './LiveCallChip';
+import { useNativeUserStatus } from '../matrix-presence/nativeUserStatus';
 import * as css from './styles.css';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -279,6 +281,14 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
   const nativeRooms = useNativeRoomListSnapshot();
   const nativeRoom = nativeRooms.rooms.find((summary) => summary.roomId === room.roomId);
   const unread = unreadFromNativeRoom(nativeRoom);
+  const dmPeerId =
+    nativeRoom?.isDirect === true &&
+    typeof nativeRoom.directUserId === 'string' &&
+    nativeRoom.hasActiveCall !== true
+      ? nativeRoom.directUserId
+      : undefined;
+  const dmPeerStatus = useNativeUserStatus(dmPeerId);
+  const showDmInCall = Boolean(dmPeerId && dmPeerStatus?.inCall);
   const typingMember = useRoomTypingMember(room.roomId).filter(
     (receipt) => receipt.userId !== mx.getUserId()
   );
@@ -330,6 +340,10 @@ function RoomNavItemImpl({ room, selected, notificationMode, linkPath }: RoomNav
                 {roomName}
               </Text>
             </Box>
+            {nativeRoom?.hasActiveCall && (
+              <LiveCallChip participantCount={nativeRoom.activeCallParticipantCount} />
+            )}
+            {showDmInCall && !nativeRoom?.hasActiveCall && <LiveCallChip participantCount={1} />}
             {!optionsVisible && !unread && !selected && typingMember.length > 0 && (
               <Badge size="300" variant="Secondary" fill="Soft" radii="Pill" outlined>
                 <TypingIndicator size="300" disableAnimation />

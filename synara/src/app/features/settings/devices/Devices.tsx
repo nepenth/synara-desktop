@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Button, Text, IconButton, Icon, Icons, Scroll, Spinner } from 'folds';
+import { Badge, Box, Button, Text, IconButton, Icon, Icons, Scroll, Spinner } from 'folds';
 import { Page, PageContent, PageHeader } from '../../../components/page';
 import { SequenceCard } from '../../../components/sequence-card';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
@@ -23,6 +23,7 @@ import { BackupRestoreTile } from '../../../components/BackupRestore';
 import { isNativeMatrixSession } from '../../verification/nativeVerification';
 import { canOfferNativeDeviceVerification } from '../../cross-signing/nativeCrossSigning';
 import { NativeSecretStorageTile } from '../../../components/SecretStorage';
+import { X509IdentityCard } from './X509IdentityCard';
 
 function DevicesPlaceholder() {
   return (
@@ -114,6 +115,19 @@ export function Devices({ requestClose }: DevicesProps) {
                       </>
                     }
                   />
+                  {nativeSession && (
+                    <SettingTile
+                      title="Share room keys with my verified devices"
+                      description="This session automatically shares historical room keys with your verified sessions, including ones verified with emoji or QR. Unverified logins stay undecryptable until you verify them or restore a backup."
+                      after={
+                        <Badge variant="Success" fill="Soft" radii="Pill" outlined>
+                          <Text as="span" size="L400">
+                            On
+                          </Text>
+                        </Badge>
+                      }
+                    />
+                  )}
                   {snapshotFailed && (
                     <InfoCard
                       variant="Critical"
@@ -148,6 +162,16 @@ export function Devices({ requestClose }: DevicesProps) {
                     />
                   )}
                 </SequenceCard>
+                {nativeSession && (
+                  <SequenceCard
+                    className={SequenceCardStyle}
+                    variant="SurfaceVariant"
+                    direction="Column"
+                    gap="400"
+                  >
+                    <X509IdentityCard />
+                  </SequenceCard>
+                )}
                 {nativeSession && (
                   <SequenceCard
                     className={SequenceCardStyle}

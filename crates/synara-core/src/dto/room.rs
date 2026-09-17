@@ -63,6 +63,11 @@ pub struct RoomHero {
     pub user_id: UserId,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub display_name: Option<String>,
+    /// MSC4426 `m.call` on this hero when projected. Distinct from room live-call.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub in_call: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub status_emoji: Option<String>,
 }
 
 /// Authoritative room-encryption knowledge carried across product boundaries.
@@ -94,10 +99,16 @@ pub struct RoomSummary {
     pub avatar_url: Option<String>,
     pub membership: Membership,
     pub is_direct: bool,
+    /// Direct-target user id for DM in-call chrome. Local `direct_targets` only.
+    pub direct_user_id: Option<UserId>,
     /// True when the room is a Matrix space (`m.space`).
     pub is_space: bool,
     /// True when the room is a Matrix voice room (`m.room.create` type `m.call`).
     pub is_call: bool,
+    /// True when MatrixRTC membership says a call is live. Distinct from `is_call`.
+    pub has_active_call: bool,
+    /// Unique live-call participants, capped. Zero when `has_active_call` is false.
+    pub active_call_participant_count: u32,
     /// Account-data favorite (m.tag `m.favourite`) projection.
     pub is_favorite: bool,
     /// Account-data low-priority (m.tag `m.lowpriority`) projection.
@@ -105,6 +116,9 @@ pub struct RoomSummary {
     /// Optional product folder / section label (not a Matrix space id).
     pub folder_id: Option<String>,
     pub encryption_status: RoomEncryptionStatus,
+    /// True when the room is MSC4362 `StateEncrypted`. The lock still uses
+    /// [`RoomEncryptionStatus::Encrypted`]; this flag is optional chrome.
+    pub state_encrypted: bool,
     /// Stable join-rule string (e.g. `public`, `invite`); not an SDK enum object.
     pub join_rule: Option<String>,
     pub unread_count: u32,
@@ -135,8 +149,12 @@ struct RoomSummarySerialize<'a> {
     avatar_url: &'a Option<String>,
     membership: Membership,
     is_direct: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    direct_user_id: &'a Option<UserId>,
     is_space: bool,
     is_call: bool,
+    has_active_call: bool,
+    active_call_participant_count: u32,
     is_favorite: bool,
     is_low_priority: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -145,6 +163,8 @@ struct RoomSummarySerialize<'a> {
     /// authoritative tri-state so Core can never emit contradictory fields.
     is_encrypted: bool,
     encryption_status: RoomEncryptionStatus,
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    state_encrypted: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     join_rule: &'a Option<String>,
     unread_count: u32,
@@ -175,13 +195,17 @@ impl Serialize for RoomSummary {
             avatar_url: &self.avatar_url,
             membership: self.membership,
             is_direct: self.is_direct,
+            direct_user_id: &self.direct_user_id,
             is_space: self.is_space,
             is_call: self.is_call,
+            has_active_call: self.has_active_call,
+            active_call_participant_count: self.active_call_participant_count,
             is_favorite: self.is_favorite,
             is_low_priority: self.is_low_priority,
             folder_id: &self.folder_id,
             is_encrypted: self.encryption_status.is_encrypted(),
             encryption_status: self.encryption_status,
+            state_encrypted: self.state_encrypted,
             join_rule: &self.join_rule,
             unread_count: self.unread_count,
             highlight_count: self.highlight_count,
@@ -210,9 +234,15 @@ struct RoomSummaryWire {
     membership: Membership,
     is_direct: bool,
     #[serde(default)]
+    direct_user_id: Option<UserId>,
+    #[serde(default)]
     is_space: bool,
     #[serde(default)]
     is_call: bool,
+    #[serde(default)]
+    has_active_call: bool,
+    #[serde(default)]
+    active_call_participant_count: u32,
     #[serde(default)]
     is_favorite: bool,
     #[serde(default)]
@@ -221,6 +251,8 @@ struct RoomSummaryWire {
     folder_id: Option<String>,
     is_encrypted: bool,
     encryption_status: RoomEncryptionStatus,
+    #[serde(default)]
+    state_encrypted: bool,
     #[serde(default)]
     join_rule: Option<String>,
     unread_count: u32,
@@ -251,6 +283,11 @@ impl<'de> Deserialize<'de> for RoomSummary {
                 "room encryption fields are inconsistent",
             ));
         }
+        if wire.state_encrypted && !wire.encryption_status.is_encrypted() {
+            return Err(serde::de::Error::custom(
+                "stateEncrypted requires encryptionStatus encrypted",
+            ));
+        }
         Ok(Self {
             room_id: wire.room_id,
             name: wire.name,
@@ -258,12 +295,16 @@ impl<'de> Deserialize<'de> for RoomSummary {
             avatar_url: wire.avatar_url,
             membership: wire.membership,
             is_direct: wire.is_direct,
+            direct_user_id: wire.direct_user_id,
             is_space: wire.is_space,
             is_call: wire.is_call,
+            has_active_call: wire.has_active_call,
+            active_call_participant_count: wire.active_call_participant_count,
             is_favorite: wire.is_favorite,
             is_low_priority: wire.is_low_priority,
             folder_id: wire.folder_id,
             encryption_status: wire.encryption_status,
+            state_encrypted: wire.state_encrypted,
             join_rule: wire.join_rule,
             unread_count: wire.unread_count,
             highlight_count: wire.highlight_count,

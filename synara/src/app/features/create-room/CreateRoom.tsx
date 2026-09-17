@@ -45,6 +45,8 @@ import {
   normalizeRoomJoinRulePresentation,
   type RoomJoinRulePresentation,
 } from '../matrix-dto/roomJoinRule';
+import { useSetting } from '../../state/hooks/settings';
+import { settingsAtom } from '../../state/settings';
 
 const getCreateRoomAccessToIcon = (access: CreateRoomAccess, type?: CreateRoomType) => {
   const isVoiceRoom = type === CreateRoomType.VoiceRoom;
@@ -98,6 +100,8 @@ export function CreateRoomForm({
     useAdditionalCreators();
   const [federation, setFederation] = useState(true);
   const [encryption, setEncryption] = useState(false);
+  const [encryptStateEvents, setEncryptStateEvents] = useState(true);
+  const [encryptedStateEventsSetting] = useSetting(settingsAtom, 'encryptedStateEvents');
   const [knock, setKnock] = useState(false);
   const [advance, setAdvance] = useState(false);
 
@@ -145,6 +149,13 @@ export function CreateRoomForm({
     let roomType: RoomType | undefined;
     if (type === CreateRoomType.VoiceRoom) roomType = RoomType.Call;
 
+    const encrypted = publicRoom ? false : encryption;
+    const encryptState =
+      encrypted &&
+      encryptedStateEventsSetting &&
+      type !== CreateRoomType.VoiceRoom &&
+      encryptStateEvents;
+
     create({
       version: selectedRoomVersion,
       type: roomType,
@@ -153,7 +164,8 @@ export function CreateRoomForm({
       name: roomName,
       topic: roomTopic || undefined,
       aliasLocalPart: publicRoom ? aliasLocalPart : undefined,
-      encryption: publicRoom ? false : encryption,
+      encryption: encrypted,
+      encryptStateEvents: encryptState,
       knock: roomKnock,
       allowFederation: federation,
       additionalCreators: allowAdditionalCreators ? additionalCreators : undefined,
@@ -262,6 +274,20 @@ export function CreateRoomForm({
                   />
                 }
               />
+              {encryptedStateEventsSetting && encryption && type !== CreateRoomType.VoiceRoom && (
+                <SettingTile
+                  title="Encrypt state events"
+                  description="Experimental MSC4362. Older clients will not see this room's name, topic, or avatar. Agent widgets that need plaintext custom state will break. Cannot be turned off later. Call rooms cannot opt in."
+                  after={
+                    <Switch
+                      variant="Primary"
+                      value={encryptStateEvents}
+                      onChange={setEncryptStateEvents}
+                      disabled={disabled}
+                    />
+                  }
+                />
+              )}
             </SequenceCard>
             {advance && (allowKnock || allowKnockRestricted) && (
               <SequenceCard

@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-set-encrypted-state-events-setting"
+description = "Enables the matrix_set_encrypted_state_events_setting command without any pre-configured scope."
+commands.allow = ["matrix_set_encrypted_state_events_setting"]
+
+[[permission]]
+identifier = "deny-matrix-set-encrypted-state-events-setting"
+description = "Denies the matrix_set_encrypted_state_events_setting command without any pre-configured scope."
+commands.deny = ["matrix_set_encrypted_state_events_setting"]

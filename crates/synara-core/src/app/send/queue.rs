@@ -1,8 +1,9 @@
 //! Outbound text send queue + local-echo state (P6.1 harness foundation).
 //!
 //! Tracks user-composed plain-text sends with generation stamps and
-//! [`LocalEchoState`]. Does **not** call SDK `Room::send` yet — host will
-//! drive network later. No dual-backend, no tokens in errors.
+//! [`LocalEchoState`]. Product code projects this from `RoomSendQueue`
+//! / `SendHandle` updates (including [`LocalEchoState::Wedged`]). No
+//! dual-backend, no tokens in errors.
 
 use std::collections::HashMap;
 
@@ -116,6 +117,52 @@ impl SendQueue {
         Ok(self.items.get(&local_txn_id).expect("just inserted"))
     }
 
+    /// Project a `RoomSendQueue` local echo using the SDK transaction id.
+    pub fn enqueue_text_with_txn(
+        &mut self,
+        room_id: impl Into<String>,
+        body: impl Into<String>,
+        local_txn_id: impl Into<String>,
+    ) -> Result<&OutboundTextMessage, SendError> {
+        let room_id = room_id.into().trim().to_owned();
+        if room_id.is_empty() || !room_id.starts_with('!') {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p6.1-invalid-room-id",
+            });
+        }
+        let body = body.into();
+        if body.is_empty() {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p6.1-empty-body",
+            });
+        }
+        if body.len() > 65_536 {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p6.1-body-too-large",
+            });
+        }
+        let local_txn_id = local_txn_id.into();
+        if local_txn_id.is_empty() {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p6.1-invalid-txn-id",
+            });
+        }
+        if self.items.contains_key(&local_txn_id) {
+            return Ok(self.items.get(&local_txn_id).expect("contains"));
+        }
+        let item = OutboundTextMessage {
+            local_txn_id: local_txn_id.clone(),
+            room_id,
+            session_generation: self.session_generation,
+            body,
+            state: LocalEchoState::Sending,
+            failure_diagnostic_id: None,
+        };
+        self.order.push(local_txn_id.clone());
+        self.items.insert(local_txn_id.clone(), item);
+        Ok(self.items.get(&local_txn_id).expect("just inserted"))
+    }
+
     pub fn get(&self, local_txn_id: &str) -> Option<&OutboundTextMessage> {
         self.items.get(local_txn_id)
     }
@@ -170,6 +217,24 @@ impl SendQueue {
         Ok(item)
     }
 
+    /// Mark send wedged (unrecoverable `RoomSendQueue` error). Not terminal:
+    /// later sends in this room wait until unwedge or abort.
+    pub fn mark_wedged(
+        &mut self,
+        local_txn_id: &str,
+        diagnostic_id: &'static str,
+    ) -> Result<&OutboundTextMessage, SendError> {
+        let item = self.get_mut_checked(local_txn_id)?;
+        if !matches!(item.state, LocalEchoState::Sending | LocalEchoState::Failed) {
+            return Err(SendError::Invalid {
+                diagnostic_id: "p6.1-mark-wedged-invalid-state",
+            });
+        }
+        item.state = LocalEchoState::Wedged;
+        item.failure_diagnostic_id = Some(diagnostic_id);
+        Ok(item)
+    }
+
     /// Cancel an in-flight or failed send (user abort).
     pub fn cancel(&mut self, local_txn_id: &str) -> Result<&OutboundTextMessage, SendError> {
         let item = self.get_mut_checked(local_txn_id)?;
@@ -186,7 +251,7 @@ impl SendQueue {
     /// Retry a Failed item → Sending.
     pub fn retry(&mut self, local_txn_id: &str) -> Result<&OutboundTextMessage, SendError> {
         let item = self.get_mut_checked(local_txn_id)?;
-        if item.state != LocalEchoState::Failed {
+        if !matches!(item.state, LocalEchoState::Failed | LocalEchoState::Wedged) {
             return Err(SendError::Invalid {
                 diagnostic_id: "p6.1-retry-not-failed",
             });
@@ -229,7 +294,7 @@ impl SendQueue {
     pub fn retire_generation(&mut self, new_generation: u64) {
         self.session_generation = new_generation;
         for item in self.items.values_mut() {
-            if item.state == LocalEchoState::Sending {
+            if matches!(item.state, LocalEchoState::Sending | LocalEchoState::Wedged) {
                 item.state = LocalEchoState::Cancelled;
                 item.failure_diagnostic_id = Some("p6.1-stale-generation-cancelled");
             }

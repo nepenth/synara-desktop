@@ -107,8 +107,17 @@ pub async fn matrix_send_attachment(
     let size_bytes = bytes.len() as u64;
     let kind = attachment_kind_for_mime(&mime_type);
     let media_handle_id = format!("native-staged:{filename}");
+    let enqueue = AttachmentEnqueue {
+        room_id: room_id.to_string(),
+        kind,
+        media_handle_id,
+        file_name: Some(filename.clone()),
+        caption: caption.clone(),
+        mime_type: Some(mime_type.to_string()),
+        size_bytes: Some(size_bytes),
+    };
 
-    let (room, session_generation, local_txn_id) = {
+    let (room, session_generation) = {
         let mut session = state.session.lock().await;
         let active = require_send_session_mut(session.as_mut())?;
         let room = active.client.get_room(&room_id).ok_or_else(|| {
@@ -118,60 +127,82 @@ pub async fn matrix_send_attachment(
                 "v-send.1-attachment-room-not-found",
             )
         })?;
-        let session_generation = active.attachments.session_generation();
-        let item = active
-            .attachments
-            .enqueue(AttachmentEnqueue {
-                room_id: room_id.to_string(),
-                kind,
-                media_handle_id,
-                file_name: Some(filename.clone()),
-                caption: caption.clone(),
-                mime_type: Some(mime_type.to_string()),
-                size_bytes: Some(size_bytes),
-            })
-            .map_err(|error| map_attachment_error(error.diagnostic_id()))?;
-        (room, session_generation, item.local_txn_id.clone())
+        if active.attachments.active_count() >= synara_core::app::send::MAX_ACTIVE_ATTACHMENTS {
+            return Err(map_attachment_error("p7.4-active-attachment-cap"));
+        }
+        (room, active.attachments.session_generation())
     };
 
-    let send_result = async {
-        let config = synara_core::app::send::attachment_config(
-            caption,
-            formatted_caption,
-            reply_to,
-            thread_root,
-            transaction_id,
-            mention_user_ids,
-            mention_room.unwrap_or(false),
-        )
-        .map_err(|_| matrix_sdk::Error::InsufficientData)?;
-        let response = room
-            .send_attachment(&filename, &mime_type, bytes, config)
-            .await?;
-        Ok::<_, matrix_sdk::Error>(response.event_id.to_string())
-    }
-    .await;
+    let config = match synara_core::app::send::attachment_config(
+        caption,
+        formatted_caption,
+        reply_to,
+        thread_root,
+        transaction_id,
+        mention_user_ids,
+        mention_room.unwrap_or(false),
+    ) {
+        Ok(config) => config,
+        Err(diagnostic) => {
+            return Err(map_attachment_error(diagnostic));
+        }
+    };
 
-    let mut session = state.session.lock().await;
-    if let Some(active) = session.as_mut() {
-        if active.attachments.session_generation() == session_generation {
-            if send_result.is_ok() {
-                let _ = active.attachments.mark_sent(&local_txn_id);
-            } else {
+    let mut queued = match synara_core::app::send::enqueue_attachment_via_room_queue(
+        &room,
+        &filename,
+        mime_type.clone(),
+        bytes,
+        config,
+    )
+    .await
+    {
+        Ok(session) => session,
+        Err(error) => {
+            return Err(map_attachment_error(error.diagnostic_id));
+        }
+    };
+    let local_txn_id = queued.transaction_id.clone();
+    {
+        let mut session = state.session.lock().await;
+        if let Some(active) = session.as_mut() {
+            if active.attachments.session_generation() == session_generation {
                 let _ = active
                     .attachments
-                    .mark_failed(&local_txn_id, "v-send.1-attachment-sdk-failed");
+                    .enqueue_with_txn(enqueue, local_txn_id.clone());
             }
         }
     }
 
-    let event_id = send_result.map_err(|_| {
-        MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix attachment could not be sent.",
-            "v-send.1-attachment-sdk-failed",
-        )
-    })?;
+    let send_result = synara_core::app::send::wait_for_queued_send(&mut queued).await;
+
+    let mut session = state.session.lock().await;
+    if let Some(active) = session.as_mut() {
+        if active.attachments.session_generation() == session_generation {
+            match &send_result {
+                Ok(_) => {
+                    let _ = active.attachments.mark_sent(&local_txn_id);
+                }
+                Err(error) if error.wedged => {
+                    let _ = active
+                        .attachments
+                        .mark_wedged(&local_txn_id, error.diagnostic_id);
+                }
+                Err(error) if error.cancelled => {
+                    let _ = active.attachments.cancel(&local_txn_id);
+                }
+                Err(error) => {
+                    let _ = active
+                        .attachments
+                        .mark_failed(&local_txn_id, error.diagnostic_id);
+                }
+            }
+        }
+    }
+
+    let event_id = send_result
+        .map(|ack| ack.event_id)
+        .map_err(|error| map_attachment_error(error.diagnostic_id))?;
     Ok(MatrixSendAttachmentResult {
         room_id: room_id.to_string(),
         event_id,
@@ -363,19 +394,6 @@ pub(crate) fn edit_message_content(
     })
 }
 
-pub(super) async fn send_message_to_room(
-    room: &Room,
-    content: RoomMessageEventContent,
-    txn_id: Option<OwnedTransactionId>,
-) -> matrix_sdk::Result<String> {
-    let send = room.send(content);
-    let result = match txn_id {
-        Some(txn_id) => send.with_transaction_id(txn_id).await?,
-        None => send.await?,
-    };
-    Ok(result.response.event_id.to_string())
-}
-
 pub(super) fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     match diagnostic_id {
         "v-send.1-attachment-empty"
@@ -402,6 +420,11 @@ pub(super) fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCom
                 diagnostic_id,
             )
         }
+        "d0.4-send-queue-wedged" => MatrixAuthCommandError::new(
+            "Unknown",
+            "The native Matrix send queue is wedged in this room.",
+            "d0.4-send-queue-wedged",
+        ),
         _ => MatrixAuthCommandError::new(
             "Unknown",
             "The native Matrix attachment could not be sent.",

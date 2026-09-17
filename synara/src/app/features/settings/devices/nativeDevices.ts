@@ -24,6 +24,7 @@ export const subscribeNativeDeviceUpdates = (
 export type NativeDeviceTrust =
   | 'verified'
   | 'verified_locally_only'
+  | 'verified_by_certificate'
   | 'unverified'
   | 'no_encryption'
   | 'dehydrated';
@@ -90,17 +91,21 @@ const optionalTimestamp = (value: unknown): number | undefined => {
 
 const parseTrust = (value: unknown): NativeDeviceTrust | undefined => {
   if (value === 'verified' || value === 'unverified' || value === 'dehydrated') return value;
-  if (value === 'verified_locally_only') return value;
+  if (value === 'verified_locally_only' || value === 'verified_by_certificate') return value;
   if (value === 'no_encryption' || value === 'unsupported') return 'no_encryption';
   return undefined;
 };
 
 export const nativeDeviceTrustLabel = (trust: NativeDeviceTrust): string => {
   if (trust === 'verified' || trust === 'verified_locally_only') return 'Verified';
+  if (trust === 'verified_by_certificate') return 'Verified (certificate)';
   if (trust === 'unverified') return 'Unverified';
   if (trust === 'dehydrated') return 'Backup device';
   return 'Not encrypted';
 };
+
+export const isNativeDeviceSelectableForLogout = (device: NativeDevice): boolean =>
+  !device.isCurrent && device.trust !== 'dehydrated';
 
 const parseOwnVerification = (value: unknown): NativeOwnDeviceVerification | undefined => {
   if (value === 'unknown' || value === 'unverified' || value === 'verified') return value;

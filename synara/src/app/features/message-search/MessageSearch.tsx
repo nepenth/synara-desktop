@@ -9,6 +9,7 @@ import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { _SearchPathSearchParams } from '../../pages/paths';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
+import { isNativeMatrixSession } from '../verification/nativeVerification';
 import { SequenceCard } from '../../components/sequence-card';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { ScrollTopContainer } from '../../components/scroll-top-container';
@@ -59,6 +60,8 @@ export function MessageSearch({
   const allRooms = useRooms(mx, allRoomsAtom, mDirects);
   const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
   const [legacyUsernameColor] = useSetting(settingsAtom, 'legacyUsernameColor');
+  const [indexedMessageSearch] = useSetting(settingsAtom, 'indexedMessageSearch');
+  const nativeSession = isNativeMatrixSession();
 
   const [hour24Clock] = useSetting(settingsAtom, 'hour24Clock');
   const [dateFormatString] = useSetting(settingsAtom, 'dateFormatString');
@@ -91,16 +94,23 @@ export function MessageSearch({
 
     return {
       term: searchPathSearchParams.term,
-      order: searchPathSearchParams.order ?? 'recent',
+      order: nativeSession ? 'rank' : searchPathSearchParams.order ?? 'recent',
       rooms: searchParamRooms ?? defaultRooms,
       senders: searchParamsSenders ?? senders,
     };
-  }, [searchPathSearchParams, searchParamRooms, searchParamsSenders, rooms, senders]);
+  }, [
+    searchPathSearchParams,
+    searchParamRooms,
+    searchParamsSenders,
+    rooms,
+    senders,
+    nativeSession,
+  ]);
 
   const searchMessages = useMessageSearch(msgSearchParams);
 
   const { status, data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    enabled: !!msgSearchParams.term,
+    enabled: !!msgSearchParams.term && (!nativeSession || indexedMessageSearch),
     queryKey: [
       'search',
       msgSearchParams.term,
@@ -254,6 +264,12 @@ export function MessageSearch({
         <SearchInput
           active={!!msgSearchParams.term}
           loading={status === 'pending'}
+          disabled={nativeSession && !indexedMessageSearch}
+          disabledReason={
+            nativeSession && !indexedMessageSearch
+              ? 'Indexed message search is off. Turn it on in Settings → General and reload the session. There is no homeserver search fallback.'
+              : undefined
+          }
           searchInputRef={searchInputRef}
           onSearch={handleSearch}
           onReset={handleSearchClear}
@@ -268,6 +284,7 @@ export function MessageSearch({
           onGlobalChange={handleGlobalChange}
           order={msgSearchParams.order}
           onOrderChange={handleOrderChange}
+          relevanceOnly={nativeSession}
           type={searchPathSearchParams.type}
           onTypeChange={handleTypeChange}
           senders={searchParamsSenders}

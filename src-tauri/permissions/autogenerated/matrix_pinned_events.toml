@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-pinned-events"
+description = "Enables the matrix_pinned_events command without any pre-configured scope."
+commands.allow = ["matrix_pinned_events"]
+
+[[permission]]
+identifier = "deny-matrix-pinned-events"
+description = "Denies the matrix_pinned_events command without any pre-configured scope."
+commands.deny = ["matrix_pinned_events"]

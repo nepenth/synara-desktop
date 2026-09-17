@@ -38,7 +38,11 @@ use crate::app::members::{
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_CREATE_EVENT_TYPE,
     ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
-use crate::app::room_ops::{build_room_create_request, MatrixRoomCreateRequest};
+use crate::app::room_ops::{
+    build_room_create_request, encrypted_state_events_setting_enabled,
+    power_level_tags_readback_source, room_encryption_enable_write, MatrixRoomCreateRequest,
+    PowerLevelTagsReadbackSource, RoomEncryptionEnableWrite,
+};
 use crate::app::spaces::{
     remove_space_child, reparent_restricted_join_allow, set_space_child, snapshot_space_children,
     snapshot_space_hierarchy, snapshot_space_parents, NativeRestrictedJoinReparentResult,
@@ -49,9 +53,11 @@ use crate::app::user_profile::MatrixProfileWriteResult;
 use crate::dto::{Membership, RoomMember as ProductRoomMember};
 
 use super::{
-    MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleUpdate,
+    retention_snapshot, MatrixRoomDirectoryVisibilityResult,
+    MatrixRoomDirectoryVisibilityWriteResult, MatrixRoomJoinRuleSnapshot,
+    MatrixRoomRetentionSnapshot, NativeRoomJoinRuleUpdate,
 };
+use crate::app::media_cache::shortest_joined_room_max_lifetime;
 
 /// Shell-supplied sink for join-rule updates. Desktop maps this to the
 /// existing Tauri event; iOS can map it to a UniFFI callback later.
@@ -82,6 +88,7 @@ pub struct NativeRoomJoinRuleOwner {
     retired: Arc<AtomicBool>,
     _handler: EventHandlerDropGuard,
     invite_avatars: Arc<AsyncMutex<crate::app::room_list::InviteAvatarHandles>>,
+    preview_cache: Arc<AsyncMutex<crate::app::media::MediaPreviewCache>>,
 }
 
 impl NativeRoomJoinRuleOwner {
@@ -136,6 +143,9 @@ impl NativeRoomJoinRuleOwner {
             invite_avatars: Arc::new(AsyncMutex::new(
                 crate::app::room_list::InviteAvatarHandles::new(session_generation),
             )),
+            preview_cache: Arc::new(AsyncMutex::new(crate::app::media::MediaPreviewCache::new(
+                session_generation,
+            ))),
         })
     }
 
@@ -432,6 +442,62 @@ impl NativeRoomJoinRuleOwner {
         Ok(MatrixProfileWriteResult { status: "ok" })
     }
 
+    /// Generic leftover state write. SDK `send_state_event_raw` encrypts
+    /// eligible types when the room is `StateEncrypted`.
+    pub async fn send_state_event(
+        &self,
+        room_id: &str,
+        event_type: &str,
+        state_key: &str,
+        content: serde_json::Value,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let event_type = parse_state_event_type(event_type)?;
+        let state_key = parse_state_event_key(state_key)?;
+        validate_state_event_content(&content)?;
+        let room = self.profile_room(room_id)?;
+        room.send_state_event_raw(event_type, state_key, content)
+            .await
+            .map_err(|_| "v-rooms-state-event-send-failed")?;
+        Ok(MatrixProfileWriteResult { status: "ok" })
+    }
+
+    /// Enable message encryption and/or opt an already-E2EE room into
+    /// MSC4362. Setting-off and call rooms never write the flag. Already
+    /// state-encrypted rooms are a no-op. `enable_encryption_with_state_event_encryption`
+    /// is not used for upgrades (it no-ops when `is_encrypted()`).
+    pub async fn enable_room_encrypted_state(
+        &self,
+        room_id: &str,
+        encrypt_state_events: bool,
+    ) -> Result<MatrixProfileWriteResult, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-join-rule-requires-session");
+        }
+        let room = self.profile_room(room_id)?;
+        let current = room
+            .latest_encryption_state()
+            .await
+            .map_err(|_| "v-rooms-encryption-state-unavailable")?;
+        match room_encryption_enable_write(
+            current.is_encrypted(),
+            current.is_state_encrypted(),
+            encrypt_state_events,
+            encrypted_state_events_setting_enabled(),
+            room.is_call(),
+        ) {
+            RoomEncryptionEnableWrite::NoOp => Ok(MatrixProfileWriteResult { status: "ok" }),
+            RoomEncryptionEnableWrite::Send(content) => {
+                room.send_state_event_raw("m.room.encryption", "", content)
+                    .await
+                    .map_err(|_| "v-rooms-encryption-enable-failed")?;
+                Ok(MatrixProfileWriteResult { status: "ok" })
+            }
+        }
+    }
+
     pub async fn leave(&self, room_id: &str) -> Result<(), &'static str> {
         if self.retired.load(Ordering::Acquire) {
             return Err("v-send.r-room-profile-join-rule-requires-session");
@@ -482,7 +548,7 @@ impl NativeRoomJoinRuleOwner {
         user_id: &str,
         reason: Option<String>,
     ) -> Result<(), &'static str> {
-        // matrix-sdk 0.18's invite_user_by_id API does not expose a reason field.
+        // matrix-sdk 0.19's invite_user_by_id API does not expose a reason field.
         let _reason = normalize_moderation_reason(reason);
         let room = self.moderation_room(room_id)?;
         let user_id = parse_room_moderation_user_id(user_id)?;
@@ -570,18 +636,7 @@ impl NativeRoomJoinRuleOwner {
         room.send_state_event_raw(event_type, "", content.clone())
             .await
             .map_err(|_| "v-rooms-power-levels-send-failed")?;
-        let readback = self
-            .client
-            .send(get_state_event_for_key::v3::Request::new(
-                room_id.clone(),
-                StateEventType::from(event_type),
-                String::new(),
-            ))
-            .await
-            .map_err(|_| "v-rooms-power-levels-readback-failed")?
-            .into_content()
-            .deserialize_as_unchecked::<serde_json::Value>()
-            .map_err(|_| "v-rooms-power-levels-readback-malformed")?;
+        let readback = read_power_level_writeback(&room, event_type).await?;
         if self.retired.load(Ordering::Acquire) {
             return Err("v-rooms-power-levels-stale-session-generation");
         }
@@ -929,6 +984,69 @@ impl NativeRoomJoinRuleOwner {
         })
     }
 
+    pub async fn get_retention(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+    ) -> Result<MatrixRoomRetentionSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-room-profile-retention-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-room-profile-retention-stale-generation");
+        }
+        let room_id = parse_retention_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-room-profile-retention-room-not-found")?;
+        // SDK maps unimplemented retention-config to `Ok(None)` (unknown, not forever).
+        let (max_lifetime, min_lifetime) = match room.effective_retention().await {
+            Ok(Some(policy)) => (policy.max_lifetime(), policy.min_lifetime()),
+            Ok(None) => (None, None),
+            Err(_) => return Err("v-send.r-room-profile-retention-sdk-failed"),
+        };
+        let shortest = shortest_joined_room_max_lifetime(&self.client).await;
+        Ok(retention_snapshot(
+            room_id.to_string(),
+            self.session_generation,
+            max_lifetime,
+            min_lifetime,
+            shortest,
+        ))
+    }
+
+    pub async fn get_media_preview(
+        &self,
+        room_id: &str,
+        session_generation: u64,
+        url: &str,
+        ts: Option<u64>,
+    ) -> Result<crate::app::media::MatrixMediaPreviewSnapshot, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("v-send.r-media-preview-requires-session");
+        }
+        if session_generation == 0 || session_generation != self.session_generation {
+            return Err("v-send.r-media-preview-stale-generation");
+        }
+        let room_id = parse_preview_room_id(room_id)?;
+        let room = self
+            .client
+            .get_room(&room_id)
+            .ok_or("v-send.r-media-preview-room-not-found")?;
+        crate::app::media::room_media_preview(
+            &self.client,
+            room.encryption_state(),
+            Arc::clone(&self.invite_avatars),
+            Arc::clone(&self.preview_cache),
+            room_id.as_str(),
+            self.session_generation,
+            url,
+            ts,
+        )
+        .await
+    }
+
     pub async fn set_directory_visibility(
         &self,
         room_id: &str,
@@ -1025,6 +1143,60 @@ async fn read_room_state_event(
             serde_json::to_value(event).map_err(|_| "v-rooms-members-read-state-malformed")
         })
         .transpose()
+}
+
+async fn read_power_level_writeback(
+    room: &Room,
+    event_type: &str,
+) -> Result<serde_json::Value, &'static str> {
+    let use_store = event_type == ROOM_POWER_LEVEL_TAGS_EVENT_TYPE
+        && power_level_tags_readback_source(room.encryption_state().is_state_encrypted())
+            == PowerLevelTagsReadbackSource::Store;
+    if use_store {
+        return read_room_state_content(room, event_type)
+            .await?
+            .ok_or("v-rooms-power-levels-readback-failed");
+    }
+    room.client()
+        .send(get_state_event_for_key::v3::Request::new(
+            room.room_id().to_owned(),
+            StateEventType::from(event_type),
+            String::new(),
+        ))
+        .await
+        .map_err(|_| "v-rooms-power-levels-readback-failed")?
+        .into_content()
+        .deserialize_as_unchecked::<serde_json::Value>()
+        .map_err(|_| "v-rooms-power-levels-readback-malformed")
+}
+
+fn parse_state_event_type(event_type: &str) -> Result<&str, &'static str> {
+    let event_type = event_type.trim();
+    if event_type.is_empty()
+        || event_type.len() > 255
+        || event_type.chars().any(char::is_whitespace)
+    {
+        return Err("v-rooms-state-event-invalid-type");
+    }
+    Ok(event_type)
+}
+
+fn parse_state_event_key(state_key: &str) -> Result<&str, &'static str> {
+    if state_key.len() > 255 || state_key.chars().any(|ch| ch == '\n' || ch == '\r') {
+        return Err("v-rooms-state-event-invalid-key");
+    }
+    Ok(state_key)
+}
+
+fn validate_state_event_content(content: &serde_json::Value) -> Result<(), &'static str> {
+    if !content.is_object() {
+        return Err("v-rooms-state-event-invalid-content");
+    }
+    let bytes = serde_json::to_vec(content).map_err(|_| "v-rooms-state-event-invalid-content")?;
+    if bytes.len() > crate::transport::MAX_ENVELOPE_PAYLOAD_JSON_BYTES {
+        return Err("v-rooms-state-event-invalid-content");
+    }
+    Ok(())
 }
 
 fn parse_join_rule_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
@@ -1164,6 +1336,18 @@ fn parse_directory_visibility_room_id(room_id: &str) -> Result<OwnedRoomId, &'st
     room_id
         .parse()
         .map_err(|_| "v-send.r-room-profile-directory-visibility-invalid")
+}
+
+fn parse_retention_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .parse()
+        .map_err(|_| "v-send.r-room-profile-retention-invalid")
+}
+
+fn parse_preview_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
+    room_id
+        .parse()
+        .map_err(|_| "v-send.r-media-preview-invalid")
 }
 
 fn parse_directory_visibility(

@@ -53,6 +53,7 @@ import { getMatrixToRoom } from '../../plugins/matrix-to';
 import { getViaServers } from '../../plugins/via-servers';
 import { BackRouteHandler } from '../../components/BackRouteHandler';
 import { useRoomPinnedEvents } from '../../hooks/useRoomPinnedEvents';
+import { pinnedEventCount, useNativePinnedEvents } from './nativePinnedEvents';
 import { RoomPinMenu } from './room-pin-menu';
 import { useOpenRoomSettings } from '../../state/hooks/roomSettings';
 import { RoomNotificationModeSwitcher } from '../../components/RoomNotificationSwitcher';
@@ -64,12 +65,14 @@ import {
 import { JumpToTime } from './jump-to-time';
 import { useRoomNavigate } from '../../hooks/useRoomNavigate';
 import { useRoomCreators } from '../../hooks/useRoomCreators';
+import { isSynaraDesktop } from '../../utils/desktop';
 import { useRoomPermissions } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
 import { ContainerColor } from '../../styles/ContainerColor.css';
 import { getRoomNotesSummary } from '../../utils/roomNotes';
 import { roomNotesContentAtom } from '../../state/roomNotesList';
 import { RoomNotesPanel } from './room-notes/RoomNotesPanel';
+import { RoomThreadListPanel } from './RoomThreadListPanel';
 import type { RoomSidePanelType } from './RoomSidePanel';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -292,8 +295,11 @@ export function RoomViewHeader({
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
   const [pinMenuAnchor, setPinMenuAnchor] = useState<RectCords>();
   const [notesOverlayOpen, setNotesOverlayOpen] = useState(false);
+  const [threadsOverlayOpen, setThreadsOverlayOpen] = useState(false);
 
-  const pinnedEvents = useRoomPinnedEvents(room);
+  const jsPinnedEvents = useRoomPinnedEvents(room);
+  const nativePinned = useNativePinnedEvents(room);
+  const pinnedCount = pinnedEventCount(nativePinned, jsPinnedEvents);
   const notesContent = useAtomValue(roomNotesContentAtom);
   const notesSummary = getRoomNotesSummary(notesContent, room.roomId);
   const encryptionEvent = useStateEvent(room, StateEvent.RoomEncryption);
@@ -302,8 +308,11 @@ export function RoomViewHeader({
   const topic = useRoomTopic(room);
 
   const [peopleDrawer, setPeopleDrawer] = useSetting(settingsAtom, 'isPeopleDrawer');
+  const [experimentalWidgetsEnabled] = useSetting(settingsAtom, 'experimentalWidgetsEnabled');
   const pinsOpen = activeSidePanel === 'pins' || !!pinMenuAnchor;
   const notesOpen = activeSidePanel === 'notes' || notesOverlayOpen;
+  const threadsOpen = activeSidePanel === 'threads' || threadsOverlayOpen;
+  const widgetsOpen = activeSidePanel === 'widgets';
 
   const handleSearchClick = () => {
     if (onToggleSidePanel) {
@@ -337,6 +346,14 @@ export function RoomViewHeader({
       return;
     }
     setNotesOverlayOpen(true);
+  };
+
+  const handleOpenThreads = () => {
+    if (onToggleSidePanel) {
+      onToggleSidePanel('threads');
+      return;
+    }
+    setThreadsOverlayOpen(true);
   };
 
   const handleMemberToggle = () => {
@@ -420,6 +437,29 @@ export function RoomViewHeader({
         </Box>
 
         <Box shrink="No">
+          {experimentalWidgetsEnabled && isSynaraDesktop() && onToggleSidePanel && (
+            <TooltipProvider
+              position="Bottom"
+              offset={4}
+              tooltip={
+                <Tooltip>
+                  <Text>Widgets</Text>
+                </Tooltip>
+              }
+            >
+              {(triggerRef) => (
+                <IconButton
+                  className={depthCss.quietInteractiveSurface}
+                  fill="None"
+                  ref={triggerRef}
+                  onClick={() => onToggleSidePanel('widgets')}
+                  aria-pressed={widgetsOpen}
+                >
+                  <Icon size="400" src={Icons.Code} filled={widgetsOpen} />
+                </IconButton>
+              )}
+            </TooltipProvider>
+          )}
           {!encryptedRoom && (
             <TooltipProvider
               position="Bottom"
@@ -447,6 +487,45 @@ export function RoomViewHeader({
             offset={4}
             tooltip={
               <Tooltip>
+                <Text>Threads</Text>
+              </Tooltip>
+            }
+          >
+            {(triggerRef) => (
+              <IconButton
+                className={depthCss.quietInteractiveSurface}
+                fill="None"
+                ref={triggerRef}
+                onClick={handleOpenThreads}
+                aria-label="Threads"
+                aria-pressed={threadsOpen}
+              >
+                <Icon size="400" src={Icons.Thread} filled={threadsOpen} />
+              </IconButton>
+            )}
+          </TooltipProvider>
+          {!onToggleSidePanel && (
+            <Overlay open={threadsOverlayOpen} backdrop={<OverlayBackdrop />}>
+              <OverlayCenter>
+                <FocusTrap
+                  focusTrapOptions={{
+                    initialFocus: false,
+                    returnFocusOnDeactivate: false,
+                    onDeactivate: () => setThreadsOverlayOpen(false),
+                    clickOutsideDeactivates: true,
+                    escapeDeactivates: stopPropagation,
+                  }}
+                >
+                  <RoomThreadListPanel requestClose={() => setThreadsOverlayOpen(false)} />
+                </FocusTrap>
+              </OverlayCenter>
+            </Overlay>
+          )}
+          <TooltipProvider
+            position="Bottom"
+            offset={4}
+            tooltip={
+              <Tooltip>
                 <Text>Pinned Messages</Text>
               </Tooltip>
             }
@@ -460,7 +539,7 @@ export function RoomViewHeader({
                 ref={triggerRef}
                 aria-pressed={pinsOpen}
               >
-                {pinnedEvents.length > 0 && (
+                {pinnedCount > 0 && (
                   <Badge
                     style={{
                       position: 'absolute',
@@ -473,7 +552,7 @@ export function RoomViewHeader({
                     radii="Pill"
                   >
                     <Text as="span" size="L400">
-                      {pinnedEvents.length}
+                      {pinnedCount}
                     </Text>
                   </Badge>
                 )}

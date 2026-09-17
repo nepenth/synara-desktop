@@ -25,6 +25,7 @@ import {
 import { recordClientDiagnostic } from '../../../utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../../utils/desktop';
 import { recordDesktopDiagnostic } from '../../../utils/desktopDiagnostics';
+import { getSettings } from '../../../state/settings';
 
 export enum GetBaseUrlError {
   NotAllow = 'NotAllow',
@@ -359,6 +360,7 @@ export const loginPassword = async (
       homeserverUrl: url,
       user,
       password,
+      indexedMessageSearch: getSettings().indexedMessageSearch,
     });
     if (!result.available || !result.value) {
       throw new PasswordLoginError(LoginError.Unknown, 'Native password login is unavailable.');

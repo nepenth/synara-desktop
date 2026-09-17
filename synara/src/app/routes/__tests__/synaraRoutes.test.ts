@@ -8,6 +8,7 @@ test('normalizeSynaraRoute accepts documented app-relative destinations', () => 
     '/home/',
     '/home/!room%3Aexample.org/%24event/',
     '/home/!room/$event/',
+    '/home/!room/thread/$root/',
     '/direct/',
     '/direct/!room%3Aexample.org/',
     '/%23space%3Aexample.org/',
@@ -58,6 +59,16 @@ test('parseSynaraRouteDestination describes route destinations', () => {
     roomIdOrAlias: '!room:example.org',
     eventId: '$event',
   });
+  assert.deepEqual(parseSynaraRouteDestination('/home/!room/thread/$root/'), {
+    kind: 'room',
+    roomIdOrAlias: '!room',
+    threadRootId: '$root',
+  });
+  assert.deepEqual(parseSynaraRouteDestination('/direct/!room/thread/$root/'), {
+    kind: 'room',
+    roomIdOrAlias: '!room',
+    threadRootId: '$root',
+  });
   assert.deepEqual(
     parseSynaraRouteDestination('/%23space%3Aexample.org/!room%3Aexample.org/%24event/'),
     {
@@ -65,6 +76,15 @@ test('parseSynaraRouteDestination describes route destinations', () => {
       parentSpaceIdOrAlias: '#space:example.org',
       roomIdOrAlias: '!room:example.org',
       eventId: '$event',
+    }
+  );
+  assert.deepEqual(
+    parseSynaraRouteDestination('/%23space%3Aexample.org/!room%3Aexample.org/thread/%24root/'),
+    {
+      kind: 'room',
+      parentSpaceIdOrAlias: '#space:example.org',
+      roomIdOrAlias: '!room:example.org',
+      threadRootId: '$root',
     }
   );
   assert.deepEqual(parseSynaraRouteDestination('/settings/'), {

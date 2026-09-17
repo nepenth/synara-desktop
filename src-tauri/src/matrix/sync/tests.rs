@@ -296,7 +296,7 @@ mod capability_mirror {
             &versions(&["v1.11"]),
             &unstable(&[("org.matrix.msc4186", true)])
         ));
-        // matrix-sdk 0.18's native SyncService uses
+        // matrix-sdk 0.19's native SyncService uses
         // /unstable/org.matrix.simplified_msc3575/sync (MSC4186).
         assert!(server_supports_sliding_sync(
             &versions(&["v1.11"]),

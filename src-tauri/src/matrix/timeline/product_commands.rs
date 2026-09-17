@@ -1,5 +1,7 @@
 use super::*;
-use synara_core::app::timeline::NativeAgentApprovalDecisionResult;
+use synara_core::app::timeline::{
+    NativeAgentApprovalDecisionResult, NativeTimelineTimestampToEventReadback,
+};
 
 #[tauri::command]
 pub async fn matrix_timeline_open(
@@ -55,6 +57,20 @@ pub async fn matrix_timeline_event_readback(
         core.inner().as_ref(),
         room_id,
         event_id,
+    )
+    .await
+}
+
+#[tauri::command]
+pub async fn matrix_timeline_timestamp_to_event(
+    core: State<'_, Arc<synara_core::Core>>,
+    room_id: String,
+    timestamp_ms: u64,
+) -> Result<NativeTimelineTimestampToEventReadback, MatrixAuthCommandError> {
+    crate::bridge::timeline_timestamp_to_event::timeline_timestamp_to_event(
+        core.inner().as_ref(),
+        room_id,
+        timestamp_ms,
     )
     .await
 }
@@ -196,6 +212,7 @@ pub async fn matrix_composer_clear_reply_draft(
         core.inner().as_ref(),
         request.room_id,
         request.expected_draft_revision,
+        request.thread_root_event_id,
     )
     .await
 }
@@ -208,8 +225,18 @@ pub async fn matrix_composer_get_reply_draft(
     crate::bridge::timeline_composer::composer_get_reply_draft(
         core.inner().as_ref(),
         request.room_id,
+        request.thread_root_event_id,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn matrix_thread_list(
+    core: State<'_, Arc<synara_core::Core>>,
+    request: synara_core::app::threads::NativeThreadListRequest,
+) -> Result<synara_core::app::threads::NativeThreadListSnapshot, MatrixAuthCommandError> {
+    crate::bridge::thread_list::thread_list(core.inner().as_ref(), request.room_id, request.action)
+        .await
 }
 
 #[tauri::command]
@@ -297,6 +324,14 @@ pub async fn matrix_timeline_pin(
         request.event_id,
     )
     .await
+}
+
+#[tauri::command]
+pub async fn matrix_pinned_events(
+    core: State<'_, Arc<synara_core::Core>>,
+    request: NativePinnedEventsRequest,
+) -> Result<PinnedEventsSnapshot, MatrixAuthCommandError> {
+    crate::bridge::timeline_actions::pinned_events(core.inner().as_ref(), request.room_id).await
 }
 
 #[tauri::command]

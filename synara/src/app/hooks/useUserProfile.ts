@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   getOwnProfileNative,
   OWN_PROFILE_CHANGED_EVENT,
+  subscribeOwnProfileNativePush,
 } from '../features/settings/account/nativeProfile';
 import { UserEvent } from '../utils/roomEvents';
 import { useMatrixClient } from './useMatrixClient';
@@ -93,7 +94,17 @@ export const useUserProfile = (userId: string): UserProfile => {
   useEffect(() => {
     if (!isOwnUser(mx, userId)) return undefined;
     window.addEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
-    return () => window.removeEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
+    const unsubscribe = subscribeOwnProfileNativePush((native) => {
+      if (native.userId !== userId) return;
+      setProfile({
+        avatarUrl: native.avatarUrl,
+        displayName: native.displayName,
+      });
+    });
+    return () => {
+      window.removeEventListener(OWN_PROFILE_CHANGED_EVENT, refresh);
+      unsubscribe();
+    };
   }, [mx, refresh, userId]);
 
   return profile;

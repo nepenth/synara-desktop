@@ -216,3 +216,11 @@ test("NSE production feature guard changes run both iOS gates", () => {
   assert.equal(result.ios, "true");
   assert.equal(result.ios_ui, "true");
 });
+test("NSE archive export guard changes run both iOS gates", () => {
+  const result = scopes(["scripts/check-synara-nse-core-archive-exports.sh"], {
+    EVENT_NAME: "push",
+    GITHUB_REF_NAME: "main",
+  });
+  assert.equal(result.ios, "true");
+  assert.equal(result.ios_ui, "true");
+});

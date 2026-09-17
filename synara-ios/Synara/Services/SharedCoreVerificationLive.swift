@@ -79,9 +79,10 @@ enum SharedCoreVerificationLive {
         case "ready":
             return needsSasStart(phase: phase, direction: direction) ? .accepted : .sasStarted
         case "started":
-            // The Rust owner accepts every transitioned SAS handle. Started is
-            // therefore observation-only; the UI must never own protocol accept.
-            return .sasStarted
+            // Incoming Started is observation-only: Rust owns SAS accept.
+            // Outgoing Started without a renderable QR still needs Start Comparison
+            // so iOS cannot deadlock if Core ever leaves Ready (show-QR).
+            return needsSasStart(phase: phase, direction: direction) ? .accepted : .sasStarted
         case "keys_exchanging":
             return .keysExchanging
         case "sas_ready":
@@ -110,8 +111,10 @@ enum SharedCoreVerificationLive {
         }
     }
 
-    /// Same rule as desktop `verificationRequestNeedsSasStart`.
-    static func needsSasStart(phase: String, direction: String) -> Bool {
-        direction == "outgoing" && phase == "ready"
+    /// iOS is SAS-only. Unlike desktop `verificationRequestNeedsSasStart`, a QR
+    /// payload never suppresses Start Comparison — this host cannot render it.
+    static func needsSasStart(phase: String, direction: String, hasShownQr: Bool = false) -> Bool {
+        let _ = hasShownQr
+        return direction == "outgoing" && (phase == "ready" || phase == "started")
     }
 }

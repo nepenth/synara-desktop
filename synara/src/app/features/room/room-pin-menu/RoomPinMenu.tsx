@@ -20,6 +20,7 @@ import { Opts as LinkifyOpts } from 'linkifyjs';
 import { HTMLReactParserOptions } from 'html-react-parser';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useRoomPinnedEvents } from '../../../hooks/useRoomPinnedEvents';
+import { type NativePinnedEventItem, useNativePinnedEvents } from '../nativePinnedEvents';
 import * as css from './RoomPinMenu.css';
 import { SequenceCard } from '../../../components/sequence-card';
 import { useRoomEvent } from '../../../hooks/useRoomEvent';
@@ -250,6 +251,117 @@ function PinnedMessage({
   );
 }
 
+type NativePinnedMessageProps = {
+  room: PinRoomReading;
+  item: NativePinnedEventItem;
+  missing?: boolean;
+  onOpen: (roomId: string, eventId: string) => void;
+  canPinEvent: boolean;
+  hour24Clock: boolean;
+  dateFormatString: string;
+};
+function NativePinnedMessage({
+  room,
+  item,
+  missing,
+  onOpen,
+  canPinEvent,
+  hour24Clock,
+  dateFormatString,
+}: NativePinnedMessageProps) {
+  const [unpinState, unpin] = useAsyncCallback(
+    useCallback(
+      () => unpinWithNativeTimelineAction({ roomId: room.roomId, eventId: item.eventId }),
+      [room.roomId, item.eventId]
+    )
+  );
+  const sender = item.senderId;
+  const displayName = getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender;
+  const reactions = item.reactions ?? [];
+
+  const renderOptions = () => (
+    <Box shrink="No" gap="200" alignItems="Center">
+      <Chip
+        data-event-id={item.eventId}
+        onClick={(evt) => {
+          evt.stopPropagation();
+          onOpen(room.roomId, item.eventId);
+        }}
+        variant="Secondary"
+        radii="Pill"
+      >
+        <Text size="T200">Open</Text>
+      </Chip>
+      {canPinEvent && (
+        <IconButton
+          data-event-id={item.eventId}
+          variant="Secondary"
+          size="300"
+          radii="Pill"
+          onClick={(evt) => {
+            evt.stopPropagation();
+            unpin();
+          }}
+          aria-disabled={unpinState.status === AsyncStatus.Loading}
+        >
+          {unpinState.status === AsyncStatus.Loading ? (
+            <Spinner size="100" />
+          ) : (
+            <Icon src={Icons.Cross} size="100" />
+          )}
+        </IconButton>
+      )}
+    </Box>
+  );
+
+  if (missing) {
+    return (
+      <Box gap="300" justifyContent="SpaceBetween" alignItems="Center">
+        <Box>
+          <Text style={{ color: color.Critical.Main }}>Failed to load message!</Text>
+        </Box>
+        {renderOptions()}
+      </Box>
+    );
+  }
+
+  return (
+    <Box direction="Column" gap="200">
+      <Box gap="300" justifyContent="SpaceBetween" alignItems="Center" grow="Yes">
+        <Box gap="200" alignItems="Baseline">
+          <Username>
+            <Text as="span" truncate>
+              <UsernameBold>{displayName}</UsernameBold>
+            </Text>
+          </Username>
+          <Time
+            ts={item.originServerTs}
+            hour24Clock={hour24Clock}
+            dateFormatString={dateFormatString}
+          />
+        </Box>
+        {renderOptions()}
+      </Box>
+      {item.redacted ? (
+        <RedactedContent />
+      ) : (
+        <Text size="T400">{item.body ?? item.messageType ?? item.eventType}</Text>
+      )}
+      {reactions.length > 0 && (
+        <Box gap="100" wrap="Wrap">
+          {reactions.map((reaction) => (
+            <Chip key={reaction.key} variant="Secondary" radii="Pill">
+              <Text size="T200">
+                {reaction.key} {reaction.count}
+              </Text>
+            </Chip>
+          ))}
+        </Box>
+      )}
+    </Box>
+  );
+}
+
 type RoomPinMenuProps = {
   room: PinRoomReading;
   requestClose: () => void;
@@ -277,8 +389,24 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
       powerLevelTags
     );
 
-    const pinnedEvents = useRoomPinnedEvents(room);
-    const sortedPinnedEvent = useMemo(() => Array.from(pinnedEvents).reverse(), [pinnedEvents]);
+    const nativePinned = useNativePinnedEvents(room);
+    const jsPinnedEvents = useRoomPinnedEvents(room);
+    const nativeRows = useMemo(() => {
+      if (!nativePinned.snapshot) return null;
+      const byId = new Map(
+        nativePinned.snapshot.items.map((item) => [item.eventId, item] as const)
+      );
+      return [...nativePinned.snapshot.eventIds].reverse().map((eventId) => ({
+        eventId,
+        item: byId.get(eventId),
+      }));
+    }, [nativePinned.snapshot]);
+    const sortedPinnedEvent = useMemo(
+      () => nativeRows?.map((row) => row.eventId) ?? Array.from(jsPinnedEvents).reverse(),
+      [nativeRows, jsPinnedEvents]
+    );
+    const showNativeLoading =
+      nativePinned.available && nativePinned.loading && !nativePinned.snapshot;
     const useAuthentication = useMediaAuthentication();
     const [mediaAutoLoad] = useSetting(settingsAtom, 'mediaAutoLoad');
 
@@ -491,7 +619,18 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
           <Box grow="Yes">
             <Scroll ref={scrollRef} size="300" hideTrack visibility="Hover">
               <Box className={css.PinMenuContent} direction="Column" gap="100">
-                {sortedPinnedEvent.length > 0 ? (
+                {showNativeLoading ? (
+                  <Box
+                    grow="Yes"
+                    direction="Column"
+                    gap="400"
+                    justifyContent="Center"
+                    alignItems="Center"
+                    style={{ padding: config.space.S700 }}
+                  >
+                    <Spinner size="400" />
+                  </Box>
+                ) : sortedPinnedEvent.length > 0 ? (
                   <div
                     style={{
                       position: 'relative',
@@ -501,6 +640,7 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                     {virtualizer.getVirtualItems().map((vItem) => {
                       const eventId = sortedPinnedEvent[vItem.index];
                       if (!eventId) return null;
+                      const nativeRow = nativeRows?.[vItem.index];
 
                       return (
                         <VirtualTile
@@ -514,18 +654,37 @@ export const RoomPinMenu = forwardRef<HTMLDivElement, RoomPinMenuProps>(
                             variant="SurfaceVariant"
                             direction="Column"
                           >
-                            <PinnedMessage
-                              room={room}
-                              eventId={eventId}
-                              renderContent={renderMatrixEvent}
-                              onOpen={handleOpen}
-                              canPinEvent={canPinEvent}
-                              getMemberPowerTag={getMemberPowerTag}
-                              accessibleTagColors={accessibleTagColors}
-                              legacyUsernameColor={legacyUsernameColor || direct}
-                              hour24Clock={hour24Clock}
-                              dateFormatString={dateFormatString}
-                            />
+                            {nativeRow ? (
+                              <NativePinnedMessage
+                                room={room}
+                                item={
+                                  nativeRow.item ?? {
+                                    eventId,
+                                    senderId: '',
+                                    originServerTs: 0,
+                                    eventType: 'unknown',
+                                  }
+                                }
+                                missing={!nativeRow.item}
+                                onOpen={handleOpen}
+                                canPinEvent={canPinEvent}
+                                hour24Clock={hour24Clock}
+                                dateFormatString={dateFormatString}
+                              />
+                            ) : (
+                              <PinnedMessage
+                                room={room}
+                                eventId={eventId}
+                                renderContent={renderMatrixEvent}
+                                onOpen={handleOpen}
+                                canPinEvent={canPinEvent}
+                                getMemberPowerTag={getMemberPowerTag}
+                                accessibleTagColors={accessibleTagColors}
+                                legacyUsernameColor={legacyUsernameColor || direct}
+                                hour24Clock={hour24Clock}
+                                dateFormatString={dateFormatString}
+                              />
+                            )}
                           </SequenceCard>
                         </VirtualTile>
                       );

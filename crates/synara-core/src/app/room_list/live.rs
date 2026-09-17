@@ -16,6 +16,7 @@ use serde::{Deserialize, Serialize};
 use tokio::task::JoinHandle;
 
 use crate::app::room_list::counts::{room_unread_presentation, RoomUnreadMembership};
+use crate::app::room_list::dm_avatar::dm_avatar_source;
 use crate::app::room_list::last_message::{
     last_message_event_is_agent_approval, last_message_event_is_agent_approval_str,
     last_message_preview_from_event_json, last_message_preview_from_event_json_str,
@@ -120,10 +121,11 @@ pub async fn snapshot_from_sync_owner(
         })
         .ok_or("d0.2-room-list-reset-missing")?;
 
-    // Sliding-sync `subscribe_to_rooms` replaces the previous set and is how
-    // encrypted rooms receive events for client-side unread math. A 20-row
-    // viewport left every other room at server notification_count=0, which
-    // is typically zero for E2EE — Element (full /sync) still showed badges.
+    // Sliding-sync `set_room_subscriptions` makes the subscription set
+    // exactly these rooms and is how encrypted rooms receive events for
+    // client-side unread math. A 20-row viewport left every other room at
+    // server notification_count=0, which is typically zero for E2EE —
+    // Element (full /sync) still showed badges.
     let subscribed_room_ids = values
         .iter()
         .map(|room| room.room_id().to_owned())
@@ -190,20 +192,40 @@ async fn project_room(room: &Room) -> RoomSummary {
     );
     // Room derefs to `BaseRoom`: `is_favourite`/`is_low_priority` read cached
     // `notable_tags` derived from the room's m.tag account data.
-    let encryption_status = project_encryption_status(room.latest_encryption_state().await);
+    let latest_encryption = room.latest_encryption_state().await;
+    let state_encrypted = latest_encryption
+        .as_ref()
+        .is_ok_and(|state| state.is_state_encrypted());
+    let encryption_status = project_encryption_status(latest_encryption);
+    let is_direct = room.is_direct().await.unwrap_or(false);
+    let avatar_url = {
+        let room_avatar = room.avatar_url();
+        if is_direct && room_avatar.is_none() {
+            dm_avatar_source(room, room.own_user_id(), true)
+                .await
+                .map(|uri| uri.to_string())
+        } else {
+            room_avatar.map(|uri| uri.to_string())
+        }
+    };
+    let (has_active_call, active_call_participant_count) = project_active_call(room);
     RoomSummary {
         room_id: room.room_id().to_string(),
         name: room.cached_display_name().map(|name| name.to_string()),
         canonical_alias: room.canonical_alias().map(|alias| alias.to_string()),
-        avatar_url: room.avatar_url().map(|uri| uri.to_string()),
+        avatar_url,
         membership,
-        is_direct: room.is_direct().await.unwrap_or(false),
+        is_direct,
+        direct_user_id: project_direct_user_id(room, is_direct),
         is_space: room.is_space(),
         is_call: room.is_call(),
+        has_active_call,
+        active_call_participant_count,
         is_favorite: room.is_favourite(),
         is_low_priority: room.is_low_priority(),
         folder_id: None,
         encryption_status,
+        state_encrypted,
         join_rule: None,
         unread_count: bounded_count(unread.unread_count),
         highlight_count: bounded_count(mention_count),
@@ -215,6 +237,45 @@ async fn project_room(room: &Room) -> RoomSummary {
         heroes: None,
         tombstone_successor_room_id: None,
     }
+}
+
+const MAX_ACTIVE_CALL_PARTICIPANTS: u32 = 99;
+
+fn project_direct_user_id(room: &Room, is_direct: bool) -> Option<String> {
+    if !is_direct {
+        return None;
+    }
+    let client = room.client();
+    let own = client.user_id();
+    let mut peer: Option<String> = None;
+    for target in room.direct_targets() {
+        let Some(user_id) = target.as_user_id() else {
+            continue;
+        };
+        if own.is_some_and(|own| own == user_id) {
+            continue;
+        }
+        let next = user_id.to_string();
+        if peer.as_ref().is_some_and(|existing| existing != &next) {
+            return None;
+        }
+        peer = Some(next);
+    }
+    peer
+}
+
+fn project_active_call(room: &Room) -> (bool, u32) {
+    if !room.has_active_room_call() {
+        return (false, 0);
+    }
+    let mut unique = std::collections::HashSet::new();
+    for participant in room.active_room_call_participants() {
+        unique.insert(participant);
+    }
+    (
+        true,
+        unique.len().min(MAX_ACTIVE_CALL_PARTICIPANTS as usize) as u32,
+    )
 }
 
 fn project_encryption_status<E>(result: Result<EncryptionState, E>) -> RoomEncryptionStatus {
@@ -375,6 +436,15 @@ mod tests {
     }
 
     #[test]
+    fn last_message_preview_matches_local_send_queue_states() {
+        let source = include_str!("live.rs");
+        assert!(source.contains("LatestEventValue::LocalIsSending"));
+        assert!(source.contains("LatestEventValue::LocalHasBeenSent"));
+        assert!(source.contains("LatestEventValue::LocalCannotBeSent"));
+        assert!(source.contains("LatestEventValue::Remote("));
+    }
+
+    #[test]
     fn encryption_projection_preserves_unknown_and_errors_fail_closed() {
         assert_eq!(
             project_encryption_status::<()>(Ok(EncryptionState::Encrypted)),
@@ -392,6 +462,13 @@ mod tests {
             project_encryption_status::<()>(Err(())),
             RoomEncryptionStatus::Unknown
         );
+        assert_eq!(
+            project_encryption_status::<()>(Ok(EncryptionState::StateEncrypted)),
+            RoomEncryptionStatus::Encrypted
+        );
+        assert!(EncryptionState::StateEncrypted.is_encrypted());
+        assert!(EncryptionState::StateEncrypted.is_state_encrypted());
+        assert!(!EncryptionState::Encrypted.is_state_encrypted());
     }
 
     #[test]
@@ -405,11 +482,13 @@ mod tests {
         assert!(source.contains("pending_approval_unread_boost"));
         assert!(source.contains("room_has_unread("));
         assert!(source.contains("room.is_marked_unread()"));
+        assert!(source.contains("dm_avatar_source"));
+        assert!(source.contains("is_direct && room_avatar.is_none()"));
         let truncated_viewport = concat!("ROOM_LIST_SUBSCRIPTION", "_LIMIT");
         assert_eq!(
             source.matches(truncated_viewport).count(),
             0,
-            "encrypted rooms only get client-side unreads after subscribe_to_rooms"
+            "encrypted rooms only get client-side unreads after set_room_subscriptions"
         );
     }
 }

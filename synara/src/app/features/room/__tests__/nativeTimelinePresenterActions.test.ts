@@ -74,6 +74,7 @@ test('native timeline rows retain hover/focus action access without restoring th
     'Report',
     'Pin',
     'Save for later',
+    'View Reactions',
   ]) {
     assert.equal(presenter.includes(action), true, `missing ${action} action`);
   }
@@ -87,6 +88,7 @@ test('native timeline rows retain hover/focus action access without restoring th
     'reportWithNativeTimelineAction',
     'pinWithNativeTimelineAction',
     'upsertLaterWithNativeOwner',
+    'ReactionViewer',
   ]) {
     assert.match(presenter, new RegExp(nativeOwner));
   }
@@ -109,8 +111,25 @@ test('message, poll, and sticker rows share Core relation and reaction presentat
     assert.match(branch, /NativeTimelineReactionPills/);
     assert.match(branch, /reactions=\{row\.reactions\}/);
   }
-  assert.match(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
+  assert.match(presenter, /const latestEventId = nativeThreadFocusEventId\(thread\)/);
+  assert.match(presenter, /onClick=\{\(\) => onOpenThread\(rootEventId, latestEventId\)\}/);
+  assert.match(presenter, /onOpenThread\?\.\(threadRoot \?\? eventId\)/);
+  assert.doesNotMatch(presenter, /onFocusEvent\(latestEventId \?\? rootEventId\)/);
+  assert.doesNotMatch(presenter, /nativeThreadFocusEventId\(thread\) \?\? threadRoot/);
   assert.match(presenter, /variant=\{reaction\.own \? 'Primary' : 'Secondary'\}/);
+  assert.match(presenter, /onViewReactions=\{openReactionViewer\}/);
+  assert.match(presenter, /nativeReactionViewFromEventReadback/);
+  assert.match(presenter, /canRedactOwn=\{Boolean\(snapshot\.capabilities\.canRedactOwn\)\}/);
+  assert.match(presenter, /canRedactOther=\{Boolean\(snapshot\.capabilities\.canRedactOther\)\}/);
+});
+
+test('reaction viewer remove stays gated on recovered annotation id and redact authority', () => {
+  const viewer = readFileSync('src/app/features/room/reaction-viewer/ReactionViewer.tsx', 'utf8');
+  assert.match(viewer, /Boolean\(reactionEventId\)/);
+  assert.match(viewer, /canRedactOwn \?\? canRedact/);
+  assert.match(viewer, /canRedactOther \?\? canRedact/);
+  assert.match(viewer, /redactReactionWithNativeOwner/);
+  assert.doesNotMatch(viewer, /matrix-js-sdk/);
 });
 
 test('poll and call actions consume Core capabilities with accessible pending controls', () => {
@@ -122,6 +141,7 @@ test('poll and call actions consume Core capabilities with accessible pending co
   assert.match(presenter, /disabled=\{!canVote \|\| closed \|\| submitting\}/);
   assert.match(presenter, /disabled=\{declinePending\}/);
   assert.match(presenter, /callDeclineWithNativeTimelineOwner/);
+  assert.match(presenter, /incomingCallLabel\(row\.callKind\)/);
   assert.doesNotMatch(presenter, /sendEvent\(['"]m\.poll\.response/);
   assert.doesNotMatch(presenter, /sendEvent\(['"]m\.rtc/);
 });
@@ -199,18 +219,106 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /followingLiveRef\.current = true/);
   assert.match(presenter, /onClick=\{jumpToLatest\}/);
   assert.doesNotMatch(presenter, /snapshot\.position\.kind !== 'live_bottom'/);
-  assert.match(presenter, /aria-label="Loading older messages"/);
-  assert.match(presenter, /aria-label="Loading newer messages"/);
+  const historyStatus = readFileSync(
+    'src/app/features/room/NativeTimelineHistoryStatus.tsx',
+    'utf8'
+  );
+  const dateRail = readFileSync('src/app/features/room/NativeTimelineDateRail.tsx', 'utf8');
+  assert.match(presenter, /NativeTimelineHistoryStatus/);
+  assert.match(presenter, /requestPagination\('backwards'\)/);
+  assert.match(presenter, /event instanceof WheelEvent/);
+  assert.match(historyStatus, /Loading older messages/);
+  assert.match(historyStatus, /Loading newer messages/);
+  assert.match(historyStatus, /role="alert"/);
+  assert.match(historyStatus, /Could not load older messages/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusCardError/);
+  assert.match(
+    htmlCss,
+    /export const HistoryStatusCard = style\(\{[\s\S]*?backgroundColor: color\.SurfaceVariant\.Container,/
+  );
+  assert.match(
+    htmlCss,
+    /export const HistoryStatusCard = style\(\{[\s\S]*?color: color\.SurfaceVariant\.OnContainer,/
+  );
+  assert.match(
+    htmlCss,
+    /export const HistoryStatusCardError = style\(\{[\s\S]*?backgroundColor: color\.Critical\.Container,/
+  );
+  assert.match(dateRail, /Jump to a date in loaded history/);
+  assert.match(dateRail, /Jump to a date in room history/);
+  assert.match(dateRail, /onCommitTimestamp/);
+  assert.match(presenter, /timestampToEventWithNativeOwner/);
+  assert.match(presenter, /roomCreatedTs/);
+  assert.doesNotMatch(presenter, /mx\.timestampToEvent/);
+  assert.match(dateRail, /aria-controls="native-timeline-history"/);
+  assert.match(dateRail, /translate3d/);
+  assert.match(dateRail, /React\.memo/);
+  assert.doesNotMatch(dateRail, /TooltipProvider/);
+  assert.doesNotMatch(dateRail, /visibleStartIndex/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusDateChip/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusDateChipCard/);
+  assert.match(historyStatus, /kind === 'hidden' && !reserveRail/);
+  assert.match(htmlCss, /export const HistoryStatusDateChip = style\(/);
+  assert.match(htmlCss, /export const HistoryStatusDateChipCard = style\(/);
+  assert.doesNotMatch(
+    htmlCss.slice(
+      htmlCss.indexOf('export const HistoryStatusDateChip'),
+      htmlCss.indexOf('export const DateRail')
+    ),
+    /linear-gradient/
+  );
+  assert.doesNotMatch(
+    htmlCss.slice(
+      htmlCss.indexOf('export const HistoryStatusDateChipCard'),
+      htmlCss.indexOf('export const DateRail')
+    ),
+    /raisedShadow/
+  );
+  assert.match(presenter, /NativeTimelineDateRail/);
+  assert.match(presenter, /const showDateRail = shouldShowTimelineDateRail/);
+  assert.match(presenter, /showDateRail \|\| atLiveBottom/);
+  assert.match(presenter, /reserveRail=\{showDateRail\}/);
+  assert.match(htmlCss, /export const HistoryStatusHitTarget = style\(/);
+  assert.doesNotMatch(historyStatus, /pointerEvents: 'auto'/);
+  assert.match(historyStatus, /htmlCss\.HistoryStatusHitTarget/);
+  assert.match(presenter, /hasSparseLoadButton \? \(/);
+  assert.match(presenter, /<Box shrink="No"/);
+  assert.doesNotMatch(
+    presenter,
+    /position: 'absolute', left: config\.space\.S400, top: config\.space\.S300/
+  );
 
   assert.doesNotMatch(presenter, />\s*Mark read\s*</);
   assert.doesNotMatch(presenter, />\s*Mark unread\s*</);
+});
+
+test('thread chip and reply-in-thread open a dedicated thread timeline with Back to live', () => {
+  assert.match(presenter, /kind: 'thread', rootEventId: threadRootId/);
+  assert.match(presenter, /const openThread = useCallback/);
+  assert.match(presenter, /if \(threadRootId\) return;/);
+  assert.match(presenter, /selectedPosition\.kind === 'thread'/);
+  assert.match(presenter, /aria-label="Back to room"/);
+  assert.match(presenter, /Icons\.ArrowLeft/);
+  assert.match(presenter, /onClick=\{closeThread\}/);
+  assert.match(presenter, /onOpenThread=\{openThread\}/);
+  assert.match(presenter, /activeThreadRoot=\{threadRootId\}/);
+  assert.match(presenter, /setPreferLiveBottom\(true\)/);
+  assert.match(presenter, /publishNativeThreadRoot\(roomId, threadRootId\)/);
+  assert.match(presenter, /threadRootEventId/);
+  assert.match(presenter, /onOpenThreadRoute\?\.\(rootEventId\)/);
+  assert.match(presenter, /onCloseThreadRoute\?\.\(\)/);
+  assert.match(presenter, /if \(threadRootEventId \|\| eventId\) \{/);
+  assert.doesNotMatch(presenter, /hide_threaded_events:\s*true/);
 });
 
 test('native live tail marks the open stream read through the native owner', () => {
   assert.match(presenter, /action: 'mark_read'/);
   assert.match(presenter, /intent: 'automatic_visibility'/);
   assert.match(presenter, /observedLiveTailEventId: liveTailReadTarget/);
-  assert.match(presenter, /selectedPosition\.kind === 'live_bottom'/);
+  assert.match(
+    readFileSync('src/app/features/room/nativeTimelineViewportPolicy.ts', 'utf8'),
+    /positionKind !== 'live_bottom' && positionKind !== 'thread'/
+  );
   assert.match(presenter, /capabilities\.markRead/);
   assert.doesNotMatch(presenter, /markAsReadInBackground/);
   assert.doesNotMatch(presenter, /sendReadReceipt/);
@@ -267,6 +375,32 @@ test('room read state stays a single contextual overflow action', () => {
   assert.match(header, /aria-label="More Options"/);
   assert.match(header, /unread \? 'Mark as Read' : 'Mark as Unread'/);
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
+});
+
+test('native timeline file attachments save through download+save, not protocol href', () => {
+  const mediaFn = presenter.slice(
+    presenter.indexOf('const NativeTimelineMedia'),
+    presenter.indexOf('const NativeTimelineSenderAvatar')
+  );
+  const fileBranch = mediaFn.indexOf("if (messageType === 'file')");
+  const missingSrc = mediaFn.indexOf('if (!mediaSrc)');
+  assert.ok(fileBranch >= 0, 'file attachments must have a dedicated branch');
+  assert.ok(fileBranch < missingSrc, 'file chips must not depend on protocol mediaSrc');
+  assert.match(presenter, /saveNativeTimelineFileAttachment/);
+  assert.match(presenter, /isNativeTimelineMarkdownAttachment/);
+  assert.match(presenter, /NativeTimelineMarkdownPreview/);
+  assert.match(presenter, /data-native-timeline-file-download/);
+  assert.match(presenter, /data-native-timeline-file-open/);
+  assert.match(presenter, /onActionError=\{onActionError\}/);
+  assert.match(htmlCss, /export const FileDownload = style\(/);
+  assert.match(htmlCss, /export const FilePreviewModal = style\(/);
+  const previewUi = readFileSync('src/app/features/room/NativeTimelineMarkdownPreview.tsx', 'utf8');
+  assert.match(previewUi, /variant="Surface"/);
+  assert.doesNotMatch(presenter, /<a href=\{mediaSrc\} download/);
+  assert.doesNotMatch(presenter, /href=\{mediaSrc\}/);
+  assert.doesNotMatch(presenter, /text\/markdown/);
+  assert.doesNotMatch(presenter, /FileHeader|FileDownloadButton/);
+  assert.doesNotMatch(mediaFn, /if \([^)]*mimeType[^)]*markdown/i);
 });
 
 test('native timeline honors hide membership, hide activity receipts, and message spacing', () => {

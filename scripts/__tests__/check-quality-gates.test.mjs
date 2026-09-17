@@ -234,10 +234,10 @@ ${iosBuildStep.replace("    steps:\n", "")}
       marketing_version: \${{ steps.upload_ios.outputs.marketing_version }}
       build_number: \${{ steps.upload_ios.outputs.build_number }}
     steps:
-      - name: Install Rust 1.93 and Apple targets
+      - name: Install Rust 1.96 and Apple targets
         uses: dtolnay/rust-toolchain@fixture
         with:
-          toolchain: 1.93
+          toolchain: 1.96
           targets: aarch64-apple-ios
       - run: scripts/generate-synara-core-swift.sh
       - id: upload_ios
@@ -637,7 +637,7 @@ test("rejects TestFlight upload that archives without UniFFI generate", () => {
         "          targets: aarch64-apple-ios",
         "          targets: aarch64-apple-darwin"
       ),
-      /Rust 1\.93/i,
+      /Rust 1\.96/i,
     ],
     [
       releaseWorkflow.replace(

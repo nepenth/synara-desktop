@@ -4,6 +4,8 @@
 //! was painted. Promotion is valid only for unread placement on the owner's
 //! actual live SDK provider, with an exact observation of its current tail.
 
+#![recursion_limit = "256"]
+
 use std::sync::Arc;
 use std::time::Duration;
 

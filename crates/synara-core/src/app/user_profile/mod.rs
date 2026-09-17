@@ -12,6 +12,7 @@ mod error;
 mod index;
 mod ipc;
 mod live;
+mod own_profile;
 
 pub use error::UserProfileError;
 pub use index::{
@@ -32,6 +33,10 @@ pub use live::{
     snapshot_threepids, unignore_user, upload_avatar, PendingThreepid,
     DEFAULT_USER_DIRECTORY_LIMIT, MAX_AVATAR_UPLOAD_BYTES, MAX_USER_DIRECTORY_LIMIT,
     MAX_USER_DIRECTORY_TERM_CHARS,
+};
+pub use own_profile::{
+    map_own_profile_stream_fields, NativeOwnProfileOwner, OwnProfileStreamMap,
+    OwnProfileUpdateEmit, OWN_PROFILE_CHANGED_EVENT,
 };
 
 /// Static marker for link / schema smoke.

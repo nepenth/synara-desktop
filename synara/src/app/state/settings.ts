@@ -47,6 +47,7 @@ export interface SharedSettings {
   hideNickAvatarEvents: boolean;
   mediaAutoLoad: boolean;
   gifSearchEnabled: boolean;
+  indexedMessageSearch: boolean;
   gifOnboardingDismissed: boolean;
   timelineVirtualizationEnabled: boolean;
   showHiddenEvents: boolean;
@@ -59,7 +60,16 @@ export interface SharedSettings {
   dateFormatString: string;
 
   developerTools: boolean;
+  experimentalWidgetsEnabled: boolean;
+  /** MSC4362 create/opt-in only. Already-flagged rooms still decrypt. Default on. */
+  encryptedStateEvents: boolean;
 }
+
+export type AgentWidgetEntry = {
+  id: string;
+  name: string;
+  url: string;
+};
 
 export interface DesktopPlatformSettings {
   desktopShortcutShow: string;
@@ -70,6 +80,7 @@ export interface DesktopPlatformSettings {
   desktopDiagnosticsSession: boolean;
   desktopDiagnosticsRoomState: boolean;
   desktopDiagnosticsOverlay: boolean;
+  agentWidgetEntries: AgentWidgetEntry[];
 }
 
 export type PlatformSettings = DesktopPlatformSettings;
@@ -115,6 +126,7 @@ export const defaultSharedSettings: SharedSettings = {
   hideNickAvatarEvents: true,
   mediaAutoLoad: true,
   gifSearchEnabled: false,
+  indexedMessageSearch: true,
   gifOnboardingDismissed: false,
   timelineVirtualizationEnabled: true,
   showHiddenEvents: false,
@@ -127,7 +139,43 @@ export const defaultSharedSettings: SharedSettings = {
   dateFormatString: 'D MMM YYYY',
 
   developerTools: false,
+  experimentalWidgetsEnabled: false,
+  encryptedStateEvents: true,
 };
+
+const MAX_AGENT_WIDGET_ENTRIES = 32;
+const MAX_AGENT_WIDGET_FIELD = 128;
+const MAX_AGENT_WIDGET_URL = 2_048;
+
+const sanitizeAgentWidgetEntries = (value: unknown): AgentWidgetEntry[] => {
+  if (!Array.isArray(value)) return [];
+  const entries: AgentWidgetEntry[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== 'object') continue;
+    const record = item as Record<string, unknown>;
+    const id = typeof record.id === 'string' ? record.id.trim() : '';
+    const name = typeof record.name === 'string' ? record.name.trim() : '';
+    const url = typeof record.url === 'string' ? record.url.trim() : '';
+    if (
+      !id ||
+      !name ||
+      !url ||
+      id.length > MAX_AGENT_WIDGET_FIELD ||
+      name.length > MAX_AGENT_WIDGET_FIELD ||
+      url.length > MAX_AGENT_WIDGET_URL
+    ) {
+      continue;
+    }
+    entries.push({ id, name, url });
+    if (entries.length >= MAX_AGENT_WIDGET_ENTRIES) break;
+  }
+  return entries;
+};
+
+const sanitizePlatformSettings = (settings: DesktopPlatformSettings): DesktopPlatformSettings => ({
+  ...settings,
+  agentWidgetEntries: sanitizeAgentWidgetEntries(settings.agentWidgetEntries),
+});
 
 export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   desktopShortcutShow: 'CmdOrCtrl+Shift+C',
@@ -138,6 +186,7 @@ export const defaultDesktopPlatformSettings: DesktopPlatformSettings = {
   desktopDiagnosticsSession: false,
   desktopDiagnosticsRoomState: false,
   desktopDiagnosticsOverlay: false,
+  agentWidgetEntries: [],
 };
 
 export const defaultPlatformSettings: PlatformSettings = {
@@ -204,7 +253,7 @@ export const mergeSettingsSnapshot = (snapshot: SettingsSnapshot): Settings => (
 
 export const splitSettings = (settings: Settings): SettingsSnapshot => ({
   shared: sanitizeSharedSettings(pickKnownSettings(defaultSharedSettings, settings)),
-  platform: pickKnownSettings(defaultPlatformSettings, settings),
+  platform: sanitizePlatformSettings(pickKnownSettings(defaultPlatformSettings, settings)),
 });
 
 export const createLocalStorageSettingsStore = (storage: SettingsStorage): SettingsStore => {
@@ -216,10 +265,12 @@ export const createLocalStorageSettingsStore = (storage: SettingsStorage): Setti
       shared: sanitizeSharedSettings(
         pickKnownSettings(defaultSharedSettings, legacyOrSharedSettings)
       ),
-      platform: pickKnownSettings(defaultPlatformSettings, {
-        ...legacyOrSharedSettings,
-        ...platformSettings,
-      }),
+      platform: sanitizePlatformSettings(
+        pickKnownSettings(defaultPlatformSettings, {
+          ...legacyOrSharedSettings,
+          ...platformSettings,
+        })
+      ),
     };
   };
 
@@ -228,7 +279,10 @@ export const createLocalStorageSettingsStore = (storage: SettingsStorage): Setti
       SHARED_SETTINGS_STORAGE_KEY,
       JSON.stringify(sanitizeSharedSettings(snapshot.shared))
     );
-    storage.setItem(PLATFORM_SETTINGS_STORAGE_KEY, JSON.stringify(snapshot.platform));
+    storage.setItem(
+      PLATFORM_SETTINGS_STORAGE_KEY,
+      JSON.stringify(sanitizePlatformSettings(snapshot.platform))
+    );
   };
 
   return {

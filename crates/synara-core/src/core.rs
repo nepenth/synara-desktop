@@ -21,8 +21,9 @@ use crate::app::auth::{
 };
 use crate::app::backup::{MatrixRestoreBackupResult, NativeBackupStatus};
 use crate::app::cross_signing::NativeCrossSigningSetupResult;
+use crate::app::dehydrated_devices::NativeDehydratedDevicesOwner;
 use crate::app::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
-use crate::app::media::MatrixUploadMediaResult;
+use crate::app::media::{MatrixMediaPreviewSnapshot, MatrixUploadMediaResult};
 use crate::app::members::{
     NativePowerLevelWriteResult, NativeRoomCreatorsSnapshot, NativeRoomMembersSnapshot,
     NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot, ROOM_POWER_LEVELS_EVENT_TYPE,
@@ -47,11 +48,12 @@ use crate::app::room_keys::NativeRoomKeyTransferStatus;
 use crate::app::room_list::{
     snapshot_from_sync_owner, NativeInviteSnapshot, NativeRoomListSnapshot,
 };
-use crate::app::room_ops::MatrixRoomCreateRequest;
+use crate::app::room_ops::{set_encrypted_state_events_setting_enabled, MatrixRoomCreateRequest};
 use crate::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
-    MatrixRoomJoinRuleSnapshot, NativeRoomJoinRuleOwner,
+    MatrixRoomJoinRuleSnapshot, MatrixRoomRetentionSnapshot, NativeRoomJoinRuleOwner,
 };
+use crate::app::rtc_transports::{NativeRtcTransportsOwner, NativeRtcTransportsSnapshot};
 use crate::app::search::MatrixMessageSearchResult;
 use crate::app::send::{
     MatrixPollRespondResult, MatrixSendPollResult, MatrixSendRoomAttachmentResult,
@@ -64,6 +66,7 @@ use crate::app::spaces::{
 use crate::app::sync::{
     SyncReadiness, SyncReadinessSnapshot, SyncServiceOwner, SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID,
 };
+use crate::app::threads::NativeThreadListSnapshot;
 use crate::app::timeline::{
     NativeAgentApprovalDecisionRequest, NativeAgentApprovalDecisionResult,
     NativeComposerReplyDraftReadback, NativeReactionMutationResult, NativeTimelineActionReadback,
@@ -71,7 +74,8 @@ use crate::app::timeline::{
     NativeTimelineFollowLiveRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenPosition,
     NativeTimelineOpenReadback, NativeTimelineOpenRequest, NativeTimelineOwner,
     NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
+    NativeTimelineReadStateRequest, NativeTimelineTimestampToEventReadback,
+    NativeTimelineViewPaginationRequest, TimelineViewSnapshot,
 };
 use crate::app::typing::{NativeTypingOwner, NativeTypingSnapshot};
 use crate::app::user_profile::{
@@ -80,8 +84,15 @@ use crate::app::user_profile::{
     MatrixThreepidSnapshot, MatrixThreepidWriteResult, MatrixUploadAvatarResult,
     MatrixUserDirectorySearchResult,
 };
+use crate::app::user_status::{
+    NativeUserStatusOwner, NativeUserStatusSnapshot, NativeUserStatusWriteResult,
+};
 use crate::app::verification::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
+};
+use crate::app::widgets::{
+    AgentWidgetEntry, NativeWidgetOwner, WidgetGrantPolicy, WidgetKind, WidgetListSnapshot,
+    WidgetOpenResult, WidgetSessionRecord,
 };
 use crate::dto::SessionSnapshot;
 use crate::platform::{
@@ -580,6 +591,54 @@ struct MatrixPresenceUnsubscribeRequest {
     subscription_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_widgets_list`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetsListRequest {
+    experimental_widgets_enabled: bool,
+    room_id: String,
+    #[serde(default)]
+    agent_widgets: Vec<AgentWidgetEntry>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_open`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetOpenRequest {
+    experimental_widgets_enabled: bool,
+    room_id: String,
+    widget_id: String,
+    name: String,
+    url: String,
+    kind: WidgetKind,
+    init_on_content_load: bool,
+    receive_room: bool,
+    send_room_message: bool,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_close`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetCloseRequest {
+    session_id: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_post`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetPostRequest {
+    experimental_widgets_enabled: bool,
+    session_id: String,
+    message: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_widget_subscribe`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixWidgetSubscribeRequest {
+    experimental_widgets_enabled: bool,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_presence_set`.
 ///
 /// `state` is the closed online/offline/unavailable vocabulary. Optional
@@ -591,6 +650,26 @@ struct MatrixPresenceSetRequest {
     state: String,
     #[serde(default)]
     status_msg: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_user_status_snapshot`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixUserStatusSnapshotRequest {
+    user_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_user_status_set`.
+///
+/// `emoji` and `text` are MSC4426 `m.status` fields. Both empty clears.
+/// Unknown keys are rejected so this cannot grow presence `state` or secrets.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixUserStatusSetRequest {
+    #[serde(default)]
+    emoji: String,
+    #[serde(default)]
+    text: String,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_get_room_image_packs`.
@@ -757,6 +836,14 @@ struct MatrixTimelineEventReadbackRequest {
     event_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_timeline_timestamp_to_event`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixTimelineTimestampToEventRequest {
+    room_id: String,
+    timestamp_ms: u64,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_paginate`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -920,6 +1007,13 @@ struct MatrixTimelinePinRequest {
     event_id: String,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_pinned_events`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixPinnedEventsRequest {
+    room_id: String,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_timeline_poll_vote`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -975,6 +1069,8 @@ struct MatrixComposerSetReplyDraftRequest {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct MatrixComposerReplyDraftRoomRequest {
     room_id: String,
+    #[serde(default)]
+    thread_root_event_id: Option<String>,
 }
 
 /// Exact React/Tauri envelope payload for composer compare-and-clear.
@@ -983,6 +1079,16 @@ struct MatrixComposerReplyDraftRoomRequest {
 struct MatrixComposerClearReplyDraftRequest {
     room_id: String,
     expected_draft_revision: u64,
+    #[serde(default)]
+    thread_root_event_id: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_thread_list`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixThreadListRequest {
+    room_id: String,
+    action: String,
 }
 
 /// Exact React/Tauri envelope payload for `matrix_verification_accept`.
@@ -1209,6 +1315,33 @@ struct MatrixSetRoomAvatarRequest {
     mxc: String,
 }
 
+/// Exact React/Tauri envelope payload for leftover native state writes.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSendStateEventRequest {
+    room_id: String,
+    event_type: String,
+    #[serde(default)]
+    state_key: String,
+    content: serde_json::Value,
+}
+
+/// Exact React/Tauri envelope payload for room encryption enable / MSC4362 opt-in.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixEnableRoomEncryptedStateRequest {
+    room_id: String,
+    #[serde(default)]
+    encrypt_state_events: bool,
+}
+
+/// Exact React/Tauri envelope payload for the create/opt-in account setting.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixSetEncryptedStateEventsSettingRequest {
+    enabled: bool,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_own_display_name`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1338,6 +1471,25 @@ struct MatrixGetRoomDirectoryVisibilityRequest {
     session_generation: u64,
 }
 
+/// Exact React/Tauri envelope payload for `matrix_room_retention`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixRoomRetentionRequest {
+    room_id: String,
+    session_generation: u64,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_media_preview`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MatrixMediaPreviewRequest {
+    room_id: String,
+    session_generation: u64,
+    url: String,
+    #[serde(default)]
+    ts: Option<u64>,
+}
+
 /// Exact React/Tauri envelope payload for `matrix_set_room_directory_visibility`.
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -1368,14 +1520,18 @@ pub struct CoreState {
     session: Mutex<Option<SessionSnapshot>>,
     typing: Mutex<Option<Arc<NativeTypingOwner>>>,
     presence: Mutex<Option<Arc<NativePresenceOwner>>>,
+    rtc_transports: Mutex<Option<Arc<NativeRtcTransportsOwner>>>,
+    user_status: Mutex<Option<Arc<NativeUserStatusOwner>>>,
     verification: Mutex<Option<Arc<NativeVerificationOwner>>>,
     devices: Mutex<Option<Arc<NativeDeviceOwner>>>,
+    dehydrated_devices: Mutex<Option<Arc<NativeDehydratedDevicesOwner>>>,
     join_rules: Mutex<Option<Arc<NativeRoomJoinRuleOwner>>>,
     image_packs: Mutex<Option<Arc<NativeImagePackOwner>>>,
     http_pusher: Mutex<Option<Arc<NativeHttpPusherOwner>>>,
     notification_decisions: Mutex<Option<Arc<NativeNotificationDecisionOwner>>>,
     timelines: Mutex<Option<Arc<NativeTimelineOwner>>>,
     sync: Mutex<Option<Arc<SyncServiceOwner>>>,
+    widgets: Mutex<Option<Arc<NativeWidgetOwner>>>,
 }
 
 impl CoreState {
@@ -1404,6 +1560,22 @@ impl CoreState {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
 
+    fn rtc_transports_owner(
+        &self,
+    ) -> Result<Option<Arc<NativeRtcTransportsOwner>>, MatrixIpcError> {
+        self.rtc_transports
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn user_status_owner(&self) -> Result<Option<Arc<NativeUserStatusOwner>>, MatrixIpcError> {
+        self.user_status
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
     fn verification_owner(&self) -> Result<Option<Arc<NativeVerificationOwner>>, MatrixIpcError> {
         self.verification
             .lock()
@@ -1420,6 +1592,15 @@ impl CoreState {
 
     fn device_owner(&self) -> Result<Option<Arc<NativeDeviceOwner>>, MatrixIpcError> {
         self.devices
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
+
+    fn dehydrated_devices_owner(
+        &self,
+    ) -> Result<Option<Arc<NativeDehydratedDevicesOwner>>, MatrixIpcError> {
+        self.dehydrated_devices
             .lock()
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
@@ -1461,6 +1642,13 @@ impl CoreState {
             .map(|guard| guard.clone())
             .map_err(|_| core_state_error("p2-core-state-poisoned"))
     }
+
+    fn widget_owner(&self) -> Result<Option<Arc<NativeWidgetOwner>>, MatrixIpcError> {
+        self.widgets
+            .lock()
+            .map(|guard| guard.clone())
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))
+    }
 }
 
 /// Platform-neutral native engine root.
@@ -1484,14 +1672,18 @@ impl Core {
                 session: Mutex::new(None),
                 typing: Mutex::new(None),
                 presence: Mutex::new(None),
+                rtc_transports: Mutex::new(None),
+                user_status: Mutex::new(None),
                 verification: Mutex::new(None),
                 devices: Mutex::new(None),
+                dehydrated_devices: Mutex::new(None),
                 join_rules: Mutex::new(None),
                 image_packs: Mutex::new(None),
                 http_pusher: Mutex::new(None),
                 notification_decisions: Mutex::new(None),
                 timelines: Mutex::new(None),
                 sync: Mutex::new(None),
+                widgets: Mutex::new(None),
             }),
             registry,
         }
@@ -1551,6 +1743,20 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *presence = None;
         drop(presence);
+        let mut rtc_transports = self
+            .state
+            .rtc_transports
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *rtc_transports = None;
+        drop(rtc_transports);
+        let mut user_status = self
+            .state
+            .user_status
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *user_status = None;
+        drop(user_status);
         let mut verification = self
             .state
             .verification
@@ -1565,6 +1771,13 @@ impl Core {
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *devices = None;
         drop(devices);
+        let mut dehydrated_devices = self
+            .state
+            .dehydrated_devices
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *dehydrated_devices = None;
+        drop(dehydrated_devices);
         let mut join_rules = self
             .state
             .join_rules
@@ -1606,6 +1819,13 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *sync = None;
+        drop(sync);
+        let mut widgets = self
+            .state
+            .widgets
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *widgets = None;
         Ok(())
     }
 
@@ -1636,6 +1856,50 @@ impl Core {
         Ok(())
     }
 
+    /// Install the live MatrixRTC transport owner created after login/restore.
+    /// Core snapshots it for `matrix_rtc_transports_snapshot` / refresh.
+    pub fn attach_rtc_transports(
+        &self,
+        owner: Arc<NativeRtcTransportsOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut rtc_transports = self
+            .state
+            .rtc_transports
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *rtc_transports = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live MSC4426 status owner created after login/restore.
+    /// Core snapshots it for `matrix_user_status_snapshot` and writes through
+    /// `matrix_user_status_set` / `clear`. This never calls `set_call`.
+    pub fn attach_user_status(
+        &self,
+        owner: Arc<NativeUserStatusOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut user_status = self
+            .state
+            .user_status
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *user_status = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live experimental widget owner created by the shell after
+    /// login/restore. Runtime enablement stays on the command payloads
+    /// (`experimentalWidgetsEnabled`); attaching the owner is not enablement.
+    pub fn attach_widgets(&self, owner: Arc<NativeWidgetOwner>) -> Result<(), MatrixIpcError> {
+        let mut widgets = self
+            .state
+            .widgets
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *widgets = Some(owner);
+        Ok(())
+    }
+
     /// Install the live verification owner created by the shell after login/restore.
     /// Core lists it for `matrix_verification_list`; the shell keeps an Arc
     /// for request/SAS mutations.
@@ -1662,6 +1926,21 @@ impl Core {
             .lock()
             .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
         *devices = Some(owner);
+        Ok(())
+    }
+
+    /// Install the live dehydrated-device manager. Start failures stay on
+    /// the owner; attach itself is infallible from the shell's point of view.
+    pub fn attach_dehydrated_devices(
+        &self,
+        owner: Arc<NativeDehydratedDevicesOwner>,
+    ) -> Result<(), MatrixIpcError> {
+        let mut dehydrated_devices = self
+            .state
+            .dehydrated_devices
+            .lock()
+            .map_err(|_| core_state_error("p2-core-state-poisoned"))?;
+        *dehydrated_devices = Some(owner);
         Ok(())
     }
 
@@ -1698,10 +1977,14 @@ impl Core {
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-restore-backup-no-session")
         })?;
-        owner
+        let result = owner
             .restore_backup(recovery_secret)
             .await
-            .map_err(restore_backup_owner_error)
+            .map_err(restore_backup_owner_error)?;
+        if let Some(dehydrated) = self.state.dehydrated_devices_owner()? {
+            let _ = dehydrated.try_start_with_secret(recovery_secret).await;
+        }
+        Ok(result)
     }
 
     /// Password UIAA for a pending email 3PID attach. Password is a method
@@ -2095,8 +2378,17 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_edit_message", matrix_edit_message)
         .expect("built-in matrix_edit_message must remain in the command census");
     registry
+        .register(
+            "matrix_enable_room_encrypted_state",
+            matrix_enable_room_encrypted_state,
+        )
+        .expect("built-in matrix_enable_room_encrypted_state must remain in the command census");
+    registry
         .register("matrix_media_config", matrix_media_config)
         .expect("built-in matrix_media_config must remain in the command census");
+    registry
+        .register("matrix_media_preview", matrix_media_preview)
+        .expect("built-in matrix_media_preview must remain in the command census");
     registry
         .register("matrix_login_flows", matrix_login_flows)
         .expect("built-in matrix_login_flows must remain in the command census");
@@ -2118,6 +2410,33 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_presence_unsubscribe", matrix_presence_unsubscribe)
         .expect("built-in matrix_presence_unsubscribe must remain in the command census");
+    registry
+        .register(
+            "matrix_rtc_transports_refresh",
+            matrix_rtc_transports_refresh,
+        )
+        .expect("built-in matrix_rtc_transports_refresh must remain in the command census");
+    registry
+        .register(
+            "matrix_rtc_transports_snapshot",
+            matrix_rtc_transports_snapshot,
+        )
+        .expect("built-in matrix_rtc_transports_snapshot must remain in the command census");
+    registry
+        .register("matrix_widgets_list", matrix_widgets_list)
+        .expect("built-in matrix_widgets_list must remain in the command census");
+    registry
+        .register("matrix_widget_open", matrix_widget_open)
+        .expect("built-in matrix_widget_open must remain in the command census");
+    registry
+        .register("matrix_widget_close", matrix_widget_close)
+        .expect("built-in matrix_widget_close must remain in the command census");
+    registry
+        .register("matrix_widget_post", matrix_widget_post)
+        .expect("built-in matrix_widget_post must remain in the command census");
+    registry
+        .register("matrix_widget_subscribe", matrix_widget_subscribe)
+        .expect("built-in matrix_widget_subscribe must remain in the command census");
     registry
         .register("matrix_verification_accept", matrix_verification_accept)
         .expect("built-in matrix_verification_accept must remain in the command census");
@@ -2200,6 +2519,9 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_room_power_levels_snapshot must remain in the command census");
     registry
+        .register("matrix_room_retention", matrix_room_retention)
+        .expect("built-in matrix_room_retention must remain in the command census");
+    registry
         .register(
             "matrix_room_creators_snapshot",
             matrix_room_creators_snapshot,
@@ -2235,6 +2557,17 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_set_room_avatar", matrix_set_room_avatar)
         .expect("built-in matrix_set_room_avatar must remain in the command census");
+    registry
+        .register("matrix_send_state_event", matrix_send_state_event)
+        .expect("built-in matrix_send_state_event must remain in the command census");
+    registry
+        .register(
+            "matrix_set_encrypted_state_events_setting",
+            matrix_set_encrypted_state_events_setting,
+        )
+        .expect(
+            "built-in matrix_set_encrypted_state_events_setting must remain in the command census",
+        );
     registry
         .register(
             "matrix_get_room_directory_visibility",
@@ -2295,6 +2628,15 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_user_directory_search", matrix_user_directory_search)
         .expect("built-in matrix_user_directory_search must remain in the command census");
+    registry
+        .register("matrix_user_status_clear", matrix_user_status_clear)
+        .expect("built-in matrix_user_status_clear must remain in the command census");
+    registry
+        .register("matrix_user_status_set", matrix_user_status_set)
+        .expect("built-in matrix_user_status_set must remain in the command census");
+    registry
+        .register("matrix_user_status_snapshot", matrix_user_status_snapshot)
+        .expect("built-in matrix_user_status_snapshot must remain in the command census");
     registry
         .register("matrix_message_search", matrix_message_search)
         .expect("built-in matrix_message_search must remain in the command census");
@@ -2457,6 +2799,12 @@ fn built_in_registry() -> CommandRegistry {
         )
         .expect("built-in matrix_timeline_event_readback must remain in the command census");
     registry
+        .register(
+            "matrix_timeline_timestamp_to_event",
+            matrix_timeline_timestamp_to_event,
+        )
+        .expect("built-in matrix_timeline_timestamp_to_event must remain in the command census");
+    registry
         .register("matrix_timeline_paginate", matrix_timeline_paginate)
         .expect("built-in matrix_timeline_paginate must remain in the command census");
     registry
@@ -2496,6 +2844,9 @@ fn built_in_registry() -> CommandRegistry {
         .register("matrix_timeline_unpin", matrix_timeline_unpin)
         .expect("built-in matrix_timeline_unpin must remain in the command census");
     registry
+        .register("matrix_pinned_events", matrix_pinned_events)
+        .expect("built-in matrix_pinned_events must remain in the command census");
+    registry
         .register("matrix_timeline_poll_vote", matrix_timeline_poll_vote)
         .expect("built-in matrix_timeline_poll_vote must remain in the command census");
     registry
@@ -2528,6 +2879,9 @@ fn built_in_registry() -> CommandRegistry {
             matrix_composer_get_reply_draft,
         )
         .expect("built-in matrix_composer_get_reply_draft must remain in the command census");
+    registry
+        .register("matrix_thread_list", matrix_thread_list)
+        .expect("built-in matrix_thread_list must remain in the command census");
     registry
 }
 
@@ -2639,7 +2993,10 @@ fn timeline_open_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         "d0.3-timeline-invalid-room-id"
         | "v-timeline-view-not-open"
         | "v-timeline-normal-room-not-found"
-        | "d0.3-timeline-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        | "d0.3-timeline-room-not-found"
+        | "v-timeline-thread-root-invalid"
+        | "v-timeline-thread-room-not-found"
+        | "v-timeline-thread-open-failed" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -2679,6 +3036,38 @@ fn timeline_event_readback_owner_error(diagnostic_id: &'static str) -> MatrixIpc
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
+fn matrix_timeline_timestamp_to_event(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixTimelineTimestampToEventRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-timeline-timestamp-to-event-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-timeline-timestamp-to-event-no-session")
+        })?;
+        let readback: NativeTimelineTimestampToEventReadback = owner
+            .timestamp_to_event(&payload.room_id, payload.timestamp_ms)
+            .await
+            .map_err(timeline_timestamp_to_event_owner_error)?;
+        serde_json::to_value(readback)
+            .map_err(|_| core_state_error("p2-timeline-timestamp-to-event-serialization-failed"))
+    })
+}
+
+fn timeline_timestamp_to_event_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "d0.3-timeline-invalid-room-id" | "p2-timeline-timestamp-to-event-invalid-timestamp" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "d0.3-timeline-room-not-found" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
 fn matrix_timeline_paginate(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixTimelinePaginateRequest = serde_json::from_value(request.payload)
@@ -2707,6 +3096,8 @@ fn timeline_view_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-read-observed-tail-unexpected"
         | "v-timeline-read-requires-live-view"
         | "v-timeline-read-mark-unread-requires-explicit-intent"
+        | "v-timeline-send-thread-receipt-failed"
+        | "v-timeline-send-read-markers-failed"
         | "v-timeline-follow-live-tail-required"
         | "v-timeline-follow-live-tail-invalid"
         | "v-timeline-follow-live-tail-not-loaded" => MatrixIpcErrorCategory::SdkInvariant,
@@ -3126,6 +3517,23 @@ fn matrix_timeline_unpin(state: Arc<CoreState>, request: CommandEnvelope) -> Com
     })
 }
 
+fn matrix_pinned_events(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixPinnedEventsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-pinned-events-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-pinned-events-no-session")
+        })?;
+        let snapshot = owner
+            .pinned_events_snapshot(&payload.room_id)
+            .await
+            .map_err(pinned_events_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-pinned-events-serialization-failed"))
+    })
+}
+
 fn matrix_timeline_poll_vote(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         let payload: MatrixTimelinePollVoteRequest = serde_json::from_value(request.payload)
@@ -3238,7 +3646,11 @@ fn matrix_composer_clear_reply_draft(
                 .with_diagnostic("p2-composer-clear-reply-draft-no-session")
         })?;
         let readback: NativeComposerReplyDraftReadback = owner
-            .clear_reply_draft(&payload.room_id, payload.expected_draft_revision)
+            .clear_reply_draft(
+                &payload.room_id,
+                payload.expected_draft_revision,
+                payload.thread_root_event_id.as_deref(),
+            )
             .await
             .map_err(timeline_action_owner_error)?;
         serde_json::to_value(readback)
@@ -3258,11 +3670,32 @@ fn matrix_composer_get_reply_draft(
                 .with_diagnostic("p2-composer-get-reply-draft-no-session")
         })?;
         let readback: NativeComposerReplyDraftReadback = owner
-            .get_reply_draft(&payload.room_id)
+            .get_reply_draft(&payload.room_id, payload.thread_root_event_id.as_deref())
             .await
             .map_err(timeline_action_owner_error)?;
         serde_json::to_value(readback)
             .map_err(|_| core_state_error("p2-composer-get-reply-draft-serialization-failed"))
+    })
+}
+
+fn pinned_events_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    timeline_action_owner_error(diagnostic_id)
+}
+
+fn matrix_thread_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixThreadListRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-thread-list-invalid-payload"))?;
+        let owner = state.timeline_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-thread-list-no-session")
+        })?;
+        let snapshot: NativeThreadListSnapshot = owner
+            .thread_list(&payload.room_id, &payload.action)
+            .await
+            .map_err(timeline_action_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-thread-list-serialization-failed"))
     })
 }
 
@@ -3281,6 +3714,9 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-pin-room-not-found"
         | "v-timeline-unpin-invalid-event-id"
         | "v-timeline-unpin-room-not-found"
+        | "v-timeline-pinned-room-not-found"
+        | "v-timeline-pinned-cache-unavailable"
+        | "v-timeline-pinned-subscribe-failed"
         | "v-timeline-poll-vote-invalid-event-id"
         | "v-timeline-poll-vote-room-not-found"
         | "v-timeline-call-decline-invalid-event-id"
@@ -3309,7 +3745,11 @@ fn timeline_action_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-timeline-reply-draft-event-unavailable"
         | "v-timeline-reply-draft-event-decode-failed"
         | "v-timeline-reply-draft-event-redacted"
-        | "v-timeline-reply-draft-unsupported-event" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-timeline-reply-draft-unsupported-event"
+        | "v-thread-list-invalid-room-id"
+        | "v-thread-list-room-not-found"
+        | "v-thread-list-paginate-failed"
+        | "v-thread-list-invalid-action" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -3394,6 +3834,198 @@ fn matrix_presence_set(state: Arc<CoreState>, request: CommandEnvelope) -> Comma
             .map_err(presence_set_owner_error)?;
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-presence-set-serialization-failed"))
+    })
+}
+
+fn matrix_rtc_transports_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-rtc-transports-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.rtc_transports_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-rtc-transports-snapshot-no-session")
+        })?;
+        let snapshot: NativeRtcTransportsSnapshot = owner.snapshot().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-rtc-transports-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_rtc_transports_refresh(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-rtc-transports-refresh-invalid-payload",
+            ));
+        }
+        let owner = state.rtc_transports_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-rtc-transports-refresh-no-session")
+        })?;
+        let snapshot: NativeRtcTransportsSnapshot = owner.refresh().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-rtc-transports-refresh-serialization-failed"))
+    })
+}
+
+fn matrix_user_status_snapshot(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixUserStatusSnapshotRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-user-status-snapshot-invalid-payload"))?;
+        let owner = state.user_status_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-status-snapshot-no-session")
+        })?;
+        let snapshot: NativeUserStatusSnapshot = owner
+            .snapshot(&payload.user_id)
+            .await
+            .map_err(user_status_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-user-status-snapshot-serialization-failed"))
+    })
+}
+
+fn matrix_user_status_set(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixUserStatusSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-user-status-set-invalid-payload"))?;
+        let owner = state.user_status_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-status-set-no-session")
+        })?;
+        let result: NativeUserStatusWriteResult = owner
+            .set(&payload.emoji, &payload.text)
+            .await
+            .map_err(user_status_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-user-status-set-serialization-failed"))
+    })
+}
+
+fn matrix_user_status_clear(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-user-status-clear-invalid-payload"));
+        }
+        let owner = state.user_status_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-status-clear-no-session")
+        })?;
+        let result: NativeUserStatusWriteResult =
+            owner.clear().await.map_err(user_status_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-user-status-clear-serialization-failed"))
+    })
+}
+
+fn matrix_widgets_list(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetsListRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widgets-list-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widgets-list-no-session")
+        })?;
+        let snapshot: WidgetListSnapshot = owner
+            .list(
+                payload.experimental_widgets_enabled,
+                &payload.room_id,
+                &payload.agent_widgets,
+            )
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-widgets-list-serialization-failed"))
+    })
+}
+
+fn matrix_widget_open(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetOpenRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-open-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-open-no-session")
+        })?;
+        let policy = WidgetGrantPolicy {
+            receive_room: payload.receive_room,
+            send_room_message: payload.send_room_message,
+        };
+        let opened: WidgetOpenResult = owner
+            .open(
+                payload.experimental_widgets_enabled,
+                &payload.room_id,
+                &payload.widget_id,
+                &payload.name,
+                &payload.url,
+                payload.kind,
+                payload.init_on_content_load,
+                policy,
+            )
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(opened)
+            .map_err(|_| core_state_error("p2-widget-open-serialization-failed"))
+    })
+}
+
+fn matrix_widget_close(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetCloseRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-close-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-close-no-session")
+        })?;
+        let closed = owner
+            .close(payload.session_id.as_deref())
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(closed)
+            .map_err(|_| core_state_error("p2-widget-close-serialization-failed"))
+    })
+}
+
+fn matrix_widget_post(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetPostRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-post-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-post-no-session")
+        })?;
+        owner
+            .post(
+                payload.experimental_widgets_enabled,
+                &payload.session_id,
+                payload.message,
+            )
+            .await
+            .map_err(widget_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+fn matrix_widget_subscribe(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixWidgetSubscribeRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-widget-subscribe-invalid-payload"))?;
+        let owner = state.widget_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-widget-subscribe-no-session")
+        })?;
+        let sessions: Vec<WidgetSessionRecord> = owner
+            .subscribe_snapshot(payload.experimental_widgets_enabled)
+            .await
+            .map_err(widget_owner_error)?;
+        serde_json::to_value(sessions)
+            .map_err(|_| core_state_error("p2-widget-subscribe-serialization-failed"))
     })
 }
 
@@ -4544,6 +5176,63 @@ fn matrix_set_room_avatar(state: Arc<CoreState>, request: CommandEnvelope) -> Co
     })
 }
 
+fn matrix_send_state_event(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSendStateEventRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-send-state-event-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-send-state-event-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .send_state_event(
+                &payload.room_id,
+                &payload.event_type,
+                &payload.state_key,
+                payload.content,
+            )
+            .await
+            .map_err(room_state_event_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-send-state-event-serialization-failed"))
+    })
+}
+
+fn matrix_enable_room_encrypted_state(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixEnableRoomEncryptedStateRequest =
+            serde_json::from_value(request.payload)
+                .map_err(|_| core_state_error("p2-enable-room-encrypted-state-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-enable-room-encrypted-state-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .enable_room_encrypted_state(&payload.room_id, payload.encrypt_state_events)
+            .await
+            .map_err(room_state_event_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-enable-room-encrypted-state-serialization-failed"))
+    })
+}
+
+fn matrix_set_encrypted_state_events_setting(
+    _state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetEncryptedStateEventsSettingRequest =
+            serde_json::from_value(request.payload).map_err(|_| {
+                core_state_error("p2-set-encrypted-state-events-setting-invalid-payload")
+            })?;
+        set_encrypted_state_events_setting_enabled(payload.enabled);
+        Ok(serde_json::json!({ "status": "ok", "enabled": payload.enabled }))
+    })
+}
+
 fn matrix_get_room_directory_visibility(
     state: Arc<CoreState>,
     request: CommandEnvelope,
@@ -4564,6 +5253,70 @@ fn matrix_get_room_directory_visibility(
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-get-room-directory-visibility-serialization-failed"))
     })
+}
+
+fn matrix_room_retention(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRoomRetentionRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-room-retention-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-retention-no-session")
+        })?;
+        let result: MatrixRoomRetentionSnapshot = owner
+            .get_retention(&payload.room_id, payload.session_generation)
+            .await
+            .map_err(room_retention_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-room-retention-serialization-failed"))
+    })
+}
+
+fn matrix_media_preview(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMediaPreviewRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-media-preview-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-media-preview-no-session")
+        })?;
+        let result: MatrixMediaPreviewSnapshot = owner
+            .get_media_preview(
+                &payload.room_id,
+                payload.session_generation,
+                &payload.url,
+                payload.ts,
+            )
+            .await
+            .map_err(media_preview_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-media-preview-serialization-failed"))
+    })
+}
+
+fn media_preview_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-media-preview-invalid"
+        | "v-send.r-media-preview-url-invalid"
+        | "v-send.r-media-preview-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-media-preview-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-send.r-media-preview-stale-generation" => MatrixIpcErrorCategory::StaleSessionGeneration,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn room_retention_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-room-profile-retention-invalid"
+        | "v-send.r-room-profile-retention-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-retention-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-send.r-room-profile-retention-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
 }
 
 fn matrix_set_room_directory_visibility(
@@ -4618,6 +5371,19 @@ fn room_profile_write_owner_error(diagnostic_id: &'static str) -> MatrixIpcError
         | "v-send.r-room-profile-name-too-long"
         | "v-send.r-room-profile-topic-too-long"
         | "v-send.r-avatar-invalid-mxc"
+        | "v-send.r-room-profile-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn room_state_event_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-rooms-state-event-invalid-type"
+        | "v-rooms-state-event-invalid-key"
+        | "v-rooms-state-event-invalid-content"
+        | "d0.4-send-invalid-room-id"
         | "v-send.r-room-profile-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
         "v-send.r-room-profile-join-rule-requires-session" => MatrixIpcErrorCategory::Forbidden,
         _ => MatrixIpcErrorCategory::Unknown,
@@ -5083,6 +5849,8 @@ fn message_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-search.invalid-room"
         | "v-search.invalid-sender" => MatrixIpcErrorCategory::SdkInvariant,
         "v-search.no-session" => MatrixIpcErrorCategory::Forbidden,
+        // Off disables product search; no Client-Server `/search` fallback.
+        "v-search.index-disabled" => MatrixIpcErrorCategory::Unknown,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -5696,6 +6464,35 @@ fn presence_set_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
             MatrixIpcErrorCategory::Forbidden
         }
         "v-presence-stale-session-generation" => MatrixIpcErrorCategory::StaleSessionGeneration,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn user_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-user-status-emoji-cap"
+        | "v-user-status-text-cap"
+        | "v-user-status-invalid-user-id"
+        | "v-user-status-unsupported" => MatrixIpcErrorCategory::SdkInvariant,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+fn widget_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "experimental-widgets-disabled"
+        | "experimental-widgets-session-not-live"
+        | "experimental-widgets-owner-missing" => MatrixIpcErrorCategory::Forbidden,
+        "experimental-widgets-url-rejected"
+        | "experimental-widgets-room-state-url-rejected"
+        | "experimental-widgets-invalid-room"
+        | "experimental-widgets-room-missing"
+        | "experimental-widgets-session-missing"
+        | "experimental-widgets-registry-full"
+        | "experimental-widgets-driver-stopped"
+        | "experimental-widgets-state-read-failed" => MatrixIpcErrorCategory::SdkInvariant,
         _ => MatrixIpcErrorCategory::Unknown,
     };
     MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
@@ -6327,6 +7124,7 @@ mod tests {
                 "matrix_device_rename",
                 "matrix_device_snapshot",
                 "matrix_edit_message",
+                "matrix_enable_room_encrypted_state",
                 "matrix_get_global_image_packs",
                 "matrix_get_own_profile",
                 "matrix_get_room_directory_visibility",
@@ -6352,11 +7150,13 @@ mod tests {
                 "matrix_mdirect_remove",
                 "matrix_mdirect_snapshot",
                 "matrix_media_config",
+                "matrix_media_preview",
                 "matrix_message_search",
                 "matrix_notification_decide",
                 "matrix_notification_dismiss",
                 "matrix_notification_focus_set",
                 "matrix_notification_pending_snapshot",
+                "matrix_pinned_events",
                 "matrix_poll_respond",
                 "matrix_presence_set",
                 "matrix_presence_snapshot",
@@ -6395,6 +7195,7 @@ mod tests {
                 "matrix_room_notifications_snapshot",
                 "matrix_room_power_level_tags_snapshot",
                 "matrix_room_power_levels_snapshot",
+                "matrix_room_retention",
                 "matrix_room_set_favorite",
                 "matrix_room_set_join_rule",
                 "matrix_room_set_power_level",
@@ -6402,10 +7203,14 @@ mod tests {
                 "matrix_room_set_power_levels",
                 "matrix_room_set_read_state",
                 "matrix_room_unban",
+                "matrix_rtc_transports_refresh",
+                "matrix_rtc_transports_snapshot",
                 "matrix_secret_storage_status",
                 "matrix_send_poll",
+                "matrix_send_state_event",
                 "matrix_send_text",
                 "matrix_session_snapshot",
+                "matrix_set_encrypted_state_events_setting",
                 "matrix_set_global_image_packs",
                 "matrix_set_own_avatar",
                 "matrix_set_own_display_name",
@@ -6421,6 +7226,7 @@ mod tests {
                 "matrix_space_hierarchy_snapshot",
                 "matrix_space_parents_snapshot",
                 "matrix_sync_status",
+                "matrix_thread_list",
                 "matrix_threepid_add_email",
                 "matrix_threepid_delete",
                 "matrix_threepid_request_email_token",
@@ -6442,10 +7248,14 @@ mod tests {
                 "matrix_timeline_report",
                 "matrix_timeline_set_read_state",
                 "matrix_timeline_snapshot",
+                "matrix_timeline_timestamp_to_event",
                 "matrix_timeline_unpin",
                 "matrix_typing_set",
                 "matrix_typing_snapshot",
                 "matrix_user_directory_search",
+                "matrix_user_status_clear",
+                "matrix_user_status_set",
+                "matrix_user_status_snapshot",
                 "matrix_verification_accept",
                 "matrix_verification_begin_sas",
                 "matrix_verification_cancel",
@@ -6454,6 +7264,11 @@ mod tests {
                 "matrix_verification_list",
                 "matrix_verification_mismatch",
                 "matrix_verification_start",
+                "matrix_widget_close",
+                "matrix_widget_open",
+                "matrix_widget_post",
+                "matrix_widget_subscribe",
+                "matrix_widgets_list",
             ]
         );
 
@@ -7599,6 +8414,52 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_widgets_list_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_widgets_list".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "experimentalWidgetsEnabled": true,
+                    "roomId": "!r:example.org",
+                    "agentWidgets": []
+                }),
+            })
+            .await
+            .expect_err("widget list without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-widgets-list-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_widget_post_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_widget_post".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "experimentalWidgetsEnabled": true,
+                    "sessionId": "w1",
+                    "message": "{}"
+                }),
+            })
+            .await
+            .expect_err("widget post without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-widget-post-no-session")
+        );
+    }
+
+    #[tokio::test]
     async fn matrix_presence_snapshot_rejects_unknown_payload_fields() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -7734,6 +8595,198 @@ mod tests {
         );
         let text = format!("{error:?}");
         assert!(!text.contains("token"));
+    }
+
+    #[tokio::test]
+    async fn matrix_rtc_transports_snapshot_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_rtc_transports_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect_err("rtc transport snapshot without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-rtc-transports-snapshot-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("widget"));
+        assert!(!text.contains("livekit"));
+    }
+
+    #[tokio::test]
+    async fn matrix_rtc_transports_snapshot_rejects_unknown_payload() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_rtc_transports_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"token":"no"}),
+            })
+            .await
+            .expect_err("rtc transport snapshot must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-rtc-transports-snapshot-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_rtc_transports_snapshot_static_unsupported_without_homeserver() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let owner = NativeRtcTransportsOwner::from_static_snapshot(
+            7,
+            NativeRtcTransportsSnapshot::unsupported(7),
+        );
+        core.attach_rtc_transports(Arc::new(owner))
+            .expect("attach static rtc owner");
+        let response = core
+            .command(CommandEnvelope {
+                command: "matrix_rtc_transports_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::Value::Null,
+            })
+            .await
+            .expect("static unsupported snapshot");
+        let snapshot: NativeRtcTransportsSnapshot =
+            serde_json::from_value(response.payload).expect("snapshot payload");
+        assert_eq!(
+            snapshot.status,
+            crate::app::rtc_transports::NativeRtcTransportsStatus::Unsupported
+        );
+        assert!(snapshot.transports.is_empty());
+        let raw = serde_json::to_string(&snapshot).expect("serialize");
+        for forbidden in ["widget", "jwt", "accessToken", "password"] {
+            assert!(!raw.contains(forbidden), "{raw}");
+        }
+    }
+
+    #[tokio::test]
+    async fn matrix_user_status_set_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"emoji":"☕","text":"secret-status-text"}),
+            })
+            .await
+            .expect_err("user status set without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-user-status-set-no-session")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("secret-status-text"));
+        assert!(!text.contains("☕"));
+    }
+
+    #[tokio::test]
+    async fn matrix_user_status_set_rejects_presence_state_and_unknown_keys() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"state":"online","emoji":"☕","text":"hi"}),
+            })
+            .await
+            .expect_err("user status set must not accept presence state keys");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-user-status-set-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_user_status_write_capability_missing_and_success_ack() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let missing = crate::app::user_status::NativeUserStatusOwner::from_static_snapshot(
+            7,
+            crate::app::user_status::NativeUserStatusSnapshot {
+                session_generation: 7,
+                user_id: "@alice:example.org".into(),
+                user_status: None,
+                in_call: None,
+            },
+            false,
+        );
+        core.attach_user_status(Arc::new(missing))
+            .expect("attach static user-status owner");
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"emoji":"☕","text":"secret-status-text"}),
+            })
+            .await
+            .expect_err("missing MSC4426 capability must fail closed");
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("v-user-status-unsupported")
+        );
+        let text = format!("{error:?}");
+        assert!(!text.contains("secret-status-text"));
+
+        let core = Core::new(Arc::new(TestPlatform));
+        let ready = crate::app::user_status::NativeUserStatusOwner::from_static_snapshot(
+            8,
+            crate::app::user_status::NativeUserStatusSnapshot {
+                session_generation: 8,
+                user_id: "@alice:example.org".into(),
+                user_status: None,
+                in_call: Some(crate::app::user_status::NativeInCall {
+                    call_joined_ts: Some(1_720_000_000),
+                }),
+            },
+            true,
+        );
+        core.attach_user_status(Arc::new(ready))
+            .expect("attach capable user-status owner");
+        let response = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_set".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"emoji":"☕","text":"in a meeting"}),
+            })
+            .await
+            .expect("capable set");
+        let ack: NativeUserStatusWriteResult =
+            serde_json::from_value(response.payload).expect("ack");
+        assert_eq!(ack.status, "ok");
+        let raw = serde_json::to_string(&ack).expect("serialize");
+        assert!(!raw.contains("☕"));
+        assert!(!raw.contains("in a meeting"));
+        assert!(!raw.contains("emoji"));
+        assert!(!raw.contains("text"));
+
+        let snapshot = core
+            .command(CommandEnvelope {
+                command: "matrix_user_status_snapshot".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"userId":"@bob:example.org"}),
+            })
+            .await
+            .expect("snapshot");
+        let body: NativeUserStatusSnapshot =
+            serde_json::from_value(snapshot.payload).expect("snapshot body");
+        assert_eq!(body.user_id, "@bob:example.org");
+        assert!(body.in_call.is_some());
     }
 
     #[tokio::test]
@@ -8564,6 +9617,80 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_send_state_event_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_send_state_event".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "eventType":"m.room.canonical_alias",
+                    "stateKey":"",
+                    "content":{"alias":"#r:example.org"}
+                }),
+            })
+            .await
+            .expect_err("send state event without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-send-state-event-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_enable_room_encrypted_state_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_enable_room_encrypted_state".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "encryptStateEvents":true
+                }),
+            })
+            .await
+            .expect_err("enable encrypted state without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-enable-room-encrypted-state-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_set_encrypted_state_events_setting_does_not_need_a_session() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let payload = core
+            .command(CommandEnvelope {
+                command: "matrix_set_encrypted_state_events_setting".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "enabled": false }),
+            })
+            .await
+            .expect("setting command is session-free")
+            .payload;
+        assert_eq!(payload["status"], "ok");
+        assert_eq!(payload["enabled"], false);
+        assert!(!crate::app::room_ops::encrypted_state_events_setting_enabled());
+        let _ = core
+            .command(CommandEnvelope {
+                command: "matrix_set_encrypted_state_events_setting".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({ "enabled": true }),
+            })
+            .await
+            .expect("restore default-on");
+        assert!(crate::app::room_ops::encrypted_state_events_setting_enabled());
+    }
+
+    #[tokio::test]
     async fn matrix_set_room_topic_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -9045,6 +10172,48 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-get-room-directory-visibility-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_room_retention_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_room_retention".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","sessionGeneration":1}),
+            })
+            .await
+            .expect_err("room retention without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-room-retention-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_media_preview_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_media_preview".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "sessionGeneration":1,
+                    "url":"https://example.org/x"
+                }),
+            })
+            .await
+            .expect_err("media preview without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-media-preview-no-session")
         );
     }
 
@@ -9924,6 +11093,48 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_timeline_timestamp_to_event_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_timestamp_to_event".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({"roomId":"!r:example.org","timestampMs":1_700_000_000_000_u64}),
+            })
+            .await
+            .expect_err("timeline timestamp_to_event without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-timestamp-to-event-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_timeline_timestamp_to_event_rejects_unknown_payload_fields() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_timeline_timestamp_to_event".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "timestampMs":1_700_000_000_000_u64,
+                    "token":"no"
+                }),
+            })
+            .await
+            .expect_err("timeline timestamp_to_event must reject unknown payload fields");
+        assert_eq!(error.category, MatrixIpcErrorCategory::SdkInvariant);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-timeline-timestamp-to-event-invalid-payload")
+        );
+    }
+
+    #[tokio::test]
     async fn matrix_timeline_paginate_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -10516,6 +11727,27 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn matrix_pinned_events_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_pinned_events".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org"
+                }),
+            })
+            .await
+            .expect_err("pinned events without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-pinned-events-no-session")
+        );
+    }
+
+    #[tokio::test]
     async fn matrix_timeline_unpin_without_owner_fails_closed() {
         let core = Core::new(Arc::new(TestPlatform));
         let error = core
@@ -10690,6 +11922,28 @@ mod tests {
         assert_eq!(
             error.diagnostic_id.as_deref(),
             Some("p2-composer-get-reply-draft-no-session")
+        );
+    }
+
+    #[tokio::test]
+    async fn matrix_thread_list_without_owner_fails_closed() {
+        let core = Core::new(Arc::new(TestPlatform));
+        let error = core
+            .command(CommandEnvelope {
+                command: "matrix_thread_list".into(),
+                session_generation: 0,
+                request_id: None,
+                payload: serde_json::json!({
+                    "roomId":"!r:example.org",
+                    "action":"open"
+                }),
+            })
+            .await
+            .expect_err("thread list without an attached owner must fail closed");
+        assert_eq!(error.category, MatrixIpcErrorCategory::Forbidden);
+        assert_eq!(
+            error.diagnostic_id.as_deref(),
+            Some("p2-thread-list-no-session")
         );
     }
 

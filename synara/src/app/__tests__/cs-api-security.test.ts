@@ -49,3 +49,21 @@ test('well-known discovery drops an insecure optional identity server', async ()
   assert.equal(error, undefined);
   assert.equal(discovery?.['m.identity_server'], undefined);
 });
+
+test('well-known types accept either rtc_foci key and non-livekit transports', () => {
+  const msc4143: import('../cs-api').AutoDiscoveryInfo = {
+    'm.homeserver': { base_url: 'https://matrix.example.org' },
+    'org.matrix.msc4143.rtc_foci': [
+      { type: 'livekit', livekit_service_url: 'https://livekit.example.org' },
+      { type: 'local.custom.sfu' },
+    ],
+  };
+  const stable: import('../cs-api').AutoDiscoveryInfo = {
+    'm.homeserver': { base_url: 'https://matrix.example.org' },
+    'm.rtc_foci': [{ type: 'livekit', livekit_service_url: 'https://livekit.example.org' }],
+  };
+  assert.equal(msc4143['org.matrix.msc4143.rtc_foci']?.[0]?.type, 'livekit');
+  assert.equal(msc4143['org.matrix.msc4143.rtc_foci']?.[1]?.type, 'local.custom.sfu');
+  assert.equal(stable['m.rtc_foci']?.[0]?.type, 'livekit');
+  assert.equal('m.rtc_foci' in msc4143 && 'org.matrix.msc4143.rtc_foci' in stable, false);
+});

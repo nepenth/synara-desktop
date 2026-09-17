@@ -562,6 +562,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.displayKind(
+                rowKind: "call",
+                body: "notification",
+                formattedBody: nil
+            ),
+            .text("Incoming call")
+        )
+        XCTAssertEqual(
+            SharedCoreTimelineRows.displayKind(
                 rowKind: "sticker",
                 body: "",
                 formattedBody: nil
@@ -696,7 +704,7 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 isAgentApproval: false,
                 mediaFilename: nil,
                 mediaCaption: nil,
-                reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true)],
+                reactions: [TimelineViewReactionDto(key: "👍", count: 2, own: true, senders: [])],
                 mediaHandleId: nil,
                 mediaMimeType: nil,
                 mediaWidth: nil,
@@ -794,14 +802,14 @@ final class SynaraCoreBindingsTests: XCTestCase {
 
         XCTAssertEqual(
             SharedCoreTimelineRows.reactionOwnership(from: [
-                TimelineViewReactionDto(key: "👍", count: 2, own: true),
-                TimelineViewReactionDto(key: "🎉", count: 1, own: false),
+                TimelineViewReactionDto(key: "👍", count: 2, own: true, senders: []),
+                TimelineViewReactionDto(key: "🎉", count: 1, own: false, senders: []),
             ]),
             .known(["👍"])
         )
         XCTAssertEqual(
             SharedCoreTimelineRows.reactionOwnership(from: [
-                TimelineViewReactionDto(key: "👍", count: 2, own: nil),
+                TimelineViewReactionDto(key: "👍", count: 2, own: nil, senders: []),
             ]),
             .unknown
         )
@@ -1284,6 +1292,10 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     lastMessagePreview: nil,
                     lastMessageIsAgentApproval: false,
                     isFavorite: false,
+                    isCall: false,
+                    hasActiveCall: false,
+                    activeCallParticipantCount: 0,
+                    directUserId: nil,
                     encryptionStatus: .encrypted
                 ),
                 SharedCoreRoomListRows.RoomRow(
@@ -1299,6 +1311,10 @@ final class SynaraCoreBindingsTests: XCTestCase {
                     lastMessagePreview: "Hello from Alice",
                     lastMessageIsAgentApproval: true,
                     isFavorite: true,
+                    isCall: true,
+                    hasActiveCall: true,
+                    activeCallParticipantCount: 3,
+                    directUserId: nil,
                     encryptionStatus: .notEncrypted
                 ),
             ],
@@ -1326,6 +1342,12 @@ final class SynaraCoreBindingsTests: XCTestCase {
         XCTAssertEqual(rooms.first?.membership, .invited)
         XCTAssertEqual(rooms.first?.isFavorite, false)
         XCTAssertEqual(rooms.last?.isFavorite, true)
+        XCTAssertEqual(rooms.first?.isCall, false)
+        XCTAssertEqual(rooms.last?.isCall, true)
+        XCTAssertEqual(rooms.first?.hasActiveCall, false)
+        XCTAssertEqual(rooms.last?.hasActiveCall, true)
+        XCTAssertEqual(rooms.last?.activeCallParticipantCount, 3)
+        XCTAssertEqual(rooms.last?.liveCallChipLabel, "3 live")
         XCTAssertEqual(rooms.first?.isEncrypted, true)
         XCTAssertEqual(rooms.last?.isEncrypted, false)
         XCTAssertEqual(rooms.first?.encryptionStatus, .encrypted)
@@ -1645,6 +1667,83 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testSharedCoreRtcTransportsWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        do {
+            _ = try await SharedCoreRtcTransports.snapshot(core: core)
+            XCTFail("Fail-closed SharedCore must not snapshot RTC transports without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-rtc-transports-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "widget", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+        do {
+            _ = try await SharedCoreRtcTransports.refresh(core: core)
+            XCTFail("Fail-closed SharedCore must not refresh RTC transports without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-rtc-transports-refresh-no-session"))
+            for forbidden in ["password", "syt_", "widget", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+        XCTAssertEqual(
+            SharedCoreRtcTransports.diagnosticCopy(
+                SharedCoreRtcTransportsSnapshot(status: "unsupported", transports: [])
+            ),
+            "This homeserver does not advertise a call transport"
+        )
+        XCTAssertEqual(
+            SharedCoreRtcTransports.diagnosticCopy(
+                SharedCoreRtcTransportsSnapshot(
+                    status: "ready",
+                    transports: [
+                        SharedCoreRtcTransport(kind: "livekit", serviceURL: "https://livekit.example.org")
+                    ]
+                )
+            ),
+            "MatrixRTC transport: LiveKit at https://livekit.example.org"
+        )
+    }
+
+    func testSharedCoreUserStatusWithoutSessionFailsClosed() async {
+        let core = SharedCore()
+        do {
+            _ = try await SharedCoreUserStatus.snapshot(core: core, userId: "@alice:example.org")
+            XCTFail("Fail-closed SharedCore must not snapshot user status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-status-snapshot-no-session"))
+            for forbidden in ["password", "syt_", "secret-status-text", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreUserStatus.set(core: core, emoji: "☕", text: "secret-status-text")
+            XCTFail("Fail-closed SharedCore must not set user status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-status-set-no-session"))
+            for forbidden in ["password", "syt_", "secret-status-text", "☕", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+
+        do {
+            _ = try await SharedCoreUserStatus.clear(core: core)
+            XCTFail("Fail-closed SharedCore must not clear user status without a session")
+        } catch {
+            let publicError = String(reflecting: error)
+            XCTAssertTrue(publicError.contains("p2-user-status-clear-no-session"))
+            for forbidden in ["password", "syt_", "token"] {
+                XCTAssertFalse(publicError.contains(forbidden))
+            }
+        }
+    }
+
     func testSharedCoreVerificationLiveMapsPhasesWithoutEcho() {
         let incoming = SharedCoreVerificationLive.state(
             phase: "requested",
@@ -1745,9 +1844,16 @@ final class SynaraCoreBindingsTests: XCTestCase {
             .failed
         )
         XCTAssertTrue(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing"))
+        XCTAssertTrue(
+            SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"),
+            "Outgoing Started must still offer SAS when iOS cannot show QR"
+        )
+        XCTAssertTrue(
+            SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "outgoing", hasShownQr: true),
+            "A QR DTO must not skip SAS start on iOS"
+        )
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "incoming"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "ready", direction: "incoming"))
-        XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "started", direction: "outgoing"))
         XCTAssertFalse(SharedCoreVerificationLive.needsSasStart(phase: "sas_ready", direction: "incoming"))
         XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "done"))
         XCTAssertTrue(SharedCoreVerificationLive.isTerminal(phase: "cancelled"))
@@ -1823,7 +1929,8 @@ final class SynaraCoreBindingsTests: XCTestCase {
                 otherUserId: "@bob:example.org",
                 otherDeviceId: "DEVICE1"
             ),
-            .sasStarted
+            .accepted,
+            "Outgoing Started still offers Start Comparison because iOS cannot render QR"
         )
     }
 

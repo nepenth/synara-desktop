@@ -26,7 +26,10 @@
       "isNotificationSounds": true,
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
-      "developerTools": false
+      "developerTools": false,
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "sharedWithOptionalFields": {
       "themeId": "aurora",
@@ -59,7 +62,10 @@
       "isNotificationSounds": false,
       "hour24Clock": true,
       "dateFormatString": "YYYY-MM-DD",
-      "developerTools": true
+      "developerTools": true,
+      "experimentalWidgetsEnabled": true,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "desktopPlatform": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
@@ -69,7 +75,8 @@
       "desktopDiagnosticsPerformance": false,
       "desktopDiagnosticsSession": false,
       "desktopDiagnosticsRoomState": false,
-      "desktopDiagnosticsOverlay": false
+      "desktopDiagnosticsOverlay": false,
+      "agentWidgetEntries": []
     }
   },
   "invalid": {
@@ -100,6 +107,9 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true,
       "desktopShortcutShow": "CmdOrCtrl+1"
     },
     "badMessageSpacing": {
@@ -128,7 +138,10 @@
       "isNotificationSounds": true,
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
-      "developerTools": false
+      "developerTools": false,
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "badThemeBaseColor": {
       "useSystemTheme": true,
@@ -157,7 +170,10 @@
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
       "developerTools": false,
-      "themeBaseColor": "aabbcc"
+      "experimentalWidgetsEnabled": false,
+      "themeBaseColor": "aabbcc",
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "badMessageTextTone": {
       "useSystemTheme": true,
@@ -185,7 +201,10 @@
       "isNotificationSounds": true,
       "hour24Clock": false,
       "dateFormatString": "D MMM YYYY",
-      "developerTools": false
+      "developerTools": false,
+      "experimentalWidgetsEnabled": false,
+      "indexedMessageSearch": true,
+      "encryptedStateEvents": true
     },
     "desktopPlatformContainsSharedField": {
       "desktopShortcutShow": "CmdOrCtrl+Shift+C",
@@ -196,6 +215,7 @@
       "desktopDiagnosticsSession": false,
       "desktopDiagnosticsRoomState": false,
       "desktopDiagnosticsOverlay": false,
+      "agentWidgetEntries": [],
       "themeId": "aurora"
     }
   }

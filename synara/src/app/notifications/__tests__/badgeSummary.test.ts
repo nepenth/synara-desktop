@@ -96,3 +96,16 @@ test('desktop tray shares the approval center snapshot instead of latest-message
   assert.match(source, /pendingCount: agentApprovalCount.*useApprovalInboxSummary/);
   assert.doesNotMatch(source, /countJoinedRoomAgentApprovals|lastMessageIsAgentApproval/);
 });
+
+test('dock badge stays on summarizeNotifications and never uses SDK total_unread_notifications', () => {
+  const updater = readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
+  const badge = readFileSync('src/app/platform/badge.ts', 'utf8');
+  const summary = readFileSync('src/app/notifications/badgeSummary.ts', 'utf8');
+  assert.match(updater, /getPlatformNotificationSummary/);
+  assert.match(updater, /setPlatformBadgeCount\(summary\.appBadgeCount\)/);
+  assert.match(badge, /summarizeNotifications/);
+  assert.match(badge, /setDesktopBadgeCount/);
+  assert.doesNotMatch(updater, /total_unread_notifications/);
+  assert.doesNotMatch(badge, /total_unread_notifications/);
+  assert.doesNotMatch(summary, /total_unread_notifications/);
+});
