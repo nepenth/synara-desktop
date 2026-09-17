@@ -40,6 +40,34 @@ const toEndOfDay = (date?: string): number | undefined => {
   return Number.isNaN(timestamp) ? undefined : timestamp;
 };
 
+const padDatePart = (value: number): string => String(value).padStart(2, '0');
+
+const isoDay = (date: Date): string =>
+  `${date.getFullYear()}-${padDatePart(date.getMonth() + 1)}-${padDatePart(date.getDate())}`;
+
+/** Inclusive local calendar range ending today. `days: 7` is today plus the previous 6 days. */
+export const lastNDaysDateRange = (
+  days: number,
+  nowMs = Date.now()
+): { fromDate: string; toDate: string } => {
+  const safeDays = Math.max(1, Math.floor(days));
+  const to = new Date(nowMs);
+  const from = new Date(nowMs);
+  from.setHours(0, 0, 0, 0);
+  from.setDate(from.getDate() - (safeDays - 1));
+  return { fromDate: isoDay(from), toDate: isoDay(to) };
+};
+
+export const isLastNDaysDateRange = (
+  fromDate: string | undefined,
+  toDate: string | undefined,
+  days: number,
+  nowMs = Date.now()
+): boolean => {
+  const range = lastNDaysDateRange(days, nowMs);
+  return fromDate === range.fromDate && toDate === range.toDate;
+};
+
 export const parseSenderFilter = (value: string): string[] | undefined => {
   const senders = value
     .split(',')
@@ -47,6 +75,35 @@ export const parseSenderFilter = (value: string): string[] | undefined => {
     .filter(Boolean);
 
   return senders.length > 0 ? senders : undefined;
+};
+
+export const isAttachmentListingType = (type?: string): boolean =>
+  type === MessageSearchTypeFilter.Media || type === MessageSearchTypeFilter.Files;
+
+export const defaultMessageSearchListingDateRange = (
+  now = new Date()
+): { fromDate: string; toDate: string } => lastNDaysDateRange(7, now.getTime());
+
+export const resolveMessageSearchListingDateRange = (
+  fromDate?: string,
+  toDate?: string,
+  now = new Date()
+): { fromDate: string; toDate: string } => {
+  const defaults = defaultMessageSearchListingDateRange(now);
+  return {
+    fromDate: fromDate || defaults.fromDate,
+    toDate: toDate || defaults.toDate,
+  };
+};
+
+export const listingDateRangeToTimestamps = (
+  fromDate: string,
+  toDate: string
+): { fromTs: number; toTs: number } | undefined => {
+  const fromTs = toStartOfDay(fromDate);
+  const toTs = toEndOfDay(toDate);
+  if (fromTs === undefined || toTs === undefined || fromTs > toTs) return undefined;
+  return { fromTs, toTs };
 };
 
 export const isMessageSearchResultForType = (

@@ -11,11 +11,16 @@
 
 mod error;
 mod ipc;
+mod listing;
 mod live;
 mod session;
 
 pub use error::SearchError;
 pub use ipc::{MatrixMessageSearchGroup, MatrixMessageSearchItem, MatrixMessageSearchResult};
+pub use listing::{
+    list_room_attachments, parse_attachment_listing_kind, AttachmentListingKind,
+    MAX_ATTACHMENT_LISTING_EVENTS, MAX_ATTACHMENT_LISTING_PAGES,
+};
 #[cfg(feature = "search-index")]
 pub use live::parse_message_search_offset;
 pub use live::{
@@ -37,6 +42,7 @@ pub fn matrix_search_markers() -> &'static str {
     debug_assert_eq!(s.state(), SearchState::Idle);
     debug_assert!(s.items().is_empty());
     debug_assert_eq!(parse_message_search_term("").ok(), Some(None));
+    debug_assert!(parse_attachment_listing_kind("media").is_ok());
     debug_assert_eq!(MESSAGE_SEARCH_LIMIT, 20);
     debug_assert_eq!(MATRIX_SEARCH_MARKER, "matrix-search-p6.8");
     MATRIX_SEARCH_MARKER

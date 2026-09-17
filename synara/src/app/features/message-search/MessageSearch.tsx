@@ -25,6 +25,12 @@ import { SearchInput } from './SearchInput';
 import { SearchFilters } from './SearchFilters';
 import { VirtualTile } from '../../components/virtualizer';
 import { filterMessageSearchGroups } from '../../utils/messageSearchFilters';
+import {
+  isRoomAttachmentListingEnabled,
+  isRoomAttachmentListingKind,
+  listingQueryRange,
+  listRoomAttachments,
+} from './roomMediaListing';
 
 const useSearchPathSearchParams = (searchParams: URLSearchParams): _SearchPathSearchParams =>
   useMemo(
@@ -88,37 +94,78 @@ export function MessageSearch({
     return undefined;
   }, [searchPathSearchParams.senders]);
 
+  const requestedTerm = searchPathSearchParams.term?.trim() || undefined;
+
   const msgSearchParams: MessageSearchParams = useMemo(() => {
     const isGlobal = searchPathSearchParams.global === 'true';
     const defaultRooms = isGlobal ? undefined : rooms;
 
     return {
-      term: searchPathSearchParams.term,
+      term: requestedTerm,
       order: nativeSession ? 'rank' : searchPathSearchParams.order ?? 'recent',
       rooms: searchParamRooms ?? defaultRooms,
       senders: searchParamsSenders ?? senders,
     };
   }, [
-    searchPathSearchParams,
+    requestedTerm,
     searchParamRooms,
     searchParamsSenders,
     rooms,
     senders,
     nativeSession,
+    searchPathSearchParams.global,
+    searchPathSearchParams.order,
   ]);
+
+  const listingActive = isRoomAttachmentListingEnabled({
+    term: msgSearchParams.term,
+    type: searchPathSearchParams.type,
+    rooms: msgSearchParams.rooms,
+  });
+  const listingRange = listingActive
+    ? listingQueryRange(searchPathSearchParams.from, searchPathSearchParams.to)
+    : undefined;
+  const keywordSearchEnabled = !!msgSearchParams.term && (!nativeSession || indexedMessageSearch);
+  const listingSearchEnabled = listingActive && nativeSession && !!listingRange;
 
   const searchMessages = useMessageSearch(msgSearchParams);
 
   const { status, data, error, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
-    enabled: !!msgSearchParams.term && (!nativeSession || indexedMessageSearch),
-    queryKey: [
-      'search',
-      msgSearchParams.term,
-      msgSearchParams.order,
-      msgSearchParams.rooms,
-      msgSearchParams.senders,
-    ],
-    queryFn: ({ pageParam }) => searchMessages(pageParam),
+    enabled: keywordSearchEnabled || listingSearchEnabled,
+    queryKey: listingSearchEnabled
+      ? [
+          'room-attachment-listing',
+          msgSearchParams.rooms,
+          searchPathSearchParams.type,
+          listingRange?.fromTs,
+          listingRange?.toTs,
+        ]
+      : [
+          'search',
+          msgSearchParams.term,
+          msgSearchParams.order,
+          msgSearchParams.rooms,
+          msgSearchParams.senders,
+        ],
+    queryFn: ({ pageParam }) => {
+      if (
+        listingSearchEnabled &&
+        listingRange &&
+        isRoomAttachmentListingKind(searchPathSearchParams.type)
+      ) {
+        const roomId = msgSearchParams.rooms?.[0];
+        if (!roomId) {
+          return Promise.resolve({ highlights: [], groups: [] });
+        }
+        return listRoomAttachments({
+          roomId,
+          kind: searchPathSearchParams.type,
+          fromTs: listingRange.fromTs,
+          toTs: listingRange.toTs,
+        });
+      }
+      return searchMessages(pageParam);
+    },
     initialPageParam: '',
     getNextPageParam: (lastPage) => lastPage.nextToken,
   });
@@ -128,10 +175,18 @@ export function MessageSearch({
     () =>
       filterMessageSearchGroups<ResultItem, ResultGroup>(rawGroups, {
         type: searchPathSearchParams.type,
-        fromDate: searchPathSearchParams.from,
-        toDate: searchPathSearchParams.to,
+        fromDate: listingSearchEnabled ? listingRange?.fromDate : searchPathSearchParams.from,
+        toDate: listingSearchEnabled ? listingRange?.toDate : searchPathSearchParams.to,
       }),
-    [rawGroups, searchPathSearchParams.type, searchPathSearchParams.from, searchPathSearchParams.to]
+    [
+      rawGroups,
+      searchPathSearchParams.type,
+      searchPathSearchParams.from,
+      searchPathSearchParams.to,
+      listingSearchEnabled,
+      listingRange?.fromDate,
+      listingRange?.toDate,
+    ]
   );
   const highlights = useMemo(() => {
     const mixed = data?.pages.flatMap((result) => result.highlights);
@@ -262,11 +317,11 @@ export function MessageSearch({
       </ScrollTopContainer>
       <Box ref={scrollTopAnchorRef} direction="Column" gap="300">
         <SearchInput
-          active={!!msgSearchParams.term}
+          active={!!requestedTerm || listingSearchEnabled}
           loading={status === 'pending'}
-          disabled={nativeSession && !indexedMessageSearch}
+          disabled={nativeSession && !indexedMessageSearch && !listingSearchEnabled}
           disabledReason={
-            nativeSession && !indexedMessageSearch
+            nativeSession && !indexedMessageSearch && !listingSearchEnabled
               ? 'Indexed message search is off. Turn it on in Settings → General and reload the session. There is no homeserver search fallback.'
               : undefined
           }
@@ -295,19 +350,31 @@ export function MessageSearch({
         />
       </Box>
 
-      {!msgSearchParams.term && status === 'pending' && (
+      {!requestedTerm && !listingSearchEnabled && status === 'pending' && (
         <PageHeroEmpty>
           <PageHeroSection>
             <PageHero
               icon={<Icon size="600" src={Icons.Message} />}
               title="Search Messages"
-              subTitle="Find helpful messages in your community by searching with related keywords."
+              subTitle="Find messages by keyword, or pick Media or Files in this room (defaults to the last 7 days)."
             />
           </PageHeroSection>
         </PageHeroEmpty>
       )}
 
-      {msgSearchParams.term && groups.length === 0 && status === 'success' && (
+      {listingSearchEnabled && groups.length === 0 && status === 'pending' && (
+        <Box
+          className={ContainerColor({ variant: 'SurfaceVariant' })}
+          style={{ padding: config.space.S300, borderRadius: config.radii.R400 }}
+          alignItems="Center"
+          gap="200"
+        >
+          <Icon size="200" src={Icons.Search} />
+          <Text>Listing attachments in this room…</Text>
+        </Box>
+      )}
+
+      {(requestedTerm || listingSearchEnabled) && groups.length === 0 && status === 'success' && (
         <Box
           className={ContainerColor({ variant: 'Warning' })}
           style={{ padding: config.space.S300, borderRadius: config.radii.R400 }}
@@ -316,13 +383,18 @@ export function MessageSearch({
         >
           <Icon size="200" src={Icons.Info} />
           <Text>
-            No results found for <b>{`"${msgSearchParams.term}"`}</b>
+            {requestedTerm ? (
+              <>
+                No results found for <b>{`"${requestedTerm}"`}</b>
+              </>
+            ) : (
+              'No matching attachments in this date range. Adjust From/To or use Last 7 days.'
+            )}
           </Text>
         </Box>
       )}
 
-      {((msgSearchParams.term && status === 'pending') ||
-        (groups.length > 0 && vItems.length === 0)) && (
+      {((requestedTerm && status === 'pending') || (groups.length > 0 && vItems.length === 0)) && (
         <Box direction="Column" gap="100">
           {[...Array(8).keys()].map((key) => (
             <SequenceCard variant="SurfaceVariant" key={key} style={{ minHeight: toRem(80) }} />
@@ -333,7 +405,13 @@ export function MessageSearch({
       {vItems.length > 0 && (
         <Box direction="Column" gap="300">
           <Box direction="Column" gap="200">
-            <Text size="H5">{`Results for "${msgSearchParams.term}"`}</Text>
+            <Text size="H5">
+              {requestedTerm
+                ? `Results for "${requestedTerm}"`
+                : searchPathSearchParams.type === 'files'
+                ? 'Files in this room'
+                : 'Media in this room'}
+            </Text>
             <Line size="300" variant="Surface" />
           </Box>
           <div

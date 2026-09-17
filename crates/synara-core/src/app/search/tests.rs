@@ -1,6 +1,7 @@
 //! Unit tests for P6.8 search session.
 
 use super::*;
+use super::{listing, live};
 use crate::dto::{SearchResult, SearchResultItem};
 use crate::transport::MatrixIpcErrorCategory;
 
@@ -185,6 +186,7 @@ fn message_search_dto_is_ids_and_snippet_only() {
                 origin_server_ts: 1,
                 body: "hello".into(),
                 room_id: "!r:example.org".into(),
+                msg_type: Some("m.text".into()),
             }],
         }],
     };
@@ -194,8 +196,112 @@ fn message_search_dto_is_ids_and_snippet_only() {
     assert_eq!(json["groups"][0]["roomId"], "!r:example.org");
     assert_eq!(json["groups"][0]["items"][0]["eventId"], "$e");
     assert_eq!(json["groups"][0]["items"][0]["body"], "hello");
+    assert_eq!(json["groups"][0]["items"][0]["msgType"], "m.text");
     assert!(json.get("term").is_none());
     assert!(json.get("search_categories").is_none());
     assert!(json["groups"][0]["items"][0].get("result").is_none());
     assert!(json["groups"][0]["items"][0].get("event").is_none());
+    assert!(json["groups"][0]["items"][0].get("content").is_none());
+}
+
+#[test]
+fn map_hit_event_preserves_known_msg_type_and_skips_garbage() {
+    let image = live::map_hit_event_from_json(
+        1.0,
+        None,
+        serde_json::json!({
+            "event_id": "$img",
+            "sender": "@a:example.org",
+            "origin_server_ts": 1_700_000_000_000_u64,
+            "room_id": "!r:example.org",
+            "content": { "msgtype": "m.image", "body": "pic.png" }
+        }),
+    )
+    .expect("image hit");
+    assert_eq!(image.msg_type.as_deref(), Some("m.image"));
+    assert_eq!(image.body, "pic.png");
+    assert_eq!(image.origin_server_ts, 1_700_000_000_000);
+
+    let file = live::map_hit_event_from_json(
+        1.0,
+        None,
+        serde_json::json!({
+            "event_id": "$file",
+            "sender": "@a:example.org",
+            "origin_server_ts": 1_700_000_000_001_u64,
+            "room_id": "!r:example.org",
+            "content": { "msgtype": "m.file", "filename": "notes.pdf" }
+        }),
+    )
+    .expect("file hit");
+    assert_eq!(file.msg_type.as_deref(), Some("m.file"));
+
+    let garbage = live::map_hit_event_from_json(
+        1.0,
+        None,
+        serde_json::json!({
+            "event_id": "$bad",
+            "sender": "@a:example.org",
+            "origin_server_ts": 2,
+            "room_id": "!r:example.org",
+            "content": { "msgtype": "http://evil.example/m.image", "body": "no" }
+        }),
+    )
+    .expect("garbage msgtype still maps the hit");
+    assert_eq!(garbage.msg_type, None);
+
+    assert_eq!(live::accept_msg_type("m.video").as_deref(), Some("m.video"));
+    assert_eq!(
+        live::accept_msg_type("m.poll.start").as_deref(),
+        Some("m.poll.start")
+    );
+    assert!(live::accept_msg_type("not-a-type").is_none());
+    assert!(live::accept_msg_type("m.").is_none());
+    assert!(live::accept_msg_type(&"m.x".repeat(40)).is_none());
+}
+
+#[test]
+fn attachment_listing_kind_matches_media_and_files() {
+    assert_eq!(
+        parse_attachment_listing_kind("media").unwrap(),
+        AttachmentListingKind::Media
+    );
+    assert_eq!(
+        parse_attachment_listing_kind("files").unwrap(),
+        AttachmentListingKind::Files
+    );
+    assert_eq!(
+        parse_attachment_listing_kind("audio").unwrap_err(),
+        "v-search.invalid-listing"
+    );
+    assert!(listing::msg_type_matches_listing(
+        Some("m.image"),
+        AttachmentListingKind::Media
+    ));
+    assert!(listing::msg_type_matches_listing(
+        Some("m.video"),
+        AttachmentListingKind::Media
+    ));
+    assert!(!listing::msg_type_matches_listing(
+        Some("m.file"),
+        AttachmentListingKind::Media
+    ));
+    assert!(listing::msg_type_matches_listing(
+        Some("m.file"),
+        AttachmentListingKind::Files
+    ));
+    assert!(!listing::msg_type_matches_listing(
+        Some("m.audio"),
+        AttachmentListingKind::Files
+    ));
+}
+
+#[test]
+fn desktop_listing_source_never_sends_search_events() {
+    let listing = include_str!("listing.rs");
+    assert!(listing.contains("MessagesOptions::backward"));
+    assert!(listing.contains("room.messages"));
+    assert!(!listing.contains("search::search_events"));
+    assert!(!listing.contains("/_matrix/client/v3/search"));
+    assert!(!listing.contains("search_homeserver"));
 }

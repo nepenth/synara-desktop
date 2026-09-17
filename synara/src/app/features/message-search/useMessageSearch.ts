@@ -27,6 +27,13 @@ import { useCallback } from 'react';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
 import { invokeDesktopWithAvailability } from '../../utils/desktop';
 import { isNativeMatrixSession } from '../verification/nativeVerification';
+import { mapNativeSearchResult, type NativeMessageSearchResult } from './nativeMessageSearchMap';
+
+export {
+  mapNativeSearchResult,
+  type NativeMessageSearchItem,
+  type NativeMessageSearchResult,
+} from './nativeMessageSearchMap';
 
 export type ResultItem = {
   rank: number;
@@ -88,49 +95,6 @@ export type MessageSearchParams = {
   rooms?: string[];
   senders?: string[];
 };
-
-type NativeMessageSearchItem = {
-  rank: number;
-  eventId: string;
-  sender: string;
-  originServerTs: number;
-  body: string;
-  roomId: string;
-};
-
-type NativeMessageSearchGroup = {
-  roomId: string;
-  items: NativeMessageSearchItem[];
-};
-
-type NativeMessageSearchResult = {
-  nextToken?: string;
-  highlights: string[];
-  groups: NativeMessageSearchGroup[];
-};
-
-const mapNativeSearchResult = (value: NativeMessageSearchResult): SearchResult => ({
-  nextToken: value.nextToken,
-  highlights: value.highlights ?? [],
-  groups: (value.groups ?? []).map((group) => ({
-    roomId: group.roomId,
-    items: (group.items ?? []).map((item) => ({
-      rank: item.rank,
-      event: {
-        event_id: item.eventId,
-        type: 'm.room.message',
-        sender: item.sender,
-        origin_server_ts: item.originServerTs,
-        room_id: item.roomId,
-        content: {
-          msgtype: 'm.text',
-          body: item.body,
-        },
-      },
-      context: {},
-    })),
-  })),
-});
 
 export const useMessageSearch = (params: MessageSearchParams) => {
   const mx = useMatrixClient();

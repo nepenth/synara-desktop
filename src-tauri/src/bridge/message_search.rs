@@ -8,6 +8,7 @@ use crate::matrix::auth::product::MatrixAuthCommandError;
 
 const READ_ONLY_SESSION_GENERATION: u64 = 0;
 
+#[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
 pub(crate) async fn message_search(
     core: &Core,
     term: String,
@@ -15,19 +16,32 @@ pub(crate) async fn message_search(
     rooms: Option<Vec<String>>,
     senders: Option<Vec<String>>,
     order: Option<String>,
+    listing_kind: Option<String>,
+    from_ts: Option<u64>,
+    to_ts: Option<u64>,
 ) -> Result<MatrixMessageSearchResult, MatrixAuthCommandError> {
+    let mut payload = serde_json::json!({
+        "term": term,
+        "nextToken": next_token,
+        "rooms": rooms,
+        "senders": senders,
+        "order": order,
+    });
+    if let Some(kind) = listing_kind {
+        payload["listingKind"] = serde_json::Value::String(kind);
+    }
+    if let Some(from_ts) = from_ts {
+        payload["fromTs"] = serde_json::json!(from_ts);
+    }
+    if let Some(to_ts) = to_ts {
+        payload["toTs"] = serde_json::json!(to_ts);
+    }
     let payload = core
         .command(CommandEnvelope {
             command: "matrix_message_search".to_owned(),
             session_generation: READ_ONLY_SESSION_GENERATION,
             request_id: None,
-            payload: serde_json::json!({
-                "term": term,
-                "nextToken": next_token,
-                "rooms": rooms,
-                "senders": senders,
-                "order": order,
-            }),
+            payload,
         })
         .await
         .map(|response| response.payload)

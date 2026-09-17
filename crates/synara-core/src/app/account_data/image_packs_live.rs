@@ -752,6 +752,16 @@ impl NativeImagePackOwner {
         .await
     }
 
+    pub async fn list_room_attachments(
+        &self,
+        room_id: &str,
+        kind: &str,
+        from_ts: u64,
+        to_ts: u64,
+    ) -> Result<crate::app::search::MatrixMessageSearchResult, &'static str> {
+        crate::app::search::list_room_attachments(&self.client, room_id, kind, from_ts, to_ts).await
+    }
+
     pub async fn snapshot_push_rules(
         &self,
     ) -> Result<crate::app::notifications::MatrixPushRulesSnapshot, &'static str> {

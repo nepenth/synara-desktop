@@ -28,13 +28,24 @@ pub const MAX_MESSAGE_SEARCH_NEXT_TOKEN_CHARS: usize = 1024;
 pub const MESSAGE_SEARCH_LIMIT: u16 = 20;
 
 #[derive(serde::Deserialize)]
-struct HitEvent {
+pub(crate) struct HitEvent {
     event_id: Option<String>,
     sender: Option<String>,
     origin_server_ts: Option<u64>,
     room_id: Option<String>,
     content: Option<serde_json::Value>,
 }
+
+const KNOWN_MSG_TYPES: &[&str] = &[
+    "m.text",
+    "m.emote",
+    "m.notice",
+    "m.image",
+    "m.video",
+    "m.file",
+    "m.audio",
+    "m.location",
+];
 
 pub fn parse_message_search_term(term: &str) -> Result<Option<String>, &'static str> {
     let trimmed = term.trim();
@@ -171,7 +182,7 @@ pub async fn search_messages(
     }
 }
 
-fn map_hit_event(
+pub(crate) fn map_hit_event(
     rank: f64,
     fallback_room_id: Option<&str>,
     parsed: HitEvent,
@@ -194,7 +205,56 @@ fn map_hit_event(
         origin_server_ts: parsed.origin_server_ts.unwrap_or(0),
         body,
         room_id,
+        msg_type: msg_type_from_content(parsed.content.as_ref()),
     })
+}
+
+/// Closed `msgtype` only: known `m.*` values or a short well-formed `m.*` token.
+pub(crate) fn accept_msg_type(value: &str) -> Option<String> {
+    let trimmed = value.trim();
+    if trimmed.is_empty() || trimmed.len() > 64 {
+        return None;
+    }
+    if KNOWN_MSG_TYPES.contains(&trimmed) {
+        return Some(trimmed.to_owned());
+    }
+    if !trimmed.starts_with("m.") {
+        return None;
+    }
+    let rest = &trimmed[2..];
+    if rest.is_empty() || rest.starts_with('.') || rest.ends_with('.') || rest.contains("..") {
+        return None;
+    }
+    if !rest.bytes().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || byte == b'.' || byte == b'_'
+    }) {
+        return None;
+    }
+    Some(trimmed.to_owned())
+}
+
+fn msg_type_from_content(content: Option<&serde_json::Value>) -> Option<String> {
+    let content = content?;
+    if let Some(msgtype) = content.get("msgtype").and_then(|value| value.as_str()) {
+        if let Some(accepted) = accept_msg_type(msgtype) {
+            return Some(accepted);
+        }
+    }
+    content
+        .get("new_content")
+        .and_then(|value| value.get("msgtype"))
+        .and_then(|value| value.as_str())
+        .and_then(accept_msg_type)
+}
+
+#[cfg(test)]
+pub(crate) fn map_hit_event_from_json(
+    rank: f64,
+    fallback_room_id: Option<&str>,
+    json: serde_json::Value,
+) -> Option<MatrixMessageSearchItem> {
+    let parsed: HitEvent = serde_json::from_value(json).ok()?;
+    map_hit_event(rank, fallback_room_id, parsed)
 }
 
 fn snippet_from_content(content: Option<&serde_json::Value>) -> String {
@@ -227,7 +287,7 @@ fn snippet_from_content(content: Option<&serde_json::Value>) -> String {
     String::new()
 }
 
-fn group_items(items: Vec<MatrixMessageSearchItem>) -> Vec<MatrixMessageSearchGroup> {
+pub(crate) fn group_items(items: Vec<MatrixMessageSearchItem>) -> Vec<MatrixMessageSearchGroup> {
     let mut groups: Vec<MatrixMessageSearchGroup> = Vec::new();
     for item in items {
         if let Some(last) = groups.last_mut() {

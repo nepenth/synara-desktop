@@ -99,6 +99,7 @@ const tests = [
   'src/app/features/settings/__tests__/settingsSurfaceGuard.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomProfileOwner.test.ts',
   'src/app/features/message-search/__tests__/useMessageSearch.test.ts',
+  'src/app/features/message-search/__tests__/roomMediaListing.test.ts',
   'src/app/features/native-client/__tests__/nativeClientFacade.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomJoinRuleOwner.test.ts',
   'src/app/features/common-settings/general/__tests__/nativeRoomRetentionOwner.test.ts',
