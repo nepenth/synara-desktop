@@ -12,8 +12,9 @@ Preserve required copyright, license, and attribution notices.
 
 ## Architecture
 
-Read the [codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) and relevant
-ADRs before changing platform or Matrix boundaries.
+Read the [shared native core ADR](../docs/adr/0003-shared-native-rust-core.md),
+[language-boundary ADR](../docs/adr/0004-rust-language-boundaries.md), and
+relevant ADRs before changing platform or Matrix boundaries.
 
 - Matrix lifecycle and domain behavior belongs in the shared Rust core.
 - React owns desktop presentation and reaches native behavior through the

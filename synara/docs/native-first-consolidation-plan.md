@@ -3,7 +3,7 @@
 > **Historical implementation plan.** The standalone web promise was retired,
 > platform APIs were established, iOS was built in SwiftUI, and both shells now
 > consume the shared Rust core. Use
-> [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md) for current
+> [ADR 0003](../../docs/adr/0003-shared-native-rust-core.md) for current
 > architecture.
 
 Reviewed: 2026-05-26

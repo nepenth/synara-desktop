@@ -91,10 +91,7 @@ const escapeRegExp = (value) =>
 const hasMarkdownTableRow = (text, firstCell) =>
   new RegExp(`^\\|\\s*${escapeRegExp(firstCell)}\\s*\\|`, "m").test(text);
 
-export function inspectProductionSmokeChecklist({
-  checklist,
-  macosIosQueue,
-}) {
+export function inspectProductionSmokeChecklist({ checklist }) {
   const errors = [];
 
   for (const section of REQUIRED_SECTIONS) {
@@ -121,14 +118,8 @@ export function inspectProductionSmokeChecklist({
     }
   }
 
-  if (!macosIosQueue.includes("docs/production-smoke-checklist.md")) {
-    errors.push(
-      "MACOS_IOS_VALIDATION_QUEUE.md must link to docs/production-smoke-checklist.md."
-    );
-  }
-
   for (const queueId of REQUIRED_IOS_QUEUE_IDS) {
-    if (!hasMarkdownTableRow(macosIosQueue, queueId)) {
+    if (!hasMarkdownTableRow(checklist, queueId)) {
       errors.push(`Missing required macOS/iOS queue row: ${queueId}`);
     }
   }
@@ -143,10 +134,6 @@ function main() {
   const result = inspectProductionSmokeChecklist({
     checklist: readFileSync(
       path.join(root, "docs/production-smoke-checklist.md"),
-      "utf8"
-    ),
-    macosIosQueue: readFileSync(
-      path.join(root, "MACOS_IOS_VALIDATION_QUEUE.md"),
       "utf8"
     ),
   });

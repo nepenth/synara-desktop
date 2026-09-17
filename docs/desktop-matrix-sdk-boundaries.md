@@ -4,7 +4,7 @@ Date: 2026-06-07
 
 > **Historical pre-cutover audit.** The desktop product no longer uses
 > `matrix-js-sdk` as its Matrix runtime. The shared Rust core is the current
-> owner; see [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) and
+> owner; see [ADR 0003](adr/0003-shared-native-rust-core.md) and
 > [ADR 0004](adr/0004-rust-language-boundaries.md). The details below are
 > retained as migration evidence.
 

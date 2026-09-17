@@ -1,0 +1,1 @@
+Matrix SDK 0.19: native threads, date-rail jumps, file download and markdown preview, dehydrated backup devices, and show-QR verification with SAS fallback. Widgets, X.509, and QR login stay off.

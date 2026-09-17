@@ -6,7 +6,7 @@
 > replaced desktop Matrix ownership with the shared Rust core. Branch names,
 > runtime labels, task states, and counts are historical snapshots. Current
 > architecture is documented in
-> [the codebase knowledge base](../../CODEBASE_KNOWLEDGE_BASE.md).
+> [ADR 0003](../adr/0003-shared-native-rust-core.md).
 
 This directory holds product and program evidence from the replacement work.
 

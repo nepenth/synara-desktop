@@ -18,6 +18,26 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-17 matrix-sdk 0.19 release-candidate review (2.1.38):
+
+- PR #1150 passed its required Quality gate and merged to main as `a58d7603`.
+  iOS simulator unit and UI suites are skipped on ordinary PRs and run on this
+  `release/v2.1.38` candidate. Stacked PRs #1129–#1149 stay unmerged leftovers.
+- Desktop Node validation, Rust desktop shell, iOS compile, package smoke, and
+  the native-timeline Playwright suite were green on the integration branch
+  before merge. This Linux environment cannot run UIKit or signed desktop
+  installers.
+- Remaining human checks before tagging: date-rail jump in a long room;
+  markdown attachment preview and generic file download; composer send after a
+  recoverable failure; thread open/back; show-QR verification (not QR login);
+  widgets remain default off; desktop local search; encrypted state and X.509
+  remain default off.
+- The maintainer authorized merging #1150 and cutting this release. Final
+  signed-artifact install/update, physical-device testing, and live
+  cross-client UI checks were not repeated here. Do not push tag `v2.1.38`
+  until this candidate's Quality gate (including iOS simulator tests) and
+  Desktop Package Smoke are green.
+
 2026-09-15 client polish release-candidate review (2.1.37):
 
 - PR #1127 passed its required Quality gate and merged to main as `91818c86`.
@@ -201,7 +221,8 @@ Every smoke pass must record:
   crash reports when they exist.
 
 Do not mark a section signed off from memory. The evidence must be attached to
-this file, `MACOS_IOS_VALIDATION_QUEUE.md`, or a linked release issue/PR.
+this file, a linked release issue/PR, or
+[desktop validation status](desktop-validation-status.md).
 
 ## Common Preflight
 
@@ -322,6 +343,19 @@ Required cases:
 | IOS-004 | Push/E2EE release gaps              | Push gateway and production E2EE remain explicitly marked pending until implemented and tested.                                                                                                                                                                                                                                                                                                                              | Current status and linked blocker.                         |
 | IOS-005 | Agent approval notification actions | With “Time-sensitive agent approvals” enabled, a locally decrypted Hermes approval is classified by shared Rust and presented Time Sensitive with Review first, authenticated Approve once, and authenticated destructive Deny. Incoming proxy category/kind metadata is stripped and cannot grant controls; only a fresh local classification can restore the category. Approve/Deny pass through `matrix_agent_approval_decide`; approve-always remains in-app only. Verify five-minute expiry, Hermes bot seed reactions do not count as a decision, cold-launch actions are retained until the app binds, and stale/malformed/unresolved/already-decided prompts do not send. Production APNs/TestFlight remains external until proxy + APNs evidence exists. | Payload used, action plan/result, cold-launch result, pass/fail. |
 
+## macOS/iOS Workstation Queue
+
+These workstation cases remain required human-smoke coverage after the former
+root validation-queue file was removed.
+
+| ID          | Area                     | Pass Criteria                                                                                                                                                                                                                         | Evidence                                                                                         |
+| ----------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| MAC-IOS-001 | Timeline unit            | Run the iOS unit test target that includes `TimelineServiceTests` from `synara-ios` on the standard Xcode scheme and simulator.                                                                                                       | Commit SHA, Xcode version, simulator name/iOS version, command, pass/fail.                       |
+| MAC-IOS-002 | Timeline focus           | Execute `docs/timeline-open-focus-contract.md` smoke on iOS: fully-read room, one-unread room, stale saved history, jump latest, stale sync, live appends, and timeline reset/gap cases.                                                | Per-case pass/fail notes.                                                                        |
+| MAC-IOS-003 | Link opening             | Smoke external links on macOS desktop: rich text and Matrix HTML links, message links, Hermes links, settings/about, profile/server, OIDC, registration terms, feature-check help, and location links open in the system browser.     | Commit SHA, macOS version, app build type, each surface pass/fail.                               |
+| MAC-IOS-004 | Release operations       | When release validation resumes, run the signed/notarized release build path and verify the strict updater gate in the release job.                                                                                                   | GitHub Actions run URL, signing/notarization status, updater metadata verification.              |
+| MAC-IOS-005 | Composer desktop parity  | Smoke the desktop composer on macOS: native spellcheck, drag/drop one and multiple files, paste a screenshot, and paste an image copied from a browser that also advertises HTML/text.                                                | Commit SHA, macOS version, app build type, each surface pass/fail.                               |
+
 ## External Dependencies Still Open
 
 Do not mark the following complete from in-repo client changes alone:
@@ -330,7 +364,7 @@ Do not mark the following complete from in-repo client changes alone:
 | --------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
 | Notification proxy approval metadata hint     | Optional reliability hint outside this repo; it cannot grant controls and is revalidated on device.             | `docs/agent-approval-notification-proxy-spec.md`                                              |
 | Production APNs / TestFlight approval actions | Needs physical device, production APNs certs/keys, and deployed proxy.                                           | `synara-ios/docs/push-gateway-staging.md`, TestFlight checklist                               |
-| Installed-app updater smoke                   | Requires signed release artifacts and update channel config.                                                     | `docs/production-smoke-checklist.md` updater section, `MACOS_IOS_VALIDATION_QUEUE.md`         |
+| Installed-app updater smoke                   | Requires signed release artifacts and update channel config.                                                     | `docs/production-smoke-checklist.md` updater section                                          |
 | Large-history timeline perf                   | Bounded rendering and directional range movement are implemented; daily-use geometry evidence is still required. | `docs/timeline-open-focus-contract.md` remaining-risk note and `docs/timeline-diagnostics.md` |
 
 ## Updater Release Smoke

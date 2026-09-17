@@ -83,8 +83,7 @@ const completeChecklist = [
   ...signoffRows.map((row) => `| ${row} | Yes | Pending | |`),
 ].join("\n");
 
-const completeQueue = [
-  "docs/production-smoke-checklist.md",
+const macosIosQueueRows = [
   "| MAC-IOS-001 | P0 | Timeline | Command | Evidence | Pending |",
   "| MAC-IOS-002 | P0 | Timeline | Command | Evidence | Pending |",
   "| MAC-IOS-003 | P0 | Link | Command | Evidence | Pending |",
@@ -92,10 +91,11 @@ const completeQueue = [
   "| MAC-IOS-005 | P0 | Composer | Command | Evidence | Pending |",
 ].join("\n");
 
+const completeDocument = [completeChecklist, macosIosQueueRows].join("\n");
+
 test("production smoke checklist gate accepts complete coverage", () => {
   const result = inspectProductionSmokeChecklist({
-    checklist: completeChecklist,
-    macosIosQueue: completeQueue,
+    checklist: completeDocument,
   });
 
   assert.equal(result.ok, true);
@@ -104,23 +104,18 @@ test("production smoke checklist gate accepts complete coverage", () => {
 
 test("production smoke checklist gate rejects missing case rows", () => {
   const result = inspectProductionSmokeChecklist({
-    checklist: completeChecklist.replace("| TL-010 |", "| TL-MISSING |"),
-    macosIosQueue: completeQueue,
+    checklist: completeDocument.replace("| TL-010 |", "| TL-MISSING |"),
   });
 
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /TL-010/);
 });
 
-test("production smoke checklist gate requires macos ios queue linkage", () => {
+test("production smoke checklist gate requires macos ios queue rows", () => {
   const result = inspectProductionSmokeChecklist({
     checklist: completeChecklist,
-    macosIosQueue: completeQueue.replace(
-      "docs/production-smoke-checklist.md",
-      "docs/other.md"
-    ),
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /production-smoke-checklist/);
+  assert.match(result.errors.join("\n"), /MAC-IOS-001/);
 });

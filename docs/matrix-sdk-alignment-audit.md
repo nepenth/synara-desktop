@@ -4,7 +4,7 @@ Date: 2026-06-07
 
 > **Historical pre-cutover audit.** The two-backend architecture described
 > below has been replaced by the shared Rust core. See
-> [the codebase knowledge base](../CODEBASE_KNOWLEDGE_BASE.md) for the current
+> [ADR 0003](adr/0003-shared-native-rust-core.md) for the current
 > implementation. This document remains a record of the findings that led to
 > that work.
 

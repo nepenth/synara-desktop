@@ -209,8 +209,7 @@ placeholders, never values.
 ## Documentation
 
 Start with [docs/README.md](docs/README.md) for the current documentation map.
-[CODEBASE_KNOWLEDGE_BASE.md](CODEBASE_KNOWLEDGE_BASE.md) provides a concise
-source-oriented architecture guide.
+Architecture decisions live in [docs/adr/](docs/adr/README.md).
 
 Dated plans, audits, handoffs, progress logs, and acceptance reports are kept
 for engineering provenance. Unless a document explicitly says it is current,
