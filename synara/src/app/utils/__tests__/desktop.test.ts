@@ -22,6 +22,7 @@ import {
   saveDesktopFile,
   sendDesktopAgentAction,
   setDesktopBadgeCount,
+  playDesktopNotificationSound,
   setDesktopShortcuts,
   setDesktopTrayState,
   shouldStreamDesktopFileIpc,
@@ -119,6 +120,58 @@ test('setDesktopBadgeCount still sends zero so native can clear dock and Linux t
   }
 
   assert.deepEqual(calls, [{ command: 'desktop_set_badge_count', args: { count: 0 } }]);
+});
+
+test('playDesktopNotificationSound invokes native playback and ignores unknown kinds', async () => {
+  const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async (command: string, args?: Record<string, unknown>) => {
+        calls.push({ command, args });
+        return true;
+      },
+    },
+  };
+
+  try {
+    assert.equal(await playDesktopNotificationSound('message'), true);
+    assert.equal(await playDesktopNotificationSound('invite'), true);
+    assert.equal(await playDesktopNotificationSound('ringtone' as 'message'), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+
+  assert.deepEqual(calls, [
+    { command: 'desktop_play_notification_sound', args: { kind: 'message' } },
+    { command: 'desktop_play_notification_sound', args: { kind: 'invite' } },
+  ]);
+});
+
+test('playDesktopNotificationSound falls back when native playback is unavailable', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {};
+  try {
+    assert.equal(await playDesktopNotificationSound('message'), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
+});
+
+test('playDesktopNotificationSound falls back when native playback returns false', async () => {
+  const originalWindow = globalThis.window;
+  (globalThis as any).window = {
+    __SYNARA_DESKTOP__: {
+      platform: 'tauri',
+      invoke: async () => false,
+    },
+  };
+  try {
+    assert.equal(await playDesktopNotificationSound('message'), false);
+  } finally {
+    (globalThis as any).window = originalWindow;
+  }
 });
 
 test('enableDesktopSpellcheck invokes the native command when the bridge supports it', async () => {

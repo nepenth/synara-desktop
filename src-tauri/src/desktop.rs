@@ -3,6 +3,7 @@ use tauri::{AppHandle, Manager, Runtime, WebviewWindow};
 use tauri_plugin_opener::OpenerExt;
 
 use crate::build_info;
+use crate::desktop_notification_sound;
 use crate::desktop_sanitize::sanitize_route;
 #[cfg(any(target_os = "windows", test))]
 use crate::desktop_secret_store::DESKTOP_SECRET_STORE_WINDOWS_UNSUPPORTED;
@@ -68,6 +69,12 @@ fn main_window<R: Runtime>(app: &AppHandle<R>) -> Option<WebviewWindow<R>> {
 
 pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
+        // Hidden-to-tray on Linux iconifies rather than unmapping. Keep the
+        // window in the dash/taskbar so a launcher click activates this copy.
+        #[cfg(target_os = "linux")]
+        {
+            let _ = window.set_skip_taskbar(false);
+        }
         window.show()?;
         window.unminimize()?;
         window.set_focus()?;
@@ -77,6 +84,14 @@ pub fn show_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 
 pub fn hide_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     if let Some(window) = main_window(app) {
+        #[cfg(target_os = "linux")]
+        {
+            // GTK hide() unmaps the toplevel. GNOME then treats Synara as not
+            // running (no dash dot) and a launcher click starts a second copy.
+            let _ = window.set_skip_taskbar(false);
+            window.minimize()?;
+        }
+        #[cfg(not(target_os = "linux"))]
         window.hide()?;
     }
     Ok(())
@@ -159,6 +174,11 @@ pub fn desktop_navigate(app: AppHandle, route: String) -> Result<(), String> {
 #[tauri::command]
 pub fn desktop_set_badge_count(app: AppHandle, count: i64) -> Result<(), String> {
     desktop_tray::set_badge_count(&app, Some(count)).map_err(|error| error.to_string())
+}
+
+#[tauri::command]
+pub fn desktop_play_notification_sound(app: AppHandle, kind: String) -> Result<bool, String> {
+    desktop_notification_sound::play_notification_sound(&app, &kind)
 }
 
 #[tauri::command]
@@ -255,5 +275,21 @@ mod tests {
         );
         assert!(sanitize_route("https://example.org".to_owned()).is_err());
         assert!(sanitize_route("room/abc".to_owned()).is_err());
+    }
+
+    #[test]
+    fn linux_close_to_tray_iconifies_instead_of_unmapping() {
+        let source = include_str!("desktop.rs");
+        let hide_fn = source
+            .split("pub fn hide_main_window")
+            .nth(1)
+            .unwrap_or("")
+            .split("pub fn navigate_main_window")
+            .next()
+            .unwrap_or("");
+        assert!(hide_fn.contains("target_os = \"linux\""));
+        assert!(hide_fn.contains("window.minimize()?"));
+        assert!(hide_fn.contains("set_skip_taskbar(false)"));
+        assert!(hide_fn.contains("window.hide()?"));
     }
 }

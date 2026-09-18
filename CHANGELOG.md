@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- Linux: closing the window keeps the dash running indicator and restores the
+  existing session instead of opening a second copy. The notification-area
+  icon paints a Slack-style unread count, and Ubuntu Dock / Dash to Dock / KDE
+  receive the Unity launcher badge.
+- macOS: notification pings play through NSSound so they no longer appear as
+  Now Playing media on the menu bar and Touch Bar.
+- Pin Matrix Rust SDK 0.19.1 (`matrix-sdk`, `matrix-sdk-ui`,
+  `matrix-sdk-crypto`, `matrix-sdk-sqlite`). The patch only ships the rustdoc
+  Mermaid script that docs.rs needs; client behavior is unchanged.
+
 ## [2.1.39] - 2026-09-17
 
 - Render markdown attachments with lists, GFM tables, task prefixes, strikethrough,

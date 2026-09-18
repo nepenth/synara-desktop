@@ -8,3 +8,4 @@ Icon=synara
 Terminal=false
 Categories=Network;InstantMessaging;Chat;
 StartupWMClass=synara
+SingleMainWindow=true

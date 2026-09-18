@@ -9,6 +9,7 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "desktop_window_close",
     "desktop_navigate",
     "desktop_set_badge_count",
+    "desktop_play_notification_sound",
     "desktop_set_shortcuts",
     "desktop_secret_store_status",
     "desktop_get_integration_status",

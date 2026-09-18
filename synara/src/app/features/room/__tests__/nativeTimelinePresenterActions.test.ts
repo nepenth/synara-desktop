@@ -289,6 +289,18 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /NativeTimelineDateRail/);
   assert.match(presenter, /const showDateRail = shouldShowTimelineDateRail/);
   assert.match(presenter, /showDateRail \|\| atLiveBottom/);
+  assert.match(presenter, /visibleTimestampForRail/);
+  assert.match(presenter, /atLiveBottom,/);
+  assert.match(dateRail, /htmlCss\.DateRailSpine/);
+  assert.match(dateRail, /translate3d\(-50%/);
+  assert.match(htmlCss, /export const DateRailSpine = style\(/);
+  assert.match(htmlCss, /DATE_RAIL_HIT = 16/);
+  assert.match(htmlCss, /DATE_RAIL_TICK = 8/);
+  const dateRailCss = htmlCss.slice(htmlCss.indexOf('export const DateRailTrack'));
+  assert.doesNotMatch(
+    dateRailCss.slice(0, dateRailCss.indexOf('export const DateRailLabel')),
+    /raisedShadow/
+  );
   assert.match(presenter, /reserveRail=\{showDateRail\}/);
   assert.match(htmlCss, /export const HistoryStatusHitTarget = style\(/);
   assert.doesNotMatch(historyStatus, /pointerEvents: 'auto'/);

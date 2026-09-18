@@ -204,6 +204,15 @@ export const collectSevenDayRailMarks = (nowMs: number): TimelineHistoryMark[] =
       });
     }
   }
+  const last = marks[marks.length - 1];
+  if (!last || last.timestampMs < nowMs) {
+    marks.push({
+      key: `now:${localDayKey(nowMs)}`,
+      index: -1,
+      timestampMs: nowMs,
+      kind: 'time',
+    });
+  }
   return marks;
 };
 
@@ -249,6 +258,19 @@ export const activeTimelineHistoryMarkIndex = (
     else break;
   }
   return active;
+};
+
+export const visibleTimestampForRail = ({
+  atLiveBottom,
+  axisEndMs,
+  viewportStartTimestampMs,
+}: {
+  atLiveBottom: boolean;
+  axisEndMs: number;
+  viewportStartTimestampMs: number | undefined;
+}): number => {
+  if (atLiveBottom) return axisEndMs;
+  return viewportStartTimestampMs ?? axisEndMs;
 };
 
 export const activeTimelineHistoryMarkForTimestamp = (

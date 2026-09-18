@@ -15,6 +15,7 @@ use crate::desktop::{
     navigate_main_window, show_main_window, MAIN_WINDOW_LABEL, ROUTE_HOME, ROUTE_LATER,
     ROUTE_NOTIFICATIONS, ROUTE_SETTINGS,
 };
+use crate::desktop_unread_badge;
 
 const MENU_SHOW: &str = "desktop.show";
 const MENU_LATER: &str = "desktop.later";
@@ -130,6 +131,44 @@ fn apply_linux_tray_badge_title<R: Runtime>(
     Ok(())
 }
 
+#[cfg(target_os = "linux")]
+fn apply_linux_tray_badge_icon<R: Runtime>(
+    app: &AppHandle<R>,
+    tray: &tauri::tray::TrayIcon<R>,
+    count: i64,
+) -> tauri::Result<()> {
+    let Some(base) = app.default_window_icon() else {
+        return Ok(());
+    };
+    if count <= 0 {
+        tray.set_icon(Some(base.clone()))?;
+        return Ok(());
+    }
+    let Some(rgba) =
+        desktop_unread_badge::overlay_unread_badge(base.rgba(), base.width(), base.height(), count)
+    else {
+        tray.set_icon(Some(base.clone()))?;
+        return Ok(());
+    };
+    let badged = tauri::image::Image::new_owned(rgba, base.width(), base.height());
+    tray.set_icon(Some(badged))?;
+    Ok(())
+}
+
+fn apply_linux_unread_surfaces<R: Runtime>(
+    app: &AppHandle<R>,
+    tray: &tauri::tray::TrayIcon<R>,
+    count: i64,
+) -> tauri::Result<()> {
+    apply_linux_tray_badge_title(tray, count)?;
+    #[cfg(target_os = "linux")]
+    apply_linux_tray_badge_icon(app, tray, count)?;
+    #[cfg(not(target_os = "linux"))]
+    let _ = app;
+    desktop_unread_badge::emit_unity_launcher_badge(count);
+    Ok(())
+}
+
 fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
     let unread = clamp_count(state.unread_count);
     let highlights = clamp_count(state.highlight_count);
@@ -181,7 +220,7 @@ fn apply_tray_state_in_place<R: Runtime>(
     if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
         tray.set_tooltip(Some(tray_tooltip(state)))
             .map_err(|error| error.to_string())?;
-        apply_linux_tray_badge_title(&tray, tray_badge_count(state))
+        apply_linux_unread_surfaces(app, &tray, tray_badge_count(state))
             .map_err(|error| error.to_string())?;
     }
     Ok(())
@@ -203,7 +242,7 @@ fn rebuild_tray_menu<R: Runtime>(
         .map_err(|error| error.to_string())?;
     tray.set_tooltip(Some(tray_tooltip(state)))
         .map_err(|error| error.to_string())?;
-    apply_linux_tray_badge_title(&tray, tray_badge_count(state))
+    apply_linux_unread_surfaces(app, &tray, tray_badge_count(state))
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -434,10 +473,13 @@ pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> ta
         }
     }
 
-    // Unity `set_badge_count` is a no-op on many GNOME setups. TrayIcon has no
-    // badge API; Linux shows the count via tray title (panel label) plus menu.
+    // Unity `set_badge_count` is a no-op on GNOME (libunity only acts when
+    // Unity itself is running). Linux paints a count on the tray icon and
+    // emits the LauncherEntry signal Ubuntu Dock / Dash to Dock / KDE use.
     if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
-        apply_linux_tray_badge_title(&tray, normalized_count.unwrap_or(0))?;
+        apply_linux_unread_surfaces(app, &tray, normalized_count.unwrap_or(0))?;
+    } else {
+        desktop_unread_badge::emit_unity_launcher_badge(normalized_count.unwrap_or(0));
     }
     Ok(())
 }
@@ -458,8 +500,29 @@ pub fn create_tray<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
     let mut builder = TrayIconBuilder::with_id(TRAY_ICON_ID)
         .tooltip(tray_tooltip(&initial_state))
         .menu(&menu)
-        .show_menu_on_left_click(true)
+        // Linux: left-click restores the running window (right-click keeps the
+        // menu). Other platforms keep the historical click-to-menu extra.
+        .show_menu_on_left_click(cfg!(not(target_os = "linux")))
         .on_menu_event(handle_menu_event);
+
+    #[cfg(target_os = "linux")]
+    {
+        builder = builder.on_tray_icon_event(|tray, event| {
+            use tauri::tray::{MouseButton, MouseButtonState, TrayIconEvent};
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                if let Err(error) = show_main_window(tray.app_handle()) {
+                    eprintln!("failed to show Synara from the tray: {error}");
+                }
+            }
+        });
+    }
 
     #[cfg(target_os = "macos")]
     {
@@ -646,5 +709,14 @@ mod tests {
             tray_title_for_badge(tray_badge_count(&state)),
             Some("10".to_string())
         );
+    }
+
+    #[test]
+    fn linux_tray_left_click_restores_instead_of_opening_the_menu() {
+        let source = include_str!("desktop_tray.rs");
+        assert!(source.contains("show_menu_on_left_click(cfg!(not(target_os = \"linux\")))"));
+        assert!(source.contains("MouseButton::Left"));
+        assert!(source.contains("overlay_unread_badge"));
+        assert!(source.contains("emit_unity_launcher_badge"));
     }
 }

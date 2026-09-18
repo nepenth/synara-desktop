@@ -5208,7 +5208,7 @@ mod tests {
         assert!(receipts.public_read_receipt.is_none());
 
         let cargo_lock = include_str!("../../../../../Cargo.lock");
-        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.19.0\""));
+        assert!(cargo_lock.contains("name = \"matrix-sdk-ui\"\nversion = \"0.19.1\""));
         let source = include_str!("live.rs");
         assert!(source.contains("Pinned matrix-sdk-ui 0.19 invariant"));
         assert!(source.contains("also when receipt deduplication removes every unchanged marker"));

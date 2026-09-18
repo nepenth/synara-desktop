@@ -13,11 +13,19 @@ use super::error::AuthError;
 use super::input::normalize_homeserver_url;
 use super::login_flow::{LoginFlow, LoginFlowTransport};
 use super::register_flow::{parse_register_uiaa_json, RegisterFlowsProbe, RegisterFlowsTransport};
+use crate::app::client_builder::MATRIX_SDK_PIN_VERSION;
 
 /// Default end-to-end timeout for the unauthenticated login-types request.
 pub const AUTH_HTTP_TIMEOUT_SECS: u64 = 15;
 /// Ceiling for a single login-types JSON response.
 pub const AUTH_HTTP_MAX_RESPONSE_BYTES: usize = 1024 * 1024;
+
+fn core_user_agent() -> String {
+    format!(
+        "Synara-Core/{} (matrix-sdk/{MATRIX_SDK_PIN_VERSION})",
+        env!("CARGO_PKG_VERSION")
+    )
+}
 
 /// Live read-only transport for `GET /_matrix/client/v3/login`.
 #[derive(Debug, Clone)]
@@ -28,11 +36,7 @@ pub struct HttpLoginFlowTransport {
 impl HttpLoginFlowTransport {
     /// Build the shared core default bounded client.
     pub fn new() -> Result<Self, AuthError> {
-        Self::new_with_user_agent(concat!(
-            "Synara-Core/",
-            env!("CARGO_PKG_VERSION"),
-            " (matrix-sdk/0.19.0)"
-        ))
+        Self::new_with_user_agent(core_user_agent())
     }
 
     /// Build a bounded client with a shell-owned product identifier. This
@@ -63,11 +67,7 @@ pub struct HttpRegisterFlowTransport {
 impl HttpRegisterFlowTransport {
     /// Build the shared core default bounded client.
     pub fn new() -> Result<Self, AuthError> {
-        Self::new_with_user_agent(concat!(
-            "Synara-Core/",
-            env!("CARGO_PKG_VERSION"),
-            " (matrix-sdk/0.19.0)"
-        ))
+        Self::new_with_user_agent(core_user_agent())
     }
 
     /// Build a bounded probe client with a shell-owned product identifier.
@@ -87,11 +87,7 @@ pub struct HttpDiscoveryTransport {
 impl HttpDiscoveryTransport {
     /// Build the shared core default bounded client.
     pub fn new() -> Result<Self, AuthError> {
-        Self::new_with_user_agent(concat!(
-            "Synara-Core/",
-            env!("CARGO_PKG_VERSION"),
-            " (matrix-sdk/0.19.0)"
-        ))
+        Self::new_with_user_agent(core_user_agent())
     }
 
     /// Build a bounded well-known client with a shell-owned product identifier.

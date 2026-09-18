@@ -32,6 +32,7 @@ import {
   setPlatformShortcuts,
   setPlatformTrayState,
   showPlatformNotification,
+  playPlatformNotificationSound,
   subscribePlatformTrayDndToggle,
   supportsPlatformGlobalShortcuts,
   supportsPlatformSystemNotifications,
@@ -212,8 +213,11 @@ function InviteNotifications() {
   );
 
   const playSound = useCallback(() => {
-    const audioElement = audioRef.current;
-    audioElement?.play();
+    void playPlatformNotificationSound('invite').then((playedNative) => {
+      if (!playedNative) {
+        void audioRef.current?.play();
+      }
+    });
   }, []);
 
   useEffect(() => {
@@ -352,8 +356,11 @@ function MessageNotifications() {
   );
 
   const playSound = useCallback(() => {
-    const audioElement = audioRef.current;
-    audioElement?.play();
+    void playPlatformNotificationSound('message').then((playedNative) => {
+      if (!playedNative) {
+        void audioRef.current?.play();
+      }
+    });
   }, []);
 
   const decideAndNotify = useCallback(
@@ -661,7 +668,11 @@ function AgentApprovalNotifications() {
   }, []);
 
   const playSound = useCallback(() => {
-    audioRef.current?.play();
+    void playPlatformNotificationSound('message').then((playedNative) => {
+      if (!playedNative) {
+        void audioRef.current?.play();
+      }
+    });
   }, []);
 
   const notifyApprovalEvent = useCallback(

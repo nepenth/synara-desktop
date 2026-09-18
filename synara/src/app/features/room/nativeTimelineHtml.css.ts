@@ -40,15 +40,11 @@ export const MessageActionSurface = style({
 
 export const MessageSwipeSurface = style({
   position: 'relative',
-  overflow: 'hidden',
-  overscrollBehaviorX: 'contain',
-  touchAction: 'pan-y',
 });
 
 export const MessageSwipeContent = style({
   position: 'relative',
   zIndex: 1,
-  transition: 'transform 140ms ease-out',
 });
 
 export const GroupedTimestampReveal = style({
@@ -62,6 +58,19 @@ export const GroupedTimestampReveal = style({
   transition: 'opacity 120ms ease-out',
   pointerEvents: 'none',
   whiteSpace: 'nowrap',
+  selectors: {
+    [`${MessageActionSurface}:hover &`]: {
+      opacity: 1,
+    },
+    [`${MessageActionSurface}:focus-within &`]: {
+      opacity: 1,
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
+  },
 });
 
 export const MessageActionRail = style([
@@ -827,49 +836,82 @@ export const DateRail = style({
   contain: 'layout style',
 });
 
+const DATE_RAIL_INSET = 8;
+const DATE_RAIL_HIT = 16;
+const DATE_RAIL_SPINE = 2;
+const DATE_RAIL_TICK = 8;
+const DATE_RAIL_THUMB = 8;
+
 export const DateRailTrack = style({
   position: 'absolute',
   top: 0,
-  right: toRem(10),
+  right: toRem(DATE_RAIL_INSET),
   bottom: 0,
-  width: toRem(12),
-  borderRadius: config.radii.R400,
-  background: color.SurfaceVariant.ContainerLine,
+  width: toRem(DATE_RAIL_HIT),
+  background: 'transparent',
   pointerEvents: 'auto',
   cursor: 'pointer',
+});
+
+export const DateRailSpine = style({
+  position: 'absolute',
+  top: 0,
+  bottom: 0,
+  left: '50%',
+  width: toRem(DATE_RAIL_SPINE),
+  marginLeft: toRem(-DATE_RAIL_SPINE / 2),
+  borderRadius: config.radii.R400,
+  background: color.SurfaceVariant.ContainerLine,
+  pointerEvents: 'none',
 });
 
 export const DateRailThumb = style({
   position: 'absolute',
   top: 0,
-  left: 0,
-  width: toRem(12),
-  height: toRem(18),
-  marginTop: toRem(-9),
-  borderRadius: config.radii.R400,
+  left: '50%',
+  width: toRem(DATE_RAIL_THUMB),
+  height: toRem(DATE_RAIL_THUMB),
+  marginTop: toRem(-DATE_RAIL_THUMB / 2),
+  borderRadius: '50%',
   background: color.Primary.Main,
+  boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
   pointerEvents: 'none',
   willChange: 'transform',
 });
 
 export const DateRailTick = style({
   position: 'absolute',
-  right: toRem(10),
-  width: toRem(18),
-  height: toRem(18),
-  marginTop: toRem(-9),
+  right: toRem(DATE_RAIL_INSET),
+  width: toRem(DATE_RAIL_HIT),
+  height: toRem(DATE_RAIL_HIT),
+  marginTop: toRem(-DATE_RAIL_HIT / 2),
   padding: 0,
   zIndex: 4,
-  border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
-  borderRadius: '50%',
-  background: color.Surface.Container,
-  boxShadow: raisedShadow,
+  border: 0,
+  background: 'transparent',
+  boxShadow: 'none',
   pointerEvents: 'auto',
   cursor: 'pointer',
   selectors: {
-    '&[aria-current="true"]': {
+    '&::before': {
+      content: '""',
+      position: 'absolute',
+      top: '50%',
+      left: '50%',
+      width: toRem(DATE_RAIL_TICK),
+      height: toRem(DATE_RAIL_TICK),
+      marginTop: toRem(-DATE_RAIL_TICK / 2),
+      marginLeft: toRem(-DATE_RAIL_TICK / 2),
+      borderRadius: '50%',
+      background: color.Surface.Container,
+      boxShadow: `inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
+    },
+    '&:hover::before, &:focus-visible::before': {
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}, inset 0 0 0 ${config.borderWidth.B300} ${color.SurfaceVariant.ContainerLine}`,
+    },
+    '&[aria-current="true"]::before': {
       background: color.Primary.Main,
-      borderColor: color.Primary.Main,
+      boxShadow: `inset 0 1px 0 ${quietEdgeLight}`,
     },
   },
 });
