@@ -22,7 +22,24 @@ const polish = params.has('polish');
 const jank = params.has('jank');
 const FILE_MD_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
 const FILE_ZIP_HANDLE = `timeline-media-${'cd'.repeat(32)}`;
-const FILE_MD_BYTES = '# Agent notes\n\nUse **bold** for emphasis.\n';
+const FILE_MD_BYTES = `# Agent notes
+
+Use **bold** for emphasis.
+
+- dash item
+* star item
+
+1. ordered
+
+| Name | Role |
+| --- | --- |
+| Ada | Lead |
+
+- [x] done task
+- [ ] open task
+
+See ~~strike~~ and \`inline code\`.
+`;
 let sequence = polish
   ? 4
   : scenario === 'sparse-missing' || scenario === 'file-md' || scenario === 'file-zip'

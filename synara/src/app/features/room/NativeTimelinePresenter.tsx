@@ -3043,6 +3043,9 @@ export function NativeTimelinePresenter({
     };
     scrollHandlersRef.current = { onScroll, onUserInput };
     saveViewport();
+    // First paint never fires `scroll`. Measure edges so historical loading
+    // chrome can show at the top without waiting for a wheel tick.
+    updateHistoryEdge(scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight);
     return () => {
       saveViewport();
     };

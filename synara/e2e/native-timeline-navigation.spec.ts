@@ -513,10 +513,11 @@ test('date rail jumps toward an earlier loaded message', async ({ page }) => {
   await open(page, 'live');
   const rail = page.locator('[data-timeline-date-rail="true"]');
   await expect(rail).toBeVisible();
-  const before = await geometry(page);
+  // Seven-day ticks are calendar hours, not loaded-row indexes. The oldest
+  // tick is outside the fixture window, so the jump goes through
+  // timestamp_to_event instead of an in-window scroll.
   await rail.getByRole('button').first().click();
-  await expect.poll(async () => (await geometry(page)).top).toBeLessThan(before.top);
-  await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(0);
+  await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(1);
 });
 
 test('date rail older tick jumps via timestamp_to_event then focused open', async ({ page }) => {
@@ -533,6 +534,37 @@ test('date rail older tick jumps via timestamp_to_event then focused open', asyn
   await expect.poll(() => commandCount(page, 'matrix_timeline_timestamp_to_event')).toBe(1);
   await expect.poll(() => commandCount(page, 'matrix_timeline_open')).toBeGreaterThanOrEqual(2);
   await expect.poll(async () => (await geometry(page)).eventId).toBe('$history-jump');
+});
+
+test('date rail tick hover paints a date label that is not under the messages', async ({
+  page,
+}) => {
+  await open(page, 'live');
+  const rail = page.locator('[data-timeline-date-rail="true"]');
+  const tick = rail.getByRole('button').last();
+  await expect(rail).toBeVisible();
+  await tick.hover();
+  const label = rail.locator('[aria-hidden="false"]');
+  await expect(label).toBeVisible();
+  await expect(label).not.toHaveText(/^\s*$/);
+  const tickBox = await tick.boundingBox();
+  const labelBox = await label.boundingBox();
+  expect(tickBox).not.toBeNull();
+  expect(labelBox).not.toBeNull();
+  expect(labelBox!.width).toBeGreaterThan(8);
+  expect(labelBox!.height).toBeGreaterThan(8);
+  expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(tickBox!.x + 4);
+});
+
+test('wheel past the newest message does not strobe loading-newer chrome', async ({ page }) => {
+  await open(page, 'live');
+  await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  await page.locator('#native-timeline').hover();
+  for (let step = 0; step < 8; step += 1) {
+    await page.mouse.wheel(0, 240);
+    await expect(page.getByRole('status', { name: 'Loading newer messages' })).toHaveCount(0);
+  }
+  await expect.poll(() => commandCount(page, 'matrix_timeline_paginate')).toBe(0);
 });
 
 test('sparse history and missing last-read recovery controls are separately clickable', async ({
@@ -596,6 +628,14 @@ test('markdown file attachments preview in-client and still download', async ({ 
   await expect(preview).toBeVisible();
   await expect(preview.getByRole('heading', { name: 'Agent notes' })).toBeVisible();
   await expect(preview.locator('strong')).toContainText('bold');
+  await expect(preview.getByRole('button', { name: 'Copy markdown' })).toBeVisible();
+  await expect(preview.getByText('dash item')).toBeVisible();
+  await expect(preview.getByText('star item')).toBeVisible();
+  await expect(preview.locator('ol')).toContainText('ordered');
+  await expect(preview.locator('table')).toContainText('Ada');
+  await expect(preview.getByText('[x] done task')).toBeVisible();
+  await expect(preview.locator('s')).toContainText('strike');
+  await expect(preview.locator('code')).toContainText('inline code');
   await preview.getByRole('button', { name: 'Download notes.md' }).click();
   await expect
     .poll(() =>
