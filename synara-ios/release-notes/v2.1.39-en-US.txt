@@ -1,0 +1,1 @@
+Timeline polish: richer markdown preview, a 7-day date rail, quieter live-tail loading, in-room media browse, unread app-icon badges, and findable widgets. Call Start/Join is not offered.

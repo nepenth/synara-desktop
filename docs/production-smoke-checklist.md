@@ -18,6 +18,26 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-17 client polish release-candidate review (2.1.39):
+
+- PR #1152 passed its required Quality gate and merged to main as `d56110e4`.
+  iOS simulator unit and UI suites are skipped on ordinary PRs and run on this
+  `release/v2.1.39` candidate. Stacked PRs #1129–#1149 stay unmerged leftovers.
+- Desktop Node validation, Rust desktop shell, iOS compile, package smoke, and
+  the native-timeline Playwright suite were green on the integration branch
+  before merge. This Linux environment cannot run UIKit or signed desktop
+  installers.
+- Remaining human checks before tagging: date-rail hover in a long room;
+  wheel at the live tail with no loading-newer chrome; markdown copy;
+  last-7-days Media/Files with an empty term; Widgets under Settings → General;
+  Invite not selected when the menu opens; dock/app-icon unread badge;
+  Rooms tab not counting invites; composer plus dismiss on outside click.
+- The maintainer authorized merging #1152 and cutting this release. Final
+  signed-artifact install/update, physical-device testing, and live
+  cross-client UI checks were not repeated here. Do not push tag `v2.1.39`
+  until this candidate's Quality gate (including iOS simulator tests) and
+  Desktop Package Smoke are green.
+
 2026-09-17 matrix-sdk 0.19 release-candidate review (2.1.38):
 
 - PR #1150 passed its required Quality gate and merged to main as `a58d7603`.

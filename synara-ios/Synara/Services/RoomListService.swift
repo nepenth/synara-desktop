@@ -641,8 +641,9 @@ enum NotificationBadgeSummary {
     }
 
     static func roomsTabBadgeCount(from rooms: [RoomSummary]) -> Int {
-        summarizeNotifications(
-            NotificationSummaryInput(unreadCounts: unreadSources(from: rooms))
+        let joinedRooms = rooms.filter { $0.membership != .invited }
+        return summarizeNotifications(
+            NotificationSummaryInput(unreadCounts: unreadSources(from: joinedRooms))
         )?.appBadgeCount ?? 0
     }
 
