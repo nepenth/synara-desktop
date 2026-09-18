@@ -141,13 +141,13 @@ fn apply_linux_tray_badge_icon<R: Runtime>(
         return Ok(());
     };
     if count <= 0 {
-        tray.set_icon(Some(base.clone().to_owned()))?;
+        tray.set_icon(Some(base.clone()))?;
         return Ok(());
     }
     let Some(rgba) =
         desktop_unread_badge::overlay_unread_badge(base.rgba(), base.width(), base.height(), count)
     else {
-        tray.set_icon(Some(base.clone().to_owned()))?;
+        tray.set_icon(Some(base.clone()))?;
         return Ok(());
     };
     let badged = tauri::image::Image::new_owned(rgba, base.width(), base.height());

@@ -22,6 +22,7 @@ impl NotificationSoundKind {
         }
     }
 
+    #[cfg(any(target_os = "macos", test))]
     pub fn wav_bytes(self) -> &'static [u8] {
         match self {
             Self::Message => include_bytes!("../sounds/notification.wav"),

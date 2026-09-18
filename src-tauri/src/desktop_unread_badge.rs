@@ -231,7 +231,7 @@ fn owned_unity_value(value: zbus::zvariant::Value<'static>) -> zbus::zvariant::O
 #[cfg(target_os = "linux")]
 fn unity_launcher_properties(count: i64) -> HashMap<&'static str, zbus::zvariant::OwnedValue> {
     let mut properties = HashMap::new();
-    properties.insert("count", owned_unity_value(count.max(0).into()));
+    properties.insert("count", owned_unity_value(count.into()));
     properties.insert("count-visible", owned_unity_value((count > 0).into()));
     properties
 }
