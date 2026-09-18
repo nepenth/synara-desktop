@@ -31,7 +31,7 @@ macOS platform-integration cases remain release-candidate gates.
   wheel at the live tail with no loading-newer chrome; markdown copy;
   last-7-days Media/Files with an empty term; Widgets under Settings → General;
   Invite not selected when the menu opens; dock/app-icon unread badge;
-  composer plus dismiss on outside click.
+  Rooms tab not counting invites; composer plus dismiss on outside click.
 - The maintainer authorized merging #1152 and cutting this release. Final
   signed-artifact install/update, physical-device testing, and live
   cross-client UI checks were not repeated here. Do not push tag `v2.1.39`

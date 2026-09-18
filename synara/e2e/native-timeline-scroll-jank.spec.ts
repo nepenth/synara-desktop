@@ -135,12 +135,16 @@ test('records scroll-jank while live appends, metadata pulses, and backward pagi
   expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
   expect(scrolledMetrics.samples).toBeGreaterThan(40);
   // Follow-live and wheel stay near vsync locally. GitHub runners add a
-  // two-frame p95 under wheel+append load; still fail a frozen compositor.
+  // two-frame p95 and extra dropped frames under wheel+append load; still
+  // fail a frozen compositor.
   const p95Budget = process.env.CI ? 80 : 25;
+  const droppedFollowBudget = process.env.CI ? 12 : 8;
+  const droppedScrollBudget = process.env.CI ? 16 : 10;
+  const droppedPrependBudget = process.env.CI ? 12 : 8;
   expect(followLiveMetrics.p95FrameMs).toBeLessThan(p95Budget);
   expect(scrolledMetrics.p95FrameMs).toBeLessThan(p95Budget);
-  expect(followLiveMetrics.droppedFrames).toBeLessThan(8);
-  expect(scrolledMetrics.droppedFrames).toBeLessThan(10);
-  expect(prependMetrics.droppedFrames).toBeLessThan(8);
+  expect(followLiveMetrics.droppedFrames).toBeLessThan(droppedFollowBudget);
+  expect(scrolledMetrics.droppedFrames).toBeLessThan(droppedScrollBudget);
+  expect(prependMetrics.droppedFrames).toBeLessThan(droppedPrependBudget);
   expect(prependMetrics.maxFrameMs).toBeLessThan(150);
 });

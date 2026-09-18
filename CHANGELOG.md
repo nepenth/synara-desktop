@@ -23,7 +23,8 @@
   walking the event cache and `/messages` instead of homeserver `/search`.
 - Keep desktop dock/tray and iOS app-icon badges on the unread summary. Linux
   shows the count in the tray title when Unity dock badges are a no-op. iOS no
-  longer zeros the icon on foreground or notification tap.
+  longer zeros the icon on foreground or notification tap. The iOS Rooms tab
+  badge omits invited rooms the same way the icon does; invites stay on Inbox.
 - Quiet settings, room, and space left nav. Invite matches other menu rows
   instead of reading as selected. Composer plus and GIF/poll menus dismiss on
   outside click. Native Appearance no longer shows a Message Layout card or
