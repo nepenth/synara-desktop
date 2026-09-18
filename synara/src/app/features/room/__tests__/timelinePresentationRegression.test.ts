@@ -100,19 +100,17 @@ test('native timeline owner hydrates unresolved sender profiles without blocking
   assert.match(live, /\(\) = &mut member_hydration, if !members_hydrated/);
 });
 
-test('desktop grouped timestamps use horizontal trackpad movement without stealing selection', () => {
+test('desktop grouped timestamps overlay on hover without shifting the message', () => {
   const presenter = readFileSync('src/app/features/room/NativeTimelinePresenter.tsx', 'utf8');
   const timelineCss = readFileSync('src/app/features/room/nativeTimelineHtml.css.ts', 'utf8');
 
-  assert.match(presenter, /GroupedTimestampReveal/);
-  assert.match(presenter, /groupedTimestampOffset/);
-  assert.match(presenter, /onWheel/);
-  assert.match(presenter, /event\.deltaMode/);
-  assert.match(presenter, /event\.deltaX/);
-  assert.match(presenter, /wheelResetTimer/);
-  assert.match(presenter, /event\.pointerType === 'mouse'/);
-  assert.match(timelineCss, /touchAction: 'pan-y'/);
-  assert.match(timelineCss, /overscrollBehaviorX: 'contain'/);
+  assert.match(presenter, /GroupedTimestampReveal\} aria-hidden="true"/);
+  assert.match(timelineCss, /MessageActionSurface\}:hover &/);
+  assert.match(timelineCss, /MessageActionSurface\}:focus-within &/);
+  assert.doesNotMatch(presenter, /groupedTimestampOffset/);
+  assert.doesNotMatch(presenter, /onMouseEnter/);
+  assert.doesNotMatch(presenter, /translateX\(\$\{groupedTimestampOffset\}px\)/);
+  assert.doesNotMatch(timelineCss, /touchAction: 'pan-y'/);
   assert.doesNotMatch(presenter, /swipeStartX/);
   assert.doesNotMatch(presenter, /grouped \? \(\s*originServerTs \? \(\s*<Time/);
 });

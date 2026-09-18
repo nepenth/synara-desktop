@@ -40,15 +40,11 @@ export const MessageActionSurface = style({
 
 export const MessageSwipeSurface = style({
   position: 'relative',
-  overflow: 'hidden',
-  overscrollBehaviorX: 'contain',
-  touchAction: 'pan-y',
 });
 
 export const MessageSwipeContent = style({
   position: 'relative',
   zIndex: 1,
-  transition: 'transform 140ms ease-out',
 });
 
 export const GroupedTimestampReveal = style({
@@ -62,6 +58,19 @@ export const GroupedTimestampReveal = style({
   transition: 'opacity 120ms ease-out',
   pointerEvents: 'none',
   whiteSpace: 'nowrap',
+  selectors: {
+    [`${MessageActionSurface}:hover &`]: {
+      opacity: 1,
+    },
+    [`${MessageActionSurface}:focus-within &`]: {
+      opacity: 1,
+    },
+  },
+  '@media': {
+    '(prefers-reduced-motion: reduce)': {
+      transition: 'none',
+    },
+  },
 });
 
 export const MessageActionRail = style([
