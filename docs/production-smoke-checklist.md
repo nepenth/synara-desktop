@@ -18,6 +18,26 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-18 date-rail, Linux restore, and macOS ping release-candidate review (2.1.40):
+
+- PR #1154 passed its required Quality gate and Desktop Package Smoke and
+  merged to main as `dbfc226c`. iOS simulator unit and UI suites are skipped
+  on ordinary PRs and run on this `release/v2.1.40` candidate. Stacked PRs
+  #1129–#1149 stay unmerged leftovers.
+- Desktop Node validation, Rust desktop shell, iOS compile, package smoke, and
+  the native-timeline Playwright suite were green on the integration branch
+  before merge. This Linux environment cannot run UIKit or signed desktop
+  installers.
+- Remaining human checks before tagging: date-rail ticks on the spine with
+  live bottom on the latest mark; grouped hover timestamp without a row
+  shift; Linux close-to-tray restore from dash or tray; Linux unread count on
+  the tray; macOS ping without Now Playing.
+- The maintainer authorized merging #1154 and cutting this release. Final
+  signed-artifact install/update, physical-device testing, and live
+  cross-client UI checks were not repeated here. Do not push tag `v2.1.40`
+  until this candidate's Quality gate (including iOS simulator tests) and
+  Desktop Package Smoke are green.
+
 2026-09-17 client polish release-candidate review (2.1.39):
 
 - PR #1152 passed its required Quality gate and merged to main as `d56110e4`.
