@@ -1,0 +1,1 @@
+Date-rail ticks stay on the spine, grouped hover timestamps no longer shift the row, Linux restores the running session with a Slack-style unread badge, and macOS pings stay out of Now Playing.

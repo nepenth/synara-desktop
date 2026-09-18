@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## [2.1.40] - 2026-09-18
+
+- Center date-rail ticks on the 2px spine and keep live bottom on the latest
+  mark.
+- Keep grouped messages still when the hover timestamp appears. The time fades
+  in over the right gutter instead of translating the row.
 - Linux: closing the window keeps the dash running indicator and restores the
   existing session instead of opening a second copy. The notification-area
   icon paints a Slack-style unread count, and Ubuntu Dock / Dash to Dock / KDE
