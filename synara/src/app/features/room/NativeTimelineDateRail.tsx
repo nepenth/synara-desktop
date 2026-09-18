@@ -45,7 +45,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
       if (!track || !thumb) return;
       const ratio = railRatioForTimestamp(timestampMs, axis.startMs, axis.endMs);
       const y = ratio * track.clientHeight;
-      thumb.style.transform = `translate3d(0, ${y}px, 0)`;
+      thumb.style.transform = `translate3d(-50%, ${y}px, 0)`;
       if (labelRef.current) {
         labelRef.current.style.transform = `translate3d(0, ${y}px, 0) translateY(-50%)`;
       }
@@ -151,6 +151,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
           }
         }}
       >
+        <div className={htmlCss.DateRailSpine} aria-hidden="true" />
         <div ref={thumbRef} className={htmlCss.DateRailThumb} />
       </div>
       {marks.map((mark, index) => {

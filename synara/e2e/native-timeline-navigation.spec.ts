@@ -556,6 +556,36 @@ test('date rail tick hover paints a date label that is not under the messages', 
   expect(labelBox!.x + labelBox!.width).toBeLessThanOrEqual(tickBox!.x + 4);
 });
 
+test('date rail ticks sit on the track center and live bottom selects the latest mark', async ({
+  page,
+}) => {
+  await open(page, 'live');
+  const rail = page.locator('[data-timeline-date-rail="true"]');
+  const track = page.getByRole('scrollbar', { name: 'Jump to a date in the last 7 days' });
+  const ticks = rail.getByRole('button');
+  await expect(rail).toBeVisible();
+  await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);
+  const trackBox = await track.boundingBox();
+  expect(trackBox).not.toBeNull();
+  const trackCenter = trackBox!.x + trackBox!.width / 2;
+  const count = await ticks.count();
+  expect(count).toBeGreaterThan(1);
+  for (let index = 0; index < count; index += 1) {
+    const tickBox = await ticks.nth(index).boundingBox();
+    expect(tickBox).not.toBeNull();
+    expect(Math.abs(tickBox!.x + tickBox!.width / 2 - trackCenter)).toBeLessThan(1.5);
+  }
+  const current = rail.locator('button[aria-current="true"]');
+  await expect
+    .poll(async () => {
+      const currentBox = await current.boundingBox();
+      const lastBox = await ticks.last().boundingBox();
+      if (!currentBox || !lastBox) return Number.POSITIVE_INFINITY;
+      return Math.abs(currentBox.y - lastBox.y);
+    })
+    .toBeLessThan(1);
+});
+
 test('wheel past the newest message does not strobe loading-newer chrome', async ({ page }) => {
   await open(page, 'live');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);

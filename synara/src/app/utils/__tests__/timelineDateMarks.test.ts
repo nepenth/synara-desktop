@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  activeTimelineHistoryMarkForTimestamp,
   activeTimelineHistoryMarkIndex,
   collectSevenDayRailMarks,
   collectTimelineHistoryMarks,
@@ -14,6 +15,7 @@ import {
   shouldShowTimelineDateRail,
   timestampForRailRatio,
   timelineRailAxis,
+  visibleTimestampForRail,
   withRoomBeginningMark,
 } from '../timelineDateMarks';
 
@@ -166,7 +168,9 @@ test('seven-day rail samples older day starts and recent 8am/noon/5pm marks', ()
   const timeMarks = marks.filter((mark) => mark.kind === 'time');
   assert.equal(dayMarks.length, 4);
   assert.equal(dayMarks[0].timestampMs, expectedStart);
-  assert.equal(timeMarks.length, 9);
+  assert.equal(timeMarks.length, 10);
+  assert.equal(marks[marks.length - 1].timestampMs, now);
+  assert.equal(marks[marks.length - 1].key.startsWith('now:'), true);
   assert.equal(
     timeMarks.some((mark) => mark.timestampMs === new Date(2026, 8, 17, 17, 0, 0).getTime()),
     true
@@ -194,4 +198,35 @@ test('seven-day history fill is needed while loaded min is after the axis start'
   const filled = sevenDayRailAxis(now, [{ index: 0, timestampMs: axis.startMs }]);
   assert.equal(needsSevenDayHistoryFill(filled, { backwardAvailable: true }), false);
   assert.equal(needsSevenDayHistoryFill(undefined, { backwardAvailable: true }), false);
+});
+
+test('live-bottom rail time uses the axis end, not the top visible row', () => {
+  const axisEndMs = day(2026, 9, 17, 18);
+  const viewportStartTimestampMs = day(2026, 9, 17, 8);
+  assert.equal(
+    visibleTimestampForRail({
+      atLiveBottom: true,
+      axisEndMs,
+      viewportStartTimestampMs,
+    }),
+    axisEndMs
+  );
+  assert.equal(
+    visibleTimestampForRail({
+      atLiveBottom: false,
+      axisEndMs,
+      viewportStartTimestampMs,
+    }),
+    viewportStartTimestampMs
+  );
+  assert.equal(
+    visibleTimestampForRail({
+      atLiveBottom: false,
+      axisEndMs,
+      viewportStartTimestampMs: undefined,
+    }),
+    axisEndMs
+  );
+  const marks = collectSevenDayRailMarks(axisEndMs);
+  assert.equal(activeTimelineHistoryMarkForTimestamp(marks, axisEndMs), marks.length - 1);
 });

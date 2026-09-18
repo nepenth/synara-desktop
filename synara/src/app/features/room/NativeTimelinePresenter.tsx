@@ -135,6 +135,7 @@ import {
   sevenDayRailAxis,
   shouldShowTimelineDateRail,
   needsSevenDayHistoryFill,
+  visibleTimestampForRail,
 } from '../../utils/timelineDateMarks';
 import {
   canPaginateTimelineForward,
@@ -2555,12 +2556,15 @@ export function NativeTimelinePresenter({
     forwardAvailable: readyState?.snapshot.pagination.forward === 'available',
   };
   const getVisibleTimestamp = useCallback(() => {
+    const axisEndMs = railContextRef.current.axis?.endMs ?? Date.now();
     const index = virtualizer.getVirtualItems()[0]?.index ?? 0;
     const row = rowsRef.current[index];
-    return (
-      (row ? rowTimestampMs(row) : undefined) ?? railContextRef.current.axis?.endMs ?? Date.now()
-    );
-  }, [virtualizer]);
+    return visibleTimestampForRail({
+      atLiveBottom,
+      axisEndMs,
+      viewportStartTimestampMs: row ? rowTimestampMs(row) : undefined,
+    });
+  }, [atLiveBottom, virtualizer]);
   const scrollToHistoryTimestamp = useCallback(
     (timestampMs: number) => {
       followingLiveRef.current = false;
