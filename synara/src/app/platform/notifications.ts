@@ -2,10 +2,12 @@ import {
   getDesktopNotificationPermission,
   isSynaraDesktop,
   listen,
+  playDesktopNotificationSound,
   requestDesktopNotificationPermission,
   showDesktopNotification,
   type DesktopNotificationActionEventPayload,
   type DesktopNotificationPermission,
+  type DesktopNotificationSoundKind,
   type DesktopUnlisten,
 } from '../utils/desktop';
 import {
@@ -37,6 +39,10 @@ export const showPlatformNotification = async (
     dismissKeys: normalized.dismissKeys,
   });
 };
+
+export const playPlatformNotificationSound = async (
+  kind: DesktopNotificationSoundKind
+): Promise<boolean> => playDesktopNotificationSound(kind);
 
 export const registerPlatformNotificationActionListener = async (
   handler: (payload: PlatformNotificationActionEventPayload) => void

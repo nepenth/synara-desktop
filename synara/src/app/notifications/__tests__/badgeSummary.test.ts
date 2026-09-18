@@ -110,6 +110,16 @@ test('dock badge stays on summarizeNotifications and never uses SDK total_unread
   assert.doesNotMatch(summary, /total_unread_notifications/);
 });
 
+test('notification pings prefer native playback over HTML audio', () => {
+  const updater = readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
+  const desktop = readFileSync('src/app/utils/desktop.ts', 'utf8');
+  const notifications = readFileSync('src/app/platform/notifications.ts', 'utf8');
+  assert.match(updater, /playPlatformNotificationSound\('invite'\)/);
+  assert.match(updater, /playPlatformNotificationSound\('message'\)/);
+  assert.match(desktop, /desktop_play_notification_sound/);
+  assert.match(notifications, /playDesktopNotificationSound/);
+});
+
 test('logged-in desktop shell always mounts PlatformBadgeAndTrayUpdater', () => {
   const updater = readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
   const router = readFileSync('src/app/pages/Router.tsx', 'utf8');

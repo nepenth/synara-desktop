@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Linux: closing the window keeps the dash running indicator and restores the
+  existing session instead of opening a second copy. The notification-area
+  icon paints a Slack-style unread count, and Ubuntu Dock / Dash to Dock / KDE
+  receive the Unity launcher badge.
+- macOS: notification pings play through NSSound so they no longer appear as
+  Now Playing media on the menu bar and Touch Bar.
+
 ## [2.1.39] - 2026-09-17
 
 - Render markdown attachments with lists, GFM tables, task prefixes, strikethrough,

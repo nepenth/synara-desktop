@@ -15,6 +15,7 @@ mod desktop_file_transfer;
 mod desktop_integration;
 mod desktop_logging;
 mod desktop_navigation;
+mod desktop_notification_sound;
 mod desktop_notifications;
 mod desktop_platform;
 mod desktop_sanitize;
@@ -22,6 +23,7 @@ mod desktop_secret_store;
 mod desktop_shortcuts;
 mod desktop_spellcheck;
 mod desktop_tray;
+mod desktop_unread_badge;
 mod desktop_url;
 mod desktop_webview_performance;
 // P1.2: compile-only Matrix Rust SDK linkage; no production client session.
@@ -339,7 +341,16 @@ pub fn run() {
     let updater_configured = updater_plugin_configured(&context);
     #[cfg(any(target_os = "android", target_os = "ios"))]
     let updater_configured = false;
-    let mut builder = register_synara_media_protocol(tauri::Builder::default())
+    let mut builder = register_synara_media_protocol(tauri::Builder::default());
+    #[cfg(not(any(target_os = "android", target_os = "ios")))]
+    {
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Err(error) = desktop::show_main_window(app) {
+                eprintln!("[synara] failed to focus the running window: {error}");
+            }
+        }));
+    }
+    builder = builder
         .manage(matrix::auth::MatrixAuthState::new())
         .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
@@ -354,6 +365,7 @@ pub fn run() {
             desktop::desktop_window_close,
             desktop::desktop_navigate,
             desktop::desktop_set_badge_count,
+            desktop::desktop_play_notification_sound,
             desktop::desktop_set_shortcuts,
             desktop::desktop_secret_store_status,
             desktop_integration::desktop_get_integration_status,
@@ -603,7 +615,7 @@ pub fn run() {
             match event {
                 WindowEvent::CloseRequested { api, .. } => {
                     api.prevent_close();
-                    let _ = window.hide();
+                    let _ = desktop::hide_main_window(window.app_handle());
                 }
                 WindowEvent::DragDrop(DragDropEvent::Enter { paths, position }) => {
                     desktop_file_transfer::reset_drag_drop_session();

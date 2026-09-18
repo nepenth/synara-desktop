@@ -160,15 +160,20 @@ test('native window chrome matches the in-app titlebar contract', () => {
   assert.match(lib, /desktop::desktop_window_minimize/);
   assert.match(lib, /desktop::desktop_window_toggle_maximize/);
   assert.match(lib, /desktop::desktop_window_close/);
+  assert.match(lib, /desktop::desktop_play_notification_sound/);
+  assert.match(lib, /tauri_plugin_single_instance/);
+  assert.match(lib, /desktop::hide_main_window\(window\.app_handle\(\)\)/);
   assert.match(lib, /matrix::auth::product::matrix_timeline_follow_live/);
   const build = source('../src-tauri/build.rs');
   assert.match(build, /"desktop_window_minimize"/);
   assert.match(build, /"desktop_window_toggle_maximize"/);
   assert.match(build, /"desktop_window_close"/);
+  assert.match(build, /"desktop_play_notification_sound"/);
   assert.match(build, /"matrix_timeline_follow_live"/);
   const desktop = source('../src-tauri/src/desktop.rs');
   assert.match(desktop, /pub fn desktop_window_close/);
   assert.match(desktop, /hide_main_window/);
+  assert.match(desktop, /window\.minimize\(\)/);
   assert.doesNotMatch(
     desktop.split('pub fn desktop_window_close')[1]?.split('pub fn desktop_navigate')[0] ?? '',
     /window\.close\(\)/
@@ -178,6 +183,7 @@ test('native window chrome matches the in-app titlebar contract', () => {
     'allow-desktop-window-minimize',
     'allow-desktop-window-toggle-maximize',
     'allow-desktop-window-close',
+    'allow-desktop-play-notification-sound',
     'allow-matrix-timeline-follow-live',
   ]) {
     assert.ok(
@@ -190,6 +196,7 @@ test('native window chrome matches the in-app titlebar contract', () => {
     'desktop_window_minimize',
     'desktop_window_toggle_maximize',
     'desktop_window_close',
+    'desktop_play_notification_sound',
     'matrix_timeline_follow_live',
   ]) {
     assert.match(linuxSchema, new RegExp(`allow-${command.replaceAll('_', '-')}`));

@@ -429,6 +429,12 @@
           "markdownDescription": "Enables the desktop_open_external_url command without any pre-configured scope."
         },
         {
+          "description": "Enables the desktop_play_notification_sound command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-desktop-play-notification-sound",
+          "markdownDescription": "Enables the desktop_play_notification_sound command without any pre-configured scope."
+        },
+        {
           "description": "Enables the desktop_read_diagnostics command without any pre-configured scope.",
           "type": "string",
           "const": "allow-desktop-read-diagnostics",
@@ -1777,6 +1783,12 @@
           "type": "string",
           "const": "deny-desktop-open-external-url",
           "markdownDescription": "Denies the desktop_open_external_url command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the desktop_play_notification_sound command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-desktop-play-notification-sound",
+          "markdownDescription": "Denies the desktop_play_notification_sound command without any pre-configured scope."
         },
         {
           "description": "Denies the desktop_read_diagnostics command without any pre-configured scope.",

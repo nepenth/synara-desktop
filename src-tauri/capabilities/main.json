@@ -30,6 +30,7 @@
     "allow-desktop-window-close",
     "allow-desktop-navigate",
     "allow-desktop-set-badge-count",
+    "allow-desktop-play-notification-sound",
     "allow-desktop-set-shortcuts",
     "allow-desktop-secret-store-status",
     "allow-desktop-get-integration-status",

@@ -623,6 +623,24 @@ export const setDesktopBadgeCount = async (count: number): Promise<void> => {
   });
 };
 
+export type DesktopNotificationSoundKind = 'message' | 'invite';
+
+export const playDesktopNotificationSound = async (
+  kind: DesktopNotificationSoundKind
+): Promise<boolean> => {
+  if (kind !== 'message' && kind !== 'invite') return false;
+  try {
+    const result = await invokeDesktopWithAvailability<boolean>(
+      'desktop_play_notification_sound',
+      { kind },
+      { suppressErrorDiagnostic: true }
+    );
+    return result.available === true && result.value === true;
+  } catch {
+    return false;
+  }
+};
+
 export const sendDesktopAgentAction = async (
   action: DesktopAgentActionPayload
 ): Promise<boolean> => {
