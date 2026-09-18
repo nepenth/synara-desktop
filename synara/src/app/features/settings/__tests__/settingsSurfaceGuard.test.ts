@@ -56,9 +56,33 @@ test('appearance does not offer Twitter Emoji and does not advertise unused mint
   assert.match(appearance, /Sample/);
 });
 
-test('native Appearance does not offer Compact or Bubble layouts that the native timeline ignores', () => {
-  assert.match(appearance, /isNativeMatrixSession\(\)/);
-  assert.match(appearance, /native timeline uses a single Element-like layout/);
+test('settings left nav stacks categories with a gap on the reading plane', () => {
+  const nav = settings.slice(
+    settings.indexOf('<PageNavContent>'),
+    settings.indexOf('<Text size="B400">Logout</Text>')
+  );
+  assert.match(nav, /<Box direction="Column" gap="(?:100|200|300|400)"/);
+  assert.match(nav, /fill="None"/);
+  assert.match(nav, /quietInteractiveSurface/);
+  assert.match(nav, /variant="Surface"/);
+});
+
+test('native Appearance hides Message Layout and does not name other clients', () => {
+  const messages = appearance.slice(
+    appearance.indexOf('function MessageDisplay'),
+    appearance.indexOf('title="Legacy Username Color"')
+  );
+  assert.match(messages, /!isNativeMatrixSession\(\)/);
+  assert.match(messages, /<SelectMessageLayout \/>/);
+  assert.match(messages, /Message Spacing/);
+  assert.doesNotMatch(messages, /title="Message layout"/);
+  assert.doesNotMatch(messages, /Other layouts are not available yet/);
+  assert.doesNotMatch(appearance, /Element-like/);
+  assert.doesNotMatch(appearance, /\bElement\b/);
+  assert.equal(appearance.includes('Cinny'), false);
+  assert.equal(appearance.includes('FluffyChat'), false);
+  assert.doesNotMatch(appearance, /retired JS timeline/);
+  assert.doesNotMatch(appearance, /<Text size="T300">Modern<\/Text>/);
 });
 
 test('Appearance is its own Settings page and General no longer hosts theme or layout controls', () => {
@@ -114,6 +138,25 @@ const developerTools = readFileSync(
   join(process.cwd(), 'src/app/features/settings/developer-tools/DevelopTools.tsx'),
   'utf8'
 );
+
+test('General hosts the first-class Widgets card and Developer Tools does not duplicate it', () => {
+  assert.match(general, /<Text size="L400">Widgets<\/Text>/);
+  assert.match(general, /experimentalWidgetsEnabled/);
+  assert.match(general, /agentWidgetEntries/);
+  assert.match(general, /widgetsSettingsDescription/);
+  assert.match(general, /Add agent widget/);
+  assert.match(developerTools, /Widgets are configured under General/);
+  assert.equal(developerTools.includes('Add agent widget'), false);
+  assert.equal(developerTools.includes('setAgentWidgetEntries'), false);
+  assert.equal(developerTools.includes('setExperimentalWidgetsEnabled'), false);
+});
+
+test('General hosts a Calls card with honest MatrixRTC transport status', () => {
+  assert.match(general, /<Text size="L400">Calls<\/Text>/);
+  assert.match(general, /rtcCallAvailabilityCopy/);
+  assert.match(general, /snapshotRtcTransportsNative/);
+  assert.equal(general.includes('set_call'), false);
+});
 
 test('X.509 identity settings live on Devices, not Developer Tools', () => {
   assert.match(devices, /X509IdentityCard/);

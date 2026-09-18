@@ -56,7 +56,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
       const mark = active >= 0 ? marks[active] : undefined;
       const label = mark
         ? formatTimelineHistoryMarkLabel(mark, hour24Clock)
-        : formatTimelineRailTimestamp(timestampMs, hour24Clock, axis);
+        : formatTimelineRailTimestamp(timestampMs, hour24Clock);
       if (label) track.setAttribute('aria-valuetext', label);
       else track.removeAttribute('aria-valuetext');
       ticksRef.current.forEach((tick, tickIndex) => {
@@ -85,15 +85,15 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
   }, [getVisibleTimestamp, paintThumb, scrollRef]);
 
   const previewFromClientY = useCallback(
-    (clientY: number) => {
+    (clientY: number, commitPreview: boolean) => {
       const track = trackRef.current;
       if (!track) return;
       const rect = track.getBoundingClientRect();
       const ratio = rect.height <= 0 ? 0 : (clientY - rect.top) / rect.height;
       const timestampMs = timestampForRailRatio(ratio, axis.startMs, axis.endMs);
       lastTimestampRef.current = timestampMs;
-      onPreviewTimestamp(timestampMs);
-      setHoverLabel(formatTimelineRailTimestamp(timestampMs, hour24Clock, axis));
+      if (commitPreview) onPreviewTimestamp(timestampMs);
+      setHoverLabel(formatTimelineRailTimestamp(timestampMs, hour24Clock));
       paintThumb(timestampMs, true);
     },
     [axis, hour24Clock, onPreviewTimestamp, paintThumb]
@@ -102,17 +102,16 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    previewFromClientY(event.clientY);
+    previewFromClientY(event.clientY, true);
   };
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    previewFromClientY(event.clientY);
+    previewFromClientY(event.clientY, event.currentTarget.hasPointerCapture(event.pointerId));
   };
   const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
+      onCommitTimestamp(lastTimestampRef.current);
     }
-    onCommitTimestamp(lastTimestampRef.current);
     setHoverLabel(undefined);
   };
 
@@ -122,9 +121,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         ref={trackRef}
         className={htmlCss.DateRailTrack}
         role="scrollbar"
-        aria-label={
-          axis.fullRoom ? 'Jump to a date in room history' : 'Jump to a date in loaded history'
-        }
+        aria-label="Jump to a date in the last 7 days"
         aria-controls="native-timeline-history"
         aria-orientation="vertical"
         aria-valuemin={axis.startMs}
@@ -135,6 +132,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onPointerLeave={() => setHoverLabel(undefined)}
         onKeyDown={(event) => {
           const current = getVisibleTimestamp();
           const span = Math.max(1, axis.endMs - axis.startMs);
@@ -157,7 +155,7 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
       </div>
       {marks.map((mark, index) => {
         const ratio = railRatioForTimestamp(mark.timestampMs, axis.startMs, axis.endMs);
-        const label = formatTimelineHistoryMarkLabel(mark, hour24Clock);
+        const label = formatTimelineRailTimestamp(mark.timestampMs, hour24Clock);
         return (
           <button
             key={mark.key}
@@ -169,15 +167,25 @@ export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail
             style={{ top: `${ratio * 100}%` }}
             title={label}
             aria-label={`Jump to ${label}`}
+            onPointerEnter={() => {
+              setHoverLabel(formatTimelineRailTimestamp(mark.timestampMs, hour24Clock));
+              paintThumb(mark.timestampMs, true);
+            }}
+            onPointerLeave={() => {
+              setHoverLabel(undefined);
+            }}
             onClick={() => onCommitTimestamp(mark.timestampMs)}
           />
         );
       })}
-      {hoverLabel ? (
-        <div ref={labelRef} className={htmlCss.DateRailLabel}>
-          <Text size="T200">{hoverLabel}</Text>
-        </div>
-      ) : null}
+      <div
+        ref={labelRef}
+        className={htmlCss.DateRailLabel}
+        style={{ opacity: hoverLabel ? 1 : 0 }}
+        aria-hidden={!hoverLabel}
+      >
+        <Text size="T200">{hoverLabel ?? '\u00a0'}</Text>
+      </div>
     </div>
   );
 });

@@ -4,6 +4,18 @@ import UserNotifications
 @testable import Synara
 
 final class AppRouteTests: XCTestCase {
+    func testAppDelegateAppliesSummaryInsteadOfClearingBadgeToZero() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Synara/App/SynaraApp.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(source.contains("clearBadgeToZero"))
+        XCTAssertFalse(source.contains("setBadgeCount(0)"))
+        XCTAssertTrue(source.contains("applyCurrentAppIconBadge"))
+        XCTAssertTrue(source.contains("AppIconBadge.applyCurrentSummary"))
+    }
+
     @MainActor
     func testNotificationDelegateIsInstalledBeforeLaunchReturnsWithoutSwiftUIBinding() {
         let center = UNUserNotificationCenter.current()
@@ -13,6 +25,80 @@ final class AppRouteTests: XCTestCase {
 
         XCTAssertTrue(delegate.application(UIApplication.shared, didFinishLaunchingWithOptions: nil))
         XCTAssertTrue(center.delegate === delegate)
+    }
+
+    @MainActor
+    func testBecomingActiveAppliesRoomListSummaryInsteadOfClearingBadge() async {
+        let push = MockPushService()
+        let rooms = [
+            RoomSummary(
+                id: "!unread:matrix.org",
+                name: "Unread",
+                lastMessagePreview: "hello",
+                unreadCount: 4,
+                hasHighlight: false,
+                kind: .room,
+                membership: .joined,
+                lastActivityAt: Date()
+            )
+        ]
+        let later = MockLaterService(
+            items: [
+                SynaraLaterListItem(
+                    id: "saved",
+                    roomID: "!unread:matrix.org",
+                    eventID: "$one",
+                    kind: .saved,
+                    dueTs: nil,
+                    completedAt: nil,
+                    createdAt: 1,
+                    isCompleted: false
+                )
+            ]
+        )
+        let environment = AppEnvironment.mock(
+            push: push,
+            roomList: MockRoomListService(state: .loaded(rooms)),
+            later: later
+        )
+        let delegate = SynaraAppDelegate()
+        delegate.bind(to: environment)
+        delegate.applicationDidBecomeActive(UIApplication.shared)
+
+        let expected = NotificationBadgeSummary.appBadgeCount(from: rooms, laterActiveCount: 1)
+        await waitUntil { push.lastAppIconBadgeCount == expected }
+        XCTAssertEqual(push.lastAppIconBadgeCount, expected)
+        XCTAssertGreaterThan(expected, 0)
+    }
+
+    @MainActor
+    func testBecomingActiveDoesNotForceIconToZeroWhileRoomListIsLoading() async {
+        let push = MockPushService()
+        push.applyAppIconBadge(9)
+        let environment = AppEnvironment.mock(
+            push: push,
+            roomList: MockRoomListService(state: .loading)
+        )
+        let delegate = SynaraAppDelegate()
+        delegate.bind(to: environment)
+        delegate.applicationDidBecomeActive(UIApplication.shared)
+
+        try? await Task.sleep(nanoseconds: 50_000_000)
+        XCTAssertEqual(push.lastAppIconBadgeCount, 9)
+        XCTAssertEqual(push.appIconBadgeApplyCallCount, 1)
+    }
+
+    @MainActor
+    func testApplyCurrentAppIconBadgeClearsOnlyWhenSummaryIsZero() async {
+        let push = MockPushService()
+        let environment = AppEnvironment.mock(
+            push: push,
+            roomList: MockRoomListService(state: .empty)
+        )
+        let delegate = SynaraAppDelegate()
+        delegate.bind(to: environment)
+        await delegate.applyCurrentAppIconBadge()
+        XCTAssertEqual(push.lastAppIconBadgeCount, 0)
     }
 
     func testTabsExposeExpectedDestinations() {
@@ -226,5 +312,19 @@ final class AppRouteTests: XCTestCase {
         XCTAssertTrue(router.roomsPath.isEmpty)
         XCTAssertTrue(router.settingsPath.isEmpty)
         XCTAssertNil(router.sheetDestination)
+    }
+}
+
+@MainActor
+private func waitUntil(
+    timeoutNanoseconds: UInt64 = 1_000_000_000,
+    condition: @escaping () -> Bool
+) async {
+    let deadline = DispatchTime.now().uptimeNanoseconds + timeoutNanoseconds
+    while DispatchTime.now().uptimeNanoseconds < deadline {
+        if condition() {
+            return
+        }
+        try? await Task.sleep(nanoseconds: 10_000_000)
     }
 }

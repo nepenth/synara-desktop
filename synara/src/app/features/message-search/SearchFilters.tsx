@@ -42,7 +42,12 @@ import {
 import { DebounceOptions, useDebounce } from '../../hooks/useDebounce';
 import { VirtualTile } from '../../components/virtualizer';
 import { stopPropagation } from '../../utils/keyboard';
-import { MessageSearchTypeFilter, parseSenderFilter } from '../../utils/messageSearchFilters';
+import {
+  isLastNDaysDateRange,
+  lastNDaysDateRange,
+  MessageSearchTypeFilter,
+  parseSenderFilter,
+} from '../../utils/messageSearchFilters';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
 import * as depthCss from '../../styles/Depth.css';
 
@@ -596,6 +601,23 @@ export function SearchFilters({
           </Box>
           <Button className={depthCss.quietInteractiveSurface} size="300" radii="300" type="submit">
             <Text size="B300">{t('modernization.search.apply_dates', 'Apply dates')}</Text>
+          </Button>
+          <Button
+            className={depthCss.quietInteractiveSurface}
+            size="300"
+            radii="300"
+            variant={isLastNDaysDateRange(fromDate, toDate, 7) ? 'Success' : 'Secondary'}
+            fill="Soft"
+            type="button"
+            aria-pressed={isLastNDaysDateRange(fromDate, toDate, 7)}
+            onClick={() => {
+              const range = lastNDaysDateRange(7);
+              setFromText(range.fromDate);
+              setToText(range.toDate);
+              onDateRangeChange(range.fromDate, range.toDate);
+            }}
+          >
+            <Text size="B300">{t('modernization.search.last_seven_days', 'Last 7 days')}</Text>
           </Button>
           <Button
             className={depthCss.quietInteractiveSurface}

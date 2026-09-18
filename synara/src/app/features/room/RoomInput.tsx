@@ -43,6 +43,7 @@ import {
   config,
   toRem,
 } from 'folds';
+import FocusTrap from 'focus-trap-react';
 
 import { requestRoomLatestAfterSend } from './nativeTimelineNavigation';
 import { useMatrixClient } from '../../hooks/useMatrixClient';
@@ -110,6 +111,7 @@ import { safeFile } from '../../utils/mimeTypes';
 import { useSetting } from '../../state/hooks/settings';
 import { settingsAtom } from '../../state/settings';
 import { getMemberDisplayName, getMentionContent, trimReplyFromBody } from '../../utils/room';
+import { stopPropagation } from '../../utils/keyboard';
 import { CommandAutocomplete } from './CommandAutocomplete';
 import { Command, SHRUG, TABLEFLIP, UNFLIP, useCommands } from '../../hooks/useCommands';
 import { mobileOrTablet } from '../../utils/user-agent';
@@ -283,6 +285,22 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
 
     const [toolbar, setToolbar] = useSetting(settingsAtom, 'editorToolbar');
     const [composerToolsAnchor, setComposerToolsAnchor] = useState<RectCords>();
+    useEffect(() => {
+      if (!composerToolsAnchor) return undefined;
+      const onPointerDown = (event: PointerEvent) => {
+        const target = event.target;
+        if (!(target instanceof Node)) {
+          setComposerToolsAnchor(undefined);
+          return;
+        }
+        if (composerToolsBtnRef.current?.contains(target)) return;
+        const menu = document.querySelector('[data-composer-tools-menu="true"]');
+        if (menu?.contains(target)) return;
+        setComposerToolsAnchor(undefined);
+      };
+      document.addEventListener('pointerdown', onPointerDown, true);
+      return () => document.removeEventListener('pointerdown', onPointerDown, true);
+    }, [composerToolsAnchor]);
     const [emojiBoardOpen, setEmojiBoardOpen] = useState(false);
     const [autocompleteQuery, setAutocompleteQuery] =
       useState<AutocompleteQuery<AutocompletePrefix>>();
@@ -1140,47 +1158,66 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
               align="Start"
               offset={12}
               content={
-                <Menu className={depthCss.floatingSurface} style={{ width: toRem(196) }}>
-                  <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
-                    <MenuItem
-                      size="300"
-                      radii="300"
-                      after={<Icon src={Icons.File} size="100" />}
-                      onClick={() => {
-                        setComposerToolsAnchor(undefined);
-                        pickFile('*');
-                      }}
-                    >
-                      <Text size="T300">Attach file</Text>
-                    </MenuItem>
-                    {(gifPickerAvailable || gifOnboardingVisible) && (
+                <FocusTrap
+                  focusTrapOptions={{
+                    initialFocus: false,
+                    onDeactivate: () => setComposerToolsAnchor(undefined),
+                    clickOutsideDeactivates: true,
+                    isKeyForward: (evt: KeyboardEvent) => evt.key === 'ArrowDown',
+                    isKeyBackward: (evt: KeyboardEvent) => evt.key === 'ArrowUp',
+                    escapeDeactivates: stopPropagation,
+                    returnFocusOnDeactivate: false,
+                  }}
+                >
+                  <Menu
+                    className={depthCss.floatingSurface}
+                    style={{ width: toRem(196) }}
+                    data-composer-tools-menu="true"
+                  >
+                    <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                       <MenuItem
+                        className={depthCss.quietInteractiveSurface}
                         size="300"
                         radii="300"
-                        after={<Icon src={Icons.Photo} size="100" />}
+                        after={<Icon src={Icons.File} size="100" />}
+                        onClick={() => {
+                          setComposerToolsAnchor(undefined);
+                          pickFile('*');
+                        }}
+                      >
+                        <Text size="T300">Attach file</Text>
+                      </MenuItem>
+                      {(gifPickerAvailable || gifOnboardingVisible) && (
+                        <MenuItem
+                          className={depthCss.quietInteractiveSurface}
+                          size="300"
+                          radii="300"
+                          after={<Icon src={Icons.Photo} size="100" />}
+                          onClick={() => {
+                            const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
+                            setComposerToolsAnchor(undefined);
+                            setGifPickerAnchor(anchor);
+                          }}
+                        >
+                          <Text size="T300">GIF</Text>
+                        </MenuItem>
+                      )}
+                      <MenuItem
+                        className={depthCss.quietInteractiveSurface}
+                        size="300"
+                        radii="300"
+                        after={<Icon src={Icons.Message} size="100" />}
                         onClick={() => {
                           const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
                           setComposerToolsAnchor(undefined);
-                          setGifPickerAnchor(anchor);
+                          setPollAnchor(anchor);
                         }}
                       >
-                        <Text size="T300">GIF</Text>
+                        <Text size="T300">Poll</Text>
                       </MenuItem>
-                    )}
-                    <MenuItem
-                      size="300"
-                      radii="300"
-                      after={<Icon src={Icons.Message} size="100" />}
-                      onClick={() => {
-                        const anchor = composerToolsBtnRef.current?.getBoundingClientRect();
-                        setComposerToolsAnchor(undefined);
-                        setPollAnchor(anchor);
-                      }}
-                    >
-                      <Text size="T300">Poll</Text>
-                    </MenuItem>
-                  </Box>
-                </Menu>
+                    </Box>
+                  </Menu>
+                </FocusTrap>
               }
             >
               <IconButton
@@ -1266,65 +1303,75 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                   align="End"
                   anchor={gifPickerAnchor}
                   content={
-                    gifPickerAvailable ? (
-                      <GifPicker
-                        config={clientConfig.gifPicker}
-                        disabled={gifSending}
-                        error={gifSendError}
-                        onSelect={handleGifSelect}
-                      />
-                    ) : (
-                      <Box
-                        className={depthCss.floatingSurface}
-                        direction="Column"
-                        gap="300"
-                        style={{
-                          padding: config.space.S400,
-                          width: toRem(280),
-                          borderRadius: config.radii.R400,
-                        }}
-                      >
-                        <Text size="H5">
-                          {t('modernization.gif.onboarding.title', 'Enable GIFs?')}
-                        </Text>
-                        <Text size="T300" priority="300">
-                          {t(
-                            'modernization.gif.onboarding.description',
-                            'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
-                          )}
-                        </Text>
-                        <Box justifyContent="End" gap="200">
-                          <Button
-                            size="300"
-                            variant="Secondary"
-                            fill="None"
-                            onClick={() => {
-                              setGifOnboardingDismissed(true);
-                              setGifPickerAnchor(undefined);
-                            }}
-                          >
-                            <Text size="B300">
-                              {t('modernization.gif.onboarding.not_now', 'Not now')}
-                            </Text>
-                          </Button>
-                          <Button
-                            size="300"
-                            variant="Primary"
-                            onClick={() => {
-                              setGifSearchEnabled(true);
-                              setGifOnboardingDismissed(true);
-                              setGifPickerAnchor(
-                                composerToolsBtnRef.current?.getBoundingClientRect()
-                              );
-                            }}
-                          >
-                            <Text size="B300">
-                              {t('modernization.gif.onboarding.enable', 'Enable GIFs')}
-                            </Text>
-                          </Button>
+                    <FocusTrap
+                      focusTrapOptions={{
+                        initialFocus: false,
+                        onDeactivate: () => setGifPickerAnchor(undefined),
+                        clickOutsideDeactivates: true,
+                        escapeDeactivates: stopPropagation,
+                        returnFocusOnDeactivate: false,
+                      }}
+                    >
+                      {gifPickerAvailable ? (
+                        <GifPicker
+                          config={clientConfig.gifPicker}
+                          disabled={gifSending}
+                          error={gifSendError}
+                          onSelect={handleGifSelect}
+                        />
+                      ) : (
+                        <Box
+                          className={depthCss.floatingSurface}
+                          direction="Column"
+                          gap="300"
+                          style={{
+                            padding: config.space.S400,
+                            width: toRem(280),
+                            borderRadius: config.radii.R400,
+                          }}
+                        >
+                          <Text size="H5">
+                            {t('modernization.gif.onboarding.title', 'Enable GIFs?')}
+                          </Text>
+                          <Text size="T300" priority="300">
+                            {t(
+                              'modernization.gif.onboarding.description',
+                              'GIF search downloads your selected GIF privately, uploads it to Matrix media, then sends an mxc:// attachment.'
+                            )}
+                          </Text>
+                          <Box justifyContent="End" gap="200">
+                            <Button
+                              size="300"
+                              variant="Secondary"
+                              fill="None"
+                              onClick={() => {
+                                setGifOnboardingDismissed(true);
+                                setGifPickerAnchor(undefined);
+                              }}
+                            >
+                              <Text size="B300">
+                                {t('modernization.gif.onboarding.not_now', 'Not now')}
+                              </Text>
+                            </Button>
+                            <Button
+                              size="300"
+                              variant="Primary"
+                              onClick={() => {
+                                setGifSearchEnabled(true);
+                                setGifOnboardingDismissed(true);
+                                setGifPickerAnchor(
+                                  composerToolsBtnRef.current?.getBoundingClientRect()
+                                );
+                              }}
+                            >
+                              <Text size="B300">
+                                {t('modernization.gif.onboarding.enable', 'Enable GIFs')}
+                              </Text>
+                            </Button>
+                          </Box>
                         </Box>
-                      </Box>
-                    )
+                      )}
+                    </FocusTrap>
                   }
                 >
                   {null}
@@ -1337,107 +1384,119 @@ export const RoomInput = forwardRef<HTMLDivElement, RoomInputProps>(
                 align="End"
                 anchor={pollAnchor}
                 content={
-                  <Box
-                    className={depthCss.floatingSurface}
-                    direction="Column"
-                    gap="300"
-                    style={{
-                      padding: config.space.S400,
-                      width: toRem(320),
-                      borderRadius: config.radii.R400,
+                  <FocusTrap
+                    focusTrapOptions={{
+                      initialFocus: false,
+                      onDeactivate: () => setPollAnchor(undefined),
+                      clickOutsideDeactivates: true,
+                      escapeDeactivates: stopPropagation,
+                      returnFocusOnDeactivate: false,
                     }}
-                    role="group"
-                    aria-label={t('modernization.poll.create_aria_label', 'Create poll')}
                   >
-                    <Text size="H5">{t('modernization.poll.create_title', 'Create Poll')}</Text>
-                    <Input
-                      size="300"
-                      radii="300"
-                      variant="Background"
-                      value={pollQuestion}
-                      onChange={(evt) => setPollQuestion(evt.currentTarget.value)}
-                      placeholder={t('modernization.poll.question_placeholder', 'Question')}
-                      aria-label={t('modernization.poll.question_aria_label', 'Poll question')}
-                    />
-                    <Input
-                      size="300"
-                      radii="300"
-                      variant="Background"
-                      type="number"
-                      min={DEFAULT_POLL_SELECTIONS}
-                      max={Math.min(MAX_POLL_SELECTIONS, pollAnswers.length)}
-                      value={pollMaxSelections}
-                      onChange={handlePollMaxSelectionsChange}
-                      placeholder={t('modernization.poll.max_aria_label', 'Max selections')}
-                      aria-label={t('modernization.poll.max_aria_label', 'Max selections')}
-                    />
-                    <Text size="T200" priority="300">
-                      {t('modernization.poll.max_description', {
-                        count: pollMaxSelections,
-                        defaultValue: 'Participants can choose up to {{count}} option(s).',
-                      })}
-                    </Text>
-                    {pollAnswers.map((answer, index) => (
+                    <Box
+                      className={depthCss.floatingSurface}
+                      direction="Column"
+                      gap="300"
+                      style={{
+                        padding: config.space.S400,
+                        width: toRem(320),
+                        borderRadius: config.radii.R400,
+                      }}
+                      role="group"
+                      aria-label={t('modernization.poll.create_aria_label', 'Create poll')}
+                    >
+                      <Text size="H5">{t('modernization.poll.create_title', 'Create Poll')}</Text>
                       <Input
-                        // eslint-disable-next-line react/no-array-index-key
-                        key={index}
                         size="300"
                         radii="300"
                         variant="Background"
-                        data-answer-index={index}
-                        value={answer}
-                        onChange={handlePollAnswerChange}
-                        placeholder={t('modernization.poll.answer_placeholder', {
-                          count: index + 1,
-                          defaultValue: 'Option {{count}}',
-                        })}
-                        aria-label={t('modernization.poll.answer_aria_label', {
-                          count: index + 1,
-                          defaultValue: 'Poll option {{count}}',
-                        })}
+                        value={pollQuestion}
+                        onChange={(evt) => setPollQuestion(evt.currentTarget.value)}
+                        placeholder={t('modernization.poll.question_placeholder', 'Question')}
+                        aria-label={t('modernization.poll.question_aria_label', 'Poll question')}
                       />
-                    ))}
-                    <Box gap="200">
-                      <Button
+                      <Input
                         size="300"
-                        variant="Secondary"
-                        fill="None"
-                        onClick={() => setPollAnswers((current) => [...current, ''])}
-                      >
-                        <Text size="B300">{t('modernization.poll.add_option', 'Add option')}</Text>
-                      </Button>
-                      {pollAnswers.length > 2 && (
+                        radii="300"
+                        variant="Background"
+                        type="number"
+                        min={DEFAULT_POLL_SELECTIONS}
+                        max={Math.min(MAX_POLL_SELECTIONS, pollAnswers.length)}
+                        value={pollMaxSelections}
+                        onChange={handlePollMaxSelectionsChange}
+                        placeholder={t('modernization.poll.max_aria_label', 'Max selections')}
+                        aria-label={t('modernization.poll.max_aria_label', 'Max selections')}
+                      />
+                      <Text size="T200" priority="300">
+                        {t('modernization.poll.max_description', {
+                          count: pollMaxSelections,
+                          defaultValue: 'Participants can choose up to {{count}} option(s).',
+                        })}
+                      </Text>
+                      {pollAnswers.map((answer, index) => (
+                        <Input
+                          // eslint-disable-next-line react/no-array-index-key
+                          key={index}
+                          size="300"
+                          radii="300"
+                          variant="Background"
+                          data-answer-index={index}
+                          value={answer}
+                          onChange={handlePollAnswerChange}
+                          placeholder={t('modernization.poll.answer_placeholder', {
+                            count: index + 1,
+                            defaultValue: 'Option {{count}}',
+                          })}
+                          aria-label={t('modernization.poll.answer_aria_label', {
+                            count: index + 1,
+                            defaultValue: 'Poll option {{count}}',
+                          })}
+                        />
+                      ))}
+                      <Box gap="200">
                         <Button
                           size="300"
                           variant="Secondary"
                           fill="None"
-                          onClick={() => setPollAnswers((current) => current.slice(0, -1))}
+                          onClick={() => setPollAnswers((current) => [...current, ''])}
                         >
                           <Text size="B300">
-                            {t('modernization.poll.remove_option', 'Remove option')}
+                            {t('modernization.poll.add_option', 'Add option')}
                           </Text>
                         </Button>
+                        {pollAnswers.length > 2 && (
+                          <Button
+                            size="300"
+                            variant="Secondary"
+                            fill="None"
+                            onClick={() => setPollAnswers((current) => current.slice(0, -1))}
+                          >
+                            <Text size="B300">
+                              {t('modernization.poll.remove_option', 'Remove option')}
+                            </Text>
+                          </Button>
+                        )}
+                      </Box>
+                      {pollError && (
+                        <Text size="T300" priority="300">
+                          {pollError}
+                        </Text>
                       )}
+                      <Box justifyContent="End" gap="200">
+                        <Button
+                          size="300"
+                          variant="Secondary"
+                          fill="None"
+                          onClick={() => setPollAnchor(undefined)}
+                        >
+                          <Text size="B300">{t('modernization.poll.cancel', 'Cancel')}</Text>
+                        </Button>
+                        <Button size="300" variant="Primary" onClick={handleSendPoll}>
+                          <Text size="B300">{t('modernization.poll.send', 'Send poll')}</Text>
+                        </Button>
+                      </Box>
                     </Box>
-                    {pollError && (
-                      <Text size="T300" priority="300">
-                        {pollError}
-                      </Text>
-                    )}
-                    <Box justifyContent="End" gap="200">
-                      <Button
-                        size="300"
-                        variant="Secondary"
-                        fill="None"
-                        onClick={() => setPollAnchor(undefined)}
-                      >
-                        <Text size="B300">{t('modernization.poll.cancel', 'Cancel')}</Text>
-                      </Button>
-                      <Button size="300" variant="Primary" onClick={handleSendPoll}>
-                        <Text size="B300">{t('modernization.poll.send', 'Send poll')}</Text>
-                      </Button>
-                    </Box>
-                  </Box>
+                  </FocusTrap>
                 }
               >
                 {null}

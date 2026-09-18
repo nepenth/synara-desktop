@@ -2,6 +2,16 @@ import XCTest
 @testable import Synara
 
 final class NotificationPreviewSupportTests: XCTestCase {
+    func testNotificationServiceExtensionDoesNotWriteAppIconBadge() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("SynaraNotificationService/NotificationService.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(source.contains("setBadgeCount"))
+        XCTAssertFalse(source.contains("applyAppIconBadge"))
+    }
+
     func testPreviewFailureDiagnosticsKeepOnlyAllowlistedReasons() {
         XCTAssertEqual(SynaraNotificationDiagnostics.previewFailureStage(coreCode: "p4-s11-nse-decryption-unavailable"), .coreDecryptionUnavailable)
         XCTAssertEqual(SynaraNotificationDiagnostics.previewFailureStage(coreCode: "p4-s11-nse-event-filtered"), .coreEventFiltered)

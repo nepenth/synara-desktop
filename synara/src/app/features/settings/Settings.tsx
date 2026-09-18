@@ -164,12 +164,13 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
             </PageNavHeader>
             <Box grow="Yes" direction="Column">
               <PageNavContent>
-                <div style={{ flexGrow: 1 }}>
+                <Box direction="Column" gap="400" style={{ flexGrow: 1 }}>
                   {menuItems.map((item) => (
                     <MenuItem
                       className={depthCss.quietInteractiveSurface}
                       key={item.name}
                       variant="Surface"
+                      fill="None"
                       radii="400"
                       aria-pressed={activePage === item.page}
                       before={<Icon src={item.icon} size="100" filled={activePage === item.page} />}
@@ -186,7 +187,7 @@ export function Settings({ initialPage, requestClose }: SettingsProps) {
                       </Text>
                     </MenuItem>
                   ))}
-                </div>
+                </Box>
               </PageNavContent>
               <Box style={{ padding: config.space.S200 }} shrink="No" direction="Column">
                 <UseStateProvider initial={false}>

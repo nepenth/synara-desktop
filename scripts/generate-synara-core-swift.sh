@@ -114,9 +114,10 @@ if [[ "$space_bounded" == "0" ]]; then
   mkdir -p "$cargo_target_dir"
 fi
 
-# Match the Swift package deployment floors. Without these, current Xcode C
-# dependencies may compile for the host's newest SDK while Rust links the iOS
-# archive at its legacy default deployment target.
+# Keep the iOS archive on the Swift package floor. Do not export
+# MACOSX_DEPLOYMENT_TARGET here: on Xcode 27 / macOS SDK 27 it makes host
+# proc-macro dylibs (serde_derive, tokio_macros) fail dlopen with a
+# misaligned LINKEDIT string pool.
 for target in "${targets[@]}"; do
   target_build_dir="$cargo_target_dir"
   if [[ "$space_bounded" == "1" ]]; then
@@ -124,7 +125,6 @@ for target in "${targets[@]}"; do
     mkdir -p "$target_build_dir"
   fi
   IPHONEOS_DEPLOYMENT_TARGET=16.0 \
-    MACOSX_DEPLOYMENT_TARGET=13.0 \
     CARGO_TARGET_DIR="$target_build_dir" \
     cargo build --locked --release --package synara-core --target "$target"
 

@@ -99,14 +99,46 @@ fn normalize_tray_state(state: DesktopTrayState) -> DesktopTrayState {
     }
 }
 
+/// Same contract as JS `summarizeNotifications` appBadgeCount: later +
+/// highlights + ordinary unreads. Invites/agent stay on the inbox, not the icon.
+fn tray_badge_count(state: &DesktopTrayState) -> i64 {
+    clamp_count(
+        clamp_count(state.unread_count)
+            .saturating_add(clamp_count(state.highlight_count))
+            .saturating_add(clamp_count(state.later_count)),
+    )
+}
+
+fn tray_title_for_badge(count: i64) -> Option<String> {
+    let count = clamp_count(count);
+    if count > 0 {
+        Some(count.to_string())
+    } else {
+        None
+    }
+}
+
+fn apply_linux_tray_badge_title<R: Runtime>(
+    tray: &tauri::tray::TrayIcon<R>,
+    count: i64,
+) -> tauri::Result<()> {
+    let title = tray_title_for_badge(count);
+    #[cfg(target_os = "linux")]
+    tray.set_title(title)?;
+    #[cfg(not(target_os = "linux"))]
+    let _ = (tray, title);
+    Ok(())
+}
+
 fn tray_route_labels(state: &DesktopTrayState) -> [String; 5] {
     let unread = clamp_count(state.unread_count);
     let highlights = clamp_count(state.highlight_count);
     let later = clamp_count(state.later_count);
     let notifications = clamp_count(state.notification_inbox_count);
+    let badge = tray_badge_count(state);
     let do_not_disturb = state.do_not_disturb;
     let summary = format!(
-        "Unread: {unread} | Highlights: {highlights} | Later: {later} | Notifications: {notifications}"
+        "Badge: {badge} | Unread: {unread} | Highlights: {highlights} | Later: {later} | Notifications: {notifications}"
     );
     let later_label = format!("Later ({later})");
     let notifications_label = format!("Notifications ({notifications})");
@@ -149,6 +181,8 @@ fn apply_tray_state_in_place<R: Runtime>(
     if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
         tray.set_tooltip(Some(tray_tooltip(state)))
             .map_err(|error| error.to_string())?;
+        apply_linux_tray_badge_title(&tray, tray_badge_count(state))
+            .map_err(|error| error.to_string())?;
     }
     Ok(())
 }
@@ -168,6 +202,8 @@ fn rebuild_tray_menu<R: Runtime>(
     tray.set_menu(Some(built_menu.0))
         .map_err(|error| error.to_string())?;
     tray.set_tooltip(Some(tray_tooltip(state)))
+        .map_err(|error| error.to_string())?;
+    apply_linux_tray_badge_title(&tray, tray_badge_count(state))
         .map_err(|error| error.to_string())?;
     Ok(())
 }
@@ -372,7 +408,8 @@ fn tray_tooltip(state: &DesktopTrayState) -> String {
     let unread = clamp_count(state.unread_count);
     let highlights = clamp_count(state.highlight_count);
     let later = clamp_count(state.later_count);
-    format!("Synara — {unread} unread ({highlights} highlights), {later} later")
+    let badge = tray_badge_count(state);
+    format!("Synara — {badge} ({unread} unread, {highlights} highlights, {later} later)")
 }
 
 pub fn tray_dnd_toggle_dispatch_script() -> String {
@@ -387,14 +424,20 @@ fn emit_tray_dnd_toggle<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
 }
 
 pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> tauri::Result<()> {
+    let normalized_count = count.map(clamp_count).filter(|value| *value > 0);
     if let Some(window) = app.get_webview_window(MAIN_WINDOW_LABEL) {
-        let normalized_count = count.map(clamp_count).filter(|value| *value > 0);
         window.set_badge_count(normalized_count)?;
 
         #[cfg(target_os = "macos")]
         {
             window.set_badge_label(normalized_count.map(|value| value.to_string()))?;
         }
+    }
+
+    // Unity `set_badge_count` is a no-op on many GNOME setups. TrayIcon has no
+    // badge API; Linux shows the count via tray title (panel label) plus menu.
+    if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
+        apply_linux_tray_badge_title(&tray, normalized_count.unwrap_or(0))?;
     }
     Ok(())
 }
@@ -557,6 +600,51 @@ mod tests {
         assert_eq!(
             tray_dnd_toggle_dispatch_script(),
             "window.dispatchEvent(new CustomEvent('synara-tray-dnd-toggle'));"
+        );
+    }
+
+    #[test]
+    fn tray_badge_count_matches_js_app_badge_contract() {
+        let state = DesktopTrayState {
+            unread_count: 3,
+            highlight_count: 2,
+            later_count: 5,
+            notification_inbox_count: 99,
+            do_not_disturb: false,
+        };
+        assert_eq!(tray_badge_count(&state), 10);
+    }
+
+    #[test]
+    fn tray_title_clears_when_count_is_zero() {
+        assert_eq!(tray_title_for_badge(0), None);
+        assert_eq!(tray_title_for_badge(-4), None);
+        assert_eq!(tray_title_for_badge(7), Some("7".to_string()));
+        assert_eq!(tray_title_for_badge(50_000), Some("9999".to_string()));
+    }
+
+    #[test]
+    fn linux_unread_summary_includes_visible_badge_count() {
+        let state = DesktopTrayState {
+            unread_count: 3,
+            highlight_count: 2,
+            later_count: 5,
+            notification_inbox_count: 1,
+            do_not_disturb: false,
+        };
+        let labels = tray_route_labels(&state);
+        assert!(labels[0].contains("Badge: 10"));
+        assert!(labels[0].contains("Unread: 3"));
+        assert!(labels[0].contains("Highlights: 2"));
+        assert!(labels[0].contains("Later: 5"));
+        assert!(labels[0].contains("Notifications: 1"));
+        assert_eq!(
+            tray_tooltip(&state),
+            "Synara — 10 (3 unread, 2 highlights, 5 later)"
+        );
+        assert_eq!(
+            tray_title_for_badge(tray_badge_count(&state)),
+            Some("10".to_string())
         );
     }
 }

@@ -60,10 +60,41 @@ export const isTimelinePaginationLoading = ({
   hasError: boolean;
 }): boolean => !hasError && (inFlight || nativeState === 'loading');
 
+/** Live tail has nothing newer unless the window is focused/unread with a gap. */
+export const canPaginateTimelineForward = ({
+  atLiveBottom,
+  positionKind,
+  followingLive,
+}: {
+  atLiveBottom: boolean;
+  positionKind: string;
+  followingLive?: boolean;
+}): boolean => {
+  if (positionKind === 'live_bottom') return false;
+  if (followingLive) return false;
+  if (atLiveBottom && positionKind !== 'focused' && positionKind !== 'unread') return false;
+  return true;
+};
+
+/** Wheel past the newest row must not start a forward page. History wheels still can. */
+export const shouldPaginateOnWheel = ({
+  deltaY,
+  atLiveBottom,
+  positionKind,
+}: {
+  deltaY: number;
+  atLiveBottom: boolean;
+  positionKind: string;
+}): boolean => {
+  if (deltaY > 0 && (atLiveBottom || positionKind === 'live_bottom')) return false;
+  return true;
+};
+
 /**
  * Sticky history-edge chrome. Errors win over loading so a failed fetch is
- * never mistaken for an in-progress spinner. `load_more` is only for a large
- * loaded window sitting on the history edge; sparse rooms keep their own button.
+ * never mistaken for an in-progress spinner. Loading only paints while the
+ * viewport is actually on that edge. `load_more` is only for a large loaded
+ * window sitting on the history edge; sparse rooms keep their own button.
  */
 export const resolveTimelineHistoryOverlay = ({
   nativeState,
@@ -81,8 +112,11 @@ export const resolveTimelineHistoryOverlay = ({
   hasSparseLoadButton?: boolean;
 }): TimelineHistoryOverlay => {
   if (error) return { kind: 'error', message: error };
-  if (inFlight || nativeState === 'loading') return { kind: 'loading' };
-  if (atEdge && canPaginate && nativeState === 'available' && !hasSparseLoadButton) {
+  // Live tail has nothing newer. Do not paint "Loading newer messages" just
+  // because the viewport is on the bottom edge or native forward is idle-loading.
+  if (!canPaginate) return { kind: 'hidden' };
+  if (atEdge && (inFlight || nativeState === 'loading')) return { kind: 'loading' };
+  if (atEdge && nativeState === 'available' && !hasSparseLoadButton) {
     return { kind: 'load_more' };
   }
   return { kind: 'hidden' };

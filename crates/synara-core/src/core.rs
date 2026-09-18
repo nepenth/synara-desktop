@@ -1384,6 +1384,12 @@ struct MatrixMessageSearchRequest {
     senders: Option<Vec<String>>,
     #[serde(default)]
     order: Option<String>,
+    #[serde(default)]
+    listing_kind: Option<String>,
+    #[serde(default)]
+    from_ts: Option<u64>,
+    #[serde(default)]
+    to_ts: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -5847,7 +5853,9 @@ fn message_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
         | "v-search.invalid-token"
         | "v-search.invalid-order"
         | "v-search.invalid-room"
-        | "v-search.invalid-sender" => MatrixIpcErrorCategory::SdkInvariant,
+        | "v-search.invalid-sender"
+        | "v-search.invalid-listing"
+        | "v-search.invalid-range" => MatrixIpcErrorCategory::SdkInvariant,
         "v-search.no-session" => MatrixIpcErrorCategory::Forbidden,
         // Off disables product search; no Client-Server `/search` fallback.
         "v-search.index-disabled" => MatrixIpcErrorCategory::Unknown,
@@ -5864,16 +5872,52 @@ fn matrix_message_search(state: Arc<CoreState>, request: CommandEnvelope) -> Com
             MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
                 .with_diagnostic("p2-message-search-no-session")
         })?;
-        let result: MatrixMessageSearchResult = owner
-            .search_messages(
-                &payload.term,
-                payload.next_token.as_deref(),
-                payload.rooms.as_deref(),
-                payload.senders.as_deref(),
-                payload.order.as_deref(),
-            )
-            .await
-            .map_err(message_search_owner_error)?;
+        let listing_kind = payload
+            .listing_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let result: MatrixMessageSearchResult = if payload.term.trim().is_empty() {
+            if let Some(kind) = listing_kind {
+                let rooms = payload.rooms.as_deref().unwrap_or(&[]);
+                if rooms.len() != 1 {
+                    return Err(message_search_owner_error("v-search.invalid-room"));
+                }
+                let room_id = rooms[0].clone();
+                let from_ts = payload
+                    .from_ts
+                    .ok_or_else(|| message_search_owner_error("v-search.invalid-range"))?;
+                let to_ts = payload
+                    .to_ts
+                    .ok_or_else(|| message_search_owner_error("v-search.invalid-range"))?;
+                owner
+                    .list_room_attachments(&room_id, kind, from_ts, to_ts)
+                    .await
+                    .map_err(message_search_owner_error)?
+            } else {
+                owner
+                    .search_messages(
+                        &payload.term,
+                        payload.next_token.as_deref(),
+                        payload.rooms.as_deref(),
+                        payload.senders.as_deref(),
+                        payload.order.as_deref(),
+                    )
+                    .await
+                    .map_err(message_search_owner_error)?
+            }
+        } else {
+            owner
+                .search_messages(
+                    &payload.term,
+                    payload.next_token.as_deref(),
+                    payload.rooms.as_deref(),
+                    payload.senders.as_deref(),
+                    payload.order.as_deref(),
+                )
+                .await
+                .map_err(message_search_owner_error)?
+        };
         serde_json::to_value(result)
             .map_err(|_| core_state_error("p2-message-search-serialization-failed"))
     })

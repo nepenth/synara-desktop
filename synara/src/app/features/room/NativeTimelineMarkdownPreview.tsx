@@ -16,6 +16,8 @@ import {
   Text,
   config,
 } from 'folds';
+import { copyToClipboard } from '../../utils/dom';
+import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
 import { downloadTimelineMediaBytes } from '../../matrix/media';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
@@ -43,6 +45,7 @@ export function NativeTimelineMarkdownPreview({
 }) {
   const label = nativeTimelineFileDownloadName(target.filename);
   const [busySave, setBusySave] = useState(false);
+  const [copied, setCopied] = useTimeoutToggle();
   const [status, setStatus] = useState<
     | { kind: 'loading' }
     | { kind: 'error'; message: string }
@@ -126,6 +129,22 @@ export function NativeTimelineMarkdownPreview({
                   </Text>
                 </Box>
                 <Box shrink="No" alignItems="Center" gap="200">
+                  <Button
+                    variant="Secondary"
+                    fill="Soft"
+                    size="300"
+                    radii="300"
+                    disabled={status.kind !== 'ready'}
+                    data-native-timeline-file-copy="true"
+                    onClick={() => {
+                      if (status.kind !== 'ready') return;
+                      copyToClipboard(status.text);
+                      setCopied();
+                    }}
+                    aria-label="Copy markdown"
+                  >
+                    <Text size="B300">{copied ? 'Copied' : 'Copy'}</Text>
+                  </Button>
                   <Button
                     variant="Primary"
                     fill="Soft"

@@ -17,6 +17,7 @@ import { RoomSettingsPage } from '../../state/roomSettings';
 import { useRoom } from '../../hooks/useRoom';
 import { DeveloperTools } from '../common-settings/developer-tools';
 import { normalizeRoomJoinRulePresentation } from '../matrix-dto/roomJoinRule';
+import * as depthCss from '../../styles/Depth.css';
 
 type RoomSettingsMenuItem = {
   page: RoomSettingsPage;
@@ -127,26 +128,33 @@ export function RoomSettings({ initialPage, requestClose }: RoomSettingsProps) {
             <Box grow="Yes" direction="Column">
               <PageNavContent>
                 <div style={{ flexGrow: 1 }}>
-                  {menuItems.map((item) => (
-                    <MenuItem
-                      key={item.name}
-                      variant="Background"
-                      radii="400"
-                      aria-pressed={activePage === item.page}
-                      before={<Icon src={item.icon} size="100" filled={activePage === item.page} />}
-                      onClick={() => setActivePage(item.page)}
-                    >
-                      <Text
-                        style={{
-                          fontWeight: activePage === item.page ? config.fontWeight.W600 : undefined,
-                        }}
-                        size="T300"
-                        truncate
+                  <Box direction="Column" gap="100">
+                    {menuItems.map((item) => (
+                      <MenuItem
+                        className={depthCss.quietInteractiveSurface}
+                        key={item.name}
+                        variant="Surface"
+                        fill="None"
+                        radii="400"
+                        aria-pressed={activePage === item.page}
+                        before={
+                          <Icon src={item.icon} size="100" filled={activePage === item.page} />
+                        }
+                        onClick={() => setActivePage(item.page)}
                       >
-                        {item.name}
-                      </Text>
-                    </MenuItem>
-                  ))}
+                        <Text
+                          style={{
+                            fontWeight:
+                              activePage === item.page ? config.fontWeight.W600 : undefined,
+                          }}
+                          size="T300"
+                          truncate
+                        >
+                          {item.name}
+                        </Text>
+                      </MenuItem>
+                    ))}
+                  </Box>
                 </div>
               </PageNavContent>
             </Box>

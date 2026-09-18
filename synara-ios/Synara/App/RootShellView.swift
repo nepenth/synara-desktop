@@ -231,6 +231,17 @@ struct RootShellView: View {
                 await MainActor.run {
                     tabBadgeCounts = TabBadgeCounts.make(from: rooms)
                 }
+
+                switch update {
+                case .loaded, .empty:
+                    await AppIconBadge.applyCurrentSummary(
+                        rooms: rooms,
+                        later: environment.later,
+                        push: environment.push
+                    )
+                case .idle, .loading, .failed:
+                    break
+                }
             }
         }
     }

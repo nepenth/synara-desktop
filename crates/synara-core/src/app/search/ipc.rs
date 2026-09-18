@@ -1,7 +1,7 @@
 //! Bounded homeserver message-search IPC DTOs.
 //!
-//! Result rows carry ids and a body snippet only. No raw event JSON, tokens,
-//! or unbounded dumps.
+//! Result rows carry ids, a body snippet, and an optional closed `msg_type`.
+//! No raw event JSON, tokens, or unbounded dumps.
 
 use serde::{Deserialize, Serialize};
 
@@ -15,6 +15,9 @@ pub struct MatrixMessageSearchItem {
     pub origin_server_ts: u64,
     pub body: String,
     pub room_id: String,
+    /// Closed Matrix `msgtype` (`m.image`, `m.text`, …). Omitted when unknown.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub msg_type: Option<String>,
 }
 
 /// Consecutive hits that share a room id.

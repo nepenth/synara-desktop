@@ -2,6 +2,7 @@ import {
   BoldRule,
   CodeRule,
   EscapeRule,
+  ImageRule,
   ItalicRule1,
   ItalicRule2,
   LinkRule,
@@ -33,6 +34,7 @@ export const parseInlineMD: InlineMDParser = (text) => {
   if (text === '') return text;
   let result: string | undefined;
   if (!result) result = runInlineRule(text, CodeRule, parseInlineMD);
+  if (!result) result = runInlineRule(text, ImageRule, parseInlineMD);
 
   if (!result) result = runInlineRules(text, LeveledRules, parseInlineMD);
 

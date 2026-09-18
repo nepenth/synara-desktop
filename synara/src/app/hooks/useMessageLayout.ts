@@ -11,7 +11,7 @@ export const useMessageLayoutItems = (): MessageLayoutItem[] =>
     () => [
       {
         layout: MessageLayout.Modern,
-        name: 'Modern',
+        name: 'Standard',
       },
       {
         layout: MessageLayout.Compact,
@@ -19,7 +19,7 @@ export const useMessageLayoutItems = (): MessageLayoutItem[] =>
       },
       {
         layout: MessageLayout.Bubble,
-        name: 'Bubble',
+        name: 'Stacked bubbles',
       },
     ],
     []

@@ -13,10 +13,10 @@ import { voiceRoomLandingCopy } from '../matrix-rtc/liveCallChrome';
 
 /**
  * Voice-room hero — first-class in-room surface for rooms created as a voice
- * room (`m.room.create` type `org.matrix.msc3417.call`). Provides an honest
- * landing for the live-conversation lane without inventing call controls the
- * native client does not yet expose. Live-call chrome is membership-driven;
- * this never offers Join/Leave.
+ * room (`m.room.create` type `org.matrix.msc3417.call`). Honest landing: this
+ * client shows live participants today. Joining and starting calls uses
+ * MatrixRTC on the homeserver and is not in this app build. Live-call chrome
+ * is membership-driven; this never offers Join/Leave.
  */
 export function VoiceRoom() {
   const room = useRoom();

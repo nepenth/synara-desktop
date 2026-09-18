@@ -30,6 +30,7 @@ import { useOpenSpaceSettings } from '../../state/hooks/spaceSettings';
 import { IPowerLevels } from '../../hooks/usePowerLevels';
 import { getRoomPermissionsAPI } from '../../hooks/useRoomPermissions';
 import { InviteUserPrompt } from '../../components/invite-user-prompt';
+import * as depthCss from '../../styles/Depth.css';
 
 type HierarchyItemWithParent = HierarchyItem & {
   parentId: string;
@@ -133,10 +134,11 @@ function InviteMenuItem({
     <>
       <MenuItem
         onClick={handleInvite}
+        variant="Surface"
+        fill="None"
         size="300"
         radii="300"
-        variant="Primary"
-        fill="None"
+        className={depthCss.quietInteractiveSurface}
         aria-pressed={invitePrompt}
         disabled={disabled || !room}
       >

@@ -646,6 +646,40 @@ enum NotificationBadgeSummary {
         )?.appBadgeCount ?? 0
     }
 
+    static func laterActiveCount(from items: [SynaraLaterListItem]) -> Int {
+        items.reduce(0) { partial, item in
+            partial + (item.isCompleted ? 0 : 1)
+        }
+    }
+
+    /// Dock/SpringBoard icon: later + highlights + ordinary unreads.
+    /// Invites and agent approvals stay on the inbox tab, not the icon.
+    static func appBadgeCount(from rooms: [RoomSummary], laterActiveCount: Int = 0) -> Int {
+        let joinedRooms = rooms.filter { $0.membership != .invited }
+        return summarizeNotifications(
+            NotificationSummaryInput(
+                unreadCounts: unreadSources(from: joinedRooms),
+                laterActiveCount: laterActiveCount
+            )
+        )?.appBadgeCount ?? 0
+    }
+
+    /// `nil` means the snapshot is not ready; keep the current icon (push may own it).
+    static func appIconBadgeCount(
+        roomListState: RoomListState,
+        laterItems: [SynaraLaterListItem]
+    ) -> Int? {
+        let laterCount = laterActiveCount(from: laterItems)
+        switch roomListState {
+        case .loaded(let rooms):
+            return appBadgeCount(from: rooms, laterActiveCount: laterCount)
+        case .empty:
+            return appBadgeCount(from: [], laterActiveCount: laterCount)
+        case .idle, .loading, .failed:
+            return nil
+        }
+    }
+
     static func notificationsTabBadgeCount(from rooms: [RoomSummary]) -> Int {
         let sections = NotificationsInboxSections.make(from: rooms)
         let agentPendingCount = AgentPendingInbox.pendingApprovals(from: rooms).count

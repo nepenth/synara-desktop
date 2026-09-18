@@ -227,8 +227,16 @@ test('native timeline navigation uses contextual controls and edge pagination', 
   assert.match(presenter, /NativeTimelineHistoryStatus/);
   assert.match(presenter, /requestPagination\('backwards'\)/);
   assert.match(presenter, /event instanceof WheelEvent/);
+  assert.match(presenter, /shouldPaginateOnWheel/);
+  assert.match(presenter, /followingLive: followingLiveRef\.current/);
+  assert.match(presenter, /overscrollBehavior: 'contain'/);
+  assert.match(htmlCss, /zIndex: 80/);
   assert.match(historyStatus, /Loading older messages/);
   assert.match(historyStatus, /Loading newer messages/);
+  assert.match(historyStatus, /edge === 'backward'/);
+  assert.match(historyStatus, /LOADING_CHROME_DELAY_MS/);
+  assert.match(historyStatus, /edge === 'forward'/);
+  assert.match(historyStatus, /setLoadingVisible\(false\)/);
   assert.match(historyStatus, /role="alert"/);
   assert.match(historyStatus, /Could not load older messages/);
   assert.match(historyStatus, /htmlCss\.HistoryStatusCardError/);
@@ -244,10 +252,14 @@ test('native timeline navigation uses contextual controls and edge pagination', 
     htmlCss,
     /export const HistoryStatusCardError = style\(\{[\s\S]*?backgroundColor: color\.Critical\.Container,/
   );
-  assert.match(dateRail, /Jump to a date in loaded history/);
-  assert.match(dateRail, /Jump to a date in room history/);
-  assert.match(dateRail, /onCommitTimestamp/);
+  assert.match(dateRail, /Jump to a date in the last 7 days/);
+  assert.match(dateRail, /hasPointerCapture/);
+  assert.match(dateRail, /previewFromClientY\(event\.clientY, true\)/);
   assert.match(presenter, /timestampToEventWithNativeOwner/);
+  assert.match(presenter, /sevenDayRailAxis/);
+  assert.match(presenter, /collectSevenDayRailMarks/);
+  assert.match(presenter, /needsSevenDayHistoryFill/);
+  assert.match(presenter, /canPaginateTimelineForward/);
   assert.match(presenter, /roomCreatedTs/);
   assert.doesNotMatch(presenter, /mx\.timestampToEvent/);
   assert.match(dateRail, /aria-controls="native-timeline-history"/);
@@ -377,6 +389,18 @@ test('room read state stays a single contextual overflow action', () => {
   assert.match(header, /unread \? Icons\.CheckTwice : Icons\.MessageUnread/);
 });
 
+test('room overflow Invite is a quiet surface option, not an accent-selected Primary item', () => {
+  const header = readFileSync('src/app/features/room/RoomViewHeader.tsx', 'utf8');
+  const inviteStart = header.indexOf('onClick={handleInvite}');
+  const invite = header.slice(inviteStart, header.indexOf('onClick={handleCopyLink}', inviteStart));
+
+  assert.match(invite, /quietInteractiveSurface/);
+  assert.match(invite, /disabled=\{!canInvite\}/);
+  assert.doesNotMatch(invite, /variant="Primary"/);
+  assert.match(invite, /fill="None"/);
+  assert.match(invite, /variant="Surface"/);
+});
+
 test('native timeline file attachments save through download+save, not protocol href', () => {
   const mediaFn = presenter.slice(
     presenter.indexOf('const NativeTimelineMedia'),
@@ -478,4 +502,20 @@ test('formatted messages use the available timeline measure, body size, and laye
   assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-odd\)'/);
   assert.match(htmlCss, /background: 'var\(--synara-rich-text-table-header\)'/);
   assert.match(htmlCss, /tbody tr:nth-child\(even\) td/);
+});
+
+test('native timeline row action menu items use quiet dimensionality', () => {
+  const start = presenter.indexOf('const NativeTimelineRowActions');
+  const end = presenter.indexOf('const NativeTimelineRowActionSurface');
+  assert.ok(start >= 0 && end > start);
+  const actions = presenter.slice(start, end);
+  const items = actions.match(/<MenuItem\b/g) ?? [];
+  const quiet = actions.match(/className=\{depthCss\.quietInteractiveSurface\}/g) ?? [];
+  assert.ok(items.length >= 8, `expected row action MenuItems, found ${items.length}`);
+  assert.ok(
+    quiet.length >= items.length,
+    `row actions have ${items.length} MenuItems but only ${quiet.length} quiet-depth classes`
+  );
+  assert.match(actions, /variant="Surface"/);
+  assert.match(actions, /variant="Critical"/);
 });

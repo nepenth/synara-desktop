@@ -59,6 +59,7 @@ import { MessageLayout, MessageSpacing } from '../../../state/settings';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
 import { useRecentEmoji } from '../../../hooks/useRecentEmoji';
 import * as css from './styles.css';
+import * as depthCss from '../../../styles/Depth.css';
 import { EventReaders } from '../../../components/event-readers';
 import { TextViewer } from '../../../components/text-viewer';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -83,6 +84,8 @@ import {
   reportWithNativeTimelineAction,
   unpinWithNativeTimelineAction,
 } from '../nativeTimelineAction';
+
+const EMPTY_IMAGE_PACK_ROOMS: string[] = [];
 
 export type ReactionHandler = (keyOrMxc: string, shortcode: string) => void;
 
@@ -217,6 +220,8 @@ export const MessageAllReactionItem = as<
         </OverlayCenter>
       </Overlay>
       <MenuItem
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         after={<Icon size="100" src={Icons.Smile} />}
         radii="300"
@@ -267,6 +272,8 @@ export const MessageReadReceiptItem = as<
         </OverlayCenter>
       </Overlay>
       <MenuItem
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         after={<Icon size="100" src={Icons.CheckTwice} />}
         radii="300"
@@ -350,6 +357,8 @@ export const MessageSourceCodeItem = as<
         </OverlayCenter>
       </Overlay>
       <MenuItem
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         after={<Icon size="100" src={Icons.BlockCode} />}
         radii="300"
@@ -398,6 +407,8 @@ export const MessageCopyItem = as<
 
   return (
     <MenuItem
+      className={depthCss.quietInteractiveSurface}
+      variant="Surface"
       size="300"
       after={<Icon size="100" src={CopyIcon} />}
       radii="300"
@@ -430,6 +441,8 @@ export const MessageCopyLinkItem = as<
 
   return (
     <MenuItem
+      className={depthCss.quietInteractiveSurface}
+      variant="Surface"
       size="300"
       after={<Icon size="100" src={Icons.Link} />}
       radii="300"
@@ -523,6 +536,8 @@ export const MessageCustomReminderItem = as<
         </OverlayCenter>
       </Overlay>
       <MenuItem
+        className={depthCss.quietInteractiveSurface}
+        variant="Surface"
         size="300"
         after={<Icon size="100" src={Icons.Clock} />}
         radii="300"
@@ -564,6 +579,8 @@ export const MessagePinItem = as<
 
   return (
     <MenuItem
+      className={depthCss.quietInteractiveSurface}
+      variant="Surface"
       size="300"
       after={<Icon size="100" src={Icons.Pin} />}
       radii="300"
@@ -692,6 +709,7 @@ export const MessageDeleteItem = as<
         </OverlayCenter>
       </Overlay>
       <Button
+        className={depthCss.quietInteractiveSurface}
         variant="Critical"
         fill="None"
         size="300"
@@ -829,6 +847,7 @@ export const MessageReportItem = as<
         </OverlayCenter>
       </Overlay>
       <Button
+        className={depthCss.quietInteractiveSurface}
         variant="Critical"
         fill="None"
         size="300"
@@ -1146,7 +1165,7 @@ export const Message = as<'div', MessageProps>(
                     anchor={emojiBoardAnchor}
                     content={
                       <EmojiBoard
-                        imagePackRooms={imagePackRooms ?? []}
+                        imagePackRooms={imagePackRooms ?? EMPTY_IMAGE_PACK_ROOMS}
                         returnFocusOnDeactivate={false}
                         allowTextCustomEmoji
                         onEmojiSelect={(key) => {
@@ -1241,6 +1260,8 @@ export const Message = as<'div', MessageProps>(
                           )}
                           <MessageCopyItem text={messageCopyText} onClose={closeMenu} />
                           <MenuItem
+                            className={depthCss.quietInteractiveSurface}
+                            variant="Surface"
                             size="300"
                             after={<Icon size="100" src={Icons.ReplyArrow} />}
                             radii="300"
@@ -1261,6 +1282,8 @@ export const Message = as<'div', MessageProps>(
                           </MenuItem>
                           {!isThreadedMessage && (
                             <MenuItem
+                              className={depthCss.quietInteractiveSurface}
+                              variant="Surface"
                               size="300"
                               after={<Icon src={Icons.ThreadPlus} size="100" />}
                               radii="300"
@@ -1282,6 +1305,8 @@ export const Message = as<'div', MessageProps>(
                           )}
                           {canEditEvent(mx, mEvent) && onEditId && (
                             <MenuItem
+                              className={depthCss.quietInteractiveSurface}
+                              variant="Surface"
                               size="300"
                               after={<Icon size="100" src={Icons.Pencil} />}
                               radii="300"
@@ -1303,6 +1328,8 @@ export const Message = as<'div', MessageProps>(
                           )}
                           {onMarkUnread && (
                             <MenuItem
+                              className={depthCss.quietInteractiveSurface}
+                              variant="Surface"
                               size="300"
                               after={<Icon size="100" src={Icons.MessageUnread} />}
                               radii="300"
@@ -1324,6 +1351,8 @@ export const Message = as<'div', MessageProps>(
                           )}
                           {eventId && onAddToNotes && (
                             <MenuItem
+                              className={depthCss.quietInteractiveSurface}
+                              variant="Surface"
                               size="300"
                               after={<Icon size="100" src={Icons.Pencil} />}
                               radii="300"
@@ -1365,6 +1394,8 @@ export const Message = as<'div', MessageProps>(
                                   )}
                                   {eventId && onSaveLater && (
                                     <MenuItem
+                                      className={depthCss.quietInteractiveSurface}
+                                      variant="Surface"
                                       size="300"
                                       after={<Icon size="100" src={Icons.Bookmark} />}
                                       radii="300"
@@ -1386,6 +1417,8 @@ export const Message = as<'div', MessageProps>(
                                   {eventId && onRemind && (
                                     <>
                                       <MenuItem
+                                        className={depthCss.quietInteractiveSurface}
+                                        variant="Surface"
                                         size="300"
                                         after={<Icon size="100" src={Icons.RecentClock} />}
                                         radii="300"
@@ -1404,6 +1437,8 @@ export const Message = as<'div', MessageProps>(
                                         </Text>
                                       </MenuItem>
                                       <MenuItem
+                                        className={depthCss.quietInteractiveSurface}
+                                        variant="Surface"
                                         size="300"
                                         after={<Icon size="100" src={Icons.Clock} />}
                                         radii="300"
@@ -1422,6 +1457,8 @@ export const Message = as<'div', MessageProps>(
                                         </Text>
                                       </MenuItem>
                                       <MenuItem
+                                        className={depthCss.quietInteractiveSurface}
+                                        variant="Surface"
                                         size="300"
                                         after={<Icon size="100" src={Icons.Clock} />}
                                         radii="300"
@@ -1453,6 +1490,8 @@ export const Message = as<'div', MessageProps>(
                                   />
                                   {eventId && onToggleForwardSelection && (
                                     <MenuItem
+                                      className={depthCss.quietInteractiveSurface}
+                                      variant="Surface"
                                       size="300"
                                       after={
                                         <Icon
@@ -1490,6 +1529,8 @@ export const Message = as<'div', MessageProps>(
                             }
                           >
                             <MenuItem
+                              className={depthCss.quietInteractiveSurface}
+                              variant="Surface"
                               size="300"
                               after={<Icon size="100" src={Icons.ChevronRight} />}
                               radii="300"

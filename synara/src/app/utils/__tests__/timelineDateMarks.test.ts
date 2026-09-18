@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   activeTimelineHistoryMarkIndex,
+  collectSevenDayRailMarks,
   collectTimelineHistoryMarks,
   formatTimelineHistoryMarkLabel,
+  formatTimelineRailTimestamp,
   isTimestampInLoadedWindow,
+  needsSevenDayHistoryFill,
   rowIndexForRailRatio,
   rowIndexForTimestamp,
+  sevenDayRailAxis,
   shouldShowTimelineDateRail,
   timestampForRailRatio,
   timelineRailAxis,
@@ -85,9 +89,9 @@ test('rail ratio maps onto loaded row indexes only', () => {
 });
 
 test('date rail stays hidden for sparse windows', () => {
-  assert.equal(shouldShowTimelineDateRail(6, 3), false);
-  assert.equal(shouldShowTimelineDateRail(40, 1), false);
-  assert.equal(shouldShowTimelineDateRail(40, 2), true);
+  assert.equal(shouldShowTimelineDateRail(0, 3), false);
+  assert.equal(shouldShowTimelineDateRail(1, 1), false);
+  assert.equal(shouldShowTimelineDateRail(1, 2), true);
 });
 
 test('full-room axis maps ratio onto timestamps and keeps loaded ticks local', () => {
@@ -148,4 +152,46 @@ test('day labels use today/yesterday when applicable', () => {
     ),
     '15:00'
   );
+});
+
+test('seven-day rail samples older day starts and recent 8am/noon/5pm marks', () => {
+  const now = new Date(2026, 8, 17, 18, 0, 0).getTime();
+  const axis = sevenDayRailAxis(now, []);
+  const expectedStart = new Date(2026, 8, 11, 0, 0, 0).getTime();
+  assert.equal(axis.startMs, expectedStart);
+  assert.equal(axis.endMs, now);
+  assert.equal(axis.fullRoom, false);
+  const marks = collectSevenDayRailMarks(now);
+  const dayMarks = marks.filter((mark) => mark.kind === 'day');
+  const timeMarks = marks.filter((mark) => mark.kind === 'time');
+  assert.equal(dayMarks.length, 4);
+  assert.equal(dayMarks[0].timestampMs, expectedStart);
+  assert.equal(timeMarks.length, 9);
+  assert.equal(
+    timeMarks.some((mark) => mark.timestampMs === new Date(2026, 8, 17, 17, 0, 0).getTime()),
+    true
+  );
+  const morning = new Date(2026, 8, 17, 9, 0, 0).getTime();
+  const morningMarks = collectSevenDayRailMarks(morning);
+  assert.equal(
+    morningMarks.some((mark) => mark.timestampMs === new Date(2026, 8, 17, 12, 0, 0).getTime()),
+    false
+  );
+  assert.equal(
+    morningMarks.some((mark) => mark.timestampMs === new Date(2026, 8, 17, 8, 0, 0).getTime()),
+    true
+  );
+  const hover = formatTimelineRailTimestamp(now, true);
+  assert.match(hover, /2026/);
+  assert.match(hover, /18:00/);
+});
+
+test('seven-day history fill is needed while loaded min is after the axis start', () => {
+  const now = new Date(2026, 8, 17, 18, 0, 0).getTime();
+  const axis = sevenDayRailAxis(now, [{ index: 0, timestampMs: now }]);
+  assert.equal(needsSevenDayHistoryFill(axis, { backwardAvailable: true }), true);
+  assert.equal(needsSevenDayHistoryFill(axis, { backwardAvailable: false }), false);
+  const filled = sevenDayRailAxis(now, [{ index: 0, timestampMs: axis.startMs }]);
+  assert.equal(needsSevenDayHistoryFill(filled, { backwardAvailable: true }), false);
+  assert.equal(needsSevenDayHistoryFill(undefined, { backwardAvailable: true }), false);
 });

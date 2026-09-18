@@ -523,17 +523,11 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         guard let badge = parseBadgeCount(from: notificationPayload) else {
             return
         }
-        let logger = logger
+        applyAppIconBadge(badge)
+    }
 
-        Task {
-            await MainActor.run {
-                UNUserNotificationCenter.current().setBadgeCount(badge) { error in
-                    if let error {
-                        logger.error("Push badge update failed: \(error.localizedDescription)", category: .push)
-                    }
-                }
-            }
-        }
+    func applyAppIconBadge(_ count: Int) {
+        AppIconBadge.apply(count, logger: logger)
     }
 
     private func schedulePusherReconciliation() {
@@ -733,6 +727,56 @@ final class SynaraPushService: NSObject, @preconcurrency PushServicing {
         )
     }
 
+}
+
+enum AppIconBadge {
+    static func apply(_ count: Int, logger: LoggingServicing? = nil) {
+        let clamped = max(0, count)
+        let logger = logger
+        Task { @MainActor in
+            UNUserNotificationCenter.current().setBadgeCount(clamped) { error in
+                if let error {
+                    logger?.error("Failed to apply app icon badge: \(error.localizedDescription)", category: .push)
+                }
+            }
+        }
+    }
+
+    static func laterItems(from later: LaterServicing) async -> [SynaraLaterListItem] {
+        guard case .success(let (items, _)) = await later.loadItems() else {
+            return []
+        }
+        return items
+    }
+
+    static func applyCurrentSummary(
+        roomList: RoomListServicing,
+        later: LaterServicing,
+        push: PushServicing
+    ) async {
+        let state = await roomList.loadRooms()
+        let laterItems = await laterItems(from: later)
+        guard let count = NotificationBadgeSummary.appIconBadgeCount(
+            roomListState: state,
+            laterItems: laterItems
+        ) else {
+            return
+        }
+        push.applyAppIconBadge(count)
+    }
+
+    static func applyCurrentSummary(
+        rooms: [RoomSummary],
+        later: LaterServicing,
+        push: PushServicing
+    ) async {
+        let laterItems = await laterItems(from: later)
+        let count = NotificationBadgeSummary.appBadgeCount(
+            from: rooms,
+            laterActiveCount: NotificationBadgeSummary.laterActiveCount(from: laterItems)
+        )
+        push.applyAppIconBadge(count)
+    }
 }
 
 enum IntValueParser {

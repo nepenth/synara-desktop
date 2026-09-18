@@ -89,11 +89,14 @@ export const useGlobalImagePacks = (): ImagePack[] => {
       const result = await getGlobalImagePacksNative();
       if (cancelled) return;
       setNativeActive(true);
-      setGlobalPacks(result === 'legacy' ? [] : result);
+      setGlobalPacks((prev) => {
+        const next = result === 'legacy' ? [] : result;
+        return sameImagePackList(prev, next) ? prev : next;
+      });
     })().catch(() => {
       if (!cancelled) {
         setNativeActive(true);
-        setGlobalPacks([]);
+        setGlobalPacks((prev) => (prev.length === 0 ? prev : []));
       }
     });
     return () => {
@@ -158,6 +161,24 @@ export const useRoomImagePacks = (room: RoomWithId): ImagePack[] => {
   return roomPacks;
 };
 
+type ImagePackFingerprintSource = {
+  id: string;
+  getImages: (usage: ImageUsage) => ReadonlyArray<{ shortcode: string }>;
+};
+
+export const imagePackListFingerprint = (packs: readonly ImagePackFingerprintSource[]): string =>
+  packs
+    .map((pack) => {
+      const images = pack.getImages(ImageUsage.Emoticon).map((image) => image.shortcode);
+      return `${pack.id}:${images.join(',')}`;
+    })
+    .join('|');
+
+export const sameImagePackList = (
+  left: readonly ImagePackFingerprintSource[],
+  right: readonly ImagePackFingerprintSource[]
+): boolean => imagePackListFingerprint(left) === imagePackListFingerprint(right);
+
 export const useRoomsImagePacks = (roomIds: string[]) => {
   const roomKey = roomIds.join(',');
   const [roomPacks, setRoomPacks] = useState<ImagePack[]>([]);
@@ -166,15 +187,16 @@ export const useRoomsImagePacks = (roomIds: string[]) => {
 
   useEffect(() => {
     let cancelled = false;
+    const ids = roomKey.length === 0 ? [] : roomKey.split(',');
     (async () => {
       try {
         const all: ImagePack[] = [];
-        for (const roomId of roomIds) {
+        for (const roomId of ids) {
           const result = await getRoomImagePacksNative(roomId);
           if (result === 'legacy') {
             if (!cancelled) {
               setNativeActive(true);
-              setRoomPacks([]);
+              setRoomPacks((prev) => (prev.length === 0 ? prev : []));
             }
             return;
           }
@@ -182,18 +204,18 @@ export const useRoomsImagePacks = (roomIds: string[]) => {
         }
         if (cancelled) return;
         setNativeActive(true);
-        setRoomPacks(all);
+        setRoomPacks((prev) => (sameImagePackList(prev, all) ? prev : all));
       } catch {
         if (!cancelled) {
           setNativeActive(true);
-          setRoomPacks([]);
+          setRoomPacks((prev) => (prev.length === 0 ? prev : []));
         }
       }
     })();
     return () => {
       cancelled = true;
     };
-  }, [roomKey, roomIds, refreshToken]);
+  }, [roomKey, refreshToken]);
 
   return roomPacks;
 };

@@ -227,6 +227,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     private var push: PushServicing?
     private var matrix: MatrixClientServicing?
     private var session: AppSessionStore?
+    private var roomList: RoomListServicing?
+    private var later: LaterServicing?
     private var router: AppRouter?
     private var logger: LoggingServicing?
     private var agentApprovalDecisions: AgentApprovalDecisionServicing?
@@ -244,6 +246,8 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
         push = environment.push
         matrix = environment.matrix
         session = environment.session
+        roomList = environment.roomList
+        later = environment.later
         router = environment.router
         logger = environment.logger
         agentApprovalDecisions = environment.agentApprovalDecisions
@@ -358,7 +362,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
     func applicationDidBecomeActive(_ application: UIApplication) {
         updateForegroundActive(true)
         Task { @MainActor in
-            clearBadgeToZero()
+            await applyCurrentAppIconBadge()
         }
     }
 
@@ -564,7 +568,7 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
         Task { @MainActor in
             router.route(to: route)
-            clearBadgeToZero()
+            await applyCurrentAppIconBadge()
         }
     }
 
@@ -576,16 +580,19 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
 
         Task { @MainActor in
             router.routeToNotificationFallback()
-            clearBadgeToZero()
+            await applyCurrentAppIconBadge()
         }
     }
 
-    private func clearBadgeToZero() {
-        UNUserNotificationCenter.current().setBadgeCount(0) { error in
-            if let error {
-                self.logger?.error("Failed to clear badge: \(error.localizedDescription)", category: .push)
-            }
+    func applyCurrentAppIconBadge() async {
+        guard let push, let roomList, let later else {
+            return
         }
+        await AppIconBadge.applyCurrentSummary(
+            roomList: roomList,
+            later: later,
+            push: push
+        )
     }
 }
 

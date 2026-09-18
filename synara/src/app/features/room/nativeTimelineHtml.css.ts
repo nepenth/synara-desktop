@@ -53,7 +53,7 @@ export const MessageSwipeContent = style({
 
 export const GroupedTimestampReveal = style({
   position: 'absolute',
-  zIndex: 0,
+  zIndex: 2,
   top: '50%',
   right: config.space.S300,
   transform: 'translateY(-50%)',
@@ -100,7 +100,7 @@ export const MessageRow = recipe({
     paddingTop: config.space.S200,
     paddingBottom: config.space.S200,
     paddingLeft: toRem(16),
-    paddingRight: toRem(72),
+    paddingRight: toRem(96),
     marginLeft: config.space.S200,
     marginRight: config.space.S200,
     boxSizing: 'border-box',
@@ -291,8 +291,17 @@ export const FilePreviewHeader = style({
 });
 
 export const FilePreviewBody = style({
-  padding: config.space.S400,
+  padding: `${config.space.S500} ${config.space.S600}`,
   minHeight: toRem(160),
+  maxWidth: toRem(760),
+  marginInline: 'auto',
+  color: color.Surface.OnContainer,
+  backgroundColor: color.Surface.Container,
+});
+
+globalStyle(`${FilePreviewBody} ${FormattedBody}`, {
+  fontSize: toRem(16),
+  lineHeight: 1.65,
 });
 
 export const ReplySurface = style({
@@ -733,7 +742,7 @@ const historyStatusOverlay = {
   position: 'absolute',
   top: 0,
   left: 0,
-  right: toRem(56),
+  right: toRem(88),
   zIndex: 4,
   display: 'flex',
   justifyContent: 'center',
@@ -810,19 +819,20 @@ export const DateRail = style({
   top: config.space.S700,
   right: config.space.S100,
   bottom: toRem(88),
-  width: toRem(56),
-  zIndex: 2,
-  pointerEvents: 'none',
-  contain: 'layout style paint',
+  width: toRem(88),
+  zIndex: 80,
   isolation: 'isolate',
+  pointerEvents: 'none',
+  overflow: 'visible',
+  contain: 'layout style',
 });
 
 export const DateRailTrack = style({
   position: 'absolute',
   top: 0,
-  right: toRem(14),
+  right: toRem(10),
   bottom: 0,
-  width: toRem(4),
+  width: toRem(12),
   borderRadius: config.radii.R400,
   background: color.SurfaceVariant.ContainerLine,
   pointerEvents: 'auto',
@@ -832,7 +842,7 @@ export const DateRailTrack = style({
 export const DateRailThumb = style({
   position: 'absolute',
   top: 0,
-  left: toRem(-4),
+  left: 0,
   width: toRem(12),
   height: toRem(18),
   marginTop: toRem(-9),
@@ -845,13 +855,15 @@ export const DateRailThumb = style({
 export const DateRailTick = style({
   position: 'absolute',
   right: toRem(10),
-  width: toRem(12),
-  height: toRem(12),
-  marginTop: toRem(-6),
+  width: toRem(18),
+  height: toRem(18),
+  marginTop: toRem(-9),
   padding: 0,
+  zIndex: 4,
   border: `${config.borderWidth.B300} solid ${color.SurfaceVariant.ContainerLine}`,
   borderRadius: '50%',
   background: color.Surface.Container,
+  boxShadow: raisedShadow,
   pointerEvents: 'auto',
   cursor: 'pointer',
   selectors: {
@@ -865,7 +877,9 @@ export const DateRailTick = style({
 export const DateRailLabel = style({
   position: 'absolute',
   top: 0,
-  right: toRem(32),
+  right: toRem(40),
+  zIndex: 5,
+  isolation: 'isolate',
   color: color.Surface.OnContainer,
   pointerEvents: 'none',
   whiteSpace: 'nowrap',

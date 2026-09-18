@@ -7,6 +7,8 @@ import { settingsAtom } from '../../state/settings';
 import {
   listExperimentalWidgets,
   openExperimentalWidget,
+  widgetsAgentHowToCopy,
+  widgetsPanelEmptyCopy,
   type ListedWidget,
 } from '../widgets/experimentalWidgets';
 
@@ -76,9 +78,14 @@ export function RoomWidgetsPanel({ roomId, requestClose }: RoomWidgetsPanelProps
             capabilities. Room-state widgets never load loopback.
           </Text>
           {widgets.length === 0 && (
-            <Text size="T200" priority="300">
-              No room widgets or agent URLs are available in this room.
-            </Text>
+            <Box direction="Column" gap="200">
+              <Text size="T200" priority="300">
+                {widgetsPanelEmptyCopy(experimentalWidgetsEnabled)}
+              </Text>
+              <Text size="T200" priority="300">
+                {widgetsAgentHowToCopy()}
+              </Text>
+            </Box>
           )}
           {widgets.map((widget) => (
             <Box key={`${widget.kind}-${widget.widgetId}`} direction="Column" gap="200">

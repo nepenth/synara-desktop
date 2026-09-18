@@ -109,3 +109,18 @@ test('dock badge stays on summarizeNotifications and never uses SDK total_unread
   assert.doesNotMatch(badge, /total_unread_notifications/);
   assert.doesNotMatch(summary, /total_unread_notifications/);
 });
+
+test('logged-in desktop shell always mounts PlatformBadgeAndTrayUpdater', () => {
+  const updater = readFileSync('src/app/pages/client/ClientNonUIFeatures.tsx', 'utf8');
+  const router = readFileSync('src/app/pages/Router.tsx', 'utf8');
+  const exportStart = updater.indexOf('export function ClientNonUIFeatures');
+  assert.ok(exportStart >= 0);
+  const exported = updater.slice(exportStart);
+  assert.match(exported, /<PlatformBadgeAndTrayUpdater \/>/);
+  assert.doesNotMatch(
+    exported,
+    /supportsAppBadge|supportsPlatformTrayState\(\)[\s\S]*PlatformBadgeAndTrayUpdater/
+  );
+  assert.match(router, /<ClientNonUIFeatures>/);
+  assert.doesNotMatch(router, /supportsAppBadge[\s\S]*ClientNonUIFeatures/);
+});

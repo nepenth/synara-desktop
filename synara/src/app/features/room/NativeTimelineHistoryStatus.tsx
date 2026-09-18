@@ -1,7 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button, Spinner, Text, color, config } from 'folds';
 import type { TimelineHistoryOverlayKind } from '../../utils/timelinePagination';
 import * as htmlCss from './nativeTimelineHtml.css';
+
+const LOADING_CHROME_DELAY_MS = 320;
+const LOADING_CHROME_HOLD_MS = 480;
 
 type NativeTimelineHistoryStatusProps = {
   edge: 'backward' | 'forward';
@@ -40,11 +43,42 @@ function NativeTimelineHistoryStatusView({
   onRetry,
   onLoadMore,
 }: NativeTimelineHistoryStatusProps) {
+  const [loadingVisible, setLoadingVisible] = useState(false);
+  useEffect(() => {
+    if (kind === 'loading') {
+      // Historical (top) loading should be visible immediately. Newer-message
+      // chrome at the live tail is delayed so a single wheel tick cannot flash.
+      if (edge === 'backward') {
+        setLoadingVisible(true);
+        return undefined;
+      }
+      const timer = window.setTimeout(() => setLoadingVisible(true), LOADING_CHROME_DELAY_MS);
+      return () => window.clearTimeout(timer);
+    }
+    // Live-tail chrome must drop immediately. Holding it after a rejected
+    // forward page is what made "Loading newer messages" strobe on overscroll.
+    if (edge === 'forward') {
+      setLoadingVisible(false);
+      return undefined;
+    }
+    const timer = window.setTimeout(() => setLoadingVisible(false), LOADING_CHROME_HOLD_MS);
+    return () => window.clearTimeout(timer);
+  }, [kind, edge]);
+  const paintedKind: TimelineHistoryOverlayKind =
+    kind === 'error'
+      ? 'error'
+      : kind === 'loading' && edge === 'backward'
+      ? 'loading'
+      : loadingVisible
+      ? 'loading'
+      : kind === 'loading'
+      ? 'hidden'
+      : kind;
   const copy = copyForEdge(edge);
   const showDate = Boolean(visibleDateLabel) && kind === 'hidden' && !reserveRail;
-  if (kind === 'hidden' && !showDate) return null;
+  if (paintedKind === 'hidden' && !showDate) return null;
 
-  if (kind === 'hidden' && showDate) {
+  if (paintedKind === 'hidden' && showDate) {
     return (
       <div className={htmlCss.HistoryStatusDateChip}>
         <div
@@ -67,7 +101,7 @@ function NativeTimelineHistoryStatusView({
       }
       style={edgeInsetStyle(reserveRail)}
     >
-      {kind === 'loading' ? (
+      {paintedKind === 'loading' ? (
         <div
           className={htmlCss.HistoryStatusCard}
           role="status"
@@ -80,7 +114,7 @@ function NativeTimelineHistoryStatusView({
           <Text size="T300">{copy.loadingText}</Text>
         </div>
       ) : null}
-      {kind === 'error' ? (
+      {paintedKind === 'error' ? (
         <div
           className={`${htmlCss.HistoryStatusCard} ${htmlCss.HistoryStatusCardError}`}
           role="alert"
@@ -104,7 +138,7 @@ function NativeTimelineHistoryStatusView({
           ) : null}
         </div>
       ) : null}
-      {kind === 'load_more' && onLoadMore ? (
+      {paintedKind === 'load_more' && onLoadMore ? (
         <div className={htmlCss.HistoryStatusHitTarget}>
           <Button
             variant="Secondary"
