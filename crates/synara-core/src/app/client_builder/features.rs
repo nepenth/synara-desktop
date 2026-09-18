@@ -1,8 +1,8 @@
 //! Approved Matrix Rust SDK Cargo feature surface for synara-core (P2.3).
 
 /// Program crate pin (exact crates.io version; git alignment is
-/// `30be7cadc5d50214081d313f6d86a4421f3bd9a7` / tag `matrix-sdk-0.19.0`).
-pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.0";
+/// `b18166c68bb958a21f0bca8b2d8320cb53583362` / tag `matrix-sdk-0.19.1`).
+pub const MATRIX_SDK_PIN_VERSION: &str = "0.19.1";
 
 /// Features intentionally enabled on direct `matrix-sdk` dependency after P2.3.
 ///
@@ -211,7 +211,7 @@ mod tests {
         let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
         assert!(manifest.contains("\"experimental-widgets\""));
         let features_block = manifest
-            .split("matrix-sdk = { version = \"=0.19.0\"")
+            .split("matrix-sdk = { version = \"=0.19.1\"")
             .nth(1)
             .and_then(|rest| rest.split("matrix-sdk-ui").next())
             .expect("direct matrix-sdk dependency features");

@@ -98,7 +98,7 @@ Element X does not implement call UI natively. It:
    exchanges media keys without ever holding the user's Matrix keys.
 5. Ringing/incoming-call UX uses MSC4075 `m.rtc.notification` events and push.
 
-### What is available in our pinned SDK (`matrix-sdk = 0.19.0`)
+### What is available in our pinned SDK (`matrix-sdk = 0.19.1`)
 
 Verified against the published crate source:
 

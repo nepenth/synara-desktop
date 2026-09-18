@@ -8,6 +8,9 @@
   receive the Unity launcher badge.
 - macOS: notification pings play through NSSound so they no longer appear as
   Now Playing media on the menu bar and Touch Bar.
+- Pin Matrix Rust SDK 0.19.1 (`matrix-sdk`, `matrix-sdk-ui`,
+  `matrix-sdk-crypto`, `matrix-sdk-sqlite`). The patch only ships the rustdoc
+  Mermaid script that docs.rs needs; client behavior is unchanged.
 
 ## [2.1.39] - 2026-09-17
 
