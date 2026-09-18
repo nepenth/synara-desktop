@@ -5,6 +5,10 @@
 //! paints a Slack-style count onto the tray icon and broadcasts the Unity
 //! LauncherEntry signal that Ubuntu Dock, Dash to Dock, and KDE listen for.
 
+// Overlay painting and Unity path helpers are called from the Linux tray.
+// macOS still compiles the same functions for unit tests.
+#![cfg_attr(not(target_os = "linux"), allow(dead_code))]
+
 #[cfg(target_os = "linux")]
 use std::collections::HashMap;
 
@@ -160,8 +164,8 @@ fn draw_label(
 
     for (index, glyph) in glyphs.iter().enumerate() {
         let gx = origin_x + index as i32 * (glyph_w + gap);
-        for cell in 0..15 {
-            if glyph[cell] == 0 {
+        for (cell, on) in glyph.iter().copied().enumerate() {
+            if on == 0 {
                 continue;
             }
             let cx_cell = (cell % 3) as i32;

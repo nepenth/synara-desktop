@@ -34,7 +34,7 @@ pub fn play_notification_sound<R: Runtime>(app: &AppHandle<R>, kind: &str) -> Re
     let kind = NotificationSoundKind::parse(kind)?;
     #[cfg(target_os = "macos")]
     {
-        return play_macos_nssound(app, kind.wav_bytes());
+        play_macos_nssound(app, kind.wav_bytes())
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -129,7 +129,7 @@ mod tests {
             .next()
             .unwrap_or("");
         assert!(macos.contains("Result<bool, String>"));
-        assert!(source.contains("return play_macos_nssound"));
+        assert!(source.contains("play_macos_nssound(app, kind.wav_bytes())"));
         assert!(source.contains("fn play_nssound_on_main(wav: &'static [u8]) -> bool"));
         assert!(source.contains("return false;"));
     }

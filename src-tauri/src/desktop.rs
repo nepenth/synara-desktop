@@ -90,7 +90,6 @@ pub fn hide_main_window<R: Runtime>(app: &AppHandle<R>) -> tauri::Result<()> {
             // running (no dash dot) and a launcher click starts a second copy.
             let _ = window.set_skip_taskbar(false);
             window.minimize()?;
-            return Ok(());
         }
         #[cfg(not(target_os = "linux"))]
         window.hide()?;
