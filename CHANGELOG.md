@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## [2.1.39] - 2026-09-17
+
+- Render markdown attachments with lists, GFM tables, task prefixes, strikethrough,
+  and a Copy control. The native date rail shows a 7-day calendar of bubbles,
+  hover date+time chips that sit above the messages, and older-tick jumps through
+  `timestamp_to_event`.
+- Keep historical loading chrome at the top of the timeline. Wheel past the
+  newest message no longer starts forward pagination or strobes
+  “Loading newer messages”. First paint measures history edges without waiting
+  for a scroll event.
+- Keep reaction-picker search results when pack lists are replaced, and hide the
+  emoji catalog while a query is active. Inbox Notification Messages reload
+  without wiping groups on joined-room identity ticks; room-list polls reuse
+  the previous snapshot when ids and unreads are unchanged.
+- Put Widgets under Settings → General on this device only. The room header
+  Search works in encrypted rooms. Call chrome reports MatrixRTC status and
+  does not pretend Start/Join is available.
+- Browse in-room Media and Files over the last 7 days without a search keyword,
+  walking the event cache and `/messages` instead of homeserver `/search`.
+- Keep desktop dock/tray and iOS app-icon badges on the unread summary. Linux
+  shows the count in the tray title when Unity dock badges are a no-op. iOS no
+  longer zeros the icon on foreground or notification tap.
+- Quiet settings, room, and space left nav. Invite matches other menu rows
+  instead of reading as selected. Composer plus and GIF/poll menus dismiss on
+  outside click. Native Appearance no longer shows a Message Layout card or
+  other-client names.
+- Stop exporting `MACOSX_DEPLOYMENT_TARGET` from the SynaraCore generator so
+  Xcode 27 host proc-macros can dlopen.
+
 ## [2.1.38] - 2026-09-17
 
 - Adopt Matrix Rust SDK 0.19.0 (`matrix-sdk`, `matrix-sdk-ui`,
