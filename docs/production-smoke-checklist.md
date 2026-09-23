@@ -18,6 +18,25 @@ macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
 
+2026-09-23 iOS, iPad, Linux timeline, and agent widget release-candidate review (2.1.41):
+
+- Feature PR #1157 passed its Quality gate, all six disposable Synapse proofs,
+  and Desktop Package Smoke for Debian, Arch, and macOS. It merged to `main`
+  as `44711b49`. The `release/v2.1.41` PR runs the full iOS simulator unit
+  and UI suites plus candidate package smoke.
+- Local iOS unit tests executed 789 cases with 3 gated skips and no failures.
+  The initial full UI run found two failures; after fixes, both passed in a
+  focused rerun, as did adjacent Later and attachment cases and two iPad
+  split-canvas cases. The release PR's full UI run is the final automated gate.
+- Remaining human checks before tagging: type and paste in iPhone dark mode;
+  open Later and send from unread history on iPhone; resize the iPad split
+  canvas; verify the Linux panel unread dot and long-room spacing at several
+  text sizes; open and update the sample widget; install the Debian candidate
+  on Pop!_OS 24.04 COSMIC. After tagging, confirm the APT repository upgrade.
+  COSMIC's app list does not yet consume the numeric Unity launcher badge signal.
+- The maintainer requested the candidate for Pop!_OS live testing. The release
+  tag follows green release candidate gates and that smoke feedback.
+
 2026-09-18 date-rail, Linux restore, and macOS ping release-candidate review (2.1.40):
 
 - PR #1154 passed its required Quality gate and Desktop Package Smoke and
