@@ -399,6 +399,50 @@ final class SynaraUITests: XCTestCase {
         XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
     }
 
+    func testAttachmentFromUnreadHistorySurvivesLatestSnapshotWithoutAnotherGesture() {
+        let app = launchRoomApp(
+            readMarkerEventID: "$synthetic-30:matrix.org",
+            largeTimelineCount: 60
+        )
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        tap(app.buttons["AttachmentButton"])
+        tap(app.buttons["AttachmentOption-File"])
+        XCTAssertTrue(identifiedElement(in: app, "ComposerAttachmentDraft-synara-upload.pdf").waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 10))
+        let sent = app.buttons["MediaPlaceholder-synara-upload.pdf"]
+        XCTAssertTrue(sent.waitForExistence(timeout: 5))
+        XCTAssertTrue(sent.isHittable)
+        XCTAssertEqual(app.buttons.matching(identifier: "MediaPlaceholder-synara-upload.pdf").count, 1)
+        XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
+    }
+
+    func testFailedAttachmentFromUnreadHistoryKeepsDraftAndProvider() {
+        let app = launchRoomApp(
+            readMarkerEventID: "$synthetic-30:matrix.org",
+            largeTimelineCount: 60,
+            uploadFails: true
+        )
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        let generation = (viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }
+        XCTAssertNotNil(generation)
+        tap(app.buttons["AttachmentButton"])
+        tap(app.buttons["AttachmentOption-File"])
+        let staged = identifiedElement(in: app, "ComposerAttachmentDraft-synara-upload.pdf")
+        XCTAssertTrue(staged.waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(app.staticTexts["Media could not be uploaded."].waitForExistence(timeout: 5))
+        XCTAssertTrue(staged.exists)
+        XCTAssertFalse(app.buttons["MediaPlaceholder-synara-upload.pdf"].exists)
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        XCTAssertEqual((viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }, generation)
+        XCTAssertTrue(app.buttons["JumpToLatestButton"].exists)
+    }
+
     func testRoomDetailsInviteAndLeaveMockFlow() {
         let app = launchRoomApp()
 
@@ -818,6 +862,10 @@ final class SynaraUITests: XCTestCase {
 
     func testFileUploadAddsAttachmentPlaceholder() {
         let app = launchRoomApp()
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        let generation = (viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }
+        XCTAssertNotNil(generation)
 
         tap(app.buttons["AttachmentButton"])
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
@@ -832,6 +880,7 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.pdf"].waitForExistence(timeout: 5))
         XCTAssertFalse(draftList.exists)
+        XCTAssertEqual((viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }, generation)
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {
@@ -2529,12 +2578,16 @@ final class SynaraUITests: XCTestCase {
         largeTimelineCount: Int? = nil,
         roomNotes: Bool = false,
         viewportScenario: String? = nil,
-        timestampGestureRegression: Bool = false
+        timestampGestureRegression: Bool = false,
+        uploadFails: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        if uploadFails {
+            app.launchEnvironment["SYNARA_UI_TEST_UPLOAD_FAIL"] = "1"
+        }
         if let readMarkerEventID {
             app.launchEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"] = readMarkerEventID
         }

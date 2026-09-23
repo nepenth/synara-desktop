@@ -758,6 +758,7 @@ private extension AppEnvironment {
             agentApprovals: agentApprovals,
             agentApprovalDecisions: agentApprovalDecisions,
             readMarkers: readMarkers,
+            mediaUploader: MockMediaUploadService(shouldFail: processEnvironment["SYNARA_UI_TEST_UPLOAD_FAIL"] == "1"),
             crypto: crypto
         )
     }

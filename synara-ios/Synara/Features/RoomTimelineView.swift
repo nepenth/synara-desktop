@@ -2059,7 +2059,7 @@ struct RoomTimelineView: View {
                     if let activeTransaction = attachmentSendTransaction {
                         attachmentSendTransaction = activeTransaction.removingAttachment(id: draft.id)
                     }
-                    append(item)
+                    appendAcknowledgedUpload(item)
                 }
             )
             if uploaded {
@@ -2631,6 +2631,12 @@ struct RoomTimelineView: View {
         pendingLastReadEventID = nil
         showJumpToLatest = true
 
+        if timelineProviderIsLive {
+            isJumpingToLatest = false
+            scrollToTimelineBottom(proxy: proxy, animated: true, ignoreComposerFocus: true, reason: "jump-latest-live")
+            return
+        }
+
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
             defer {
@@ -2720,6 +2726,12 @@ struct RoomTimelineView: View {
 
         isJumpingToLatest = true
         showJumpToLatest = true
+
+        if timelineProviderIsLive {
+            timelinePosition = .placingInitial
+            enqueueStableViewportCommand(.latest(animated: true), generation: timelineBottomAnchorGeneration)
+            return
+        }
 
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
@@ -3111,13 +3123,15 @@ struct RoomTimelineView: View {
         editSession = nil
     }
 
-    private func append(_ item: TimelineItem) {
-        switch state {
-        case let .loaded(items, isPaginating):
-            state = .loaded(items + [item], isPaginating: isPaginating)
-        default:
-            state = .loaded([item], isPaginating: false)
-        }
+    private func appendAcknowledgedUpload(_ item: TimelineItem) {
+        // HTTP send completion precedes the timeline echo. Reuse the same local
+        // echo lifecycle as text, preserving the exact acknowledged event ID.
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: loadedTimelineItems,
+            localItems: [item.withDeliveryStatus(.sent)],
+            currentUserID: currentUserID
+        )
+        state = .loaded(merged, isPaginating: currentTimelineIsPaginating)
     }
 
     private func registerSendAnimation(for itemID: String, isRetry: Bool = false) {

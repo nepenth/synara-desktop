@@ -444,6 +444,12 @@ enum TimelinePendingReconciler {
         guard pending.deliveryStatus == .sending || pending.deliveryStatus == .sent else {
             return false
         }
+        // A send acknowledgement identifies the event, but does not guarantee
+        // that the timeline has observed it yet. Its eventual echo must match
+        // that identity, including attachments and server-normalized content.
+        if let serverEventID = pending.serverEventID {
+            return serverItem.isLocalPending == false && serverItem.serverEventID == serverEventID
+        }
         guard pending.senderID == serverItem.senderID else {
             return false
         }
@@ -475,8 +481,11 @@ enum TimelinePendingReconciler {
         }
 
         var unmatchedPending = pendingItems
-        for serverItem in streamItems where serverItem.senderID == currentUserID {
-            if let index = unmatchedPending.firstIndex(where: { matchesPending($0, serverItem: serverItem) }) {
+        for serverItem in streamItems {
+            if let index = unmatchedPending.firstIndex(where: {
+                ($0.serverEventID != nil || serverItem.senderID == currentUserID)
+                    && matchesPending($0, serverItem: serverItem)
+            }) {
                 unmatchedPending.remove(at: index)
             }
         }
