@@ -403,6 +403,7 @@ struct RoomTimelineView: View {
     @State private var initialReadMarkerEventID: String?
     @State private var pendingLastReadEventID: String?
     @State private var sendLatestRequest = 0
+    @State private var sendFollowLatestTask: Task<Void, Never>?
     @State private var hasReachedOldestMessages = false
     @State private var lastOlderPaginationAt = Date.distantPast
     @State private var paginationScrollAnchorID: String?
@@ -1510,6 +1511,8 @@ struct RoomTimelineView: View {
         stopTimelineUpdates(reason: "room-reset")
         stopTypingUpdates()
         cancelTimelineScroll()
+        sendFollowLatestTask?.cancel()
+        sendFollowLatestTask = nil
         cancelTimestampReveal()
         ownAvatarURL = nil
         state = .idle
@@ -2075,7 +2078,7 @@ struct RoomTimelineView: View {
                         environment.drafts.clearDraft(roomID: roomID)
                         completeComposerRelation()
                         if StableScrollAnchoringFeatureFlag.isEnabled {
-                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
+                            followLatestAfterSend()
                         } else {
                             sendLatestRequest &+= 1
                         }
@@ -2162,7 +2165,7 @@ struct RoomTimelineView: View {
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
         if StableScrollAnchoringFeatureFlag.isEnabled {
-            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
+            followLatestAfterSend()
         } else {
             sendLatestRequest &+= 1
         }
@@ -2777,6 +2780,31 @@ struct RoomTimelineView: View {
         }
     }
 
+    private func followLatestAfterSend() {
+        sendFollowLatestTask?.cancel()
+        let routeID = stableViewportRouteID
+        hasUserInteractedWithTimeline = false
+        jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
+
+        // The keyboard and the local-echo snapshot can settle after the first
+        // viewport command. Keep the explicit send-to-latest intent briefly,
+        // while letting a user's timeline drag take ownership immediately.
+        sendFollowLatestTask = Task { @MainActor in
+            for _ in 0 ..< 12 {
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                guard Task.isCancelled == false,
+                      stableViewportRouteID == routeID,
+                      hasUserInteractedWithTimeline == false
+                else {
+                    return
+                }
+                if isTimelineBottomVisible == false, isJumpingToLatest == false {
+                    jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
+                }
+            }
+        }
+    }
+
     @ViewBuilder
     private var timelineNavigationRecovery: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.small) {
@@ -2866,6 +2894,8 @@ struct RoomTimelineView: View {
     private func handleStableUserInteractionChanged(isInteracting: Bool) {
         isUserDraggingTimeline = isInteracting
         if isInteracting {
+            sendFollowLatestTask?.cancel()
+            sendFollowLatestTask = nil
             hasUserInteractedWithTimeline = true
             cancelTimelineScroll()
             cancelMarkFullyRead()
