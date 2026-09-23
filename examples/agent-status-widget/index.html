@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agent status</title>
+    <link rel="stylesheet" href="/style.css" />
+    <script type="module" src="/app.js"></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="eyebrow">Synara test widget</p>
+        <h1>Agent status</h1>
+        <p id="updated">Waiting for status…</p>
+      </header>
+      <section class="summary" aria-label="Summary">
+        <div><strong id="active-count">0</strong><span>Active</span></div>
+        <div><strong id="blocked-count">0</strong><span>Blocked</span></div>
+        <div><strong id="pending-count">0</strong><span>Pending</span></div>
+      </section>
+      <div id="error" role="status"></div>
+      <ol id="items" aria-label="Priority list"></ol>
+    </main>
+  </body>
+</html>

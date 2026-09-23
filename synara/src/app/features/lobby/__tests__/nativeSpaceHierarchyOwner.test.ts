@@ -28,6 +28,7 @@ const validRoom = {
   roomType: 'm.space',
   numJoinedMembers: 2,
   joinRule: 'public',
+  allowedRoomIds: [],
   worldReadable: true,
   guestCanJoin: false,
 };
@@ -131,9 +132,20 @@ test('native hierarchy read selects the requested room and maps the native view 
     room_type: 'm.space',
     num_joined_members: 2,
     join_rule: 'public',
+    allowed_room_ids: [],
     world_readable: true,
     guest_can_join: false,
   });
+});
+
+test('restricted hierarchy preserves join eligibility room IDs', async () => {
+  const { invoke } = makeInvoke(loggedInSession, {
+    sessionGeneration: 9,
+    rooms: [{ ...validRoom, joinRule: 'restricted', allowedRoomIds: [OTHER_ROOM_ID] }],
+  });
+  const room = await readSpaceHierarchyRoomWithNativeOwner(ROOM_ID, true, invoke);
+  assert.deepEqual(room.allowedRoomIds, [OTHER_ROOM_ID]);
+  assert.deepEqual(toRoomSummaryView(room).allowed_room_ids, [OTHER_ROOM_ID]);
 });
 
 test('native hierarchy read rejects stale generations and mismatched rooms', async () => {
@@ -161,6 +173,9 @@ test('native hierarchy read rejects malformed or unsupported native DTOs', async
     { ...validRoom, name: 'x'.repeat(4_097) },
     { ...validRoom, numJoinedMembers: Number.MAX_SAFE_INTEGER },
     { ...validRoom, joinRule: 'unknown' },
+    { ...validRoom, allowedRoomIds: ['invalid'] },
+    { ...validRoom, allowedRoomIds: [OTHER_ROOM_ID] },
+    { ...validRoom, allowedRoomIds: null },
     { ...validRoom, roomType: 'm.forum' },
     { ...validRoom, worldReadable: 'true' },
   ];
@@ -204,6 +219,7 @@ test('native hierarchy read accepts the Rust optional-null shape', async () => {
     roomType: undefined,
     numJoinedMembers: 2,
     joinRule: 'public',
+    allowedRoomIds: [],
     worldReadable: true,
     guestCanJoin: false,
   });

@@ -29,6 +29,7 @@ const ROOM_KEYS = [
   'roomType',
   'numJoinedMembers',
   'joinRule',
+  'allowedRoomIds',
   'worldReadable',
   'guestCanJoin',
 ] as const;
@@ -36,6 +37,7 @@ const REQUIRED_ROOM_KEYS = [
   'roomId',
   'numJoinedMembers',
   'joinRule',
+  'allowedRoomIds',
   'worldReadable',
   'guestCanJoin',
 ] as const;
@@ -158,6 +160,11 @@ const parseRoom = (value: unknown): NativeSpaceHierarchyRoom => {
     !isSafeCount(value.numJoinedMembers, MAX_MEMBER_COUNT) ||
     typeof value.joinRule !== 'string' ||
     !SUPPORTED_JOIN_RULES.has(value.joinRule) ||
+    !Array.isArray(value.allowedRoomIds) ||
+    value.allowedRoomIds.length > MAX_ROOM_COUNT ||
+    !value.allowedRoomIds.every(isNativeRoomId) ||
+    (!['restricted', 'knock_restricted'].includes(value.joinRule) &&
+      value.allowedRoomIds.length > 0) ||
     typeof value.worldReadable !== 'boolean' ||
     typeof value.guestCanJoin !== 'boolean'
   ) {
@@ -173,6 +180,7 @@ const parseRoom = (value: unknown): NativeSpaceHierarchyRoom => {
     roomType,
     numJoinedMembers: value.numJoinedMembers,
     joinRule: value.joinRule,
+    allowedRoomIds: value.allowedRoomIds,
     worldReadable: value.worldReadable,
     guestCanJoin: value.guestCanJoin,
   };
@@ -206,6 +214,7 @@ export type NativeSpaceHierarchyRoom = {
   roomType?: string;
   numJoinedMembers: number;
   joinRule: string;
+  allowedRoomIds: string[];
   worldReadable: boolean;
   guestCanJoin: boolean;
 };

@@ -200,7 +200,12 @@ struct MockMediaLoader: MediaLoading {
 }
 
 struct MockMediaUploadService: MediaUploading {
+    var shouldFail = false
+
     func upload(_ request: MediaUploadRequest) async -> MediaUploadState {
+        if shouldFail {
+            return .failed("Media could not be uploaded.")
+        }
         let safeName = URL(fileURLWithPath: request.displayName).lastPathComponent
         let resource = MediaResource(
             id: "$upload-\(UUID().uuidString)",

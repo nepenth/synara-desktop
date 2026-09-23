@@ -2333,6 +2333,57 @@ final class TimelineServiceTests: XCTestCase {
         XCTAssertNil(merged.first?.deliveryStatus)
     }
 
+    func testAcknowledgedUploadSurvivesLaggingSnapshotAndReconcilesExactServerEvent() async throws {
+        let result = await MockMediaUploadService().upload(MediaUploadRequest(
+            roomID: "!room:matrix.org", source: .file, displayName: "report.pdf",
+            data: Data("attachment".utf8), mimeType: "application/pdf", caption: "Report"
+        ))
+        guard case let .uploaded(upload) = result else {
+            return XCTFail("Expected successful upload")
+        }
+        let acknowledged = upload.withDeliveryStatus(.sent)
+        XCTAssertEqual(acknowledged.serverEventID, upload.eventID)
+        let lagging = TimelinePendingReconciler.merge(
+            streamItems: [], localItems: [acknowledged], currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(lagging.map(\.eventID), [upload.eventID])
+
+        // The owner may normalize presentation, timestamp, or sender metadata;
+        // the HTTP response's exact event ID is the reconciliation authority.
+        let confirmed = TimelineItem(
+            id: "sdk-row", eventID: upload.eventID, senderID: "@resolved:matrix.org",
+            timestamp: upload.timestamp.addingTimeInterval(600), kind: .text("Owner presentation"),
+            replyToEventID: nil, isEdited: false, reactions: [:]
+        )
+        let reconciled = TimelinePendingReconciler.merge(
+            streamItems: [confirmed], localItems: lagging, currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(reconciled.map(\.id), ["sdk-row"])
+        XCTAssertNil(reconciled.first?.deliveryStatus)
+        let echoArrivedFirst = TimelinePendingReconciler.merge(
+            streamItems: [confirmed], localItems: [acknowledged], currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(echoArrivedFirst, reconciled)
+    }
+
+    func testAcknowledgedEventCannotReconcileWithSimilarDifferentServerEvent() {
+        let acknowledged = TimelineItem(
+            id: "$ack", eventID: "$ack", senderID: "@local:matrix.org",
+            timestamp: TimelineFixtures.baseDate, kind: .text("Same content"),
+            replyToEventID: nil, isEdited: false, reactions: [:]
+        ).withDeliveryStatus(.sent)
+        let other = TimelineItem(
+            id: "$other", eventID: "$other", senderID: "@local:matrix.org",
+            timestamp: TimelineFixtures.baseDate, kind: .text("Same content"),
+            replyToEventID: nil, isEdited: false, reactions: [:]
+        )
+        XCTAssertFalse(TimelinePendingReconciler.matchesPending(acknowledged, serverItem: other))
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: [other], localItems: [acknowledged], currentUserID: "@local:matrix.org"
+        )
+        XCTAssertEqual(merged.map(\.eventID), ["$other", "$ack"])
+    }
+
     func testPendingReconcilerRequiresMatchingThreadRoot() {
         let pending = TimelineItem.pendingMessage(
             localID: "$pending-thread-reply",

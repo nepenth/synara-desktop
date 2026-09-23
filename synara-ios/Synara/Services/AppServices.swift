@@ -50,6 +50,20 @@ enum MatrixSyncStatus: Equatable {
     }
 }
 
+enum OwnProfileWriteStatus: Equatable {
+    case updated
+    case rateLimited
+    case failed
+
+    func message(for field: String) -> String {
+        switch self {
+        case .updated: return "\(field) updated."
+        case .rateLimited: return "The homeserver is limiting profile changes. Please try again shortly."
+        case .failed: return "Could not update \(field.lowercased())."
+        }
+    }
+}
+
 protocol MatrixClientServicing: AnyObject {
     var syncStatusDescription: String { get }
     var syncStatus: MatrixSyncStatus { get }
@@ -80,7 +94,9 @@ protocol MatrixClientServicing: AnyObject {
     func clearOwnUserStatus() async -> Bool
     func ownProfile() async -> SharedCoreOwnProfileInfo?
     func setOwnDisplayName(_ displayName: String) async -> Bool
+    func setOwnDisplayNameStatus(_ displayName: String) async -> OwnProfileWriteStatus
     func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool
+    func uploadOwnAvatarStatus(payload: Data, mimeType: String) async -> OwnProfileWriteStatus
     func setOutgoingTyping(roomID: String, typing: Bool) async
     func ignoredUserIDs() async -> [String]
     func ignoreUser(_ userID: String) async -> Bool
@@ -115,6 +131,14 @@ struct SynaraPushRulesSnapshot {
 }
 
 extension MatrixClientServicing {
+    func setOwnDisplayNameStatus(_ displayName: String) async -> OwnProfileWriteStatus {
+        await setOwnDisplayName(displayName) ? .updated : .failed
+    }
+
+    func uploadOwnAvatarStatus(payload: Data, mimeType: String) async -> OwnProfileWriteStatus {
+        await uploadOwnAvatar(payload: payload, mimeType: mimeType) ? .updated : .failed
+    }
+
     func forgetPersistedSession(_ session: AuthenticatedSession) async throws {
         _ = session
     }

@@ -3,6 +3,7 @@ import { test } from 'node:test';
 import type { DesktopInvokeResult } from '../../../../utils/desktop';
 import {
   getOwnProfileWithNativeOwner,
+  profileWriteErrorMessage,
   setOwnAvatarWithNativeOwner,
   setOwnDisplayNameWithNativeOwner,
   uploadMediaWithNativeOwner,
@@ -14,6 +15,20 @@ const loggedIn: DesktopInvokeResult<unknown> = {
   available: true,
   value: { status: 'logged_in' },
 };
+
+test('profile rate limits have actionable copy without exposing server text', () => {
+  assert.match(
+    profileWriteErrorMessage({
+      diagnostic_id: 'v-send.r-avatar-profile-rate-limited',
+      message: 'sensitive server response',
+    }),
+    /limiting profile changes.*try again/i
+  );
+  assert.doesNotMatch(
+    profileWriteErrorMessage({ message: 'sensitive server response' }),
+    /sensitive/
+  );
+});
 
 test('display name returns legacy when desktop unavailable', async () => {
   const invoke: NativeInvoke = async () => {

@@ -110,13 +110,10 @@ fn tray_badge_count(state: &DesktopTrayState) -> i64 {
     )
 }
 
-fn tray_title_for_badge(count: i64) -> Option<String> {
-    let count = clamp_count(count);
-    if count > 0 {
-        Some(count.to_string())
-    } else {
-        None
-    }
+fn tray_title_for_badge(_count: i64) -> Option<String> {
+    // The menu and tooltip carry the count. A title beside a panel icon is
+    // too small to read and duplicates the dot on the icon itself.
+    None
 }
 
 fn apply_linux_tray_badge_title<R: Runtime>(
@@ -145,7 +142,7 @@ fn apply_linux_tray_badge_icon<R: Runtime>(
         return Ok(());
     }
     let Some(rgba) =
-        desktop_unread_badge::overlay_unread_badge(base.rgba(), base.width(), base.height(), count)
+        desktop_unread_badge::overlay_unread_dot(base.rgba(), base.width(), base.height(), count)
     else {
         tray.set_icon(Some(base.clone()))?;
         return Ok(());
@@ -474,8 +471,8 @@ pub fn set_badge_count<R: Runtime>(app: &AppHandle<R>, count: Option<i64>) -> ta
     }
 
     // Unity `set_badge_count` is a no-op on GNOME (libunity only acts when
-    // Unity itself is running). Linux paints a count on the tray icon and
-    // emits the LauncherEntry signal Ubuntu Dock / Dash to Dock / KDE use.
+    // Unity itself is running). Linux paints a dot on the panel icon and
+    // emits the numeric LauncherEntry signal for supporting docks.
     if let Some(tray) = app.tray_by_id(TRAY_ICON_ID) {
         apply_linux_unread_surfaces(app, &tray, normalized_count.unwrap_or(0))?;
     } else {
@@ -682,8 +679,8 @@ mod tests {
     fn tray_title_clears_when_count_is_zero() {
         assert_eq!(tray_title_for_badge(0), None);
         assert_eq!(tray_title_for_badge(-4), None);
-        assert_eq!(tray_title_for_badge(7), Some("7".to_string()));
-        assert_eq!(tray_title_for_badge(50_000), Some("9999".to_string()));
+        assert_eq!(tray_title_for_badge(7), None);
+        assert_eq!(tray_title_for_badge(50_000), None);
     }
 
     #[test]
@@ -705,10 +702,7 @@ mod tests {
             tray_tooltip(&state),
             "Synara — 10 (3 unread, 2 highlights, 5 later)"
         );
-        assert_eq!(
-            tray_title_for_badge(tray_badge_count(&state)),
-            Some("10".to_string())
-        );
+        assert_eq!(tray_title_for_badge(tray_badge_count(&state)), None);
     }
 
     #[test]

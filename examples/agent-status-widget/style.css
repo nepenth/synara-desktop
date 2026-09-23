@@ -1,0 +1,99 @@
+:root {
+  color-scheme: light dark;
+  font: 16px/1.5 system-ui, sans-serif;
+  background: #101827;
+  color: #f3f6fb;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 780px;
+  margin: auto;
+  padding: 32px 24px;
+}
+h1 {
+  margin: 0;
+  font-size: 2rem;
+}
+header p {
+  margin: 4px 0;
+  color: #adb9cb;
+}
+.eyebrow {
+  color: #91c5fa;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin: 28px 0;
+}
+.summary div {
+  padding: 16px;
+  border: 1px solid #34445c;
+  border-radius: 12px;
+  background: #1b2a3e;
+}
+.summary strong {
+  display: block;
+  font-size: 1.6rem;
+}
+.summary span,
+small {
+  color: #b5c3d5;
+}
+ol {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.item {
+  border: 1px solid #34445c;
+  border-left: 4px solid #75a9e6;
+  background: #19263a;
+  border-radius: 10px;
+  padding: 14px 18px;
+}
+.item.active {
+  border-left-color: #64d59a;
+}
+.item.blocked {
+  border-left-color: #f07871;
+}
+.item.done {
+  border-left-color: #8494a9;
+  opacity: 0.75;
+}
+.item strong {
+  display: block;
+}
+.item small {
+  display: block;
+  margin-top: 3px;
+  text-transform: capitalize;
+}
+.item p {
+  margin: 8px 0 0;
+  color: #c5d0de;
+  white-space: pre-wrap;
+}
+#error {
+  color: #f7aaa5;
+}
+@media (max-width: 520px) {
+  .summary {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  main {
+    padding: 20px 14px;
+  }
+}

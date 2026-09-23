@@ -445,7 +445,8 @@ test('native timeline honors hide membership, hide activity receipts, and messag
   assert.match(presenter, /hideActivity,/);
   assert.match(presenter, /nativeLiveReadTarget/);
   assert.doesNotMatch(presenter, /if \(!hideActivity\) \{/);
-  assert.match(presenter, /messageSpacing=\{messageSpacing\}/);
+  assert.match(presenter, /messageSpacing !== '0'/);
+  assert.match(presenter, /paddingBottom: spacingToken/);
 });
 
 test('native timeline message rows sit on chat chrome and highlight on hover', () => {

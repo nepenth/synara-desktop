@@ -190,6 +190,7 @@ type RoomProfileProps = {
   suggested?: boolean;
   memberCount?: number;
   joinRule?: RoomJoinRulePresentation | null;
+  allowedRoomIds?: string[];
   options?: ReactNode;
 };
 function RoomProfile({
@@ -201,6 +202,7 @@ function RoomProfile({
   suggested,
   memberCount,
   joinRule,
+  allowedRoomIds,
   options,
 }: RoomProfileProps) {
   return (
@@ -227,6 +229,17 @@ function RoomProfile({
           )}
         </Box>
         <Box gap="200" alignItems="Center">
+          {(joinRule === 'restricted' || joinRule === 'knock_restricted') && (
+            <Text size="T200" priority="300">
+              {allowedRoomIds?.length
+                ? `Join with an invite or membership in: ${allowedRoomIds.join(', ')}.${
+                    joinRule === 'knock_restricted' ? ' You can also request to join.' : ''
+                  }`
+                : `An invite is required${
+                    joinRule === 'knock_restricted' ? ', or you can request to join' : ''
+                  }.`}
+            </Text>
+          )}
           {memberCount && (
             <Box shrink="No" gap="200">
               <Text size="T200" priority="300">{`${millify(memberCount)} Members`}</Text>
@@ -418,6 +431,7 @@ export const RoomItemCard = as<'div', RoomItemCardProps>(
                   memberCount={summary.num_joined_members}
                   suggested={content.suggested}
                   joinRule={normalizeRoomJoinRulePresentation(summary.join_rule)}
+                  allowedRoomIds={summary.allowed_room_ids}
                   options={<RoomJoinButton roomId={roomId} via={content.via} />}
                 />
               )}

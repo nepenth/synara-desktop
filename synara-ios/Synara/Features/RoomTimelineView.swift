@@ -438,6 +438,7 @@ struct RoomTimelineView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
 
     init(roomID: String, roomTitle: String?, focusedEventID: String? = nil) {
         self.roomID = roomID
@@ -460,6 +461,7 @@ struct RoomTimelineView: View {
                 subtitle: timelineSubtitle,
                 cryptoLabel: cryptoStatus.roomHeaderLabel,
                 cryptoSystemImage: cryptoStatus.roomHeaderSystemImage,
+                showsBackButton: canvasLayout.showsConversationBackButton,
                 onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
                 onBack: {
@@ -510,7 +512,7 @@ struct RoomTimelineView: View {
         .navigationTitle(displayRoomTitle)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
         .preferredColorScheme(isAgentRoom ? .dark : nil)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
@@ -2057,7 +2059,7 @@ struct RoomTimelineView: View {
                     if let activeTransaction = attachmentSendTransaction {
                         attachmentSendTransaction = activeTransaction.removingAttachment(id: draft.id)
                     }
-                    append(item)
+                    appendAcknowledgedUpload(item)
                 }
             )
             if uploaded {
@@ -2073,7 +2075,7 @@ struct RoomTimelineView: View {
                         environment.drafts.clearDraft(roomID: roomID)
                         completeComposerRelation()
                         if StableScrollAnchoringFeatureFlag.isEnabled {
-                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
                         } else {
                             sendLatestRequest &+= 1
                         }
@@ -2160,7 +2162,7 @@ struct RoomTimelineView: View {
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
         if StableScrollAnchoringFeatureFlag.isEnabled {
-            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
         } else {
             sendLatestRequest &+= 1
         }
@@ -2629,6 +2631,12 @@ struct RoomTimelineView: View {
         pendingLastReadEventID = nil
         showJumpToLatest = true
 
+        if timelineProviderIsLive {
+            isJumpingToLatest = false
+            scrollToTimelineBottom(proxy: proxy, animated: true, ignoreComposerFocus: true, reason: "jump-latest-live")
+            return
+        }
+
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
             defer {
@@ -2680,7 +2688,11 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func jumpToLatestStable(currentItems: [TimelineItem], dismissComposer: Bool = true) {
+    private func jumpToLatestStable(
+        currentItems: [TimelineItem],
+        dismissComposer: Bool = true,
+        animated: Bool = true
+    ) {
         guard isJumpingToLatest == false,
               let timelineSession
         else {
@@ -2710,7 +2722,7 @@ struct RoomTimelineView: View {
         ) {
             showJumpToLatest = false
             enqueueStableViewportCommand(
-                .latest(animated: true),
+                .latest(animated: animated),
                 generation: timelineBottomAnchorGeneration
             )
             return
@@ -2718,6 +2730,12 @@ struct RoomTimelineView: View {
 
         isJumpingToLatest = true
         showJumpToLatest = true
+
+        if timelineProviderIsLive {
+            timelinePosition = .placingInitial
+            enqueueStableViewportCommand(.latest(animated: animated), generation: timelineBottomAnchorGeneration)
+            return
+        }
 
         Task {
             let signpostID = PerformanceTrace.begin("TimelineJumpToLatest")
@@ -2731,7 +2749,7 @@ struct RoomTimelineView: View {
                     hasPositionedInitialTimeline = false
                     timelinePosition = .placingInitial
                     applySessionFeed(feed)
-                    enqueueStableViewportCommand(.latest(animated: true), generation: feed.generation)
+                    enqueueStableViewportCommand(.latest(animated: animated), generation: feed.generation)
                     lastRenderedTimelineCount = loadedTimelineItems.count
                     showJumpToLatest = true
                 case .empty:
@@ -3109,13 +3127,15 @@ struct RoomTimelineView: View {
         editSession = nil
     }
 
-    private func append(_ item: TimelineItem) {
-        switch state {
-        case let .loaded(items, isPaginating):
-            state = .loaded(items + [item], isPaginating: isPaginating)
-        default:
-            state = .loaded([item], isPaginating: false)
-        }
+    private func appendAcknowledgedUpload(_ item: TimelineItem) {
+        // HTTP send completion precedes the timeline echo. Reuse the same local
+        // echo lifecycle as text, preserving the exact acknowledged event ID.
+        let merged = TimelinePendingReconciler.merge(
+            streamItems: loadedTimelineItems,
+            localItems: [item.withDeliveryStatus(.sent)],
+            currentUserID: currentUserID
+        )
+        state = .loaded(merged, isPaginating: currentTimelineIsPaginating)
     }
 
     private func registerSendAnimation(for itemID: String, isRetry: Bool = false) {
@@ -3357,19 +3377,22 @@ private struct TimelineHeader: View {
     let subtitle: String
     let cryptoLabel: String?
     let cryptoSystemImage: String
+    var showsBackButton = true
     let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 19, weight: .semibold))
-                    .frame(width: 34, height: 34)
+            if showsBackButton {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 19, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: SynaraSpacing.xSmall) {
@@ -3527,6 +3550,7 @@ struct ThreadTimelineView: View {
     let rootTitle: String?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
     @State private var state: TimelineViewState = .idle
     @State private var draft = ""
     @State private var sendError: String?
@@ -3582,7 +3606,7 @@ struct ThreadTimelineView: View {
         .background(SynaraColor.surface)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
         .task(id: roomID + rootEventID) {
             async let status = environment.crypto.roomStatus(roomID: roomID)
             await loadThread()

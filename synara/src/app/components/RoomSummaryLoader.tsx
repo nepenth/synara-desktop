@@ -18,6 +18,7 @@ export type IRoomSummary = {
   room_type?: string;
   num_joined_members: number;
   join_rule: string;
+  allowed_room_ids: string[];
   world_readable: boolean;
   guest_can_join: boolean;
 };
@@ -31,6 +32,7 @@ export const toRoomSummaryView = (room: NativeSpaceHierarchyRoom): IRoomSummary 
   room_type: room.roomType,
   num_joined_members: room.numJoinedMembers,
   join_rule: room.joinRule,
+  allowed_room_ids: room.allowedRoomIds,
   world_readable: room.worldReadable,
   guest_can_join: room.guestCanJoin,
 });

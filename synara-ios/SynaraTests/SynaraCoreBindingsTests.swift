@@ -2444,6 +2444,21 @@ final class SynaraCoreBindingsTests: XCTestCase {
         }
     }
 
+    func testOwnProfileRateLimitIsShownAsRetryGuidance() {
+        let limited = OwnProfileCommandError.Failed(
+            code: "v-send.r-avatar-profile-rate-limited",
+            description: "Profile request was rate limited"
+        )
+        XCTAssertEqual(SharedCoreOwnProfile.writeStatus(for: limited), .rateLimited)
+        XCTAssertTrue(OwnProfileWriteStatus.rateLimited.message(for: "Avatar").contains("try again"))
+        XCTAssertEqual(
+            SharedCoreOwnProfile.writeStatus(
+                for: OwnProfileCommandError.Failed(code: "other-error", description: "Unknown")
+            ),
+            .failed
+        )
+    }
+
     func testSharedCoreRoomProfileWithoutSessionFailsClosed() async {
         let core = SharedCore()
         let roomId = "!s99SecretRoom:example.org"

@@ -2,6 +2,8 @@ import SwiftUI
 
 struct RoomListView: View {
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
+    @Environment(\.synaraSelectedConversationID) private var selectedConversationID
     @State private var state: RoomListState = .idle
     @State private var membershipError: String?
     @State private var searchQuery: String = ProcessInfo.processInfo.environment["SYNARA_UI_TEST_ROOM_SEARCH"] ?? ""
@@ -539,15 +541,13 @@ struct RoomListView: View {
                     .padding(.vertical, SynaraSpacing.small)
                     .background {
                         RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous)
-                            .fill(room.hasUnreadActivity
-                                ? SynaraColor.elevatedSurface
-                                : SynaraColor.surface)
+                            .fill(roomRowFill(for: room))
                     }
                     .clipShape(RoundedRectangle(cornerRadius: SynaraRadius.card, style: .continuous))
                     .synaraDepth(
                         SynaraSurfaceDepthRole.roomRow,
                         cornerRadius: SynaraRadius.card,
-                        boundaryColor: room.hasHighlight ? SynaraColor.accent : SynaraColor.separator
+                        boundaryColor: roomRowBoundary(for: room)
                     )
                     .contentShape(Rectangle())
             }
@@ -556,6 +556,7 @@ struct RoomListView: View {
             .contentShape(Rectangle())
             .accessibilityLabel(room.accessibilitySummary)
             .accessibilityHint("Opens the room timeline")
+            .accessibilityAddTraits(isSelectedConversation(room) ? .isSelected : [])
             .accessibilityIdentifier("RoomRow-\(room.id)")
             .listRowSeparator(.hidden)
             .listRowInsets(EdgeInsets(top: 4, leading: SynaraSpacing.medium, bottom: 4, trailing: SynaraSpacing.medium))
@@ -609,6 +610,24 @@ struct RoomListView: View {
                 }
             }
         }
+    }
+
+    private func isSelectedConversation(_ room: RoomSummary) -> Bool {
+        canvasLayout == .split && selectedConversationID == room.id
+    }
+
+    private func roomRowFill(for room: RoomSummary) -> Color {
+        if isSelectedConversation(room) {
+            return SynaraColor.accent.opacity(0.16)
+        }
+        return room.hasUnreadActivity ? SynaraColor.elevatedSurface : SynaraColor.surface
+    }
+
+    private func roomRowBoundary(for room: RoomSummary) -> Color {
+        if isSelectedConversation(room) {
+            return SynaraColor.accent
+        }
+        return room.hasHighlight ? SynaraColor.accent : SynaraColor.separator
     }
 
     private func markRoomAsRead(_ room: RoomSummary) {

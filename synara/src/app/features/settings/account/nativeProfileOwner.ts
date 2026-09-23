@@ -23,6 +23,16 @@ export type NativeOwnProfile = {
   avatarUrl?: string;
 };
 
+export const profileWriteErrorMessage = (error: unknown): string => {
+  if (error && typeof error === 'object' && !Array.isArray(error)) {
+    const diagnostic = (error as Record<string, unknown>).diagnostic_id;
+    if (diagnostic === 'v-send.r-avatar-profile-rate-limited') {
+      return 'The homeserver is limiting profile changes. Please try again shortly.';
+    }
+  }
+  return 'The profile change could not be saved. Please try again.';
+};
+
 /**
  * V-SEND.R-AVATAR-UPLOAD: sole user-profile write owner when a native Matrix
  * session is live. Fail-closed — never falls through to mx.setDisplayName /

@@ -73,6 +73,44 @@ const scrollToHistory = async (page: Page) => {
   await expect.poll(async () => (await geometry(page)).distance).toBeGreaterThan(200);
 };
 
+test('measured rows reserve their message spacing without covering the next row', async ({
+  page,
+}) => {
+  await open(page, 'scenario=live&nativeEvents=1&jank=1');
+  await scrollToHistory(page);
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const rows = [
+          ...document.querySelectorAll<HTMLElement>('[data-native-timeline-row-key]'),
+        ].sort((a, b) => Number(a.dataset.index) - Number(b.dataset.index));
+        return rows.filter(
+          (row, index) =>
+            index + 1 < rows.length &&
+            Number(rows[index + 1].dataset.index) === Number(row.dataset.index) + 1
+        ).length;
+      })
+    )
+    .toBeGreaterThan(2);
+  const gaps = await page.evaluate(() => {
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-native-timeline-row-key]')].sort(
+      (a, b) => Number(a.dataset.index) - Number(b.dataset.index)
+    );
+    return rows.flatMap((row, index) => {
+      const next = rows[index + 1];
+      if (!next || Number(next.dataset.index) !== Number(row.dataset.index) + 1) return [];
+      const content = row.firstElementChild as HTMLElement;
+      const reserved = Number.parseFloat(getComputedStyle(row).paddingBottom) || 0;
+      const paintedBottom =
+        content.getBoundingClientRect().bottom +
+        (Number.parseFloat(getComputedStyle(content).marginBottom) || 0);
+      return [{ gap: next.getBoundingClientRect().top - paintedBottom, reserved }];
+    });
+  });
+  expect(gaps.some(({ reserved }) => reserved > 0)).toBe(true);
+  expect(gaps.every(({ gap }) => gap >= -1)).toBe(true);
+});
+
 test('a sub-96px user scroll during live appends is not yanked back', async ({ page }) => {
   await open(page, 'scenario=live&nativeEvents=1');
   await expect.poll(async () => (await geometry(page)).distance).toBeLessThanOrEqual(8);

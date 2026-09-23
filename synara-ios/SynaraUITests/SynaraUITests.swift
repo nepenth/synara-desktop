@@ -296,6 +296,55 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
+    func testIPadRoomCanvasKeepsListAndConversationVisible() throws {
+        let app = launchRoomApp()
+        guard app.frame.width > 700 else {
+            throw XCTSkip("Run this canvas test on a full-width iPad simulator.")
+        }
+
+        let room = app.descendants(matching: .any)["RoomRow-!project:matrix.org"]
+        let timeline = timelineViewport(in: app)
+        XCTAssertTrue(room.waitForExistence(timeout: 5))
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        XCTAssertTrue(room.exists, "The iPad sidebar must stay available while reading a room")
+        XCTAssertLessThanOrEqual(room.frame.maxX, timeline.frame.minX + 8)
+        XCTAssertGreaterThan(timeline.frame.width, room.frame.width)
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "ipad-room-split-canvas"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        XCTAssertTrue(room.waitForExistence(timeout: 10))
+        XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+        XCTAssertLessThanOrEqual(room.frame.maxX, timeline.frame.minX + 8)
+        XCTAssertTrue(composerField(in: app).exists)
+        XCTAssertGreaterThan(app.frame.width, app.frame.height)
+        Thread.sleep(forTimeInterval: 1.0)
+        let landscapeAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        landscapeAttachment.name = "ipad-room-split-landscape"
+        landscapeAttachment.lifetime = .keepAlways
+        add(landscapeAttachment)
+    }
+
+    func testIPadLaterItemOpensBesideList() throws {
+        let app = launchLaterApp()
+        guard app.frame.width > 700 else {
+            throw XCTSkip("Run this canvas test on a full-width iPad simulator.")
+        }
+
+        let row = app.buttons["LaterRow-$text_!project_matrix.org"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        tap(row)
+        let timeline = timelineViewport(in: app)
+        XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.exists, "The iPad Later list must remain visible beside the room")
+        XCTAssertLessThanOrEqual(row.frame.maxX, timeline.frame.minX + 8)
+    }
+
     func testQuietDepthSurfacesKeepRoomTimelineActionsAndComposerDiscoverable() {
         let app = launchSignedInRoomsApp()
         let projectRoom = app.buttons["RoomRow-!project:matrix.org"]
@@ -345,6 +394,20 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertEqual(composer.value as? String, paragraph)
         XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    func testComposerTypedTextScreenshot() {
+        let app = launchRoomApp()
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("Dark composer text stays readable.")
+        XCTAssertEqual(composer.value as? String, "Dark composer text stays readable.")
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "composer-typed-text"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testUnreadRoomRoutePositionsAfterSharedReadMarker() {
@@ -397,6 +460,50 @@ final class SynaraUITests: XCTestCase {
         )
         XCTAssertTrue(sent.isHittable)
         XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
+    }
+
+    func testAttachmentFromUnreadHistorySurvivesLatestSnapshotWithoutAnotherGesture() {
+        let app = launchRoomApp(
+            readMarkerEventID: "$synthetic-30:matrix.org",
+            largeTimelineCount: 60
+        )
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        tap(app.buttons["AttachmentButton"])
+        tap(app.buttons["AttachmentOption-File"])
+        XCTAssertTrue(identifiedElement(in: app, "ComposerAttachmentDraft-synara-upload.pdf").waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=true", timeout: 10))
+        let sent = app.buttons["MediaPlaceholder-synara-upload.pdf"]
+        XCTAssertTrue(sent.waitForExistence(timeout: 5))
+        XCTAssertTrue(sent.isHittable)
+        XCTAssertEqual(app.buttons.matching(identifier: "MediaPlaceholder-synara-upload.pdf").count, 1)
+        XCTAssertFalse(app.buttons["JumpToLatestButton"].exists)
+    }
+
+    func testFailedAttachmentFromUnreadHistoryKeepsDraftAndProvider() {
+        let app = launchRoomApp(
+            readMarkerEventID: "$synthetic-30:matrix.org",
+            largeTimelineCount: 60,
+            uploadFails: true
+        )
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        let generation = (viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }
+        XCTAssertNotNil(generation)
+        tap(app.buttons["AttachmentButton"])
+        tap(app.buttons["AttachmentOption-File"])
+        let staged = identifiedElement(in: app, "ComposerAttachmentDraft-synara-upload.pdf")
+        XCTAssertTrue(staged.waitForExistence(timeout: 5))
+        tap(app.buttons["ComposerSendButton"])
+        XCTAssertTrue(app.staticTexts["Media could not be uploaded."].waitForExistence(timeout: 5))
+        XCTAssertTrue(staged.exists)
+        XCTAssertFalse(app.buttons["MediaPlaceholder-synara-upload.pdf"].exists)
+        XCTAssertTrue(waitForViewportDiagnostics(viewport, containing: "pinned=false", timeout: 5))
+        XCTAssertEqual((viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }, generation)
+        XCTAssertTrue(app.buttons["JumpToLatestButton"].exists)
     }
 
     func testRoomDetailsInviteAndLeaveMockFlow() {
@@ -818,6 +925,10 @@ final class SynaraUITests: XCTestCase {
 
     func testFileUploadAddsAttachmentPlaceholder() {
         let app = launchRoomApp()
+        let viewport = timelineViewport(in: app)
+        XCTAssertTrue(viewport.waitForExistence(timeout: 5))
+        let generation = (viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }
+        XCTAssertNotNil(generation)
 
         tap(app.buttons["AttachmentButton"])
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
@@ -832,6 +943,7 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertTrue(app.buttons["MediaPlaceholder-synara-upload.pdf"].waitForExistence(timeout: 5))
         XCTAssertFalse(draftList.exists)
+        XCTAssertEqual((viewport.value as? String)?.components(separatedBy: ";").first { $0.hasPrefix("generation=") }, generation)
     }
 
     func testThreadViewOpensAndRepliesFromTimeline() {
@@ -2529,12 +2641,16 @@ final class SynaraUITests: XCTestCase {
         largeTimelineCount: Int? = nil,
         roomNotes: Bool = false,
         viewportScenario: String? = nil,
-        timestampGestureRegression: Bool = false
+        timestampGestureRegression: Bool = false,
+        uploadFails: Bool = false
     ) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchEnvironment["SYNARA_UI_TESTS"] = "1"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_ID"] = "!project:matrix.org"
         app.launchEnvironment["SYNARA_UI_TEST_ROOM_TITLE"] = "Project"
+        if uploadFails {
+            app.launchEnvironment["SYNARA_UI_TEST_UPLOAD_FAIL"] = "1"
+        }
         if let readMarkerEventID {
             app.launchEnvironment["SYNARA_UI_TEST_READ_MARKER_EVENT_ID"] = readMarkerEventID
         }

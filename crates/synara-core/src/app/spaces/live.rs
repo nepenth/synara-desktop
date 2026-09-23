@@ -13,6 +13,7 @@ use matrix_sdk::{
         events::{
             room::join_rules::RoomJoinRulesEventContent, space::child::SpaceChildEventContent,
         },
+        room::JoinRuleSummary,
         room::{AllowRule, JoinRule},
         OwnedRoomId, OwnedServerName, SpaceChildOrder, UInt,
     },
@@ -102,6 +103,14 @@ pub async fn snapshot_space_hierarchy(
 
         for chunk in response.rooms {
             let summary = chunk.summary;
+            let allowed_room_ids = match &summary.join_rule {
+                JoinRuleSummary::Restricted(rule) | JoinRuleSummary::KnockRestricted(rule) => rule
+                    .allowed_room_ids
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect(),
+                _ => Vec::new(),
+            };
             let room = NativeSpaceHierarchyRoom {
                 room_id: summary.room_id.to_string(),
                 name: summary.name,
@@ -111,6 +120,7 @@ pub async fn snapshot_space_hierarchy(
                 room_type: summary.room_type.map(|value| value.to_string()),
                 num_joined_members: summary.num_joined_members.into(),
                 join_rule: summary.join_rule.as_str().to_owned(),
+                allowed_room_ids,
                 world_readable: summary.world_readable,
                 guest_can_join: summary.guest_can_join,
             };

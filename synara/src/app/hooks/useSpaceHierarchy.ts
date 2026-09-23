@@ -315,6 +315,7 @@ export type SpaceHierarchyRoom = {
   room_type?: string;
   num_joined_members: number;
   join_rule: RoomJoinRulePresentation | null;
+  allowed_room_ids: string[];
   world_readable: boolean;
   guest_can_join: boolean;
 };
@@ -328,6 +329,7 @@ const toSpaceHierarchyRoom = (room: NativeSpaceHierarchyRoom): SpaceHierarchyRoo
   room_type: room.roomType,
   num_joined_members: room.numJoinedMembers,
   join_rule: normalizeRoomJoinRulePresentation(room.joinRule),
+  allowed_room_ids: room.allowedRoomIds,
   world_readable: room.worldReadable,
   guest_can_join: room.guestCanJoin,
 });

@@ -639,11 +639,11 @@ private struct AccountSettingsView: View {
                 guard let data = try await item.loadTransferable(type: Data.self), data.isEmpty == false else {
                     throw NSError(domain: "synara.avatar", code: 1)
                 }
-                let ok = await environment.matrix.uploadOwnAvatar(payload: data, mimeType: "image/jpeg")
+                let status = await environment.matrix.uploadOwnAvatarStatus(payload: data, mimeType: "image/jpeg")
                 await MainActor.run {
                     selectedAvatarPhoto = nil
                     isUploadingAvatar = false
-                    displayNameMessage = ok ? "Avatar updated." : "Could not update avatar."
+                    displayNameMessage = status.message(for: "Avatar")
                 }
             } catch {
                 await MainActor.run {
@@ -727,12 +727,10 @@ private struct AccountSettingsView: View {
         isSavingDisplayName = true
         displayNameMessage = nil
         Task {
-            let ok = await environment.matrix.setOwnDisplayName(name)
+            let status = await environment.matrix.setOwnDisplayNameStatus(name)
             await MainActor.run {
                 isSavingDisplayName = false
-                displayNameMessage = ok
-                    ? "Display name updated."
-                    : "Could not update display name."
+                displayNameMessage = status.message(for: "Display name")
             }
         }
     }

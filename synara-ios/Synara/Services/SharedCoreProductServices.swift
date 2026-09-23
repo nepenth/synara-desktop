@@ -522,18 +522,26 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
     }
 
     func setOwnDisplayName(_ displayName: String) async -> Bool {
+        await setOwnDisplayNameStatus(displayName) == .updated
+    }
+
+    func setOwnDisplayNameStatus(_ displayName: String) async -> OwnProfileWriteStatus {
         do {
             _ = try await SharedCoreOwnProfile.setOwnDisplayName(
                 core: host.core,
                 displayName: displayName
             )
-            return true
+            return .updated
         } catch {
-            return false
+            return SharedCoreOwnProfile.writeStatus(for: error)
         }
     }
 
     func uploadOwnAvatar(payload: Data, mimeType: String) async -> Bool {
+        await uploadOwnAvatarStatus(payload: payload, mimeType: mimeType) == .updated
+    }
+
+    func uploadOwnAvatarStatus(payload: Data, mimeType: String) async -> OwnProfileWriteStatus {
         do {
             let uploaded = try await SharedCoreOwnProfile.uploadAvatar(
                 core: host.core,
@@ -541,9 +549,9 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
                 mimeType: mimeType
             )
             _ = try await SharedCoreOwnProfile.setOwnAvatar(core: host.core, mxc: uploaded.mxc)
-            return true
+            return .updated
         } catch {
-            return false
+            return SharedCoreOwnProfile.writeStatus(for: error)
         }
     }
 
