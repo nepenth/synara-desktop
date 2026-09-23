@@ -1,0 +1,1 @@
+Improved dark-mode message typing and iPad layouts. Sending from unread history now returns to the latest message, and saved items open reliably. Desktop adds a clearer unread dot and fixes overlapping messages.

@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [2.1.41] - 2026-09-23
+
 - iOS: keep typed and pasted composer text legible in dark appearance, and return to the live tail after sending from unread history. Keep Later navigation reliable on iPhone and in the iPad split canvas.
 - iOS: use a compact stacked conversation canvas on iPhone and in narrow iPad windows, and a regular-width list-plus-conversation split on iPad. Resizing keeps the same room selected; the split canvas keeps the tab bar visible and drops the back-to-list chevron because the room list stays visible.
 - Linux: show a red unread dot in the small panel icon, and include message spacing in each measured timeline row to prevent adjacent messages from overlapping. Numeric dock badges still depend on the desktop's launcher support.
