@@ -8,7 +8,7 @@ import { fileURLToPath } from "node:url";
 
 const checker = resolve(
   dirname(fileURLToPath(import.meta.url)),
-  "../check-synara-nse-core-archive-exports.sh",
+  "../check-synara-nse-core-archive-exports.sh"
 );
 
 function fixture(t) {
@@ -34,10 +34,14 @@ function check(t, { archiveContents, nmScript, extraArgs = [] }) {
     writeExecutable(nm, nmScript);
     env.SYNARA_NSE_ARCHIVE_NM = nm;
   }
-  return spawnSync("bash", [checker, ...(archiveContents === undefined ? extraArgs : [archive])], {
-    encoding: "utf8",
-    env,
-  });
+  return spawnSync(
+    "bash",
+    [checker, ...(archiveContents === undefined ? extraArgs : [archive])],
+    {
+      encoding: "utf8",
+      env,
+    }
+  );
 }
 
 const llvm22Mismatch = `#!/usr/bin/env bash
@@ -62,6 +66,20 @@ test("readable nm output with full Core exports fails", (t) => {
     nmScript: `#!/usr/bin/env bash
 echo "_uniffi_synara_core_fn_login"
 exit 0
+`,
+  });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /forbidden full Core exports/);
+});
+
+test("a full Core export after large nm output still fails", (t) => {
+  const result = check(t, {
+    archiveContents: "archive with many symbols",
+    nmScript: `#!${process.execPath}
+const { writeSync } = require("node:fs");
+const chunk = "0000 T _uniffi_synara_nse_core_resolve\\n".repeat(1024);
+for (let index = 0; index < 64; index += 1) writeSync(1, chunk);
+writeSync(1, "0000 T _uniffi_synara_core_forbidden\\n");
 `,
   });
   assert.equal(result.status, 1);
