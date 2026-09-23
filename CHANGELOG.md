@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- iOS: use a compact stacked canvas on iPhone and the iPhone Duo cover display, and a regular-width list-plus-conversation split on the Duo inner display and iPad. Opening or closing the device keeps the same room selected; the inner canvas keeps the tab bar and drops the back-to-list chevron because the room list stays visible.
+
 ## [2.1.40] - 2026-09-18
 
 - Center date-rail ticks on the 2px spine and keep live bottom on the latest

@@ -25,6 +25,7 @@ struct PlaceholderScreen: View {
 
 struct RoutePlaceholderView: View {
     let route: AppRoute
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
 
     var body: some View {
         switch route {
@@ -38,6 +39,7 @@ struct RoutePlaceholderView: View {
             )
             .id("\(id)-\(eventID ?? "")")
             .synaraInteractiveSwipeBack()
+            .environment(\.synaraAllowsConversationSwipeBack, canvasLayout == .stacked)
         case .thread(let roomID, let rootEventID, let roomTitle, let rootTitle):
             ThreadTimelineView(
                 roomID: roomID,
@@ -46,6 +48,7 @@ struct RoutePlaceholderView: View {
                 rootTitle: rootTitle
             )
             .synaraInteractiveSwipeBack()
+            .environment(\.synaraAllowsConversationSwipeBack, true)
         case .settings:
             EmptyView()
         case .notifications:

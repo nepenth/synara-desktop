@@ -7,6 +7,26 @@ enum AppRoute: Hashable {
     case settings
     case notifications
     case later
+
+    var isConversation: Bool {
+        switch self {
+        case .room, .thread:
+            return true
+        case .login, .settings, .notifications, .later:
+            return false
+        }
+    }
+
+    var conversationRoomID: String? {
+        switch self {
+        case .room(let id, _, _):
+            return id
+        case .thread(let roomID, _, _, _):
+            return roomID
+        case .login, .settings, .notifications, .later:
+            return nil
+        }
+    }
 }
 
 enum AppDeepLink: Equatable {

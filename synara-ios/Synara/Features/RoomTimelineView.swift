@@ -438,6 +438,7 @@ struct RoomTimelineView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var accessibilityReduceMotion
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
 
     init(roomID: String, roomTitle: String?, focusedEventID: String? = nil) {
         self.roomID = roomID
@@ -460,6 +461,7 @@ struct RoomTimelineView: View {
                 subtitle: timelineSubtitle,
                 cryptoLabel: cryptoStatus.roomHeaderLabel,
                 cryptoSystemImage: cryptoStatus.roomHeaderSystemImage,
+                showsBackButton: canvasLayout.showsConversationBackButton,
                 onSearch: { isTimelineSearchPresented = true },
                 onDetails: { isRoomDetailsPresented = true },
                 onBack: {
@@ -510,7 +512,7 @@ struct RoomTimelineView: View {
         .navigationTitle(displayRoomTitle)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
         .preferredColorScheme(isAgentRoom ? .dark : nil)
         .sheet(item: $viewerResource) { resource in
             MediaViewer(resource: resource)
@@ -3357,19 +3359,22 @@ private struct TimelineHeader: View {
     let subtitle: String
     let cryptoLabel: String?
     let cryptoSystemImage: String
+    var showsBackButton = true
     let onSearch: () -> Void
     let onDetails: () -> Void
     let onBack: () -> Void
 
     var body: some View {
         HStack(spacing: SynaraSpacing.medium) {
-            Button(action: onBack) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 19, weight: .semibold))
-                    .frame(width: 34, height: 34)
+            if showsBackButton {
+                Button(action: onBack) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 19, weight: .semibold))
+                        .frame(width: 34, height: 34)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Back")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Back")
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: SynaraSpacing.xSmall) {
@@ -3527,6 +3532,7 @@ struct ThreadTimelineView: View {
     let rootTitle: String?
     @Environment(\.appEnvironment) private var environment
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
     @State private var state: TimelineViewState = .idle
     @State private var draft = ""
     @State private var sendError: String?
@@ -3582,7 +3588,7 @@ struct ThreadTimelineView: View {
         .background(SynaraColor.surface)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
-        .toolbar(.hidden, for: .tabBar)
+        .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
         .task(id: roomID + rootEventID) {
             async let status = environment.crypto.roomStatus(roomID: roomID)
             await loadThread()

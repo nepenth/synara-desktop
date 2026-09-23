@@ -62,7 +62,7 @@ Status labels:
 | Push | Pusher registration service | Partial | push unit tests | Physical-device APNs receive/tap/badge smoke |
 | Settings | Account/security/about/licenses/support/privacy | Partial | UI tests | Final URLs/legal/signing review |
 | Settings | Device verification/recovery/key backup controls | Partial | UI tests and SDK status calls | Real cross-signing/recovery live smoke |
-| Platform | iPad layout | Missing | none | Split-view implementation and screenshot matrix |
+| Platform | iPad / iPhone Duo layout | Partial | canvas layout unit tests | ArrangementView / reserved-region adoption when Xcode 27.1 SDK ships; second inner-display window |
 | Platform | Share extension | Missing | none | Authenticated share flow tests |
 | Platform | App Intents/Shortcuts | Missing | none | Shortcut/entity test plan |
 

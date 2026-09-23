@@ -149,24 +149,30 @@ private struct NotificationsTabView: View {
     }
 
     private func notificationsRow(_ room: RoomSummary) -> some View {
-        NavigationLink(value: AppRoute.room(id: room.id, title: room.name)) {
+        Button {
+            environment.router.route(to: .room(id: room.id, title: room.name))
+        } label: {
             NotificationsInboxRow(room: room)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityIdentifier("NotificationsRow-\(room.id)")
     }
 
     private func agentPendingRow(_ item: AgentPendingApprovalItem) -> some View {
-        NavigationLink(
-            value: AppRoute.room(id: item.roomID, eventID: item.eventID, title: item.roomName)
-        ) {
+        Button {
+            environment.router.route(
+                to: .room(id: item.roomID, eventID: item.eventID, title: item.roomName)
+            )
+        } label: {
             AgentPendingApprovalRow(item: item)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
         }
+        .buttonStyle(.plain)
         .frame(maxWidth: .infinity, alignment: .leading)
         .contentShape(Rectangle())
         .accessibilityLabel("\(item.title) in \(item.roomName)")
@@ -314,6 +320,54 @@ enum AppTab: String, CaseIterable, Identifiable {
     case settings
 
     var id: String { rawValue }
+
+    var usesConversationCanvas: Bool {
+        switch self {
+        case .rooms, .later, .notifications:
+            return true
+        case .settings:
+            return false
+        }
+    }
+
+    var emptyConversationTitle: String {
+        switch self {
+        case .rooms:
+            return "Select a Room"
+        case .notifications:
+            return "Select a Notification"
+        case .later:
+            return "Select an Item"
+        case .settings:
+            return "Select a Setting"
+        }
+    }
+
+    var emptyConversationSystemImage: String {
+        switch self {
+        case .rooms:
+            return "bubble.left.and.bubble.right"
+        case .notifications:
+            return "bell"
+        case .later:
+            return "clock"
+        case .settings:
+            return "gearshape"
+        }
+    }
+
+    var emptyConversationMessage: String {
+        switch self {
+        case .rooms:
+            return "Pick a conversation. The room list stays open beside it."
+        case .notifications:
+            return "Open a mention, invite, or unread room. The inbox stays visible."
+        case .later:
+            return "Open a saved message. Your Later list stays visible."
+        case .settings:
+            return "Choose a settings page to open beside the list."
+        }
+    }
 
     @ViewBuilder
     var content: some View {
