@@ -90,7 +90,7 @@ import { useNativeRoomListSnapshot } from '../../state/room-list/roomList';
 import { Time } from '../../components/message';
 import { UserAvatar } from '../../components/user-avatar';
 import { useSetting } from '../../state/hooks/settings';
-import { settingsAtom, type MessageSpacing } from '../../state/settings';
+import { settingsAtom } from '../../state/settings';
 import { getMxIdLocalPart } from '../../utils/matrix';
 import { nameInitials } from '../../utils/common';
 import { invokeDesktopWithAvailability, isSynaraDesktop } from '../../utils/desktop';
@@ -345,16 +345,17 @@ const nativeTimelineRowSizeHint = (
 const measuredSizeKeyForRow = (
   roomId: string,
   rows: readonly NativeTimelineViewRow[],
-  index: number
+  index: number,
+  messageSpacing: string
 ): string | undefined => {
   const row = rows[index];
   if (!row) return undefined;
   return nativeTimelineMeasuredSizeKey(
     roomId,
     rowKey(row),
-    nativeTimelineMeasuredSizeIdentity(
+    `${messageSpacing}:${nativeTimelineMeasuredSizeIdentity(
       nativeTimelineRowSizeHint(row, isGroupedWithPrevious(rows[index - 1], row))
-    )
+    )}`
   );
 };
 
@@ -372,7 +373,6 @@ type NativeTimelineRowProps = {
   groupsNext: boolean;
   roomId: string;
   sessionGeneration: number;
-  messageSpacing: MessageSpacing;
   pinnedEventIds?: string[];
   sourceEncryptionStatus?: RoomEncryptionStatus;
   onActionError: (message: string) => void;
@@ -1595,7 +1595,6 @@ const NativeTimelineRow = ({
   groupsNext,
   roomId,
   sessionGeneration,
-  messageSpacing,
   pinnedEventIds,
   sourceEncryptionStatus,
   onActionError,
@@ -1616,11 +1615,6 @@ const NativeTimelineRow = ({
     grouped: surface && grouped,
     groupsNext: surface && groupsNext,
   });
-  const spacingToken =
-    groupsNext || messageSpacing === '0'
-      ? undefined
-      : config.space[`S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500'];
-  const rowStyle = spacingToken ? { marginBottom: spacingToken } : undefined;
   const capabilities = rowCapabilities(row);
   // Hermes treats its seeded terminal reaction keys as approval decisions.
   // For a Core-classified approval prompt those reactions must therefore flow
@@ -1815,7 +1809,6 @@ const NativeTimelineRow = ({
               direction="Column"
               gap="100"
               className={`${rowClassName} ${htmlCss.MessageSwipeContent}`}
-              style={rowStyle}
             >
               <Box gap="300" alignItems="Start">
                 <Box direction="Column" alignItems="Center" style={{ width: 36, flexShrink: 0 }}>
@@ -2404,14 +2397,14 @@ export function NativeTimelinePresenter({
       const current = rowsRef.current;
       const row = current[index];
       if (!row) return NATIVE_TIMELINE_DEFAULT_ROW_ESTIMATE_PX;
-      const measuredKey = measuredSizeKeyForRow(roomId, current, index);
+      const measuredKey = measuredSizeKeyForRow(roomId, current, index, messageSpacing);
       const measured = measuredKey ? nativeTimelineMeasuredSize(measuredKey) : undefined;
       if (measured) return measured;
       return estimateNativeTimelineRowSize(
         nativeTimelineRowSizeHint(row, isGroupedWithPrevious(current[index - 1], row))
       );
     },
-    [roomId]
+    [roomId, messageSpacing]
   );
   const measureElement = useCallback(
     (element: HTMLDivElement, entry?: ResizeObserverEntry) => {
@@ -2428,12 +2421,12 @@ export function NativeTimelinePresenter({
       const index = fromKey ?? Number(element.dataset.index);
       const row = Number.isInteger(index) ? current[index] : undefined;
       if (row && measured > 0) {
-        const measuredKey = measuredSizeKeyForRow(roomId, current, index);
+        const measuredKey = measuredSizeKeyForRow(roomId, current, index, messageSpacing);
         if (measuredKey) rememberNativeTimelineMeasuredSize(measuredKey, measured);
       }
       return measured;
     },
-    [roomId]
+    [roomId, messageSpacing]
   );
   const virtualizer = useVirtualizer<HTMLDivElement, HTMLDivElement>({
     count: rows.length,
@@ -3453,6 +3446,14 @@ export function NativeTimelinePresenter({
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const row = rows[virtualItem.index];
               if (!row) return null;
+              const groupsNext = isGroupedWithPrevious(
+                row,
+                virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
+              );
+              const spacingToken =
+                row.kind === 'message' && !groupsNext && messageSpacing !== '0'
+                  ? config.space[`S${messageSpacing}` as 'S100' | 'S200' | 'S300' | 'S400' | 'S500']
+                  : undefined;
               return (
                 <div
                   key={virtualItem.key}
@@ -3468,6 +3469,10 @@ export function NativeTimelinePresenter({
                     transform: `translateY(${virtualItem.start}px)`,
                     width: '100%',
                     overflowAnchor: 'none',
+                    // This padding is part of the measured row box. A margin
+                    // on a descendant can escape the box and make adjacent
+                    // absolutely positioned rows overlap after measurement.
+                    paddingBottom: spacingToken,
                   }}
                 >
                   <NativeTimelineRow
@@ -3477,12 +3482,8 @@ export function NativeTimelinePresenter({
                       virtualItem.index > 0 ? rows[virtualItem.index - 1] : undefined,
                       row
                     )}
-                    groupsNext={isGroupedWithPrevious(
-                      row,
-                      virtualItem.index + 1 < rows.length ? rows[virtualItem.index + 1] : undefined
-                    )}
+                    groupsNext={groupsNext}
                     roomId={roomId}
-                    messageSpacing={messageSpacing}
                     pinnedEventIds={snapshot.pinnedEventIds}
                     sourceEncryptionStatus={sourceEncryptionStatus}
                     onActionError={setActionError}

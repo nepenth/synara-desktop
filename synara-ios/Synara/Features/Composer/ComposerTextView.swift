@@ -61,6 +61,8 @@ enum ComposerTextInputRegistry {
 }
 
 struct ComposerTextView: UIViewRepresentable {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.synaraThemeBaseHex) private var themeBaseHex
     @Binding var text: String
     @Binding var selection: ComposerTextSelection
     @Binding var height: CGFloat
@@ -79,7 +81,6 @@ struct ComposerTextView: UIViewRepresentable {
         textView.backgroundColor = .clear
         textView.font = .preferredFont(forTextStyle: .callout)
         textView.adjustsFontForContentSizeCategory = true
-        applyTextAppearance(to: textView)
         textView.textContainerInset = ComposerTextMetrics.textContainerInset
         textView.textContainer.lineFragmentPadding = 0
         textView.isScrollEnabled = false
@@ -97,8 +98,10 @@ struct ComposerTextView: UIViewRepresentable {
         context.coordinator.lastPlaceholder = placeholder
         context.coordinator.performProgrammaticUpdate {
             textView.text = text
+            applyTextAppearance(to: textView)
             applySelection(to: textView)
         }
+        context.coordinator.lastAppearanceKey = appearanceKey
         textView.delegate = context.coordinator
         textView.onPasteImages = onPasteImages
         container.onWidthChange = { [weak coordinator = context.coordinator] in
@@ -118,6 +121,7 @@ struct ComposerTextView: UIViewRepresentable {
         context.coordinator.parent = self
         textView.onPasteImages = onPasteImages
         context.coordinator.performProgrammaticUpdate {
+            var replacedText = false
             if context.coordinator.lastPlaceholder != placeholder {
                 context.coordinator.lastPlaceholder = placeholder
                 uiView.placeholderLabel.text = placeholder
@@ -131,6 +135,7 @@ struct ComposerTextView: UIViewRepresentable {
             if context.coordinator.lastFormattingRevision != formattingRevision {
                 context.coordinator.lastFormattingRevision = formattingRevision
                 textView.text = text
+                replacedText = true
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
             } else if textView.isFirstResponder == false,
@@ -140,8 +145,13 @@ struct ComposerTextView: UIViewRepresentable {
                       ) != text
             {
                 textView.text = text
+                replacedText = true
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
+            }
+            if replacedText || context.coordinator.lastAppearanceKey != appearanceKey {
+                applyTextAppearance(to: textView)
+                context.coordinator.lastAppearanceKey = appearanceKey
             }
         }
 
@@ -176,18 +186,37 @@ struct ComposerTextView: UIViewRepresentable {
         textView.selectedRange = desiredRange
     }
 
+    private var appearanceKey: String {
+        "\(themeBaseHex):\(colorScheme == .dark ? "dark" : "light")"
+    }
+
     private func applyTextAppearance(to textView: UITextView) {
         let font = textView.font ?? .preferredFont(forTextStyle: .callout)
+        // SwiftUI's room can use a preferred color scheme that does not match
+        // the UIKit text view's inherited trait collection. Resolve against
+        // the same theme and scheme as the composer surface.
+        let color = SynaraThemeRamp.uiColor(
+            \.primaryText,
+            baseHex: themeBaseHex,
+            dark: colorScheme == .dark
+        )
         textView.font = font
-        textView.textColor = .label
-        textView.tintColor = .label
+        textView.textColor = color
+        textView.tintColor = color
         textView.linkTextAttributes = [
-            .foregroundColor: UIColor.label
+            .foregroundColor: color
         ]
-        textView.typingAttributes = [
-            .font: font,
-            .foregroundColor: UIColor.label
-        ]
+        if textView.textStorage.length > 0 {
+            textView.textStorage.addAttribute(
+                .foregroundColor,
+                value: color,
+                range: NSRange(location: 0, length: textView.textStorage.length)
+            )
+        }
+        var typingAttributes = textView.typingAttributes
+        typingAttributes[.font] = typingAttributes[.font] ?? font
+        typingAttributes[.foregroundColor] = color
+        textView.typingAttributes = typingAttributes
     }
 
     final class Coordinator: NSObject, UITextViewDelegate {
@@ -195,6 +224,7 @@ struct ComposerTextView: UIViewRepresentable {
         weak var container: ComposerTextContainer?
         var lastFormattingRevision = -1
         var lastPlaceholder = ""
+        var lastAppearanceKey = ""
         private var isApplyingProgrammaticState = false
         private var lastMeasuredText: String?
         private var lastMeasuredWidth: CGFloat = 0
@@ -398,11 +428,19 @@ final class ComposerPasteTextView: UITextView {
     }
 
     private func insertComposerAttributedText(_ attributed: NSAttributedString) {
+        let normalized = NSMutableAttributedString(attributedString: attributed)
+        if normalized.length > 0 {
+            normalized.addAttribute(
+                .foregroundColor,
+                value: textColor ?? .label,
+                range: NSRange(location: 0, length: normalized.length)
+            )
+        }
         let mutable = NSMutableAttributedString(attributedString: attributedText)
         let range = selectedRange
-        mutable.replaceCharacters(in: range, with: attributed)
+        mutable.replaceCharacters(in: range, with: normalized)
         attributedText = mutable
-        selectedRange = NSRange(location: range.location + attributed.length, length: 0)
+        selectedRange = NSRange(location: range.location + normalized.length, length: 0)
         typingAttributes = [
             .font: font ?? .preferredFont(forTextStyle: .callout),
             .foregroundColor: textColor ?? .label,

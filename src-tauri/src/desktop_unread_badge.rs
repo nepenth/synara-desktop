@@ -1,9 +1,10 @@
-//! Linux unread count for the dash/dock and notification-area tray icon.
+//! Linux unread count for the dash/dock and a dot on the notification-area icon.
 //!
 //! GNOME's dash tracks mapped windows, not processes. Unity's `libunity`
 //! launcher badge is a no-op unless Unity itself is running, so this module
-//! paints a Slack-style count onto the tray icon and broadcasts the Unity
-//! LauncherEntry signal that Ubuntu Dock, Dash to Dock, and KDE listen for.
+//! paints a red dot onto the tray icon and broadcasts the Unity LauncherEntry
+//! count signal that supporting docks listen for. COSMIC's app-list does not
+//! currently consume that signal, so its dock icon needs upstream badge support.
 
 // Overlay painting and Unity path helpers are called from the Linux tray.
 // macOS still compiles the same functions for unit tests.
@@ -13,37 +14,10 @@
 use std::collections::HashMap;
 
 const BADGE_RED: [u8; 4] = [220, 50, 47, 255];
-const BADGE_WHITE: [u8; 4] = [255, 255, 255, 255];
 const MAX_BADGE_COUNT: i64 = 9_999;
-
-/// 3×5 digits `0-9` plus `+`, packed row-major.
-const GLYPH_3X5: [[u8; 15]; 11] = [
-    [1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1], // 0
-    [0, 1, 0, 1, 1, 0, 0, 1, 0, 0, 1, 0, 1, 1, 1], // 1
-    [1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1], // 2
-    [1, 1, 1, 0, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1], // 3
-    [1, 0, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 0, 0, 1], // 4
-    [1, 1, 1, 1, 0, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1], // 5
-    [1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 1, 1, 1, 1], // 6
-    [1, 1, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0], // 7
-    [1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1], // 8
-    [1, 1, 1, 1, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1], // 9
-    [0, 0, 0, 0, 1, 0, 1, 1, 1, 0, 1, 0, 0, 0, 0], // +
-];
 
 pub fn clamp_unread_badge_count(count: i64) -> i64 {
     count.clamp(0, MAX_BADGE_COUNT)
-}
-
-pub fn unread_badge_label(count: i64) -> Option<String> {
-    let count = clamp_unread_badge_count(count);
-    if count == 0 {
-        None
-    } else if count > 99 {
-        Some("99+".to_owned())
-    } else {
-        Some(count.to_string())
-    }
 }
 
 /// Desktop file IDs the running window may be grouped under.
@@ -76,9 +50,10 @@ pub fn unity_launcher_object_path(app_uri: &str) -> String {
     )
 }
 
-pub fn overlay_unread_badge(rgba: &[u8], width: u32, height: u32, count: i64) -> Option<Vec<u8>> {
-    let label = unread_badge_label(count)?;
-    if width == 0 || height == 0 {
+/// Notification-area icons render at roughly 16–24 px. A count is unreadable
+/// there, so keep the number for the launcher and paint only an attention dot.
+pub fn overlay_unread_dot(rgba: &[u8], width: u32, height: u32, count: i64) -> Option<Vec<u8>> {
+    if count <= 0 || width == 0 || height == 0 {
         return None;
     }
     let expected = (width as usize)
@@ -88,103 +63,29 @@ pub fn overlay_unread_badge(rgba: &[u8], width: u32, height: u32, count: i64) ->
         return None;
     }
     let mut out = rgba[..expected].to_vec();
-    paint_unread_badge(&mut out, width, height, &label);
+    let side = width.min(height) as f32;
+    let radius = (side * 0.21).clamp(3.0, side / 2.0);
+    let margin = (side * 0.04).clamp(1.0, 6.0);
+    let cx = width as f32 - margin - radius;
+    let cy = margin + radius;
+    for y in (cy - radius).floor() as i32..=(cy + radius).ceil() as i32 {
+        for x in (cx - radius).floor() as i32..=(cx + radius).ceil() as i32 {
+            let cover =
+                (radius + 0.5 - (x as f32 + 0.5 - cx).hypot(y as f32 + 0.5 - cy)).clamp(0.0, 1.0);
+            if cover > 0.0 {
+                blend_px(
+                    &mut out,
+                    width,
+                    height,
+                    x,
+                    y,
+                    BADGE_RED,
+                    (cover * 255.0) as u8,
+                );
+            }
+        }
+    }
     Some(out)
-}
-
-fn paint_unread_badge(pixels: &mut [u8], width: u32, height: u32, label: &str) {
-    let min_side = width.min(height) as f32;
-    let diameter = (min_side * 0.46).clamp(10.0, min_side);
-    let radius = diameter / 2.0;
-    let extra = ((label.len().saturating_sub(1) as f32) * radius * 0.72).max(0.0);
-    let badge_w = diameter + extra;
-    let badge_h = diameter;
-    let margin = (min_side * 0.05).clamp(1.0, 8.0);
-    let cx = width as f32 - margin - badge_w / 2.0;
-    let cy = margin + badge_h / 2.0;
-    let left = (cx - badge_w / 2.0).floor() as i32;
-    let right = (cx + badge_w / 2.0).ceil() as i32;
-    let top = (cy - badge_h / 2.0).floor() as i32;
-    let bottom = (cy + badge_h / 2.0).ceil() as i32;
-
-    for y in top..=bottom {
-        for x in left..=right {
-            let px = x as f32 + 0.5;
-            let py = y as f32 + 0.5;
-            let dx = (px - cx).abs() - (badge_w / 2.0 - radius);
-            let dx = dx.max(0.0);
-            let dy = py - cy;
-            let cover = (radius + 0.5 - dx.hypot(dy)).clamp(0.0, 1.0);
-            if cover <= 0.0 {
-                continue;
-            }
-            blend_px(
-                pixels,
-                width,
-                height,
-                x,
-                y,
-                BADGE_RED,
-                (cover * 255.0).round() as u8,
-            );
-        }
-    }
-
-    draw_label(pixels, width, height, cx, cy, badge_h, label);
-}
-
-fn draw_label(
-    pixels: &mut [u8],
-    width: u32,
-    height: u32,
-    cx: f32,
-    cy: f32,
-    badge_h: f32,
-    label: &str,
-) {
-    let glyphs: Vec<[u8; 15]> = label
-        .chars()
-        .filter_map(|ch| match ch {
-            '0'..='9' => Some(GLYPH_3X5[(ch as u8 - b'0') as usize]),
-            '+' => Some(GLYPH_3X5[10]),
-            _ => None,
-        })
-        .collect();
-    if glyphs.is_empty() {
-        return;
-    }
-
-    let scale = ((badge_h / 11.0).floor() as i32).clamp(1, 6);
-    let glyph_w = 3 * scale;
-    let glyph_h = 5 * scale;
-    let gap = scale.max(1);
-    let total_w = glyphs.len() as i32 * glyph_w + (glyphs.len() as i32 - 1) * gap;
-    let origin_x = (cx - total_w as f32 / 2.0).round() as i32;
-    let origin_y = (cy - glyph_h as f32 / 2.0).round() as i32;
-
-    for (index, glyph) in glyphs.iter().enumerate() {
-        let gx = origin_x + index as i32 * (glyph_w + gap);
-        for (cell, on) in glyph.iter().copied().enumerate() {
-            if on == 0 {
-                continue;
-            }
-            let cx_cell = (cell % 3) as i32;
-            let cy_cell = (cell / 3) as i32;
-            for oy in 0..scale {
-                for ox in 0..scale {
-                    blend_px(
-                        pixels,
-                        width,
-                        height,
-                        gx + cx_cell * scale + ox,
-                        origin_y + cy_cell * scale + oy,
-                        BADGE_WHITE,
-                        255,
-                    );
-                }
-            }
-        }
-    }
 }
 
 fn blend_px(pixels: &mut [u8], width: u32, height: u32, x: i32, y: i32, color: [u8; 4], alpha: u8) {
@@ -259,47 +160,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn badge_label_hides_zero_and_caps_at_99_plus() {
-        assert_eq!(unread_badge_label(0), None);
-        assert_eq!(unread_badge_label(-4), None);
-        assert_eq!(unread_badge_label(1), Some("1".to_owned()));
-        assert_eq!(unread_badge_label(99), Some("99".to_owned()));
-        assert_eq!(unread_badge_label(100), Some("99+".to_owned()));
-        assert_eq!(unread_badge_label(50_000), Some("99+".to_owned()));
-    }
-
-    #[test]
-    fn overlay_requires_a_positive_count_and_preserves_size() {
-        let width = 32;
-        let height = 32;
-        let src = vec![12u8; (width * height * 4) as usize];
-        assert!(overlay_unread_badge(&src, width, height, 0).is_none());
-        let out = overlay_unread_badge(&src, width, height, 7).expect("badge");
-        assert_eq!(out.len(), src.len());
-    }
-
-    #[test]
-    fn overlay_paints_red_in_the_top_right() {
-        let width = 32u32;
-        let height = 32u32;
-        let mut src = vec![0u8; (width * height * 4) as usize];
-        for px in src.chunks_exact_mut(4) {
-            px[0] = 24;
-            px[1] = 24;
-            px[2] = 24;
-            px[3] = 255;
-        }
-        let out = overlay_unread_badge(&src, width, height, 3).expect("badge");
-        let mut found_red = false;
-        for y in 0..height / 2 {
-            for x in width / 2..width {
-                let i = ((y * width + x) * 4) as usize;
-                if out[i] > 180 && out[i + 1] < 90 && out[i + 2] < 90 && out[i + 3] > 200 {
-                    found_red = true;
-                }
-            }
-        }
-        assert!(found_red);
+    fn panel_dot_is_visible_at_16px_and_does_not_encode_the_count() {
+        let src = vec![0u8; 16 * 16 * 4];
+        assert!(overlay_unread_dot(&src, 16, 16, 0).is_none());
+        let one = overlay_unread_dot(&src, 16, 16, 1).expect("dot");
+        let many = overlay_unread_dot(&src, 16, 16, 500).expect("dot");
+        assert_eq!(one, many);
+        assert!(one
+            .chunks_exact(4)
+            .any(|pixel| pixel[0] > 180 && pixel[1] < 90));
     }
 
     #[test]
