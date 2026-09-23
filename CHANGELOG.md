@@ -2,7 +2,10 @@
 
 ## Unreleased
 
-- iOS: use a compact stacked canvas on iPhone and the iPhone Duo cover display, and a regular-width list-plus-conversation split on the Duo inner display and iPad. Opening or closing the device keeps the same room selected; the inner canvas keeps the tab bar and drops the back-to-list chevron because the room list stays visible.
+- iOS: use a compact stacked conversation canvas on iPhone and in narrow iPad windows, and a regular-width list-plus-conversation split on iPad. Resizing keeps the same room selected; the split canvas keeps the tab bar visible and drops the back-to-list chevron because the room list stays visible.
+- Matrix: preserve restricted space hierarchy eligibility rooms and explain invite or membership requirements in the desktop space browser.
+- Profile settings: show clear retry guidance when the homeserver rate-limits display-name or avatar changes on desktop and iOS.
+- Integration: update the disposable Synapse baseline to 1.161.0 and add a version-12 smoke script for a future disposable 1.162 server.
 
 ## [2.1.40] - 2026-09-18
 

@@ -1,19 +1,10 @@
 import SwiftUI
 
-/// Size-class canvas for iPhone, iPhone Duo, and iPad.
-///
-/// Apple's iPhone Duo guidance is two layouts, not a layout per pose:
-/// compact width on the outer 5.4-inch display, regular width on the inner
-/// 7.6-inch display. The same regular-width split is what iPad has been
-/// missing. Fold, tent, and tabletop poses then come from system bars,
-/// safe areas, and (on iOS 27.1+) `ArrangementView` / reserved regions —
-/// not from reading hinge angle.
+/// Size-class canvas for iPhone and iPad, including resizable iPad windows.
 enum SynaraCanvasLayout: Equatable {
-    /// Outer display and iPhone: tab plus a stacked room list that pushes
-    /// the conversation.
+    /// Compact width: a room list that pushes the conversation.
     case stacked
-    /// Inner display and iPad: room list and conversation stay visible
-    /// together. Hierarchy does not change when the device opens or closes.
+    /// Regular width: room list and conversation stay visible together.
     case split
 
     var hidesTabBarInConversation: Bool {
@@ -35,8 +26,7 @@ enum SynaraCanvasLayoutPolicy {
 ///
 /// Stacked compact width keeps the full path on one `NavigationStack`.
 /// Split regular width shows the first conversation as the detail root and
-/// any thread on top of it. Opening or closing iPhone Duo must not rewrite
-/// this path: an open room stays open on both canvases.
+/// any thread on top of it. Resizing an iPad window keeps the room selected.
 enum SynaraConversationPath {
     static func splitRoot(in path: [AppRoute]) -> AppRoute? {
         path.first(where: \.isConversation)

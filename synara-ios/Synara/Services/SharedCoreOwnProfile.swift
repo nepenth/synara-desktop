@@ -16,6 +16,14 @@ struct SharedCoreOwnProfileInfo: Equatable {
 }
 
 enum SharedCoreOwnProfile {
+    static func writeStatus(for error: Error) -> OwnProfileWriteStatus {
+        guard let profileError = error as? OwnProfileCommandError,
+              case let .Failed(code, _) = profileError else {
+            return .failed
+        }
+        return code == "v-send.r-avatar-profile-rate-limited" ? .rateLimited : .failed
+    }
+
     static func setOwnDisplayName(
         core: SharedCore,
         displayName: String

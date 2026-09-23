@@ -67,6 +67,7 @@ import {
   type NativeRtcTransportsSnapshot,
 } from '../../matrix-rtc/nativeRtcTransports';
 import { rtcTransportsDiagnosticCopy } from '../../matrix-rtc/liveCallChrome';
+import { profileWriteErrorMessage } from './nativeProfileOwner';
 
 type ProfileProps = {
   profile: UserProfile;
@@ -84,7 +85,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
   const [imageFile, setImageFile] = useState<File>();
   const imageFileURL = useObjectURL(imageFile);
   const [nativeUploading, setNativeUploading] = useState(false);
-  const [nativeUploadError, setNativeUploadError] = useState(false);
+  const [nativeUploadError, setNativeUploadError] = useState<string>();
   const uploadAtom = useMemo(() => {
     // Legacy web path only: desktop native uses uploadMediaNative below.
     if (imageFile && !isSynaraDesktop()) {
@@ -97,7 +98,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
 
   const handleRemoveUpload = useCallback(() => {
     setImageFile(undefined);
-    setNativeUploadError(false);
+    setNativeUploadError(undefined);
   }, []);
 
   const handleUploaded = useCallback(
@@ -119,7 +120,7 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
     let cancelled = false;
     (async () => {
       setNativeUploading(true);
-      setNativeUploadError(false);
+      setNativeUploadError(undefined);
       try {
         const bytes = Array.from(new Uint8Array(await imageFile.arrayBuffer()));
         const mimeType = imageFile.type || 'image/png';
@@ -127,23 +128,23 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
         if (cancelled) return;
         if (uploaded === 'legacy') {
           // Not a native session (unexpected on desktop shell) — fail closed.
-          setNativeUploadError(true);
+          setNativeUploadError('The native avatar upload is unavailable.');
           setNativeUploading(false);
           return;
         }
         const setResult = await setOwnAvatarNative(uploaded.mxc);
         if (cancelled) return;
         if (setResult === 'legacy') {
-          setNativeUploadError(true);
+          setNativeUploadError('The native avatar update is unavailable.');
           setNativeUploading(false);
           return;
         }
         notifyOwnProfileChanged();
         handleRemoveUpload();
         setNativeUploading(false);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setNativeUploadError(true);
+          setNativeUploadError(profileWriteErrorMessage(error));
           setNativeUploading(false);
         }
       }
@@ -154,12 +155,18 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
   }, [imageFile, mx, handleRemoveUpload]);
 
   const handleRemoveAvatar = async () => {
-    const result = await setOwnAvatarNative('');
-    if (result === 'legacy') {
-      await mx.setAvatarUrl('');
+    try {
+      const result = await setOwnAvatarNative('');
+      if (result === 'legacy') {
+        await mx.setAvatarUrl('');
+      }
+      notifyOwnProfileChanged();
+      setAlertRemove(false);
+      setNativeUploadError(undefined);
+    } catch (error) {
+      setAlertRemove(false);
+      setNativeUploadError(profileWriteErrorMessage(error));
     }
-    notifyOwnProfileChanged();
-    setAlertRemove(false);
   };
 
   return (
@@ -183,11 +190,6 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
         <Box gap="200" alignItems="Center">
           <Spinner size="300" />
           <Text size="T300">Uploading avatar…</Text>
-          {nativeUploadError && (
-            <Text size="T300" style={{ color: 'var(--folds-color-Critical-Main)' }}>
-              Native avatar upload failed.
-            </Text>
-          )}
         </Box>
       ) : uploadAtom ? (
         <Box gap="200" direction="Column">
@@ -225,6 +227,12 @@ function ProfileAvatar({ profile, userId }: ProfileProps) {
             </Button>
           )}
         </Box>
+      )}
+
+      {nativeUploadError && (
+        <Text size="T300" role="alert" style={{ color: 'var(--folds-color-Critical-Main)' }}>
+          {nativeUploadError}
+        </Text>
       )}
 
       {imageFileURL && (
@@ -325,6 +333,10 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
     )
   );
   const changingDisplayName = changeState.status === AsyncStatus.Loading;
+  const displayNameError =
+    changeState.status === AsyncStatus.Error
+      ? profileWriteErrorMessage(changeState.error)
+      : undefined;
 
   useEffect(() => {
     setDisplayName(defaultDisplayName);
@@ -409,6 +421,11 @@ function ProfileDisplayName({ profile, userId }: ProfileProps) {
             <Text size="B400">Save</Text>
           </Button>
         </Box>
+        {displayNameError && (
+          <Text size="T300" role="alert" style={{ color: 'var(--folds-color-Critical-Main)' }}>
+            {displayNameError}
+          </Text>
+        )}
       </Box>
     </SettingTile>
   );

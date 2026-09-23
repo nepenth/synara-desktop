@@ -296,6 +296,40 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.staticTexts["Here's the latest spec for the new permissions model."].waitForExistence(timeout: 5))
     }
 
+    func testIPadRoomCanvasKeepsListAndConversationVisible() throws {
+        let app = launchRoomApp()
+        guard app.frame.width > 700 else {
+            throw XCTSkip("Run this canvas test on a full-width iPad simulator.")
+        }
+
+        let room = app.descendants(matching: .any)["RoomRow-!project:matrix.org"]
+        let timeline = timelineViewport(in: app)
+        XCTAssertTrue(room.waitForExistence(timeout: 5))
+        XCTAssertTrue(timeline.waitForExistence(timeout: 5))
+        XCTAssertTrue(room.exists, "The iPad sidebar must stay available while reading a room")
+        XCTAssertLessThanOrEqual(room.frame.maxX, timeline.frame.minX + 8)
+        XCTAssertGreaterThan(timeline.frame.width, room.frame.width)
+        XCTAssertTrue(composerField(in: app).waitForExistence(timeout: 5))
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "ipad-room-split-canvas"
+        attachment.lifetime = .keepAlways
+        add(attachment)
+
+        XCUIDevice.shared.orientation = .landscapeLeft
+        defer { XCUIDevice.shared.orientation = .portrait }
+        XCTAssertTrue(room.waitForExistence(timeout: 10))
+        XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+        XCTAssertLessThanOrEqual(room.frame.maxX, timeline.frame.minX + 8)
+        XCTAssertTrue(composerField(in: app).exists)
+        XCTAssertGreaterThan(app.frame.width, app.frame.height)
+        Thread.sleep(forTimeInterval: 1.0)
+        let landscapeAttachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        landscapeAttachment.name = "ipad-room-split-landscape"
+        landscapeAttachment.lifetime = .keepAlways
+        add(landscapeAttachment)
+    }
+
     func testQuietDepthSurfacesKeepRoomTimelineActionsAndComposerDiscoverable() {
         let app = launchSignedInRoomsApp()
         let projectRoom = app.buttons["RoomRow-!project:matrix.org"]
@@ -345,6 +379,20 @@ final class SynaraUITests: XCTestCase {
 
         XCTAssertEqual(composer.value as? String, paragraph)
         XCTAssertEqual(app.state, .runningForeground)
+    }
+
+    func testComposerTypedTextScreenshot() {
+        let app = launchRoomApp()
+        let composer = composerField(in: app)
+        XCTAssertTrue(composer.waitForExistence(timeout: 5))
+        composer.tap()
+        composer.typeText("Dark composer text stays readable.")
+        XCTAssertEqual(composer.value as? String, "Dark composer text stays readable.")
+
+        let attachment = XCTAttachment(screenshot: app.screenshot())
+        attachment.name = "composer-typed-text"
+        attachment.lifetime = .keepAlways
+        add(attachment)
     }
 
     func testUnreadRoomRoutePositionsAfterSharedReadMarker() {

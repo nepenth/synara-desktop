@@ -31,6 +31,7 @@ pub struct NativeSpaceHierarchyRoom {
     pub room_type: Option<String>,
     pub num_joined_members: u64,
     pub join_rule: String,
+    pub allowed_room_ids: Vec<String>,
     pub world_readable: bool,
     pub guest_can_join: bool,
 }
@@ -150,6 +151,7 @@ mod tests {
                 room_type: Some("m.space".into()),
                 num_joined_members: 4,
                 join_rule: "public".into(),
+                allowed_room_ids: vec![],
                 world_readable: true,
                 guest_can_join: false,
             }],

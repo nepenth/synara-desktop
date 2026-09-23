@@ -52,7 +52,7 @@ final class SynaraCanvasLayoutTests: XCTestCase {
         )
     }
 
-    func testEmptyPathHasNoSplitDetailAndSamePathWorksAfterFold() {
+    func testEmptyPathHasNoSplitDetailAndSamePathWorksAfterResize() {
         XCTAssertNil(SynaraConversationPath.splitRoot(in: []))
         XCTAssertEqual(SynaraConversationPath.splitTail(in: []), [])
         XCTAssertNil(SynaraConversationPath.selectedConversationID(in: []))

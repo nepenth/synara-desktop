@@ -29,12 +29,61 @@ Sources: [Synapse release-v1.162 changelog](https://github.com/element-hq/synaps
 | 1.160 fixes missing sync stream positions after cancelled writes and transparent WebP thumbnails; 1.161–1.162 fix `state_after`, leave-room, and `/relations` behavior | Existing SDK sync, media preview, and timeline paths benefit from server fixes without a new client API. Synara already uses SDK media preview, unread totals, room subscriptions, retention, and automatic back pagination. | Add regression smoke cases only where users saw corresponding symptoms; no SDK upgrade is needed just to consume these fixes. |
 | 1.161 adds GET for one delayed event | SDK widget code supports delayed-event protocol work, but Synara's widget grant policy excludes delayed capabilities. | Keep the sample widget outside delayed Matrix events. Revisit when reminders need server-managed delivery and a permission model. |
 
+### Implementation and verification on this branch
+
+- The space hierarchy now preserves `allowed_room_ids` for restricted and
+  knock-restricted join rules through the SDK mapping, native DTO, UniFFI DTO,
+  desktop parser, and room list. The UI explains how membership or an invite
+  grants access. Non-restricted rooms reject unexpected allowed IDs.
+- Room creation still delegates the default room version to the homeserver. A
+  Core test proves an explicit room version 12 request and encrypted initial
+  state are accepted by the client builder. A loopback-only v12 smoke script
+  now covers default and explicit room creation, invite/join, event readback,
+  relations, redaction, settings, and encrypted-room initial state with two
+  accounts. Its simulated-server test passes. A real 1.162 server run and
+  encrypted send/readback in two Synara clients are still needed when 1.162 is
+  stable; this Mac has no Docker runtime.
+- The disposable integration image is pinned to the latest stable Synapse
+  1.161.0. Its existing CI scenarios exercise sync, receipts, attachments,
+  reactions, polls, rich messages, and threads against that server. The local
+  harness pin and secret-boundary tests pass. Docker is unavailable on this
+  Mac, so its live tests were not run here.
+- Profile reads and writes now classify SDK `M_LIMIT_EXCEEDED` as a bounded
+  diagnostic. Desktop and iOS avatar and display-name errors remain visible
+  after a failed write, with specific retry guidance for rate limits. The
+  one-time-key upload path remains SDK-owned; testing its 1.162 quota behavior
+  requires a disposable 1.162 server with fresh devices.
+- SDK UI 0.19.1's `RoomListService::new_with` already enables the Profiles
+  sliding-sync extension. Synara's `SyncService` uses that builder and
+  `subscribe_to_own_profile` with one fallback fetch, so no extra profile
+  polling was added. Cross-device name/avatar propagation still needs a
+  Synapse server with MSC4262 enabled and two client sessions.
+- Synara already calls `Client::discover_rtc_transports`; SDK 0.19.1 tests
+  endpoint preference and well-known fallback. The transport DTO retains the
+  LiveKit authorization-service URL, which is HTTP(S); the SFU WebSocket URL
+  is supplied later by that service. Old/new Synapse RTC configuration needs
+  two live servers or two successive disposable configurations.
+- The recent server fixes for WebP thumbnails, cancelled sync writes,
+  `state_after`, leave-room, and relations require server-side regression
+  runs only where the symptom is present. The client paths already use the
+  SDK sync, media and timeline APIs. Matrix delayed-event capabilities stay
+  outside the sample widget's grant policy.
+
 ## Community readiness pass
 
 1. **Before promotion:** run the same room workflow on macOS, COSMIC Linux, and iPhone: login/restart, compose/edit/reply, media, reactions, threads, unread/read, search, notifications, and logout. Capture screenshots at light/dark, narrow/wide windows, larger text, and reduced motion. Record any platform differences as issues with a reproducible room/event fixture.
 2. **Accessibility and interaction:** keyboard-only navigation and visible focus on Desktop; VoiceOver labels, Dynamic Type, tap targets, contrast and modal dismissal on iOS. Include error, empty, offline and permission-denied states, not just the successful path.
 3. **Release quality:** a clean APT install and upgrade on Pop!_OS 24.04 COSMIC, macOS install/update, and iOS TestFlight install/update; confirm desktop-file identity, tray behavior, notifications, deep links, logs, privacy wording and recovery after a network interruption.
-4. **iPad later:** the Xcode project already targets device families `1,2` and supports iPad orientations. This establishes installability, not a finished tablet layout. Audit split view, resizable windows, sidebar/timeline/composer proportions, hardware keyboard, pointer and multitasking before advertising iPad support.
+4. **iPad first:** the Xcode project targets device families `1,2`. The new regular-width split canvas keeps the room list and conversation visible together; compact width keeps stacked navigation. Audit resizable windows, sidebar/timeline/composer proportions, hardware keyboard, pointer and multitasking before advertising iPad support.
 5. **“iPhone duo” later:** keep this as a design exploration until the intended device/form factor and interaction model are specified. Start with responsive widths and two-pane navigation tests rather than a separate device promise.
 
 Exit criterion for a public client listing: the device smoke matrix passes, known limitations (including COSMIC dock badges) are documented, support/reporting and privacy pages are current, and a fresh install can complete the core messaging path without developer setup.
+
+### Local device evidence
+
+| Surface | Evidence | Remaining check |
+| --- | --- | --- |
+| iPhone 17 simulator, dark appearance | [Mock room screenshot](assets/2026-09-23-iphone-dark-mock-room.png) and [typed-composer screenshot](assets/2026-09-23-iphone-dark-composer-typed.png). The typed text, caret and dark keyboard are legible; the composer input and busy-timeline retention UI tests pass. | Paste rich text while changing themes, test Dynamic Type and VoiceOver, then repeat on a physical iPhone. |
+| iPad Pro 11-inch (M4), iOS 26.5 and 13-inch (M5), iOS 27 simulators | [Mock room-list screenshot](assets/2026-09-23-ipad-mock-room-list.png), [selected-room portrait screenshot](assets/2026-09-23-ipad-mock-room-open.png), and [landscape screenshot](assets/2026-09-23-ipad-mock-room-landscape.png). The UI test passes with the room list, timeline, and composer visible in both orientations, including the accessibility-medium text setting. | Resize a Stage Manager window, test hardware keyboard/pointer and VoiceOver, then verify with a live account. |
+| macOS desktop | Installed app received a visual read-only review; branch browser fixtures passed 42 room-list, avatar, call-indicator and approvals checks. | Run a branch build with a disposable account and complete the room workflow; the installed app is an older build. |
+| Pop!_OS 24.04 COSMIC | No local device available. | Test panel dot, unread clearing, long-room overlap, APT upgrade and notification integration on the user's machine. |

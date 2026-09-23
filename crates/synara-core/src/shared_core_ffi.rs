@@ -11907,6 +11907,7 @@ pub struct SpaceHierarchyRoomDto {
     pub room_type: Option<String>,
     pub num_joined_members: u64,
     pub join_rule: String,
+    pub allowed_room_ids: Vec<String>,
     pub world_readable: bool,
     pub guest_can_join: bool,
 }
@@ -13418,6 +13419,17 @@ fn space_hierarchy_room_dto(
         .get("guestCanJoin")
         .and_then(|item| item.as_bool())
         .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?;
+    let allowed_room_ids = value
+        .get("allowedRoomIds")
+        .and_then(|item| item.as_array())
+        .filter(|items| items.len() <= 5_000)
+        .ok_or_else(|| space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION))?
+        .iter()
+        .map(|item| required_space_id(Some(item)))
+        .collect::<Result<Vec<_>, _>>()?;
+    if !matches!(join_rule, "restricted" | "knock_restricted") && !allowed_room_ids.is_empty() {
+        return Err(space_failed(SPACE_FAILED_CODE, SPACE_FAILED_DESCRIPTION));
+    }
     Ok(SpaceHierarchyRoomDto {
         room_id: required_space_id(value.get("roomId"))?,
         name: optional_space_string(value.get("name")),
@@ -13427,6 +13439,7 @@ fn space_hierarchy_room_dto(
         room_type: optional_space_string(value.get("roomType")),
         num_joined_members,
         join_rule: join_rule.to_owned(),
+        allowed_room_ids,
         world_readable,
         guest_can_join,
     })

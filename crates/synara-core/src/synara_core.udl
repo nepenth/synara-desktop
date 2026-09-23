@@ -1670,6 +1670,7 @@ dictionary SpaceHierarchyRoomDto {
   string? room_type;
   u64 num_joined_members;
   string join_rule;
+  sequence<string> allowed_room_ids;
   boolean world_readable;
   boolean guest_can_join;
 };

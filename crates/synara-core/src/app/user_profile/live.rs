@@ -5,6 +5,7 @@ use std::sync::Mutex;
 use matrix_sdk::ruma::api::client::uiaa::{
     AuthData, AuthType, MatrixUserIdentifier, Password, UserIdentifier,
 };
+use matrix_sdk::ruma::api::error::ErrorKind;
 use matrix_sdk::ruma::thirdparty::Medium;
 use matrix_sdk::ruma::{ClientSecret, OwnedClientSecret, OwnedMxcUri, OwnedSessionId};
 use matrix_sdk::Client;
@@ -24,6 +25,13 @@ const MAX_OWN_DISPLAY_NAME_CHARS: usize = 255;
 pub const MAX_USER_DIRECTORY_TERM_CHARS: usize = 256;
 pub const MAX_USER_DIRECTORY_LIMIT: u64 = 50;
 pub const DEFAULT_USER_DIRECTORY_LIMIT: u64 = 10;
+
+fn profile_error_diagnostic(error: &matrix_sdk::Error, fallback: &'static str) -> &'static str {
+    match error.client_api_error_kind() {
+        Some(ErrorKind::LimitExceeded(_)) => "v-send.r-avatar-profile-rate-limited",
+        _ => fallback,
+    }
+}
 
 pub fn parse_own_display_name(display_name: &str) -> Result<Option<String>, &'static str> {
     let trimmed = display_name.trim();
@@ -60,7 +68,9 @@ pub async fn set_own_display_name(
         .account()
         .set_display_name(display_name.as_deref())
         .await
-        .map_err(|_| "v-send.r-avatar-display-name-sdk-failed")?;
+        .map_err(|error| {
+            profile_error_diagnostic(&error, "v-send.r-avatar-display-name-sdk-failed")
+        })?;
     Ok(MatrixProfileWriteResult { status: "ok" })
 }
 
@@ -73,7 +83,7 @@ pub async fn set_own_avatar(
         .account()
         .set_avatar_url(mxc.as_deref())
         .await
-        .map_err(|_| "v-send.r-avatar-set-sdk-failed")?;
+        .map_err(|error| profile_error_diagnostic(&error, "v-send.r-avatar-set-sdk-failed"))?;
     Ok(MatrixProfileWriteResult { status: "ok" })
 }
 
@@ -82,11 +92,9 @@ pub async fn get_own_profile(client: &Client) -> Result<MatrixOwnProfile, &'stat
         .user_id()
         .ok_or("v-send.r-avatar-profile-no-session")?
         .to_string();
-    let display_name = client
-        .account()
-        .get_display_name()
-        .await
-        .map_err(|_| "v-send.r-avatar-display-name-read-failed")?;
+    let display_name = client.account().get_display_name().await.map_err(|error| {
+        profile_error_diagnostic(&error, "v-send.r-avatar-display-name-read-failed")
+    })?;
     if let Some(ref name) = display_name {
         parse_own_display_name(name)?;
     }
@@ -94,7 +102,7 @@ pub async fn get_own_profile(client: &Client) -> Result<MatrixOwnProfile, &'stat
         .account()
         .get_avatar_url()
         .await
-        .map_err(|_| "v-send.r-avatar-read-failed")?;
+        .map_err(|error| profile_error_diagnostic(&error, "v-send.r-avatar-read-failed"))?;
     let avatar_url = match avatar {
         Some(mxc) => {
             let serialized = mxc.to_string();

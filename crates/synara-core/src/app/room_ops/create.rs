@@ -367,6 +367,21 @@ mod tests {
     }
 
     #[test]
+    fn room_version_twelve_is_explicitly_supported_and_default_stays_server_owned() {
+        let default = build_room_create_request(sample(false, false, None)).expect("default");
+        assert!(default.room_version.is_none());
+
+        let mut input = sample(true, false, None);
+        input.room_version = Some("12".into());
+        let explicit = build_room_create_request(input).expect("version 12");
+        assert_eq!(
+            explicit.room_version.as_ref().map(RoomVersionId::as_str),
+            Some("12")
+        );
+        assert!(encryption_event(&explicit).is_some());
+    }
+
+    #[test]
     fn setting_off_backstop_rejects_a_true_flag() {
         let request = build_room_create_request_with_setting(sample(true, true, None), false)
             .expect("create");

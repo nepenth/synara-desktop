@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const SYNAPSE_IMAGE = "matrixdotorg/synapse:v1.157.0";
+const SYNAPSE_IMAGE = "matrixdotorg/synapse:v1.161.0";
 const POSTGRES_IMAGE = "postgres:16.9-bookworm";
 const SYNAPSE_LOOPBACK_PORT = "127.0.0.1:${SYNARA_PORT:-8008}:8008";
 
@@ -109,7 +109,7 @@ export function inspectSynapseHarness({ compose, template, launcher, ignore }) {
   const synapse = services.get("synapse");
   const postgres = services.get("postgres");
   if (!synapse || getServiceScalar(synapse, "image") !== SYNAPSE_IMAGE) {
-    errors.push("Synapse integration image must remain pinned to v1.157.0.");
+    errors.push("Synapse integration image must remain pinned to v1.161.0.");
   }
   if (!postgres || getServiceScalar(postgres, "image") !== POSTGRES_IMAGE) {
     errors.push(
