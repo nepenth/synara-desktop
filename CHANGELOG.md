@@ -2,7 +2,11 @@
 
 ## Unreleased
 
+- iOS: keep typed and pasted composer text legible in dark appearance, and return to the live tail after sending from unread history. Keep Later navigation reliable on iPhone and in the iPad split canvas.
 - iOS: use a compact stacked conversation canvas on iPhone and in narrow iPad windows, and a regular-width list-plus-conversation split on iPad. Resizing keeps the same room selected; the split canvas keeps the tab bar visible and drops the back-to-list chevron because the room list stays visible.
+- Linux: show a red unread dot in the small panel icon, and include message spacing in each measured timeline row to prevent adjacent messages from overlapping. Numeric dock badges still depend on the desktop's launcher support.
+- Widgets: include a self-hostable sample agent priority and status widget with a token-protected update endpoint.
+- Notifications: verify the iOS notification service extension's production feature isolation and archive exports.
 - Matrix: preserve restricted space hierarchy eligibility rooms and explain invite or membership requirements in the desktop space browser.
 - Profile settings: show clear retry guidance when the homeserver rate-limits display-name or avatar changes on desktop and iOS.
 - Integration: update the disposable Synapse baseline to 1.161.0 and add a version-12 smoke script for a future disposable 1.162 server.

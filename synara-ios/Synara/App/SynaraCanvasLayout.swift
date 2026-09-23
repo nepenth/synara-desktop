@@ -82,18 +82,22 @@ extension EnvironmentValues {
 
 struct SynaraConversationCanvas<List: View>: View {
     let tab: AppTab
-    @Binding var path: [AppRoute]
+    @ObservedObject private var router: AppRouter
     let list: List
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     init(
         tab: AppTab,
-        path: Binding<[AppRoute]>,
+        router: AppRouter,
         @ViewBuilder list: () -> List
     ) {
         self.tab = tab
-        self._path = path
+        self.router = router
         self.list = list()
+    }
+
+    private var path: Binding<[AppRoute]> {
+        router.binding(for: tab)
     }
 
     private var layout: SynaraCanvasLayout {
@@ -105,7 +109,7 @@ struct SynaraConversationCanvas<List: View>: View {
             .environment(\.synaraCanvasLayout, layout)
             .environment(
                 \.synaraSelectedConversationID,
-                SynaraConversationPath.selectedConversationID(in: path)
+                SynaraConversationPath.selectedConversationID(in: path.wrappedValue)
             )
     }
 
@@ -120,7 +124,7 @@ struct SynaraConversationCanvas<List: View>: View {
     }
 
     private var stacked: some View {
-        NavigationStack(path: $path) {
+        NavigationStack(path: path) {
             list
                 .navigationDestination(for: AppRoute.self) { route in
                     RoutePlaceholderView(route: route)
@@ -142,7 +146,7 @@ struct SynaraConversationCanvas<List: View>: View {
 
     @ViewBuilder
     private var splitDetail: some View {
-        if let root = SynaraConversationPath.splitRoot(in: path) {
+        if let root = SynaraConversationPath.splitRoot(in: path.wrappedValue) {
             NavigationStack(path: splitTail) {
                 RoutePlaceholderView(route: root)
                     .navigationDestination(for: AppRoute.self) { route in
@@ -156,8 +160,8 @@ struct SynaraConversationCanvas<List: View>: View {
 
     private var splitTail: Binding<[AppRoute]> {
         Binding(
-            get: { SynaraConversationPath.splitTail(in: path) },
-            set: { path = SynaraConversationPath.applyingSplitTail($0, to: path) }
+            get: { SynaraConversationPath.splitTail(in: path.wrappedValue) },
+            set: { path.wrappedValue = SynaraConversationPath.applyingSplitTail($0, to: path.wrappedValue) }
         )
     }
 }

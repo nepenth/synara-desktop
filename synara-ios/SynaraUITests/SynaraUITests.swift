@@ -330,6 +330,21 @@ final class SynaraUITests: XCTestCase {
         add(landscapeAttachment)
     }
 
+    func testIPadLaterItemOpensBesideList() throws {
+        let app = launchLaterApp()
+        guard app.frame.width > 700 else {
+            throw XCTSkip("Run this canvas test on a full-width iPad simulator.")
+        }
+
+        let row = app.buttons["LaterRow-$text_!project_matrix.org"]
+        XCTAssertTrue(row.waitForExistence(timeout: 5))
+        tap(row)
+        let timeline = timelineViewport(in: app)
+        XCTAssertTrue(timeline.waitForExistence(timeout: 10))
+        XCTAssertTrue(row.exists, "The iPad Later list must remain visible beside the room")
+        XCTAssertLessThanOrEqual(row.frame.maxX, timeline.frame.minX + 8)
+    }
+
     func testQuietDepthSurfacesKeepRoomTimelineActionsAndComposerDiscoverable() {
         let app = launchSignedInRoomsApp()
         let projectRoom = app.buttons["RoomRow-!project:matrix.org"]

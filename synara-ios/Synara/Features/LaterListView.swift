@@ -136,22 +136,27 @@ private struct LaterListRow: View {
     let roomName: String
     let onComplete: ((SynaraLaterListItem) -> Void)?
     @Environment(\.appEnvironment) private var environment
+    @Environment(\.synaraCanvasLayout) private var canvasLayout
 
     var body: some View {
         Group {
             if item.canNavigate {
-                Button {
-                    environment.router.route(
-                        to: .room(
-                            id: item.roomID,
-                            eventID: item.eventID,
-                            title: roomName
+                if canvasLayout == .stacked {
+                    NavigationLink(
+                        value: AppRoute.room(id: item.roomID, eventID: item.eventID, title: roomName)
+                    ) {
+                        rowContent
+                    }
+                } else {
+                    Button {
+                        environment.router.route(
+                            to: .room(id: item.roomID, eventID: item.eventID, title: roomName)
                         )
-                    )
-                } label: {
-                    rowContent
+                    } label: {
+                        rowContent
+                    }
+                    .buttonStyle(.plain)
                 }
-                .buttonStyle(.plain)
             } else {
                 rowContent
                     .accessibilityElement(children: .combine)

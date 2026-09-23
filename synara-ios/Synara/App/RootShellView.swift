@@ -207,7 +207,7 @@ struct RootShellView: View {
     private func tab(_ tab: AppTab) -> some View {
         Group {
             if tab.usesConversationCanvas {
-                SynaraConversationCanvas(tab: tab, path: router.binding(for: tab)) {
+                SynaraConversationCanvas(tab: tab, router: router) {
                     tab.content
                 }
             } else {

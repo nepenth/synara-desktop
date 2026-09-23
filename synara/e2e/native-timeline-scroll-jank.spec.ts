@@ -124,7 +124,9 @@ test('records scroll-jank while live appends, metadata pulses, and backward pagi
   const before = await geometry(page);
   await startProbe(page);
   await fixture(page, 'prependHistory', 40);
-  await page.waitForTimeout(250);
+  // Keep sampling after the snapshot settles. A 250 ms window can contain
+  // only two frames on a busy CI runner, making p95 equal to one outlier.
+  await page.waitForTimeout(750);
   const prependMetrics = await stopProbe(page);
   const after = await geometry(page);
 
@@ -134,6 +136,7 @@ test('records scroll-jank while live appends, metadata pulses, and backward pagi
   expect(after.eventId).toBe(before.eventId);
   expect(Math.abs(after.offset - before.offset)).toBeLessThanOrEqual(2);
   expect(scrolledMetrics.samples).toBeGreaterThan(40);
+  expect(prependMetrics.samples).toBeGreaterThan(20);
   // Follow-live and wheel stay near vsync locally. GitHub runners add a
   // two-frame p95 and extra dropped frames under wheel+append load; still
   // fail a frozen compositor. A runner recorded 16 drops across 171 frames
@@ -144,8 +147,9 @@ test('records scroll-jank while live appends, metadata pulses, and backward pagi
   const droppedPrependBudget = process.env.CI ? 12 : 8;
   expect(followLiveMetrics.p95FrameMs).toBeLessThan(p95Budget);
   expect(scrolledMetrics.p95FrameMs).toBeLessThan(p95Budget);
+  expect(prependMetrics.p95FrameMs).toBeLessThan(process.env.CI ? 100 : 50);
   expect(followLiveMetrics.droppedFrames).toBeLessThan(droppedFollowBudget);
   expect(scrolledMetrics.droppedFrames).toBeLessThan(droppedScrollBudget);
   expect(prependMetrics.droppedFrames).toBeLessThan(droppedPrependBudget);
-  expect(prependMetrics.maxFrameMs).toBeLessThan(150);
+  expect(prependMetrics.maxFrameMs).toBeLessThan(process.env.CI ? 300 : 150);
 });

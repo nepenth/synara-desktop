@@ -2075,7 +2075,7 @@ struct RoomTimelineView: View {
                         environment.drafts.clearDraft(roomID: roomID)
                         completeComposerRelation()
                         if StableScrollAnchoringFeatureFlag.isEnabled {
-                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+                            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
                         } else {
                             sendLatestRequest &+= 1
                         }
@@ -2162,7 +2162,7 @@ struct RoomTimelineView: View {
         registerSendAnimation(for: queued.id, isRetry: failedItem != nil)
         applyOutgoingQueueToTimeline()
         if StableScrollAnchoringFeatureFlag.isEnabled {
-            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false)
+            jumpToLatestStable(currentItems: loadedTimelineItems, dismissComposer: false, animated: false)
         } else {
             sendLatestRequest &+= 1
         }
@@ -2688,7 +2688,11 @@ struct RoomTimelineView: View {
         }
     }
 
-    private func jumpToLatestStable(currentItems: [TimelineItem], dismissComposer: Bool = true) {
+    private func jumpToLatestStable(
+        currentItems: [TimelineItem],
+        dismissComposer: Bool = true,
+        animated: Bool = true
+    ) {
         guard isJumpingToLatest == false,
               let timelineSession
         else {
@@ -2718,7 +2722,7 @@ struct RoomTimelineView: View {
         ) {
             showJumpToLatest = false
             enqueueStableViewportCommand(
-                .latest(animated: true),
+                .latest(animated: animated),
                 generation: timelineBottomAnchorGeneration
             )
             return
@@ -2729,7 +2733,7 @@ struct RoomTimelineView: View {
 
         if timelineProviderIsLive {
             timelinePosition = .placingInitial
-            enqueueStableViewportCommand(.latest(animated: true), generation: timelineBottomAnchorGeneration)
+            enqueueStableViewportCommand(.latest(animated: animated), generation: timelineBottomAnchorGeneration)
             return
         }
 
@@ -2745,7 +2749,7 @@ struct RoomTimelineView: View {
                     hasPositionedInitialTimeline = false
                     timelinePosition = .placingInitial
                     applySessionFeed(feed)
-                    enqueueStableViewportCommand(.latest(animated: true), generation: feed.generation)
+                    enqueueStableViewportCommand(.latest(animated: animated), generation: feed.generation)
                     lastRenderedTimelineCount = loadedTimelineItems.count
                     showJumpToLatest = true
                 case .empty:
