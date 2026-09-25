@@ -135,19 +135,23 @@ private struct LaterListRow: View {
     let item: SynaraLaterListItem
     let roomName: String
     let onComplete: ((SynaraLaterListItem) -> Void)?
+    @Environment(\.appEnvironment) private var environment
 
     var body: some View {
         Group {
             if item.canNavigate {
-                NavigationLink(
-                    value: AppRoute.room(
-                        id: item.roomID,
-                        eventID: item.eventID,
-                        title: roomName
+                Button {
+                    environment.router.route(
+                        to: .room(
+                            id: item.roomID,
+                            eventID: item.eventID,
+                            title: roomName
+                        )
                     )
-                ) {
+                } label: {
                     rowContent
                 }
+                .buttonStyle(.plain)
             } else {
                 rowContent
                     .accessibilityElement(children: .combine)

@@ -205,11 +205,19 @@ struct RootShellView: View {
     }
 
     private func tab(_ tab: AppTab) -> some View {
-        NavigationStack(path: router.binding(for: tab)) {
-            tab.content
-                .navigationDestination(for: AppRoute.self) { route in
-                    RoutePlaceholderView(route: route)
+        Group {
+            if tab.usesConversationCanvas {
+                SynaraConversationCanvas(tab: tab, path: router.binding(for: tab)) {
+                    tab.content
                 }
+            } else {
+                NavigationStack(path: router.binding(for: tab)) {
+                    tab.content
+                        .navigationDestination(for: AppRoute.self) { route in
+                            RoutePlaceholderView(route: route)
+                        }
+                }
+            }
         }
         .synaraTabRootContentReachability(scrollTailHeight: tabBarScrollTailHeight)
         .tabItem {

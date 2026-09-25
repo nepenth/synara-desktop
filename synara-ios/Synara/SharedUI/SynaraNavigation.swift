@@ -123,6 +123,7 @@ struct NavigationInteractivePopGestureEnabler: UIViewControllerRepresentable {
 
 private struct SynaraEdgeSwipeBackModifier: ViewModifier {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.synaraAllowsConversationSwipeBack) private var allowsConversationSwipeBack
 
     private let edgeActivationWidth: CGFloat = 28
     private let commitTranslation: CGFloat = 96
@@ -131,15 +132,22 @@ private struct SynaraEdgeSwipeBackModifier: ViewModifier {
     @State private var dragOffset: CGFloat = 0
 
     func body(content: Content) -> some View {
-        content
-            .offset(x: dragOffset)
-            .overlay(alignment: .leading) {
-                Color.clear
-                    .frame(width: edgeActivationWidth)
-                    .contentShape(Rectangle())
-                    .gesture(edgeDragGesture)
-                    .accessibilityIdentifier("SynaraEdgeSwipeBack")
-            }
+        if allowsConversationSwipeBack {
+            content
+                .offset(x: dragOffset)
+                .overlay(alignment: .leading) {
+                    Color.clear
+                        .frame(width: edgeActivationWidth)
+                        .contentShape(Rectangle())
+                        .gesture(edgeDragGesture)
+                        .accessibilityIdentifier("SynaraEdgeSwipeBack")
+                }
+                #if canImport(UIKit)
+                .background(NavigationInteractivePopGestureEnabler())
+                #endif
+        } else {
+            content
+        }
     }
 
     private var edgeDragGesture: some Gesture {
@@ -178,8 +186,5 @@ extension View {
     /// Re-enables native edge swipe-back when the navigation bar is hidden and adds a leading-edge fallback.
     func synaraInteractiveSwipeBack() -> some View {
         modifier(SynaraEdgeSwipeBackModifier())
-            #if canImport(UIKit)
-            .background(NavigationInteractivePopGestureEnabler())
-            #endif
     }
 }
