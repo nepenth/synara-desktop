@@ -7,8 +7,6 @@ import {
 } from '../nativeTimelineFileSave';
 
 const MARKDOWN_HANDLE = `timeline-media-${'ab'.repeat(32)}`;
-const MARKDOWN_BYTES = Array.from(new TextEncoder().encode('# heading\n'));
-const ZIP_BYTES = [80, 75, 3, 4];
 
 const withDesktopInvoke = async (
   invoke: (command: string, args?: Record<string, unknown>) => Promise<unknown>,
@@ -36,17 +34,12 @@ test('file download name keeps the Matrix filename including markdown', () => {
   assert.equal(nativeTimelineFileDownloadName(undefined), 'download');
 });
 
-test('markdown file attachments download through matrix_media_download then desktop_save_file', async () => {
+test('markdown file attachments save in Rust and do not return bytes', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   await withDesktopInvoke(
     async (command, args) => {
       calls.push({ command, args });
-      if (command === 'matrix_media_download') {
-        return { bytes: MARKDOWN_BYTES };
-      }
-      if (command === 'desktop_save_file') {
-        return '/tmp/notes.md';
-      }
+      if (command === 'matrix_media_save') return { filename: 'notes.md' };
       throw new Error(`unexpected ${command}`);
     },
     async () => {
@@ -60,28 +53,20 @@ test('markdown file attachments download through matrix_media_download then desk
 
   assert.deepEqual(
     calls.map((call) => call.command),
-    ['matrix_media_download', 'desktop_save_file']
+    ['matrix_media_save']
   );
-  assert.equal(calls[0]?.args?.contentUri, MARKDOWN_HANDLE);
-  assert.deepEqual(calls[1]?.args, {
-    payload: {
-      filename: 'notes.md',
-      bytes: MARKDOWN_BYTES,
-    },
+  assert.deepEqual(calls[0]?.args, {
+    contentUri: MARKDOWN_HANDLE,
+    filename: 'notes.md',
   });
 });
 
-test('generic file attachments use the same download and save path', async () => {
+test('generic file attachments use the same Rust save path', async () => {
   const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
   await withDesktopInvoke(
     async (command, args) => {
       calls.push({ command, args });
-      if (command === 'matrix_media_download') {
-        return { bytes: ZIP_BYTES };
-      }
-      if (command === 'desktop_save_file') {
-        return '/tmp/archive.zip';
-      }
+      if (command === 'matrix_media_save') return { filename: 'archive.zip' };
       throw new Error(`unexpected ${command}`);
     },
     async () => {
@@ -93,15 +78,9 @@ test('generic file attachments use the same download and save path', async () =>
     }
   );
 
-  assert.deepEqual(
-    calls.map((call) => call.command),
-    ['matrix_media_download', 'desktop_save_file']
-  );
-  assert.deepEqual(calls[1]?.args, {
-    payload: {
-      filename: 'archive.zip',
-      bytes: ZIP_BYTES,
-    },
+  assert.deepEqual(calls[0]?.args, {
+    contentUri: MARKDOWN_HANDLE,
+    filename: 'archive.zip',
   });
 });
 
@@ -129,10 +108,8 @@ test('missing handle fails closed before invoking download', async () => {
 
 test('file save owner does not special-case markdown MIME or extension', () => {
   const source = readFileSync('src/app/features/room/nativeTimelineFileSave.ts', 'utf8');
-  assert.match(source, /downloadTimelineMediaBytes/);
-  assert.match(source, /savePlatformFile/);
-  assert.match(source, /supportsPlatformNativeFileSave/);
-  assert.match(source, /FileSaver\.saveAs/);
+  assert.match(source, /saveMatrixMediaFile/);
+  assert.doesNotMatch(source, /matrix_media_download|desktop_save_file|FileSaver/);
   assert.doesNotMatch(source, /if \([^)]*markdown/i);
   assert.doesNotMatch(source, /endsWith\(['"]\.md['"]\)/);
   assert.doesNotMatch(source, /text\/markdown['"]\s*===/);

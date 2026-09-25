@@ -3,9 +3,6 @@
   "identifier": "main",
   "description": "Synara desktop runtime permissions for the main webview. Global shortcuts are validated in Rust before registration; external URLs are filtered in desktop.rs and the Synara desktop URL policy.",
   "windows": ["main"],
-  "remote": {
-    "urls": ["http://localhost:*/*"]
-  },
   "permissions": [
     "core:default",
     "core:window:allow-start-dragging",
@@ -18,10 +15,6 @@
     "notification:allow-show",
     "global-shortcut:allow-register-all",
     "global-shortcut:allow-unregister-all",
-    "opener:allow-open-url",
-    "updater:allow-check",
-    "updater:allow-download-and-install",
-    "process:allow-restart",
     "window-state:default",
     "allow-desktop-show",
     "allow-desktop-hide",
@@ -158,7 +151,8 @@
     "allow-matrix-set-global-image-packs",
     "allow-matrix-set-room-image-pack",
     "allow-matrix-media-config",
-    "allow-matrix-media-download",
+    "allow-matrix-media-save",
+    "allow-matrix-media-text-preview",
     "allow-matrix-media-preview",
     "allow-matrix-upload-media",
     "allow-matrix-set-own-avatar",

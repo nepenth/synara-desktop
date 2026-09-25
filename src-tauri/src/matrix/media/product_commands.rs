@@ -71,44 +71,50 @@ pub async fn matrix_media_config(
     crate::bridge::media_config::media_config(core.inner().as_ref()).await
 }
 
-/// V-SEND.R-MEDIA / P4-S36 — original-file download owner.
+/// Same presentation budget as the native markdown preview.
+pub(super) const MAX_MEDIA_TEXT_PREVIEW_BYTES: usize = 256 * 1024;
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixMediaSaveResult {
+    pub filename: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct MatrixMediaTextPreviewResult {
+    pub text: String,
+}
+
+/// Save a timeline handle or plain `mxc://` into Downloads.
 ///
-/// Timeline handles (`timeline-media-*`) resolve through the native owner so
-/// encrypted sources never become leftover `mxc://` on the wire. Plain `mxc://`
-/// stays available for leftover avatar/pack paths only. Bytes never cross
-/// `Core::command`.
+/// The webview receives the saved filename only. Decrypted bytes stay in Rust.
 #[tauri::command]
-pub async fn matrix_media_download(
+pub async fn matrix_media_save(
     state: State<'_, MatrixAuthState>,
     content_uri: String,
-) -> Result<MatrixMediaDownloadResult, MatrixAuthCommandError> {
-    let request = MatrixMediaDownloadRequest { content_uri };
-    if crate::matrix::timeline::is_timeline_media_handle(&request.content_uri) {
-        return download_timeline_media_handle(&state, &request.content_uri).await;
-    }
-    let content_uri = parse_media_download_uri(&request.content_uri)?;
-    let media_request = MediaRequestParameters {
-        source: MediaSource::Plain(content_uri),
-        format: MediaFormat::File,
-    };
-    let client = {
-        let session = state.session.lock().await;
-        require_session(session.as_ref())?.client.clone()
-    };
-    let bytes = synara_core::app::media::download_media_bounded(
-        &client,
-        &media_request,
-        MAX_MEDIA_DOWNLOAD_BYTES,
-    )
-    .await
-    .map_err(|error| match error {
-        synara_core::app::media::BoundedMediaError::TooLarge => {
-            map_media_download_error("v-send.r-media-download-too-large")
-        }
-        _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
-    })?;
+    filename: String,
+) -> Result<MatrixMediaSaveResult, MatrixAuthCommandError> {
+    let bytes = download_content_bytes(&state, &content_uri, MAX_MEDIA_DOWNLOAD_BYTES).await?;
+    let filename = crate::desktop_file_transfer::save_exclusive_download(&filename, &bytes)
+        .map_err(|_| map_media_download_error("v-send.r-media-save-failed"))?;
+    Ok(MatrixMediaSaveResult { filename })
+}
 
-    Ok(MatrixMediaDownloadResult { bytes })
+/// UTF-8 preview for markdown and other text the UI has to render.
+///
+/// Files above [`MAX_MEDIA_TEXT_PREVIEW_BYTES`] fail closed and are not returned.
+#[tauri::command]
+pub async fn matrix_media_text_preview(
+    state: State<'_, MatrixAuthState>,
+    content_uri: String,
+) -> Result<MatrixMediaTextPreviewResult, MatrixAuthCommandError> {
+    let bytes = download_content_bytes(&state, &content_uri, MAX_MEDIA_TEXT_PREVIEW_BYTES).await?;
+    let text = std::str::from_utf8(&bytes)
+        .map_err(|_| map_media_download_error("v-send.r-media-preview-not-text"))?;
+    Ok(MatrixMediaTextPreviewResult {
+        text: text.to_owned(),
+    })
 }
 
 /// Read-only URL preview. Encrypted and unknown rooms skip the homeserver call.
@@ -130,33 +136,55 @@ pub async fn matrix_media_preview(
     .await
 }
 
-async fn download_timeline_media_handle(
+async fn download_content_bytes(
     state: &State<'_, MatrixAuthState>,
-    handle: &str,
-) -> Result<MatrixMediaDownloadResult, MatrixAuthCommandError> {
-    let Some((client, source)) = state.resolve_timeline_media(handle).await else {
-        return Err(map_media_download_error("v-send.r-media-unknown-handle"));
+    content_uri: &str,
+    max_bytes: usize,
+) -> Result<Vec<u8>, MatrixAuthCommandError> {
+    let too_large_id = if max_bytes == MAX_MEDIA_TEXT_PREVIEW_BYTES {
+        "v-send.r-media-preview-too-large"
+    } else {
+        "v-send.r-media-download-too-large"
     };
+    if crate::matrix::timeline::is_timeline_media_handle(content_uri) {
+        let Some((client, source)) = state.resolve_timeline_media(content_uri).await else {
+            return Err(map_media_download_error("v-send.r-media-unknown-handle"));
+        };
+        let media_request = MediaRequestParameters {
+            source: source.source,
+            format: MediaFormat::File,
+        };
+        return download_bounded(&client, &media_request, max_bytes, too_large_id).await;
+    }
+    let content_uri = parse_media_download_uri(content_uri)?;
     let media_request = MediaRequestParameters {
-        source: source.source,
+        source: MediaSource::Plain(content_uri),
         format: MediaFormat::File,
     };
-    let bytes = synara_core::app::media::download_media_bounded(
-        &client,
-        &media_request,
-        MAX_MEDIA_DOWNLOAD_BYTES,
-    )
-    .await
-    .map_err(|error| match error {
-        synara_core::app::media::BoundedMediaError::TooLarge => {
-            map_media_download_error("v-send.r-media-download-too-large")
-        }
-        _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
-    })?;
-    Ok(MatrixMediaDownloadResult { bytes })
+    let client = {
+        let session = state.session.lock().await;
+        require_session(session.as_ref())?.client.clone()
+    };
+    download_bounded(&client, &media_request, max_bytes, too_large_id).await
 }
 
-pub(super) fn parse_media_download_uri(
+async fn download_bounded(
+    client: &matrix_sdk::Client,
+    media_request: &MediaRequestParameters,
+    max_bytes: usize,
+    too_large_id: &'static str,
+) -> Result<Vec<u8>, MatrixAuthCommandError> {
+    synara_core::app::media::download_media_bounded(client, media_request, max_bytes)
+        .await
+        .map_err(|error| match error {
+            synara_core::app::media::BoundedMediaError::TooLarge => {
+                map_media_download_error(too_large_id)
+            }
+            _ => map_media_download_error("v-send.r-media-download-sdk-failed"),
+        })
+}
+
+pub(crate) fn parse_media_download_uri(
     content_uri: &str,
 ) -> Result<OwnedMxcUri, MatrixAuthCommandError> {
     if content_uri.is_empty()

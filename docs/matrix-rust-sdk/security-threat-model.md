@@ -1,5 +1,9 @@
 # Matrix Rust SDK replacement security threat model
 
+> Pre-cutover review artifact, 2026-07-25. The product now uses matrix-sdk
+> 0.19.1. Report vulnerabilities through the root [SECURITY.md](../../SECURITY.md).
+> Do not treat `CURRENT_JS_ONLY` in this file as the shipping client.
+
 | Field                      | Value                                                      |
 | -------------------------- | ---------------------------------------------------------- |
 | Artifact                   | `MRSDK-SEC-TM-001`                                         |

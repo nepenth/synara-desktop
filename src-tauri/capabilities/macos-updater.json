@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "macos-updater",
+  "description": "macOS in-app update check, install, and relaunch for the main window. Linux reads release metadata and updates through its package manager, so these grants are not active there.",
+  "windows": ["main"],
+  "platforms": ["macOS"],
+  "local": true,
+  "permissions": [
+    "updater:allow-check",
+    "updater:allow-download-and-install",
+    "process:allow-restart"
+  ]
+}

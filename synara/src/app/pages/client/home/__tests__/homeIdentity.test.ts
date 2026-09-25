@@ -5,8 +5,8 @@ import { homeserverDisplayName } from '../homeIdentity';
 
 test('home identity displays only the authenticated homeserver hostname', () => {
   assert.equal(
-    homeserverDisplayName('https://matrix.whyland.com/_matrix/client?access_token=secret'),
-    'matrix.whyland.com'
+    homeserverDisplayName('https://matrix.example.org/_matrix/client?access_token=secret'),
+    'matrix.example.org'
   );
   assert.equal(homeserverDisplayName('https://[2001:db8::1]:8448'), '[2001:db8::1]');
 });

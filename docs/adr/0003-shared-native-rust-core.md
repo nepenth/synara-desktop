@@ -54,7 +54,7 @@ session, sync, crypto, room, timeline, account-data, or Matrix-write authority.
 ## Current evidence
 
 - `crates/synara-core/` contains shared lifecycle and product domains over
-  matrix-sdk 0.18.
+  matrix-sdk 0.19.1.
 - `src-tauri/Cargo.toml` depends on the local Core crate.
 - `crates/synara-core-bindgen/` generates the iOS binding package/XCFramework.
 - Product Swift services import `SynaraCore`; direct `MatrixRustSDK` source

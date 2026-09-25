@@ -134,15 +134,16 @@ export function NativeSecretStorageAction({
           <b>{operationState.error.message}</b>
         </Text>
       )}
-      {operationState.status === AsyncStatus.Success &&
-        operationState.data.recoveryDocumentSaved && (
+      {operationState.status === AsyncStatus.Success && operationState.data.recoveryKey && (
+        <Box gap="100">
           <Text size="T200" style={{ color: color.Success.Main }}>
-            <b>
-              Recovery is ready. {operationState.data.recoveryDocumentName} was saved privately to
-              Downloads.
-            </b>
+            <b>Recovery is ready. Copy this key now. Synara does not save it to Downloads.</b>
           </Text>
-        )}
+          <Text size="T200" style={{ wordBreak: 'break-all' }}>
+            {operationState.data.recoveryKey}
+          </Text>
+        </Box>
+      )}
     </Box>
   );
 }

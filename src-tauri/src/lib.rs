@@ -113,6 +113,30 @@ fn timeline_media_content_type(bytes: &[u8], declared: Option<&str>) -> Option<&
     }
 }
 
+fn decode_synara_media_path(path: &str) -> Option<String> {
+    let bytes = path.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] == b'%' && index + 2 < bytes.len() {
+            let hex = std::str::from_utf8(&bytes[index + 1..index + 3]).ok()?;
+            decoded.push(u8::from_str_radix(hex, 16).ok()?);
+            index += 3;
+        } else {
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+    }
+    let decoded = String::from_utf8(decoded).ok()?;
+    if decoded.is_empty()
+        || decoded.contains(['\0', '\\'])
+        || decoded.split('/').any(|segment| segment == "..")
+    {
+        return None;
+    }
+    Some(decoded)
+}
+
 fn register_synara_media_protocol<R: tauri::Runtime>(
     builder: tauri::Builder<R>,
 ) -> tauri::Builder<R> {
@@ -141,6 +165,14 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
             let app = context.app_handle().clone();
             let handle = handle.to_owned();
             tauri::async_runtime::spawn(async move {
+                let Some(handle) = decode_synara_media_path(&handle) else {
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::NOT_FOUND,
+                        Vec::new(),
+                        None,
+                    ));
+                    return;
+                };
                 let state = app.state::<matrix::auth::MatrixAuthState>();
                 if matrix::timeline::is_timeline_media_handle(&handle) {
                     let Some((client, source)) = state.resolve_timeline_media(&handle).await else {
@@ -172,6 +204,48 @@ fn register_synara_media_protocol<R: tauri::Runtime>(
                     let Some(content_type) =
                         timeline_media_content_type(&bytes, source.declared_mime_type.as_deref())
                     else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    responder.respond(synara_media_response(
+                        tauri::http::StatusCode::OK,
+                        bytes,
+                        Some(content_type),
+                    ));
+                    return;
+                }
+                if let Ok(content_uri) = matrix::auth::product::parse_media_download_uri(&handle) {
+                    let Some(client) = state.media_client().await else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::NOT_FOUND,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    let request = matrix_sdk::media::MediaRequestParameters {
+                        source: matrix_sdk::ruma::events::room::MediaSource::Plain(content_uri),
+                        format: matrix_sdk::media::MediaFormat::File,
+                    };
+                    let Ok(bytes) = synara_core::app::media::download_media_bounded(
+                        &client,
+                        &request,
+                        TIMELINE_MEDIA_MAX_BYTES,
+                    )
+                    .await
+                    else {
+                        responder.respond(synara_media_response(
+                            tauri::http::StatusCode::NOT_FOUND,
+                            Vec::new(),
+                            None,
+                        ));
+                        return;
+                    };
+                    let Some(content_type) = timeline_media_content_type(&bytes, None) else {
                         responder.respond(synara_media_response(
                             tauri::http::StatusCode::UNSUPPORTED_MEDIA_TYPE,
                             Vec::new(),
@@ -284,58 +358,7 @@ fn updater_plugin_configured<R: tauri::Runtime>(context: &tauri::Context<R>) -> 
         .is_some_and(|config| !config.is_null())
 }
 
-const PREFERRED_LOCALHOST_PORT: u16 = 44548;
-const LOCALHOST_PORT_FALLBACK_COUNT: u16 = 10;
-
-fn is_localhost_port_available(port: u16) -> bool {
-    // The asset server and WebView resolve `localhost` independently. Reserve
-    // both loopback families while probing so an IPv6-only listener cannot
-    // make the WebView load another process's assets on an IPv4-free port.
-    let Ok(_ipv4) = std::net::TcpListener::bind(("127.0.0.1", port)) else {
-        return false;
-    };
-    match std::net::TcpListener::bind(("::1", port)) {
-        Ok(_ipv6) => true,
-        Err(error) => matches!(
-            error.kind(),
-            std::io::ErrorKind::AddrNotAvailable | std::io::ErrorKind::Unsupported
-        ),
-    }
-}
-
-fn select_localhost_port_with(mut is_available: impl FnMut(u16) -> bool) -> Result<u16, String> {
-    for offset in 0..LOCALHOST_PORT_FALLBACK_COUNT {
-        let port = PREFERRED_LOCALHOST_PORT.saturating_add(offset);
-        if is_available(port) {
-            if offset == 0 {
-                eprintln!("[synara] Serving bundled UI on localhost:{port}");
-            } else {
-                eprintln!(
-                    "[synara] Preferred port {PREFERRED_LOCALHOST_PORT} busy; using localhost:{port}"
-                );
-            }
-            return Ok(port);
-        }
-    }
-
-    Err(format!(
-        "No available localhost port in range {PREFERRED_LOCALHOST_PORT}-{}",
-        PREFERRED_LOCALHOST_PORT + LOCALHOST_PORT_FALLBACK_COUNT - 1
-    ))
-}
-
-fn select_localhost_port() -> Result<u16, String> {
-    select_localhost_port_with(is_localhost_port_available)
-}
-
 pub fn run() {
-    let port = match select_localhost_port() {
-        Ok(port) => port,
-        Err(error) => {
-            eprintln!("Failed to start Synara: {error}");
-            std::process::exit(1);
-        }
-    };
     let context = tauri::generate_context!();
     #[cfg(not(any(target_os = "android", target_os = "ios")))]
     let updater_configured = updater_plugin_configured(&context);
@@ -352,7 +375,6 @@ pub fn run() {
     }
     builder = builder
         .manage(matrix::auth::MatrixAuthState::new())
-        .plugin(tauri_plugin_localhost::Builder::new(port).build())
         .plugin(tauri_plugin_window_state::Builder::default().build())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_notification::init())
@@ -482,7 +504,8 @@ pub fn run() {
             matrix::auth::product::matrix_set_global_image_packs,
             matrix::auth::product::matrix_set_room_image_pack,
             matrix::auth::product::matrix_media_config,
-            matrix::auth::product::matrix_media_download,
+            matrix::auth::product::matrix_media_save,
+            matrix::auth::product::matrix_media_text_preview,
             matrix::auth::product::matrix_media_preview,
             matrix::auth::product::matrix_later_snapshot,
             matrix::auth::product::matrix_later_upsert,
@@ -692,31 +715,21 @@ pub fn run() {
 
             desktop_tray::create_tray(app.handle())?;
 
-            // Dev: use devUrl from tauri.conf.json (http://localhost:8080) to support HMR
-            #[cfg(debug_assertions)]
+            // WebviewUrl::App follows Tauri's dev cfg: http://localhost:8080 while
+            // `tauri dev` is running, and the private asset origin tauri://localhost
+            // for every packaged build. Navigation is pinned to that same origin.
             let window_url = WebviewUrl::App(Default::default());
 
-            // Release: tauri-plugin-localhost serves bundled frontend assets on this port
-            #[cfg(not(debug_assertions))]
-            let window_url = {
-                let localhost_url = format!("http://localhost:{port}");
-                let parsed_url = localhost_url
-                    .parse::<url::Url>()
-                    .map_err(|error| format!("Invalid localhost URL for port {port}: {error}"))?;
-                WebviewUrl::External(parsed_url)
-            };
-
-            // Match the actual dev server or selected packaged asset origin.
-            // Other localhost ports have unrelated content and must never load
-            // in this privileged webview, even though the ACL spans ports.
-            #[cfg(debug_assertions)]
-            let navigation_url = app.config().build.dev_url.clone()
+            #[cfg(dev)]
+            let navigation_url = app
+                .config()
+                .build
+                .dev_url
+                .clone()
                 .ok_or("Desktop development requires a configured devUrl")?;
-            #[cfg(not(debug_assertions))]
-            let navigation_url = match &window_url {
-                WebviewUrl::External(url) => url.clone(),
-                _ => return Err("Packaged desktop requires its local asset origin".into()),
-            };
+            #[cfg(not(dev))]
+            let navigation_url = url::Url::parse(desktop_navigation::PACKAGED_ASSET_ORIGIN)
+                .map_err(|error| format!("Invalid packaged asset origin: {error}"))?;
 
             let app_handle = app.handle().clone();
             let bridge_script = format!(
@@ -794,42 +807,8 @@ pub fn run() {
 }
 
 #[cfg(test)]
-mod localhost_port_tests {
-    use super::{
-        is_localhost_port_available, select_localhost_port_with, timeline_media_content_type,
-        PREFERRED_LOCALHOST_PORT,
-    };
-
-    #[test]
-    fn localhost_port_rejects_an_ipv6_only_listener() {
-        let listener = std::net::TcpListener::bind(("::1", 0))
-            .expect("test host should support IPv6 loopback");
-        let port = listener.local_addr().unwrap().port();
-        drop(std::net::TcpListener::bind(("127.0.0.1", port)).unwrap());
-        assert!(!is_localhost_port_available(port));
-    }
-
-    #[test]
-    fn localhost_port_rejects_an_ipv4_listener() {
-        let listener = std::net::TcpListener::bind(("127.0.0.1", 0)).unwrap();
-        assert!(!is_localhost_port_available(
-            listener.local_addr().unwrap().port()
-        ));
-    }
-
-    #[test]
-    fn select_localhost_port_returns_first_available_port() {
-        let port =
-            select_localhost_port_with(|_| true).expect("localhost port should be available");
-        assert_eq!(port, PREFERRED_LOCALHOST_PORT);
-    }
-
-    #[test]
-    fn select_localhost_port_skips_busy_preferred_port() {
-        let port = select_localhost_port_with(|port| port != PREFERRED_LOCALHOST_PORT)
-            .expect("fallback localhost port should be available");
-        assert_eq!(port, PREFERRED_LOCALHOST_PORT + 1);
-    }
+mod protocol_path_tests {
+    use super::{decode_synara_media_path, timeline_media_content_type};
 
     #[test]
     fn timeline_media_requires_allowlisted_bytes_and_matching_mime() {
@@ -847,5 +826,19 @@ mod localhost_port_tests {
             timeline_media_content_type(b"# heading\n", Some("text/markdown")),
             None
         );
+    }
+
+    #[test]
+    fn media_protocol_path_decodes_mxc_and_rejects_traversal() {
+        assert_eq!(
+            decode_synara_media_path("timeline-media-ab").as_deref(),
+            Some("timeline-media-ab")
+        );
+        assert_eq!(
+            decode_synara_media_path("mxc%3A%2F%2Fexample.org%2Fmedia").as_deref(),
+            Some("mxc://example.org/media")
+        );
+        assert_eq!(decode_synara_media_path("mxc%2F..%2Fsecret"), None);
+        assert_eq!(decode_synara_media_path("%00"), None);
     }
 }

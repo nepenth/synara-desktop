@@ -22,7 +22,7 @@ normal `paru -Syu` or `sudo pacman -Syu`.
 
 ## Workstation Prerequisites
 
-Use the Node.js version in `.node-version`, Rust stable, and the Tauri Linux dependencies for your distribution. The package lists below mirror the upstream Tauri 2 Linux prerequisites: <https://v2.tauri.app/start/prerequisites/>.
+Use Node.js 24.13.1 from `.node-version`, Rust 1.96 from `rust-toolchain.toml`, and the Tauri Linux dependencies for your distribution. Published Linux packages are x86_64 only. The package lists below mirror the upstream Tauri 2 Linux prerequisites: <https://v2.tauri.app/start/prerequisites/>.
 
 Debian, Ubuntu, KDE neon:
 

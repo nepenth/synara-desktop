@@ -190,7 +190,7 @@ jobs:
 
       - name: Install XcodeGen
         if: steps.reuse.outputs.reuse != 'true'
-        run: brew install xcodegen
+        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Build and run unsigned simulator tests
         if: steps.reuse.outputs.reuse != 'true'
@@ -305,7 +305,7 @@ jobs:
     if: startsWith(github.ref_name, 'v')
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    container: archlinux:base-devel
+    container: archlinux:base-devel@sha256:8745817f349ed24373341ddb92776209eeec3f0364ea48f7f645ac5800d30a50
     needs: [quality-gate]
     steps:
       - name: Checkout repository
@@ -323,7 +323,7 @@ jobs:
             xdg-desktop-portal \
             nodejs \
             npm \
-            rust \
+            rustup \
             base-devel \
             pacman-contrib \
             curl \
@@ -335,6 +335,8 @@ jobs:
             libayatana-appindicator \
             librsvg \
             xdotool
+          rustup toolchain install 1.96 --profile minimal --component rustfmt,clippy
+          rustup default 1.96
 
       - name: Install desktop dependencies
         run: npm ci

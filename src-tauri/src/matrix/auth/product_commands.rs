@@ -29,6 +29,7 @@ pub async fn matrix_login_password(
     password: String,
     indexed_message_search: Option<bool>,
 ) -> Result<MatrixLoginIdentity, MatrixAuthCommandError> {
+    let password = zeroize::Zeroizing::new(password);
     let mut session = state.session.lock().await;
     if session.is_some() {
         return Err(MatrixAuthCommandError::new(
@@ -79,7 +80,7 @@ pub async fn matrix_login_password(
     let result = match login_with_password(
         &client,
         requested_identity.user_id(),
-        &password,
+        password.as_str(),
         &LoginOptions {
             request_refresh_token: true,
             device_id: existing_device_id,

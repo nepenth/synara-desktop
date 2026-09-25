@@ -52,13 +52,17 @@ test("release updater config satisfies strict release readiness inspection", () 
     tauriConfig,
     cargoToml: 'tauri-plugin-updater = "2"\ntauri-plugin-process = "2"\n',
     rustLib:
-      "tauri_plugin_updater::Builder::new().build(); tauri_plugin_process::init()",
+      "WebviewUrl::App(Default::default()); desktop_navigation::PACKAGED_ASSET_ORIGIN; tauri_plugin_updater::Builder::new().build(); tauri_plugin_process::init()",
+    navigation: 'pub const PACKAGED_ASSET_ORIGIN: &str = "tauri://localhost";',
     capabilities: {
-      remote: {
-        urls: ["http://localhost:*/*"],
-      },
+      local: true,
+      permissions: ["core:default"],
+    },
+    updaterCapability: {
+      local: true,
+      windows: ["main"],
+      platforms: ["macOS"],
       permissions: [
-        "core:default",
         "updater:allow-check",
         "updater:allow-download-and-install",
         "process:allow-restart",

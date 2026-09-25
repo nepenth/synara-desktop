@@ -1,10 +1,7 @@
-# Workspace root — Synara shared-native-core program (P1 — crate extraction).
+# Workspace root — Synara shared Rust core.
 #
-# This slice (SNC-P1-1) only scaffolds the workspace and the empty
-# crates/synara-core package. src-tauri is intentionally EXCLUDED for now so
-# the desktop shell keeps resolving exactly as today (standalone package with
-# its own committed src-tauri/Cargo.lock). Later P1 slices will fold src-tauri
-# into the workspace as it starts depending on synara-core.
+# crates/synara-core is the production Matrix engine. src-tauri depends on it
+# and stays excluded so the desktop shell keeps its own Cargo.lock.
 [workspace]
 resolver = "2"
 members = [

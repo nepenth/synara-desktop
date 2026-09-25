@@ -145,7 +145,7 @@ jobs:
           name: synara-linux-deb
           path: src-tauri/target/release/bundle/deb/Synara_*.deb
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   linux-arch:
     name: Linux Arch package
@@ -153,7 +153,7 @@ jobs:
     if: needs.changes.outputs.packages == 'true'
     runs-on: ubuntu-22.04
     timeout-minutes: 60
-    container: archlinux:base-devel
+    container: archlinux:base-devel@sha256:8745817f349ed24373341ddb92776209eeec3f0364ea48f7f645ac5800d30a50
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -170,7 +170,7 @@ jobs:
             xdg-desktop-portal \
             nodejs \
             npm \
-            rust \
+            rustup \
             base-devel \
             curl \
             wget \
@@ -181,6 +181,8 @@ jobs:
             libayatana-appindicator \
             librsvg \
             xdotool
+          rustup toolchain install 1.96 --profile minimal --component rustfmt,clippy
+          rustup default 1.96
 
       - name: Install desktop dependencies
         run: npm ci
@@ -209,7 +211,7 @@ jobs:
           name: synara-linux-arch-pkg
           path: packaging/arch/synara-desktop-bin-*.pkg.tar.zst
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   macos-app:
     name: macOS app bundle
@@ -256,7 +258,7 @@ jobs:
           name: synara-macos-app
           path: src-tauri/target/release/bundle/macos/Synara.app
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
 
   package-gate:
     name: Desktop package gate

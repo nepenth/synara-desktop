@@ -14,7 +14,6 @@ import {
   TooltipProvider,
   as,
 } from 'folds';
-import FileSaver from 'file-saver';
 import { EncryptedAttachmentInfo, IFileInfo } from '../../../../types/matrix/common';
 import FocusTrap from 'focus-trap-react';
 import { AsyncStatus, useAsyncCallback } from '../../../hooks/useAsyncCallback';
@@ -29,8 +28,11 @@ import {
 import { stopPropagation } from '../../../utils/keyboard';
 import { useMediaAuthentication } from '../../../hooks/useMediaAuthentication';
 import { ModalWide } from '../../../styles/Modal.css';
-import { savePlatformFile, supportsPlatformNativeFileSave } from '../../../platform';
-import { createMatrixMediaObjectUrl, downloadMatrixMedia } from '../../../matrix/media';
+import {
+  createMatrixMediaObjectUrl,
+  previewMatrixMediaText,
+  saveMatrixMediaFile,
+} from '../../../matrix/media';
 
 const renderErrorButton = (retry: () => void, text: string) => (
   <TooltipProvider
@@ -74,23 +76,18 @@ type ReadTextFileProps = {
   encInfo?: EncryptedAttachmentInfo;
   renderViewer: (props: RenderTextViewerProps) => ReactNode;
 };
-export function ReadTextFile({ body, mimeType, url, encInfo, renderViewer }: ReadTextFileProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
+export function ReadTextFile({ body, mimeType, url, renderViewer }: ReadTextFileProps) {
   const [textViewer, setTextViewer] = useState(false);
 
   const [textState, loadText] = useAsyncCallback(
     useCallback(async () => {
-      const fileContent = await downloadMatrixMedia(mx, url, {
-        useAuthentication,
-        mimeType,
-        encryptedInfo: encInfo,
-      });
-
-      const text = fileContent.text();
+      const preview = await previewMatrixMediaText(url);
+      if (preview.kind === 'tooLarge') {
+        throw new Error('File is too large to preview.');
+      }
       setTextViewer(true);
-      return text;
-    }, [mx, useAuthentication, mimeType, encInfo, url])
+      return preview.text;
+    }, [url])
   );
 
   return (
@@ -243,27 +240,11 @@ export type DownloadFileProps = {
   info: IFileInfo;
   encInfo?: EncryptedAttachmentInfo;
 };
-export function DownloadFile({ body, mimeType, url, info, encInfo }: DownloadFileProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
-
+export function DownloadFile({ body, url, info }: DownloadFileProps) {
   const [downloadState, download] = useAsyncCallback(
     useCallback(async () => {
-      const fileContent = await downloadMatrixMedia(mx, url, {
-        useAuthentication,
-        mimeType,
-        encryptedInfo: encInfo,
-      });
-
-      if (supportsPlatformNativeFileSave()) {
-        await savePlatformFile(fileContent, body);
-        return undefined;
-      }
-
-      const fileURL = URL.createObjectURL(fileContent);
-      FileSaver.saveAs(fileURL, body);
-      return fileURL;
-    }, [mx, url, useAuthentication, mimeType, encInfo, body])
+      await saveMatrixMediaFile(url, body);
+    }, [url, body])
   );
 
   return downloadState.status === AsyncStatus.Error ? (
@@ -274,11 +255,7 @@ export function DownloadFile({ body, mimeType, url, info, encInfo }: DownloadFil
       fill="Soft"
       radii="300"
       size="400"
-      onClick={() =>
-        downloadState.status === AsyncStatus.Success && downloadState.data
-          ? FileSaver.saveAs(downloadState.data, body)
-          : download()
-      }
+      onClick={() => download()}
       disabled={downloadState.status === AsyncStatus.Loading}
       before={
         downloadState.status === AsyncStatus.Loading ? (

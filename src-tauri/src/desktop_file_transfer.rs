@@ -56,6 +56,26 @@ pub(crate) fn downloads_dir() -> Result<PathBuf, String> {
     Ok(PathBuf::from(home_dir).join("Downloads"))
 }
 
+/// Write `bytes` into the user's Downloads folder and return only the filename.
+pub(crate) fn save_exclusive_download(filename: &str, bytes: &[u8]) -> Result<String, String> {
+    if bytes.is_empty() {
+        return Err("File is empty".to_owned());
+    }
+    if bytes.len() as u64 > MAX_SAVE_FILE_BYTES {
+        return Err("File exceeds the maximum save size".to_owned());
+    }
+    let downloads = downloads_dir()?;
+    fs::create_dir_all(&downloads).map_err(|err| format!("Unable to create Downloads: {err}"))?;
+    let filename = sanitize_download_filename(filename);
+    let path = unique_download_path(&downloads, &filename);
+    write_exclusive_download(&downloads, &path, bytes)?;
+    Ok(path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&filename)
+        .to_owned())
+}
+
 pub(crate) fn unique_download_path(downloads: &Path, filename: &str) -> PathBuf {
     let initial = downloads.join(filename);
     if !initial.exists() {
@@ -81,6 +101,38 @@ pub(crate) fn unique_download_path(downloads: &Path, filename: &str) -> PathBuf 
     }
 
     downloads.join(format!("{stem} ({})", timestamp_ms()))
+}
+
+fn write_exclusive_download(downloads: &Path, path: &Path, bytes: &[u8]) -> Result<(), String> {
+    let downloads = downloads
+        .canonicalize()
+        .map_err(|err| format!("Unable to resolve Downloads: {err}"))?;
+    let parent = path
+        .parent()
+        .ok_or_else(|| "Unable to resolve download path".to_owned())?;
+    let parent = if parent.exists() {
+        parent
+            .canonicalize()
+            .map_err(|err| format!("Unable to resolve Downloads: {err}"))?
+    } else {
+        parent.to_path_buf()
+    };
+    if parent != downloads {
+        return Err("Refusing to save outside Downloads".to_owned());
+    }
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options
+        .open(path)
+        .map_err(|err| format!("Unable to write file: {err}"))?;
+    file.write_all(bytes)
+        .map_err(|err| format!("Unable to write file: {err}"))?;
+    Ok(())
 }
 
 fn timestamp_ms() -> u128 {
@@ -296,10 +348,15 @@ fn finalize_save_session(session: SaveFileSession) -> Result<String, String> {
     fs::create_dir_all(&downloads).map_err(|err| format!("Unable to create Downloads: {err}"))?;
     let filename = sanitize_download_filename(&session.filename);
     let destination = unique_download_path(&downloads, &filename);
+    write_exclusive_download(&downloads, &destination, &[])?;
     fs::rename(&session.temp_path, &destination)
         .map_err(|err| format!("Unable to finalize saved file: {err}"))?;
 
-    Ok(destination.to_string_lossy().into_owned())
+    Ok(destination
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&filename)
+        .to_owned())
 }
 
 #[tauri::command]
@@ -315,9 +372,13 @@ pub fn desktop_save_file(payload: DesktopSaveFilePayload) -> Result<String, Stri
     fs::create_dir_all(&downloads).map_err(|err| format!("Unable to create Downloads: {err}"))?;
     let filename = sanitize_download_filename(&payload.filename);
     let path = unique_download_path(&downloads, &filename);
-    fs::write(&path, payload.bytes).map_err(|err| format!("Unable to write file: {err}"))?;
+    write_exclusive_download(&downloads, &path, &payload.bytes)?;
 
-    Ok(path.to_string_lossy().into_owned())
+    Ok(path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or(&filename)
+        .to_owned())
 }
 
 #[tauri::command]
@@ -935,8 +996,9 @@ mod command_tests {
             offset += length as u64;
         }
 
-        let saved_path =
+        let saved_name =
             desktop_save_file_end(begin.session_id).expect("streaming save should finalize");
+        let saved_path = downloads_dir().expect("downloads dir").join(saved_name);
         let saved_bytes = fs::read(&saved_path).expect("saved file should be readable");
         assert_eq!(saved_bytes.len(), total_size as usize);
         assert_eq!(saved_bytes[0], 1);

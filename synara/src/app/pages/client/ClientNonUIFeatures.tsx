@@ -696,7 +696,7 @@ function AgentApprovalNotifications() {
           eventId,
           kind: 'agent_approval',
           title: prompt.title,
-          body: `${room.name ?? 'Unknown'}: ${prompt.body}`,
+          body: `${room.name ?? 'Unknown'}: Review a request in Synara.`,
           route: buildDesktopNotificationRoomRoute(room.roomId, eventId),
           suppressIfFocusedRoom: false,
         });

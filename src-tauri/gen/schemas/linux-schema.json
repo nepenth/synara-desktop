@@ -837,16 +837,22 @@
           "markdownDescription": "Enables the matrix_media_config command without any pre-configured scope."
         },
         {
-          "description": "Enables the matrix_media_download command without any pre-configured scope.",
-          "type": "string",
-          "const": "allow-matrix-media-download",
-          "markdownDescription": "Enables the matrix_media_download command without any pre-configured scope."
-        },
-        {
           "description": "Enables the matrix_media_preview command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-media-preview",
           "markdownDescription": "Enables the matrix_media_preview command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_media_save command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-media-save",
+          "markdownDescription": "Enables the matrix_media_save command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_media_text_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-media-text-preview",
+          "markdownDescription": "Enables the matrix_media_text_preview command without any pre-configured scope."
         },
         {
           "description": "Enables the matrix_message_search command without any pre-configured scope.",
@@ -2193,16 +2199,22 @@
           "markdownDescription": "Denies the matrix_media_config command without any pre-configured scope."
         },
         {
-          "description": "Denies the matrix_media_download command without any pre-configured scope.",
-          "type": "string",
-          "const": "deny-matrix-media-download",
-          "markdownDescription": "Denies the matrix_media_download command without any pre-configured scope."
-        },
-        {
           "description": "Denies the matrix_media_preview command without any pre-configured scope.",
           "type": "string",
           "const": "deny-matrix-media-preview",
           "markdownDescription": "Denies the matrix_media_preview command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_media_save command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-media-save",
+          "markdownDescription": "Denies the matrix_media_save command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_media_text_preview command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-media-text-preview",
+          "markdownDescription": "Denies the matrix_media_text_preview command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_message_search command without any pre-configured scope.",

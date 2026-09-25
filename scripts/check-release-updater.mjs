@@ -105,16 +105,51 @@ const workflowVerifiesMacosDistributableContents = (workflow) =>
     /codesign\s+--verify[\s\S]*extract_dir\/Synara\.app/,
   );
 
-const hasPackagedLocalhostRemoteCapability = (capabilities) =>
-  (capabilities?.remote?.urls ?? []).some(
-    (url) => url === "http://localhost:*" || url === "http://localhost:*/*",
+const MAIN_UPDATER_PERMISSIONS = [
+  "updater:default",
+  "updater:allow-check",
+  "updater:allow-download",
+  "updater:allow-download-and-install",
+  "updater:allow-install",
+  "process:default",
+  "process:allow-restart",
+];
+
+const permissionGranted = (permissions, specific, fallback) =>
+  permissions.some(
+    (permission) => permission === specific || permission === fallback,
   );
+
+const usesPackagedAssetOrigin = (rustLib, navigation = "") => {
+  const originDefined =
+    /tauri:\/\/localhost/.test(rustLib) ||
+    (/PACKAGED_ASSET_ORIGIN/.test(rustLib) &&
+      /tauri:\/\/localhost/.test(navigation));
+  return (
+    /WebviewUrl::App/.test(rustLib) &&
+    originDefined &&
+    !/tauri_plugin_localhost/.test(rustLib) &&
+    !/WebviewUrl::External/.test(rustLib)
+  );
+};
+
+const isMacosUpdaterCapability = (capability) =>
+  Array.isArray(capability?.platforms) &&
+  capability.platforms.length === 1 &&
+  capability.platforms[0] === "macOS" &&
+  Array.isArray(capability?.windows) &&
+  capability.windows.length === 1 &&
+  capability.windows[0] === "main" &&
+  capability?.local !== false &&
+  (capability?.remote?.urls ?? []).length === 0;
 
 export function inspectReleaseUpdaterReadiness({
   tauriConfig,
   cargoToml,
   rustLib,
+  navigation = "",
   capabilities,
+  updaterCapability,
   desktopPackage,
   releaseWorkflow,
   requireEnabled = false,
@@ -133,6 +168,7 @@ export function inspectReleaseUpdaterReadiness({
   const updaterConfig = tauriConfig?.plugins?.updater;
   const endpoints = updaterConfig?.endpoints;
   const permissions = capabilities?.permissions ?? [];
+  const updaterPermissions = updaterCapability?.permissions ?? [];
   const packageDependencies = {
     ...(desktopPackage?.dependencies ?? {}),
     ...(desktopPackage?.devDependencies ?? {}),
@@ -194,39 +230,53 @@ export function inspectReleaseUpdaterReadiness({
     report("src-tauri/src/lib.rs must register the Tauri updater plugin.");
   }
 
+  for (const permission of MAIN_UPDATER_PERMISSIONS) {
+    if (permissions.includes(permission)) {
+      errors.push(
+        `src-tauri/capabilities/main.json must not grant ${permission}. macOS update install and relaunch belong in macos-updater.json.`,
+      );
+    }
+  }
+
   if (
-    !permissions.some(
-      (permission) =>
-        permission === "updater:default" ||
-        permission === "updater:allow-check",
+    !permissionGranted(
+      updaterPermissions,
+      "updater:allow-check",
+      "updater:default",
     )
   ) {
     report(
-      "src-tauri/capabilities/main.json must grant updater:allow-check or updater:default when the frontend owns update checks.",
+      "src-tauri/capabilities/macos-updater.json must grant updater:allow-check or updater:default when the frontend owns update checks.",
     );
   }
 
   if (
-    !permissions.some(
-      (permission) =>
-        permission === "updater:default" ||
-        permission === "updater:allow-download-and-install",
+    !permissionGranted(
+      updaterPermissions,
+      "updater:allow-download-and-install",
+      "updater:default",
     )
   ) {
     report(
-      "src-tauri/capabilities/main.json must grant updater:allow-download-and-install or updater:default for macOS install prompts.",
+      "src-tauri/capabilities/macos-updater.json must grant updater:allow-download-and-install or updater:default for macOS install prompts.",
     );
   }
 
   if (
-    !permissions.some(
-      (permission) =>
-        permission === "process:default" ||
-        permission === "process:allow-restart",
+    !permissionGranted(
+      updaterPermissions,
+      "process:allow-restart",
+      "process:default",
     )
   ) {
     report(
-      "src-tauri/capabilities/main.json must grant process:allow-restart or process:default for post-update relaunch.",
+      "src-tauri/capabilities/macos-updater.json must grant process:allow-restart or process:default for post-update relaunch.",
+    );
+  }
+
+  if (!isMacosUpdaterCapability(updaterCapability)) {
+    errors.push(
+      'src-tauri/capabilities/macos-updater.json must apply only to the main window on platforms ["macOS"], with no remote URLs.',
     );
   }
 
@@ -256,9 +306,15 @@ export function inspectReleaseUpdaterReadiness({
     report("src-tauri/src/lib.rs must register the Tauri process plugin.");
   }
 
-  if (!hasPackagedLocalhostRemoteCapability(capabilities)) {
+  if ((capabilities?.remote?.urls ?? []).length > 0 || capabilities?.local === false) {
     errors.push(
-      "src-tauri/capabilities/main.json must allow the packaged localhost webview origin with remote.urls containing http://localhost:*/*.",
+      "src-tauri/capabilities/main.json must stay local and must not grant remote.urls. The packaged UI is tauri://localhost.",
+    );
+  }
+
+  if (!usesPackagedAssetOrigin(rustLib, navigation)) {
+    errors.push(
+      "src-tauri/src/lib.rs must load the packaged window with WebviewUrl::App and pin navigation to tauri://localhost, without tauri-plugin-localhost or WebviewUrl::External.",
     );
   }
 
@@ -332,7 +388,9 @@ function main() {
     tauriConfig: readJson("src-tauri/tauri.conf.json"),
     cargoToml: readText("src-tauri/Cargo.toml"),
     rustLib: readText("src-tauri/src/lib.rs"),
+    navigation: readText("src-tauri/src/desktop_navigation.rs"),
     capabilities: readJson("src-tauri/capabilities/main.json"),
+    updaterCapability: readJson("src-tauri/capabilities/macos-updater.json"),
     desktopPackage: readJson("package.json"),
     releaseWorkflow: readText(releaseWorkflowPath),
     requireEnabled,

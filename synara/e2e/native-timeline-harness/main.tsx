@@ -347,16 +347,12 @@ window.__SYNARA_DESKTOP__ = {
       return undefined as T;
     }
     if (command === 'matrix_timeline_paginate') return snapshots.get(request?.streamId ?? '') as T;
-    if (command === 'matrix_media_download') {
-      const contentUri = args?.contentUri;
-      if (contentUri === FILE_ZIP_HANDLE) {
-        return { bytes: [80, 75, 3, 4] } as T;
-      }
-      return { bytes: Array.from(new TextEncoder().encode(FILE_MD_BYTES)) } as T;
+    if (command === 'matrix_media_text_preview') {
+      return { text: FILE_MD_BYTES } as T;
     }
-    if (command === 'desktop_save_file') {
-      const filename = (args?.payload as { filename?: string } | undefined)?.filename;
-      return `/tmp/synara-e2e-${filename || 'download'}` as T;
+    if (command === 'matrix_media_save') {
+      const filename = typeof args?.filename === 'string' ? args.filename : 'download';
+      return { filename } as T;
     }
     return undefined as T;
   },

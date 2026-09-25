@@ -11,6 +11,12 @@ devAssets/*
 .DS_Store
 AuthKey_*.p8
 *.p8
+*.p12
+*.cer
+*.mobileprovision
+*.pem
+!crates/synara-core/src/app/x509/test_ca.pem
+commitmsg.txt
 .env.macos-signing.local
 .env
 .env.*

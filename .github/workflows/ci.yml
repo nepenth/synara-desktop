@@ -521,7 +521,7 @@ jobs:
           toolchain: 1.96
 
       - name: Install cargo-audit
-        run: cargo install cargo-audit --locked
+        run: cargo install cargo-audit --version 0.22.2 --locked
 
       # .cargo/audit.toml holds the short documented allowlist (quick-xml via
       # plist=tauri-bundler, fixed upstream at >=0.41.0, unreachable in-chain).
@@ -651,7 +651,7 @@ jobs:
           shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -674,7 +674,7 @@ jobs:
           name: ios-test-results
           path: /private/tmp/synara-ios-results/*.xcresult
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
 
   ios-ui-tests:
     name: iOS simulator UI tests
@@ -699,7 +699,7 @@ jobs:
           shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -722,7 +722,7 @@ jobs:
           name: ios-ui-test-results
           path: /private/tmp/synara-ios-results/*.xcresult
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
 
   ios-compile:
     name: iOS compile gate
@@ -753,7 +753,7 @@ jobs:
           shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -775,7 +775,7 @@ jobs:
           name: ios-compile-results
           path: /private/tmp/synara-ios-results/*.xcresult
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 3
 
   synapse-native-reactions:
     name: Synapse native reaction proof
@@ -806,7 +806,6 @@ jobs:
         run: >
           cargo test --locked
           live_native_reaction_paths_against_disposable_synapse_when_configured
-          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()
@@ -841,7 +840,6 @@ jobs:
         run: >
           cargo test --locked
           live_native_attachment_send_against_disposable_synapse_when_configured
-          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()
@@ -876,7 +874,6 @@ jobs:
         run: >
           cargo test --locked
           live_native_poll_send_and_respond_against_disposable_synapse_when_configured
-          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()
@@ -911,7 +908,6 @@ jobs:
         run: >
           cargo test --locked
           live_native_rich_message_send_against_disposable_synapse_when_configured
-          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()
@@ -946,7 +942,6 @@ jobs:
         run: >
           cargo test --locked
           live_native_thread_send_against_disposable_synapse_when_configured
-          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()
@@ -981,7 +976,6 @@ jobs:
         run: >
           cargo test --locked
           live_native_two_client_receipt_and_ordering_against_disposable_synapse_when_configured
-          -- --nocapture
 
       - name: Tear down disposable Synapse
         if: always()

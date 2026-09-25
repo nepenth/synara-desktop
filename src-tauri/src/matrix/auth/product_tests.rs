@@ -2843,6 +2843,21 @@ fn media_config_and_download_use_exact_wire_shapes() {
         serde_json::to_value(download).unwrap(),
         serde_json::json!({ "bytes": [0, 1, 255] })
     );
+
+    let saved = crate::matrix::auth::product::MatrixMediaSaveResult {
+        filename: "notes.md".to_owned(),
+    };
+    assert_eq!(
+        serde_json::to_value(saved).unwrap(),
+        serde_json::json!({ "filename": "notes.md" })
+    );
+    let preview = crate::matrix::auth::product::MatrixMediaTextPreviewResult {
+        text: "# heading".to_owned(),
+    };
+    assert_eq!(
+        serde_json::to_value(preview).unwrap(),
+        serde_json::json!({ "text": "# heading" })
+    );
 }
 
 #[test]
@@ -2946,26 +2961,32 @@ async fn media_config_desktop_owner_keeps_the_live_client_and_closed_no_session_
     assert!(!projection.contains("synara_core::Core"));
     assert!(!projection.contains("matrix-js-sdk"));
 
-    let download = product
-        .split("pub async fn matrix_media_download")
-        .nth(1)
-        .expect("media download command");
-    let download = download
-        .split("#[tauri::command]")
-        .next()
-        .expect("media download command body");
-    assert!(download.contains("is_timeline_media_handle"));
-    assert!(download.contains("download_timeline_media_handle"));
-    assert!(download.contains("MediaFormat::File"));
-    assert!(download.contains("download_media_bounded("));
-    assert!(download.contains("MAX_MEDIA_DOWNLOAD_BYTES"));
-    assert!(!download.contains("Thumbnail"));
-    assert!(!download.contains("mxcUrlToHttp"));
-    assert!(!download.contains("Core::command"));
-
     let media_owner = include_str!("../media/product_commands.rs");
-    assert!(media_owner.contains("resolve_timeline_media"));
+    assert!(!media_owner.contains("pub async fn matrix_media_download"));
+    assert!(!media_owner.contains("MatrixMediaDownloadResult"));
+    for command in ["matrix_media_save", "matrix_media_text_preview"] {
+        assert!(media_owner.contains(&format!("pub async fn {command}")));
+        assert!(product.contains(&format!("pub async fn {command}")));
+    }
     assert!(media_owner.contains("is_timeline_media_handle"));
+    assert!(media_owner.contains("MediaFormat::File"));
+    assert!(media_owner.contains("download_media_bounded("));
+    assert!(media_owner.contains("MAX_MEDIA_DOWNLOAD_BYTES"));
+    assert!(media_owner.contains("MAX_MEDIA_TEXT_PREVIEW_BYTES"));
+    assert!(media_owner.contains("save_exclusive_download"));
+    assert!(media_owner.contains("resolve_timeline_media"));
+    assert!(!media_owner.contains("Thumbnail"));
+    assert!(!media_owner.contains("mxcUrlToHttp"));
+    assert!(!media_owner.contains("Core::command"));
+    let save = media_owner
+        .split("pub async fn matrix_media_save")
+        .nth(1)
+        .expect("media save command")
+        .split("pub async fn matrix_media_text_preview")
+        .next()
+        .expect("save command body");
+    assert!(!save.contains("MatrixMediaDownloadResult"));
+    assert!(save.contains("filename"));
 }
 
 #[test]

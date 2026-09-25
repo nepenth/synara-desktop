@@ -30,7 +30,7 @@ verticals remain the product standard.
 ### Model selection (single configured model)
 
 The only model configured in prime-agent is **DeepSeek V4 Flash 0731**
-(selector `whyland-spark/deepseek-v4-flash-0731`), locally hosted. Orchestrator
+(selector `local-model/deepseek-v4-flash-0731`), locally hosted. Orchestrator
 and sub-agents all use it; **max 2 concurrent sub-agent sessions**. Assign
 effort by role and reasoning budget on the same model:
 

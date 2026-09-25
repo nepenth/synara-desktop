@@ -1,7 +1,7 @@
 {
   "name": "synara-desktop",
   "version": "2.1.41",
-  "description": "Synara Desktop, a high-performance Matrix client for secure conversations and agent workflows.",
+  "description": "Synara Desktop, a Matrix client for macOS and Linux with a shared Rust core.",
   "main": "index.js",
   "engines": {
     "node": ">=22.12.0"
