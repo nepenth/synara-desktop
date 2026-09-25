@@ -34,6 +34,26 @@ Linux packages are x86_64 only. Source builds need Node.js 24.13.1 and Rust 1.96
 | Device verification, secret storage, and encrypted media through the Rust core | An ARM Linux package |
 | iOS app on the same core, internal TestFlight only | App Store distribution |
 
+## Interface
+
+These screenshots show sample rooms on a disposable account.
+
+### macOS
+
+![Synara macOS room list with sample rooms and unread counts](docs/readme/macos-room-list.png)
+
+![Synara macOS Design Studio timeline with sample messages, a file attachment, and the composer](docs/readme/macos-timeline.png)
+
+![Synara macOS Design Studio member list showing Ada and Ben](docs/readme/macos-details.png)
+
+### iOS
+
+![Synara iPhone room list with sample rooms and unread counts](docs/readme/iphone-room-list.png)
+
+![Synara iPhone Mobile Studio timeline with sample messages, a file attachment, and the composer](docs/readme/iphone-timeline.png)
+
+![Synara iPad room list and Tablet Studio timeline side by side](docs/readme/ipad-split.png)
+
 ## Product Channels
 
 | Client | User interface  | Matrix/application core                           | Distribution                                 |
