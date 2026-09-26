@@ -840,11 +840,11 @@ export function inspectQualityGates({
       releaseDocs
     ) ||
     !/do\s+not\s+run on tag refs/i.test(releaseDocs) ||
-    !/required human reviewers/i.test(releaseDocs) ||
+    !/pushing the validated version tag is the release\s+authorization/i.test(releaseDocs) ||
     !/exact-tag[^\n]*jobs/i.test(releaseDocs)
   ) {
     errors.push(
-      "Release documentation must forbid non-tag CI status checks on production-release and prescribe human reviewers plus exact-tag jobs."
+      "Release documentation must forbid non-tag CI status checks on production-release and identify the version tag plus exact-tag jobs as publication gates."
     );
   }
 

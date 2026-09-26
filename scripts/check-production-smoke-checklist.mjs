@@ -12,7 +12,7 @@ const REQUIRED_SECTIONS = [
   "## Timeline Resurrection Smoke",
   "## iOS Tool-Bound Smoke",
   "## Updater Release Smoke",
-  "## Signoff Table",
+  "## Manual Coverage Backlog",
 ];
 
 const REQUIRED_COMMANDS = [

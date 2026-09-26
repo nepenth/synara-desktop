@@ -11,7 +11,7 @@ const sections = [
   "## Timeline Resurrection Smoke",
   "## iOS Tool-Bound Smoke",
   "## Updater Release Smoke",
-  "## Signoff Table",
+  "## Manual Coverage Backlog",
 ].join("\n");
 
 const commands = [
