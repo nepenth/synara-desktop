@@ -7469,7 +7469,10 @@ private struct ComposerView: View {
         .padding(.horizontal, SynaraSpacing.small)
         .padding(.top, SynaraSpacing.xSmall)
         .padding(.bottom, SynaraSpacing.xSmall)
-        .background(SynaraChrome.composer)
+        .background {
+            SynaraChrome.composer
+                .ignoresSafeArea(.container, edges: .bottom)
+        }
         .animation(.easeInOut(duration: 0.18), value: isFormattingBarVisible)
         .animation(.easeInOut(duration: 0.18), value: shouldShowPromptMetrics)
         .onChange(of: isComposerFocused) { focused in

@@ -17,6 +17,7 @@ struct RootShellView: View {
     @State private var signOutError: String?
     @State private var tabBarScrollTailHeight: CGFloat = 0
     @ObservedObject private var themePaint = SynaraThemePaint.shared
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     init(environment: AppEnvironment = .mock()) {
         self.environment = environment
@@ -219,11 +220,22 @@ struct RootShellView: View {
                 }
             }
         }
-        .synaraTabRootContentReachability(scrollTailHeight: tabBarScrollTailHeight)
+        .synaraTabRootContentReachability(scrollTailHeight: scrollTailHeight(for: tab))
         .tabItem {
             tab.label(badgeCounts: tabBadgeCounts)
         }
         .tag(tab)
+    }
+
+    private func scrollTailHeight(for tab: AppTab) -> CGFloat {
+        if tab.usesConversationCanvas,
+           SynaraCanvasLayoutPolicy.layout(horizontalSizeClass: horizontalSizeClass) == .stacked,
+           SynaraConversationPath.splitRoot(in: router.binding(for: tab).wrappedValue) != nil {
+            // The compact conversation hides the tab bar. Its root scroll tail
+            // would otherwise reserve a blank strip below the composer.
+            return 0
+        }
+        return tabBarScrollTailHeight
     }
 
     private func startTabBadgeUpdates() {
