@@ -435,9 +435,8 @@ final class ComposerPasteTextView: UITextView {
         updateQuoteBars()
     }
 
-    /// Keep Matrix Markdown in text storage, while presenting quote markers as
-    /// a block rule like the desktop editor. This leaves selection and sending
-    /// on the same UTF-16 offsets as the draft.
+    /// Keep the sendable draft in text storage. Presentation attributes hide
+    /// syntax and style its content without changing selection offsets.
     func refreshQuotePresentation() {
         guard isRefreshingQuotePresentation == false else { return }
         isRefreshingQuotePresentation = true
@@ -448,20 +447,183 @@ final class ComposerPasteTextView: UITextView {
             return
         }
         textStorage.beginEditing()
+        let fullRange = NSRange(location: 0, length: content.length)
+        var previousPresentationRanges: [NSRange] = []
+        textStorage.enumerateAttribute(
+            ComposerAttributedMarkdown.presentationAttribute,
+            in: fullRange
+        ) { value, range, _ in
+            if value != nil { previousPresentationRanges.append(range) }
+        }
+        for range in previousPresentationRanges {
+            textStorage.addAttribute(.font, value: font ?? UIFont.preferredFont(forTextStyle: .callout), range: range)
+            textStorage.removeAttribute(.underlineStyle, range: range)
+            textStorage.removeAttribute(.strikethroughStyle, range: range)
+            textStorage.removeAttribute(.obliqueness, range: range)
+            textStorage.removeAttribute(.backgroundColor, range: range)
+        }
+        textStorage.removeAttribute(ComposerAttributedMarkdown.presentationAttribute, range: fullRange)
         textStorage.addAttribute(
             .foregroundColor,
             value: textColor ?? UIColor.label,
-            range: NSRange(location: 0, length: content.length)
+            range: fullRange
         )
         for range in quoteLineRanges(in: content) {
+            textStorage.addAttribute(ComposerAttributedMarkdown.presentationAttribute, value: true, range: range)
             textStorage.addAttribute(
                 .foregroundColor,
                 value: UIColor.clear,
                 range: NSRange(location: range.location, length: 2)
             )
+            let contentRange = NSRange(location: range.location + 2, length: range.length - 2)
+            textStorage.addAttribute(.obliqueness, value: 0.15, range: contentRange)
         }
+        for range in lineRanges(in: content, prefix: "- ") {
+            textStorage.addAttribute(ComposerAttributedMarkdown.presentationAttribute, value: true, range: range)
+            textStorage.addAttribute(
+                .foregroundColor,
+                value: UIColor.clear,
+                range: NSRange(location: range.location, length: 1)
+            )
+        }
+        applyInlinePresentation(in: content)
+        applyHeadingPresentation(in: content)
+        applyCodeBlockPresentation(in: content)
         textStorage.endEditing()
         updateQuoteBars()
+    }
+
+    private enum InlineStyle: Equatable {
+        case bold, italic, underline, strike, code, spoiler
+    }
+
+    private func applyInlinePresentation(in content: NSString) {
+        let fullRange = NSRange(location: 0, length: content.length)
+        let fencedRanges = codeBlockMatches(in: content).map(\.range)
+        let inlineCodeRanges = (try? NSRegularExpression(pattern: #"`([^`\n]+)`"#))?
+            .matches(in: content as String, range: fullRange)
+            .map(\.range) ?? []
+        let patterns: [(String, InlineStyle)] = [
+            (#"\*\*([^*\n]+)\*\*"#, .bold),
+            (#"(?<!_)_([^_\n]+)_(?!_)"#, .italic),
+            (#"<u>([\s\S]+?)</u>"#, .underline),
+            (#"~~([^~\n]+)~~"#, .strike),
+            (#"`([^`\n]+)`"#, .code),
+            (#"<span data-mx-spoiler>([\s\S]+?)</span>"#, .spoiler),
+        ]
+        for (pattern, style) in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { continue }
+            for match in regex.matches(in: content as String, range: fullRange) {
+                if fencedRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                    continue
+                }
+                if style != .code,
+                   inlineCodeRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 })
+                {
+                    continue
+                }
+                let inner = match.range(at: 1)
+                guard inner.location != NSNotFound else { continue }
+                textStorage.addAttribute(
+                    ComposerAttributedMarkdown.presentationAttribute,
+                    value: true,
+                    range: match.range
+                )
+                let leading = NSRange(location: match.range.location, length: inner.location - match.range.location)
+                let trailing = NSRange(location: NSMaxRange(inner), length: NSMaxRange(match.range) - NSMaxRange(inner))
+                textStorage.addAttribute(.foregroundColor, value: UIColor.clear, range: leading)
+                textStorage.addAttribute(.foregroundColor, value: UIColor.clear, range: trailing)
+                switch style {
+                case .bold:
+                    applyFontTraits(.traitBold, in: inner)
+                case .italic:
+                    applyFontTraits(.traitItalic, in: inner)
+                case .underline:
+                    textStorage.addAttribute(.underlineStyle, value: NSUnderlineStyle.single.rawValue, range: inner)
+                case .strike:
+                    textStorage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: inner)
+                case .code:
+                    textStorage.addAttribute(
+                        .font,
+                        value: UIFont.monospacedSystemFont(ofSize: font?.pointSize ?? 17, weight: .regular),
+                        range: inner
+                    )
+                    textStorage.addAttribute(.backgroundColor, value: UIColor.tertiarySystemFill, range: inner)
+                case .spoiler:
+                    textStorage.addAttribute(.backgroundColor, value: UIColor.tertiarySystemFill, range: inner)
+                }
+            }
+        }
+    }
+
+    private func applyHeadingPresentation(in content: NSString) {
+        guard let regex = try? NSRegularExpression(pattern: #"^(#{1,4}) (.*)$"#, options: .anchorsMatchLines) else {
+            return
+        }
+        let fullRange = NSRange(location: 0, length: content.length)
+        let codeRanges = codeBlockMatches(in: content).map(\.range)
+        for match in regex.matches(in: content as String, range: fullRange) {
+            if codeRanges.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) {
+                continue
+            }
+            let markers = match.range(at: 1)
+            let body = match.range(at: 2)
+            let level = max(1, markers.length - 1)
+            textStorage.addAttribute(ComposerAttributedMarkdown.presentationAttribute, value: true, range: match.range)
+            textStorage.addAttribute(
+                .foregroundColor,
+                value: UIColor.clear,
+                range: NSRange(location: markers.location, length: markers.length + 1)
+            )
+            let base = font ?? UIFont.preferredFont(forTextStyle: .callout)
+            let scale: CGFloat = level == 1 ? 1.35 : (level == 2 ? 1.2 : 1.1)
+            textStorage.addAttribute(
+                .font,
+                value: UIFont.systemFont(ofSize: base.pointSize * scale, weight: .semibold),
+                range: body
+            )
+        }
+    }
+
+    private func applyCodeBlockPresentation(in content: NSString) {
+        for match in codeBlockMatches(in: content) {
+            let code = match.range(at: 1)
+            guard code.location != NSNotFound else { continue }
+            textStorage.addAttribute(ComposerAttributedMarkdown.presentationAttribute, value: true, range: match.range)
+            textStorage.addAttribute(
+                .foregroundColor,
+                value: UIColor.clear,
+                range: NSRange(location: match.range.location, length: code.location - match.range.location)
+            )
+            textStorage.addAttribute(
+                .foregroundColor,
+                value: UIColor.clear,
+                range: NSRange(location: NSMaxRange(code), length: NSMaxRange(match.range) - NSMaxRange(code))
+            )
+            textStorage.addAttribute(
+                .font,
+                value: UIFont.monospacedSystemFont(ofSize: font?.pointSize ?? 17, weight: .regular),
+                range: code
+            )
+            textStorage.addAttribute(.backgroundColor, value: UIColor.tertiarySystemFill, range: code)
+        }
+    }
+
+    private func codeBlockMatches(in content: NSString) -> [NSTextCheckingResult] {
+        guard let regex = try? NSRegularExpression(
+            pattern: #"(?m)^```[^\n]*\n([\s\S]*?)\n```(?=\n|$)"#
+        ) else {
+            return []
+        }
+        return regex.matches(in: content as String, range: NSRange(location: 0, length: content.length))
+    }
+
+    private func applyFontTraits(_ traits: UIFontDescriptor.SymbolicTraits, in range: NSRange) {
+        let current = (textStorage.attribute(.font, at: range.location, effectiveRange: nil) as? UIFont)
+            ?? font ?? UIFont.preferredFont(forTextStyle: .callout)
+        let combined = current.fontDescriptor.symbolicTraits.union(traits)
+        let descriptor = current.fontDescriptor.withSymbolicTraits(combined) ?? current.fontDescriptor
+        textStorage.addAttribute(.font, value: UIFont(descriptor: descriptor, size: current.pointSize), range: range)
     }
 
     func updateQuoteBars() {
@@ -484,16 +646,33 @@ final class ComposerPasteTextView: UITextView {
                 height: height
             ), cornerRadius: 1.5))
         }
+        for range in lineRanges(in: content, prefix: "- ") {
+            let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+            let y = textContainerInset.top + rect.minY - contentOffset.y
+            path.append(UIBezierPath(ovalIn: CGRect(
+                x: textContainerInset.left + 2 - contentOffset.x,
+                y: y + max(0, (font?.lineHeight ?? 17) - 5) / 2,
+                width: 5,
+                height: 5
+            )))
+        }
         quoteBars.path = path.cgPath
     }
 
     private func quoteLineRanges(in content: NSString) -> [NSRange] {
+        lineRanges(in: content, prefix: "> ")
+    }
+
+    private func lineRanges(in content: NSString, prefix: String) -> [NSRange] {
         var ranges: [NSRange] = []
         var position = 0
+        let codeRanges = codeBlockMatches(in: content).map(\.range)
         while position < content.length {
             let range = content.lineRange(for: NSRange(location: position, length: 0))
-            if range.length >= 2,
-               content.substring(with: NSRange(location: range.location, length: 2)) == "> "
+            if range.length >= prefix.utf16.count,
+               codeRanges.contains(where: { NSIntersectionRange($0, range).length > 0 }) == false,
+               content.substring(with: NSRange(location: range.location, length: prefix.utf16.count)) == prefix
             {
                 ranges.append(range)
             }
@@ -507,7 +686,8 @@ final class ComposerPasteTextView: UITextView {
         fallback: ComposerTextSelection
     ) -> ComposerTextSelection {
         guard fallback.length == 0,
-              [.blockquote, .bulletList, .numberedList, .codeBlock].contains(format),
+              [.blockquote, .bulletList, .numberedList, .codeBlock,
+               .heading1, .heading2, .heading3].contains(format),
               let recentPasteRange,
               recentPasteText == text,
               selectedRange.location == NSMaxRange(recentPasteRange),

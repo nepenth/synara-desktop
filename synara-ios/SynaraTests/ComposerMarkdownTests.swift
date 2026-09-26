@@ -2,6 +2,36 @@ import XCTest
 @testable import Synara
 
 final class ComposerMarkdownTests: XCTestCase {
+    func testDesktopInlineControlsWrapAndToggle() {
+        let cases: [(ComposerMarkdownFormat, String, String)] = [
+            (.underline, "<u>word</u>", "word"),
+            (.spoiler, "<span data-mx-spoiler>word</span>", "word"),
+        ]
+        for (format, expected, original) in cases {
+            let applied = ComposerMarkdown.apply(
+                format,
+                to: original,
+                selection: ComposerTextSelection(location: 0, length: 4)
+            )
+            XCTAssertEqual(applied.text, expected)
+            let removed = ComposerMarkdown.apply(format, to: applied.text, selection: applied.selection)
+            XCTAssertEqual(removed.text, original)
+        }
+    }
+
+    func testHeadingLevelsSwitchAndToggle() {
+        let first = ComposerMarkdown.apply(
+            .heading1,
+            to: "Release plan",
+            selection: ComposerTextSelection(location: 0, length: 12)
+        )
+        XCTAssertEqual(first.text, "## Release plan")
+        let second = ComposerMarkdown.apply(.heading2, to: first.text, selection: first.selection)
+        XCTAssertEqual(second.text, "### Release plan")
+        let removed = ComposerMarkdown.apply(.heading2, to: second.text, selection: second.selection)
+        XCTAssertEqual(removed.text, "Release plan")
+    }
+
     func testBoldWrapsSelectedText() {
         let result = ComposerMarkdown.apply(
             .bold,

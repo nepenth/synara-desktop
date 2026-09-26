@@ -894,6 +894,11 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.scrollViews["ComposerFormattingBar"].waitForExistence(timeout: 5))
         XCTAssertTrue(app.buttons["ComposerFormat-bold"].exists)
         XCTAssertTrue(app.buttons["ComposerFormat-bulletList"].exists)
+        XCTAssertTrue(app.buttons["ComposerFormat-underline"].exists)
+        XCTAssertTrue(app.buttons["ComposerFormat-spoiler"].exists)
+        XCTAssertTrue(app.buttons["ComposerFormat-heading1"].exists)
+        XCTAssertTrue(app.buttons["ComposerFormat-heading2"].exists)
+        XCTAssertTrue(app.buttons["ComposerFormat-heading3"].exists)
 
         tap(app.buttons["ComposerFormat-bold"])
         let composer = composerField(in: app)

@@ -2116,16 +2116,18 @@ struct RoomTimelineView: View {
         editEventID: String?,
         retrying failedItem: TimelineItem? = nil
     ) async {
-        let body = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard body.isEmpty == false else {
+        let draftBody = rawBody.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard draftBody.isEmpty == false else {
             sendError = MessageSendError.emptyMessage.localizedDescription
             return
         }
+        let formattedBody = ComposerMatrixFormatting.formattedBody(for: draftBody)
+        let body = ComposerMatrixFormatting.plainBody(for: draftBody, formattedBody: formattedBody)
 
         let request = MessageSendRequest(
             roomID: roomID,
             body: body,
-            formattedBody: ComposerMatrixFormatting.formattedBody(for: body),
+            formattedBody: formattedBody,
             replyToEventID: replyToEventID,
             editEventID: editEventID,
             threadRootEventID: threadRootEventID
@@ -4000,11 +4002,12 @@ struct ThreadTimelineView: View {
                 defer {
                     PerformanceTrace.end("ThreadMessageSend", id: signpostID)
                 }
+                let formattedBody = ComposerMatrixFormatting.formattedBody(for: trailingText)
                 let item = try await environment.messageSender.send(
                     MessageSendRequest(
                         roomID: roomID,
-                        body: trailingText,
-                        formattedBody: ComposerMatrixFormatting.formattedBody(for: trailingText),
+                        body: ComposerMatrixFormatting.plainBody(for: trailingText, formattedBody: formattedBody),
+                        formattedBody: formattedBody,
                         replyToEventID: nil,
                         editEventID: nil,
                         threadRootEventID: rootEventID
@@ -7879,16 +7882,22 @@ private struct ComposerFormattingBar: View {
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            // Eight 44-point hit targets plus spacing and row padding must fit
-            // a 377-point composer row: keep the accessible frame and tighten
-            // the visual box and rhythm instead.
+            // Keep every action at a 44-point hit target while the row scrolls
+            // horizontally on compact devices.
             HStack(spacing: 2) {
                 ForEach(ComposerMarkdownFormat.allCases) { format in
                     Button {
                         onFormat(format)
                     } label: {
-                        Image(systemName: format.systemImage)
-                            .font(.system(size: 15, weight: .semibold))
+                        Group {
+                            if let headingLabel = format.headingLabel {
+                                Text(headingLabel)
+                                    .font(.system(size: 13, weight: .semibold))
+                            } else {
+                                Image(systemName: format.systemImage)
+                                    .font(.system(size: 15, weight: .semibold))
+                            }
+                        }
                             .frame(width: 34, height: 34)
                             .background(SynaraColor.surface)
                             .foregroundStyle(SynaraColor.primaryText)
