@@ -503,6 +503,7 @@ struct RoomTimelineView: View {
                 onPasteImages: draftPastedImages,
                 isFocusedExternally: $isComposerFocused
             )
+            .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
             .background(SynaraChrome.composer)
             .synaraDockedDepth(
                 .floating,
@@ -510,6 +511,7 @@ struct RoomTimelineView: View {
             )
         }
         .background(isAgentRoom ? SynaraChrome.agentReview : SynaraChrome.chat)
+        .ignoresSafeArea(.container, edges: canvasLayout == .stacked ? .bottom : [])
         .navigationTitle(displayRoomTitle)
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
@@ -3634,8 +3636,10 @@ struct ThreadTimelineView: View {
                 onPasteImages: draftThreadPastedImages,
                 isFocusedExternally: $isComposerFocused
             )
+            .padding(.bottom, canvasLayout == .stacked ? SynaraSpacing.large : 0)
         }
         .background(SynaraColor.surface)
+        .ignoresSafeArea(.container, edges: canvasLayout == .stacked ? .bottom : [])
         .navigationBarBackButtonHidden(true)
         .toolbar(.hidden, for: .navigationBar)
         .toolbar(canvasLayout.hidesTabBarInConversation ? .hidden : .automatic, for: .tabBar)
