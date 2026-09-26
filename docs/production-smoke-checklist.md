@@ -2,10 +2,14 @@
 
 Reviewed: 2026-09-26
 
-This checklist is the release handoff surface for human-run desktop and iOS
-validation gates. Automated commands and release sequencing live in
+This checklist tracks optional human-run desktop and iOS validation. It is a
+coverage backlog and evidence record, not a routine release gate for the
+single-maintainer repository. Run the relevant cases when a change carries
+platform-specific risk or when time permits; record what was actually tested.
+Automated commands and release sequencing live in
 [the build and release runbook](build-and-release.md). The dated feedback below
-is preserved as regression history; it does not override newer evidence.
+is preserved as regression history. Earlier entries that call a manual case
+"required" describe the policy at that time and do not block new releases.
 
 ## Current Baseline
 
@@ -14,7 +18,7 @@ proof is [the 2026-08-17 shared-core proof](shared-native-core/15-2026-08-17-loc
 The core macOS Matrix path now also has Xcode-driven interactive evidence dated
 2026-08-18 in [desktop validation status](desktop-validation-status.md). Linux
 package/install interaction, physical-device iOS checks, and the unexercised
-macOS platform-integration cases remain release-candidate gates.
+macOS platform-integration cases remain useful follow-up coverage.
 
 ## Latest Smoke Feedback
 
@@ -472,13 +476,13 @@ Cases:
 | UPD-003 | Hosted metadata  | Production HTTPS endpoint serves valid signed metadata for the built version.                   | URL and validation output.     |
 | UPD-004 | App check        | Installed app can check for updates without crashing or contacting placeholder/local endpoints. | App logs and pass/fail.        |
 
-## Signoff Table
+## Manual Coverage Backlog
 
-| Section                     |                         Required Before Release | Status                                                                                                 | Evidence Link           |
-| --------------------------- | ----------------------------------------------: | ------------------------------------------------------------------------------------------------------ | ----------------------- |
-| Common preflight            |                                             Yes | Pending                                                                                                |                         |
-| macOS desktop smoke         |                                             Yes | Core Matrix interaction passed 2026-08-18; link/open, paste/drop, spellcheck, notification, tray, shortcut, updater, and signed-package cases remain | `docs/desktop-validation-status.md` |
-| Linux desktop smoke         |                                             Yes | Failed link/open, paste/drop, and spellcheck smoke; packaged-localhost capability fix pending re-smoke | 2026-07-07 human report |
-| Timeline Resurrection smoke |                                             Yes | Much improved, but visible initial-load repositioning remains; diagnostics/formal evidence pending     | 2026-07-07 human report |
-| iOS tool-bound smoke        | Yes for iOS release and shared Timeline signoff | Pending                                                                                                |                         |
-| Updater release smoke       |                                             Yes | Pending                                                                                                |                         |
+| Section                     | Current evidence or follow-up | Evidence link |
+| --------------------------- | ----------------------------- | ------------- |
+| Common preflight            | Run before an interactive smoke session. | |
+| macOS desktop smoke         | Core Matrix interaction passed 2026-08-18; link/open, paste/drop, spellcheck, notification, tray, shortcut, updater, and signed-package cases remain. | [Desktop validation status](desktop-validation-status.md) |
+| Linux desktop smoke         | Link/open, paste/drop, and spellcheck failed in the 2026-07-07 human report; packaged-localhost changes need re-smoke. | 2026-07-07 human report |
+| Timeline Resurrection smoke | Improved, but initial-load positioning needs interactive evidence. | 2026-07-07 human report |
+| iOS tool-bound smoke        | Physical-device behavior remains unverified. | |
+| Updater release smoke       | Installed-app update behavior remains unverified. | |

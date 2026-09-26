@@ -33,6 +33,7 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
           PR_LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
         run: |
           # Always-on full smoke: manual runs.
@@ -78,6 +79,21 @@ jobs:
             else
               echo "packages=false" >> "$GITHUB_OUTPUT"
               echo "reason=integration_pr_default_skip_package_smoke"
+            fi
+            exit 0
+          fi
+
+          # A release PR already runs the full client Quality gate. The exact
+          # tag builds every distributable and publishes only after all of
+          # them pass, so candidate package builds add no release proof unless
+          # the maintainer explicitly requests an installable smoke artifact.
+          if [[ "$BASE_REF" == "main" && "$HEAD_REF" == release/* ]]; then
+            if [[ ",$PR_LABELS," == *",needs-package,"* ]]; then
+              echo "packages=true" >> "$GITHUB_OUTPUT"
+              echo "reason=release_pr_label_needs-package"
+            else
+              echo "packages=false" >> "$GITHUB_OUTPUT"
+              echo "reason=release_tag_builds_packages"
             fi
             exit 0
           fi

@@ -1,6 +1,6 @@
 # Build And Release Runbook
 
-Reviewed: 2026-08-18
+Reviewed: 2026-09-26
 
 This is the entry point for agents and maintainers preparing Synara builds or
 releases. Read this before changing packaging, signing, updater, TestFlight, or
@@ -11,11 +11,14 @@ release workflow behavior.
 | Lane                | Purpose                                                              |         Client-visible update? |
 | ------------------- | -------------------------------------------------------------------- | -----------------------------: |
 | `main`              | Integration branch. Runs normal CI on push and PR.                   |                             No |
-| `release/vX.Y.Z`    | Release candidate branch. Runs CI and desktop package smoke on the release PR, not a second time on push. |                             No |
+| `release/vX.Y.Z`    | Version and notes PR. Runs the full client Quality gate, including iOS simulator unit and UI suites. | No |
 | Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.           | Yes, after every client passes |
 
-Do not push a release tag until the branch `Quality gate`, desktop package smoke,
-and human smoke checklist have passed.
+The maintainer merges a green release PR and pushes the matching version tag as
+the single deliberate publication action. The tag workflow builds and checks
+the actual macOS, Linux, and iOS distributables before publishing them. Manual
+device and installed-package smoke is recommended when relevant, but does not
+block routine releases.
 
 ## Local Prerequisites
 
@@ -92,24 +95,29 @@ full app launch smoke are tracked in
 [iOS validation status](../synara-ios/docs/ios-validation-status.md) and
 [desktop validation status](desktop-validation-status.md).
 
-## Release Branch Flow
+## Release PR Flow
 
-1. Bump version metadata with `npm run bump:version -- X.Y.Z`.
-2. Confirm `npm run check:versions`.
-3. Create `release/vX.Y.Z` from `main`.
-4. Push the release branch.
-5. Confirm GitHub Actions:
-   - `CI / Quality gate`, including real iOS simulator tests
-   - `Desktop Package Smoke`
-6. Install and smoke the generated package artifacts:
+1. Create `release/vX.Y.Z` from `main` and bump all client versions and the iOS
+   build number with `npm run bump:version -- X.Y.Z --ios-build X.Y.Z`.
+2. Add the changelog, `docs/releases/vX.Y.Z.md`, and
+   `synara-ios/release-notes/vX.Y.Z-en-US.txt`.
+3. Open the release PR into `main`. Require its `CI / Quality gate`, including
+   the iOS simulator unit and UI suites, to pass. Merge when green.
+4. Push `vX.Y.Z` at the merged `main` commit. That tag starts the Release
+   workflow. Do not wait for another full CI run on the merge commit.
+
+When a change needs interactive candidate testing, add the `needs-package` PR
+label. It builds disposable smoke artifacts:
+
    - `synara-macos-app`: unsigned/ad-hoc macOS `.app` release-candidate smoke artifact.
    - `synara-linux-arch-pkg`: Arch/CachyOS pacman package artifact for
      `pacman -U` smoke and GitHub Release-backed pacman repo validation.
    - `synara-linux-deb`: Debian-family package smoke artifact.
-7. Record smoke evidence in [production-smoke-checklist.md](production-smoke-checklist.md).
 
-Release branch pushes build candidate artifacts for validation. They must not
-publish a production updater channel.
+Record any interactive results in
+[production-smoke-checklist.md](production-smoke-checklist.md). Release PRs do
+not build disposable desktop packages by default; the tag builds the signed
+and publishable packages once, from the exact release commit.
 
 ## Production Publish Flow
 
@@ -118,23 +126,7 @@ It is deliberately tag-push-only: do not add `workflow_dispatch` unless it
 requires an explicit tag and checks out that exact tag SHA. GitHub's normal
 manual workflow branch selector is not a safe release-source selector.
 
-1. Bump every client and the iOS build number together:
-
-```bash
-npm run bump:version -- X.Y.Z --ios-build X.Y.Z
-```
-
-Write `synara-ios/release-notes/vX.Y.Z-en-US.txt` before opening the release
-PR. The release PR and tag validation require this TestFlight text. A missing
-file prevents promotion even when Apple accepts the uploaded build.
-
-2. Open a release PR (version files, changelog, release notes). Version-bearing
-   manifests and configuration are executable build inputs and run the relevant
-   validation. Use a `release/vX.Y.Z` head branch to require the iOS unit and UI
-   suites as well. Only inert release prose qualifies for metadata-only skips.
-3. Merge when Quality gate is green, then tag `vX.Y.Z` at that `main` commit.
-   Do not wait for a second full suite on the merge push.
-4. The `Release` workflow validates that the tag matches the committed shared
+1. The `Release` workflow validates that the tag matches the committed shared
    version and is reachable from `main`. Exact-tag jobs reuse a proven
    `Quality gate` on that SHA (or the incoming PR parent of a merge commit)
    and otherwise rerun full desktop/runtime and iOS simulator tests at the
@@ -145,9 +137,10 @@ file prevents promotion even when Apple accepts the uploaded build.
      `Packages.gz`, `Release`, and the package).
    - Arch-family `synara-desktop-bin` package plus fixed `pacman-repo` release
      assets (`synara.db`, `synara.files`, and package file).
-5. GitHub Release publishes those desktop artifacts through the
-   `production-release` environment. It does not wait on TestFlight.
-6. iOS TestFlight upload and internal promotion run in parallel as their own
+2. GitHub Release publishes those desktop artifacts through the
+   `production-release` environment without a second human approval. It does
+   not wait on TestFlight. The environment still scopes signing secrets.
+3. iOS TestFlight upload and internal promotion run in parallel as their own
    track. Confirm the TestFlight state snapshot; Apple should report the exact
    build as `IN_BETA_TESTING`.
 
@@ -156,15 +149,15 @@ fails, repair the cause on `main` and use **TestFlight Promotion Recovery** with
 the existing release tag and exact uploaded build number. This recovery checks
 that the tag is on `main`, reads the release notes from `main`, and promotes the
 already uploaded build. It does not rebuild or republish desktop assets.
-7. Confirm hosted macOS `latest.json`.
-8. Verify the fixed Linux repository URLs:
+4. Confirm hosted macOS `latest.json`.
+5. Verify the fixed Linux repository URLs:
 
 ```text
 https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db
 https://github.com/nepenth/synara-desktop/releases/download/apt-repo/Packages
 ```
 
-9. Confirm installed-app update behavior:
+For periodic or higher-risk releases, also smoke installed-app update behavior:
    - iOS updates through TestFlight.
    - macOS updates through the Tauri updater flow.
    - Linux updates through `sudo apt upgrade`, `paru -Syu`, or
@@ -172,8 +165,9 @@ https://github.com/nepenth/synara-desktop/releases/download/apt-repo/Packages
 
 Updater secrets, endpoint names, and publication rules live in this runbook.
 Release-branch PRs into `main` from `release/vX.Y.Z` run Quality gate including
-iOS simulator unit and UI suites, plus Desktop Package Smoke. Ordinary feature
-PRs skip those iOS suites.
+iOS simulator unit and UI suites. Ordinary feature PRs skip those iOS suites.
+Desktop Package Smoke remains available on release PRs through the
+`needs-package` label or manual dispatch.
 
 ## Required Release Secrets
 
@@ -210,9 +204,10 @@ EB88 3952 04C1 EE19 7EE8  3B2F 3E02 F509 BB6B 0D2B
 Never commit updater private keys, Apple certificates, passwords, or notarization
 credentials.
 
-Configure the GitHub `production-release` Environment with at least one required
-human reviewer. The workflow declares the environment, but repository-level
-review protection must be enabled in GitHub settings.
+Keep the GitHub `production-release` Environment for signing secrets and
+deployment history. A second human reviewer approval is not required for a
+single-maintainer repository: pushing the validated version tag is the release
+authorization.
 
 Set the repository variable `SYNARA_TESTFLIGHT_INTERNAL_ONLY` to `true` or
 `false` to control internal-only TestFlight distribution for subsequent tag
@@ -220,9 +215,8 @@ pushes. It defaults to `true`; there is no manual-dispatch override.
 
 Do not configure the `production-release` environment with required status checks
 from ordinary CI workflows that do not run on tag refs: those checks cannot
-report against a release-tag deployment and will leave approval permanently
-blocked. Use required human reviewers for the environment and the Release
-workflow's exact-tag validation jobs for automated publication protection.
+report against a release-tag deployment and will leave publication blocked.
+The Release workflow's exact-tag validation jobs protect publication.
 Branch-protection status checks remain appropriate for `main` and release
 branches where their workflows actually run.
 
@@ -275,10 +269,10 @@ atomically deployed static repository.
 
 ## Release Constraints
 
-- Human macOS and Linux package-install smoke remains required for each release
-  candidate even when automated build and unit gates pass.
-- Physical-device iOS upgrade, performance, APNs, and archive evidence remains
-  a release-candidate responsibility.
+- Human macOS and Linux package-install smoke is optional routine coverage;
+  use it when packaging or platform behavior changed in a way CI cannot prove.
+- Physical-device iOS upgrade, performance, APNs, and archive evidence is
+  recommended for relevant changes and can be collected after publication.
 - macOS uses signed Tauri updater metadata; Linux uses the GitHub
   Release-backed pacman repository; iOS uses TestFlight or the App Store.
 - Production publication is blocked unless the exact-tag workflow validates all

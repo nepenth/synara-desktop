@@ -275,7 +275,8 @@ ${iosBuildStep.replace("    steps:\n", "")}
 
 const releaseDocs = `
 Do not configure the production-release environment with status checks that do
-not run on tag refs. Use required human reviewers and exact-tag validation jobs.
+not run on tag refs. Pushing the validated version tag is the release
+authorization. Use exact-tag validation jobs before publication.
 `;
 
 const rootPackage = JSON.stringify({
