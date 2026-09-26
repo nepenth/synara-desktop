@@ -1,13 +1,9 @@
 import { Badge, Box, Icon, IconButton, Icons, Spinner, Text, as, toRem } from 'folds';
 import React, { ReactNode, useCallback } from 'react';
 import { EncryptedAttachmentInfo } from '../../../types/matrix/common';
-import FileSaver from 'file-saver';
 import { mimeTypeToExt } from '../../utils/mimeTypes';
-import { useMatrixClient } from '../../hooks/useMatrixClient';
-import { useMediaAuthentication } from '../../hooks/useMediaAuthentication';
 import { AsyncStatus, useAsyncCallback } from '../../hooks/useAsyncCallback';
-import { savePlatformFile, supportsPlatformNativeFileSave } from '../../platform';
-import { downloadMatrixMedia } from '../../matrix/media';
+import { saveMatrixMediaFile } from '../../matrix/media';
 
 const badgeStyles = { maxWidth: toRem(100) };
 
@@ -17,27 +13,11 @@ type FileDownloadButtonProps = {
   mimeType: string;
   encInfo?: EncryptedAttachmentInfo;
 };
-export function FileDownloadButton({ filename, url, mimeType, encInfo }: FileDownloadButtonProps) {
-  const mx = useMatrixClient();
-  const useAuthentication = useMediaAuthentication();
-
+export function FileDownloadButton({ filename, url }: FileDownloadButtonProps) {
   const [downloadState, download] = useAsyncCallback(
     useCallback(async () => {
-      const fileContent = await downloadMatrixMedia(mx, url, {
-        useAuthentication,
-        mimeType,
-        encryptedInfo: encInfo,
-      });
-
-      if (supportsPlatformNativeFileSave()) {
-        await savePlatformFile(fileContent, filename);
-        return undefined;
-      }
-
-      const fileURL = URL.createObjectURL(fileContent);
-      FileSaver.saveAs(fileURL, filename);
-      return fileURL;
-    }, [mx, url, useAuthentication, mimeType, encInfo, filename])
+      await saveMatrixMediaFile(url, filename);
+    }, [url, filename])
   );
 
   const downloading = downloadState.status === AsyncStatus.Loading;

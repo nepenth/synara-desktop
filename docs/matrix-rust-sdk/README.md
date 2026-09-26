@@ -24,10 +24,10 @@ This directory holds product and program evidence from the replacement work.
 | [full-vertical-policy.md](full-vertical-policy.md)                                         | Complete replacement acceptance (no dual-backend, no plateau)          |
 | [d0-residual-completion.md](d0-residual-completion.md)                                     | Residual capability queue                                              |
 | [PROGRESS.md](PROGRESS.md)                                                                 | Human-readable progress log                                            |
-| [operating-instructions.md](operating-instructions.md)                                     | **Live operating model** — public hygiene, this harness, UI/UX fidelity |
-| [cutover-operating-model.md](cutover-operating-model.md)                                   | Cutover / operating model                                              |
-| [v-burn-importer-taxonomy.md](v-burn-importer-taxonomy.md)                                 | Exhaustive 150-file importer taxonomy and residual overlay (docs only) |
-| [../matrix-rust-sdk-full-replacement-plan.md](../matrix-rust-sdk-full-replacement-plan.md) | Authoritative plan                                                     |
+| [operating-instructions.md](operating-instructions.md)                                     | Historical harness notes. Not the product operating model.            |
+| [cutover-operating-model.md](cutover-operating-model.md)                                   | Historical cutover notes                                               |
+| [v-burn-importer-taxonomy.md](v-burn-importer-taxonomy.md)                                 | Historical importer taxonomy (docs only)                               |
+| [../matrix-rust-sdk-full-replacement-plan.md](../matrix-rust-sdk-full-replacement-plan.md) | Historical plan. The replacement has landed on matrix-sdk 0.19.1.     |
 
 ## Not published here
 

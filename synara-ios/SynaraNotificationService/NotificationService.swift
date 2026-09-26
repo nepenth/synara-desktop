@@ -77,6 +77,7 @@ final class NotificationService: UNNotificationServiceExtension {
             }
             if let resolved = await resolver.resolve(
                 for: payload,
+                retainMessageBody: showPreview,
                 onRequest: { request in
                     coordinator.installCoreCancellation(
                         { request.cancel() },
@@ -205,6 +206,7 @@ private struct MatrixNotificationPreviewResolver {
 
     func resolve(
         for payload: SynaraNotificationPreviewPayload,
+        retainMessageBody: Bool,
         onRequest: (NsePreviewRequest) -> Void,
         recordStage: (SynaraNotificationDiagnostics.Stage) -> Void
     ) async -> ResolvedNotificationEvent? {
@@ -257,7 +259,7 @@ private struct MatrixNotificationPreviewResolver {
                 preview: SynaraMatrixEventPreviewComposer.preview(from: SynaraMatrixEventPreviewInput(
                     eventType: event.eventType,
                     senderID: event.senderId,
-                    body: event.body,
+                    body: retainMessageBody ? event.body : nil,
                     messageType: event.messageType
                 )),
                 isAgentApproval: event.isAgentApproval,

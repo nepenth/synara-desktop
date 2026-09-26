@@ -27,7 +27,9 @@ jobs:
           targets: aarch64-apple-ios-sim
 
       - name: Install XcodeGen
-        run: brew install xcodegen
+        run: |
+          brew install xcodegen
+          test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Build and run unsigned simulator tests
         run: scripts/ci-build.sh

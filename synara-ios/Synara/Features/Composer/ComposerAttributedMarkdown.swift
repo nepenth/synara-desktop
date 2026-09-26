@@ -25,6 +25,7 @@ enum ComposerPasteboard {
 }
 
 enum ComposerAttributedMarkdown {
+    static let presentationAttribute = NSAttributedString.Key("SynaraComposerMarkdownPresentation")
     static var composerBaseFont: UIFont {
         .preferredFont(forTextStyle: .callout)
     }
@@ -178,7 +179,7 @@ enum ComposerAttributedMarkdown {
     #if canImport(UIKit)
         static func attributedString(fromHTML html: String, baseFont: UIFont) -> NSAttributedString? {
             guard let sanitized = MatrixHTMLRenderer.sanitizedHTMLForClipboard(html: html),
-                  let data = sanitized.data(using: .utf8)
+                  let data = composerImportHTML(sanitized).data(using: .utf8)
             else {
                 return nil
             }
@@ -238,6 +239,48 @@ enum ComposerAttributedMarkdown {
             }
             return parsed
         }
+
+        private static func composerImportHTML(_ html: String) -> String {
+            var output = replaceHTMLBlocks(
+                in: html,
+                pattern: #"(?is)<span\b[^>]*data-mx-spoiler[^>]*>(.*?)</span\s*>"#
+            ) { inner in
+                "&lt;span data-mx-spoiler&gt;\(inner)&lt;/span&gt;"
+            }
+            output = replaceHTMLBlocks(
+                in: output,
+                pattern: #"(?is)<blockquote(?:\s+[^>]*)?>(.*?)</blockquote\s*>"#
+            ) { inner in
+                let markdown = MatrixHTMLRenderer.sanitizedMarkdown(body: "", html: inner)
+                let quoted = markdown.components(separatedBy: "\n")
+                    .map { "> " + $0 }
+                    .map(escapeHTMLText)
+                    .joined(separator: "<br/>")
+                return "<p>\(quoted)</p>"
+            }
+            return output
+        }
+
+        private static func replaceHTMLBlocks(
+            in html: String,
+            pattern: String,
+            replacement: (String) -> String
+        ) -> String {
+            guard let regex = try? NSRegularExpression(pattern: pattern) else { return html }
+            var result = html
+            let matches = regex.matches(in: html, range: NSRange(location: 0, length: (html as NSString).length))
+            for match in matches.reversed() {
+                let inner = (html as NSString).substring(with: match.range(at: 1))
+                result = (result as NSString).replacingCharacters(in: match.range, with: replacement(inner))
+            }
+            return result
+        }
+
+        private static func escapeHTMLText(_ text: String) -> String {
+            text.replacingOccurrences(of: "&", with: "&amp;")
+                .replacingOccurrences(of: "<", with: "&lt;")
+                .replacingOccurrences(of: ">", with: "&gt;")
+        }
     #endif
 
     private static func wrappedMarkdown(
@@ -245,6 +288,9 @@ enum ComposerAttributedMarkdown {
         attributes: [NSAttributedString.Key: Any],
         baseFont: UIFont
     ) -> String {
+        if attributes[presentationAttribute] != nil {
+            return text
+        }
         if text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return text
         }
@@ -257,13 +303,15 @@ enum ComposerAttributedMarkdown {
         let isMono = (font?.fontDescriptor.symbolicTraits ?? []).contains(.traitMonoSpace)
         let strikeValue = attributes[.strikethroughStyle] as? Int ?? 0
         let isStrike = strikeValue != 0
+        let underlineValue = attributes[.underlineStyle] as? Int ?? 0
+        let isUnderlined = underlineValue != 0
 
         if isMono, text.contains(where: { $0.isNewline }) {
             return "\n```\n\(text)\n```\n"
         }
 
         var inner = text
-        if isBold || isItalic || isStrike || isMono {
+        if isBold || isItalic || isStrike || isMono || isUnderlined {
             inner = escapeMarkdown(text)
         }
 
@@ -278,6 +326,9 @@ enum ComposerAttributedMarkdown {
         }
         if isBold {
             inner = "**\(inner)**"
+        }
+        if isUnderlined {
+            inner = "<u>\(inner)</u>"
         }
         if let href = safeLink(attributes) {
             let label = inner.replacingOccurrences(of: "]", with: "\\]")

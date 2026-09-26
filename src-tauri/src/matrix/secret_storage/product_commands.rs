@@ -11,7 +11,7 @@ pub async fn matrix_secret_storage_status(
 pub async fn matrix_secret_storage_bootstrap(
     state: State<'_, MatrixAuthState>,
     mut passphrase: String,
-) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+) -> Result<live_secret_storage::DesktopSecretStorageSetup, MatrixAuthCommandError> {
     let result = matrix_secret_storage_bootstrap_inner(&state, &passphrase).await;
     passphrase.zeroize();
     result
@@ -20,7 +20,7 @@ pub async fn matrix_secret_storage_bootstrap(
 pub(super) async fn matrix_secret_storage_bootstrap_inner(
     state: &State<'_, MatrixAuthState>,
     passphrase: &str,
-) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+) -> Result<live_secret_storage::DesktopSecretStorageSetup, MatrixAuthCommandError> {
     require_secret_storage_input(passphrase, "v-crypto.4-bootstrap-passphrase-empty")?;
     let session = state.session.lock().await;
     let active = require_secret_storage_session(session.as_ref())?;
@@ -57,7 +57,7 @@ pub(super) async fn matrix_secret_storage_unlock_inner(
 pub async fn matrix_secret_storage_reset(
     state: State<'_, MatrixAuthState>,
     mut passphrase: String,
-) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+) -> Result<live_secret_storage::DesktopSecretStorageSetup, MatrixAuthCommandError> {
     let result = matrix_secret_storage_reset_inner(&state, &passphrase).await;
     passphrase.zeroize();
     result
@@ -66,7 +66,7 @@ pub async fn matrix_secret_storage_reset(
 pub(super) async fn matrix_secret_storage_reset_inner(
     state: &State<'_, MatrixAuthState>,
     passphrase: &str,
-) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+) -> Result<live_secret_storage::DesktopSecretStorageSetup, MatrixAuthCommandError> {
     require_secret_storage_input(passphrase, "v-crypto.4-reset-passphrase-empty")?;
     let session = state.session.lock().await;
     let active = require_secret_storage_session(session.as_ref())?;

@@ -76,7 +76,7 @@ final class ConnectionStatusCopyTests: XCTestCase {
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.connected))
         XCTAssertFalse(ConnectionStatusCopy.holdsBeforeBanner(.starting))
         XCTAssertEqual(ConnectionStatusCopy.lostHold, 4)
-        XCTAssertEqual(ConnectionStatusCopy.connectedFlash, 4)
+        XCTAssertEqual(ConnectionStatusCopy.connectedFlash, 12)
     }
 
     func testConnectedBannerIsNotSticky() {
@@ -193,6 +193,24 @@ final class ConnectionStatusCopyTests: XCTestCase {
         store.update(.connected)
         XCTAssertEqual(store.status, .connected)
         XCTAssertFalse(store.isBannerVisible)
+    }
+
+    func testRepeatedConnectedUpdatesDoNotExtendRecoveryFlash() {
+        let store = ConnectionStatusStore(reconnectingHold: 0, connectedFlash: 0.08)
+        store.update(.disconnected)
+        store.update(.connected)
+        XCTAssertTrue(store.isBannerVisible)
+
+        let hidden = expectation(description: "original recovery deadline wins")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            store.update(.connected)
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.11) {
+            XCTAssertEqual(store.status, .connected)
+            XCTAssertFalse(store.isBannerVisible)
+            hidden.fulfill()
+        }
+        wait(for: [hidden], timeout: 1)
     }
 
     func testEmptyStateCopyUsesHeldStatusNotLiveLost() {

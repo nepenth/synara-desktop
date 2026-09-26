@@ -59,7 +59,7 @@ The status ledger must be updated as part of each accepted remediation PR;
 changing artifact or merge state never closes a strict acceptance or phase gate
 by implication.
 
-The shipping desktop product still uses only `matrix-js-sdk`. No Rust production
+At the 2026-07-25 snapshot, the shipping desktop product still used only `matrix-js-sdk`. No Rust production
 login/sync backend, selector, dual-client runtime, or cutover has been accepted.
 
 ## 1. Decision

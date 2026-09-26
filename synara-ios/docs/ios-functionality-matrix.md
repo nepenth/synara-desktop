@@ -1,5 +1,8 @@
 # iOS Functionality Matrix
 
+> Historical snapshot, reviewed 2026-05-28. Not the 2.1.41 feature list.
+> See the root changelog and `docs/production-smoke-checklist.md`.
+
 Reviewed: 2026-05-28
 
 Purpose: track what the native iOS app currently supports, how each capability

@@ -1808,7 +1808,7 @@ mod tests {
 
     #[test]
     fn sender_label_prefers_localpart_over_full_mxid() {
-        assert_eq!(sender_localpart_or_id("@chris:matrix.whyland.com"), "chris");
+        assert_eq!(sender_localpart_or_id("@alice:matrix.example.org"), "alice");
         assert_eq!(sender_localpart_or_id("@spectre:example.org"), "spectre");
         assert_eq!(sender_localpart_or_id("not-an-mxid"), "not-an-mxid");
     }

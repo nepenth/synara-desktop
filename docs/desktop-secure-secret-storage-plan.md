@@ -25,12 +25,15 @@ write fails.
 
 ## Current State
 
-- Runtime session fallback is in
-  `synara/src/app/state/sessions.ts`.
-- Login and registration write `synara_access_token`, `synara_device_id`,
-  `synara_user_id`, and `synara_hs_base_url` into browser `localStorage`.
-- Startup reads that fallback session synchronously from `src/index.tsx`,
-  `src/app/pages/Router.tsx`, and client boot paths.
+Reviewed against the 2.1.41 tree. The bullets that follow this note and still
+describe `localStorage` writes are the 2026-05-25 migration plan, not the
+shipping client.
+
+- `synara/src/app/state/sessions.ts` keeps `synara_access_token` and the related
+  keys only so a leftover renderer session can be deleted.
+- Desktop session persistence is the OS credential store (Keychain on macOS,
+  Secret Service on Linux). Login does not write the access token into
+  `localStorage`.
 - The Tauri shell exposes the scoped secret-store command surface and a
   keyring-backed native credential adapter.
 - macOS reports `macos-keychain` and can persist the Matrix session envelope.

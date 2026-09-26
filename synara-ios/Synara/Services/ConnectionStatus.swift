@@ -113,7 +113,7 @@ enum ConnectionStatusCopy {
     /// Offline-equivalent statuses wait this long before Connection Lost chrome.
     static let lostHold: TimeInterval = 4
     /// Connected is a recovery flash, not steady-state chrome.
-    static let connectedFlash: TimeInterval = 4
+    static let connectedFlash: TimeInterval = 12
 
     static func holdsBeforeBanner(_ status: MatrixSyncStatus) -> Bool {
         switch status {
@@ -219,6 +219,11 @@ final class ConnectionStatusStore: ObservableObject {
     }
 
     private func present(_ status: MatrixSyncStatus) {
+        // Sliding sync reports Connected repeatedly while the session is healthy.
+        // Keep the original recovery deadline instead of restarting it on every update.
+        if status == .connected, self.status == .connected, pendingLost == nil {
+            return
+        }
         connectedFlashWork?.cancel()
         connectedFlashWork = nil
 

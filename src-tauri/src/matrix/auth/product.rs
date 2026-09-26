@@ -627,6 +627,12 @@ impl MatrixAuthState {
         let source = active.timelines.lock().await.resolve_media(handle).await?;
         Some((active.client.clone(), source))
     }
+
+    /// Live session client for plain `mxc://` display through the media protocol.
+    pub(crate) async fn media_client(&self) -> Option<Client> {
+        let session = self.session.lock().await;
+        session.as_ref().map(|active| active.client.clone())
+    }
 }
 
 /// Restart SyncService when wall time jumps ahead of monotonic time (OS sleep).

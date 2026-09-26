@@ -12,8 +12,9 @@ clients onto **one transport-agnostic Rust application-logic core** —
 `crates/synara-core` — consumed by both platforms, so sync, room list,
 timeline, and crypto are not implemented twice.
 
-**That end state has not been reached.** SNC engineering is on `main`
-via #991. It is not a release. Never claim 100%. Implementers start at
+**That end state has been reached.** The paragraph and status table below are
+the migration snapshot. They are not the current product. Implementers of that
+era started at
 [11-implementer-playbook.md](11-implementer-playbook.md).
 P4-S3 plan: [12-p4-s3-live-client.md](12-p4-s3-live-client.md).
 Language-boundary loop: [13-language-boundary-goal-graph.md](13-language-boundary-goal-graph.md).

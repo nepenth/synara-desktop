@@ -35,3 +35,27 @@ updates:
     groups:
       rust-updates:
         patterns: ["*"]
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "06:35"
+      timezone: America/New_York
+    open-pull-requests-limit: 2
+    groups:
+      workspace-rust-updates:
+        patterns: ["*"]
+
+  - package-ecosystem: npm
+    directory: /synara
+    schedule:
+      interval: weekly
+      day: tuesday
+      time: "06:05"
+      timezone: America/New_York
+    open-pull-requests-limit: 2
+    groups:
+      synara-npm-updates:
+        patterns: ["*"]

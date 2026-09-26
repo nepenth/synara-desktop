@@ -664,30 +664,14 @@ test('F4 getMediaConfig fails closed (empty) when unavailable', async () => {
   assert.deepEqual(await client.getMediaConfig(), {});
 });
 
-test('F4 downloadMedia proxies matrix_media_download', async () => {
-  const { invoke } = invokingWith({
-    matrix_media_download: { bytes: [10, 20, 30] },
+test('F4 downloadMedia does not return decrypted file bytes', async () => {
+  const seen: string[] = [];
+  const client = createNativeMatrixClient(async (command) => {
+    seen.push(command);
+    return unavailable;
   });
-  const client = createNativeMatrixClient(invoke);
-  const dl = await client.downloadMedia('mxc://example.org/f1');
-  assert.deepEqual(dl?.bytes, [10, 20, 30]);
-});
-
-test('P4-S36 downloadMedia prefers timeline handles over leftover mxc', async () => {
-  const seen: Array<{ command: string; args?: Record<string, unknown> }> = [];
-  const { invoke } = invokingWith({
-    matrix_media_download: { bytes: [7, 8, 9] },
-  });
-  const client = createNativeMatrixClient(async (command, args) => {
-    seen.push({ command, args });
-    return invoke(command, args);
-  });
-  const handle = `timeline-media-${'ab'.repeat(32)}`;
-  const dl = await client.downloadMedia(`synara-media://localhost/${handle}`);
-  assert.deepEqual(dl?.bytes, [7, 8, 9]);
-  assert.equal(seen[0]?.command, 'matrix_media_download');
-  assert.equal(seen[0]?.args?.contentUri, handle);
-  assert.notEqual(seen[0]?.args?.contentUri, 'mxc://example.org/f1');
+  assert.equal(await client.downloadMedia('mxc://example.org/f1'), null);
+  assert.deepEqual(seen, []);
 });
 
 test('F4 getProfileInfo loads own profile from the native owner', async () => {

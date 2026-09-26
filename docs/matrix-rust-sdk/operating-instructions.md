@@ -1,8 +1,11 @@
 # Operating instructions — Matrix Rust full replacement
 
+> Historical harness notes from the Rust cutover. Not the current product
+> operating model. Current architecture is [ADR 0003](../adr/0003-shared-native-rust-core.md).
+
 | Field           | Value                                                                                       |
 | --------------- | ------------------------------------------------------------------------------------------- |
-| Status          | **Active operating instructions** — supersede external-model playbooks                      |
+| Status          | Historical snapshot. The table below is not a live operating model.    |
 | Scope           | How this program is executed day-to-day and what every slice must respect                   |
 | Repo visibility | **PUBLIC** — every doc, note, status, and commit in this tree is public                     |
 | Related         | [README.md](README.md), [SCOREBOARD.md](SCOREBOARD.md), [full-vertical-policy.md](full-vertical-policy.md), [pause-handoff-2026-08-03.md](pause-handoff-2026-08-03.md) |
@@ -42,7 +45,7 @@ prime-agent** (via the agent runtime's sub-agent facility) — up to **2
 concurrent sessions max**.
 
 - **The only model configured in prime-agent is `deepseek-v4-flash-0731`**
-  (selector `whyland-spark/deepseek-v4-flash-0731`), **locally hosted**. Every
+  (selector `local-model/deepseek-v4-flash-0731`), **locally hosted**. Every
   orchestrator turn and every sub-agent session uses it. There are no other
   model APIs in use.
 - **Concurrency: up to 2 concurrent sub-agent sessions.** Do not spawn a third

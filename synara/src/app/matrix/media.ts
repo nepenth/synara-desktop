@@ -1,5 +1,5 @@
 import type { EncryptedAttachmentInfo } from '../../types/matrix/common';
-import { invokeDesktopWithAvailability } from '../utils/desktop';
+import { convertDesktopFileSrc, invokeDesktopWithAvailability } from '../utils/desktop';
 import { mxcUrlToHttp } from '../utils/matrix';
 
 const TIMELINE_MEDIA_HANDLE_PREFIX = 'timeline-media-';
@@ -88,40 +88,80 @@ export function resolveMatrixThumbnailUrl(
   }
 }
 
-async function downloadNativeMedia(contentUri: string, mimeType: string): Promise<Blob> {
-  const resolved = timelineMediaHandleFromUri(contentUri) ?? contentUri.trim();
-  const result = await invokeDesktopWithAvailability<{ bytes?: unknown }>('matrix_media_download', {
-    contentUri: resolved,
-  });
-  if (!result.available || !result.value || !Array.isArray(result.value.bytes)) {
-    throw new Error('Native media download failed');
-  }
-  const bytes = Uint8Array.from(result.value.bytes.map((b) => (typeof b === 'number' ? b : 0)));
-  return new Blob([bytes], { type: mimeType });
+function resolvedMediaContentUri(contentUri: string): string {
+  return timelineMediaHandleFromUri(contentUri) ?? contentUri.trim();
 }
 
-export async function downloadTimelineMediaBytes(
-  handleId: string,
-  mimeType: string
-): Promise<Blob> {
-  return downloadNativeMedia(handleId, mimeType);
-}
-
-export async function downloadMatrixMedia(
-  mx: MatrixMediaClient,
-  mxcUrl: string,
-  options: MatrixMediaDownloadOptions
-): Promise<Blob> {
-  void mx;
-  const handle = timelineMediaHandleFromUri(mxcUrl);
-  if (options.encryptedInfo && !handle) {
+function assertDisplayableMedia(
+  contentUri: string,
+  encryptedInfo?: EncryptedAttachmentInfo
+): string {
+  const handle = timelineMediaHandleFromUri(contentUri);
+  if (encryptedInfo && !handle) {
     throw new Error('Leftover encrypted media requires a native handle');
   }
-  const trimmed = mxcUrl.trim();
-  if (handle || trimmed.startsWith('mxc://')) {
-    return downloadNativeMedia(mxcUrl, options.mimeType);
-  }
+  const resolved = resolvedMediaContentUri(contentUri);
+  if (handle || resolved.startsWith('mxc://')) return resolved;
   throw new Error('Invalid Matrix media URL');
+}
+
+/** Opaque display URL. The webview loads bytes from Rust; JS never receives them. */
+export function nativeMediaDisplayUrl(contentUri: string | undefined): string | undefined {
+  if (!contentUri) return undefined;
+  try {
+    const resolved = assertDisplayableMedia(contentUri);
+    return convertDesktopFileSrc(resolved, 'synara-media');
+  } catch {
+    return undefined;
+  }
+}
+
+const mediaDiagnosticId = (error: unknown): string | undefined => {
+  if (!error || typeof error !== 'object') return undefined;
+  const record = error as Record<string, unknown>;
+  const diagnosticId = record.diagnosticId ?? record.diagnostic_id;
+  return typeof diagnosticId === 'string' ? diagnosticId : undefined;
+};
+
+export async function previewMatrixMediaText(
+  contentUri: string
+): Promise<{ kind: 'ready'; text: string } | { kind: 'tooLarge' }> {
+  const resolved = resolvedMediaContentUri(contentUri);
+  if (!resolved) throw new Error('Could not open file.');
+  try {
+    const result = await invokeDesktopWithAvailability<{ text?: unknown }>(
+      'matrix_media_text_preview',
+      { contentUri: resolved }
+    );
+    if (!result.available || typeof result.value?.text !== 'string') {
+      throw new Error('Could not open file.');
+    }
+    return { kind: 'ready', text: result.value.text };
+  } catch (error) {
+    if (mediaDiagnosticId(error) === 'v-send.r-media-preview-too-large') {
+      return { kind: 'tooLarge' };
+    }
+    throw error instanceof Error ? error : new Error('Could not open file.');
+  }
+}
+
+/** Rust writes the file and returns its Downloads filename. No file bytes cross IPC. */
+export async function saveMatrixMediaFile(contentUri: string, filename: string): Promise<string> {
+  const resolved = resolvedMediaContentUri(contentUri);
+  if (!resolved) throw new Error('File attachment is unavailable.');
+  const result = await invokeDesktopWithAvailability<{ filename?: unknown }>('matrix_media_save', {
+    contentUri: resolved,
+    filename,
+  });
+  if (
+    !result.available ||
+    !result.value ||
+    typeof result.value.filename !== 'string' ||
+    result.value.filename.length === 0
+  ) {
+    throw new Error('Native media save failed');
+  }
+  return result.value.filename;
 }
 
 /** Leftover `mxc://` and opaque handles must not be used as `<img src>`. */
@@ -140,6 +180,9 @@ export async function createMatrixMediaObjectUrl(
   mxcUrl: string,
   options: MatrixMediaDownloadOptions
 ): Promise<string> {
-  const fileContent = await downloadMatrixMedia(mx, mxcUrl, options);
-  return URL.createObjectURL(fileContent);
+  void mx;
+  const resolved = assertDisplayableMedia(mxcUrl, options.encryptedInfo);
+  const displayUrl = convertDesktopFileSrc(resolved, 'synara-media');
+  if (!displayUrl) throw new Error('Native media display is unavailable');
+  return displayUrl;
 }

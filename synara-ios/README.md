@@ -79,6 +79,11 @@ require their corresponding real-device or App Store Connect evidence.
 
 ## Current Evidence
 
+The May and August 2026 matrices below are snapshots. They are not the 2.1.41
+feature list. Current shipping notes are the root changelog and
+[the production smoke checklist](../docs/production-smoke-checklist.md).
+iOS distribution is internal TestFlight only.
+
 - [iOS validation status](docs/ios-validation-status.md)
 - [iOS functionality matrix](docs/ios-functionality-matrix.md)
 - [iOS visual fidelity matrix](docs/ios-visual-fidelity-matrix.md)

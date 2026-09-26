@@ -1,19 +1,66 @@
 # Synara
 
-Synara is a native-first Matrix client for macOS, Linux, and iOS. It combines
-secure messaging, room and timeline workflows, native platform integration,
-and structured agent interactions in one repository.
+Synara is an AGPL-3.0-only Matrix client for macOS and Linux, with a SwiftUI
+iOS app that shares the same Rust core. It is a derivative of
+[Cinny](https://github.com/cinnyapp/cinny). Copyright © 2026 Whyland Creative LLC.
+See [NOTICE](NOTICE).
+
+Public downloads are desktop builds. iOS is shared with internal TestFlight
+testers and is not on the App Store or attached to GitHub Releases. Windows,
+Android, a standalone web client, and voice or video calling are not supported.
+Call chrome can report MatrixRTC status. It does not start or join a call.
 
 Synara does not ship a standalone browser client. The React/Vite package under
 `synara/` is the application runtime embedded by the Tauri desktop shell.
+
+## Install
+
+Current desktop release: [v2.1.41](https://github.com/nepenth/synara-desktop/releases/tag/v2.1.41).
+
+| Platform | What you get | Where |
+| --- | --- | --- |
+| macOS | Universal signed and notarized disk image | The `DMG` asset on that release |
+| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`) | [Linux install](docs/linux.md) |
+| Arch, CachyOS, and related | x86_64 pacman package | [Linux install](docs/linux.md) |
+
+Linux packages are x86_64 only. Source builds need Node.js 24.13.1 and Rust 1.96.
+
+## Current capabilities
+
+| In this release | Not in this release |
+| --- | --- |
+| End-to-end encrypted messaging, rooms, and spaces on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls |
+| Desktop client for macOS and x86_64 Linux | Windows, Android, and a standalone web app |
+| Device verification, secret storage, and encrypted media through the Rust core | An ARM Linux package |
+| iOS app on the same core, internal TestFlight only | App Store distribution |
+
+## Interface
+
+These screenshots show sample rooms on a disposable account.
+
+### macOS
+
+![Synara macOS room list with sample rooms and unread counts](docs/readme/macos-room-list.png)
+
+![Synara macOS Design Studio timeline with sample messages, a file attachment, and the composer](docs/readme/macos-timeline.png)
+
+![Synara macOS Design Studio member list showing Ada and Ben](docs/readme/macos-details.png)
+
+### iOS
+
+![Synara iPhone room list with sample rooms and unread counts](docs/readme/iphone-room-list.png)
+
+![Synara iPhone Mobile Studio timeline with sample messages, a file attachment, and the composer](docs/readme/iphone-timeline.png)
+
+![Synara iPad room list and Tablet Studio timeline side by side](docs/readme/ipad-split.png)
 
 ## Product Channels
 
 | Client | User interface  | Matrix/application core                           | Distribution                                 |
 | ------ | --------------- | ------------------------------------------------- | -------------------------------------------- |
-| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized DMG for production releases |
-| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | `.deb` and Arch-family package assets        |
-| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight, then App Store release  |
+| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG               |
+| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb` and Arch-family packages       |
+| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                     |
 
 Windows, Android, and public web distribution are not currently supported.
 
@@ -36,8 +83,9 @@ recovery material, local file paths, and large media bytes. Platform adapters
 retain those responsibilities.
 
 See [ADR 0004](docs/adr/0004-rust-language-boundaries.md) for the binding
-rules and [the shared-core documentation](docs/shared-native-core/README.md)
-for migration history and implementation detail.
+rules and [ADR 0003](docs/adr/0003-shared-native-rust-core.md) for the shared
+core. [docs/shared-native-core/](docs/shared-native-core/README.md) is the
+migration record, not a statement that the core is unfinished.
 
 ## Repository Layout
 
@@ -63,7 +111,8 @@ need `--recursive` or any submodule command.
 ## Prerequisites
 
 - Node.js at the exact version in `.node-version` (currently 24.13.1).
-- Rust at the version in `rust-toolchain.toml` with required platform targets.
+- Rust 1.96, pinned in `rust-toolchain.toml`. iOS builds also need the
+  `aarch64-apple-ios` and `aarch64-apple-ios-sim` targets, which CI installs.
 - Tauri 2 platform prerequisites.
 - Xcode and XcodeGen for iOS work.
 - Linux system packages documented in [docs/linux.md](docs/linux.md) for Linux
@@ -217,8 +266,22 @@ its status, branch, version, commit, test count, and remaining-work statements
 describe that historical snapshot. Current source, ADRs, validation contracts,
 and release workflows take precedence.
 
+## Community
+
+- [Contributing](CONTRIBUTING.md)
+- [Code of conduct](CODE_OF_CONDUCT.md)
+- [Security reports](SECURITY.md). Do not file credentials or recovery keys in a public issue.
+
+`probes/` holds old SDK compile experiments. It is not the application.
+`docs/matrix-rust-sdk/` and `docs/shared-native-core/` are historical migration
+records. Current architecture is the ADRs above.
+
 ## License
 
-Synara is licensed under the GNU Affero General Public License v3.0-only. See
-[LICENSE](LICENSE) for the license and [NOTICE](NOTICE) for copyright and
-third-party attribution that must accompany distributions.
+Synara is licensed under the GNU Affero General Public License v3.0 only
+(AGPL-3.0-only), including the Affero clause: if you modify Synara and let
+users interact with that modified version over a network, you must offer them
+the corresponding source. Contributions stay under that license.
+
+Synara is a derivative of Cinny. Preserve the attribution in [NOTICE](NOTICE).
+See [LICENSE](LICENSE) for the full license text.

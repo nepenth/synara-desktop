@@ -18,13 +18,18 @@ const readyInputs = {
   },
   cargoToml: 'tauri-plugin-updater = "2"\ntauri-plugin-process = "2"\n',
   rustLib:
-    "tauri_plugin_updater::Builder::new().build(); tauri_plugin_process::init()",
+    "WebviewUrl::App(Default::default()); desktop_navigation::PACKAGED_ASSET_ORIGIN; tauri_plugin_updater::Builder::new().build(); tauri_plugin_process::init()",
+  navigation: 'pub const PACKAGED_ASSET_ORIGIN: &str = "tauri://localhost";',
   capabilities: {
-    remote: {
-      urls: ["http://localhost:*/*"],
-    },
+    local: true,
+    permissions: ["core:default"],
+  },
+  updaterCapability: {
+    identifier: "macos-updater",
+    local: true,
+    windows: ["main"],
+    platforms: ["macOS"],
     permissions: [
-      "core:default",
       "updater:allow-check",
       "updater:allow-download-and-install",
       "process:allow-restart",
@@ -91,17 +96,64 @@ test("release updater gate accepts complete production updater wiring", () => {
   assert.deepEqual(result.errors, []);
 });
 
-test("release updater gate requires packaged localhost remote capability", () => {
+test("release updater gate rejects a remote grant on the main webview", () => {
   const result = inspectReleaseUpdaterReadiness({
     ...readyInputs,
     capabilities: {
-      permissions: readyInputs.capabilities.permissions,
+      ...readyInputs.capabilities,
+      remote: {
+        urls: ["http://localhost:*/*"],
+      },
     },
     requireEnabled: true,
   });
 
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /packaged localhost webview origin/);
+  assert.match(result.errors.join("\n"), /must not grant remote\.urls/);
+});
+
+test("release updater gate rejects updater permissions on the shared capability", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    capabilities: {
+      permissions: [
+        ...readyInputs.capabilities.permissions,
+        "updater:allow-check",
+        "process:allow-restart",
+      ],
+    },
+    requireEnabled: false,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /must not grant updater:allow-check/);
+  assert.match(result.errors.join("\n"), /must not grant process:allow-restart/);
+});
+
+test("release updater gate rejects an updater capability that includes Linux", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    updaterCapability: {
+      ...readyInputs.updaterCapability,
+      platforms: ["macOS", "linux"],
+    },
+    requireEnabled: false,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /platforms \["macOS"\]/);
+});
+
+test("release updater gate requires the private packaged asset origin", () => {
+  const result = inspectReleaseUpdaterReadiness({
+    ...readyInputs,
+    rustLib: "tauri_plugin_localhost::Builder::new(port).build(); WebviewUrl::External(parsed_url)",
+    navigation: "",
+    requireEnabled: false,
+  });
+
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /tauri:\/\/localhost/);
 });
 
 test("non-release gate requires all Apple credentials on the Tauri build step", () => {
@@ -218,13 +270,14 @@ test("non-release check warns instead of failing while updater is intentionally 
       },
     },
     cargoToml: "",
-    rustLib: "",
+    rustLib:
+      "WebviewUrl::App(Default::default()); desktop_navigation::PACKAGED_ASSET_ORIGIN",
+    navigation: 'pub const PACKAGED_ASSET_ORIGIN: &str = "tauri://localhost";',
     capabilities: {
-      remote: {
-        urls: ["http://localhost:*/*"],
-      },
+      local: true,
       permissions: ["core:default"],
     },
+    updaterCapability: readyInputs.updaterCapability,
     desktopPackage: {
       dependencies: {},
     },

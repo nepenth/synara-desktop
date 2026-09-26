@@ -18,7 +18,7 @@ import {
 } from 'folds';
 import { copyToClipboard } from '../../utils/dom';
 import { useTimeoutToggle } from '../../hooks/useTimeoutToggle';
-import { downloadTimelineMediaBytes } from '../../matrix/media';
+import { previewMatrixMediaText } from '../../matrix/media';
 import { stopPropagation } from '../../utils/keyboard';
 import { NativeFormattedBody } from './nativeTimelineFormattedBody';
 import {
@@ -26,13 +26,10 @@ import {
   saveNativeTimelineFileAttachment,
 } from './nativeTimelineFileSave';
 import {
-  MAX_NATIVE_MARKDOWN_PREVIEW_BYTES,
   projectNativeTimelineMarkdownPreview,
   type NativeTimelineFilePreviewTarget,
 } from './nativeTimelineFilePreview';
 import * as htmlCss from './nativeTimelineHtml.css';
-
-const FALLBACK_MIME_TYPE = 'application/octet-stream';
 
 export function NativeTimelineMarkdownPreview({
   target,
@@ -58,16 +55,13 @@ export function NativeTimelineMarkdownPreview({
     setStatus({ kind: 'loading' });
     void (async () => {
       try {
-        const blob = await downloadTimelineMediaBytes(
-          target.handleId,
-          target.mimeType?.trim() || FALLBACK_MIME_TYPE
-        );
+        const preview = await previewMatrixMediaText(target.handleId);
         if (cancelled) return;
-        if (blob.size > MAX_NATIVE_MARKDOWN_PREVIEW_BYTES) {
+        if (preview.kind === 'tooLarge') {
           setStatus({ kind: 'tooLarge' });
           return;
         }
-        setStatus({ kind: 'ready', text: await blob.text() });
+        setStatus({ kind: 'ready', text: preview.text });
       } catch (error) {
         if (cancelled) return;
         setStatus({

@@ -57,7 +57,7 @@ well. The final reset is destructive only to the generated loopback harness:
 
 ```bash
 scripts/synapse-integration.sh up
-npm run test:synapse-integration
+npm run check:synapse-harness
 scripts/synapse-integration.sh reset
 ```
 

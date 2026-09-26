@@ -24,6 +24,7 @@ export type NativeSecretStorageOperationResult = {
   outcome: 'complete' | 'already_configured';
   recoveryDocumentSaved: boolean;
   recoveryDocumentName?: string;
+  recoveryKey?: string;
   status: NativeSecretStorageStatus;
 };
 

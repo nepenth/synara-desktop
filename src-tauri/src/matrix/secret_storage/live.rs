@@ -1,10 +1,6 @@
 //! Privacy-safe live Matrix secret-storage product projection.
 
-use std::{
-    fs::{self, OpenOptions},
-    io::Write,
-    path::Path,
-};
+use serde::Serialize;
 
 use matrix_sdk::{
     encryption::recovery::{RecoveryError, RecoveryState},
@@ -17,15 +13,22 @@ use matrix_sdk::{
 };
 use zeroize::Zeroize;
 
-use crate::{
-    desktop_file_transfer::{downloads_dir, unique_download_path},
-    matrix::auth::product::MatrixAuthCommandError,
-};
+use crate::matrix::auth::product::MatrixAuthCommandError;
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DesktopSecretStorageSetup {
+    #[serde(flatten)]
+    pub result: NativeSecretStorageOperationResult,
+    /// Shown once in the desktop UI. Never written to Downloads.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub recovery_key: Option<String>,
+}
 
 pub use synara_core::app::secret_storage::{
     operation_result, project_secret_storage_status, NativeMissingSecret, NativeRecoveryPhase,
     NativeSecretStorageAction, NativeSecretStorageOperationResult, NativeSecretStorageOutcome,
-    NativeSecretStorageState, NativeSecretStorageStatus, RECOVERY_DOCUMENT_NAME,
+    NativeSecretStorageState, NativeSecretStorageStatus,
 };
 
 pub async fn status(
@@ -94,14 +97,13 @@ pub async fn bootstrap(
     client: &Client,
     session_generation: u64,
     passphrase: &str,
-) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+) -> Result<DesktopSecretStorageSetup, MatrixAuthCommandError> {
     let before = status(client, session_generation).await?;
     if before.exists {
-        return Ok(operation_result(
-            NativeSecretStorageOutcome::AlreadyConfigured,
-            false,
-            before,
-        ));
+        return Ok(DesktopSecretStorageSetup {
+            result: operation_result(NativeSecretStorageOutcome::AlreadyConfigured, false, before),
+            recovery_key: None,
+        });
     }
     if !before.bootstrap_ready {
         return Err(secret_storage_error(
@@ -118,16 +120,18 @@ pub async fn bootstrap(
         .wait_for_backups_to_upload()
         .await
         .map_err(map_bootstrap_error)?;
+    let displayed_key = recovery_key.clone();
     let _ = synara_core::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
-    let save_result = save_recovery_document(&recovery_key);
     recovery_key.zeroize();
-    save_result?;
 
-    Ok(operation_result(
-        NativeSecretStorageOutcome::Complete,
-        true,
-        status(client, session_generation).await?,
-    ))
+    Ok(DesktopSecretStorageSetup {
+        result: operation_result(
+            NativeSecretStorageOutcome::Complete,
+            false,
+            status(client, session_generation).await?,
+        ),
+        recovery_key: Some(displayed_key),
+    })
 }
 
 pub async fn unlock(
@@ -158,7 +162,7 @@ pub async fn reset(
     client: &Client,
     session_generation: u64,
     passphrase: &str,
-) -> Result<NativeSecretStorageOperationResult, MatrixAuthCommandError> {
+) -> Result<DesktopSecretStorageSetup, MatrixAuthCommandError> {
     let before = status(client, session_generation).await?;
     if !before.unlocked {
         return Err(secret_storage_error(
@@ -179,16 +183,18 @@ pub async fn reset(
                 "v-crypto.4-reset-failed",
             )
         })?;
+    let displayed_key = recovery_key.clone();
     let _ = synara_core::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
-    let save_result = save_recovery_document(&recovery_key);
     recovery_key.zeroize();
-    save_result?;
 
-    Ok(operation_result(
-        NativeSecretStorageOutcome::Complete,
-        true,
-        status(client, session_generation).await?,
-    ))
+    Ok(DesktopSecretStorageSetup {
+        result: operation_result(
+            NativeSecretStorageOutcome::Complete,
+            false,
+            status(client, session_generation).await?,
+        ),
+        recovery_key: Some(displayed_key),
+    })
 }
 
 fn recovery_phase(state: RecoveryState) -> NativeRecoveryPhase {
@@ -278,38 +284,6 @@ fn map_bootstrap_error(error: RecoveryError) -> MatrixAuthCommandError {
             "v-crypto.4-bootstrap-failed",
         ),
     }
-}
-
-fn save_recovery_document(recovery_key: &str) -> Result<(), MatrixAuthCommandError> {
-    let downloads = downloads_dir().map_err(|_| recovery_document_error())?;
-    fs::create_dir_all(&downloads).map_err(|_| recovery_document_error())?;
-    let path = unique_download_path(&downloads, RECOVERY_DOCUMENT_NAME);
-    write_private_file(&path, recovery_key.as_bytes())
-        .inspect_err(|_| {
-            let _ = fs::remove_file(&path);
-        })
-        .map_err(|_| recovery_document_error())
-}
-
-fn write_private_file(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::OpenOptionsExt;
-        options.mode(0o600);
-    }
-    let mut file = options.open(path)?;
-    file.write_all(bytes)?;
-    file.write_all(b"\n")?;
-    file.sync_all()
-}
-
-fn recovery_document_error() -> MatrixAuthCommandError {
-    secret_storage_error(
-        "Secret storage was created, but its recovery document could not be saved. Your recovery passphrase remains valid.",
-        "v-crypto.4-recovery-document-save-failed",
-    )
 }
 
 fn secret_storage_error(

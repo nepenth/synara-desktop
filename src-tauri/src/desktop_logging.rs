@@ -14,7 +14,7 @@ use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 
 const LOG_FILE_NAME: &str = "synara-desktop.log";
 const DIAGNOSTICS_FILE_NAME: &str = "synara-diagnostics.jsonl";
-const MAX_LOG_FIELD_LEN: usize = 4_000;
+const MAX_LOG_FIELD_LEN: usize = 240;
 const MAX_LOG_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_DIAGNOSTICS_FILE_BYTES: u64 = 5 * 1024 * 1024;
 const MAX_DIAGNOSTIC_RECORD_BYTES: usize = 4_096;

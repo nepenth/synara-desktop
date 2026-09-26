@@ -6,6 +6,7 @@ import { Box, Chip, Header, Icon, IconButton, Icons, Text, as } from 'folds';
 import * as css from './ImageViewer.css';
 import { useZoom } from '../../hooks/useZoom';
 import { usePan } from '../../hooks/usePan';
+import { isNativeMediaContentUri, saveMatrixMediaFile } from '../../matrix/media';
 import { downloadMedia } from '../../utils/matrix';
 
 export type ImageViewerProps = {
@@ -20,6 +21,10 @@ export const ImageViewer = as<'div', ImageViewerProps>(
     const { pan, cursor, onMouseDown } = usePan(zoom !== 1);
 
     const handleDownload = async () => {
+      if (isNativeMediaContentUri(src)) {
+        await saveMatrixMediaFile(src, alt || 'download');
+        return;
+      }
       const fileContent = await downloadMedia(src);
       FileSaver.saveAs(fileContent, alt);
     };

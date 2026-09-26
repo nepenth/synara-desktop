@@ -226,25 +226,6 @@ export type FacadeTimelineEventReading = {
   originServerTs: number;
 };
 
-const TIMELINE_MEDIA_HANDLE_PREFIX = 'timeline-media-';
-
-/** Prefer an opaque timeline handle over leftover `mxc://` or protocol URLs. */
-export const timelineMediaHandleFromUri = (contentUri: string): string | null => {
-  const trimmed = contentUri.trim();
-  if (trimmed.startsWith(TIMELINE_MEDIA_HANDLE_PREFIX)) {
-    return trimmed;
-  }
-  const match = /^synara-media:\/\/[^/]*\/(.+)$/i.exec(trimmed);
-  if (!match?.[1]) {
-    return null;
-  }
-  try {
-    return decodeURIComponent(match[1]);
-  } catch {
-    return match[1];
-  }
-};
-
 const isMxcAvatar = (value: string): boolean =>
   value.startsWith('mxc://') && value.split('/').length >= 4;
 
@@ -467,13 +448,6 @@ const parseMediaConfig = (value: unknown): FacadeMediaConfig => {
   return typeof maybeSize === 'number' && Number.isSafeInteger(maybeSize) && maybeSize > 0
     ? { maxUploadSizeBytes: maybeSize }
     : {};
-};
-
-const parseMediaDownload = (value: unknown): FacadeMediaDownloadResult | null => {
-  if (!isObject(value) || hasForbiddenWireFields(value)) return null;
-  const bytes = value.bytes;
-  if (!Array.isArray(bytes)) return null;
-  return { bytes: bytes.map((b) => (typeof b === 'number' ? b : 0)) };
 };
 
 /** F5 — crypto & extended readings. */
@@ -1056,13 +1030,13 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
       return parseMediaConfig(result.value);
     },
 
-    /** F4 / P4-S36 — download via handle or leftover mxc. Handles stay opaque. */
+    /**
+     * Display and save no longer return file bytes. Callers use the
+     * synara-media URL or `matrix_media_save`.
+     */
     async downloadMedia(contentUri: string): Promise<FacadeMediaDownloadResult | null> {
-      const result = await invoke('matrix_media_download', {
-        contentUri: timelineMediaHandleFromUri(contentUri) ?? contentUri,
-      });
-      if (!result.available) return null;
-      return parseMediaDownload(result.value);
+      void contentUri;
+      return null;
     },
 
     /** F4 — own profile from the native owner; peer profiles stay fail-closed. */

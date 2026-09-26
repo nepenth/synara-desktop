@@ -1,5 +1,9 @@
 # iOS E2EE Validation
 
+> Historical snapshot, reviewed 2026-08-17. Later releases decrypt media and
+> run device verification through the shared Rust core. Unable-to-decrypt when
+> keys are missing is still a real state.
+
 Reviewed: 2026-08-17
 
 Status: Matrix Rust SDK live E2EE probe and app-level live encrypted-room UI

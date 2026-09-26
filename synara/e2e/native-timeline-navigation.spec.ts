@@ -677,24 +677,27 @@ test('markdown file attachments preview in-client and still download', async ({ 
             };
           }
         ).nativeTimelineFixture.commands;
-        const download = commands.find((entry) => entry.command === 'matrix_media_download');
-        const save = commands.find((entry) => entry.command === 'desktop_save_file');
+        const preview = commands.find((entry) => entry.command === 'matrix_media_text_preview');
+        const save = commands.find((entry) => entry.command === 'matrix_media_save');
         return {
-          downloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
+          byteDownloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
             .length,
-          saveCount: commands.filter((entry) => entry.command === 'desktop_save_file').length,
-          contentUri: download?.args?.contentUri,
-          filename: (
-            save?.args as { payload?: { filename?: string; bytes?: number[] } } | undefined
-          )?.payload?.filename,
+          previewCount: commands.filter((entry) => entry.command === 'matrix_media_text_preview')
+            .length,
+          saveCount: commands.filter((entry) => entry.command === 'matrix_media_save').length,
+          contentUri: preview?.args?.contentUri,
+          filename: save?.args?.filename,
+          saveBytes: save?.args?.bytes,
         };
       })
     )
     .toEqual({
-      downloadCount: 2,
+      byteDownloadCount: 0,
+      previewCount: 1,
       saveCount: 1,
       contentUri: `timeline-media-${'ab'.repeat(32)}`,
       filename: 'notes.md',
+      saveBytes: undefined,
     });
 });
 
@@ -722,24 +725,22 @@ test('generic file attachments download on click without a preview', async ({ pa
             };
           }
         ).nativeTimelineFixture.commands;
-        const save = commands.find((entry) => entry.command === 'desktop_save_file');
+        const save = commands.find((entry) => entry.command === 'matrix_media_save');
         return {
-          downloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
+          byteDownloadCount: commands.filter((entry) => entry.command === 'matrix_media_download')
             .length,
-          saveCount: commands.filter((entry) => entry.command === 'desktop_save_file').length,
-          contentUri: commands.find((entry) => entry.command === 'matrix_media_download')?.args
-            ?.contentUri,
-          filename: (save?.args as { payload?: { filename?: string } } | undefined)?.payload
-            ?.filename,
-          bytes: (save?.args as { payload?: { bytes?: number[] } } | undefined)?.payload?.bytes,
+          saveCount: commands.filter((entry) => entry.command === 'matrix_media_save').length,
+          contentUri: save?.args?.contentUri,
+          filename: save?.args?.filename,
+          bytes: save?.args?.bytes,
         };
       })
     )
     .toEqual({
-      downloadCount: 1,
+      byteDownloadCount: 0,
       saveCount: 1,
       contentUri: `timeline-media-${'cd'.repeat(32)}`,
       filename: 'archive.zip',
-      bytes: [80, 75, 3, 4],
+      bytes: undefined,
     });
 });

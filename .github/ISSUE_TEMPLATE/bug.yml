@@ -1,0 +1,32 @@
+name: Bug
+description: A defect in the desktop or iOS client
+title: "bug: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: Do not include passwords, access tokens, recovery keys, or message contents.
+  - type: dropdown
+    id: surface
+    attributes:
+      label: Surface
+      options:
+        - macOS
+        - Linux x86_64
+        - iOS internal TestFlight
+        - Source build
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: The release tag or commit, for example v2.1.41.
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+    validations:
+      required: true
