@@ -7791,7 +7791,15 @@ private struct ComposerView: View {
     }
 
     private func applyFormatting(_ format: ComposerMarkdownFormat) {
-        let result = ComposerMarkdown.apply(format, to: currentText, selection: composerSelection)
+        #if canImport(UIKit)
+            let targetSelection = ComposerTextInputRegistry.selectionForFormatting(
+                format,
+                fallback: composerSelection
+            )
+        #else
+            let targetSelection = composerSelection
+        #endif
+        let result = ComposerMarkdown.apply(format, to: currentText, selection: targetSelection)
         setLiveText(result.text)
         composerSelection = result.selection
         formattingRevision += 1

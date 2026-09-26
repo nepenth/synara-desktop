@@ -5,6 +5,55 @@ import XCTest
 #endif
 
 final class ComposerAttributedMarkdownTests: XCTestCase {
+    func testBlockFormattingUsesWholeRecentPasteUntilCaretMoves() {
+        #if canImport(UIKit)
+            let textView = ComposerPasteTextView()
+            textView.font = .systemFont(ofSize: 17)
+            textView.text = "Before: "
+            textView.selectedRange = NSRange(location: 8, length: 0)
+            textView.insertComposerAttributedText(NSAttributedString(string: "one\ntwo\nthree"))
+
+            let fallback = ComposerTextSelection(location: (textView.text as NSString).length, length: 0)
+            let quoteSelection = textView.selectionForFormatting(.blockquote, fallback: fallback)
+            XCTAssertEqual(quoteSelection, ComposerTextSelection(location: 8, length: 13))
+            XCTAssertEqual(textView.selectionForFormatting(.bold, fallback: fallback), fallback)
+
+            let result = ComposerMarkdown.apply(.blockquote, to: textView.text, selection: quoteSelection)
+            XCTAssertEqual(result.text, "> Before: one\n> two\n> three")
+
+            textView.selectedRange = NSRange(location: 9, length: 0)
+            textView.invalidateRecentPasteIfSelectionMoved()
+            XCTAssertEqual(textView.selectionForFormatting(.blockquote, fallback: fallback), fallback)
+        #else
+            XCTFail("UIKit is required for paste selection")
+        #endif
+    }
+
+    func testQuotePresentationKeepsMarkdownAndSelectionWhileHidingMarkers() {
+        #if canImport(UIKit)
+            let textView = ComposerPasteTextView()
+            textView.font = .systemFont(ofSize: 17)
+            textView.textColor = .label
+            textView.text = "> first line\n> second line"
+            textView.selectedRange = NSRange(location: 2, length: 22)
+
+            textView.refreshQuotePresentation()
+
+            XCTAssertEqual(textView.text, "> first line\n> second line")
+            XCTAssertEqual(textView.selectedRange, NSRange(location: 2, length: 22))
+            XCTAssertEqual(
+                ComposerAttributedMarkdown.markdown(from: textView.attributedText, baseFont: textView.font!),
+                "> first line\n> second line"
+            )
+            let prefixColor = textView.textStorage.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? UIColor
+            let contentColor = textView.textStorage.attribute(.foregroundColor, at: 2, effectiveRange: nil) as? UIColor
+            XCTAssertEqual(prefixColor, .clear)
+            XCTAssertEqual(contentColor, .label)
+        #else
+            XCTFail("UIKit is required for quote presentation")
+        #endif
+    }
+
     func testPlainAttributedStringStaysPlain() {
         let attributed = NSAttributedString(string: "hello world")
         XCTAssertEqual(ComposerAttributedMarkdown.markdown(from: attributed), "hello world")

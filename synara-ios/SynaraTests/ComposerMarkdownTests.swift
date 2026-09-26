@@ -43,7 +43,7 @@ final class ComposerMarkdownTests: XCTestCase {
         )
 
         XCTAssertEqual(result.text, "1. alpha\n2. beta")
-        XCTAssertEqual(result.selection, ComposerTextSelection(location: 3, length: 5))
+        XCTAssertEqual(result.selection, ComposerTextSelection(location: 3, length: 13))
     }
 
     func testCodeBlockWrapsSelection() {
@@ -66,6 +66,62 @@ final class ComposerMarkdownTests: XCTestCase {
 
         XCTAssertEqual(result.text, "> quoted")
         XCTAssertEqual(result.selection, ComposerTextSelection(location: 2, length: 6))
+    }
+
+    func testBlockquotePreservesEveryPastedLineAndSelection() {
+        let source = "  first line\n\nsecond line\nlast line"
+        let result = ComposerMarkdown.apply(
+            .blockquote,
+            to: source,
+            selection: ComposerTextSelection(location: 0, length: (source as NSString).length)
+        )
+
+        XCTAssertEqual(result.text, ">   first line\n> \n> second line\n> last line")
+        XCTAssertEqual(result.selection.location, 2)
+        XCTAssertEqual(result.selection.upperBound, (result.text as NSString).length)
+    }
+
+    func testBlockquoteDoesNotConsumeNextLineAtSelectionBoundary() {
+        let result = ComposerMarkdown.apply(
+            .blockquote,
+            to: "first\nsecond",
+            selection: ComposerTextSelection(location: 0, length: 6)
+        )
+
+        XCTAssertEqual(result.text, "> first\nsecond")
+    }
+
+    func testBlockquoteKeepsTrailingNewline() {
+        let result = ComposerMarkdown.apply(
+            .blockquote,
+            to: "first\n",
+            selection: ComposerTextSelection(location: 0, length: 6)
+        )
+
+        XCTAssertEqual(result.text, "> first\n")
+    }
+
+    func testBlockquoteTogglesOffForEverySelectedLine() {
+        let source = "> first\n> second"
+        let result = ComposerMarkdown.apply(
+            .blockquote,
+            to: source,
+            selection: ComposerTextSelection(location: 2, length: 14)
+        )
+
+        XCTAssertEqual(result.text, "first\nsecond")
+        XCTAssertEqual(result.selection, ComposerTextSelection(location: 0, length: 12))
+    }
+
+    func testNumberedListTogglesOffForEverySelectedLine() {
+        let source = "1. first\n2. second"
+        let result = ComposerMarkdown.apply(
+            .numberedList,
+            to: source,
+            selection: ComposerTextSelection(location: 3, length: 15)
+        )
+
+        XCTAssertEqual(result.text, "first\nsecond")
     }
 
     func testInlineCodeWrapsPartialSelection() {

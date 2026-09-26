@@ -6,7 +6,7 @@ import UIKit
 
 #if canImport(UIKit)
 enum ComposerTextMetrics {
-    static let maxHeight: CGFloat = 112
+    static let maxHeight: CGFloat = 240
     static let textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
 
     static func singleLineHeight(font: UIFont) -> CGFloat {
@@ -58,6 +58,16 @@ enum ComposerTextInputRegistry {
             for: nil
         )
     }
+
+    static func selectionForFormatting(
+        _ format: ComposerMarkdownFormat,
+        fallback: ComposerTextSelection
+    ) -> ComposerTextSelection {
+        guard let textView = activeTextView as? ComposerPasteTextView else {
+            return fallback
+        }
+        return textView.selectionForFormatting(format, fallback: fallback)
+    }
 }
 
 struct ComposerTextView: UIViewRepresentable {
@@ -99,6 +109,7 @@ struct ComposerTextView: UIViewRepresentable {
         context.coordinator.performProgrammaticUpdate {
             textView.text = text
             applyTextAppearance(to: textView)
+            textView.refreshQuotePresentation()
             applySelection(to: textView)
         }
         context.coordinator.lastAppearanceKey = appearanceKey
@@ -149,9 +160,11 @@ struct ComposerTextView: UIViewRepresentable {
                 applySelection(to: textView)
                 context.coordinator.syncPlaceholder()
             }
-            if replacedText || context.coordinator.lastAppearanceKey != appearanceKey {
+            let appearanceChanged = context.coordinator.lastAppearanceKey != appearanceKey
+            if replacedText || appearanceChanged {
                 applyTextAppearance(to: textView)
                 context.coordinator.lastAppearanceKey = appearanceKey
+                textView.refreshQuotePresentation()
             }
         }
 
@@ -255,14 +268,20 @@ struct ComposerTextView: UIViewRepresentable {
             }
             let traceID = PerformanceTrace.begin("ComposerTextChange")
             defer { PerformanceTrace.end("ComposerTextChange", id: traceID) }
+            (textView as? ComposerPasteTextView)?.refreshQuotePresentation()
             publishContent(from: textView)
             updateHeight(for: textView)
+        }
+
+        func scrollViewDidScroll(_ scrollView: UIScrollView) {
+            (scrollView as? ComposerPasteTextView)?.updateQuoteBars()
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
             guard isApplyingProgrammaticState == false else {
                 return
             }
+            (textView as? ComposerPasteTextView)?.invalidateRecentPasteIfSelectionMoved()
             updateSelection(from: textView)
         }
 
@@ -394,6 +413,122 @@ struct ComposerTextView: UIViewRepresentable {
 
 final class ComposerPasteTextView: UITextView {
     var onPasteImages: (([UIImage]) -> Void)?
+    private let quoteBars = CAShapeLayer()
+    private var isRefreshingQuotePresentation = false
+    private var recentPasteRange: NSRange?
+    private var recentPasteText: String?
+
+    override init(frame: CGRect, textContainer: NSTextContainer?) {
+        super.init(frame: frame, textContainer: textContainer)
+        quoteBars.fillColor = UIColor.systemTeal.cgColor
+        quoteBars.zPosition = 1
+        layer.addSublayer(quoteBars)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        nil
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        updateQuoteBars()
+    }
+
+    /// Keep Matrix Markdown in text storage, while presenting quote markers as
+    /// a block rule like the desktop editor. This leaves selection and sending
+    /// on the same UTF-16 offsets as the draft.
+    func refreshQuotePresentation() {
+        guard isRefreshingQuotePresentation == false else { return }
+        isRefreshingQuotePresentation = true
+        defer { isRefreshingQuotePresentation = false }
+        let content = textStorage.string as NSString
+        guard content.length > 0 else {
+            quoteBars.path = nil
+            return
+        }
+        textStorage.beginEditing()
+        textStorage.addAttribute(
+            .foregroundColor,
+            value: textColor ?? UIColor.label,
+            range: NSRange(location: 0, length: content.length)
+        )
+        for range in quoteLineRanges(in: content) {
+            textStorage.addAttribute(
+                .foregroundColor,
+                value: UIColor.clear,
+                range: NSRange(location: range.location, length: 2)
+            )
+        }
+        textStorage.endEditing()
+        updateQuoteBars()
+    }
+
+    func updateQuoteBars() {
+        quoteBars.frame = bounds
+        guard bounds.width > 0 else {
+            quoteBars.path = nil
+            return
+        }
+        let content = textStorage.string as NSString
+        let path = UIBezierPath()
+        for range in quoteLineRanges(in: content) {
+            let glyphs = layoutManager.glyphRange(forCharacterRange: range, actualCharacterRange: nil)
+            let rect = layoutManager.boundingRect(forGlyphRange: glyphs, in: textContainer)
+            let y = textContainerInset.top + rect.minY - contentOffset.y
+            let height = max(rect.height, font?.lineHeight ?? 0)
+            path.append(UIBezierPath(roundedRect: CGRect(
+                x: textContainerInset.left + 2 - contentOffset.x,
+                y: y,
+                width: 3,
+                height: height
+            ), cornerRadius: 1.5))
+        }
+        quoteBars.path = path.cgPath
+    }
+
+    private func quoteLineRanges(in content: NSString) -> [NSRange] {
+        var ranges: [NSRange] = []
+        var position = 0
+        while position < content.length {
+            let range = content.lineRange(for: NSRange(location: position, length: 0))
+            if range.length >= 2,
+               content.substring(with: NSRange(location: range.location, length: 2)) == "> "
+            {
+                ranges.append(range)
+            }
+            position = NSMaxRange(range)
+        }
+        return ranges
+    }
+
+    func selectionForFormatting(
+        _ format: ComposerMarkdownFormat,
+        fallback: ComposerTextSelection
+    ) -> ComposerTextSelection {
+        guard fallback.length == 0,
+              [.blockquote, .bulletList, .numberedList, .codeBlock].contains(format),
+              let recentPasteRange,
+              recentPasteText == text,
+              selectedRange.location == NSMaxRange(recentPasteRange),
+              selectedRange.length == 0
+        else {
+            return fallback
+        }
+        return ComposerAttributedMarkdown.markdownSelection(
+            from: attributedText,
+            visibleRange: recentPasteRange,
+            baseFont: font ?? .preferredFont(forTextStyle: .callout)
+        )
+    }
+
+    func invalidateRecentPasteIfSelectionMoved() {
+        guard let recentPasteRange else { return }
+        if selectedRange.length != 0 || selectedRange.location != NSMaxRange(recentPasteRange) {
+            self.recentPasteRange = nil
+            recentPasteText = nil
+        }
+    }
 
     override func canPerformAction(_ action: Selector, withSender sender: Any?) -> Bool {
         if action == #selector(paste(_:)), pasteboardImages().isEmpty == false {
@@ -427,7 +562,7 @@ final class ComposerPasteTextView: UITextView {
         }
     }
 
-    private func insertComposerAttributedText(_ attributed: NSAttributedString) {
+    func insertComposerAttributedText(_ attributed: NSAttributedString) {
         let normalized = NSMutableAttributedString(attributedString: attributed)
         if normalized.length > 0 {
             normalized.addAttribute(
@@ -441,6 +576,9 @@ final class ComposerPasteTextView: UITextView {
         mutable.replaceCharacters(in: range, with: normalized)
         attributedText = mutable
         selectedRange = NSRange(location: range.location + normalized.length, length: 0)
+        recentPasteRange = NSRange(location: range.location, length: normalized.length)
+        recentPasteText = text
+        refreshQuotePresentation()
         typingAttributes = [
             .font: font ?? .preferredFont(forTextStyle: .callout),
             .foregroundColor: textColor ?? .label,

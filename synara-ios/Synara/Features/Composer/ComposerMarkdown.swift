@@ -149,32 +149,43 @@ enum ComposerMarkdown {
         placeholder: String
     ) -> (text: String, selection: ComposerTextSelection) {
         let nsText = text as NSString
-        let lineRange = nsText.lineRange(for: NSRange(location: selection.location, length: selection.length))
+        let lineRange = selectedLineRange(in: nsText, selection: selection)
         let selectedLines = nsText.substring(with: lineRange)
-        let trimmed = selectedLines.trimmingCharacters(in: .newlines)
+        let hasTrailingNewline = selectedLines.hasSuffix("\n")
+        let content = hasTrailingNewline ? String(selectedLines.dropLast()) : selectedLines
 
         let lines: [String]
-        if trimmed.isEmpty {
+        if content.isEmpty {
             lines = [placeholder]
         } else {
-            lines = splitLines(selectedLines)
+            lines = content.components(separatedBy: "\n")
+        }
+
+        if content.isEmpty == false, lines.allSatisfy({ $0.hasPrefix(prefix) }) {
+            let unprefixed = lines.map { String($0.dropFirst(prefix.count)) }.joined(separator: "\n")
+            let updated = nsText.replacingCharacters(
+                in: lineRange,
+                with: unprefixed + (hasTrailingNewline ? "\n" : "")
+            )
+            let length = selection.length > 0
+                ? (unprefixed as NSString).length
+                : (lines.first.map { String($0.dropFirst(prefix.count)) } ?? "").utf16.count
+            return (updated, ComposerTextSelection(location: lineRange.location, length: length))
         }
 
         let prefixed = lines
             .map { line in
-                let stripped = line.trimmingCharacters(in: .whitespaces)
-                if stripped.isEmpty {
-                    return prefix
-                }
-                return "\(prefix)\(stripped)"
+                "\(prefix)\(line)"
             }
             .joined(separator: "\n")
 
-        let replacement = prefixed + lineEnding(from: nsText, lineRange: lineRange)
+        let replacement = prefixed + (hasTrailingNewline ? "\n" : "")
         let updated = nsText.replacingCharacters(in: lineRange, with: replacement)
-        let firstLine = lines.first ?? placeholder
         let contentStart = lineRange.location + prefix.utf16.count
-        return (updated, ComposerTextSelection(location: contentStart, length: firstLine.utf16.count))
+        let selectedLength = selection.length > 0
+            ? (prefixed as NSString).length - prefix.utf16.count
+            : (lines.first ?? placeholder).utf16.count
+        return (updated, ComposerTextSelection(location: contentStart, length: selectedLength))
     }
 
     private static func applyNumberedList(
@@ -182,50 +193,63 @@ enum ComposerMarkdown {
         selection: ComposerTextSelection
     ) -> (text: String, selection: ComposerTextSelection) {
         let nsText = text as NSString
-        let lineRange = nsText.lineRange(for: NSRange(location: selection.location, length: selection.length))
+        let lineRange = selectedLineRange(in: nsText, selection: selection)
         let selectedLines = nsText.substring(with: lineRange)
-        let trimmed = selectedLines.trimmingCharacters(in: .newlines)
+        let hasTrailingNewline = selectedLines.hasSuffix("\n")
+        let content = hasTrailingNewline ? String(selectedLines.dropLast()) : selectedLines
 
         let lines: [String]
-        if trimmed.isEmpty {
+        if content.isEmpty {
             lines = ["list item"]
         } else {
-            lines = splitLines(selectedLines)
+            lines = content.components(separatedBy: "\n")
+        }
+
+        let numberedPrefixes = lines.map { line -> String? in
+            guard let match = line.range(of: #"^\d+\. "#, options: .regularExpression) else {
+                return nil
+            }
+            return String(line[match])
+        }
+        if content.isEmpty == false, numberedPrefixes.allSatisfy({ $0 != nil }) {
+            let unprefixed = zip(lines, numberedPrefixes).map { pair in
+                String(pair.0.dropFirst(pair.1?.count ?? 0))
+            }.joined(separator: "\n")
+            let updated = nsText.replacingCharacters(
+                in: lineRange,
+                with: unprefixed + (hasTrailingNewline ? "\n" : "")
+            )
+            let firstPrefixLength = numberedPrefixes.first.flatMap { $0 }?.count ?? 0
+            let length = selection.length > 0
+                ? (unprefixed as NSString).length
+                : (lines.first.map { String($0.dropFirst(firstPrefixLength)) } ?? "").utf16.count
+            return (updated, ComposerTextSelection(location: lineRange.location, length: length))
         }
 
         let prefixed = lines.enumerated().map { index, line in
-            let stripped = line.trimmingCharacters(in: .whitespaces)
-            if stripped.isEmpty {
-                return "\(index + 1). "
-            }
-            return "\(index + 1). \(stripped)"
+            "\(index + 1). \(line)"
         }.joined(separator: "\n")
 
-        let replacement = prefixed + lineEnding(from: nsText, lineRange: lineRange)
+        let replacement = prefixed + (hasTrailingNewline ? "\n" : "")
         let updated = nsText.replacingCharacters(in: lineRange, with: replacement)
-        let firstLine = lines.first ?? "list item"
         let prefix = "1. "
         let contentStart = lineRange.location + prefix.utf16.count
-        return (updated, ComposerTextSelection(location: contentStart, length: firstLine.utf16.count))
+        let selectedLength = selection.length > 0
+            ? (prefixed as NSString).length - prefix.utf16.count
+            : (lines.first ?? "list item").utf16.count
+        return (updated, ComposerTextSelection(location: contentStart, length: selectedLength))
     }
 
-    private static func lineEnding(from text: NSString, lineRange: NSRange) -> String {
-        guard lineRange.upperBound <= text.length else {
-            return ""
+    private static func selectedLineRange(in text: NSString, selection: ComposerTextSelection) -> NSRange {
+        var length = selection.length
+        // A selection ending at the start of the next line must not format
+        // that unselected line as well.
+        if length > 0, selection.upperBound < text.length,
+           text.substring(with: NSRange(location: selection.upperBound - 1, length: 1)) == "\n"
+        {
+            length -= 1
         }
-        if lineRange.upperBound == text.length {
-            return ""
-        }
-        return text.substring(with: NSRange(location: lineRange.upperBound - 1, length: 1)) == "\n" ? "\n" : ""
+        return text.lineRange(for: NSRange(location: selection.location, length: length))
     }
 
-    private static func splitLines(_ value: String) -> [String] {
-        var lines = value
-            .split(separator: "\n", omittingEmptySubsequences: false)
-            .map(String.init)
-        if lines.last?.isEmpty == true {
-            lines.removeLast()
-        }
-        return lines
-    }
 }

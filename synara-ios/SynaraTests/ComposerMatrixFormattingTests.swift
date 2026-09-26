@@ -18,6 +18,17 @@ final class ComposerMatrixFormattingTests: XCTestCase {
         XCTAssertTrue(html?.contains("<code>verify</code>") == true)
     }
 
+    func testMultilineQuoteProducesOneFormattedBlock() {
+        let body = "> first line\n> second line\n> third line"
+        let html = ComposerMatrixFormatting.formattedBody(for: body)
+
+        XCTAssertNotNil(html)
+        XCTAssertTrue(html?.contains("<blockquote>") == true, html ?? "nil")
+        for line in ["first line", "second line", "third line"] {
+            XCTAssertTrue(html?.contains(line) == true, html ?? "nil")
+        }
+    }
+
     #if canImport(UIKit)
     func testEmptyComposerMeasuresWrappedPlaceholderAtAccessibilityScale() {
         let container = ComposerTextContainer()
