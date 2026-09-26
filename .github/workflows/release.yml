@@ -33,6 +33,9 @@ jobs:
       - name: Check version metadata
         run: npm run check:versions
 
+      - name: Require TestFlight release notes
+        run: node scripts/check-ios-release-notes.mjs
+
       - name: Require tag to match the shared version
         shell: bash
         run: |

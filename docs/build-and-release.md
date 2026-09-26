@@ -124,6 +124,10 @@ manual workflow branch selector is not a safe release-source selector.
 npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 ```
 
+Write `synara-ios/release-notes/vX.Y.Z-en-US.txt` before opening the release
+PR. The release PR and tag validation require this TestFlight text. A missing
+file prevents promotion even when Apple accepts the uploaded build.
+
 2. Open a release PR (version files, changelog, release notes). Version-bearing
    manifests and configuration are executable build inputs and run the relevant
    validation. Use a `release/vX.Y.Z` head branch to require the iOS unit and UI
@@ -146,6 +150,12 @@ npm run bump:version -- X.Y.Z --ios-build X.Y.Z
 6. iOS TestFlight upload and internal promotion run in parallel as their own
    track. Confirm the TestFlight state snapshot; Apple should report the exact
    build as `IN_BETA_TESTING`.
+
+If an exact build uploads successfully but only its TestFlight promotion job
+fails, repair the cause on `main` and use **TestFlight Promotion Recovery** with
+the existing release tag and exact uploaded build number. This recovery checks
+that the tag is on `main`, reads the release notes from `main`, and promotes the
+already uploaded build. It does not rebuild or republish desktop assets.
 7. Confirm hosted macOS `latest.json`.
 8. Verify the fixed Linux repository URLs:
 

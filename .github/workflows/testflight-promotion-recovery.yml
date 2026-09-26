@@ -1,0 +1,115 @@
+name: TestFlight Promotion Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag whose iOS build was already uploaded
+        required: true
+        type: string
+      build_number:
+        description: Exact uploaded App Store Connect build number
+        required: true
+        type: string
+
+concurrency:
+  group: testflight-promotion-recovery-${{ inputs.tag }}-${{ inputs.build_number }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  promote:
+    name: Verify and promote an uploaded internal TestFlight build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 50
+    environment:
+      name: testflight
+      url: https://appstoreconnect.apple.com/apps
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Checkout release operations from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate exact existing release tag and notes
+        shell: bash
+        env:
+          RECOVERY_TAG: ${{ inputs.tag }}
+          RECOVERY_BUILD_NUMBER: ${{ inputs.build_number }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$RECOVERY_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Recovery requires a canonical version tag." >&2
+            exit 1
+          fi
+          if [[ ! "$RECOVERY_BUILD_NUMBER" =~ ^[0-9]+(\.[0-9]+)*$ ]]; then
+            echo "Recovery requires an exact numeric iOS build number." >&2
+            exit 1
+          fi
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git fetch origin "refs/tags/$RECOVERY_TAG:refs/tags/$RECOVERY_TAG"
+          tagged_commit="$(git rev-parse "$RECOVERY_TAG^{commit}")"
+          git merge-base --is-ancestor "$tagged_commit" origin/main
+          tagged_version="$(git show "$tagged_commit:package.json" | node -e 'let input="";process.stdin.on("data",chunk=>input+=chunk);process.stdin.on("end",()=>console.log(JSON.parse(input).version))')"
+          if [[ "$RECOVERY_TAG" != "v$tagged_version" ]]; then
+            echo "Tag does not match its committed version." >&2
+            exit 1
+          fi
+          notes_path="synara-ios/release-notes/${RECOVERY_TAG}-en-US.txt"
+          test -s "$notes_path"
+          echo "SYNARA_RECOVERY_VERSION=$tagged_version" >> "$GITHUB_ENV"
+          echo "SYNARA_RECOVERY_NOTES_PATH=$notes_path" >> "$GITHUB_ENV"
+          echo "Validated $RECOVERY_TAG at $tagged_commit with build $RECOVERY_BUILD_NUMBER."
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+
+      - name: Prepare App Store Connect API key
+        shell: bash
+        env:
+          SYNARA_ASC_KEY_BASE64: ${{ secrets.SYNARA_ASC_KEY_BASE64 }}
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+        run: |
+          api_key_path="$RUNNER_TEMP/AuthKey_${SYNARA_ASC_KEY_ID}.p8"
+          printf '%s' "$SYNARA_ASC_KEY_BASE64" | /usr/bin/base64 --decode > "$api_key_path"
+          chmod 600 "$api_key_path"
+          echo "SYNARA_ASC_KEY_PATH=$api_key_path" >> "$GITHUB_ENV"
+
+      - name: Verify and promote exact uploaded build
+        env:
+          SYNARA_ASC_KEY_ID: ${{ secrets.SYNARA_ASC_KEY_ID }}
+          SYNARA_ASC_ISSUER_ID: ${{ secrets.SYNARA_ASC_ISSUER_ID }}
+          SYNARA_IOS_MARKETING_VERSION: ${{ env.SYNARA_RECOVERY_VERSION }}
+          SYNARA_IOS_BUILD_NUMBER: ${{ inputs.build_number }}
+          SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS: ${{ vars.SYNARA_TESTFLIGHT_INTERNAL_GROUP_IDS }}
+          SYNARA_TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS: "2400"
+          SYNARA_TESTFLIGHT_POLL_INTERVAL_SECONDS: "15"
+          SYNARA_TESTFLIGHT_WHATS_NEW_PATH: ${{ env.SYNARA_RECOVERY_NOTES_PATH }}
+          SYNARA_TESTFLIGHT_WHATS_NEW_LOCALE: en-US
+          SYNARA_IOS_DIAGNOSTICS_DIR: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+        run: node synara-ios/scripts/promote-testflight-internal.mjs
+
+      - name: Clean App Store Connect API key
+        if: always()
+        run: |
+          if [[ -n "${SYNARA_ASC_KEY_PATH:-}" ]]; then
+            rm -f -- "$SYNARA_ASC_KEY_PATH"
+          fi
+
+      - name: Upload TestFlight processing diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-testflight-recovery-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/synara-ios-testflight-diagnostics
+          if-no-files-found: warn
+          retention-days: 30

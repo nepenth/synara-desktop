@@ -51,6 +51,10 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Require TestFlight notes on release PRs
+        if: startsWith(github.head_ref, 'release/')
+        run: node scripts/check-ios-release-notes.mjs
+
       - name: Determine which heavy CI jobs must run
         id: scope
         shell: bash

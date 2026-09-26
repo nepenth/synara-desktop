@@ -1,0 +1,1 @@
+Improved message formatting on iPhone and iPad, including multi-line quotes and pasted text. The message composer now sits at the bottom of the screen, and the connection notice disappears after a short time. This release also improves the public desktop and iOS experience.
