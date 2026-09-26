@@ -190,7 +190,9 @@ jobs:
 
       - name: Install XcodeGen
         if: steps.reuse.outputs.reuse != 'true'
-        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
+        run: |
+          brew install xcodegen
+          test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Build and run unsigned simulator tests
         if: steps.reuse.outputs.reuse != 'true'

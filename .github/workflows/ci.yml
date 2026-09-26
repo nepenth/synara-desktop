@@ -651,7 +651,9 @@ jobs:
           shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
-        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
+        run: |
+          brew install xcodegen
+          test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -699,7 +701,9 @@ jobs:
           shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
-        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
+        run: |
+          brew install xcodegen
+          test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
@@ -753,7 +757,9 @@ jobs:
           shared-key: ci-synara-core-apple-simulator-arm64
 
       - name: Install XcodeGen
-        run: brew install xcodegen && test "$(xcodegen --version)" = "Version: 2.46.0"
+        run: |
+          brew install xcodegen
+          test "$(xcodegen --version)" = "Version: 2.46.0"
 
       - name: Check SynaraCore Swift scaffold
         run: node scripts/check-synara-core-swift-scaffold.mjs
