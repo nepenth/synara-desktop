@@ -96,7 +96,7 @@ futures-util = "0.3"
 getrandom = "0.4"
 # P4-1 binding metadata/runtime. The version is pinned so the UDL scaffolding,
 # generated Swift, and Apple libraries are produced by one reproducible toolchain.
-uniffi = { version = "=0.28.3", features = ["tokio"] }
+uniffi = { version = "=0.32.1", features = ["tokio"] }
 # Store identity fingerprints directory names (moved from desktop store/identity.rs).
 # Pin matches src-tauri (`sha2 = "0.11"`).
 sha2 = "0.11"
@@ -116,7 +116,7 @@ rustls = { version = "0.23.45", default-features = false, features = [
 ], optional = true }
 
 [build-dependencies]
-uniffi = { version = "=0.28.3", features = ["build"] }
+uniffi = { version = "=0.32.1", features = ["build"] }
 
 [dev-dependencies]
 # dto/tests.rs fixture + serde round-trip tests.

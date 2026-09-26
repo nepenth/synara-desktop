@@ -13,10 +13,10 @@ crate-type = ["lib", "staticlib"]
 synara-core = { path = "../synara-core", default-features = false, features = ["nse-preview"] }
 tokio = { version = "1", features = ["macros"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-uniffi = { version = "=0.28.3", features = ["tokio"] }
+uniffi = { version = "=0.32.1", features = ["tokio"] }
 
 [build-dependencies]
-uniffi = { version = "=0.28.3", features = ["build"] }
+uniffi = { version = "=0.32.1", features = ["build"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "time"] }
