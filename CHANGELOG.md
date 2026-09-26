@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.1.42] - 2026-09-26
+
+- Prepare the public project README with desktop, iPhone, and iPad interface images captured from disposable sample accounts, plus contribution and security guidance.
+- iOS: bring composer formatting closer to desktop, preserving every line of pasted quotes and exposing Markdown controls in the native input.
+- iOS: keep the compact composer immediately above the home indicator and dismiss the Connected recovery banner after 12 seconds even with repeated sync updates.
+- Desktop: load the packaged React interface inside Tauri and tighten Matrix media, local file, and secret-storage handling.
+
 ## [2.1.41] - 2026-09-23
 
 - iOS: keep typed and pasted composer text legible in dark appearance, and return to the live tail after sending from unread history. Keep Later navigation reliable on iPhone and in the iPad split canvas.

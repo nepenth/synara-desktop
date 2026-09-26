@@ -1,6 +1,6 @@
 # Production Smoke Checklist
 
-Reviewed: 2026-09-10
+Reviewed: 2026-09-26
 
 This checklist is the release handoff surface for human-run desktop and iOS
 validation gates. Automated commands and release sequencing live in
@@ -17,6 +17,20 @@ package/install interaction, physical-device iOS checks, and the unexercised
 macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
+
+2026-09-26 public-readiness release candidate (2.1.42):
+
+- Feature PR #1160 passed Quality gate and Desktop Package Smoke, then merged to
+  `main` as `fa2051c1`. The post-merge Quality gate passed after a hosted iOS UI
+  simulator startup failure cleared on rerun; the five affected cases also
+  passed locally in the disposable simulator.
+- The `release/v2.1.42` candidate must pass full iOS unit and UI suites and
+  desktop package smoke at its own head. Candidate package artifacts need
+  install and launch checks before tagging.
+- Human smoke remains: verify iPhone quote/paste and composer position on a
+  physical device, iPad split navigation, and packaged macOS and Linux launch
+  and update behavior. Use disposable accounts and sample rooms for public
+  screenshots or evidence.
 
 2026-09-23 iOS, iPad, Linux timeline, and agent widget release-candidate review (2.1.41):
 
