@@ -9,8 +9,8 @@ settings:
     SWIFT_VERSION: "5.0"
     IPHONEOS_DEPLOYMENT_TARGET: "16.0"
     CODE_SIGN_STYLE: Automatic
-    MARKETING_VERSION: "2.1.41"
-    CURRENT_PROJECT_VERSION: "2.1.41"
+    MARKETING_VERSION: "2.1.42"
+    CURRENT_PROJECT_VERSION: "2.1.42"
 packages:
   SynaraCore:
     path: SynaraCore

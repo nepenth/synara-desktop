@@ -1,6 +1,6 @@
 # Production Smoke Checklist
 
-Reviewed: 2026-09-10
+Reviewed: 2026-09-26
 
 This checklist is the release handoff surface for human-run desktop and iOS
 validation gates. Automated commands and release sequencing live in
@@ -17,6 +17,34 @@ package/install interaction, physical-device iOS checks, and the unexercised
 macOS platform-integration cases remain release-candidate gates.
 
 ## Latest Smoke Feedback
+
+2026-09-26 public-readiness release candidate (2.1.42):
+
+- Feature PR #1160 passed Quality gate and Desktop Package Smoke, then merged to
+  `main` as `fa2051c1`. The post-merge Quality gate passed after a hosted iOS UI
+  simulator startup failure cleared on rerun; the five affected cases also
+  passed locally in the disposable simulator.
+- Candidate commit `e7d21042` on `release/v2.1.42` passed the full iOS unit and
+  UI suites and Quality gate in [CI run 36257295353](https://github.com/nepenth/synara-desktop/actions/runs/36257295353).
+  The macOS app bundle, Debian package, Arch package, and aggregate desktop
+  package gate passed in [run 36257295363](https://github.com/nepenth/synara-desktop/actions/runs/36257295363).
+  All three candidate artifacts were present and unexpired on 2026-09-26.
+- On an arm64 macOS 27.0 workstation, the downloaded CI macOS app bundle
+  reported version 2.1.42 and passed `codesign --verify --deep --strict`.
+  This is an artifact integrity check, not an install, launch, session, or
+  updater smoke pass. The local preflight checks for version consistency,
+  repository layout, documentation, and checklist coverage passed. The local
+  updater check confirmed the committed configuration is disabled until the
+  tag workflow materializes production settings.
+- **Explicit release exception, authorized by the maintainer on 2026-09-26:**
+  proceed to the production tag without candidate install/launch on macOS or
+  Linux, physical iPhone quote/paste and composer-position checks, iPad split
+  navigation smoke, or installed-app update checks. No physical iPhone or Linux
+  GUI was available on this workstation. These cases are unverified, not
+  passed; use disposable accounts and sample rooms for any later evidence.
+  Signed artifact and TestFlight publication must still pass their automated
+  workflow gates. Follow up on the waived device and package cases after
+  publication.
 
 2026-09-23 iOS, iPad, Linux timeline, and agent widget release-candidate review (2.1.41):
 
