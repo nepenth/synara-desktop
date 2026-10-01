@@ -20,11 +20,6 @@ fn space(
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_spaces_markers(), MATRIX_SPACES_MARKER);
-}
-
-#[test]
 fn hierarchy_children_order_and_descendants() {
     let mut h = SpaceHierarchy::new();
     h.replace_all(vec![

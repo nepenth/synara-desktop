@@ -3,8 +3,14 @@
 use std::fmt;
 
 use crate::app::store::{AccountIdentityError, StorePathError};
-use crate::app::supervisor::FactoryError;
 use crate::transport::MatrixIpcErrorCategory;
+
+/// Privacy-safe failure categorization consumed by native auth adapters.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FactoryError {
+    pub category: MatrixIpcErrorCategory,
+    pub diagnostic_id: &'static str,
+}
 
 /// Failure while validating config or constructing an unauthenticated Client.
 #[derive(Debug)]

@@ -23,11 +23,6 @@ fn member(
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_members_markers(), MATRIX_MEMBERS_MARKER);
-}
-
-#[test]
 fn upsert_list_power_order() {
     let mut idx = MemberIndex::new(1);
     idx.upsert(member(

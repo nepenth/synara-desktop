@@ -15,18 +15,14 @@
 //! - `docs/matrix-rust-sdk/p4.3-membership-unread.md`
 //! - `docs/matrix-rust-sdk/p4.4-room-semantics.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 pub use synara_core::app::room_list::{
-    contains_bad_word, filter_rooms_by_scope, matrix_room_list_markers, partition_favorite_rooms,
-    reconstruct, room_matches_scope, select_dm_avatar_source, select_rooms_by_scope,
-    select_rooms_in_folder, snapshot_from_sync_owner, snapshot_invites, sort_rooms,
-    sort_rooms_in_place, DmAvatarSourceKind, InviteAvatarHandles, InviteAvatarSource, NativeInvite,
+    contains_bad_word, filter_rooms_by_scope, partition_favorite_rooms, reconstruct,
+    room_matches_scope, select_dm_avatar_source, select_rooms_by_scope, select_rooms_in_folder,
+    snapshot_from_sync_owner, snapshot_invites, sort_rooms, sort_rooms_in_place,
+    DmAvatarSourceKind, InviteAvatarHandles, InviteAvatarSource, NativeInvite,
     NativeInviteSnapshot, NativeInviteTriage, NativeRoomListSnapshot, RoomListBadgeCounts,
     RoomListDeltaBatch, RoomListDeltaOp, RoomListError, RoomListProjection, RoomListScope,
-    RoomListSnapshot, RoomListSort, RoomSummaryBuilder, MATRIX_ROOM_LIST_MARKER,
-    MAX_INVITE_AVATAR_HANDLES,
+    RoomListSnapshot, RoomListSort, RoomSummaryBuilder, MAX_INVITE_AVATAR_HANDLES,
 };
 
 #[cfg(test)]

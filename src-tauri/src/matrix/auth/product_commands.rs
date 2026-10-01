@@ -868,21 +868,7 @@ pub async fn matrix_logout(
         // A failed restore can leave native identity and keychain material
         // without a live SDK client. Logout must still remove both so the user
         // can recover to the login route instead of entering a retry loop.
-        let orphan_cleanup_outcome = if active_identity_path(&app_data_root).is_file() {
-            read_active_identity(&app_data_root)
-                .and_then(|identity| account_identity(&identity))
-                .and_then(|identity| {
-                    clear_session_material(&KeyringSessionMaterialVault::new(), &identity).map_err(
-                        |_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"),
-                    )
-                })
-                .map(|_| ())
-        } else {
-            Ok(())
-        };
-        let remove_result = remove_active_identity(&app_data_root);
-        orphan_cleanup_outcome?;
-        remove_result?;
+        clear_persisted_logout_material(&KeyringSessionMaterialVault::new(), &app_data_root)?;
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
@@ -901,18 +887,16 @@ pub async fn matrix_logout(
         .await
         .map_err(|error| map_sync_error(error.diagnostic_id()))?;
 
-    let identity = account_identity(&active.identity)?;
-    let clear_result = clear_session_material(&KeyringSessionMaterialVault::new(), &identity)
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"));
-    let remove_result = remove_active_identity(&app_data_root(&app)?);
+    let cleanup_result = app_data_root(&app).and_then(|root| {
+        clear_native_logout_material(&KeyringSessionMaterialVault::new(), &active.identity, &root)
+    });
     *session = None;
     // The desktop session is now gone. Release its async mutex before Core's
     // await and close Core before reporting deferred non-session cleanup errors.
     drop(session);
     crate::bridge::session_lifecycle::close_after_desktop_session_removal(core.inner().as_ref())
         .await?;
-    clear_result?;
-    remove_result?;
+    cleanup_result?;
     Ok(MatrixSessionSnapshot::LoggedOut)
 }
 
@@ -1549,6 +1533,40 @@ pub(super) fn read_active_identity(
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-active-session-read-failed"))?;
     serde_json::from_slice(&bytes)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-active-session-invalid"))
+}
+
+/// The identity file is the retry locator for failed credential deletion.
+/// Delete it only after every vault operation succeeded. This function is also
+/// used by the orphan path after live/Core owners have been retired.
+pub(super) fn clear_native_logout_material<
+    V: crate::matrix::lifecycle::SessionMaterialVault + ?Sized,
+>(
+    vault: &V,
+    identity: &MatrixLoginIdentity,
+    root: &Path,
+) -> Result<(), MatrixAuthCommandError> {
+    let account = account_identity(identity)?;
+    if !active_identity_path(root).is_file() {
+        // A live owner still knows the identity if external deletion removed
+        // its locator. Persist that non-secret locator before attempting clear.
+        write_active_identity(root, identity)?;
+    }
+    clear_session_material(vault, &account)
+        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"))?;
+    remove_active_identity(root)
+}
+
+pub(super) fn clear_persisted_logout_material<
+    V: crate::matrix::lifecycle::SessionMaterialVault + ?Sized,
+>(
+    vault: &V,
+    root: &Path,
+) -> Result<(), MatrixAuthCommandError> {
+    if active_identity_path(root).is_file() {
+        let identity = read_active_identity(root)?;
+        clear_native_logout_material(vault, &identity, root)?;
+    }
+    Ok(())
 }
 
 pub(super) fn remove_active_identity(app_data_root: &Path) -> Result<(), MatrixAuthCommandError> {

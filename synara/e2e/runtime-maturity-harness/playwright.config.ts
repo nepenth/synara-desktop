@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url';
-import { defineConfig, devices } from '@playwright/test';
+import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: '..',
   testMatch: 'runtime-maturity.spec.ts',
@@ -13,5 +13,6 @@ export default defineConfig({
     url: 'http://127.0.0.1:4190/e2e/runtime-maturity-harness/index.html',
     reuseExistingServer: false,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  // Keep the browser's native user agent aligned with navigator.platform for editor hotkeys.
+  projects: [{ name: 'chromium', use: { viewport: { width: 1280, height: 720 } } }],
 });

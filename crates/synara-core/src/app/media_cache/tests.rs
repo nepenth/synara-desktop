@@ -13,11 +13,6 @@ fn entry(handle: &str, size: u64, ts: u64) -> CacheEntry {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_media_cache_markers(), MATRIX_MEDIA_CACHE_MARKER);
-}
-
-#[test]
 fn upsert_touch_total() {
     let mut idx = MediaCacheIndex::new(1);
     idx.upsert(entry("a", 100, 10)).unwrap();

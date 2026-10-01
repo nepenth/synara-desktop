@@ -1,3 +1,5 @@
+import { rustDeclarationSurface } from "./rust-module-sources.mjs";
+
 const operations = [
   [
     "secret_storage_bootstrap",
@@ -27,6 +29,7 @@ const operations = [
 ];
 
 export function inspectTypedRecoveryBoundaries({ udl, ffi }) {
+  ffi = rustDeclarationSurface(ffi);
   const errors = [];
   for (const [method, argument, result, error] of operations) {
     const signature = `[Async, Throws=${error}]\n  ${result} ${method}(string ${argument});`;

@@ -31,13 +31,6 @@ fn state(
 }
 
 #[test]
-fn marker_and_empty_indexes() {
-    assert_eq!(matrix_polls_markers(), MATRIX_POLLS_MARKER);
-    assert!(PollIndex::new(1).is_empty());
-    assert!(StateProjectionIndex::new(1).is_empty());
-}
-
-#[test]
 fn poll_insert_replace_and_remove() {
     let mut index = PollIndex::new(3);
     assert!(index

@@ -21,11 +21,6 @@ fn sample_profile(room_id: &str) -> RoomProfile {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_room_profile_markers(), MATRIX_ROOM_PROFILE_MARKER);
-}
-
-#[test]
 fn upsert_get_and_alias_lookup() {
     let mut idx = RoomProfileIndex::new(1);
     idx.upsert(sample_profile("!r:example.org")).unwrap();

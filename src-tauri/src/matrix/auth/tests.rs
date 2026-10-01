@@ -13,11 +13,6 @@ fn secret_fragments() -> &'static [&'static str] {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_auth_markers(), MATRIX_AUTH_MARKER);
-}
-
-#[test]
 fn valid_homeserver_url_input_no_network() {
     let rt = tokio::runtime::Builder::new_current_thread()
         .enable_all()

@@ -49,3 +49,21 @@ Repository layout acceptance criteria:
 - `synara/` does not contain nested Git metadata.
 - `synara/` does not contain nested GitHub workflow automation.
 - Fresh clones, local builds, and CI do not depend on another repository.
+
+## Native domain ownership
+
+`crates/synara-core/src/core.rs` contains the Core owner state and command registry.
+Its `core/` modules keep command request validation and closed error mapping by
+domain; `core/tests.rs` preserves transport and owner regression coverage.
+`shared_core_ffi.rs` wires the UniFFI facade and reexports its established DTOs.
+Its `shared_core_ffi/` modules keep typed domain methods, DTO projections, and
+error conversions together. The UDL remains the generated binding contract.
+
+The unused legacy-session transition harness and desktop marker-only linker
+harness have been retired. Their dated migration documents remain historical
+evidence. Production ownership is established through real Core/desktop callers
+and compiler checks, rather than marker references or blanket module lint
+exemptions.
+
+See the [native maturity retirement ledger](rust-maturity-retirements.md) for
+the retired graph, preserved live APIs, and validation boundaries.

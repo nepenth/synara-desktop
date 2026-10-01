@@ -1,9 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import FocusTrap from 'focus-trap-react';
+import parse, { domToReact } from 'html-react-parser';
+import { CDATA, Document, Element, Text } from 'domhandler';
 import { useForceUpdate } from '../../src/app/hooks/useForceUpdate';
 import { createPage, usePdfDocumentLoader, usePdfJSLoader } from '../../src/app/plugins/pdfjs-dist';
 import { AsyncStatus } from '../../src/app/hooks/useAsyncCallback';
+import {
+  getReactCustomHtmlParser,
+  LINKIFY_OPTS,
+} from '../../src/app/plugins/react-custom-html-parser';
+import type { MatrixClientReading } from '../../src/app/utils/room';
+import { reactDomNodes } from '../../src/app/utils/reactDomNodes';
+import { RoomComposer } from '../../src/app/features/room/RoomComposer';
+import { useEditor } from '../../src/app/components/editor/Editor';
+
+// These code-block fixtures have no Matrix mentions or media, so no client reads occur.
+const parserOptions = getReactCustomHtmlParser({} as MatrixClientReading, undefined, {
+  linkifyOpts: LINKIFY_OPTS,
+});
+const nestedXmlNodes = new Document([
+  new Element('strong', {}, [new CDATA([new Text('nested literal <kept>')])]),
+]);
 
 const createPdf = () => {
   const stream = '1 0 0 rg 0 0 100 100 re f\n';
@@ -29,6 +47,8 @@ const createPdf = () => {
 
 function MaturityHarness() {
   const [count, update] = useForceUpdate();
+  const editor = useEditor();
+  const [composerState, setComposerState] = useState('[]');
   const [trap, setTrap] = useState(false);
   const [pdf, loadPdf] = usePdfJSLoader();
   const [src] = useState(createPdf);
@@ -64,7 +84,19 @@ function MaturityHarness() {
         </FocusTrap>
       )}
       <div id="pdf-output" />
-      <output>{rendered ? 'PDF rendered' : 'PDF loading'}</output>
+      <output data-testid="pdf-status">{rendered ? 'PDF rendered' : 'PDF loading'}</output>
+      <section aria-label="Code block regression">
+        {parse('<pre></pre><pre><code></code></pre><pre><code>hello</code></pre>', parserOptions)}
+      </section>
+      <section aria-label="Nested XML regression">
+        {domToReact(reactDomNodes([nestedXmlNodes]), parserOptions)}
+      </section>
+      <RoomComposer
+        editor={editor}
+        placeholder="Composer compatibility"
+        onChange={(value) => setComposerState(JSON.stringify(value))}
+      />
+      <output data-testid="composer-state">{composerState}</output>
       {(pdf.status === AsyncStatus.Error || documentState.status === AsyncStatus.Error) && (
         <p role="alert">PDF failed</p>
       )}

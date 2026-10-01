@@ -24,11 +24,6 @@ fn summary(
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_threads_markers(), MATRIX_THREADS_MARKER);
-}
-
-#[test]
 fn upsert_list_and_order() {
     let mut idx = ThreadIndex::new(1);
     idx.upsert(summary(

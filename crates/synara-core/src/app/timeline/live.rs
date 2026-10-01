@@ -36,8 +36,8 @@ use matrix_sdk::{
 };
 use matrix_sdk_crypto::types::events::UtdCause;
 use matrix_sdk_ui::timeline::{
-    EncryptedMessage, EventSendState, MsgLikeKind, ThreadListPaginationState, ThreadListService,
-    Timeline, TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId,
+    EncryptedMessage, MsgLikeKind, ThreadListPaginationState, ThreadListService, Timeline,
+    TimelineBuilder, TimelineDetails, TimelineEventFocusThreadMode, TimelineEventItemId,
     TimelineFocus, TimelineItem as SdkTimelineItem, TimelineItemContent as SdkTimelineItemContent,
     TimelineReadReceiptTracking,
 };
@@ -68,6 +68,9 @@ use crate::app::threads::{
 use crate::app::utd_recovery::{UtdRecoveryCoordinator, UtdRecoveryKind, MAX_EVENT_IDS_PER_BATCH};
 use crate::dto::{RoomEncryptionStatus, TimelineEncryptedUnavailableItem};
 
+#[cfg(test)]
+use super::view::TimelineViewDeltaBatch;
+
 use super::{
     format_forwarded_media_body, format_forwarded_plain_body, project_timeline_diffs_with_media,
     project_timeline_item_with_media,
@@ -88,10 +91,10 @@ use super::{
     NativeTimelineViewPaginationRequest, NativeTimelineViewportHint, NativeUtdPhase,
     NativeUtdStatus, PinnedEventsSnapshot, TimelineMediaRegistry, TimelineMediaSource,
     TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineRoomActionAuthority,
-    TimelineViewCapabilities, TimelineViewDeltaBatch, TimelineViewPosition, TimelineViewSnapshot,
-    TimelineViewUpdateEmit, UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter,
-    NATIVE_TIMELINE_ACTION_SCHEMA_VERSION, NATIVE_TIMELINE_OPEN_SCHEMA_VERSION,
-    NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS, TIMELINE_VIEW_SCHEMA_VERSION,
+    TimelineViewCapabilities, TimelineViewPosition, TimelineViewSnapshot, TimelineViewUpdateEmit,
+    UtdIndex, UtdPhase, UtdReasonCode, ViewDeltaEmitter, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
 
 #[cfg(test)]

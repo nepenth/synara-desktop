@@ -6,6 +6,11 @@ updates. `cargo audit` runs without an advisory ignore list; informational
 warnings remain visible in CI. Reassess the source evidence below whenever
 Matrix SDK, Tantivy, Tauri, GTK/WebKit, or their lockfile entries change.
 
+The [dependency PR disposition record](dependency-update-dispositions.md)
+captures all four open update PRs, every npm package outcome, compatibility
+alternatives, renderer retirement, and the validation still required before
+the consolidated branch is accepted.
+
 ## Remediated entries and dependency PRs
 
 - `wayland-scanner` 0.31.10 → 0.31.11 replaces `quick-xml` 0.39.4 with
@@ -16,9 +21,12 @@ Matrix SDK, Tantivy, Tauri, GTK/WebKit, or their lockfile entries change.
 - Yanked `chacha20` 0.10.1 → 0.10.2, including Matrix encryption and RNG users.
 - [PR #1159](https://github.com/nepenth/synara-desktop/pull/1159) is incorporated
   into the root lock: Tauri 2.11.6, updater 2.12.0, single-instance 2.4.5,
-  zbus 5.19.0. Updater's direct requirement is raised to 2.12.0. The Tauri
-  2.11 runtime and support crate family remains compatible with the existing
-  desktop API/CLI major-minor policy.
+  zbus 5.19.0. Direct requirements encode Tauri `~2.11.6` and updater
+  `~2.12.0` so updates remain in their validated minor families; single-instance
+  and zbus use compatible major requirements with floors 2.4.5 and 5.19.0.
+  Supporting Tauri crates retain upstream-compatible ranges rather than
+  gratuitous exact pins. Production builds use `--locked`, and version checks
+  validate the resolved Tauri API/CLI and updater families.
 - [PR #1162](https://github.com/nepenth/synara-desktop/pull/1162) is incorporated
   as exact UniFFI 0.32.2 across Core, NSE, and the project-owned generator.
   Its upstream metadata comments fix the obsolete 0.28.3 Clippy workaround.
@@ -28,7 +36,18 @@ Matrix SDK, Tantivy, Tauri, GTK/WebKit, or their lockfile entries change.
   alone does not establish ABI compatibility.
 - Matrix SDK and its direct sibling crates remain exactly 0.19.1. Desktop
   and Apple packages share one lockfile, while their shipping feature graphs
-  are selected and checked independently.
+  are selected and checked independently. Apple generators build each package
+  in a separate `-p` invocation. The NSE checker inspects normal, build, and
+  feature edges for every supported Apple target and rejects forwarding,
+  search, X.509, and full FFI. Unified workspace and test builds deliberately
+  enable development fixtures and do not establish the shipping feature graph.
+  No additional compile-time rejection is added because it would also reject
+  those intentional fixtures.
+- `matrix-sdk-test` 0.19.1 declares only the opt-in
+  `experimental-encrypted-state-events` feature and has no default features
+  in its published manifest. Its exact pin therefore cannot implicitly enable
+  forwarding, search, or X.509 defaults; adding `default-features = false`
+  would not change this version's behavior.
 
 ## Remaining informational warnings
 
@@ -47,12 +66,21 @@ Run from the repository root with the pinned Rust toolchain:
 ```sh
 cargo audit
 cargo metadata --locked --no-deps --format-version 1
+cargo tree --locked -p synara-core --target all -i matrix-sdk@0.19.1
+cargo tree --locked -p synara-core --target all -i uniffi@0.32.2
+cargo tree --locked -p synara --target all -i quick-xml@0.41.0
+cargo tree --locked -p synara --target all -i chacha20@0.10.2
+cargo tree --locked -p synara --target all -i tauri@2.11.6
+cargo tree --locked -p synara --target all -i zbus@5.19.0
 cargo tree --locked -p synara --target all -i wayland-scanner
 cargo tree --locked -p synara --target all -i lru
 cargo tree --locked -p synara --target all -i glib
 cargo tree --locked --workspace --target all --edges all -i derivative
 node scripts/check-synara-nse-core-production-features.mjs
 ```
+
+`metadata --no-deps` proves workspace membership and inherited metadata only;
+the locked tree queries above prove the named dependency versions and consumers.
 
 Review Tantivy `src/store/reader.rs` and its manifest against the locked version,
 and scan the above Linux consumers for `VariantStrIter` and `array_iter_str`.

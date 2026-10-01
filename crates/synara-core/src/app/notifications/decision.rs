@@ -828,7 +828,7 @@ mod tests {
         let server = MatrixMockServer::new().await;
         let client = server
             .client_builder()
-            .request_config(RequestConfig::new().disable_retry())
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
             .build()
             .await;
         client.event_cache().subscribe().unwrap();

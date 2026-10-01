@@ -25,11 +25,6 @@ fn candidate(
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_notifications_markers(), MATRIX_NOTIFICATIONS_MARKER);
-}
-
-#[test]
 fn enqueue_list_dismiss() {
     let mut idx = NotificationIndex::new(1);
     let id = idx

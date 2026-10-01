@@ -5,11 +5,6 @@ use crate::dto::{BackupStatus, RecoveryStatus};
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_backup_markers(), MATRIX_BACKUP_MARKER);
-}
-
-#[test]
 fn setup_succeed_path() {
     let mut flow = BackupRecoveryFlow::new(1);
     assert!(!flow.needs_attention()); // Unknown is not attention

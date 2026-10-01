@@ -22,11 +22,6 @@ fn msg(id: &str, body: &str) -> TimelineItem {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_timeline_markers(), MATRIX_TIMELINE_MARKER);
-}
-
-#[test]
 fn open_mark_live_close_dispose() {
     let mut reg = TimelineRegistry::new(3);
     let key = TimelineKey::main("!room:example.org").unwrap();

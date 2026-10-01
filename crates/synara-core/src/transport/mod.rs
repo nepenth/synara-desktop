@@ -11,9 +11,6 @@
 //! command handlers yet (P1.4+). Types are part of the public crate surface for
 //! later phases and are exercised by unit tests + schema markers.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod census;
 mod command;
 mod envelope;

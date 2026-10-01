@@ -1,15 +1,10 @@
 //! Unit tests for P4.1 sync readiness / reconnect foundation.
 
+use super::SyncPhase;
 use super::*;
-use crate::matrix::diagnostics::SyncPhase;
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 use matrix_sdk_ui::sync_service::State as SdkSyncState;
 use std::sync::Arc;
-
-#[test]
-fn marker_stable() {
-    assert_eq!(matrix_sync_markers(), MATRIX_SYNC_MARKER);
-}
 
 #[test]
 fn readiness_labels_cover_all() {

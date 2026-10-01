@@ -4,11 +4,6 @@ use super::*;
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_user_profile_markers(), MATRIX_USER_PROFILE_MARKER);
-}
-
-#[test]
 fn own_profile_read_dto_is_mxc_only() {
     let profile = MatrixOwnProfile {
         user_id: "@alice:example.org".into(),

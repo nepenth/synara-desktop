@@ -166,6 +166,4 @@ pub use app::room_list::{
 pub mod dto;
 pub mod platform;
 
-pub mod task;
-
 pub mod transport;

@@ -5,9 +5,6 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.6-members.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod index;
 mod native;
@@ -29,18 +26,6 @@ pub use snapshots::{
     parse_room_members_room_id, project_room_creators, project_room_member,
     validate_power_level_tags_snapshot_content, validate_power_levels_snapshot_content,
 };
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_MEMBERS_MARKER: &str = "matrix-members-p4.6";
-
-/// Touch member paths so they remain linked in non-test builds.
-pub fn matrix_members_markers() -> &'static str {
-    let idx = MemberIndex::new(0);
-    debug_assert!(idx.is_empty());
-    debug_assert_eq!(idx.room_count(), 0);
-    debug_assert_eq!(MATRIX_MEMBERS_MARKER, "matrix-members-p4.6");
-    MATRIX_MEMBERS_MARKER
-}
 
 #[cfg(test)]
 mod tests;

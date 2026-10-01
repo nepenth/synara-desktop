@@ -2717,9 +2717,7 @@ fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_
         .nth(1)
         .and_then(|source| source.split("// Remote logout is best-effort").next())
         .expect("matrix_logout missing-session branch");
-    assert!(no_active_session.contains("read_active_identity"));
-    assert!(no_active_session.contains("clear_session_material"));
-    assert!(no_active_session.contains("remove_active_identity"));
+    assert!(no_active_session.contains("clear_persisted_logout_material"));
 }
 
 #[test]
@@ -2773,7 +2771,8 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         "remote logout must remain best-effort"
     );
     assert!(
-        logout.contains("clear_session_material") && logout.contains("remove_active_identity"),
+        logout.contains("clear_native_logout_material")
+            && logout.contains("clear_persisted_logout_material"),
         "local logout must clear native session material and identity"
     );
     assert!(
@@ -3023,4 +3022,73 @@ fn media_preview_command_is_registered_and_read_only() {
     assert!(command.contains("core: State<'_, Arc<synara_core::Core>>"));
     assert!(!command.contains("get_media_preview("));
     assert!(!command.contains("send_state_event"));
+}
+
+#[test]
+fn logout_partial_vault_failure_retains_retry_identity_until_all_credentials_are_deleted() {
+    use crate::matrix::lifecycle::{
+        LifecycleError, SessionMaterial, SessionMaterialId, SessionMaterialVault,
+    };
+    use std::sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    };
+    struct PartialVault {
+        fail: AtomicBool,
+        fragments: Mutex<(bool, bool)>,
+    }
+    impl SessionMaterialVault for PartialVault {
+        fn get(&self, _: &SessionMaterialId) -> Result<Option<SessionMaterial>, LifecycleError> {
+            Ok(None)
+        }
+        fn set(&self, _: &SessionMaterialId, _: &SessionMaterial) -> Result<(), LifecycleError> {
+            Ok(())
+        }
+        fn clear(&self, _: &SessionMaterialId) -> Result<bool, LifecycleError> {
+            let mut fragments = self.fragments.lock().unwrap();
+            fragments.0 = false;
+            if self.fail.load(Ordering::Relaxed) {
+                return Err(LifecycleError::Vault {
+                    diagnostic_id: "test-partial-delete",
+                    category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
+                });
+            }
+            fragments.1 = false;
+            Ok(true)
+        }
+    }
+    let root = std::env::temp_dir().join(format!("synara-logout-partial-{}", std::process::id()));
+    let identity = MatrixLoginIdentity {
+        user_id: "@logout-test:example.org".into(),
+        device_id: "TEST".into(),
+        homeserver_url: "https://example.org".into(),
+    };
+    let vault = PartialVault {
+        fail: AtomicBool::new(true),
+        fragments: Mutex::new((true, true)),
+    };
+    write_active_identity(&root, &identity).unwrap();
+    // Active logout retires live/Core owners, but retains the locator on error.
+    assert_eq!(
+        clear_native_logout_material(&vault, &identity, &root)
+            .unwrap_err()
+            .diagnostic_id,
+        "d0.1-session-clear-failed"
+    );
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    assert_eq!(*vault.fragments.lock().unwrap(), (false, true));
+    // A subsequent renderer retry enters the orphan route and must still fail.
+    assert_eq!(
+        clear_persisted_logout_material(&vault, &root)
+            .unwrap_err()
+            .diagnostic_id,
+        "d0.1-session-clear-failed"
+    );
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    vault.fail.store(false, Ordering::Relaxed);
+    clear_persisted_logout_material(&vault, &root).unwrap();
+    assert_eq!(*vault.fragments.lock().unwrap(), (false, false));
+    assert!(!active_identity_path(&root).exists());
+    clear_persisted_logout_material(&vault, &root).unwrap();
+    let _ = fs::remove_dir_all(root);
 }

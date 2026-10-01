@@ -104,7 +104,14 @@ export const initClient = async (
       outcome: 'initialized',
       durationMs: performance.now() - initStartedAtMs,
     });
-    if (freshLogin) {
+    if (
+      freshLogin &&
+      client.getUserId() === session.userId &&
+      client.getDeviceId() === session.deviceId &&
+      client.getBaseUrl() === session.baseUrl &&
+      client.getSessionGeneration() !== undefined &&
+      String(client.getSessionGeneration()) === session.sessionGeneration
+    ) {
       clearPendingFreshLoginIdentity(session);
     }
     return client;
@@ -123,11 +130,25 @@ export const startClient = async (mx: MatrixClient): Promise<void> => {
   await mx.startClient();
 };
 
+/** Try every renderer cleanup step even if a listener or browser storage fails. */
+const finishRendererCleanup = async (steps: Array<() => void | Promise<void>>) => {
+  for (const step of steps) {
+    try {
+      await step();
+    } catch {
+      // Native session authority is independent; reload restores its actual state.
+    }
+  }
+};
+
 export const reloadApplication = async (mx: MatrixClient) => {
-  await mx.stopClient();
-  // Clear renderer caches only; native owns the encrypted store and credentials.
-  clearNavToActivePathStore(mx.getSafeUserId());
-  clearNotificationCaches();
+  const userId = mx.getSafeUserId();
+  // stopClient only clears renderer cache/listeners; no native stop or wipe is invoked.
+  await finishRendererCleanup([
+    () => mx.stopClient(),
+    () => clearNavToActivePathStore(userId),
+    clearNotificationCaches,
+  ]);
   if (typeof window !== 'undefined') window.location.reload();
 };
 
@@ -164,10 +185,13 @@ export const performLogout = async (
     await deps.logoutNativeSession();
   }
 
-  await deps.clearPersistedSessions();
-
-  deps.clearSessionLocalStorage(storage);
-  clearNotificationCaches();
+  // Once native confirms logout, every remaining renderer cleanup is attempted.
+  // A storage/listener failure must not leave the document appearing signed in.
+  await finishRendererCleanup([
+    deps.clearPersistedSessions,
+    () => deps.clearSessionLocalStorage(storage),
+    clearNotificationCaches,
+  ]);
   deps.reload();
 };
 

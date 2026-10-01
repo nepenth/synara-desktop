@@ -963,3 +963,26 @@ test('F6c-2a crypto reading exposes getOwnDeviceKeys continuity surfaceless stub
   };
   assert.ok(!crypto.getOwnDeviceKeys, 'D1C: renderer crypto must not expose own-device keys');
 });
+
+test('confirmed native logout clears identity even when a stopped-sync listener throws', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: {
+      status: 'logged_in',
+      userId: '@alice:example.org',
+      deviceId: 'DEVICE',
+      homeserverUrl: 'https://matrix.example.org',
+      sessionGeneration: 7,
+    },
+    matrix_sync_status: { readiness: 'running', sessionGeneration: 7 },
+    matrix_logout: { status: 'logged_out' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getSessionGeneration(), 7);
+  client.on('sync', () => {
+    throw new Error('renderer listener failed');
+  });
+  await client.logout();
+  assert.equal(client.getSafeUserId(), '');
+  assert.equal(client.getSessionGeneration(), undefined);
+});

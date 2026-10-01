@@ -1,8 +1,5 @@
 //! P4.5 space hierarchy foundation + V-ROOMS.2 live ownership.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 pub use synara_core::app::spaces::*;
 
 pub mod live;

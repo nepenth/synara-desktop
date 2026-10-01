@@ -8,11 +8,6 @@ fn message_filter(event_type: MessageLikeEventType) -> Filter {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_widgets_markers(), MATRIX_WIDGETS_MARKER);
-}
-
-#[test]
 fn public_https_is_safe_for_room_state_and_agent() {
     assert!(is_safe_widget_url("https://widgets.example.org/app", false));
     assert!(is_safe_widget_url("https://widgets.example.org/app", true));

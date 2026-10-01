@@ -2,12 +2,8 @@
 
 use super::*;
 use crate::matrix::store::{AccountIdentity, StoreKeyMaterial, StorePaths};
-use crate::matrix::supervisor::{
-    ClientFactory, ClientHandle, MatrixSupervisor, SupervisorCommand, SupervisorState,
-};
 use std::fs;
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 
 fn temp_root(label: &str) -> PathBuf {
@@ -41,29 +37,6 @@ fn test_runtime() -> tokio::runtime::Runtime {
         .enable_all()
         .build()
         .expect("tokio runtime")
-}
-
-#[test]
-fn marker_stable() {
-    assert_eq!(
-        matrix_client_builder_markers(),
-        MATRIX_CLIENT_BUILDER_MARKER
-    );
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"sqlite"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"bundled-sqlite"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"rustls-aws-lc-rs"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"unstable-msc4426"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
-    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"automatic-room-key-forwarding"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
-    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-search"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
-    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-widgets"));
-    assert!(FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-send-custom-to-device"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
-    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-encrypted-state-events"));
-    assert!(APPROVED_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
-    assert!(!FORBIDDEN_MATRIX_SDK_FEATURES.contains(&"experimental-x509-identity-verification"));
 }
 
 #[test]
@@ -247,82 +220,6 @@ fn reopen_client_on_same_store_paths() {
     drop(_enter);
     drop(rt);
 
-    let _ = fs::remove_dir_all(&root);
-}
-
-/// Harness factory: builds a real SDK client on a shared multi-thread runtime.
-struct HarnessSdkFactory {
-    root: PathBuf,
-    identity: AccountIdentity,
-    next_id: AtomicU64,
-    runtime: tokio::runtime::Runtime,
-}
-
-impl ClientFactory for HarnessSdkFactory {
-    fn build(
-        &self,
-        _generation: u64,
-    ) -> Result<Box<dyn ClientHandle>, crate::matrix::supervisor::FactoryError> {
-        let _enter = self.runtime.enter();
-        let key =
-            StoreKeyMaterial::generate().map_err(|_| crate::matrix::supervisor::FactoryError {
-                category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable,
-                diagnostic_id: "p2.3-harness-keygen",
-            })?;
-        let cfg = ClientBuildConfig::product_default(&self.root, self.identity.clone(), Some(key))
-            .map_err(|e| e.to_factory_error())?;
-        let client = self
-            .runtime
-            .block_on(build_unauthenticated_client(&cfg))
-            .map_err(|e| e.to_factory_error())?;
-        let id = self.next_id.fetch_add(1, Ordering::SeqCst) + 1;
-        Ok(Box::new(SdkClientHandle::new(id, client)))
-    }
-}
-
-#[test]
-fn supervisor_installs_sdk_handle_from_builder_factory() {
-    let root = temp_root("supervisor");
-    let factory = HarnessSdkFactory {
-        root: root.clone(),
-        identity: alice(),
-        next_id: AtomicU64::new(0),
-        runtime: test_runtime(),
-    };
-    // Keep a handle entered for the whole supervisor lifecycle (Client drop on logout).
-    let _enter = factory.runtime.enter();
-
-    let mut supervisor = MatrixSupervisor::new();
-    supervisor
-        .apply(SupervisorCommand::BeginOpen)
-        .expect("begin open");
-    supervisor
-        .apply(SupervisorCommand::BeginAuthenticate)
-        .expect("auth");
-    supervisor
-        .apply_with_factory(SupervisorCommand::InstallClient, &factory)
-        .expect("install sdk client");
-    assert!(supervisor.has_client());
-    supervisor
-        .apply(SupervisorCommand::BeginSync)
-        .expect("sync");
-    supervisor
-        .apply(SupervisorCommand::MarkReady)
-        .expect("ready");
-    assert_eq!(supervisor.state(), SupervisorState::Ready);
-
-    supervisor
-        .apply(SupervisorCommand::BeginStop)
-        .expect("stop");
-    supervisor
-        .apply(SupervisorCommand::CompleteLogout)
-        .expect("logout");
-    assert!(!supervisor.has_client());
-    assert_eq!(supervisor.state(), SupervisorState::LoggedOut);
-
-    drop(supervisor);
-    drop(_enter);
-    drop(factory);
     let _ = fs::remove_dir_all(&root);
 }
 

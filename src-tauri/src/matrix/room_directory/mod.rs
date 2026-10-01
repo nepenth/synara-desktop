@@ -1,6 +1,4 @@
 //! P6.10 — Public room directory search and projection owner.
-#![allow(dead_code)]
-#![allow(unused_imports)]
 
 pub use synara_core::app::room_directory::*;
 

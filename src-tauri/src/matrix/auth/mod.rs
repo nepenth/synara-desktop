@@ -24,9 +24,6 @@
 //! - `docs/matrix-rust-sdk/v-auth-2-token-login.md`
 //! - `docs/matrix-rust-sdk/p3.4-uia.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod http_transport;
 mod input;
@@ -69,35 +66,6 @@ pub use synara_core::app::auth::{
     UiaFlowKind, UiaOutcome, UiaPhase, UiaSession, UiaStage, UiaStageKind, MAX_UIA_ID_CHARS,
     MAX_UIA_STAGES,
 };
-
-/// Static marker for link / schema smoke (no network, no Client, no login).
-pub const MATRIX_AUTH_MARKER: &str = "matrix-auth-password-p3.2+uia-p3.4";
-
-/// Touch auth foundation paths so they remain linked in non-test builds.
-pub fn matrix_auth_markers() -> &'static str {
-    let _kinds = LoginFlowKind::ALL_KNOWN.len();
-    let _password = LoginFlowKind::Password.matrix_type();
-    let _input = DiscoveryInputKind::HomeserverUrl.as_str();
-    let _timeout = AUTH_HTTP_TIMEOUT_SECS;
-    let _device = platform_device_display_name();
-    let _method = LoginMethodKind::Password.as_str();
-    let uia = UiaSession::new(0);
-    debug_assert!(!uia.is_active());
-    debug_assert!(uia.never_stores_secrets());
-    debug_assert_eq!(UiaPhase::Idle.as_str(), "idle");
-    debug_assert_eq!(
-        UiaStageKind::from_matrix_type("m.login.password"),
-        UiaStageKind::Password
-    );
-    debug_assert_eq!(_kinds, 3);
-    debug_assert_eq!(_password, Some("m.login.password"));
-    debug_assert_eq!(_input, "homeserver_url");
-    debug_assert!(_timeout >= 5);
-    debug_assert!(_device.starts_with("Synara "));
-    debug_assert_eq!(_method, "password");
-    debug_assert_eq!(MATRIX_AUTH_MARKER, "matrix-auth-password-p3.2+uia-p3.4");
-    MATRIX_AUTH_MARKER
-}
 
 #[cfg(test)]
 mod tests;

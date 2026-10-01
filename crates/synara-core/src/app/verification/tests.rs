@@ -25,11 +25,6 @@ fn flow(id: &str, phase: VerificationPhase) -> VerificationFlow {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_verification_markers(), MATRIX_VERIFICATION_MARKER);
-}
-
-#[test]
 fn upsert_list_open_order() {
     let mut inbox = VerificationInbox::new(1);
     inbox

@@ -104,26 +104,25 @@ pub async fn bootstrap(
         return Err("v-crypto.4-bootstrap-cross-signing-required");
     }
 
-    let recovery_key = Zeroizing::new(
-        client
-            .encryption()
-            .recovery()
-            .enable()
-            .with_passphrase(passphrase)
-            .wait_for_backups_to_upload()
-            .await
-            .map_err(map_bootstrap_error)?,
-    );
-    let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+    finish_secret_setup(
+        async {
+            let recovery_key = Zeroizing::new(
+                client
+                    .encryption()
+                    .recovery()
+                    .enable()
+                    .with_passphrase(passphrase)
+                    .wait_for_backups_to_upload()
+                    .await
+                    .map_err(map_bootstrap_error)?,
+            );
+            let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
 
-    Ok(SecretStorageSetup {
-        result: operation_result(
-            NativeSecretStorageOutcome::Complete,
-            false,
-            complete_status(client, session_generation).await?,
-        ),
-        recovery_key: Some(recovery_key),
-    })
+            Ok(recovery_key)
+        },
+        status(client, session_generation),
+    )
+    .await
 }
 
 pub async fn unlock(
@@ -134,18 +133,21 @@ pub async fn unlock(
     if recovery_secret.trim().is_empty() || recovery_secret.len() > 100_000 {
         return Err("recovery-secret-invalid");
     }
-    client
-        .encryption()
-        .recovery()
-        .recover(recovery_secret)
-        .await
-        .map_err(|_| "v-crypto.4-unlock-rejected")?;
-    let _ = crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
-    Ok(operation_result(
-        NativeSecretStorageOutcome::Complete,
-        false,
-        complete_status(client, session_generation).await?,
-    ))
+    finish_secret_unlock(
+        async {
+            client
+                .encryption()
+                .recovery()
+                .recover(recovery_secret)
+                .await
+                .map_err(|_| "v-crypto.4-unlock-rejected")?;
+            let _ =
+                crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+            Ok(())
+        },
+        status(client, session_generation),
+    )
+    .await
 }
 
 pub async fn reset(
@@ -161,25 +163,24 @@ pub async fn reset(
         return Err("v-crypto.4-reset-requires-unlock");
     }
 
-    let recovery_key = Zeroizing::new(
-        client
-            .encryption()
-            .recovery()
-            .reset_key()
-            .with_passphrase(passphrase)
-            .await
-            .map_err(|_| "v-crypto.4-reset-failed")?,
-    );
-    let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+    finish_secret_setup(
+        async {
+            let recovery_key = Zeroizing::new(
+                client
+                    .encryption()
+                    .recovery()
+                    .reset_key()
+                    .with_passphrase(passphrase)
+                    .await
+                    .map_err(|_| "v-crypto.4-reset-failed")?,
+            );
+            let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
 
-    Ok(SecretStorageSetup {
-        result: operation_result(
-            NativeSecretStorageOutcome::Complete,
-            false,
-            complete_status(client, session_generation).await?,
-        ),
-        recovery_key: Some(recovery_key),
-    })
+            Ok(recovery_key)
+        },
+        status(client, session_generation),
+    )
+    .await
 }
 
 fn recovery_phase(state: RecoveryState) -> NativeRecoveryPhase {
@@ -264,15 +265,33 @@ fn map_bootstrap_error(error: RecoveryError) -> &'static str {
     }
 }
 
-/// Read back authoritative readiness before returning Complete. A successful SDK
-/// write alone cannot establish that secret storage has usable account data.
-async fn complete_status(
-    client: &Client,
-    generation: u64,
-) -> Result<NativeSecretStorageStatus, &'static str> {
-    let status = status(client, generation).await?;
+/// A generated key stays zeroizing until the same authoritative completion
+/// check used by unlock succeeds. Failed readbacks never release a display key.
+async fn finish_secret_setup(
+    operation: impl std::future::Future<Output = Result<Zeroizing<String>, &'static str>>,
+    readback: impl std::future::Future<Output = Result<NativeSecretStorageStatus, &'static str>>,
+) -> Result<SecretStorageSetup, &'static str> {
+    let recovery_key = operation.await?;
+    let status = readback.await?;
     require_complete(&status)?;
-    Ok(status)
+    Ok(SecretStorageSetup {
+        result: operation_result(NativeSecretStorageOutcome::Complete, false, status),
+        recovery_key: Some(recovery_key),
+    })
+}
+
+async fn finish_secret_unlock(
+    operation: impl std::future::Future<Output = Result<(), &'static str>>,
+    readback: impl std::future::Future<Output = Result<NativeSecretStorageStatus, &'static str>>,
+) -> Result<NativeSecretStorageOperationResult, &'static str> {
+    operation.await?;
+    let status = readback.await?;
+    require_complete(&status)?;
+    Ok(operation_result(
+        NativeSecretStorageOutcome::Complete,
+        false,
+        status,
+    ))
 }
 
 fn require_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static str> {
@@ -291,6 +310,88 @@ fn require_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static s
 mod tests {
     use super::*;
     #[tokio::test]
+    async fn successful_setup_reset_and_unlock_mutations_reject_incomplete_readback() {
+        use std::cell::Cell;
+        let mutated = Cell::new(false);
+        let incomplete = project_secret_storage_status(
+            8,
+            NativeRecoveryPhase::Enabled,
+            true,
+            true,
+            true,
+            true,
+            vec![NativeMissingSecret::EncryptionBackup],
+        );
+        // Bootstrap and reset both use this production key-display completion route.
+        let result = finish_secret_setup(
+            async {
+                mutated.set(true);
+                Ok(Zeroizing::new("test-generated-key".to_owned()))
+            },
+            async {
+                assert!(mutated.get());
+                Ok(incomplete.clone())
+            },
+        )
+        .await;
+        match result {
+            Err(error) => assert_eq!(error, "v-crypto.4-operation-incomplete"),
+            Ok(_) => panic!("partial success must not release a display key"),
+        }
+        mutated.set(false);
+        let result = finish_secret_unlock(
+            async {
+                mutated.set(true);
+                Ok(())
+            },
+            async {
+                assert!(mutated.get());
+                Ok(incomplete)
+            },
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "v-crypto.4-operation-incomplete");
+    }
+
+    #[tokio::test]
+    async fn successful_key_mutation_followed_by_malformed_sdk_account_data_releases_no_key() {
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(
+                r"^/_matrix/client/.*/user/.*/account_data/m.secret_storage.default_key$",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({"key":42})))
+            .mount(server.server())
+            .await;
+        // Inject only the already-successful SDK mutation; readback is the real
+        // SDK HTTP/account-data adapter and the production completion function.
+        let mutated = std::cell::Cell::new(false);
+        let result = finish_secret_setup(
+            async {
+                mutated.set(true);
+                Ok(Zeroizing::new("test-generated-key".to_owned()))
+            },
+            status(&client, 8),
+        )
+        .await;
+        assert!(mutated.get());
+        match result {
+            Err(error) => assert_eq!(error, "v-crypto.4-status-default-key-failed"),
+            Ok(_) => panic!("malformed authoritative readback must not return a recovery key"),
+        }
+    }
+
+    #[tokio::test]
     async fn secret_storage_sdk_query_failure_is_static_and_no_key_is_displayed() {
         use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
         use wiremock::{
@@ -300,7 +401,7 @@ mod tests {
         let server = MatrixMockServer::new().await;
         let client = server
             .client_builder()
-            .request_config(RequestConfig::new().disable_retry())
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
             .build()
             .await;
         Mock::given(method("GET"))

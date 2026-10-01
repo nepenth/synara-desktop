@@ -25,11 +25,6 @@ fn alice_other_hs() -> AccountIdentity {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_store_markers(), MATRIX_STORE_MARKER);
-}
-
-#[test]
 fn identity_validation_rejects_bad_inputs() {
     assert!(AccountIdentity::new("", "https://example.org").is_err());
     assert!(AccountIdentity::new("@alice:example.org", "").is_err());

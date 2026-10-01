@@ -217,3 +217,81 @@ test('Reload Application clears renderer caches without logging out or invoking 
     });
   }
 });
+
+for (const failingStep of ['bootstrap', 'storage']) {
+  test(`confirmed logout completes other cleanup and reload when ${failingStep} cleanup throws`, async () => {
+    const calls: string[] = [];
+    const storage = createEnumeratedMemoryStorage({ after_login_redirect_url: '/old' });
+    notifiedEventIdsCache.add('$old-account');
+    await performLogout(undefined, {
+      storage,
+      logoutNativeSession: async () => {
+        calls.push('native-logged-out');
+      },
+      clearPersistedSessions: async () => {
+        calls.push('bootstrap');
+        if (failingStep === 'bootstrap') throw new Error('renderer bootstrap cleanup failed');
+      },
+      clearSessionLocalStorage: (target) => {
+        calls.push('storage');
+        if (failingStep === 'storage') throw new Error('browser storage unavailable');
+        clearSessionLocalStorage(target);
+      },
+      reload: () => {
+        calls.push('reload');
+      },
+    });
+    assert.deepEqual(calls, ['native-logged-out', 'bootstrap', 'storage', 'reload']);
+    assert.equal(notifiedEventIdsCache.size, 0);
+    if (failingStep === 'bootstrap')
+      assert.equal(storage.getItem('after_login_redirect_url'), null);
+  });
+}
+
+for (const storageFails of [false, true]) {
+  test(`renderer recovery reloads after stop listener failure (storageFails=${storageFails})`, async () => {
+    const originalWindow = globalThis.window;
+    const originalStorage = globalThis.localStorage;
+    const calls: string[] = [];
+    notifiedEventIdsCache.add('$wedged-renderer');
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        removeItem: () => {
+          calls.push('navigation');
+          if (storageFails) throw new Error('storage unavailable');
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: {
+          reload: () => {
+            calls.push('reload');
+          },
+        },
+      },
+    });
+    try {
+      await reloadApplication({
+        getSafeUserId: () => {
+          calls.push('identity');
+          return '@alice:example.org';
+        },
+        stopClient: async () => {
+          calls.push('stop');
+          throw new Error('renderer listener threw');
+        },
+      } as any);
+      assert.deepEqual(calls, ['identity', 'stop', 'navigation', 'reload']);
+      assert.equal(notifiedEventIdsCache.size, 0);
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: originalStorage,
+      });
+    }
+  });
+}

@@ -113,23 +113,31 @@ pub async fn setup(
         return Err("v-crypto.3-setup-existing-backup");
     }
 
-    let generated_recovery_key = zeroize::Zeroizing::new(
-        client
-            .encryption()
-            .recovery()
-            .enable()
-            .with_passphrase(passphrase)
-            .wait_for_backups_to_upload()
-            .await
-            .map_err(|error| match error {
-                RecoveryError::BackupExistsOnServer => "v-crypto.3-setup-existing-backup",
-                _ => "v-crypto.3-setup-failed",
-            })?,
-    );
-    let _ =
-        crate::app::dehydrated_devices::start_with_secret(client, &generated_recovery_key).await;
+    finish_backup_operation(
+        async {
+            let generated_recovery_key = zeroize::Zeroizing::new(
+                client
+                    .encryption()
+                    .recovery()
+                    .enable()
+                    .with_passphrase(passphrase)
+                    .wait_for_backups_to_upload()
+                    .await
+                    .map_err(|error| match error {
+                        RecoveryError::BackupExistsOnServer => "v-crypto.3-setup-existing-backup",
+                        _ => "v-crypto.3-setup-failed",
+                    })?,
+            );
+            let _ =
+                crate::app::dehydrated_devices::start_with_secret(client, &generated_recovery_key)
+                    .await;
 
-    operation_complete(client, session_generation, "v-crypto.3-setup-incomplete").await
+            Ok(())
+        },
+        status(client, session_generation),
+        "v-crypto.3-setup-incomplete",
+    )
+    .await
 }
 
 pub async fn restore_operation(
@@ -140,14 +148,22 @@ pub async fn restore_operation(
     if recovery_secret.trim().is_empty() || recovery_secret.len() > 100_000 {
         return Err("recovery-secret-invalid");
     }
-    client
-        .encryption()
-        .recovery()
-        .recover(recovery_secret)
-        .await
-        .map_err(|_| "v-crypto.3-restore-rejected")?;
-    let _ = crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
-    operation_complete(client, session_generation, "v-crypto.3-restore-incomplete").await
+    finish_backup_operation(
+        async {
+            client
+                .encryption()
+                .recovery()
+                .recover(recovery_secret)
+                .await
+                .map_err(|_| "v-crypto.3-restore-rejected")?;
+            let _ =
+                crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+            Ok(())
+        },
+        status(client, session_generation),
+        "v-crypto.3-restore-incomplete",
+    )
+    .await
 }
 
 pub async fn repair(
@@ -158,22 +174,34 @@ pub async fn repair(
     if recovery_secret.trim().is_empty() || recovery_secret.len() > 100_000 {
         return Err("recovery-secret-invalid");
     }
-    client
-        .encryption()
-        .recovery()
-        .recover_and_fix_backup(recovery_secret)
-        .await
-        .map_err(|_| "v-crypto.3-repair-rejected")?;
-    let _ = crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
-    operation_complete(client, session_generation, "v-crypto.3-repair-incomplete").await
+    finish_backup_operation(
+        async {
+            client
+                .encryption()
+                .recovery()
+                .recover_and_fix_backup(recovery_secret)
+                .await
+                .map_err(|_| "v-crypto.3-repair-rejected")?;
+            let _ =
+                crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+            Ok(())
+        },
+        status(client, session_generation),
+        "v-crypto.3-repair-incomplete",
+    )
+    .await
 }
 
-async fn operation_complete(
-    client: &Client,
-    session_generation: u64,
+/// SDK mutation and authoritative readback are separate steps. This narrow
+/// seam tests partial remote success through the same production completion
+/// path; a successful write alone never produces Complete.
+async fn finish_backup_operation(
+    operation: impl std::future::Future<Output = Result<(), &'static str>>,
+    readback: impl std::future::Future<Output = Result<NativeBackupStatus, &'static str>>,
     incomplete_diagnostic_id: &'static str,
 ) -> Result<NativeBackupOperationResult, &'static str> {
-    let status = status(client, session_generation).await?;
+    operation.await?;
+    let status = readback.await?;
     if !backup_is_complete(&status) {
         return Err(incomplete_diagnostic_id);
     }
@@ -192,6 +220,57 @@ fn backup_is_complete(status: &NativeBackupStatus) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn successful_backup_mutation_followed_by_incomplete_readback_cannot_complete() {
+        use std::cell::Cell;
+        let mutated = Cell::new(false);
+        let incomplete = project_backup_status(
+            8,
+            Some(ServerBackupProjection {
+                version: "1".into(),
+                key_count: 0,
+            }),
+            true,
+            NativeBackupEnginePhase::Enabled,
+            NativeBackupRecoveryPhase::Incomplete,
+        );
+        for diagnostic in [
+            "v-crypto.3-setup-incomplete",
+            "v-crypto.3-restore-incomplete",
+            "v-crypto.3-repair-incomplete",
+        ] {
+            let result = finish_backup_operation(
+                async {
+                    mutated.set(true);
+                    Ok(())
+                },
+                async {
+                    assert!(mutated.get());
+                    Ok(incomplete.clone())
+                },
+                diagnostic,
+            )
+            .await;
+            assert_eq!(result.unwrap_err(), diagnostic);
+            mutated.set(false);
+        }
+        let read = Cell::new(false);
+        let result = finish_backup_operation(
+            async { Err("test-sdk-rejected") },
+            async {
+                read.set(true);
+                Ok(incomplete)
+            },
+            "test-incomplete",
+        )
+        .await;
+        assert_eq!(result.unwrap_err(), "test-sdk-rejected");
+        assert!(
+            !read.get(),
+            "mutation failure must not report a later successful readback"
+        );
+    }
+
     #[test]
     fn backup_completion_rejects_partial_native_state() {
         let ready = project_backup_status(
@@ -225,7 +304,7 @@ mod tests {
         let server = MatrixMockServer::new().await;
         let client = server
             .client_builder()
-            .request_config(RequestConfig::new().disable_retry())
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
             .build()
             .await;
         Mock::given(method("GET"))

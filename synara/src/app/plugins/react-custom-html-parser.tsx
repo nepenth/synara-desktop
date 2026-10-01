@@ -260,7 +260,7 @@ export function CodeBlock({
   opts: HTMLReactParserOptions;
 }) {
   const code = children[0];
-  const attribs = isTag(code) && code.name === 'code' ? code.attribs : undefined;
+  const attribs = code && isTag(code) && code.name === 'code' ? code.attribs : undefined;
   const languageClass = attribs?.class;
   const customLabel = attribs?.['data-label'];
   const language =

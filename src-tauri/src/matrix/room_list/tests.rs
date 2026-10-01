@@ -12,11 +12,6 @@ fn room(id: &str, name: &str) -> RoomSummary {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_room_list_markers(), MATRIX_ROOM_LIST_MARKER);
-}
-
-#[test]
 fn snapshot_then_ordered_deltas_reconstruct() {
     let a = room("!a:example.org", "Alpha");
     let b = room("!b:example.org", "Beta");

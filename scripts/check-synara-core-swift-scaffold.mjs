@@ -9,6 +9,7 @@ import { constants } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readRustModuleSources } from "./lib/rust-module-sources.mjs";
 import { inspectTypedRecoveryBoundaries } from "./lib/typed-recovery-boundaries.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
@@ -88,10 +89,10 @@ const sessionProjectionFfi = readFileSync(
   resolve(root, "crates/synara-core/src/session_projection_ffi.rs"),
   "utf8"
 );
-const sharedCoreFfi = readFileSync(
+const sharedCoreFfi = readRustModuleSources(
   resolve(root, "crates/synara-core/src/shared_core_ffi.rs"),
-  "utf8"
-);
+  { includeTests: true }
+).source;
 const sessionProjectionAdapter = readFileSync(
   resolve(root, "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift"),
   "utf8"
@@ -2557,7 +2558,9 @@ if (!attachDto) throw new Error("missing SessionAttachDto");
 if (/\bpassword\b/.test(attachDto[1]) || /\btoken\b/.test(attachDto[1])) {
   throw new Error("SessionAttachDto must not carry password or token fields");
 }
-const productionSharedCoreFfi = sharedCoreFfi.split("#[cfg(test)]")[0];
+const productionSharedCoreFfi = readRustModuleSources(
+  resolve(root, "crates/synara-core/src/shared_core_ffi.rs")
+).source;
 if (productionSharedCoreFfi.includes("p4-s3b-store-key")) {
   throw new Error("P4-S3b must use StoreKeyId store-key: accounts, not an invented prefix");
 }

@@ -27,7 +27,6 @@ mod desktop_unread_badge;
 mod desktop_url;
 mod desktop_webview_performance;
 // P1.2: compile-only Matrix Rust SDK linkage; no production client session.
-mod matrix_sdk_link_smoke;
 // P1.3: Matrix IPC schema foundation (types/helpers only; no production commands).
 mod matrix;
 #[cfg(target_os = "macos")]

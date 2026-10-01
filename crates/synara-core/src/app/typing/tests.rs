@@ -4,11 +4,6 @@ use super::*;
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_typing_markers(), MATRIX_TYPING_MARKER);
-}
-
-#[test]
 fn nonempty_snapshots_are_sorted_and_omit_empty_rooms() {
     let mut idx = TypingIndex::new(2);
     idx.set_users("!b:example.org", ["@bob:example.org"])

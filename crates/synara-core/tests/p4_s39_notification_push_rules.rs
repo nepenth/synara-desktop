@@ -551,7 +551,15 @@ async fn synced_messages_reach_the_observation_stream_and_then_the_decision_owne
     assert_eq!(live.event_id, "$live");
     assert_eq!(live.sender, BOB.as_str());
     assert_eq!(live.event_type, "m.room.message");
-    assert_eq!(live.body.as_deref(), Some("hello everyone"));
+    assert!(
+        live.agent_approval.is_none(),
+        "ordinary messages have no approval classification"
+    );
+    let wire = serde_json::to_value(live).unwrap();
+    assert!(
+        wire.get("body").is_none(),
+        "raw plaintext is retired from observations"
+    );
 
     // The observation is exactly what the renderer hands back to the
     // decision owner; the SDK push rules still decide.

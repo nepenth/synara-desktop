@@ -9,7 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use matrix_sdk::{
     event_handler::EventHandlerDropGuard,
     ruma::{events::presence::PresenceEvent, presence::PresenceState as RumaPresenceState, UserId},
-    Client, StateStore,
+    Client,
 };
 use tokio::sync::Mutex;
 

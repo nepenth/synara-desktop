@@ -27,8 +27,6 @@ pub const MIN_MIGRATABLE_LAYOUT_VERSION: u32 = 0;
 pub const STORE_REVISION_MANIFEST_FILE: &str = "revision.json";
 /// Archive directory for explicitly reset store content.
 pub const STORE_RECOVERY_ARCHIVE_SEGMENT: &str = "recovery";
-/// Static link/schema marker.
-pub const MATRIX_STORE_REVISION_MARKER: &str = "matrix-store-revision-migrate-reset-v1";
 
 /// Non-secret persisted revision state.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
@@ -419,12 +417,6 @@ fn now_unix_ms() -> u128 {
         .unwrap_or(0)
 }
 
-/// Static marker for link/schema smoke.
-pub fn matrix_store_revision_marker() -> &'static str {
-    debug_assert_eq!(STORE_LAYOUT_VERSION, 1);
-    MATRIX_STORE_REVISION_MARKER
-}
-
 #[cfg(test)]
 mod revision_tests {
     use super::*;
@@ -642,10 +634,5 @@ mod revision_tests {
                 .to_ascii_lowercase()
                 .contains(&forbidden.to_ascii_lowercase()));
         }
-    }
-
-    #[test]
-    fn marker_is_stable() {
-        assert_eq!(matrix_store_revision_marker(), MATRIX_STORE_REVISION_MARKER);
     }
 }

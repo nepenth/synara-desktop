@@ -16,11 +16,6 @@ fn receipt(room: &str, event: &str, user: &str, kind: ReceiptType, ts: Option<u6
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_receipts_markers(), MATRIX_RECEIPTS_MARKER);
-}
-
-#[test]
 fn apply_and_latest_read() {
     let mut idx = ReceiptIndex::new(2);
     idx.apply(receipt(

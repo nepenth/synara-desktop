@@ -1,8 +1,5 @@
 //! P6.7 account-data foundation + live Synara account-data owners.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 pub use synara_core::app::account_data::*;
 
 mod image_packs;

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
+import { readRustModuleSources } from "../lib/rust-module-sources.mjs";
 import { inspectTypedRecoveryBoundaries } from "../lib/typed-recovery-boundaries.mjs";
 
 const root = path.resolve(import.meta.dirname, "../..");
@@ -10,10 +11,9 @@ const inputs = {
     path.join(root, "crates/synara-core/src/synara_core.udl"),
     "utf8"
   ),
-  ffi: readFileSync(
-    path.join(root, "crates/synara-core/src/shared_core_ffi.rs"),
-    "utf8"
-  ),
+  ffi: readRustModuleSources(
+    path.join(root, "crates/synara-core/src/shared_core_ffi.rs")
+  ).source,
 };
 test("accepted recovery APIs use narrow typed secret transport", () => {
   assert.deepEqual(inspectTypedRecoveryBoundaries(inputs), {
@@ -57,5 +57,16 @@ test("the setup response cannot acquire a stored password or arbitrary secret fi
   assert.match(
     inspectTypedRecoveryBoundaries({ ...inputs, udl }).errors.join("\n"),
     /only status/
+  );
+});
+
+test("commented or literal recovery code cannot satisfy native secret boundaries", () => {
+  const ffi = inputs.ffi.replaceAll(
+    "Zeroizing::new(passphrase)",
+    "/* Zeroizing::new(passphrase) */ passphrase"
+  );
+  assert.match(
+    inspectTypedRecoveryBoundaries({ ...inputs, ffi }).errors.join("\n"),
+    /zeroizing buffer/
   );
 });

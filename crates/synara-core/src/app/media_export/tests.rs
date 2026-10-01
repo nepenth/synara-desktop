@@ -16,11 +16,6 @@ fn enqueue(queue: &mut ExportQueue, kind: ExportKind) -> ExportJobId {
 }
 
 #[test]
-fn marker_is_stable() {
-    assert_eq!(matrix_media_export_markers(), MATRIX_MEDIA_EXPORT_MARKER);
-}
-
-#[test]
 fn all_export_kinds_follow_success_lifecycle() {
     let mut queue = ExportQueue::new(7);
 
