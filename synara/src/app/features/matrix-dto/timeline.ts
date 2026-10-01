@@ -14,7 +14,7 @@ import {
 } from './parseUtil';
 
 export const LOCAL_ECHO_STATES = ['sending', 'sent', 'failed', 'cancelled', 'wedged'] as const;
-export type LocalEchoState = typeof LOCAL_ECHO_STATES[number];
+export type LocalEchoState = (typeof LOCAL_ECHO_STATES)[number];
 const LOCAL_ECHO_SET = new Set<string>(LOCAL_ECHO_STATES);
 
 export function isLocalEchoState(value: unknown): value is LocalEchoState {
@@ -33,7 +33,7 @@ export const TIMELINE_ITEM_KINDS = [
   'other',
 ] as const;
 
-export type TimelineItemKind = typeof TIMELINE_ITEM_KINDS[number];
+export type TimelineItemKind = (typeof TIMELINE_ITEM_KINDS)[number];
 
 export type TimelineMessageItem = {
   kind: 'message';

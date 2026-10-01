@@ -1,6 +1,6 @@
 export const MESSAGE_TEXT_TONES = ['soft', 'balanced', 'bright'] as const;
 
-export type MessageTextTone = typeof MESSAGE_TEXT_TONES[number];
+export type MessageTextTone = (typeof MESSAGE_TEXT_TONES)[number];
 export type MessageTextAppearance = 'light' | 'dark';
 
 export const DEFAULT_MESSAGE_TEXT_TONE: MessageTextTone = 'bright';

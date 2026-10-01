@@ -35,29 +35,13 @@ const repositoryFiles = [
   ...new Set([...trackedFiles, ...untrackedFiles]),
 ].filter((path) => existsSync(resolve(root, path)));
 
-const IOS_ALLOWED_DIRECT_MATRIX_PATHS = new Map([
-  [
-    "synara-ios/Synara/Services/MatrixRustSDKService.swift",
-    "IOS-REST-EXCEPTION-006: device display-name patch pending SDK device-display-name support.",
-  ],
-  [
-    "synara-ios/Synara/Services/RoomReadMarkerService.swift",
-    "IOS-REST-EXCEPTION-007: room read-marker account-data lookup pending SDK read-receipt/account-data support.",
-  ],
-]);
+// Product iOS uses SynaraCore; historical REST exceptions are retired.
+const IOS_ALLOWED_DIRECT_MATRIX_PATHS = new Map();
 
 const DESKTOP_ALLOWED_DIRECT_MATRIX_PATHS = new Map([
   [
-    "synara/src/sw.ts",
-    "DESKTOP-REST-EXCEPTION-001: service worker injects Matrix auth for media requests in the Tauri WebView runtime.",
-  ],
-  [
     "synara/src/app/cs-api.ts",
     "DESKTOP-REST-EXCEPTION-002: login-time homeserver version discovery helper.",
-  ],
-  [
-    "src-tauri/src/matrix/auth/http_transport.rs",
-    "DESKTOP-REST-EXCEPTION-003 / R0.7-CS-API-001: read-only well-known + login-types listing (no credentials; no dual-backend).",
   ],
 ]);
 

@@ -100,7 +100,7 @@ for target in "${targets[@]}"; do
   fi
   IPHONEOS_DEPLOYMENT_TARGET=16.0 \
     CARGO_TARGET_DIR="$target_build_dir" \
-    cargo build --locked --profile "$rust_profile" --package synara-nse-core --target "$target"
+    cargo build --locked --profile "$rust_profile" --package synara-nse-core --target "$target" --manifest-path "$repo_root/Cargo.toml"
   if [[ "$space_bounded" == "1" ]]; then
     built_archive="$target_build_dir/$target/$rust_profile/libsynara_nse_core.a"
     [[ -f "$built_archive" ]] || fail "Rust build did not produce $built_archive"
@@ -118,7 +118,7 @@ if [[ "$space_bounded" == "1" ]]; then
   bindgen_target_dir="$work_dir/cargo-bindgen"
   mkdir -p "$bindgen_target_dir"
 fi
-CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --locked --package synara-core-bindgen \
+CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --locked --package synara-core-bindgen --manifest-path "$repo_root/Cargo.toml" \
   -- generate "$core_udl" --language swift --out-dir "$swift_tmp" --no-format
 if [[ "$space_bounded" == "1" ]]; then
   remove_bounded_target_dir "$bindgen_target_dir"

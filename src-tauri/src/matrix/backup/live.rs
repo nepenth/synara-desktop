@@ -4,13 +4,9 @@
 //! passed directly to matrix-sdk. This module never stores or serializes them.
 
 use matrix_sdk::{
-    encryption::{
-        backups::BackupState,
-        recovery::{RecoveryError, RecoveryState},
-    },
+    encryption::{backups::BackupState, recovery::RecoveryState},
     Client,
 };
-use zeroize::Zeroize;
 
 use crate::matrix::auth::product::MatrixAuthCommandError;
 
@@ -78,35 +74,9 @@ pub async fn setup(
     session_generation: u64,
     passphrase: &str,
 ) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
-    let before = status(client, session_generation).await?;
-    if before.enabled && before.recovery_state == NativeBackupRecoveryState::Ready {
-        return Ok(NativeBackupOperationResult {
-            outcome: NativeBackupOperationOutcome::AlreadyConfigured,
-            status: before,
-        });
-    }
-    if before.availability == NativeBackupAvailability::Available && !before.enabled {
-        return Err(backup_error(
-            "InvalidRequest",
-            "An existing encryption backup must be restored before setup can continue.",
-            "v-crypto.3-setup-existing-backup",
-        ));
-    }
-
-    let mut generated_recovery_key = client
-        .encryption()
-        .recovery()
-        .enable()
-        .with_passphrase(passphrase)
-        .wait_for_backups_to_upload()
+    synara_core::app::backup::setup(client, session_generation, passphrase)
         .await
-        .map_err(map_recovery_setup_error)?;
-    let _ =
-        synara_core::app::dehydrated_devices::start_with_secret(client, &generated_recovery_key)
-            .await;
-    generated_recovery_key.zeroize();
-
-    operation_complete(client, session_generation, "v-crypto.3-setup-incomplete").await
+        .map_err(map_operation_error)
 }
 
 pub async fn restore(
@@ -114,20 +84,9 @@ pub async fn restore(
     session_generation: u64,
     recovery_secret: &str,
 ) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
-    client
-        .encryption()
-        .recovery()
-        .recover(recovery_secret)
+    synara_core::app::backup::restore_operation(client, session_generation, recovery_secret)
         .await
-        .map_err(|_| {
-            backup_error(
-                "Forbidden",
-                "The recovery key or passphrase was rejected. Check it and try again.",
-                "v-crypto.3-restore-rejected",
-            )
-        })?;
-    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
-    operation_complete(client, session_generation, "v-crypto.3-restore-incomplete").await
+        .map_err(map_operation_error)
 }
 
 pub async fn repair(
@@ -135,62 +94,38 @@ pub async fn repair(
     session_generation: u64,
     recovery_secret: &str,
 ) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
-    client
-        .encryption()
-        .recovery()
-        .recover_and_fix_backup(recovery_secret)
+    synara_core::app::backup::repair(client, session_generation, recovery_secret)
         .await
-        .map_err(|_| {
-            backup_error(
-                "Forbidden",
-                "Encryption backup repair failed. Check your recovery key or passphrase and try again.",
-                "v-crypto.3-repair-rejected",
-            )
-        })?;
-    let _ = synara_core::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
-    operation_complete(client, session_generation, "v-crypto.3-repair-incomplete").await
+        .map_err(map_operation_error)
 }
 
-async fn operation_complete(
-    client: &Client,
-    session_generation: u64,
-    incomplete_diagnostic_id: &'static str,
-) -> Result<NativeBackupOperationResult, MatrixAuthCommandError> {
-    let status = status(client, session_generation).await?;
-    if !status.enabled || status.availability != NativeBackupAvailability::Available {
-        return Err(backup_error(
-            "Unknown",
-            "Native encryption backup could not be activated.",
-            incomplete_diagnostic_id,
-        ));
-    }
-    Ok(NativeBackupOperationResult {
-        outcome: NativeBackupOperationOutcome::Complete,
-        status,
-    })
-}
-
-fn map_recovery_setup_error(error: RecoveryError) -> MatrixAuthCommandError {
-    match error {
-        RecoveryError::BackupExistsOnServer => backup_error(
+fn map_operation_error(diagnostic: &'static str) -> MatrixAuthCommandError {
+    let (code, message) = match diagnostic {
+        "v-crypto.3-setup-existing-backup" => (
             "InvalidRequest",
             "An existing encryption backup must be restored before setup can continue.",
-            "v-crypto.3-setup-existing-backup",
         ),
-        _ => backup_error(
+        "v-crypto.3-restore-rejected" => (
+            "Forbidden",
+            "The recovery key or passphrase was rejected. Check it and try again.",
+        ),
+        "v-crypto.3-repair-rejected" => (
+            "Forbidden",
+            "Encryption backup repair failed. Check your recovery key or passphrase and try again.",
+        ),
+        _ => (
             "Unknown",
-            "Native encryption backup setup could not be completed.",
-            "v-crypto.3-setup-failed",
+            "Native encryption backup could not be activated.",
         ),
-    }
+    };
+    backup_error(code, message, diagnostic)
 }
-
 fn backup_error(
     code: &'static str,
     message: &'static str,
-    diagnostic_id: &'static str,
+    diagnostic: &'static str,
 ) -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
+    MatrixAuthCommandError::new(code, message, diagnostic)
 }
 
 #[cfg(test)]

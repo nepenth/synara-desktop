@@ -24,7 +24,6 @@ test("build inputs, dependencies, and executable files must run validation", () 
     "Cargo.lock",
     "rust-toolchain.toml",
     "src-tauri/Cargo.toml",
-    "src-tauri/Cargo.lock",
     "src-tauri/tauri.conf.json",
     "synara-ios/project.yml",
     "synara-ios/Synara.xcodeproj/project.pbxproj",

@@ -2055,6 +2055,13 @@ pub struct MediaConfigDto {
     pub upload_size: u64,
 }
 
+/// Explicit one-time key display only; not a status DTO or generic envelope.
+#[derive(Clone)]
+pub struct SecretStorageSetupDto {
+    pub status: SecretStorageStatusDto,
+    pub recovery_key: Option<String>,
+}
+
 /// Privacy-safe secret-storage status from the registered Core command.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SecretStorageStatusDto {
@@ -7142,6 +7149,108 @@ impl SharedCore {
             .session_status_command(SECRET_STORAGE_STATUS_COMMAND)
             .await?;
         secret_storage_status_dto(payload)
+    }
+
+    /// Typed recovery arguments bypass generic command envelopes. Returned keys
+    /// are only the explicit once-displayed bootstrap/reset contract.
+    pub async fn secret_storage_bootstrap(
+        &self,
+        passphrase: String,
+    ) -> Result<SecretStorageSetupDto, SessionStatusError> {
+        let secret = Zeroizing::new(passphrase);
+        let result = self
+            .core
+            .secret_storage_bootstrap(secret.as_str())
+            .await
+            .map_err(map_session_status_core_error)?;
+        let status = secret_storage_status_dto(
+            serde_json::to_value(result.result.status).map_err(|_| {
+                session_status_failed(
+                    "recovery-projection-failed",
+                    "Recovery status is unavailable.",
+                )
+            })?,
+        )?;
+        Ok(SecretStorageSetupDto {
+            status,
+            recovery_key: result.recovery_key.map(|key| key.to_string()),
+        })
+    }
+
+    pub async fn secret_storage_unlock(
+        &self,
+        recovery_secret: String,
+    ) -> Result<SecretStorageStatusDto, SessionStatusError> {
+        let secret = Zeroizing::new(recovery_secret);
+        let result = self
+            .core
+            .secret_storage_unlock(secret.as_str())
+            .await
+            .map_err(map_session_status_core_error)?;
+        secret_storage_status_dto(serde_json::to_value(result.status).map_err(|_| {
+            session_status_failed(
+                "recovery-projection-failed",
+                "Recovery status is unavailable.",
+            )
+        })?)
+    }
+
+    pub async fn secret_storage_reset(
+        &self,
+        passphrase: String,
+    ) -> Result<SecretStorageSetupDto, SessionStatusError> {
+        let secret = Zeroizing::new(passphrase);
+        let result = self
+            .core
+            .secret_storage_reset(secret.as_str())
+            .await
+            .map_err(map_session_status_core_error)?;
+        let status = secret_storage_status_dto(
+            serde_json::to_value(result.result.status).map_err(|_| {
+                session_status_failed(
+                    "recovery-projection-failed",
+                    "Recovery status is unavailable.",
+                )
+            })?,
+        )?;
+        Ok(SecretStorageSetupDto {
+            status,
+            recovery_key: result.recovery_key.map(|key| key.to_string()),
+        })
+    }
+
+    pub async fn backup_setup(
+        &self,
+        passphrase: String,
+    ) -> Result<BackupStatusDto, LeftoverCommandError> {
+        let secret = Zeroizing::new(passphrase);
+        let result = self
+            .core
+            .backup_setup(secret.as_str())
+            .await
+            .map_err(map_recovery_backup_core_error)?;
+        leftover_backup_status_dto(serde_json::to_value(result.status).map_err(|_| {
+            map_recovery_backup_core_error(MatrixIpcError::new(
+                MatrixIpcErrorCategory::SdkInvariant,
+            ))
+        })?)
+    }
+
+    pub async fn backup_repair(
+        &self,
+        recovery_secret: String,
+    ) -> Result<BackupStatusDto, LeftoverCommandError> {
+        let secret = Zeroizing::new(recovery_secret);
+        let result = self
+            .core
+            .backup_repair(secret.as_str())
+            .await
+            .map_err(map_recovery_backup_core_error)?;
+        leftover_backup_status_dto(serde_json::to_value(result.status).map_err(|_| {
+            map_recovery_backup_core_error(MatrixIpcError::new(
+                MatrixIpcErrorCategory::SdkInvariant,
+            ))
+        })?)
     }
 
     /// Open the persisted store for NSE preview. Never attaches owners or
@@ -13752,6 +13861,13 @@ fn map_leftover_status_core_error(error: MatrixIpcError) -> LeftoverCommandError
             leftover_failed(code, LEFTOVER_UNAVAILABLE_DESCRIPTION)
         }
         _ => leftover_failed(LEFTOVER_FAILED_CODE, LEFTOVER_FAILED_DESCRIPTION),
+    }
+}
+
+fn map_recovery_backup_core_error(_error: MatrixIpcError) -> LeftoverCommandError {
+    LeftoverCommandError::Failed {
+        code: "recovery-backup-failed".to_owned(),
+        description: "Encryption backup recovery could not be completed.".to_owned(),
     }
 }
 

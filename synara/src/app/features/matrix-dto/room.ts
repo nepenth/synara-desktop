@@ -15,7 +15,7 @@ import {
 } from './parseUtil';
 
 export const MEMBERSHIPS = ['invite', 'join', 'knock', 'leave', 'ban'] as const;
-export type Membership = typeof MEMBERSHIPS[number];
+export type Membership = (typeof MEMBERSHIPS)[number];
 const MEMBERSHIP_SET = new Set<string>(MEMBERSHIPS);
 
 export function isMembership(value: unknown): value is Membership {
@@ -23,7 +23,7 @@ export function isMembership(value: unknown): value is Membership {
 }
 
 export const NOTIFICATION_MODES = ['all', 'mentions', 'mute', 'default'] as const;
-export type NotificationMode = typeof NOTIFICATION_MODES[number];
+export type NotificationMode = (typeof NOTIFICATION_MODES)[number];
 const NOTIFICATION_MODE_SET = new Set<string>(NOTIFICATION_MODES);
 
 export function isNotificationMode(value: unknown): value is NotificationMode {
@@ -31,7 +31,7 @@ export function isNotificationMode(value: unknown): value is NotificationMode {
 }
 
 export const ROOM_ENCRYPTION_STATUSES = ['encrypted', 'not_encrypted', 'unknown'] as const;
-export type RoomEncryptionStatus = typeof ROOM_ENCRYPTION_STATUSES[number];
+export type RoomEncryptionStatus = (typeof ROOM_ENCRYPTION_STATUSES)[number];
 const ROOM_ENCRYPTION_STATUS_SET = new Set<string>(ROOM_ENCRYPTION_STATUSES);
 
 export function isRoomEncryptionStatus(value: unknown): value is RoomEncryptionStatus {

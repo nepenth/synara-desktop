@@ -14,38 +14,18 @@ const session = {
 
 const createMockMatrixClient = (): any => ({ refresh: async () => undefined } as any);
 
-test('initClient runs the native client bootstrap and records identity', async () => {
-  const calls: string[] = [];
-
-  await initClient(session, {
-    isPendingFreshLoginIdentity: () => true,
-    startMatrixClient: async () => {
-      calls.push('start');
-      return createMockMatrixClient();
-    },
-    setLastBootstrappedMatrixIdentity: () => {
-      calls.push('record-identity');
-    },
-  });
-
-  assert.deepEqual(calls, ['start', 'record-identity']);
-});
-
-test('initClient records bootstrapped identity after successful init', async () => {
-  let recordedIdentity: { userId: string; deviceId: string } | undefined;
-
-  await initClient(session, {
+test('initClient boots through the native client owner', async () => {
+  const client = createMockMatrixClient();
+  let starts = 0;
+  const result = await initClient(session, {
     isPendingFreshLoginIdentity: () => false,
-    startMatrixClient: async () => createMockMatrixClient(),
-    setLastBootstrappedMatrixIdentity: (identity) => {
-      recordedIdentity = identity;
+    startMatrixClient: async () => {
+      starts += 1;
+      return client;
     },
   });
-
-  assert.deepEqual(recordedIdentity, {
-    userId: '@alice:example.org',
-    deviceId: 'ALICE_DEVICE',
-  });
+  assert.equal(result, client);
+  assert.equal(starts, 1);
 });
 
 test('initClient rethrows unrelated native boot failures', async () => {

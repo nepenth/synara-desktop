@@ -40,7 +40,7 @@ function parseJobs(workflow) {
 function topLevelBlock(workflow, property) {
   const lines = workflow.split(/\r?\n/);
   const start = lines.findIndex(
-    (line) => indentation(line) === 0 && line.trim() === `${property}:`
+    (line) => indentation(line) === 0 && line.trim() === `${property}:`,
   );
   if (start < 0) return [];
 
@@ -57,14 +57,14 @@ const jobScalar = (lines, property) => {
   const prefix = `${property}:`;
   const line = lines.find(
     (candidate) =>
-      indentation(candidate) === 4 && candidate.trim().startsWith(prefix)
+      indentation(candidate) === 4 && candidate.trim().startsWith(prefix),
   );
   return line?.trim().slice(prefix.length).trim();
 };
 
 function hasJobScopedSecret(lines) {
   const envIndex = lines.findIndex(
-    (line) => indentation(line) === 4 && line.trim() === "env:"
+    (line) => indentation(line) === 4 && line.trim() === "env:",
   );
   if (envIndex < 0) return false;
 
@@ -79,7 +79,7 @@ function hasJobScopedSecret(lines) {
 function pullRequestBlock(workflow) {
   return (
     workflow.match(
-      /^  pull_request:\s*\n([\s\S]*?)(?=^  [A-Za-z_][A-Za-z0-9_-]*:|^[A-Za-z_][A-Za-z0-9_-]*:)/m
+      /^  pull_request:\s*\n([\s\S]*?)(?=^  [A-Za-z_][A-Za-z0-9_-]*:|^[A-Za-z_][A-Za-z0-9_-]*:)/m,
     )?.[1] ?? ""
   );
 }
@@ -99,7 +99,7 @@ export function inspectWorkflowPolicy({
     const permissions = topLevelBlock(workflow, "permissions");
     if (!permissions.some((line) => /^  contents:\s*read\s*$/.test(line))) {
       errors.push(
-        `${filename} must declare top-level contents: read permissions.`
+        `${filename} must declare top-level contents: read permissions.`,
       );
     }
     if (topLevelBlock(workflow, "concurrency").length === 0) {
@@ -109,7 +109,7 @@ export function inspectWorkflowPolicy({
     if (cancellableValidationWorkflows.includes(filename)) {
       if (!hasIntegrationPullRequestTarget(workflow)) {
         errors.push(
-          `${filename} must validate pull requests targeting ${integrationBranch}.`
+          `${filename} must validate pull requests targeting ${integrationBranch}.`,
         );
       }
 
@@ -122,12 +122,12 @@ export function inspectWorkflowPolicy({
         !group.includes("github.ref_name")
       ) {
         errors.push(
-          `${filename} concurrency must share one cancellable lane per branch for push and pull_request.`
+          `${filename} concurrency must share one cancellable lane per branch for push and pull_request.`,
         );
       }
       if (!concurrency.includes("cancel-in-progress: true")) {
         errors.push(
-          `${filename} must cancel obsolete runs within the same branch lane.`
+          `${filename} must cancel obsolete runs within the same branch lane.`,
         );
       }
     }
@@ -137,7 +137,7 @@ export function inspectWorkflowPolicy({
       if (reference.startsWith("./")) continue;
       if (!/^[^@\s]+@[0-9a-f]{40}$/.test(reference)) {
         errors.push(
-          `${filename} action ${reference} must use a full commit SHA.`
+          `${filename} action ${reference} must use a full commit SHA.`,
         );
       }
     }
@@ -150,12 +150,12 @@ export function inspectWorkflowPolicy({
       const timeout = Number(jobScalar(jobLines, "timeout-minutes"));
       if (!Number.isInteger(timeout) || timeout < 1 || timeout > 120) {
         errors.push(
-          `${filename} job ${jobName} must have a 1-120 minute timeout.`
+          `${filename} job ${jobName} must have a 1-120 minute timeout.`,
         );
       }
       if (hasJobScopedSecret(jobLines)) {
         errors.push(
-          `${filename} job ${jobName} must scope secrets to only the steps that consume them.`
+          `${filename} job ${jobName} must scope secrets to only the steps that consume them.`,
         );
       }
     }
@@ -167,24 +167,24 @@ export function inspectWorkflowPolicy({
   const packageGate = packageJobs.get("package-gate") ?? [];
   if (/^\s{4}paths:/m.test(pullRequestBlock(packageWorkflow))) {
     errors.push(
-      "Desktop package smoke must emit its stable aggregate check for every pull request."
+      "Desktop package smoke must emit its stable aggregate check for every pull request.",
     );
   }
   if (
     jobScalar(packageGate, "name") !== "Desktop package gate" ||
-    (jobScalar(packageGate, "if") !== "always()"
-      && jobScalar(packageGate, "if") !== "always() && !cancelled()") ||
+    (jobScalar(packageGate, "if") !== "always()" &&
+      jobScalar(packageGate, "if") !== "always() && !cancelled()") ||
     !packageGate
       .join("\n")
       .includes("needs: [changes, linux-deb, linux-arch, macos-app]")
   ) {
     errors.push(
-      "Desktop package smoke must retain an always-running aggregate package gate."
+      "Desktop package smoke must retain an always-running aggregate package gate.",
     );
   }
   const packageChangeContract = packageChanges.join("\n");
   const packageDiffStart = packageChangeContract.indexOf(
-    'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --'
+    'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --',
   );
   const packageDiffEnd =
     packageDiffStart >= 0
@@ -194,22 +194,32 @@ export function inspectWorkflowPolicy({
     packageDiffStart >= 0 && packageDiffEnd >= 0
       ? packageChangeContract.slice(packageDiffStart, packageDiffEnd)
       : "";
-  for (const pathRoot of ["scripts", "packaging/arch", "src-tauri", "synara"]) {
+  for (const pathRoot of [
+    "scripts",
+    "packaging/arch",
+    "src-tauri",
+    "synara",
+    "crates",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    ".cargo",
+  ]) {
     if (!packageDiffContract.includes(pathRoot)) {
       errors.push(
-        `Desktop package change detection must retain the ${pathRoot} path.`
+        `Desktop package change detection must retain the ${pathRoot} path.`,
       );
     }
   }
   if (
     !packageChangeContract.includes(
-      'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --'
+      'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --',
     ) ||
     !packageChangeContract.includes('echo "packages=false"') ||
     !packageChangeContract.includes('echo "packages=true"')
   ) {
     errors.push(
-      "Desktop package smoke must retain PR diff-based package change detection."
+      "Desktop package smoke must retain PR diff-based package change detection.",
     );
   }
 
@@ -227,10 +237,16 @@ export function inspectWorkflowPolicy({
     ["shared workspace formatting", "cargo fmt --all -- --check"],
     [
       "shared workspace lint",
-      "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      "cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings",
     ],
-    ["shared workspace check", "cargo check --locked --workspace"],
-    ["shared workspace tests", "cargo test --locked --workspace"],
+    [
+      "shared workspace check",
+      "cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
+    ],
+    [
+      "shared workspace tests",
+      "cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
+    ],
   ]) {
     if (!ciValidationContract.includes(command)) {
       errors.push(`CI must retain strict Rust ${label}: ${command}.`);
@@ -246,7 +262,7 @@ export function inspectWorkflowPolicy({
     !releaseConcurrency.includes("cancel-in-progress: false")
   ) {
     errors.push(
-      "Production release tags must share a non-cancelling serialized concurrency lane."
+      "Production release tags must share a non-cancelling serialized concurrency lane.",
     );
   }
 
@@ -259,21 +275,21 @@ export function inspectWorkflowPolicy({
   ).join("\n");
   for (const command of [
     "cargo fmt --all -- --check",
-    "cargo clippy --locked --workspace --all-targets -- -D warnings",
-    "cargo check --locked --workspace",
-    "cargo test --locked --workspace",
+    "cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings",
+    "cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
+    "cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
   ]) {
     if (!exactTagDesktopQuality.includes(command)) {
       errors.push(
-        `Exact-tag desktop quality must validate the shared Rust workspace: ${command}.`
+        `Exact-tag desktop quality must validate the shared Rust workspace: ${command}.`,
       );
     }
   }
   const releasePublish = (releaseJobs.get("publish-gh-release") ?? []).join(
-    "\n"
+    "\n",
   );
   const validationTagCheck = releaseValidate.indexOf(
-    "Require tag to match the shared version"
+    "Require tag to match the shared version",
   );
   const validationGuard = releaseValidate.indexOf(releaseVersionGuard);
   if (
@@ -283,21 +299,21 @@ export function inspectWorkflowPolicy({
     validationGuard < validationTagCheck
   ) {
     errors.push(
-      "Production release validation must run the immutable release-version guard exactly once after the exact tag check and before builds."
+      "Production release validation must run the immutable release-version guard exactly once after the exact tag check and before builds.",
     );
   }
   if (!releasePublish.includes(releaseVersionGuard)) {
     errors.push(
-      "Production release publication must recheck the immutable release-version guard."
+      "Production release publication must recheck the immutable release-version guard.",
     );
   }
   const guardBeforePublish = releasePublish.indexOf(releaseVersionGuard);
   const ghReleasePublish = releasePublish.indexOf(
-    "softprops/action-gh-release"
+    "softprops/action-gh-release",
   );
   const directlyPrecedesGhRelease =
     /Recheck immutable release version before publication\n        run: node scripts\/assert-release-version\.mjs\n      - name: Create GitHub Release with all client artifacts/.test(
-      releasePublish
+      releasePublish,
     );
   if (
     guardBeforePublish < 0 ||
@@ -306,7 +322,7 @@ export function inspectWorkflowPolicy({
     !directlyPrecedesGhRelease
   ) {
     errors.push(
-      "Production release version guard must run immediately before the mutating GitHub release action."
+      "Production release version guard must run immediately before the mutating GitHub release action.",
     );
   }
   if (
@@ -315,7 +331,7 @@ export function inspectWorkflowPolicy({
     !releasePublish.includes("fetch-depth: 0")
   ) {
     errors.push(
-      "Production release version guard must have ledger access and an immutable full-history tag checkout."
+      "Production release version guard must have ledger access and an immutable full-history tag checkout.",
     );
   }
   if (
@@ -323,12 +339,12 @@ export function inspectWorkflowPolicy({
     /semantic-release/i.test(runtimePackage)
   ) {
     errors.push(
-      "Runtime package must not retain an alternate semantic-release publisher."
+      "Runtime package must not retain an alternate semantic-release publisher.",
     );
   }
 
   const signedBuild = parseJobs(workflows["macos-signed-build.yml"] ?? "").get(
-    "macos-signed-build"
+    "macos-signed-build",
   );
   if (
     !signedBuild
@@ -336,21 +352,46 @@ export function inspectWorkflowPolicy({
       .match(/environment:\s*\n\s+name:\s*production-release/)
   ) {
     errors.push(
-      "Manual macOS signing must use the protected production-release environment."
+      "Manual macOS signing must use the protected production-release environment.",
     );
   }
 
   for (const group of [
     "npm-updates",
     "github-actions-updates",
-    "rust-updates",
+    "workspace-rust-updates",
   ]) {
     const groupedLane = new RegExp(
       `^ {6}${group}:\\n(?:(?: {8,}.*)?\\n)*? {8}patterns: \\["\\*"\\]$`,
-      "m"
+      "m",
     );
     if (!groupedLane.test(dependabot)) {
       errors.push(`Dependabot must retain the grouped ${group} update lane.`);
+    }
+  }
+
+  const cargoUpdates = dependabot
+    .split(/^  - package-ecosystem:/m)
+    .slice(1)
+    .filter((entry) => /^\s*cargo\s*$/m.test(entry.split("\n", 1)[0]));
+  if (
+    cargoUpdates.length !== 1 ||
+    !/^    directory: \/\s*$/m.test(cargoUpdates[0] ?? "")
+  ) {
+    errors.push(
+      "Dependabot must maintain exactly one Cargo update lane at the root workspace.",
+    );
+  }
+
+  for (const [filename, workflow] of Object.entries(workflows)) {
+    if (
+      /src-tauri\/(?:target\/|Cargo\.lock)|src-tauri\s*->\s*target|workspaces:\s*src-tauri\b/m.test(
+        workflow,
+      )
+    ) {
+      errors.push(
+        `${filename} must use the root Cargo lockfile, workspace cache, and target output paths.`,
+      );
     }
   }
 
@@ -366,17 +407,17 @@ export function loadWorkflowPolicyInputs(repositoryRoot = root) {
       .map((filename) => [
         filename,
         readFileSync(path.join(workflowDirectory, filename), "utf8"),
-      ])
+      ]),
   );
   return {
     workflows,
     dependabot: readFileSync(
       path.join(repositoryRoot, ".github", "dependabot.yml"),
-      "utf8"
+      "utf8",
     ),
     runtimePackage: readFileSync(
       path.join(repositoryRoot, "synara", "package.json"),
-      "utf8"
+      "utf8",
     ),
   };
 }
@@ -387,7 +428,7 @@ function main() {
     console.error(`[workflow-policy] ${error}`);
   if (!result.ok) process.exit(1);
   console.log(
-    "[workflow-policy] permissions, timeouts, action pins, integration CI, concurrency, Rust quality, release secret scope, and package gates are valid."
+    "[workflow-policy] permissions, timeouts, action pins, integration CI, concurrency, Rust quality, release secret scope, and package gates are valid.",
   );
 }
 

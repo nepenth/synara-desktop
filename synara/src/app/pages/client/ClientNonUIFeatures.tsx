@@ -39,12 +39,10 @@ import {
   supportsPlatformTrayState,
 } from '../../platform';
 import {
-  AGENT_APPROVAL_NATIVE_ACTION_TTL_MS,
   AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
   AGENT_APPROVAL_NOTIFICATION_KIND,
   buildAgentApprovalNativeActionDedupeKey,
   createAgentApprovalNativeActionDedupeStore,
-  detectAgentApprovalPrompt,
   planAgentApprovalNativeNotificationAction,
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
@@ -68,7 +66,6 @@ import {
   type NativeNotificationObservation,
 } from '../../features/room/nativeNotificationObservation';
 
-const RECENT_AGENT_APPROVAL_MS = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS;
 // Local submit-memory bound. Core `(room, event)` dedup is authoritative;
 // this set only guards against a duplicated observation of the same event.
 const NOTIFICATION_SUBMITTED_CACHE_MAX = 500;
@@ -368,7 +365,7 @@ function MessageNotifications() {
       const { roomId, eventId, sender } = observation;
       // Agent approvals travel the Core approval-decision path, never the
       // generic message route.
-      if (observation.body !== undefined && detectAgentApprovalPrompt({ body: observation.body })) {
+      if (observation.agentApproval !== undefined) {
         return;
       }
       const room = mx.getRoom(roomId);
@@ -578,7 +575,6 @@ function AgentApprovalNotifications() {
       const earlyPlan = planAgentApprovalNativeNotificationAction({
         actionId,
         context,
-        nowMs: Date.now(),
         // Require full event validation before send; early plan without eventResolved rejects.
       });
 
@@ -677,17 +673,12 @@ function AgentApprovalNotifications() {
 
   const notifyApprovalEvent = useCallback(
     async (observation: NativeNotificationObservation) => {
-      const { eventId, sender, originServerTs, body } = observation;
-      if (body === undefined) return;
+      const { eventId, agentApproval } = observation;
+      if (!agentApproval || agentApproval.expired) return;
       const room = mx.getRoom(observation.roomId);
       if (!room || room.isSpaceRoom()) return;
-      if (sender === mx.getUserId()) return;
-      if (Date.now() - originServerTs > RECENT_AGENT_APPROVAL_MS) return;
 
       if (notifiedEventIdsCache.has(eventId)) return;
-
-      const prompt = detectAgentApprovalPrompt({ body });
-      if (!prompt) return;
 
       let readback;
       try {
@@ -695,7 +686,7 @@ function AgentApprovalNotifications() {
           roomId: room.roomId,
           eventId,
           kind: 'agent_approval',
-          title: prompt.title,
+          title: 'Approval Required: Dangerous Command',
           body: `${room.name ?? 'Unknown'}: Review a request in Synara.`,
           route: buildDesktopNotificationRoomRoute(room.roomId, eventId),
           suppressIfFocusedRoom: false,
@@ -733,7 +724,7 @@ function AgentApprovalNotifications() {
   );
 
   // Approval prompts ride the same Core observation stream as messages; the
-  // renderer detects the prompt in the observed body instead of scanning.
+  // renderer consumes Core classification and Core revalidates before delivery.
   useEffect(() => {
     const dispose = subscribeNativeNotificationObservations(
       () => mx.getSyncStateData()?.sessionGeneration,

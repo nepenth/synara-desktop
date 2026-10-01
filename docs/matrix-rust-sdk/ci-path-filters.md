@@ -1,5 +1,12 @@
 # CI path filters — Matrix Rust integration workflow
 
+> Historical integration-program scope record. The current workflows broaden
+> Apple compilation and desktop package checks to all shared Core modules,
+> nested FFI modules, root Cargo manifests/lockfile, `.cargo` configuration,
+> and the Rust toolchain. Ordinary feature PRs run Apple compilation while
+> simulator labels and release policies remain separately scheduled. See
+> [current build and validation guidance](../build-and-release.md).
+
 | Field | Value |
 | --- | --- |
 | Date | 2026-07-27 |

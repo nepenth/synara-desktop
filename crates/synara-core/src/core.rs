@@ -1993,6 +1993,110 @@ impl Core {
         Ok(result)
     }
 
+    /// Recovery mutations accept secrets only as typed arguments. Core's
+    /// managed owner is shared by desktop and full-app Apple bindings.
+    pub async fn backup_setup(
+        &self,
+        passphrase: &str,
+    ) -> Result<crate::app::backup::NativeBackupOperationResult, MatrixIpcError> {
+        if passphrase.is_empty() || passphrase.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("recovery-secret-invalid"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("recovery-no-session")
+        })?;
+        owner.backup_setup(passphrase).await.map_err(|diagnostic| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure).with_diagnostic(diagnostic)
+        })
+    }
+
+    pub async fn backup_repair(
+        &self,
+        recovery_secret: &str,
+    ) -> Result<crate::app::backup::NativeBackupOperationResult, MatrixIpcError> {
+        if recovery_secret.is_empty() || recovery_secret.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("recovery-secret-invalid"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("recovery-no-session")
+        })?;
+        owner
+            .backup_repair(recovery_secret)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                    .with_diagnostic(diagnostic)
+            })
+    }
+
+    pub async fn secret_storage_bootstrap(
+        &self,
+        passphrase: &str,
+    ) -> Result<crate::app::secret_storage::SecretStorageSetup, MatrixIpcError> {
+        if passphrase.is_empty() || passphrase.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("recovery-secret-invalid"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("recovery-no-session")
+        })?;
+        owner
+            .secret_storage_bootstrap(passphrase)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                    .with_diagnostic(diagnostic)
+            })
+    }
+
+    pub async fn secret_storage_unlock(
+        &self,
+        recovery_secret: &str,
+    ) -> Result<crate::app::secret_storage::NativeSecretStorageOperationResult, MatrixIpcError>
+    {
+        if recovery_secret.is_empty() || recovery_secret.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("recovery-secret-invalid"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("recovery-no-session")
+        })?;
+        owner
+            .secret_storage_unlock(recovery_secret)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                    .with_diagnostic(diagnostic)
+            })
+    }
+
+    pub async fn secret_storage_reset(
+        &self,
+        passphrase: &str,
+    ) -> Result<crate::app::secret_storage::SecretStorageSetup, MatrixIpcError> {
+        if passphrase.is_empty() || passphrase.len() > 100_000 {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("recovery-secret-invalid"));
+        }
+        let owner = self.state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("recovery-no-session")
+        })?;
+        owner
+            .secret_storage_reset(passphrase)
+            .await
+            .map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                    .with_diagnostic(diagnostic)
+            })
+    }
+
     /// Password UIAA for a pending email 3PID attach. Password is a method
     /// argument, never a `Core::command` JSON field.
     pub async fn threepid_add_email_password(
@@ -6660,14 +6764,21 @@ fn cross_signing_status_transport_error(error: PlatformCrossSigningStatusError) 
 
 /// `matrix_secret_storage_status` is a payload-free read observation.
 ///
-/// The Platform retains the sole live SDK/session/key/store ownership and
-/// supplies only fixed booleans and closed enums. Core reconstructs the exact
-/// legacy response and never receives a secret, identifier, raw diagnostic,
-/// or SDK/account-data value.
+/// Core queries its managed SDK owner when attached. Before owner attachment,
+/// the platform bridge supplies the same shared domain projection through
+/// closed transport fields; neither status route carries secret material.
 fn matrix_secret_storage_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
     Box::pin(async move {
         if !request.payload.is_null() {
             return Err(core_state_error("p2-secret-storage-status-invalid-payload"));
+        }
+        if let Some(owner) = state.device_owner()? {
+            let status = owner.secret_storage_status().await.map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                    .with_diagnostic(diagnostic)
+            })?;
+            return serde_json::to_value(status)
+                .map_err(|_| core_state_error("p2-secret-storage-status-serialization-failed"));
         }
         let status = state
             .platform()
@@ -6827,6 +6938,21 @@ mod tests {
     fn available_platform_media_config() -> PlatformMediaConfig {
         PlatformMediaConfig::new(16 * 1024 * 1024)
             .expect("a normal upload limit is a valid closed media projection")
+    }
+
+    #[tokio::test]
+    async fn typed_recovery_operations_fail_closed_without_native_owner_or_valid_input() {
+        let core = Core::new(Arc::new(TestPlatform));
+        assert!(core.backup_setup("passphrase").await.is_err());
+        assert!(core.backup_repair("recovery-secret").await.is_err());
+        assert!(core.secret_storage_bootstrap("passphrase").await.is_err());
+        assert!(core.secret_storage_unlock("recovery-secret").await.is_err());
+        assert!(core.secret_storage_reset("passphrase").await.is_err());
+        assert!(core.backup_setup("").await.is_err());
+        assert!(core
+            .secret_storage_reset(&"x".repeat(100_001))
+            .await
+            .is_err());
     }
 
     #[derive(Default)]

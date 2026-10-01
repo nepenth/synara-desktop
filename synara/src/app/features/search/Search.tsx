@@ -394,7 +394,7 @@ export function Search({ requestClose }: SearchProps) {
             allowOutsideClick: true,
             clickOutsideDeactivates: true,
             onDeactivate: requestClose,
-            escapeDeactivates: (evt) => {
+            escapeDeactivates: (evt: KeyboardEvent) => {
               evt.stopPropagation();
               return true;
             },

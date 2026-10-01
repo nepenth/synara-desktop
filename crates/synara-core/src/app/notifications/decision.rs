@@ -143,9 +143,9 @@ impl NotificationPushEvaluation {
         }
     }
 
-    /// Kinds without a timeline event (invites, agent approvals, Later
-    /// reminders) are explicit user commitments and always surface, subject
-    /// to focus and dedup.
+    /// Invites, Later reminders and SDK-validated fresh approvals surface
+    /// subject to focus and dedup. Approval eligibility is resolved before
+    /// this projection; approval reactions use the separate action owner.
     pub const fn surface() -> Self {
         Self {
             notify: true,
@@ -315,6 +315,7 @@ struct ObservedEvent {
     is_own_event: bool,
     is_encrypted: bool,
     push: NotificationPushEvaluation,
+    agent_approval: bool,
 }
 
 impl NativeNotificationDecisionOwner {
@@ -410,27 +411,39 @@ impl NativeNotificationDecisionOwner {
         &self,
         request: NativeNotificationDecideRequest,
     ) -> Result<NotificationDecisionReadback, NotificationError> {
-        let kind = NotificationDecisionKind::parse(&request.kind)
+        let mut kind = NotificationDecisionKind::parse(&request.kind)
             .map_err(|diagnostic_id| NotificationError::Invalid { diagnostic_id })?;
         let observed = match kind {
-            NotificationDecisionKind::Message => {
-                self.observe_message_event(&request.room_id, request.event_id.as_deref())
+            NotificationDecisionKind::Message | NotificationDecisionKind::AgentApproval => {
+                self.observe_message_event(&request.room_id, request.event_id.as_deref(), kind)
                     .await?
             }
-            NotificationDecisionKind::Invite
-            | NotificationDecisionKind::AgentApproval
-            | NotificationDecisionKind::LaterReminder => ObservedEvent {
-                is_own_event: false,
-                is_encrypted: false,
-                push: NotificationPushEvaluation::surface(),
-            },
+            NotificationDecisionKind::Invite | NotificationDecisionKind::LaterReminder => {
+                ObservedEvent {
+                    is_own_event: false,
+                    is_encrypted: false,
+                    push: NotificationPushEvaluation::surface(),
+                    agent_approval: false,
+                }
+            }
         };
+        if observed.agent_approval {
+            kind = NotificationDecisionKind::AgentApproval;
+        }
         self.decide(NotificationDecisionInput {
             room_id: request.room_id,
             event_id: request.event_id,
             kind,
-            title: request.title,
-            body: request.body,
+            title: if observed.agent_approval {
+                "Approval Required: Dangerous Command".into()
+            } else {
+                request.title
+            },
+            body: if observed.agent_approval {
+                "Review a request in Synara.".into()
+            } else {
+                request.body
+            },
             route: request.route,
             suppress_if_focused_room: request.suppress_if_focused_room,
             is_encrypted: observed.is_encrypted,
@@ -443,6 +456,7 @@ impl NativeNotificationDecisionOwner {
         &self,
         room_id: &str,
         event_id: Option<&str>,
+        requested_kind: NotificationDecisionKind,
     ) -> Result<ObservedEvent, NotificationError> {
         let client = self.client.as_ref().ok_or(NotificationError::Invalid {
             diagnostic_id: "v-notify.no-client",
@@ -483,6 +497,26 @@ impl NativeNotificationDecisionOwner {
         let is_own_event = event
             .sender()
             .is_some_and(|sender| sender.as_str() == self.user_id);
+        let timeline = event
+            .raw()
+            .deserialize()
+            .map_err(|_| NotificationError::Invalid {
+                diagnostic_id: "v-notify.event-unavailable",
+            })?;
+        let approval = authoritative_approval(
+            &timeline,
+            &self.user_id,
+            notification_now_ms(),
+            requested_kind,
+        )?;
+        if approval {
+            return Ok(ObservedEvent {
+                is_own_event,
+                is_encrypted: room.encryption_state().is_encrypted(),
+                push: NotificationPushEvaluation::surface(),
+                agent_approval: true,
+            });
+        }
         // Sync stores computed actions as `Some` (possibly empty). `None`
         // means they were never computed for this event (for example a
         // `/event` fetch before room state settled), so recompute once with
@@ -502,6 +536,7 @@ impl NativeNotificationDecisionOwner {
             is_own_event,
             is_encrypted: room.encryption_state().is_encrypted(),
             push: NotificationPushEvaluation::from_actions(&actions),
+            agent_approval: false,
         })
     }
 
@@ -640,6 +675,60 @@ impl NativeNotificationDecisionOwner {
     }
 }
 
+fn notification_now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|time| time.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Classify the SDK-resolved event again at decision time. A renderer cannot
+/// turn an ordinary message into a critical approval by supplying kind/title.
+fn authoritative_approval(
+    event: &matrix_sdk::ruma::events::AnySyncTimelineEvent,
+    user_id: &str,
+    now_ms: u64,
+    requested_kind: NotificationDecisionKind,
+) -> Result<bool, NotificationError> {
+    use matrix_sdk::ruma::events::{
+        AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncMessageLikeEvent,
+    };
+    let classification = match event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(
+            SyncMessageLikeEvent::Original(message),
+        )) if !matches!(
+            message.content.relates_to,
+            Some(matrix_sdk::ruma::events::room::message::Relation::Replacement(_))
+        ) =>
+        {
+            crate::app::agent_approvals::classify_agent_approval(
+                message.content.body(),
+                message.sender.as_str(),
+                user_id,
+                message.origin_server_ts.0.into(),
+                now_ms,
+                std::iter::empty(),
+            )
+            .ok()
+        }
+        _ => None,
+    };
+    if let Some(classification) = classification {
+        if classification.expired {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.approval-expired",
+            });
+        }
+        return Ok(true);
+    }
+    if requested_kind == NotificationDecisionKind::AgentApproval {
+        return Err(NotificationError::Invalid {
+            diagnostic_id: "v-notify.approval-invalid",
+        });
+    }
+    Ok(false)
+}
+
 fn suppressed(reason: NotificationSuppressReason) -> NotificationDecisionReadback {
     NotificationDecisionReadback {
         decision: "suppress".to_owned(),
@@ -725,6 +814,127 @@ mod tests {
             index: Mutex::new(NotificationIndex::new(7)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
         }
+    }
+
+    #[tokio::test]
+    async fn sdk_resolved_approval_route_rejects_forgery_expiry_and_ignores_renderer_title() {
+        use matrix_sdk::ruma::{room_id, RoomVersionId};
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .request_config(RequestConfig::new().disable_retry())
+            .build()
+            .await;
+        client.event_cache().subscribe().unwrap();
+        let room_id = room_id!("!notification-test:example.org");
+        let f = EventFactory::new().room(room_id);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11)),
+            )
+            .await;
+        let now = notification_now_ms();
+        for (id, body, timestamp) in [
+            ("forged", "Ordinary message", now),
+            (
+                "expired",
+                "Approval Required: Dangerous Command",
+                now - crate::app::agent_approvals::AGENT_APPROVAL_TTL_MS - 1,
+            ),
+            ("fresh", "Approval Required: Dangerous Command", now),
+        ] {
+            Mock::given(method("GET")).and(path_regex(format!(r".*/event/.*{id}$")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "type": "m.room.message", "room_id": room_id, "event_id": format!("${id}"), "sender": *BOB, "origin_server_ts": timestamp, "content": { "msgtype": "m.text", "body": body } })))
+                .mount(server.server()).await;
+        }
+        let owner = NativeNotificationDecisionOwner::new(&client, 8).unwrap();
+        let request = |id: &str| NativeNotificationDecideRequest {
+            room_id: room_id.to_string(),
+            event_id: Some(format!("${id}")),
+            kind: "agent_approval".into(),
+            title: "Renderer forged title".into(),
+            body: "Renderer forged body".into(),
+            route: None,
+            suppress_if_focused_room: false,
+        };
+        assert_eq!(
+            owner
+                .decide_observed(request("forged"))
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-invalid"
+        );
+        assert_eq!(
+            owner
+                .decide_observed(request("expired"))
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-expired"
+        );
+        let readback = owner.decide_observed(request("fresh")).await.unwrap();
+        assert_eq!(readback.decision, "show");
+        let candidate = readback.candidate.unwrap();
+        assert_eq!(candidate.title, "Approval Required: Dangerous Command");
+        assert_eq!(candidate.body, "Review a request in Synara.");
+    }
+
+    #[test]
+    fn requested_approval_kind_requires_authoritative_sdk_prompt_and_fresh_timestamp() {
+        fn event(
+            body: &str,
+            sender: &str,
+            timestamp: u64,
+        ) -> matrix_sdk::ruma::events::AnySyncTimelineEvent {
+            serde_json::from_value(serde_json::json!({ "type": "m.room.message", "event_id": "$approval", "sender": sender, "origin_server_ts": timestamp, "content": { "msgtype": "m.text", "body": body } })).unwrap()
+        }
+        let now = 1_700_000_000_000;
+        let kind = NotificationDecisionKind::AgentApproval;
+        let ordinary = event("An ordinary message", "@bot:example.org", now);
+        assert_eq!(
+            authoritative_approval(&ordinary, "@u:example.org", now, kind)
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-invalid"
+        );
+        let body = "Approval Required: Dangerous Command\necho hello";
+        let prompt = event(body, "@bot:example.org", now);
+        assert!(authoritative_approval(
+            &prompt,
+            "@u:example.org",
+            now,
+            NotificationDecisionKind::Message
+        )
+        .unwrap());
+        assert_eq!(
+            authoritative_approval(
+                &prompt,
+                "@u:example.org",
+                now + crate::app::agent_approvals::AGENT_APPROVAL_TTL_MS,
+                kind
+            )
+            .unwrap_err()
+            .diagnostic_id(),
+            "v-notify.approval-expired"
+        );
+        let own = event(body, "@u:example.org", now);
+        assert_eq!(
+            authoritative_approval(&own, "@u:example.org", now, kind)
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-invalid"
+        );
+        let future = event(body, "@bot:example.org", now + 60_001);
+        assert!(authoritative_approval(&future, "@u:example.org", now, kind).is_err());
     }
 
     #[test]

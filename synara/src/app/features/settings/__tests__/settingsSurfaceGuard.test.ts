@@ -98,7 +98,7 @@ test('Appearance is its own Settings page and General no longer hosts theme or l
 
 test('maintenance actions live once, under General > Storage, not duplicated in About', () => {
   assert.match(general, /<Text size="L400">Storage<\/Text>/);
-  assert.match(general, /Clear Cache & Reload/);
+  assert.match(general, /Reload Application/);
   assert.match(general, /isDesktopPlatform\(\) && <SecretStoreTile \/>/);
   assert.equal(about.includes('Clear Cache'), false);
   assert.equal(about.includes('UpdateSettingsTile'), false);

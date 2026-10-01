@@ -1,0 +1,357 @@
+//! Privacy-safe live Matrix secret-storage product projection.
+
+use zeroize::Zeroizing;
+
+use matrix_sdk::{
+    encryption::recovery::{RecoveryError, RecoveryState},
+    ruma::events::{
+        secret::request::SecretName,
+        secret_storage::{key::SecretStorageKeyEventContent, secret::SecretEventContent},
+        EventContentFromType, GlobalAccountDataEventType,
+    },
+    Client,
+};
+
+use super::{
+    operation_result, project_secret_storage_status, NativeMissingSecret, NativeRecoveryPhase,
+    NativeSecretStorageOperationResult, NativeSecretStorageOutcome, NativeSecretStorageStatus,
+};
+
+/// Explicit one-time display result. No Debug, Clone or serialization implementation.
+/// If a status/postcondition fails, the generated secret is wiped when dropped.
+pub struct SecretStorageSetup {
+    pub result: NativeSecretStorageOperationResult,
+    pub recovery_key: Option<Zeroizing<String>>,
+}
+
+pub async fn status(
+    client: &Client,
+    session_generation: u64,
+) -> Result<NativeSecretStorageStatus, &'static str> {
+    let secret_storage = client.encryption().secret_storage();
+    let default_key = secret_storage
+        .fetch_default_key_id()
+        .await
+        .map_err(|_| "v-crypto.4-status-default-key-failed")?;
+    let default_key = default_key
+        .map(|raw| {
+            raw.deserialize()
+                .map_err(|_| "v-crypto.4-status-default-key-failed")
+        })
+        .transpose()?;
+    let default_key_set = default_key.is_some();
+    let default_key_id = default_key.as_ref().map(|content| content.key_id.as_str());
+    let (exists, passphrase_configured) = match default_key.as_ref() {
+        Some(default_key) => {
+            let event_type =
+                GlobalAccountDataEventType::SecretStorageKey(default_key.key_id.to_owned());
+            let key = client
+                .account()
+                .fetch_account_data(event_type.to_owned())
+                .await
+                .map_err(|_| "v-crypto.4-status-key-info-failed")?;
+            let key = key
+                .map(|raw| {
+                    let event_type = event_type.to_string();
+                    let value = serde_json::value::to_raw_value(&raw)
+                        .map_err(|_| "v-crypto.4-status-key-info-failed")?;
+                    SecretStorageKeyEventContent::from_parts(&event_type, &value)
+                        .map_err(|_| "v-crypto.4-status-key-info-failed")
+                })
+                .transpose()?;
+            (
+                key.is_some(),
+                key.as_ref()
+                    .is_some_and(|content| content.passphrase.is_some()),
+            )
+        }
+        None => (false, false),
+    };
+
+    let missing_secrets = missing_secrets(client, default_key_id).await?;
+    let bootstrap_ready = client
+        .encryption()
+        .cross_signing_status()
+        .await
+        .is_some_and(|status| status.is_complete());
+    Ok(project_status(
+        session_generation,
+        client.encryption().recovery().state(),
+        exists,
+        default_key_set,
+        passphrase_configured,
+        bootstrap_ready,
+        missing_secrets,
+    ))
+}
+
+pub async fn bootstrap(
+    client: &Client,
+    session_generation: u64,
+    passphrase: &str,
+) -> Result<SecretStorageSetup, &'static str> {
+    if passphrase.trim().is_empty() || passphrase.len() > 100_000 {
+        return Err("recovery-secret-invalid");
+    }
+    let before = status(client, session_generation).await?;
+    if before.exists {
+        return Ok(SecretStorageSetup {
+            result: operation_result(NativeSecretStorageOutcome::AlreadyConfigured, false, before),
+            recovery_key: None,
+        });
+    }
+    if !before.bootstrap_ready {
+        return Err("v-crypto.4-bootstrap-cross-signing-required");
+    }
+
+    let recovery_key = Zeroizing::new(
+        client
+            .encryption()
+            .recovery()
+            .enable()
+            .with_passphrase(passphrase)
+            .wait_for_backups_to_upload()
+            .await
+            .map_err(map_bootstrap_error)?,
+    );
+    let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+
+    Ok(SecretStorageSetup {
+        result: operation_result(
+            NativeSecretStorageOutcome::Complete,
+            false,
+            complete_status(client, session_generation).await?,
+        ),
+        recovery_key: Some(recovery_key),
+    })
+}
+
+pub async fn unlock(
+    client: &Client,
+    session_generation: u64,
+    recovery_secret: &str,
+) -> Result<NativeSecretStorageOperationResult, &'static str> {
+    if recovery_secret.trim().is_empty() || recovery_secret.len() > 100_000 {
+        return Err("recovery-secret-invalid");
+    }
+    client
+        .encryption()
+        .recovery()
+        .recover(recovery_secret)
+        .await
+        .map_err(|_| "v-crypto.4-unlock-rejected")?;
+    let _ = crate::app::dehydrated_devices::start_with_secret(client, recovery_secret).await;
+    Ok(operation_result(
+        NativeSecretStorageOutcome::Complete,
+        false,
+        complete_status(client, session_generation).await?,
+    ))
+}
+
+pub async fn reset(
+    client: &Client,
+    session_generation: u64,
+    passphrase: &str,
+) -> Result<SecretStorageSetup, &'static str> {
+    if passphrase.trim().is_empty() || passphrase.len() > 100_000 {
+        return Err("recovery-secret-invalid");
+    }
+    let before = status(client, session_generation).await?;
+    if !before.unlocked {
+        return Err("v-crypto.4-reset-requires-unlock");
+    }
+
+    let recovery_key = Zeroizing::new(
+        client
+            .encryption()
+            .recovery()
+            .reset_key()
+            .with_passphrase(passphrase)
+            .await
+            .map_err(|_| "v-crypto.4-reset-failed")?,
+    );
+    let _ = crate::app::dehydrated_devices::start_with_secret(client, &recovery_key).await;
+
+    Ok(SecretStorageSetup {
+        result: operation_result(
+            NativeSecretStorageOutcome::Complete,
+            false,
+            complete_status(client, session_generation).await?,
+        ),
+        recovery_key: Some(recovery_key),
+    })
+}
+
+fn recovery_phase(state: RecoveryState) -> NativeRecoveryPhase {
+    match state {
+        RecoveryState::Unknown => NativeRecoveryPhase::Unknown,
+        RecoveryState::Disabled => NativeRecoveryPhase::Disabled,
+        RecoveryState::Incomplete => NativeRecoveryPhase::Incomplete,
+        RecoveryState::Enabled => NativeRecoveryPhase::Enabled,
+    }
+}
+
+async fn missing_secrets(
+    client: &Client,
+    default_key_id: Option<&str>,
+) -> Result<Vec<NativeMissingSecret>, &'static str> {
+    let known = [
+        (
+            SecretName::CrossSigningMasterKey,
+            NativeMissingSecret::CrossSigningMaster,
+        ),
+        (
+            SecretName::CrossSigningSelfSigningKey,
+            NativeMissingSecret::CrossSigningSelfSigning,
+        ),
+        (
+            SecretName::CrossSigningUserSigningKey,
+            NativeMissingSecret::CrossSigningUserSigning,
+        ),
+        (
+            SecretName::RecoveryKey,
+            NativeMissingSecret::EncryptionBackup,
+        ),
+    ];
+    let mut missing = Vec::new();
+    for (name, projection) in known {
+        let event_type = GlobalAccountDataEventType::from(name);
+        let content = client
+            .account()
+            .fetch_account_data(event_type)
+            .await
+            .map_err(|_| "v-crypto.4-status-secret-check-failed")?;
+        let present = content
+            .map(|raw| {
+                raw.deserialize_as_unchecked::<SecretEventContent>()
+                    .map_err(|_| "v-crypto.4-status-secret-check-failed")
+            })
+            .transpose()?
+            .is_some_and(|content| {
+                default_key_id.is_some_and(|key_id| content.encrypted.contains_key(key_id))
+            });
+        if !present {
+            missing.push(projection);
+        }
+    }
+    Ok(missing)
+}
+
+fn project_status(
+    session_generation: u64,
+    recovery_state: RecoveryState,
+    exists: bool,
+    default_key_set: bool,
+    passphrase_configured: bool,
+    bootstrap_ready: bool,
+    missing_secrets: Vec<NativeMissingSecret>,
+) -> NativeSecretStorageStatus {
+    project_secret_storage_status(
+        session_generation,
+        recovery_phase(recovery_state),
+        exists,
+        default_key_set,
+        passphrase_configured,
+        bootstrap_ready,
+        missing_secrets,
+    )
+}
+
+fn map_bootstrap_error(error: RecoveryError) -> &'static str {
+    match error {
+        RecoveryError::BackupExistsOnServer => "v-crypto.4-bootstrap-existing-backup",
+        _ => "v-crypto.4-bootstrap-failed",
+    }
+}
+
+/// Read back authoritative readiness before returning Complete. A successful SDK
+/// write alone cannot establish that secret storage has usable account data.
+async fn complete_status(
+    client: &Client,
+    generation: u64,
+) -> Result<NativeSecretStorageStatus, &'static str> {
+    let status = status(client, generation).await?;
+    require_complete(&status)?;
+    Ok(status)
+}
+
+fn require_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static str> {
+    if !status.exists
+        || !status.default_key_set
+        || !status.unlocked
+        || !status.bootstrap_ready
+        || !status.missing_secrets.is_empty()
+    {
+        return Err("v-crypto.4-operation-incomplete");
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[tokio::test]
+    async fn secret_storage_sdk_query_failure_is_static_and_no_key_is_displayed() {
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .request_config(RequestConfig::new().disable_retry())
+            .build()
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(
+                r"^/_matrix/client/.*/user/.*/account_data/m.secret_storage.default_key$",
+            ))
+            .respond_with(ResponseTemplate::new(503).set_body_json(
+                serde_json::json!({"errcode":"M_UNKNOWN","error":"private key material"}),
+            ))
+            .mount(server.server())
+            .await;
+        assert_eq!(
+            status(&client, 8).await.unwrap_err(),
+            "v-crypto.4-status-default-key-failed"
+        );
+        match bootstrap(&client, 8, "test-passphrase").await {
+            Err(diagnostic) => assert_eq!(diagnostic, "v-crypto.4-status-default-key-failed"),
+            Ok(_) => panic!("SDK failure must not return a key"),
+        }
+    }
+    #[test]
+    fn completion_requires_all_authoritative_state() {
+        let ready = project_secret_storage_status(
+            9,
+            NativeRecoveryPhase::Enabled,
+            true,
+            true,
+            true,
+            true,
+            vec![],
+        );
+        assert_eq!(require_complete(&ready), Ok(()));
+        let mut cases = vec![];
+        let mut s = ready.clone();
+        s.exists = false;
+        cases.push(s);
+        let mut s = ready.clone();
+        s.default_key_set = false;
+        cases.push(s);
+        let mut s = ready.clone();
+        s.unlocked = false;
+        cases.push(s);
+        let mut s = ready.clone();
+        s.bootstrap_ready = false;
+        cases.push(s);
+        let mut s = ready;
+        s.missing_secrets
+            .push(NativeMissingSecret::EncryptionBackup);
+        cases.push(s);
+        for s in cases {
+            assert_eq!(require_complete(&s), Err("v-crypto.4-operation-incomplete"));
+        }
+    }
+}

@@ -529,7 +529,7 @@ test('logout clears the facade identity after the native command succeeds', asyn
       homeserver_url: 'https://matrix.example.org',
       sessionGeneration: 8,
     },
-    matrix_logout: { status: 'ok' },
+    matrix_logout: { status: 'logged_out' },
   });
   const client = createNativeMatrixClient(invoke);
   await client.refresh();
@@ -537,6 +537,35 @@ test('logout clears the facade identity after the native command succeeds', asyn
 
   assert.equal(client.getUserId(), null);
   assert.equal(client.getSafeUserId(), '');
+});
+
+test('native logout rejects unavailable, malformed, and failed completion without clearing identity', async () => {
+  for (const outcome of [
+    unavailable,
+    ok({ status: 'logged_in' }),
+    ok(undefined),
+    new Error('local deletion failed'),
+  ]) {
+    const client = createNativeMatrixClient(async (command) => {
+      if (command === 'matrix_logout') {
+        if (outcome instanceof Error) throw outcome;
+        return outcome;
+      }
+      if (command === 'matrix_session_snapshot')
+        return ok({
+          status: 'logged_in',
+          user_id: '@alice:example.org',
+          device_id: 'DEVICE',
+          homeserver_url: 'https://matrix.example.org',
+          sessionGeneration: 8,
+        });
+      return unavailable;
+    });
+    await client.refresh();
+    await assert.rejects(client.logout());
+    assert.equal(client.getUserId(), '@alice:example.org');
+    assert.equal(client.getSafeUserId(), '@alice:example.org');
+  }
 });
 
 test('F2 fetchRoomEvent proxies matrix_timeline_event_readback', async () => {

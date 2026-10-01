@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import produce from 'immer';
+import { produce } from 'immer';
 import type { EventedRoomReading } from '../utils/roomEvents';
 import type { RoomReading, MatrixEventReading } from '../utils/room';
 import { useStateEvent } from './useStateEvent';

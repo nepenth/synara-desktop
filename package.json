@@ -2,9 +2,8 @@
   "name": "synara-desktop",
   "version": "2.1.42",
   "description": "Synara Desktop, a Matrix client for macOS and Linux with a shared Rust core.",
-  "main": "index.js",
   "engines": {
-    "node": ">=22.12.0"
+    "node": ">=24.13.1"
   },
   "scripts": {
     "build:runtime": "node scripts/build-runtime.mjs",
@@ -47,11 +46,12 @@
   "author": "Synara contributors",
   "license": "AGPL-3.0-only",
   "dependencies": {
-    "@tauri-apps/api": "2.11.0",
+    "@tauri-apps/api": "2.11.1",
     "@tauri-apps/plugin-process": "2.3.1",
-    "@tauri-apps/plugin-updater": "2.11.0"
+    "@tauri-apps/plugin-updater": "2.12.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "2.11.2"
-  }
+    "@tauri-apps/cli": "2.11.5"
+  },
+  "private": true
 }

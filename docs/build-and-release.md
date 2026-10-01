@@ -35,6 +35,34 @@ npm --prefix synara ci
 Linux system package details live in [linux.md](linux.md). macOS local signing
 and app replacement notes live in [macos-local-signing.md](macos-local-signing.md).
 
+## Rust workspace and output paths
+
+Desktop, shared Core, NSE, and bindgen use the root `Cargo.lock` and common
+workspace dependencies. Desktop package output is under
+`target/release/bundle/` (or `target/universal-apple-darwin/release/bundle/`
+for universal macOS builds). Apple generators explicitly use
+`target/synara-core-apple` for their isolated feature builds.
+
+A desktop `--manifest-path src-tauri/Cargo.toml` invocation uses the same
+workspace lockfile. CI validates the desktop package and the three shared
+packages separately to avoid repeating desktop checks. NSE shipping isolation
+is checked with its explicit production feature graph and archive exports;
+workspace-wide tests do not substitute for that check.
+
+Any shared Core source, nested FFI module, workspace manifest/lockfile,
+`.cargo` configuration, or toolchain change triggers the Apple compile gate
+on ordinary feature PRs and the applicable desktop package checks. Main pushes run Apple unit tests for shared-Core/iOS changes and keep the UI
+lane disabled. Releases, `needs-ios-ui` labels, nightly schedules, and manual
+full runs retain their fuller test policy.
+
+The CI workflow's manual inputs allow additional unsigned Apple validation:
+`apple_slices=all` builds the four full-Core slices and the three NSE slices;
+`check_ios_device_release=true` also builds the unsigned device Release app
+and inspects its NSE archive. The device opt-in installs all Apple targets even
+when the slice input retains its default. These inputs affect only the unit-test
+job, have a bounded 120-minute budget, and do not sign, upload, or publish a
+release. Defaults remain `simulator-arm64` and device Release disabled.
+
 ## Local Validation Gates
 
 Run these before accepting desktop/runtime changes:

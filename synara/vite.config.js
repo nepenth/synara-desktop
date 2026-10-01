@@ -2,22 +2,14 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { viteStaticCopy } from 'vite-plugin-static-copy';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
-import { NodeGlobalsPolyfillPlugin } from '@esbuild-plugins/node-globals-polyfill';
-import inject from '@rollup/plugin-inject';
-import topLevelAwait from 'vite-plugin-top-level-await';
-import { VitePWA } from 'vite-plugin-pwa';
-import buildConfig from './build.config';
+import buildConfig from './build.config.ts';
 
 const copyFiles = {
   targets: [
     {
-      src: 'node_modules/@element-hq/element-call-embedded/dist/*',
-      dest: 'public/element-call',
-    },
-    {
       src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
       dest: '',
-      rename: 'pdf.worker.min.js',
+      rename: { stripBase: true, name: 'pdf.worker.min.js' },
     },
     {
       src: 'config.json',
@@ -26,6 +18,7 @@ const copyFiles = {
     {
       src: 'public/locales',
       dest: 'public/',
+      rename: { stripBase: 1 },
     },
   ],
 };
@@ -42,52 +35,12 @@ export default defineConfig({
       allow: ['..'],
     },
   },
-  plugins: [
-    topLevelAwait({
-      // The export name of top-level await promise for each chunk module
-      promiseExportName: '__tla',
-      // The function to generate import names of top-level await promise in each chunk module
-      promiseImportName: (i) => `__tla_${i}`,
-    }),
-    viteStaticCopy(copyFiles),
-    vanillaExtractPlugin(),
-    react(),
-    // Bundles a stub worker so injectManifest still has an entry; app manifest/install support is disabled.
-    VitePWA({
-      srcDir: 'src',
-      filename: 'sw.ts',
-      strategies: 'injectManifest',
-      injectRegister: false,
-      manifest: false,
-      injectManifest: {
-        injectionPoint: undefined,
-      },
-      devOptions: {
-        enabled: true,
-        type: 'module',
-      },
-    }),
-  ],
-  optimizeDeps: {
-    esbuildOptions: {
-      define: {
-        global: 'globalThis',
-      },
-      plugins: [
-        // Enable esbuild polyfill plugins
-        NodeGlobalsPolyfillPlugin({
-          process: false,
-          buffer: true,
-        }),
-      ],
-    },
-  },
+  plugins: [viteStaticCopy(copyFiles), vanillaExtractPlugin(), react()],
   build: {
+    // Native webviews support ES2022, including top-level await used by PDF.js.
+    target: 'es2022',
     outDir: 'dist',
     sourcemap: true,
     copyPublicDir: false,
-    rollupOptions: {
-      plugins: [inject({ Buffer: ['buffer', 'Buffer'] })],
-    },
   },
 });

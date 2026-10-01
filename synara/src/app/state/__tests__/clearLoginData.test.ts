@@ -24,7 +24,11 @@ const createEnumeratedMemoryStorage = (
 };
 
 const withWindow = async (
-  windowValue: { localStorage: SessionLocalStorage; location: { reload: () => void } },
+  windowValue: {
+    localStorage: SessionLocalStorage;
+    location: { reload: () => void };
+    __SYNARA_DESKTOP__?: { invoke: (command: string) => Promise<unknown> };
+  },
   run: () => void | Promise<void>
 ) => {
   const originalWindow = globalThis.window;
@@ -60,6 +64,12 @@ test('clearLoginData removes session keys only', async () => {
   await withWindow(
     {
       localStorage: storage,
+      __SYNARA_DESKTOP__: {
+        invoke: async (command) => {
+          assert.equal(command, 'matrix_logout');
+          return { status: 'logged_out' };
+        },
+      },
       location: {
         reload: () => {
           reloaded = true;
@@ -81,4 +91,24 @@ test('clearLoginData removes session keys only', async () => {
     JSON.stringify({ desktopShortcutShow: 'CmdOrCtrl+1' })
   );
   assert.equal(reloaded, true);
+});
+
+test('clearLoginData rejects when the native owner is unavailable without reloading', async () => {
+  const storage = createEnumeratedMemoryStorage({ after_login_redirect_url: '/home' });
+  let reloaded = false;
+  await withWindow(
+    {
+      localStorage: storage,
+      location: {
+        reload: () => {
+          reloaded = true;
+        },
+      },
+    },
+    async () => {
+      await assert.rejects(clearLoginData(storage), /Native logout did not complete/);
+    }
+  );
+  assert.equal(storage.getItem('after_login_redirect_url'), '/home');
+  assert.equal(reloaded, false);
 });

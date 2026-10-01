@@ -818,6 +818,9 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     async logout(): Promise<void> {
       const result = await invoke('matrix_logout');
       if (!result.available) throw new Error(UNAVAILABLE_MESSAGE);
+      if (!result.value || (result.value as NativeSessionSnapshot).status !== 'logged_out') {
+        throw new Error('Native logout did not complete. Retry before signing out.');
+      }
       clearSession({ clearIdentity: true });
     },
 

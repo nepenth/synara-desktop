@@ -146,6 +146,43 @@ impl NativeDeviceOwner {
         crate::app::backup::restore(&self.client, self.session_generation, recovery_secret).await
     }
 
+    pub async fn secret_storage_status(
+        &self,
+    ) -> Result<crate::app::secret_storage::NativeSecretStorageStatus, &'static str> {
+        crate::app::secret_storage::status(&self.client, self.session_generation).await
+    }
+    pub async fn backup_setup(
+        &self,
+        passphrase: &str,
+    ) -> Result<crate::app::backup::NativeBackupOperationResult, &'static str> {
+        crate::app::backup::setup(&self.client, self.session_generation, passphrase).await
+    }
+    pub async fn backup_repair(
+        &self,
+        recovery_secret: &str,
+    ) -> Result<crate::app::backup::NativeBackupOperationResult, &'static str> {
+        crate::app::backup::repair(&self.client, self.session_generation, recovery_secret).await
+    }
+    pub async fn secret_storage_bootstrap(
+        &self,
+        passphrase: &str,
+    ) -> Result<crate::app::secret_storage::SecretStorageSetup, &'static str> {
+        crate::app::secret_storage::bootstrap(&self.client, self.session_generation, passphrase)
+            .await
+    }
+    pub async fn secret_storage_unlock(
+        &self,
+        recovery_secret: &str,
+    ) -> Result<crate::app::secret_storage::NativeSecretStorageOperationResult, &'static str> {
+        crate::app::secret_storage::unlock(&self.client, self.session_generation, recovery_secret)
+            .await
+    }
+    pub async fn secret_storage_reset(
+        &self,
+        passphrase: &str,
+    ) -> Result<crate::app::secret_storage::SecretStorageSetup, &'static str> {
+        crate::app::secret_storage::reset(&self.client, self.session_generation, passphrase).await
+    }
     pub async fn cross_signing_setup(
         &self,
     ) -> Result<crate::app::cross_signing::NativeCrossSigningSetupResult, &'static str> {

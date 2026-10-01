@@ -272,7 +272,9 @@ and release workflows take precedence.
 - [Code of conduct](CODE_OF_CONDUCT.md)
 - [Security reports](SECURITY.md). Do not file credentials or recovery keys in a public issue.
 
-`probes/` holds old SDK compile experiments. It is not the application.
+`probes/` holds provenance records for retired SDK experiments. Their executable
+code, manifests, and lockfiles are removed; the README records identify the
+Git revision containing the original experiments.
 `docs/matrix-rust-sdk/` and `docs/shared-native-core/` are historical migration
 records. Current architecture is the ADRs above.
 

@@ -21,9 +21,8 @@
 //!   initial sync does not replay history into the tray.
 //!
 //! The observation carries identity (`room_id`, `event_id`, `sender`), the
-//! event type, its origin timestamp, and the bounded plaintext `body` of an
-//! `m.room.message` — the same class of data the timeline view stream already
-//! delivers to the renderer. It carries no ciphertext, keys, tokens, or push
+//! event type, its origin timestamp, and Core approval classification. Raw
+//! prompt bodies remain inside Core. It carries no ciphertext, keys, tokens, or push
 //! verdicts.
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -48,12 +47,10 @@ pub const NOTIFICATION_OBSERVED_EVENT: &str = "matrix-notification-observed";
 /// an initial or catch-up sync and never notify.
 pub const NOTIFICATION_OBSERVATION_WINDOW_MS: u64 = 5 * 60 * 1000;
 
-/// Bound for the plaintext body carried to the renderer for agent-approval
-/// prompt detection. Longer bodies are truncated on a char boundary.
-pub const NOTIFICATION_OBSERVATION_BODY_MAX_CHARS: usize = 8_000;
-
-/// One observed candidate event. Identity plus presentation-neutral facts;
-/// no policy verdict.
+/// One observed candidate event: identity/facts and Core approval classification.
+/// Push delivery verdicts remain private to the decision owner. Approval
+/// classification does not assert terminal reaction state; the action owner
+/// revalidates current SDK reaction aggregation before sending any reaction.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct NativeNotificationObservation {
@@ -63,9 +60,16 @@ pub struct NativeNotificationObservation {
     pub sender: String,
     pub event_type: String,
     pub origin_server_ts: u64,
-    /// Plaintext `body` of an `m.room.message`; `None` for stickers and
-    /// events Core could not decrypt.
-    pub body: Option<String>,
+    /// Classification from the complete SDK plaintext body, never truncated renderer input.
+    pub agent_approval: Option<NativeAgentApprovalObservation>,
+}
+
+/// Core classification; delayed consumers must revalidate through decide_observed.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeAgentApprovalObservation {
+    pub expires_at: u64,
+    pub expired: bool,
 }
 
 /// Shell-supplied sink. Desktop maps this to a Tauri event; iOS can map it
@@ -251,7 +255,7 @@ pub fn project_observation(
     if now_ms.saturating_sub(origin_server_ts) > NOTIFICATION_OBSERVATION_WINDOW_MS {
         return None;
     }
-    let body = match event {
+    let agent_approval = match event {
         AnySyncMessageLikeEvent::RoomMessage(SyncMessageLikeEvent::Original(message)) => {
             if matches!(
                 message.content.relates_to,
@@ -259,10 +263,19 @@ pub fn project_observation(
             ) {
                 return None;
             }
-            Some(truncate_chars(
+            crate::app::agent_approvals::classify_agent_approval(
                 message.content.body(),
-                NOTIFICATION_OBSERVATION_BODY_MAX_CHARS,
-            ))
+                event.sender().as_str(),
+                own_user_id.as_str(),
+                origin_server_ts,
+                now_ms,
+                std::iter::empty(),
+            )
+            .ok()
+            .map(|classification| NativeAgentApprovalObservation {
+                expires_at: classification.expires_at,
+                expired: classification.expired,
+            })
         }
         AnySyncMessageLikeEvent::RoomEncrypted(SyncMessageLikeEvent::Original(encrypted)) => {
             if matches!(
@@ -289,12 +302,8 @@ pub fn project_observation(
         sender: event.sender().to_string(),
         event_type: event_type.to_owned(),
         origin_server_ts,
-        body,
+        agent_approval,
     })
-}
-
-fn truncate_chars(value: &str, max_chars: usize) -> String {
-    value.chars().take(max_chars).collect()
 }
 
 #[cfg(test)]
@@ -331,10 +340,39 @@ mod tests {
     }
 
     #[test]
-    fn recent_message_from_another_user_is_observed_with_bounded_body() {
+    fn approval_classification_uses_complete_body_and_core_expiry() {
+        let me = user_id!("@me:example.org");
+        let bot = user_id!("@bot:example.org");
+        let body = format!(
+            "Approval Required: Dangerous Command\n{}",
+            "x".repeat(100_001)
+        );
+        assert!(
+            project_observation(&text(bot, NOW, &body), ROOM, me, NOW, 7)
+                .unwrap()
+                .agent_approval
+                .is_none()
+        );
+        let body = "Approval Required: Dangerous Command\necho hello";
+        let observation =
+            project_observation(&text(bot, NOW - 1_000, body), ROOM, me, NOW, 7).unwrap();
+        assert_eq!(
+            observation.agent_approval,
+            Some(NativeAgentApprovalObservation {
+                expires_at: NOW - 1_000 + crate::app::agent_approvals::AGENT_APPROVAL_TTL_MS,
+                expired: false
+            })
+        );
+        let wire = serde_json::to_value(observation).unwrap();
+        assert!(wire.get("body").is_none());
+        assert!(wire.get("agentApproval").is_some());
+    }
+
+    #[test]
+    fn recent_message_carries_no_raw_prompt_body() {
         let me = user_id!("@me:example.org");
         let bob = user_id!("@bob:example.org");
-        let long_body = "x".repeat(NOTIFICATION_OBSERVATION_BODY_MAX_CHARS + 50);
+        let long_body = "x".repeat(8_050);
         let event = text(bob, NOW - 1_000, &long_body);
         let observed = project_observation(&event, ROOM, me, NOW, 7).expect("observed");
         assert_eq!(observed.session_generation, 7);
@@ -343,10 +381,7 @@ mod tests {
         assert_eq!(observed.sender, bob.as_str());
         assert_eq!(observed.event_type, "m.room.message");
         assert_eq!(observed.origin_server_ts, NOW - 1_000);
-        assert_eq!(
-            observed.body.as_deref().map(|b| b.chars().count()),
-            Some(NOTIFICATION_OBSERVATION_BODY_MAX_CHARS)
-        );
+        assert!(observed.agent_approval.is_none());
         let wire = serde_json::to_value(&observed).unwrap();
         assert!(wire.get("sessionGeneration").is_some());
         assert!(wire.get("originServerTs").is_some());
@@ -412,7 +447,7 @@ mod tests {
     }
 
     #[test]
-    fn undecryptable_and_sticker_events_are_observed_without_body() {
+    fn undecryptable_and_sticker_events_have_no_approval_classification() {
         let me = user_id!("@me:example.org");
         let bob = user_id!("@bob:example.org");
         let encrypted = message(
@@ -429,7 +464,7 @@ mod tests {
         );
         let observed = project_observation(&encrypted, ROOM, me, NOW, 7).expect("observed");
         assert_eq!(observed.event_type, "m.room.encrypted");
-        assert_eq!(observed.body, None, "ciphertext never crosses");
+        assert_eq!(observed.agent_approval, None, "ciphertext never crosses");
         let sticker = message(
             bob,
             NOW,
@@ -442,7 +477,7 @@ mod tests {
         );
         let observed = project_observation(&sticker, ROOM, me, NOW, 7).expect("observed");
         assert_eq!(observed.event_type, "m.sticker");
-        assert_eq!(observed.body, None);
+        assert_eq!(observed.agent_approval, None);
         let reaction = message(
             bob,
             NOW,

@@ -1,5 +1,5 @@
 import { WritableAtom, atom } from 'jotai';
-import produce from 'immer';
+import { produce } from 'immer';
 import { Path } from 'react-router-dom';
 import {
   atomWithLocalStorage,

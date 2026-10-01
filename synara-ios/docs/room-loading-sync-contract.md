@@ -1,5 +1,13 @@
 # Room Loading And Sync Contract
 
+> Historical room-loading implementation snapshot. The direct Swift Matrix SDK services described
+> below were retired by the shared Rust Core migration. Product iOS now
+> uses project-owned SynaraCore bindings; the Swift SDK experiment was
+> decommissioned on 2026-09-30. Refer to [ADR 0003](../../docs/adr/0003-shared-native-rust-core.md)
+> and [ADR 0004](../../docs/adr/0004-rust-language-boundaries.md) for current
+> ownership. Behavioral goals remain relevant; old service names and build
+> commands are historical evidence.
+
 ## Problem
 
 The iOS client must feel immediate without presenting stale Matrix SDK cache data as the current room state. A cached room list or timeline slice is acceptable for first paint only; unread state, latest message previews, and "bottom of room" positioning must be corrected by live sync before the UI implies it is current.

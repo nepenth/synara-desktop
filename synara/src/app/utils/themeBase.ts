@@ -378,7 +378,7 @@ export const chromeColorsForRamp = (ramp: ThemeSurfaceRamp): ThemeChromeColors =
 
 export const themeChromeAssignments = (
   ramp: ThemeSurfaceRamp
-): Record<typeof THEME_CHROME_ROLES[ThemeChromeRole], ThemeSurfaceScale> => ({
+): Record<(typeof THEME_CHROME_ROLES)[ThemeChromeRole], ThemeSurfaceScale> => ({
   background: ramp.background,
   surface: ramp.surface,
   surfaceVariant: ramp.surfaceVariant,

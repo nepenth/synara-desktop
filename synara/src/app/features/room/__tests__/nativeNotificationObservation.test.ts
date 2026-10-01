@@ -16,15 +16,15 @@ const OBSERVATION: NativeNotificationObservation = {
   sender: '@bob:example.org',
   eventType: 'm.room.message',
   originServerTs: 1_700_000_000_000,
-  body: 'hello',
+  agentApproval: { expiresAt: 1_700_000_300_000, expired: false },
 };
 
 test('observation parser accepts identity plus bounded facts and rejects verdicts', () => {
   assert.deepEqual(parseNativeNotificationObservation(OBSERVATION), OBSERVATION);
-  // Body is optional (stickers, undecryptable events).
+  // Approval classification is optional (ordinary/undecryptable events).
   const bare: NativeNotificationObservation = { ...OBSERVATION };
-  delete bare.body;
-  assert.deepEqual(parseNativeNotificationObservation({ ...bare, body: null }), bare);
+  delete bare.agentApproval;
+  assert.deepEqual(parseNativeNotificationObservation({ ...bare, agentApproval: null }), bare);
   assert.deepEqual(parseNativeNotificationObservation(bare), bare);
 
   // A policy verdict or any unknown key fails closed so the wire cannot grow
@@ -40,7 +40,10 @@ test('observation parser accepts identity plus bounded facts and rejects verdict
     { ...OBSERVATION, eventType: 'm.reaction' },
     { ...OBSERVATION, sessionGeneration: -1 },
     { ...OBSERVATION, originServerTs: 'now' },
-    { ...OBSERVATION, body: 42 },
+    { ...OBSERVATION, agentApproval: 42 },
+    { ...OBSERVATION, body: 'retired plaintext parser input' },
+    { ...OBSERVATION, agentApproval: { expiresAt: 123, expired: false, body: 'raw prompt' } },
+    { ...OBSERVATION, agentApproval: { expiresAt: -1, expired: false } },
     null,
     [],
     'observation',
