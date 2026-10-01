@@ -164,6 +164,124 @@ final class ComposerMatrixFormattingTests: XCTestCase {
         XCTAssertTrue(textView.isFirstResponder)
     }
 
+    @MainActor
+    func testHostedComposerMountedFocusObserverABProbe() async throws {
+        let appeared = expectation(description: "Composer bindings installed in a hosted view")
+        var controls: ComposerFocusTestControls?
+        // A/B fidelity probe: this arm intentionally adds the wrapped focus
+        // dependency observed by the production RoomTimelineView parent.
+        let mountedFocus = ComposerMountedFocusWitness()
+        let controller = UIHostingController(rootView: ComposerMountedFocusProbeHarness(
+            onReady: { bindings in
+                controls = bindings
+                appeared.fulfill()
+            },
+            onMountedFocusChange: { mountedFocus.observe($0) }
+        ))
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first { $0.activationState == .foregroundActive },
+            "Use the hosted application's active window scene"
+        )
+        let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer {
+            window.endEditing(true)
+            window.isHidden = true
+            previousKeyWindow?.makeKey()
+            window.rootViewController = nil
+            window.windowScene = nil
+        }
+        await fulfillment(of: [appeared], timeout: 5)
+        let bindings = try XCTUnwrap(controls)
+        // onAppear installs bindings before every UIKit attachment/layout is
+        // necessarily complete. The global registry may hold a detached editor;
+        // ownership comes from this controller's actual hosted view hierarchy.
+        let editorReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                let editors = hostedComposerEditors(in: controller.view)
+                return editors.count == 1
+                    && editors[0].window === window
+                    && editors[0].isDescendant(of: controller.view)
+                    && editors[0].bounds.width > 0
+                    && editors[0].bounds.height > 0
+                    && window.isKeyWindow
+                    && !editors[0].isFirstResponder
+            },
+            object: controller
+        )
+        await fulfillment(of: [editorReady], timeout: 5)
+        let editors = hostedComposerEditors(in: controller.view)
+        let textView = try XCTUnwrap(
+            editors.count == 1 ? editors.first : nil,
+            "Require one production editor in this hosted controller"
+        )
+        guard textView.window === window,
+              textView.isDescendant(of: controller.view),
+              textView.bounds.width > 0,
+              textView.bounds.height > 0,
+              window.isKeyWindow,
+              !textView.isFirstResponder
+        else {
+            XCTFail("Hosted production editor was not laid out in the key test window: count=\(editors.count)")
+            struct HostedEditorNotReady: Error {}
+            throw HostedEditorNotReady()
+        }
+        let diagnostics = ComposerMountedFocusProbeDiagnostics(
+            bindings: bindings, textView: textView, window: window, rootView: controller.view,
+            mountedFocus: mountedFocus
+        )
+        defer { diagnostics.stopObserving() }
+        diagnostics.record("hosted-editor-ready")
+
+        // A toolbar request must reach UIKit through the real representable update.
+        bindings.isFocused.wrappedValue = true
+        diagnostics.record("binding-focus-request-written")
+        let focused = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in textView.isFirstResponder },
+            object: textView
+        )
+        try await diagnostics.require(focused, stage: "binding-focus-reaches-UIKit", in: self)
+        textView.insertText("draft")
+        XCTAssertEqual(bindings.text.wrappedValue, "draft")
+
+        // A programmatic dismissal and a subsequent native editing action must
+        // both update the same state, as happens around attachment presentation.
+        bindings.isFocused.wrappedValue = false
+        diagnostics.record("binding-dismiss-request-written")
+        let dismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !textView.isFirstResponder },
+            object: textView
+        )
+        try await diagnostics.require(dismissed, stage: "binding-dismiss-resigns-UIKit", in: self)
+        XCTAssertTrue(textView.becomeFirstResponder())
+        XCTAssertTrue(bindings.isFocused.wrappedValue)
+
+        let result = ComposerMarkdown.apply(
+            .bold,
+            to: bindings.text.wrappedValue,
+            selection: ComposerTextSelection(location: 0, length: 5)
+        )
+        bindings.text.wrappedValue = result.text
+        bindings.selection.wrappedValue = result.selection
+        bindings.formattingRevision.wrappedValue += 1
+        let formatted = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                textView.isFirstResponder && textView.text == "**draft**"
+            },
+            object: textView
+        )
+        try await diagnostics.require(formatted, stage: "formatting-preserves-UIKit-focus", in: self)
+        textView.insertText("replacement")
+        XCTAssertEqual(bindings.text.wrappedValue, "**replacement**")
+        XCTAssertTrue(textView.isFirstResponder)
+        diagnostics.attachEvidence(stage: "mounted-focus-arm-passed", in: self)
+    }
+
     func testEmptyComposerMeasuresWrappedPlaceholderAtAccessibilityScale() {
         let container = ComposerTextContainer()
         let accessibilityFont = UIFont.systemFont(ofSize: 31)
@@ -344,6 +462,123 @@ private struct ComposerFocusTestHarness: View {
             isFocused: $isFocused
         )
         .frame(height: height)
+        .onAppear {
+            onReady(ComposerFocusTestControls(
+                text: $text,
+                selection: $selection,
+                formattingRevision: $formattingRevision,
+                isFocused: $isFocused
+            ))
+        }
+    }
+}
+// Deliberately non-observable: readback cannot itself invalidate SwiftUI.
+// The .onChange body read in the B harness is the dependency under test.
+@MainActor
+private final class ComposerMountedFocusWitness {
+    private let origin = ProcessInfo.processInfo.systemUptime
+    private(set) var values: [Bool] = []
+    private(set) var timedChanges: [String] = []
+    var latest: Bool? { values.last }
+    var elapsed: TimeInterval { ProcessInfo.processInfo.systemUptime - origin }
+
+    func observe(_ focused: Bool) {
+        timedChanges.append("elapsed=\(elapsed) mountedChange=\(values.count) focus=\(focused)")
+        values.append(focused)
+    }
+}
+
+@MainActor
+private final class ComposerMountedFocusProbeDiagnostics {
+    private let mountedFocus: ComposerMountedFocusWitness
+    private let bindings: ComposerFocusTestControls
+    private let textView: UITextView
+    private let window: UIWindow
+    private let rootView: UIView
+    private var records: [String] = []
+    private var observers: [NSObjectProtocol] = []
+
+    init(bindings: ComposerFocusTestControls, textView: UITextView, window: UIWindow, rootView: UIView,
+         mountedFocus: ComposerMountedFocusWitness) {
+        self.mountedFocus = mountedFocus
+        self.bindings = bindings
+        self.textView = textView
+        self.window = window
+        self.rootView = rootView
+        for (name, stage) in [
+            (UITextView.textDidBeginEditingNotification, "native-begin-editing"),
+            (UITextView.textDidEndEditingNotification, "native-end-editing"),
+        ] {
+            observers.append(NotificationCenter.default.addObserver(
+                forName: name, object: textView, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.record(stage) }
+            })
+        }
+    }
+
+    func record(_ stage: String) {
+        // Read owner state only. No draft, selection, identifiers or secrets.
+        records.append(
+            "stage=\(stage) requestedFocus=\(bindings.isFocused.wrappedValue) "
+                + "firstResponder=\(textView.isFirstResponder) keyWindow=\(window.isKeyWindow) "
+                + "attached=\(textView.window === window) descendant=\(textView.isDescendant(of: rootView)) "
+                + "laidOut=\(textView.bounds.width > 0 && textView.bounds.height > 0) "
+                + "mountedFocusKnown=\(mountedFocus.latest != nil) "
+                + "mountedFocus=\(mountedFocus.latest.map(String.init) ?? "unknown") "
+                + "mountedChanges=\(mountedFocus.values.count) elapsed=\(mountedFocus.elapsed)"
+        )
+    }
+
+    func require(_ expectation: XCTestExpectation, stage: String, in test: XCTestCase) async throws {
+        expectation.expectationDescription = stage
+        record("\(stage)-wait-start")
+        let result = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
+        record("\(stage)-wait-return-result-\(result)")
+        guard result == .completed else {
+            attachEvidence(stage: stage, in: test)
+            XCTFail("Hosted composer stage '\(stage)' did not complete: \(result)")
+            struct ComposerFocusStageFailed: Error {}
+            throw ComposerFocusStageFailed()
+        }
+    }
+
+    func attachEvidence(stage: String, in test: XCTestCase) {
+        let attachment = XCTAttachment(string: (records + mountedFocus.timedChanges).joined(separator: "\n"))
+        attachment.name = "hosted-composer-mounted-focus-ab-\(stage)"
+        attachment.lifetime = .keepAlways
+        test.add(attachment)
+    }
+
+    func stopObserving() {
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        observers.removeAll()
+    }
+}
+
+@MainActor
+private struct ComposerMountedFocusProbeHarness: View {
+    let onReady: (ComposerFocusTestControls) -> Void
+    let onMountedFocusChange: (Bool) -> Void
+    @State private var text = ""
+    @State private var selection = ComposerTextSelection.empty
+    @State private var height: CGFloat = 34
+    @State private var formattingRevision = 0
+    @State private var isFocused = false
+
+    var body: some View {
+        ComposerTextView(
+            text: $text,
+            selection: $selection,
+            height: $height,
+            placeholder: "Message",
+            formattingRevision: formattingRevision,
+            isFocused: $isFocused
+        )
+        .frame(height: height)
+        .onChange(of: isFocused) { focused in
+            onMountedFocusChange(focused)
+        }
         .onAppear {
             onReady(ComposerFocusTestControls(
                 text: $text,
