@@ -55,11 +55,102 @@ export function rustDeclarationSurface(source) {
   return result;
 }
 
+// With test=false, unknown feature/target atoms remain potentially enabled.
+// This deliberately evaluates only cfg's Boolean grammar, not target features.
+function productionCfg(expression) {
+  expression = expression.trim();
+  if (expression === "test") return false;
+  const call = /^(all|any|not)\s*\(([\s\S]*)\)$/.exec(expression);
+  if (!call) return undefined;
+  const arguments_ = [];
+  let start = 0;
+  let depth = 0;
+  for (let cursor = 0; cursor < call[2].length; cursor++) {
+    if (call[2][cursor] === "(") depth++;
+    else if (call[2][cursor] === ")") depth--;
+    else if (call[2][cursor] === "," && depth === 0) {
+      arguments_.push(call[2].slice(start, cursor));
+      start = cursor + 1;
+    }
+  }
+  if (call[2].slice(start).trim()) arguments_.push(call[2].slice(start));
+  const values = arguments_.map(productionCfg);
+  if (call[1] === "not")
+    return values.length === 1 && values[0] !== undefined
+      ? !values[0]
+      : undefined;
+  if (call[1] === "all")
+    return values.includes(false)
+      ? false
+      : values.every((value) => value === true)
+      ? true
+      : undefined;
+  return values.includes(true)
+    ? true
+    : values.every((value) => value === false)
+    ? false
+    : undefined;
+}
+
+function rustAttributes(surface) {
+  const result = [];
+  for (const match of surface.matchAll(/#(!?)\s*\[/g)) {
+    let cursor = match.index + match[0].length;
+    const contentStart = cursor;
+    let depth = 1;
+    while (depth && cursor < surface.length) {
+      if (surface[cursor] === "[") depth++;
+      else if (surface[cursor] === "]") depth--;
+      cursor++;
+    }
+    if (depth) throw new Error("Unterminated Rust attribute");
+    result.push({
+      start: match.index,
+      end: cursor,
+      inner: match[1] === "!",
+      content: surface.slice(contentStart, cursor - 1).trim(),
+    });
+  }
+  return result;
+}
+
 function withoutTestItems(source) {
   const surface = rustDeclarationSurface(source);
+  const attributes = rustAttributes(surface);
   const spans = [];
-  for (const match of surface.matchAll(/#\[cfg\(test\)\]/g)) {
-    let end = match.index + match[0].length;
+  for (const attribute of attributes) {
+    if (/^cfg_attr\s*\([\s\S]*\bcfg\s*\(/.test(attribute.content))
+      throw new Error(
+        "Unsupported conditional cfg attribute in Rust source guard"
+      );
+    const cfg = /^cfg\s*\(([\s\S]*)\)$/.exec(attribute.content);
+    if (!cfg || productionCfg(cfg[1]) !== false) continue;
+    if (attribute.inner) {
+      const prefix = surface.slice(0, attribute.start);
+      const depth = [...prefix].reduce(
+        (depth, token) => depth + (token === "{" ? 1 : token === "}" ? -1 : 0),
+        0
+      );
+      if (depth !== 0)
+        throw new Error(
+          "Unsupported nested inner cfg attribute in Rust source guard"
+        );
+      return source.replace(/[^\n]/g, " ");
+    }
+    let end = attribute.end;
+    // Skip the rest of this item's attribute group, including same-line groups.
+    for (;;) {
+      while (/\s/.test(surface[end] ?? "") && end < surface.length) end++;
+      const attached = attributes.find((candidate) => candidate.start === end);
+      if (!attached) break;
+      end = attached.end;
+    }
+    if (
+      !/^(?:pub(?:\([^)]*\))?\s+)?(?:async\s+)?(?:fn|mod|struct|enum|impl|use|const|type|trait|extern)\b/.test(
+        surface.slice(end)
+      )
+    )
+      throw new Error("Unsupported test-only Rust item in source guard");
     let braces = 0;
     let parentheses = 0;
     let brackets = 0;
@@ -89,14 +180,14 @@ function withoutTestItems(source) {
         break;
       }
     }
-    spans.push([match.index, end]);
+    spans.push([attribute.start, end]);
   }
-  for (const [start, end] of spans.reverse())
-    source =
-      source.slice(0, start) +
-      source.slice(start, end).replace(/[^\n]/g, " ") +
-      source.slice(end);
-  return source;
+  // Nested cfg items can overlap: mask a single union without offset changes.
+  const characters = source.split("");
+  for (const [start, end] of spans)
+    for (let cursor = start; cursor < end; cursor++)
+      if (characters[cursor] !== "\n") characters[cursor] = " ";
+  return characters.join("");
 }
 
 /** Read a Rust facade and its declared external modules, rather than assuming
@@ -110,6 +201,19 @@ export function readRustModuleSources(entry, { includeTests = false } = {}) {
     if (visited.has(file)) throw new Error(`Repeated Rust module: ${file}`);
     visited.add(file);
     const rawSource = readFileSync(file, "utf8");
+    const rawSurface = rustDeclarationSurface(rawSource);
+    if (
+      rustAttributes(rawSurface).some((attribute) =>
+        /\bpath\s*=/.test(attribute.content)
+      )
+    )
+      throw new Error(`Unsupported Rust module path override: ${file}`);
+    // This bounded reader does not resolve macros or generated sources. Reject
+    // include! explicitly instead of silently missing compiled Rust content.
+    if (/\binclude\s*!\s*[([{]/.test(rawSurface))
+      throw new Error(
+        `Unsupported Rust include macro in source guard: ${file}`
+      );
     const source = includeTests ? rawSource : withoutTestItems(rawSource);
     const surface = rustDeclarationSurface(source);
     files.push({ path: file, source });
@@ -117,19 +221,20 @@ export function readRustModuleSources(entry, { includeTests = false } = {}) {
     const moduleRoot = ["lib", "main", "mod"].includes(name)
       ? dirname(file)
       : join(dirname(file), name);
-    // Facade modules use ordinary external declarations. Explicit path
-    // overrides need a separate resolution rule; fail rather than overlook it.
-    if (/^\s*#\[path\s*=/m.test(surface))
-      throw new Error(`Unsupported Rust module path override: ${file}`);
-    for (const declaration of surface.matchAll(
-      /(?:^|\n)((?:#\[[^\n]+\]\s*\n)*)(?:pub(?:\([^)]*\))?\s+)?mod\s+(\w+)\s*;/g
-    )) {
-      const [, attributes, child] = declaration;
-      if (
-        !includeTests &&
-        (/cfg\(test\)/.test(attributes) || child === "tests")
-      )
-        continue;
+    for (const declaration of surface.matchAll(/\bmod\s+([^\s;{}]+)\s*;/g)) {
+      const [, identifier] = declaration;
+      const child = identifier.replace(/^r#/, "");
+      if (!/^[A-Za-z_][A-Za-z_0-9]*$/.test(child))
+        throw new Error(
+          `Unsupported Rust module identifier ${identifier} in ${file}`
+        );
+      const prefix = surface.slice(0, declaration.index);
+      const depth = [...prefix].reduce(
+        (depth, token) => depth + (token === "{" ? 1 : token === "}" ? -1 : 0),
+        0
+      );
+      if (depth !== 0)
+        throw new Error(`Unsupported nested external Rust module: ${file}`);
       const direct = join(moduleRoot, `${child}.rs`);
       const nested = join(moduleRoot, child, "mod.rs");
       const candidates = [direct, nested].filter(existsSync);

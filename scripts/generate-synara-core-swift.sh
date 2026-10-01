@@ -53,6 +53,9 @@ publication_helper="$repo_root/scripts/lib/publish-generated-apple-pair.sh"
 [[ -r "$publication_helper" ]] || fail "missing Apple pair publication helper: $publication_helper"
 [[ -x "$publication_helper" ]] || fail "Apple pair publication helper is not executable: $publication_helper"
 
+# Validate the locked shipping graph before building or publishing either pair.
+node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   fail "Apple binding generation requires macOS with Xcode and Apple Rust targets; host is $(uname -s). Run scripts/check-synara-core-swift-scaffold.mjs for host-neutral validation."
 fi

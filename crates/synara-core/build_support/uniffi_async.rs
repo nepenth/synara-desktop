@@ -50,13 +50,18 @@ fn tokens(source: &str) -> Vec<Token<'_>> {
                 }
             }
         } else {
-            if bytes[i] == b'r' {
-                let mut quote = i + 1;
+            let raw_start = if bytes[i..].starts_with(b"br") {
+                i + 1
+            } else {
+                i
+            };
+            if bytes[raw_start] == b'r' {
+                let mut quote = raw_start + 1;
                 while quote < bytes.len() && bytes[quote] == b'#' {
                     quote += 1;
                 }
                 if quote < bytes.len() && bytes[quote] == b'"' {
-                    let hashes = quote - i - 1;
+                    let hashes = quote - raw_start - 1;
                     i = quote + 1;
                     while i < bytes.len() {
                         if bytes[i] == b'"'
@@ -172,6 +177,42 @@ pub fn bridge_async_exports(source: &str, udl: &str) -> Result<String, String> {
 mod tests {
     use super::*;
     const EXPORT: &str = "#[::uniffi::export_for_udl]";
+
+    #[test]
+    fn pinned_generator_mixed_object_patches_only_the_async_method() {
+        let source = include_str!("fixtures/mixed.uniffi.rs");
+        let patched = bridge_async_exports(source, include_str!("fixtures/mixed.udl")).unwrap();
+        assert_eq!(patched.matches(RUNTIME_EXPORT).count(), 1);
+        assert!(patched.contains(&format!(
+            "{EXPORT}\nimpl r#Probe {{\n    #[uniffi::constructor]\n    pub fn r#new"
+        )));
+        assert!(patched.contains(&format!("{EXPORT}\nimpl r#Probe {{\n    pub fn r#status")));
+        assert!(patched.contains(&format!(
+            "{RUNTIME_EXPORT}\nimpl r#Probe {{\n    pub async fn r#fetch"
+        )));
+    }
+
+    #[test]
+    fn pinned_generator_async_callback_is_rejected_before_publication() {
+        let source = include_str!("fixtures/callback.uniffi.rs");
+        assert!(source.contains("#[::uniffi::export_for_udl(callback_interface)]"));
+        let error =
+            bridge_async_exports(source, include_str!("fixtures/callback.udl")).unwrap_err();
+        assert!(error.contains("found 0, expected 1"));
+    }
+
+    #[test]
+    fn raw_byte_strings_mask_embedded_quotes_and_fake_declarations() {
+        let source = r###"const TEXT: &[u8] = br##"a quote " #[::uniffi::export_for_udl] pub async fn fake() {}"##;"###;
+        assert_eq!(
+            bridge_async_exports(source, "namespace fixture {};").unwrap(),
+            source
+        );
+        assert_eq!(
+            bridge_async_exports("", r###"[Name=br##"quote " [Async]"##] void sync();"###).unwrap(),
+            ""
+        );
+    }
 
     #[test]
     fn mixed_real_declarations_ignore_comments_strings_and_sync_bodies() {

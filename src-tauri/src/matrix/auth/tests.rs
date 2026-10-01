@@ -2,6 +2,11 @@
 
 use super::*;
 use crate::matrix::ipc::MatrixIpcErrorCategory;
+use synara_core::app::auth::{
+    discover_homeserver_and_login_flows, host_device_platform, identity_with_discovered_homeserver,
+    UiaFlowKind, UiaStage, UiaStageKind, DEVICE_DISPLAY_NAME_LINUX, DEVICE_DISPLAY_NAME_MACOS,
+    MAX_UIA_STAGES,
+};
 
 fn secret_fragments() -> &'static [&'static str] {
     &[

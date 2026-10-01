@@ -10,25 +10,6 @@ use synara_core::app::store::{
     StoreKeyId, StoreKeyMaterial, StoreKeyVault, StoreKeyVaultError, STORE_KEY_LEN,
 };
 
-/// Non-secret service/account refs for the keyring-backed vault.
-///
-/// Stable naming contract for collision tests and diagnostics (never contains
-/// key material). Live IO goes through [`KeyringStoreKeyVault`].
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyringStoreKeyRefs {
-    pub service: String,
-    pub account: String,
-}
-
-impl KeyringStoreKeyRefs {
-    pub fn from_id(id: &StoreKeyId) -> Self {
-        Self {
-            service: id.service().to_owned(),
-            account: id.account().to_owned(),
-        }
-    }
-}
-
 /// OS credential-store vault for Matrix store encryption keys (R0.4 residual).
 ///
 /// - macOS: Keychain via `keyring` apple-native backend

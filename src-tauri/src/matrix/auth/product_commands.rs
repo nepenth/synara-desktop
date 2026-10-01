@@ -3,7 +3,7 @@ use crate::matrix::user_profile::NativeOwnProfileOwner;
 use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 /// V-AUTH.3 desktop compatibility re-exports for the shared command response.
-pub use synara_core::app::auth::{MatrixLoginFlowDto, MatrixLoginFlowsResponse};
+pub use synara_core::app::auth::MatrixLoginFlowsResponse;
 
 /// V-AUTH.3 / SNC-P3.1 — discover login flows through the managed shared Core.
 ///
@@ -218,7 +218,6 @@ pub async fn matrix_login_password(
         sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
         timelines: timelines.clone(),
-        sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         devices: devices.clone(),
@@ -756,7 +755,6 @@ pub(super) async fn install_session_from_register_secrets(
         sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
         timelines,
-        sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         devices: devices.clone(),
@@ -851,52 +849,59 @@ pub async fn matrix_logout(
     core: State<'_, Arc<synara_core::Core>>,
 ) -> Result<MatrixSessionSnapshot, MatrixAuthCommandError> {
     let mut session = state.session.lock().await;
-    // Logout is also a security boundary when no session is installed: an old
-    // Pending/AwaitingConfirmation recovery capability must never outlive it.
     state.clear_store_recovery().await;
     let Some(active) = session.as_ref() else {
-        let app_data_root = app_data_root(&app)?;
-
-        // A repeated logout must also clear any stale Core projection left by
-        // a prior partial lifecycle failure. Release the desktop mutex first.
+        // Even a path-resolution failure must not skip retirement of stale Core.
         drop(session);
-        crate::bridge::session_lifecycle::close_after_desktop_session_removal(
-            core.inner().as_ref(),
+        finish_orphan_logout(
+            crate::bridge::session_lifecycle::close_after_desktop_session_removal(
+                core.inner().as_ref(),
+            ),
+            || {
+                app_data_root(&app).and_then(|root| {
+                    clear_persisted_logout_material(&KeyringSessionMaterialVault::new(), &root)
+                })
+            },
         )
         .await?;
-
-        // A failed restore can leave native identity and keychain material
-        // without a live SDK client. Logout must still remove both so the user
-        // can recover to the login route instead of entering a retry loop.
-        clear_persisted_logout_material(&KeyringSessionMaterialVault::new(), &app_data_root)?;
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
-    // Remote logout is best-effort. An expired/revoked token must never trap a
-    // user in a locally authenticated state or prevent secure local cleanup.
-    let _remote_logout_succeeded = active.client.matrix_auth().logout().await.is_ok();
-    active.join_rules.retire();
-    active.notification_observations.retire();
-    // TM-T10: cancel every WidgetDriver::run and destroy every widget webview
-    // before the session is dropped. The owner's Drop is a best-effort
-    // `try_lock` fallback, not the logout guarantee.
-    active.widgets.retire_and_close().await;
-    active
-        .sync
-        .stop()
-        .await
-        .map_err(|error| map_sync_error(error.diagnostic_id()))?;
-
-    let cleanup_result = app_data_root(&app).and_then(|root| {
-        clear_native_logout_material(&KeyringSessionMaterialVault::new(), &active.identity, &root)
-    });
-    *session = None;
-    // The desktop session is now gone. Release its async mutex before Core's
-    // await and close Core before reporting deferred non-session cleanup errors.
-    drop(session);
-    crate::bridge::session_lifecycle::close_after_desktop_session_removal(core.inner().as_ref())
-        .await?;
-    cleanup_result?;
+    // Resolve the root while the live session still retains the retry identity.
+    // The coordinator preflights the locator before constructing any SDK or
+    // widget teardown future; preflight failure leaves this session installed.
+    let root = app_data_root(&app)?;
+    let client = active.client.clone();
+    let sync = Arc::clone(&active.sync);
+    let identity = active.identity.clone();
+    let join_rules = Arc::clone(&active.join_rules);
+    let observations = Arc::clone(&active.notification_observations);
+    let widgets = Arc::clone(&active.widgets);
+    finish_active_logout(
+        || ensure_logout_retry_locator(&root, &identity),
+        || async move {
+            // Remote revocation is best-effort; local cleanup remains mandatory.
+            let _remote_logout_succeeded = client.matrix_auth().logout().await.is_ok();
+            join_rules.retire();
+            observations.retire();
+            widgets.retire_and_close().await;
+            sync.stop()
+                .await
+                .map(|_| ())
+                .map_err(|error| map_sync_error(error.diagnostic_id()))
+        },
+        || clear_native_logout_material(&KeyringSessionMaterialVault::new(), &identity, &root),
+        move || {
+            *session = None;
+            drop(session);
+        },
+        || {
+            crate::bridge::session_lifecycle::close_after_desktop_session_removal(
+                core.inner().as_ref(),
+            )
+        },
+    )
+    .await?;
     Ok(MatrixSessionSnapshot::LoggedOut)
 }
 
@@ -1031,7 +1036,6 @@ pub async fn matrix_restore_session(
         sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
         timelines: timelines.clone(),
-        sends: SendQueue::new(session_generation),
         attachments: AttachmentSendQueue::new(session_generation),
         verification: verification.clone(),
         devices: devices.clone(),
@@ -1168,18 +1172,6 @@ pub(super) fn map_room_join_rule_owner_error(
         "Native Matrix room join-rule updates are unavailable.",
         diagnostic_id,
     )
-}
-
-pub(super) fn snapshot(session: Option<&ManagedMatrixSession>) -> MatrixSessionSnapshot {
-    match session {
-        None => MatrixSessionSnapshot::LoggedOut,
-        Some(active) => MatrixSessionSnapshot::LoggedIn {
-            user_id: active.identity.user_id.clone(),
-            device_id: active.identity.device_id.clone(),
-            homeserver_url: active.identity.homeserver_url.clone(),
-            session_generation: active.sync.session_generation(),
-        },
-    }
 }
 
 /// The only normal-login failures that may arm the explicit archive action.
@@ -1535,6 +1527,93 @@ pub(super) fn read_active_identity(
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-active-session-invalid"))
 }
 
+/// Once teardown begins, stop errors cannot retain a revoked live client.
+/// Always attempt credential cleanup, retire live ownership, and close Core.
+/// The fixed result contract returns credential failure first, then Core close,
+/// then sync stop; all three outcomes are observed before returning any error.
+pub(super) async fn finish_active_logout<Begin, BeginFuture, Close, CloseFuture>(
+    preflight: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    begin: Begin,
+    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    retire: impl FnOnce(),
+    close: Close,
+) -> Result<(), MatrixAuthCommandError>
+where
+    Begin: FnOnce() -> BeginFuture,
+    BeginFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+    Close: FnOnce() -> CloseFuture,
+    CloseFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+{
+    preflight()?;
+    let stop_result = begin().await;
+    let cleanup_result = cleanup();
+    retire();
+    let close_result = close().await;
+    cleanup_result?;
+    close_result?;
+    stop_result
+}
+
+pub(super) async fn finish_orphan_logout(
+    close: impl std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+) -> Result<(), MatrixAuthCommandError> {
+    let close_result = close.await;
+    let cleanup_result = cleanup();
+    cleanup_result?;
+    close_result
+}
+
+/// Establish the non-secret retry locator before any logout side effect.
+/// Readback and filesystem sync errors leave the live session installed.
+/// These are OS filesystem sync requests, not a guarantee against hardware or
+/// platform-specific power-loss behavior (including macOS fsync limitations).
+pub(super) fn ensure_logout_retry_locator(
+    root: &Path,
+    identity: &MatrixLoginIdentity,
+) -> Result<(), MatrixAuthCommandError> {
+    ensure_logout_retry_locator_with_directory_sync(root, identity, |directory| {
+        fs::File::open(directory)?.sync_all()
+    })
+}
+
+// Narrow I/O fault seam: production readback and file sync remain mandatory.
+// Tests can fail a directory sync before the logout coordinator begins teardown.
+pub(super) fn ensure_logout_retry_locator_with_directory_sync(
+    root: &Path,
+    identity: &MatrixLoginIdentity,
+    mut sync_directory: impl FnMut(&Path) -> std::io::Result<()>,
+) -> Result<(), MatrixAuthCommandError> {
+    account_identity(identity)?;
+    let path = active_identity_path(root);
+    if !path.is_file() {
+        write_active_identity(root, identity)?;
+    }
+    if read_active_identity(root)? != *identity {
+        return Err(MatrixAuthCommandError::unavailable(
+            "d0.1-session-locator-mismatch",
+        ));
+    }
+    fs::File::open(&path)
+        .and_then(|file| file.sync_all())
+        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-locator-sync-failed"))?;
+    // File fsync alone does not persist the directory entry on Linux. Sync
+    // containing directories from the leaf to the root, including each parent
+    // link create_dir_all may have added. Repeat the whole chain on retries:
+    // directories left by an earlier failed preflight may still be unsynced.
+    let canonical_path = fs::canonicalize(&path).map_err(|_| {
+        MatrixAuthCommandError::unavailable("d0.1-session-locator-directory-sync-failed")
+    })?;
+    if let Some(parent) = canonical_path.parent() {
+        for directory in parent.ancestors() {
+            sync_directory(directory).map_err(|_| {
+                MatrixAuthCommandError::unavailable("d0.1-session-locator-directory-sync-failed")
+            })?;
+        }
+    }
+    Ok(())
+}
+
 /// The identity file is the retry locator for failed credential deletion.
 /// Delete it only after every vault operation succeeded. This function is also
 /// used by the orphan path after live/Core owners have been retired.
@@ -1546,11 +1625,7 @@ pub(super) fn clear_native_logout_material<
     root: &Path,
 ) -> Result<(), MatrixAuthCommandError> {
     let account = account_identity(identity)?;
-    if !active_identity_path(root).is_file() {
-        // A live owner still knows the identity if external deletion removed
-        // its locator. Persist that non-secret locator before attempting clear.
-        write_active_identity(root, identity)?;
-    }
+    ensure_logout_retry_locator(root, identity)?;
     clear_session_material(vault, &account)
         .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-clear-failed"))?;
     remove_active_identity(root)
@@ -1598,27 +1673,6 @@ pub(super) fn map_auth_error(error: AuthError) -> MatrixAuthCommandError {
         "InvalidRequest" => "The native Matrix login request is invalid.",
         "InvalidServer" => "The Matrix homeserver is unavailable.",
         _ => "Native Matrix login failed.",
-    };
-    MatrixAuthCommandError::new(code, message, error.diagnostic_id())
-}
-
-/// Map login-flow discovery errors (V-AUTH.3). Privacy-safe; no secrets in message.
-pub(super) fn map_login_flows_auth_error(error: AuthError) -> MatrixAuthCommandError {
-    let code = match error {
-        AuthError::InvalidInput { .. } => "InvalidRequest",
-        AuthError::RateLimited { .. } => "RateLimited",
-        AuthError::Connectivity { .. }
-        | AuthError::HomeserverUnavailable { .. }
-        | AuthError::WellKnownNotFound { .. } => "InvalidServer",
-        AuthError::UnsupportedCapability { .. } => "Unsupported",
-        _ => "Unknown",
-    };
-    let message = match code {
-        "InvalidRequest" => "The login-flow discovery request is invalid.",
-        "RateLimited" => "Login-flow discovery was rate limited.",
-        "InvalidServer" => "The Matrix homeserver is unavailable.",
-        "Unsupported" => "The homeserver returned unsupported login-flow data.",
-        _ => "Native login-flow discovery failed.",
     };
     MatrixAuthCommandError::new(code, message, error.diagnostic_id())
 }

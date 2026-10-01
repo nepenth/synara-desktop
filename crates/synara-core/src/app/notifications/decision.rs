@@ -445,7 +445,9 @@ impl NativeNotificationDecisionOwner {
                 request.body
             },
             route: request.route,
-            suppress_if_focused_room: request.suppress_if_focused_room,
+            // SDK-validated approvals remain actionable even in the focused room,
+            // including a message request promoted after late decryption.
+            suppress_if_focused_room: !observed.agent_approval && request.suppress_if_focused_room,
             is_encrypted: observed.is_encrypted,
             push: observed.push,
             is_own_event: observed.is_own_event,
@@ -503,6 +505,18 @@ impl NativeNotificationDecisionOwner {
             .map_err(|_| NotificationError::Invalid {
                 diagnostic_id: "v-notify.event-unavailable",
             })?;
+        if matches!(
+            timeline,
+            matrix_sdk::ruma::events::AnySyncTimelineEvent::MessageLike(
+                matrix_sdk::ruma::events::AnySyncMessageLikeEvent::RoomEncrypted(_)
+            )
+        ) {
+            // Nonsticky: no push evaluation or candidate enqueue has occurred.
+            // The decrypted follow-up can classify this same event ID later.
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.event-not-ready",
+            });
+        }
         let approval = authoritative_approval(
             &timeline,
             &self.user_id,
@@ -886,6 +900,90 @@ mod tests {
         let candidate = readback.candidate.unwrap();
         assert_eq!(candidate.title, "Approval Required: Dangerous Command");
         assert_eq!(candidate.body, "Review a request in Synara.");
+    }
+
+    #[tokio::test]
+    async fn ciphertext_decision_is_nonsticky_and_later_plaintext_classifies_same_event() {
+        use matrix_sdk::{
+            ruma::{room_id, RoomVersionId},
+            test_utils::mocks::MatrixMockServer,
+        };
+        use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        client.event_cache().subscribe().unwrap();
+        let room_id = room_id!("!notification-race:example.org");
+        let f = EventFactory::new().room(room_id);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11)),
+            )
+            .await;
+        let plaintext_ready = Arc::new(AtomicBool::new(false));
+        let phase = plaintext_ready.clone();
+        let at = notification_now_ms();
+        Mock::given(method("GET")).and(path_regex(r".*/event/.*late-approval$"))
+            .respond_with(move |_: &wiremock::Request| {
+                let ready = phase.load(Ordering::Acquire);
+                let content = if ready { serde_json::json!({"msgtype": "m.text", "body": "Approval Required: Dangerous Command\necho hello"}) }
+                    else { serde_json::json!({"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "AwgAE...", "sender_key": "abc", "session_id": "def", "device_id": "DEV"}) };
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"type": if ready { "m.room.message" } else { "m.room.encrypted" }, "room_id": room_id, "event_id": "$late-approval", "sender": *BOB, "origin_server_ts": at, "content": content}))
+            }).mount(server.server()).await;
+        let owner = NativeNotificationDecisionOwner::new(&client, 8).unwrap();
+        owner.set_focused_room(Some(room_id.as_str())).unwrap();
+        let request = || NativeNotificationDecideRequest {
+            room_id: room_id.to_string(),
+            event_id: Some("$late-approval".into()),
+            kind: "message".into(),
+            title: "Renderer summary".into(),
+            body: "New message".into(),
+            route: None,
+            suppress_if_focused_room: true,
+        };
+        for _ in 0..2 {
+            assert_eq!(
+                owner
+                    .decide_observed(request())
+                    .await
+                    .unwrap_err()
+                    .diagnostic_id(),
+                "v-notify.event-not-ready"
+            );
+            assert!(owner.list_pending().unwrap().is_empty());
+        }
+        plaintext_ready.store(true, Ordering::Release);
+        let readback = owner.decide_observed(request()).await.unwrap();
+        assert_eq!(readback.decision, "show");
+        let candidate = readback.candidate.unwrap();
+        assert_eq!(candidate.kind, NotificationKind::AgentApproval);
+        assert!(!candidate.suppress_if_focused_room);
+        assert_eq!(candidate.room_id, room_id.as_str());
+        assert_eq!(candidate.event_id.as_deref(), Some("$late-approval"));
+        assert_eq!(candidate.title, "Approval Required: Dangerous Command");
+        assert_eq!(candidate.body, "Review a request in Synara.");
+        assert_eq!(
+            owner
+                .decide_observed(request())
+                .await
+                .unwrap()
+                .reason
+                .as_deref(),
+            Some("duplicate-event")
+        );
     }
 
     #[test]

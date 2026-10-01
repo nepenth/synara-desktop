@@ -16,8 +16,7 @@ pub struct DesktopSecretStorageSetup {
 }
 
 pub use synara_core::app::secret_storage::{
-    operation_result, project_secret_storage_status, NativeMissingSecret, NativeRecoveryPhase,
-    NativeSecretStorageAction, NativeSecretStorageOperationResult, NativeSecretStorageOutcome,
+    NativeMissingSecret, NativeSecretStorageAction, NativeSecretStorageOperationResult,
     NativeSecretStorageState, NativeSecretStorageStatus,
 };
 

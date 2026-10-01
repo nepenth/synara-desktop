@@ -39,8 +39,6 @@ import {
   supportsPlatformTrayState,
 } from '../../platform';
 import {
-  AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
-  AGENT_APPROVAL_NOTIFICATION_KIND,
   buildAgentApprovalNativeActionDedupeKey,
   createAgentApprovalNativeActionDedupeStore,
   planAgentApprovalNativeNotificationAction,
@@ -59,7 +57,9 @@ import {
   dismissNotificationWithNativeOwner,
   setNotificationFocusWithNativeOwner,
   type NativeNotificationDeliveryOutcome,
+  type NativeNotificationCandidate,
 } from '../../features/room/nativeNotificationDecision';
+import { buildNativeObservedNotificationPresentation } from '../../features/room/nativeNotificationPresentation';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 import {
   subscribeNativeNotificationObservations,
@@ -256,7 +256,6 @@ function MessageNotifications() {
   // only guards against a duplicated observation of the same event.
   // Transient suppressions are deliberately not remembered.
   const submittedRef = useRef<Set<string>>(new Set());
-  const encryptedFallbackRef = useRef<Set<string>>(new Set());
 
   const mx = useMatrixClient();
   const useAuthentication = useMediaAuthentication();
@@ -297,31 +296,29 @@ function MessageNotifications() {
 
   const notify = useCallback(
     async ({
-      title,
-      body,
+      candidate,
       roomAvatar,
       roomId,
       eventId,
-      route,
     }: {
-      title: string;
-      body: string;
+      candidate: NativeNotificationCandidate;
       roomAvatar?: string;
       roomId: string;
       eventId: string;
-      route?: string;
     }): Promise<NativeNotificationDeliveryOutcome> => {
+      let presentation;
+      try {
+        presentation = buildNativeObservedNotificationPresentation(candidate, { roomId, eventId });
+      } catch {
+        return 'failed';
+      }
+      const approval = candidate.kind === 'agent_approval';
       // The OS answer is the delivery receipt Core records with the
       // acknowledgement. Errors are reported as `failed`, never swallowed
       // into a silent success.
       if (supportsPlatformSystemNotifications()) {
         try {
-          const shown = await showPlatformNotification({
-            title,
-            body,
-            route: route ?? buildDesktopNotificationRoomRoute(roomId, eventId),
-            dismissKeys: [`room:${roomId}`],
-          });
+          const shown = await showPlatformNotification(presentation);
           return shown ? 'delivered' : 'failed';
         } catch {
           return 'failed';
@@ -329,10 +326,10 @@ function MessageNotifications() {
       }
 
       try {
-        const noti = new window.Notification(title, {
-          icon: roomAvatar,
-          badge: roomAvatar,
-          body,
+        const noti = new window.Notification(presentation.title, {
+          icon: approval ? LogoHighlightPNG : roomAvatar,
+          badge: approval ? LogoHighlightPNG : roomAvatar,
+          body: presentation.body,
           silent: true,
         });
 
@@ -363,8 +360,8 @@ function MessageNotifications() {
   const decideAndNotify = useCallback(
     async (observation: NativeNotificationObservation) => {
       const { roomId, eventId, sender } = observation;
-      // Agent approvals travel the Core approval-decision path, never the
-      // generic message route.
+      // Observations already classified as approvals use the approval pump.
+      // Core may still promote an opaque message during this route's lookup.
       if (observation.agentApproval !== undefined) {
         return;
       }
@@ -373,20 +370,9 @@ function MessageNotifications() {
 
       const cacheKey = `${roomId}:${eventId}`;
       if (submittedRef.current.has(cacheKey)) return;
-      // Ciphertext observations get a Core decrypt follow-up. Deciding them
-      // as generic messages records (room, event) seen and then blocks the
-      // critical agent-approval path after plaintext arrives. Skip the first
-      // encrypted pass; a second encrypted observation means decrypt retries
-      // exhausted and the generic message path may notify.
-      if (observation.eventType === 'm.room.encrypted') {
-        if (!encryptedFallbackRef.current.has(cacheKey)) {
-          encryptedFallbackRef.current.add(cacheKey);
-          return;
-        }
-        encryptedFallbackRef.current.delete(cacheKey);
-      } else {
-        encryptedFallbackRef.current.delete(cacheKey);
-      }
+      // Core emits an unresolved encrypted observation only after its bounded
+      // decrypt budget. Submit it once: Core can resolve newer plaintext or
+      // return a nonsticky not-ready error without consuming dedup.
 
       let readback;
       try {
@@ -440,14 +426,12 @@ function MessageNotifications() {
         const avatarMxc =
           room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
         outcome = await notify({
-          title: readback.candidate.title,
-          body: readback.candidate.body,
+          candidate: readback.candidate,
           roomAvatar: avatarMxc
             ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
             : undefined,
           roomId,
           eventId,
-          route: readback.candidate.route,
         });
       }
 
@@ -455,7 +439,11 @@ function MessageNotifications() {
       // mentions, keywords, and any account rule that sets a sound), gated by
       // the local preference. A notification the OS refused stays silent so
       // sound never claims a delivery that did not happen.
-      if (notificationSound && readback.sound === true && outcome !== 'failed') {
+      if (readback.candidate.kind === 'agent_approval') {
+        // Native approval context owns time-sensitive sound, including a
+        // late SDK promotion of the originally opaque message observation.
+        if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
+      } else if (notificationSound && readback.sound === true && outcome !== 'failed') {
         playSound();
       }
 
@@ -516,47 +504,28 @@ function AgentApprovalNotifications() {
 
   const notify = useCallback(
     async ({
+      candidate,
       roomId,
       eventId,
-      approvalEventId,
-      title,
-      body,
     }: {
+      candidate: NativeNotificationCandidate;
       roomId: string;
       eventId: string;
-      approvalEventId: string;
-      title: string;
-      body: string;
-      commandPreview?: string;
     }): Promise<NativeNotificationDeliveryOutcome> => {
-      // Keep dangerous command text out of OS-level notification surfaces.
-      // The exact prompt remains available through the Review route.
-      const notificationBody = body;
-
+      const presentation = buildNativeObservedNotificationPresentation(candidate, {
+        roomId,
+        eventId,
+      });
       if (supportsPlatformSystemNotifications()) {
-        const shown = await showPlatformNotification({
-          title,
-          body: notificationBody,
-          route: buildDesktopNotificationRoomRoute(roomId, eventId),
-          // Approve-always is not offered on native OS notifications.
-          actions: AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
-          actionContext: {
-            kind: AGENT_APPROVAL_NOTIFICATION_KIND,
-            roomId,
-            eventId: approvalEventId,
-          },
-          dismissKeys: [`room:${roomId}`, `event:${approvalEventId}`],
-        });
+        const shown = await showPlatformNotification(presentation);
         return shown ? 'delivered' : 'failed';
       }
-
-      const noti = new window.Notification(title, {
+      const noti = new window.Notification(presentation.title, {
         icon: LogoHighlightPNG,
         badge: LogoHighlightPNG,
-        body: notificationBody,
+        body: presentation.body,
         silent: true,
       });
-
       noti.onclick = () => {
         if (!window.closed) navigateRoom(roomId, eventId);
         noti.close();
@@ -706,9 +675,7 @@ function AgentApprovalNotifications() {
           outcome = await notify({
             roomId: room.roomId,
             eventId,
-            approvalEventId: eventId,
-            title: readback.candidate.title,
-            body: readback.candidate.body,
+            candidate: readback.candidate,
           });
         } catch {
           outcome = 'failed';

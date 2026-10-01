@@ -324,3 +324,103 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod projection_tests {
+    use super::*;
+    use crate::app::backup::NativeBackupAction;
+    fn project_status(
+        generation: u64,
+        server: Option<ServerBackupProjection>,
+        enabled: bool,
+        backup: BackupState,
+        recovery: RecoveryState,
+    ) -> NativeBackupStatus {
+        project_backup_status(
+            generation,
+            server,
+            enabled,
+            backup_engine_phase(backup),
+            backup_recovery_phase(recovery),
+        )
+    }
+    fn server() -> Option<ServerBackupProjection> {
+        Some(ServerBackupProjection {
+            version: "7".to_owned(),
+            key_count: 42,
+        })
+    }
+
+    #[test]
+    fn projection_covers_setup_restore_repair_and_ready() {
+        assert_eq!(
+            project_status(
+                1,
+                None,
+                false,
+                BackupState::Unknown,
+                RecoveryState::Disabled,
+            )
+            .action,
+            NativeBackupAction::SetupRequired
+        );
+        assert_eq!(
+            project_status(
+                1,
+                server(),
+                false,
+                BackupState::Unknown,
+                RecoveryState::Disabled,
+            )
+            .action,
+            NativeBackupAction::RestoreRequired
+        );
+        assert_eq!(
+            project_status(
+                1,
+                server(),
+                true,
+                BackupState::Enabled,
+                RecoveryState::Incomplete,
+            )
+            .action,
+            NativeBackupAction::RepairRequired
+        );
+        assert_eq!(
+            project_status(
+                1,
+                server(),
+                true,
+                BackupState::Enabled,
+                RecoveryState::Enabled,
+            )
+            .action,
+            NativeBackupAction::None
+        );
+    }
+
+    #[test]
+    fn status_projection_is_privacy_safe() {
+        let status = project_status(
+            9,
+            server(),
+            true,
+            BackupState::Enabled,
+            RecoveryState::Enabled,
+        );
+        let json = serde_json::to_string(&status).unwrap().to_ascii_lowercase();
+        assert_eq!(status.version.as_deref(), Some("7"));
+        assert_eq!(status.key_count, Some(42));
+        for forbidden in [
+            "access_token",
+            "refresh_token",
+            "recovery_key",
+            "private_key",
+            "ciphertext",
+            "passphrase",
+            "password",
+        ] {
+            assert!(!json.contains(forbidden));
+        }
+    }
+}

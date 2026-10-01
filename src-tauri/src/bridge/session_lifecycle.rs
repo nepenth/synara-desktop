@@ -746,21 +746,24 @@ mod tests {
         );
 
         let logout = tauri_command_body(source, "matrix_logout");
-        let clear = logout
-            .find("*session = None;")
-            .expect("desktop session clear");
-        let release = logout
-            .rfind("drop(session);")
-            .expect("post-clear session guard release");
-        let close = logout
-            .rfind("close_after_desktop_session_removal(")
-            .expect("post-clear Core session close");
-        let deferred_cleanup = logout
-            .find("clear_result?;")
-            .expect("deferred cleanup result");
+        assert!(logout.contains("finish_active_logout("));
+        assert!(logout.contains("*session = None;"));
+        assert!(logout.contains("drop(session);"));
+        assert!(logout.contains("close_after_desktop_session_removal("));
+        let coordinator = source
+            .split("pub(super) async fn finish_active_logout<")
+            .nth(1)
+            .and_then(|body| {
+                body.split("pub(super) async fn finish_orphan_logout")
+                    .next()
+            })
+            .expect("logout coordinator");
+        let retire = coordinator.find("retire();").unwrap();
+        let close = coordinator.find("close().await").unwrap();
+        let deferred_cleanup = coordinator.find("cleanup_result?;").unwrap();
         assert!(
-            clear < release && release < close && close < deferred_cleanup,
-            "logout must close Core after desktop removal, without its mutex, before cleanup errors"
+            retire < close && close < deferred_cleanup,
+            "retire callback releases desktop mutex before Core await and deferred cleanup errors"
         );
     }
 

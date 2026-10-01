@@ -4,7 +4,8 @@
 
 mod session_material;
 
-pub use session_material::{KeyringSessionMaterialRefs, KeyringSessionMaterialVault};
+pub use session_material::KeyringSessionMaterialVault;
+
 pub use synara_core::app::lifecycle::*;
 
 #[cfg(test)]

@@ -106,16 +106,19 @@ impl NativeNotificationObservationOwner {
                         return;
                     }
                     let room_id = room.room_id().to_string();
-                    if let Some(observation) = project_observation(
+                    let observation = project_observation(
                         &event,
                         &room_id,
                         &own_user_id,
                         now_ms(),
                         session_generation,
-                    ) {
-                        emit(observation);
-                    }
+                    );
                     if needs_decryption_follow_up(&event) {
+                        // Ciphertext cannot establish approval classification. Do
+                        // not consume a notification/dedup slot before resolving it.
+                        if observation.is_none() {
+                            return;
+                        }
                         tokio::spawn(async move {
                             follow_up_encrypted_observation(
                                 room,
@@ -127,6 +130,8 @@ impl NativeNotificationObservationOwner {
                             )
                             .await;
                         });
+                    } else if let Some(observation) = observation {
+                        emit(observation);
                     }
                 }
             });
@@ -178,16 +183,18 @@ async fn follow_up_encrypted_observation(
 ) {
     let event_id = original_event.event_id().to_owned();
     let room_id = room.room_id().to_string();
-    for delay_ms in DECRYPT_FOLLOW_UP_DELAYS_MS {
-        if retired.load(Ordering::Acquire) {
-            return;
-        }
-        tokio::time::sleep(Duration::from_millis(delay_ms)).await;
-        if retired.load(Ordering::Acquire) {
-            return;
-        }
-        let Ok(timeline_event) = room
-            .load_or_fetch_event(
+    resolve_encrypted_observation(
+        EncryptedObservationContext {
+            original_event: &original_event,
+            room_id: &room_id,
+            own_user_id: &own_user_id,
+            emit: &emit,
+            retired: &retired,
+            session_generation,
+        },
+        &DECRYPT_FOLLOW_UP_DELAYS_MS,
+        || async {
+            room.load_or_fetch_event(
                 &event_id,
                 Some(
                     RequestConfig::new()
@@ -196,39 +203,92 @@ async fn follow_up_encrypted_observation(
                 ),
             )
             .await
-        else {
-            continue;
-        };
-        let Ok(AnySyncTimelineEvent::MessageLike(message_like)) =
-            timeline_event.raw().deserialize()
-        else {
-            continue;
-        };
-        if matches!(message_like, AnySyncMessageLikeEvent::RoomEncrypted(_)) {
-            continue;
-        }
-        if let Some(observation) = project_observation(
-            &message_like,
-            &room_id,
-            &own_user_id,
-            now_ms(),
-            session_generation,
-        ) {
-            emit(observation);
+            .ok()?
+            .raw()
+            .deserialize()
+            .ok()
+        },
+    )
+    .await;
+}
+
+// Both the SDK loader and raw-event regressions run this bounded async path.
+// A resolved non-candidate is terminal: an edit/redaction cannot become the
+// original ciphertext fallback after projection hygiene has rejected it.
+struct EncryptedObservationContext<'a> {
+    original_event: &'a AnySyncMessageLikeEvent,
+    room_id: &'a str,
+    own_user_id: &'a UserId,
+    emit: &'a NotificationObservationEmit,
+    retired: &'a AtomicBool,
+    session_generation: u64,
+}
+
+async fn resolve_encrypted_observation<F, Fut>(
+    context: EncryptedObservationContext<'_>,
+    delays_ms: &[u64],
+    mut load: F,
+) where
+    F: FnMut() -> Fut,
+    Fut: std::future::Future<Output = Option<AnySyncTimelineEvent>>,
+{
+    let EncryptedObservationContext {
+        original_event,
+        room_id,
+        own_user_id,
+        emit,
+        retired,
+        session_generation,
+    } = context;
+    for delay_ms in delays_ms {
+        if retired.load(Ordering::Acquire) {
             return;
         }
+        tokio::time::sleep(Duration::from_millis(*delay_ms)).await;
+        if retired.load(Ordering::Acquire) {
+            return;
+        }
+        let Some(event) = load().await else {
+            continue;
+        };
+        if retired.load(Ordering::Acquire) {
+            return;
+        }
+        if matches!(
+            event,
+            AnySyncTimelineEvent::MessageLike(ref message_like)
+                if needs_decryption_follow_up(message_like)
+        ) {
+            // Only unresolved original ciphertext may consume more budget.
+            // Redacted ciphertext and encrypted replacements are terminal
+            // filtered events, just like decrypted redactions and edits.
+            continue;
+        }
+        if let AnySyncTimelineEvent::MessageLike(message_like) = event {
+            if let Some(observation) = project_observation(
+                &message_like,
+                room_id,
+                own_user_id,
+                now_ms(),
+                session_generation,
+            ) {
+                emit(observation);
+            }
+        }
+        return;
     }
     if retired.load(Ordering::Acquire) {
         return;
     }
-    // Decrypt never landed: re-emit the ciphertext observation so the
-    // generic message path can still notify after the renderer skipped the
-    // first encrypted pass (which would otherwise record seen and block a
-    // later approval).
+    // Every retry remained encrypted or unavailable. Offer one bounded opaque
+    // observation; decide still refuses ciphertext without recording dedup.
+    // This intentionally suppresses the former generic platform alert while
+    // plaintext/classification is unavailable. If lookup now resolves plaintext,
+    // decide reclassifies it and rechecks approval expiry before delivery.
     if let Some(observation) = project_observation(
-        &original_event,
-        &room_id,
-        &own_user_id,
+        original_event,
+        room_id,
+        own_user_id,
         now_ms(),
         session_generation,
     ) {
@@ -535,5 +595,193 @@ mod tests {
     fn encrypted_follow_up_derives_room_id_from_the_room() {
         let source = include_str!("observation.rs");
         assert!(source.contains("let room_id = room.room_id().to_string();"));
+    }
+    fn ciphertext(at_ms: u64) -> AnySyncMessageLikeEvent {
+        message(
+            user_id!("@bob:example.org"),
+            at_ms,
+            "m.room.encrypted",
+            serde_json::json!({
+                "algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "AwgAE...",
+                "sender_key": "abc", "session_id": "def", "device_id": "DEV"
+            }),
+        )
+    }
+
+    async fn resolve_sequence(
+        events: Vec<Option<AnySyncTimelineEvent>>,
+        original: AnySyncMessageLikeEvent,
+    ) -> (Vec<NativeNotificationObservation>, usize) {
+        use std::collections::VecDeque;
+        use std::sync::Mutex;
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let recorded = output.clone();
+        let emit: NotificationObservationEmit =
+            Arc::new(move |event| recorded.lock().unwrap().push(event));
+        let mut pending = VecDeque::from(events);
+        let attempts = pending.len();
+        resolve_encrypted_observation(
+            EncryptedObservationContext {
+                original_event: &original,
+                room_id: ROOM,
+                own_user_id: user_id!("@me:example.org"),
+                emit: &emit,
+                retired: &AtomicBool::new(false),
+                session_generation: 7,
+            },
+            &vec![0; attempts],
+            || {
+                // No encrypted observation can be delivered while retries run.
+                assert!(output.lock().unwrap().is_empty());
+                let next = pending.pop_front().unwrap();
+                async move {
+                    tokio::task::yield_now().await;
+                    next
+                }
+            },
+        )
+        .await;
+        let delivered = output.lock().unwrap().clone();
+        (delivered, attempts - pending.len())
+    }
+
+    #[tokio::test]
+    async fn delayed_plaintext_approval_is_the_only_observation() {
+        let at = now_ms();
+        let original = ciphertext(at);
+        let approval = text(
+            user_id!("@bob:example.org"),
+            at,
+            "Approval Required: Dangerous Command\necho hello",
+        );
+        let (events, attempts) = resolve_sequence(
+            vec![
+                Some(AnySyncTimelineEvent::MessageLike(original.clone())),
+                Some(AnySyncTimelineEvent::MessageLike(approval)),
+            ],
+            original,
+        )
+        .await;
+        assert_eq!(attempts, 2);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "m.room.message");
+        assert!(events[0]
+            .agent_approval
+            .as_ref()
+            .is_some_and(|approval| !approval.expired));
+        assert!(serde_json::to_value(&events[0])
+            .unwrap()
+            .get("body")
+            .is_none());
+    }
+
+    #[tokio::test]
+    async fn decrypted_edits_redactions_and_non_candidates_never_fall_back_to_ciphertext() {
+        let at = now_ms();
+        let edit = message(
+            user_id!("@bob:example.org"),
+            at,
+            "m.room.message",
+            serde_json::json!({
+                "msgtype": "m.text", "body": "* edit",
+                "m.new_content": { "msgtype": "m.text", "body": "edit" },
+                "m.relates_to": { "rel_type": "m.replace", "event_id": "$original" }
+            }),
+        );
+        let redacted_raw = serde_json::json!({
+            "type": "m.room.message", "event_id": "$observed", "sender": "@bob:example.org",
+            "origin_server_ts": at, "content": {}, "unsigned": { "redacted_because": {
+                "type": "m.room.redaction", "event_id": "$redaction", "sender": "@bob:example.org",
+                "origin_server_ts": at, "content": { "redacts": "$observed" }, "redacts": "$observed"
+            } }
+        });
+        let redacted: AnySyncMessageLikeEvent =
+            serde_json::from_value(redacted_raw.clone()).unwrap();
+        let mut encrypted_redacted = redacted_raw;
+        encrypted_redacted["type"] = serde_json::json!("m.room.encrypted");
+        let encrypted_redacted: AnySyncMessageLikeEvent =
+            serde_json::from_value(encrypted_redacted).unwrap();
+        let encrypted_edit = message(
+            user_id!("@bob:example.org"),
+            at,
+            "m.room.encrypted",
+            serde_json::json!({ "algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "AwgAE...",
+                "sender_key": "abc", "session_id": "def", "device_id": "DEV",
+                "m.relates_to": { "rel_type": "m.replace", "event_id": "$original" } }),
+        );
+        for resolved in [
+            edit,
+            redacted,
+            encrypted_redacted,
+            encrypted_edit,
+            text(user_id!("@me:example.org"), at, "own"),
+        ] {
+            let original = ciphertext(at);
+            let (events, attempts) = resolve_sequence(
+                vec![
+                    Some(AnySyncTimelineEvent::MessageLike(original.clone())),
+                    Some(AnySyncTimelineEvent::MessageLike(resolved)),
+                    None,
+                ],
+                original,
+            )
+            .await;
+            assert_eq!(attempts, 2, "resolved non-candidates terminate retries");
+            assert!(
+                events.is_empty(),
+                "filtered plaintext cannot become ciphertext fallback"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn unresolved_ciphertext_is_offered_once_only_after_the_entire_budget() {
+        let original = ciphertext(now_ms());
+        let (events, attempts) = resolve_sequence(
+            vec![
+                None,
+                Some(AnySyncTimelineEvent::MessageLike(original.clone())),
+                None,
+            ],
+            original,
+        )
+        .await;
+        assert_eq!(attempts, 3);
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].event_type, "m.room.encrypted");
+        assert!(events[0].agent_approval.is_none());
+    }
+
+    #[tokio::test]
+    async fn retirement_while_sdk_lookup_is_in_flight_emits_nothing() {
+        use std::sync::Mutex;
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let recorded = output.clone();
+        let emit: NotificationObservationEmit =
+            Arc::new(move |event| recorded.lock().unwrap().push(event));
+        let retired = AtomicBool::new(false);
+        let original = ciphertext(now_ms());
+        resolve_encrypted_observation(
+            EncryptedObservationContext {
+                original_event: &original,
+                room_id: ROOM,
+                own_user_id: user_id!("@me:example.org"),
+                emit: &emit,
+                retired: &retired,
+                session_generation: 7,
+            },
+            &[0],
+            || async {
+                tokio::task::yield_now().await;
+                retired.store(true, Ordering::Release);
+                Some(AnySyncTimelineEvent::MessageLike(text(
+                    user_id!("@bob:example.org"),
+                    now_ms(),
+                    "hello",
+                )))
+            },
+        )
+        .await;
+        assert!(output.lock().unwrap().is_empty());
     }
 }

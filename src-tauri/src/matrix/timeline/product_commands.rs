@@ -374,33 +374,6 @@ pub async fn matrix_timeline_call_decline(
     .await
 }
 
-pub(super) fn map_timeline_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "d0.3-timeline-invalid-room-id" => (
-            "InvalidRequest",
-            "The native Matrix timeline request is invalid.",
-        ),
-        "d0.3-timeline-room-not-found" | "d0.3-timeline-not-open" => {
-            ("NotFound", "The native Matrix timeline is not available.")
-        }
-        _ => ("Unknown", "The native Matrix timeline is unavailable."),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
-pub(super) fn map_reaction_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let code = if diagnostic_id.contains("invalid") {
-        "InvalidRequest"
-    } else {
-        "Unknown"
-    };
-    MatrixAuthCommandError::new(
-        code,
-        "The native Matrix reaction operation could not be completed.",
-        diagnostic_id,
-    )
-}
-
 pub(super) fn require_send_session_mut(
     session: Option<&mut ManagedMatrixSession>,
 ) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
@@ -437,22 +410,4 @@ pub(super) fn parse_reply_event_id(
                 .map_err(|_| map_send_error("d0.4-send-invalid-reply-event-id"))
         })
         .transpose()
-}
-
-pub(super) fn parse_required_event_id(
-    event_id: &str,
-    diagnostic_id: &'static str,
-) -> Result<OwnedEventId, MatrixAuthCommandError> {
-    event_id
-        .trim()
-        .parse()
-        .map_err(|_| map_timeline_action_error(diagnostic_id))
-}
-
-pub(super) fn map_timeline_action_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "InvalidRequest",
-        "The native Matrix timeline action request is invalid.",
-        diagnostic_id,
-    )
 }

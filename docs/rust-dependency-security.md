@@ -38,8 +38,11 @@ the consolidated branch is accepted.
   and Apple packages share one lockfile, while their shipping feature graphs
   are selected and checked independently. Apple generators build each package
   in a separate `-p` invocation. The NSE checker inspects normal, build, and
-  feature edges for every supported Apple target and rejects forwarding,
-  search, X.509, and full FFI. Unified workspace and test builds deliberately
+  feature edges for every supported Apple target and the all-target build-edge
+  readback. Inverse Core feature nodes reject full FFI and search; forward
+  feature nodes reject forwarding and X.509, and the normal/build crate tree
+  rejects local search dependencies. Every query disables Cargo colors. Both
+  Apple generators run this checker before any build or publication. Unified workspace and test builds deliberately
   enable development fixtures and do not establish the shipping feature graph.
   No additional compile-time rejection is added because it would also reject
   those intentional fixtures.

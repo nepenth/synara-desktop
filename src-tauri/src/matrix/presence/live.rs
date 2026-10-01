@@ -6,13 +6,10 @@
 use std::sync::Arc;
 
 use matrix_sdk::Client;
+
 use tauri::{AppHandle, Emitter};
 
-pub use synara_core::app::presence::{
-    NativePresenceOwner, NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
-    NativePresenceSubscription, NativePresenceUpdate, NativePresenceUpdateOutcome,
-    NativePresenceWriteResult, PRESENCE_UPDATED_EVENT,
-};
+pub use synara_core::app::presence::{NativePresenceOwner, PRESENCE_UPDATED_EVENT};
 
 /// Start the Core owner and emit presence updates on the existing Tauri event.
 pub fn start(

@@ -16,6 +16,7 @@
 
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use synara_core::app::timeline::NativeTimelineRegistry;
 
 use hmac::{Hmac, KeyInit, Mac};
 use matrix_sdk::attachment::AttachmentConfig;
@@ -31,7 +32,7 @@ use crate::matrix::send::{
     AttachmentSendQueue,
 };
 use crate::matrix::store::{AccountIdentity, StoreKeyMaterial};
-use crate::matrix::timeline::{NativeTimelineDirection, NativeTimelineRegistry};
+use crate::matrix::timeline::NativeTimelineDirection;
 
 type HmacSha1 = Hmac<Sha1>;
 

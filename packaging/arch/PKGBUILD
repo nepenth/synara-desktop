@@ -39,7 +39,7 @@ sha256sums=('SKIP' 'SKIP')
 
 package() {
   local desktop_file="${startdir}/synara.desktop"
-  local release_binary="${_repo_root}/src-tauri/target/release/synara"
+  local release_binary="${_repo_root}/target/release/synara"
 
   if [[ ! -f "${release_binary}" ]]; then
     printf 'Synara release binary was not found. Run `npm run tauri build` from the repository root before `makepkg -f`.\n' >&2

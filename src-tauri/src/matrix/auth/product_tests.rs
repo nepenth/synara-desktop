@@ -1,16 +1,12 @@
 use std::collections::BTreeMap;
 
 use super::*;
-use super::{
-    account_data::*, auth_commands::*, backup::*, cross_signing::*, devices::*, media::*,
-    members::*, presence::*, room_keys::*, room_ops::*, room_profile::*, secret_storage::*,
-    send::*, spaces::*, timeline::*, typing::*, user_profile::*, verification::*,
-};
 use crate::matrix::presence::{
     NativePresenceSnapshot, NativePresenceSnapshotResult, NativePresenceState,
     NativePresenceUpdate, NativePresenceUpdateOutcome,
 };
 use crate::matrix::room_profile::NativeRoomJoinRuleUpdate;
+use synara_core::app::auth::MatrixLoginFlowDto;
 
 const PRODUCT_SOURCE: &str = concat!(
     include_str!("product_commands.rs"),
@@ -529,28 +525,6 @@ fn matrix_login_flows_dto_is_privacy_safe_and_maps_domain_flows() {
             "login flows DTO must not contain secret field {forbidden}"
         );
     }
-}
-
-#[test]
-fn map_login_flows_auth_error_is_privacy_safe() {
-    let err = map_login_flows_auth_error(AuthError::HomeserverUnavailable {
-        diagnostic_id: "v-auth.3-login-flows-hs",
-    });
-    assert_eq!(err.code, "InvalidServer");
-    assert_eq!(err.diagnostic_id, "v-auth.3-login-flows-hs");
-    assert!(!err.message.contains("token"));
-    assert!(!err.message.contains("password"));
-
-    let unsupported = map_login_flows_auth_error(AuthError::UnsupportedCapability {
-        diagnostic_id: "r0.7-login-types-json",
-    });
-    assert_eq!(unsupported.code, "Unsupported");
-
-    let invalid = map_login_flows_auth_error(AuthError::InvalidInput {
-        diagnostic_id: "p3.1-empty-url",
-        reason: "empty",
-    });
-    assert_eq!(invalid.code, "InvalidRequest");
 }
 
 #[test]
@@ -2715,7 +2689,7 @@ fn v_auth_logout_clears_orphaned_native_identity_when_restore_never_installed_a_
     let no_active_session = logout
         .split("let Some(active) = session.as_ref() else {")
         .nth(1)
-        .and_then(|source| source.split("// Remote logout is best-effort").next())
+        .and_then(|source| source.split("// Resolve the root").next())
         .expect("matrix_logout missing-session branch");
     assert!(no_active_session.contains("clear_persisted_logout_material"));
 }
@@ -3091,4 +3065,268 @@ fn logout_partial_vault_failure_retains_retry_identity_until_all_credentials_are
     assert!(!active_identity_path(&root).exists());
     clear_persisted_logout_material(&vault, &root).unwrap();
     let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn logout_preflight_failure_preserves_live_identity_and_skips_all_teardown() {
+    use std::cell::Cell;
+    let root = std::env::temp_dir().join(format!(
+        "synara-logout-locator-denied-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&root);
+    let _ = fs::remove_file(&root);
+    fs::write(&root, b"regular file prevents locator directory creation").unwrap();
+    let identity = MatrixLoginIdentity {
+        user_id: "@locator:example.org".into(),
+        device_id: "TEST".into(),
+        homeserver_url: "https://example.org".into(),
+    };
+    let live = Cell::new(true);
+    let began = Cell::new(false);
+    let cleaned = Cell::new(false);
+    let closed = Cell::new(false);
+    let result = finish_active_logout(
+        || ensure_logout_retry_locator(&root, &identity),
+        || async {
+            began.set(true);
+            Ok(())
+        },
+        || {
+            cleaned.set(true);
+            Ok(())
+        },
+        || live.set(false),
+        || async {
+            closed.set(true);
+            Ok(())
+        },
+    )
+    .await;
+    assert!(result.is_err());
+    assert!(
+        live.get(),
+        "the only identity custodian stays installed on preflight failure"
+    );
+    assert!(
+        !began.get() && !cleaned.get() && !closed.get(),
+        "preflight failure precedes remote revocation and every local teardown action"
+    );
+    fs::remove_file(&root).unwrap();
+    ensure_logout_retry_locator(&root, &identity).unwrap();
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    let wrong = MatrixLoginIdentity {
+        device_id: "OTHER".into(),
+        ..identity.clone()
+    };
+    assert_eq!(
+        ensure_logout_retry_locator(&root, &wrong)
+            .unwrap_err()
+            .diagnostic_id,
+        "d0.1-session-locator-mismatch"
+    );
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    let _ = fs::remove_dir_all(root);
+}
+
+#[tokio::test]
+async fn logout_directory_sync_failure_preserves_live_and_retry_syncs_created_parent_links() {
+    use std::cell::{Cell, RefCell};
+    let base = std::env::temp_dir().join(format!(
+        "synara-logout-directory-sync-{}",
+        std::process::id()
+    ));
+    let _ = fs::remove_dir_all(&base);
+    fs::create_dir(&base).unwrap();
+    let base = fs::canonicalize(base).unwrap();
+    // Neither of these parent links nor the locator directory exists yet.
+    let root = base.join("new-parent").join("app-root");
+    let identity = MatrixLoginIdentity {
+        user_id: "@directory-sync:example.org".into(),
+        device_id: "TEST".into(),
+        homeserver_url: "https://example.org".into(),
+    };
+    let live = Cell::new(true);
+    let began = Cell::new(false);
+    let cleaned = Cell::new(false);
+    let closed = Cell::new(false);
+    let synced = RefCell::new(Vec::new());
+    let result = finish_active_logout(
+        || {
+            ensure_logout_retry_locator_with_directory_sync(&root, &identity, |directory| {
+                synced.borrow_mut().push(directory.to_path_buf());
+                if directory == base {
+                    return Err(std::io::Error::other("injected parent-link sync failure"));
+                }
+                fs::File::open(directory)?.sync_all()
+            })
+        },
+        || async {
+            began.set(true);
+            Ok(())
+        },
+        || {
+            cleaned.set(true);
+            Ok(())
+        },
+        || live.set(false),
+        || async {
+            closed.set(true);
+            Ok(())
+        },
+    )
+    .await;
+    assert_eq!(
+        result.unwrap_err().diagnostic_id,
+        "d0.1-session-locator-directory-sync-failed"
+    );
+    assert!(live.get());
+    assert!(!began.get() && !cleaned.get() && !closed.get());
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    let required_directories = [
+        active_identity_path(&root).parent().unwrap().to_path_buf(),
+        root.clone(),
+        base.join("new-parent"),
+        base.clone(),
+    ];
+    assert_eq!(*synced.borrow(), required_directories);
+    // Existing locators also fail closed when their directory sync fails.
+    let existing_result = finish_active_logout(
+        || {
+            ensure_logout_retry_locator_with_directory_sync(&root, &identity, |_| {
+                Err(std::io::Error::other(
+                    "injected existing-entry sync failure",
+                ))
+            })
+        },
+        || async {
+            began.set(true);
+            Ok(())
+        },
+        || {
+            cleaned.set(true);
+            Ok(())
+        },
+        || live.set(false),
+        || async {
+            closed.set(true);
+            Ok(())
+        },
+    )
+    .await;
+    assert_eq!(
+        existing_result.unwrap_err().diagnostic_id,
+        "d0.1-session-locator-directory-sync-failed"
+    );
+    assert!(live.get());
+    assert!(!began.get() && !cleaned.get() && !closed.get());
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    // A retry sees existing directories, but must still sync their parent links
+    // left behind by the failed attempt. Real filesystem syncs and readback run.
+    synced.borrow_mut().clear();
+    ensure_logout_retry_locator_with_directory_sync(&root, &identity, |directory| {
+        synced.borrow_mut().push(directory.to_path_buf());
+        fs::File::open(directory)?.sync_all()
+    })
+    .unwrap();
+    for directory in required_directories {
+        assert!(synced.borrow().contains(&directory));
+    }
+    assert!(synced.borrow().contains(&PathBuf::from("/")));
+    assert_eq!(read_active_identity(&root).unwrap(), identity);
+    ensure_logout_retry_locator(&root, &identity).unwrap();
+    fs::remove_dir_all(base).unwrap();
+}
+
+#[tokio::test]
+async fn logout_stop_and_cleanup_failures_always_retire_live_and_close_core_with_cleanup_priority()
+{
+    use std::cell::Cell;
+    for cleanup_fails in [false, true] {
+        let live = Cell::new(true);
+        let cleaned = Cell::new(false);
+        let closed = Cell::new(false);
+        let result = finish_active_logout(
+            || Ok(()),
+            || async { Err(MatrixAuthCommandError::unavailable("test-sync-stop-failed")) },
+            || {
+                cleaned.set(true);
+                if cleanup_fails {
+                    Err(MatrixAuthCommandError::unavailable(
+                        "d0.1-session-clear-failed",
+                    ))
+                } else {
+                    Ok(())
+                }
+            },
+            || live.set(false),
+            || async {
+                assert!(!live.get());
+                closed.set(true);
+                Ok(())
+            },
+        )
+        .await;
+        assert_eq!(
+            result.unwrap_err().diagnostic_id,
+            if cleanup_fails {
+                "d0.1-session-clear-failed"
+            } else {
+                "test-sync-stop-failed"
+            }
+        );
+        assert!(cleaned.get() && closed.get());
+        assert!(!live.get());
+    }
+    let retired = Cell::new(false);
+    let closed = Cell::new(false);
+    let result = finish_active_logout(
+        || Ok(()),
+        || async { Ok(()) },
+        || {
+            Err(MatrixAuthCommandError::unavailable(
+                "d0.1-session-clear-failed",
+            ))
+        },
+        || retired.set(true),
+        || async {
+            closed.set(true);
+            Err(MatrixAuthCommandError::unavailable(
+                "test-core-close-failed",
+            ))
+        },
+    )
+    .await;
+    assert!(retired.get() && closed.get());
+    assert_eq!(
+        result.unwrap_err().diagnostic_id,
+        "d0.1-session-clear-failed",
+        "Core failure cannot hide remaining credentials"
+    );
+}
+
+#[tokio::test]
+async fn orphan_logout_path_failure_still_attempts_core_close_and_cleanup() {
+    use std::cell::Cell;
+    let closed = Cell::new(false);
+    let result = finish_orphan_logout(
+        async {
+            closed.set(true);
+            Err(MatrixAuthCommandError::unavailable(
+                "test-core-close-failed",
+            ))
+        },
+        || {
+            assert!(closed.get());
+            Err(MatrixAuthCommandError::unavailable(
+                "d0.1-app-data-dir-unavailable",
+            ))
+        },
+    )
+    .await;
+    assert!(closed.get());
+    assert_eq!(
+        result.unwrap_err().diagnostic_id,
+        "d0.1-app-data-dir-unavailable"
+    );
 }

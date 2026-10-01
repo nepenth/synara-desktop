@@ -1,4 +1,6 @@
 use super::*;
+#[cfg(test)]
+use matrix_sdk::ruma::events::room::message::RoomMessageEventContent;
 
 #[tauri::command]
 #[allow(clippy::too_many_arguments)] // Stable Tauri IPC fields are intentionally explicit.
@@ -252,25 +254,6 @@ pub async fn matrix_poll_respond(
     .await
 }
 
-pub(super) fn map_poll_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    match diagnostic_id {
-        "v-send.3-poll-invalid-question"
-        | "v-send.3-poll-invalid-answers"
-        | "v-send.3-poll-invalid-max-selections"
-        | "v-send.3-poll-invalid-event-id"
-        | "v-send.3-poll-invalid-answer-ids" => MatrixAuthCommandError::new(
-            "InvalidRequest",
-            "The native Matrix poll request is invalid.",
-            diagnostic_id,
-        ),
-        _ => MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix poll operation failed.",
-            diagnostic_id,
-        ),
-    }
-}
-
 pub(super) fn parse_thread_root_event_id(
     thread_root: Option<String>,
 ) -> Result<Option<OwnedEventId>, MatrixAuthCommandError> {
@@ -281,12 +264,6 @@ pub(super) fn parse_thread_root_event_id(
                 .map_err(|_| map_send_error("v-send.5-invalid-thread-root-event-id"))
         })
         .transpose()
-}
-
-pub(super) fn parse_edit_event_id(
-    event_id: String,
-) -> Result<OwnedEventId, MatrixAuthCommandError> {
-    synara_core::app::send::parse_edit_event_id(&event_id).map_err(map_send_error)
 }
 
 pub(super) fn parse_transaction_id(
@@ -300,98 +277,6 @@ pub(super) fn parse_transaction_id(
             Ok(OwnedTransactionId::from(txn_id))
         })
         .transpose()
-}
-
-pub(super) fn normalize_formatted_body(
-    body: &str,
-    formatted_body: Option<&str>,
-) -> Result<Option<String>, MatrixAuthCommandError> {
-    let formatted_body = formatted_body
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .filter(|html| should_attach_formatted_body(body, Some(html)));
-    synara_core::app::send::validate_outbound_text_payload(body, formatted_body)
-        .map_err(map_send_error)?;
-    Ok(formatted_body.map(str::to_owned))
-}
-
-/// Build validated room-message content for the native composer owner.
-///
-/// Relation rules (V-SEND.4 + V-SEND.5):
-/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
-///   (`is_falling_back: false`); root and reply ids may be equal when starting
-///   a thread from the root event.
-/// - `thread_root` only → `m.thread` without in-reply fallback.
-/// - `reply_to` only → classic `m.in_reply_to` reply (no thread).
-pub(crate) fn message_content(
-    body: String,
-    msg_type: Option<String>,
-    formatted_body: Option<String>,
-    mention_user_ids: Option<Vec<String>>,
-    mention_room: bool,
-    reply_to: Option<OwnedEventId>,
-    thread_root: Option<OwnedEventId>,
-) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
-    synara_core::app::send::message_content(
-        body,
-        msg_type,
-        formatted_body,
-        mention_user_ids,
-        mention_room,
-        reply_to,
-        thread_root,
-    )
-    .map_err(|diagnostic| match diagnostic {
-        "v-send.4-invalid-message-type" => MatrixAuthCommandError::new(
-            "InvalidRequest",
-            "The native Matrix message type is invalid.",
-            diagnostic,
-        ),
-        "v-send.4-invalid-mention-user-id" => MatrixAuthCommandError::new(
-            "InvalidRequest",
-            "A native Matrix mention user ID is invalid.",
-            diagnostic,
-        ),
-        _ => map_send_error(diagnostic),
-    })
-}
-
-/// Build validated `m.replace` replacement content for the native edit owner.
-///
-/// The new content is built via `message_content` (msg_type / formatted_body /
-/// mentions), then wrapped with `make_replacement` so the real body/html/mentions
-/// live in `m.new_content` and the fallback body is `* {plain}`. The
-/// `make_replacement` helper strips any reply/thread relation and sets
-/// `m.relates_to.rel_type == m.replace` with the target `event_id`.
-pub(crate) fn edit_message_content(
-    body: String,
-    msg_type: Option<String>,
-    formatted_body: Option<String>,
-    mention_user_ids: Option<Vec<String>>,
-    mention_room: bool,
-    event_id: OwnedEventId,
-) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
-    synara_core::app::send::edit_message_content(
-        body,
-        msg_type,
-        formatted_body,
-        mention_user_ids,
-        mention_room,
-        event_id,
-    )
-    .map_err(|diagnostic| match diagnostic {
-        "v-send.4-invalid-message-type" => MatrixAuthCommandError::new(
-            "InvalidRequest",
-            "The native Matrix message type is invalid.",
-            diagnostic,
-        ),
-        "v-send.4-invalid-mention-user-id" => MatrixAuthCommandError::new(
-            "InvalidRequest",
-            "A native Matrix mention user ID is invalid.",
-            diagnostic,
-        ),
-        _ => map_send_error(diagnostic),
-    })
 }
 
 pub(super) fn map_attachment_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
@@ -463,4 +348,90 @@ pub(super) fn attachment_kind_for_mime(mime: &Mime) -> AttachmentKind {
         mime::AUDIO => AttachmentKind::Audio,
         _ => AttachmentKind::File,
     }
+}
+
+#[cfg(test)]
+/// Build validated `m.replace` replacement content for the native edit owner.
+///
+/// The new content is built via `message_content` (msg_type / formatted_body /
+/// mentions), then wrapped with `make_replacement` so the real body/html/mentions
+/// live in `m.new_content` and the fallback body is `* {plain}`. The
+/// `make_replacement` helper strips any reply/thread relation and sets
+/// `m.relates_to.rel_type == m.replace` with the target `event_id`.
+pub(crate) fn edit_message_content(
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+    event_id: OwnedEventId,
+) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
+    synara_core::app::send::edit_message_content(
+        body,
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room,
+        event_id,
+    )
+    .map_err(|diagnostic| match diagnostic {
+        "v-send.4-invalid-message-type" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix message type is invalid.",
+            diagnostic,
+        ),
+        "v-send.4-invalid-mention-user-id" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix mention user ID is invalid.",
+            diagnostic,
+        ),
+        _ => map_send_error(diagnostic),
+    })
+}
+#[cfg(test)]
+pub(super) fn parse_edit_event_id(
+    event_id: String,
+) -> Result<OwnedEventId, MatrixAuthCommandError> {
+    synara_core::app::send::parse_edit_event_id(&event_id).map_err(map_send_error)
+}
+#[cfg(test)]
+/// Build validated room-message content for the native composer owner.
+///
+/// Relation rules (V-SEND.4 + V-SEND.5):
+/// - `thread_root` + `reply_to` → `m.thread` with genuine in-thread reply
+///   (`is_falling_back: false`); root and reply ids may be equal when starting
+///   a thread from the root event.
+/// - `thread_root` only → `m.thread` without in-reply fallback.
+/// - `reply_to` only → classic `m.in_reply_to` reply (no thread).
+pub(crate) fn message_content(
+    body: String,
+    msg_type: Option<String>,
+    formatted_body: Option<String>,
+    mention_user_ids: Option<Vec<String>>,
+    mention_room: bool,
+    reply_to: Option<OwnedEventId>,
+    thread_root: Option<OwnedEventId>,
+) -> Result<RoomMessageEventContent, MatrixAuthCommandError> {
+    synara_core::app::send::message_content(
+        body,
+        msg_type,
+        formatted_body,
+        mention_user_ids,
+        mention_room,
+        reply_to,
+        thread_root,
+    )
+    .map_err(|diagnostic| match diagnostic {
+        "v-send.4-invalid-message-type" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The native Matrix message type is invalid.",
+            diagnostic,
+        ),
+        "v-send.4-invalid-mention-user-id" => MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "A native Matrix mention user ID is invalid.",
+            diagnostic,
+        ),
+        _ => map_send_error(diagnostic),
+    })
 }

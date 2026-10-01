@@ -192,12 +192,12 @@ test('the renderer acknowledges with the OS receipt after delivery and follows t
   // `.catch(() => undefined)` around the OS call is gone from this path.
   assert.match(feature, /outcome = await notify\(/);
   assert.match(feature, /dismissNotificationWithNativeOwner\(shownCandidateId, outcome\)/);
-  assert.match(feature, /const shown = await showPlatformNotification\(\{/);
+  assert.match(feature, /const shown = await showPlatformNotification\(presentation\)/);
   assert.match(feature, /return shown \? 'delivered' : 'failed'/);
   assert.doesNotMatch(feature, /\}\)\.catch\(\(\) => undefined\);\s*return;/);
 
-  // Sound is the SDK push tweak Core echoed, gated by the preference, and
-  // never plays for a delivery the OS refused.
+  // Ordinary message sound is the SDK push tweak Core echoed, gated by
+  // preference; promoted approvals use the shared approval sound ownership.
   assert.match(feature, /notificationSound && readback\.sound === true && outcome !== 'failed'/);
   // No renderer retry loop: a failed receipt is recorded by Core only.
   assert.doesNotMatch(feature, /retryNotification|setTimeout\([^)]*notify/);

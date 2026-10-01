@@ -1,12 +1,13 @@
 //! Unit + temp-dir integration tests for P2.6 destructive lifecycle.
 
 use super::*;
-use crate::matrix::ipc::MatrixIpcErrorCategory;
+
 use crate::matrix::store::{
-    get_or_create_store_key, AccountIdentity, InMemoryStoreKeyVault, StoreKeyId, StoreKeyVault,
-    StorePaths,
+    get_or_create_store_key, AccountIdentity, InMemoryStoreKeyVault, StoreKeyId, StorePaths,
 };
+
 use std::fs;
+
 use std::path::{Path, PathBuf};
 
 fn temp_root(label: &str) -> PathBuf {

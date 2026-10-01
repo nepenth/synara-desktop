@@ -125,7 +125,9 @@ replacements and retired packages are deliberate outcomes explained below.
   The official `typescript: npm:@typescript/typescript6@6.0.2` alias supports
   compiler-API inventory tooling and ESLint. This follows Microsoft's
   [side-by-side migration guidance](https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/).
-  Retire the API alias once its callers support the native compiler API.
+  The compatibility package exports `tsc6`, while the native package exports
+  `tsc`; installed bin links target those respective packages without a name
+  collision. Retire the API alias once its callers support the native compiler API.
 - **ESLint:** `eslint` and `@eslint/js` use 9.39.5 because installed React/import
   plugins declare support through ESLint 9. Upgrade to 10 when peers support it;
   clean installs must keep working without force or legacy peer flags.
@@ -147,6 +149,14 @@ replacements and retired packages are deliberate outcomes explained below.
 - **Other adaptations:** Immer uses named `produce`; search results use explicit
   result types; the millify adapter uses its named export under Vite 8; UA-parser
   2's `macOS` name preserves shortcuts and device labels.
+- **Slate:** the proposed `slate` 0.126.2, `slate-dom` 0.126.0, and `slate-react`
+  0.127.1 satisfy their declared peers (`slate >=0.121.0` and
+  `slate-dom >=0.119.1`); retained `slate-history` 0.113.1 accepts
+  `slate >=0.65.3`. Versions need not have identical minor numbers. A browser
+  regression uses the production `RoomComposer` and `useEditor`, including
+  `withReact`/`withHistory`, to insert text, apply bold, split paragraphs,
+  undo, and redo. Its native user agent remains aligned with browser platform
+  information so macOS/Linux keyboard mappings are coherent.
 
 ## Retired infrastructure and retained renderer roles
 
@@ -167,8 +177,16 @@ local-storage bootstrap keys without inspecting or deleting IndexedDB.
 Renderer cleanup/reload follows the exact native `{ status: 'logged_out' }`
 acknowledgment; native failure preserves renderer state for retry. Logout retains
 the encrypted native store, and archival recovery is a separate native operation.
+After confirmed native logout, every renderer cleanup is attempted and reload
+still occurs if browser storage or a renderer listener throws; native remains
+the session authority. Existing cleanup already removes all account navigation
+keys by prefix. Fresh login markers are consumed only after the initialized
+facade's native identity, homeserver, and canonical generation match. Missing,
+unavailable, logged-out, mismatched, and failed native refreshes preserve them;
+the marker writer currently has no production caller.
 Former “Clear Cache” controls accurately say “Reload Application” and only
-refresh renderer state.
+refresh renderer state. Renderer stop/cache failures cannot prevent that recovery
+reload, and no native stop or wipe command is added.
 
 PWA generation, unused Element Call and roughly 41 MB of embedded assets,
 Buffer injection/polyfills, and the top-level-await plugin are retired. Startup
@@ -195,14 +213,14 @@ Validated with pinned Node 24.13.1:
 | Full root/frontend `npm audit --json` | Zero findings at every severity, including development dependencies. |
 | Full TypeScript and modernization typechecks | Passed with native TypeScript 7. |
 | Full renderer lint | ESLint and Prettier passed. |
-| Normal `npm run test:modernization`, including runtime build pretest | 1,175 passed, zero failures or skips. |
+| Normal `npm run test:modernization`, including runtime build pretest | 1,192 passed, zero failures or skips. |
 | Native-timeline Chromium browser command | 72 passed. |
-| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 2 runtime-maturity Chromium cases passed. |
+| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 4 runtime-maturity Chromium cases passed on the final sequential run. |
 | Normal build output guard and `check:runtime-assets` | Matching installed PDF-worker bytes, config/locales at actual URLs, retired assets absent. |
 
 Both CI `desktop-polish:ci` and release `desktop-polish` npm entrypoints include
 runtime-maturity. It runs the typed update hook, dialog focus trap, production
-HTML parser, and real PDF worker, checks a rendered pixel, and rejects fake-worker
+HTML parser, Slate composer, and real PDF worker, checks a rendered pixel, and rejects fake-worker
 fallback. Existing release WebKit coverage remains required; this frontend
 packet did not claim a fresh WebKit run. Sanitizer/PostCSS externalization
 warnings remain visible. These harnesses do not prove authenticated live Matrix

@@ -11,20 +11,21 @@ use std::{
 };
 
 use matrix_sdk::Client;
+
 use tokio::sync::Mutex;
 
 use super::{
     RoomKeyTransferFlow, RoomKeyTransferKind, RoomKeyTransferOutcome, RoomKeyTransferPhase,
 };
+
 use crate::{
     desktop_file_transfer::{downloads_dir, unique_download_path},
     matrix::auth::product::MatrixAuthCommandError,
 };
 
 pub use synara_core::app::room_keys::{
-    project_room_key_status, NativeRoomKeyFileSelection, NativeRoomKeyTransferKind,
-    NativeRoomKeyTransferPhase, NativeRoomKeyTransferResult, NativeRoomKeyTransferStatus,
-    EXPORT_FILE_NAME,
+    project_room_key_status, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
+    NativeRoomKeyTransferStatus, EXPORT_FILE_NAME,
 };
 
 #[derive(Debug)]

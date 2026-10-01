@@ -18,13 +18,18 @@
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.1-sync-readiness.md`
 
 pub use synara_core::app::sync::{
-    assert_generation, build_sync_service, decide_reconnect, failure_diagnostic_from_sdk_state,
-    is_restartable, probe_sliding_sync, readiness_from_sdk_state, readiness_of,
-    recover_cooldown_active, server_supports_sliding_sync, snapshot_from_sdk_state,
-    suspend_detected, unconfigured_snapshot, ReconnectAction, SyncError, SyncIntent, SyncReadiness,
-    SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner, RECOVER_COOLDOWN,
-    SUSPEND_WALL_SKEW,
+    build_sync_service, recover_cooldown_active, suspend_detected, unconfigured_snapshot,
+    SyncError, SyncIntent, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
+    RECOVER_COOLDOWN, SUSPEND_WALL_SKEW,
+};
+#[cfg(test)]
+pub use synara_core::app::sync::{
+    decide_reconnect, failure_diagnostic_from_sdk_state, is_restartable, readiness_from_sdk_state,
+    readiness_of, snapshot_from_sdk_state, ReconnectAction, SyncReadiness,
 };
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+use synara_core::app::sync::SyncPhase;

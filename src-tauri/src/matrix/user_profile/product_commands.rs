@@ -53,20 +53,6 @@ pub(super) fn map_avatar_error(diagnostic_id: &'static str) -> MatrixAuthCommand
     }
 }
 
-/// Parse and validate a display name. Empty/whitespace-only input is treated as
-/// a removal request (`None`). Non-empty names are trimmed and capped.
-pub(super) fn parse_display_name(
-    display_name: &str,
-) -> Result<Option<String>, MatrixAuthCommandError> {
-    synara_core::app::user_profile::parse_own_display_name(display_name).map_err(map_avatar_error)
-}
-
-/// Parse and validate an avatar MXC URI. Empty/whitespace-only input is treated
-/// as a removal request (`None`). Non-empty values must be valid `mxc://` URIs.
-pub(super) fn parse_avatar_mxc(mxc: &str) -> Result<Option<OwnedMxcUri>, MatrixAuthCommandError> {
-    synara_core::app::user_profile::parse_own_avatar_mxc(mxc).map_err(map_avatar_error)
-}
-
 #[tauri::command]
 pub async fn matrix_ignored_users_snapshot(
     core: State<'_, Arc<synara_core::Core>>,
@@ -137,4 +123,19 @@ pub async fn matrix_threepid_add_email_password(
     password: String,
 ) -> Result<synara_core::app::user_profile::MatrixThreepidAddResult, MatrixAuthCommandError> {
     crate::bridge::threepid::threepid_add_email_password(core.inner().as_ref(), password).await
+}
+
+#[cfg(test)]
+/// Parse and validate an avatar MXC URI. Empty/whitespace-only input is treated
+/// as a removal request (`None`). Non-empty values must be valid `mxc://` URIs.
+pub(super) fn parse_avatar_mxc(mxc: &str) -> Result<Option<OwnedMxcUri>, MatrixAuthCommandError> {
+    synara_core::app::user_profile::parse_own_avatar_mxc(mxc).map_err(map_avatar_error)
+}
+#[cfg(test)]
+/// Parse and validate a display name. Empty/whitespace-only input is treated as
+/// a removal request (`None`). Non-empty names are trimmed and capped.
+pub(super) fn parse_display_name(
+    display_name: &str,
+) -> Result<Option<String>, MatrixAuthCommandError> {
+    synara_core::app::user_profile::parse_own_display_name(display_name).map_err(map_avatar_error)
 }

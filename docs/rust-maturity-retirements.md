@@ -45,3 +45,48 @@ boundary guards. The module source reader follows declared Rust files, rejects
 missing modules, and excludes test modules/items, comments, and raw literal
 examples from production declaration discovery. Compiler and hosted validation
 must assess the exact final tree; the source inventory itself is not build proof.
+
+Validation status: the desktop shell and three shared packages passed strict Clippy over all targets
+in the final bounded local compiler run. All 394 repository tooling tests also passed.
+Clippy checks compilation and lints; native
+unit/integration test execution remains pending. The rewritten desktop lifecycle
+tests have source review and local compilation; hosted Linux compilation/execution is still pending.
+Full Apple slices, NSE archive/export checks, app linkage, simulator tests,
+unsigned device Release, and desktop packaging require their hosted lanes.
+
+The Rust source guard evaluates `cfg` Boolean combinations with `test=false`,
+retaining feature/target combinations that can compile in production. It handles
+same-line and multiline outer attributes and file-level inner `cfg` attributes.
+Raw ASCII module identifiers resolve to their actual filename; unsupported
+Unicode module identifiers fail explicitly. Path overrides, compiled `include!`
+macros with any Rust delimiter (including literal paths), nested
+external modules, nested inner test-only cfg, and cfg-adding `cfg_attr` are
+explicitly unsupported and fail closed; they cannot silently hide source. A
+module named `tests` is excluded only when its actual cfg disables production.
+
+Encrypted notification ownership changed explicitly: Core waits through its
+bounded decrypt retries and emits a resolved projection, or one final opaque
+ciphertext observation if every lookup remains encrypted/unavailable. A resolved
+edit, redaction, own event, or other non-candidate terminates observation without
+ciphertext fallback. The renderer forwards the single final observation to Core.
+When the authoritative SDK event remains ciphertext, Core returns nonsticky
+`v-notify.event-not-ready` without push evaluation, pending enqueue, or event
+dedup. This intentionally suppresses the previous generic platform alert while
+plaintext/classification is unavailable. If a subsequent lookup resolves
+plaintext, the same event can be classified and approval expiry rechecked; no
+renderer retry schedule or unbounded Core polling is introduced.
+
+Async raw-projection tests cover retry exhaustion, filtered plaintext, redacted
+encrypted events, encrypted replacements, delayed approval classification, and
+retirement during lookup. An SDK-backed decision
+regression covers ciphertext refusal without dedup followed by successful
+classification of the same event and ordinary duplicate suppression. The SDK
+regression submits the generic message request with focus suppression enabled
+while the room is focused; authoritative approval promotion overrides that flag.
+Both renderer delivery routes use a shared presentation adapter based on the
+returned candidate kind and matching source IDs. Its runtime tests cover approval
+actions, time-sensitive action context, event dismissal keys, and rejection of
+mismatched candidate IDs; no renderer classifier or expiry timer is introduced.
+Frontend subscription execution and a message-route source contract cover
+forwarding one final observation; they do not prove OS delivery or decryption arriving after
+the retry budget. Those native/runtime results require their test lanes.

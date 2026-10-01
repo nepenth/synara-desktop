@@ -94,7 +94,10 @@ pub async fn bootstrap(
         return Err("recovery-secret-invalid");
     }
     let before = status(client, session_generation).await?;
-    if before.exists {
+    if before.exists || before.default_key_set {
+        // Existing but incomplete state is not enrollment success. Never enable
+        // again automatically after a partial prior setup or lost display key.
+        require_setup_complete(&before)?;
         return Ok(SecretStorageSetup {
             result: operation_result(NativeSecretStorageOutcome::AlreadyConfigured, false, before),
             recovery_key: None,
@@ -273,7 +276,7 @@ async fn finish_secret_setup(
 ) -> Result<SecretStorageSetup, &'static str> {
     let recovery_key = operation.await?;
     let status = readback.await?;
-    require_complete(&status)?;
+    require_setup_complete(&status)?;
     Ok(SecretStorageSetup {
         result: operation_result(NativeSecretStorageOutcome::Complete, false, status),
         recovery_key: Some(recovery_key),
@@ -294,6 +297,14 @@ async fn finish_secret_unlock(
     ))
 }
 
+fn require_setup_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static str> {
+    require_complete(status)?;
+    if !status.passphrase_configured {
+        return Err("v-crypto.4-passphrase-not-configured");
+    }
+    Ok(())
+}
+
 fn require_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static str> {
     if !status.exists
         || !status.default_key_set
@@ -309,6 +320,95 @@ fn require_complete(status: &NativeSecretStorageStatus) -> Result<(), &'static s
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[tokio::test]
+    async fn setup_requires_passphrase_readback_while_key_only_unlock_remains_valid() {
+        let key_only = project_secret_storage_status(
+            8,
+            NativeRecoveryPhase::Enabled,
+            true,
+            true,
+            false,
+            true,
+            vec![],
+        );
+        let result = finish_secret_setup(
+            async { Ok(Zeroizing::new("test-generated-key".into())) },
+            async { Ok(key_only.clone()) },
+        )
+        .await;
+        match result {
+            Err(error) => assert_eq!(error, "v-crypto.4-passphrase-not-configured"),
+            Ok(_) => panic!("requested passphrase enrollment must be confirmed before key display"),
+        }
+        let result = finish_secret_unlock(async { Ok(()) }, async { Ok(key_only) })
+            .await
+            .unwrap();
+        assert_eq!(result.outcome, NativeSecretStorageOutcome::Complete);
+        let mut incomplete = result.status;
+        incomplete.unlocked = false;
+        assert_eq!(
+            require_setup_complete(&incomplete),
+            Err("v-crypto.4-operation-incomplete")
+        );
+    }
+
+    #[tokio::test]
+    async fn existing_incomplete_sdk_secret_storage_is_not_success_and_is_not_enabled_again() {
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(r"^/_matrix/client/.*/user/.*/account_data/.*$"))
+            .respond_with(
+                ResponseTemplate::new(404).set_body_json(
+                    serde_json::json!({"errcode":"M_NOT_FOUND","error":"not stored"}),
+                ),
+            )
+            .with_priority(10)
+            .mount(server.server())
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(
+                r"^/_matrix/client/.*/user/.*/account_data/m.secret_storage.default_key$",
+            ))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"key":"test-key"})),
+            )
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+        Mock::given(method("GET"))
+            .and(path_regex(
+                r"^/_matrix/client/.*/user/.*/account_data/m.secret_storage.key.test-key$",
+            ))
+            .respond_with(ResponseTemplate::new(200).set_body_json(
+                serde_json::json!({"algorithm":"m.secret_storage.v1.aes-hmac-sha2"}),
+            ))
+            .with_priority(1)
+            .mount(server.server())
+            .await;
+        let before = server.server().received_requests().await.unwrap().len();
+        match bootstrap(&client, 8, "test-passphrase").await {
+            Err(error) => assert_eq!(error, "v-crypto.4-operation-incomplete"),
+            Ok(_) => panic!("an existing but locked/incomplete key is not enrollment success"),
+        }
+        let requests = server.server().received_requests().await.unwrap();
+        assert!(
+            requests[before..]
+                .iter()
+                .all(|request| request.method.as_str() == "GET"),
+            "existing incomplete state must not trigger another enable/write"
+        );
+    }
+
     #[tokio::test]
     async fn successful_setup_reset_and_unlock_mutations_reject_incomplete_readback() {
         use std::cell::Cell;

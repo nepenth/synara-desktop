@@ -200,11 +200,11 @@ fn missing_vault_key_is_not_found_not_wipe_signal() {
 #[test]
 fn keyring_refs_stable_and_scoped() {
     let id = StoreKeyId::from_identity(&alice());
-    let refs = KeyringStoreKeyRefs::from_id(&id);
-    assert_eq!(refs.service, STORE_KEY_SERVICE);
-    assert!(refs.account.starts_with("store-key:"));
+    let refs = id;
+    assert_eq!(refs.service(), STORE_KEY_SERVICE);
+    assert!(refs.account().starts_with("store-key:"));
     // Must not collide with session credential account name.
-    assert_ne!(refs.account, "matrix-session");
+    assert_ne!(refs.account(), "matrix-session");
 }
 
 #[test]

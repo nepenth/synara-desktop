@@ -9,6 +9,9 @@ import {
   type NativeNotificationObservation,
 } from '../nativeNotificationObservation';
 
+import { buildNativeObservedNotificationPresentation } from '../nativeNotificationPresentation';
+import type { NativeNotificationCandidate } from '../nativeNotificationDecision';
+
 const OBSERVATION: NativeNotificationObservation = {
   sessionGeneration: 7,
   roomId: '!room:example.org',
@@ -116,7 +119,7 @@ test('the renderer observes through the Core stream and no longer scans timeline
   // Both the message and the agent-approval pumps subscribe to the stream.
   const subscriptions = source.match(/subscribeNativeNotificationObservations\(/g) ?? [];
   assert.ok(subscriptions.length >= 2, 'messages and approvals subscribe');
-  assert.match(source, /eventType === 'm\.room\.encrypted'/);
+  assert.doesNotMatch(source, /encryptedFallbackRef/);
   assert.match(source, /kind: 'agent_approval'/);
 
   // The dead observation pumps are gone: no sync-state gate the native facade
@@ -127,4 +130,95 @@ test('the renderer observes through the Core stream and no longer scans timeline
   assert.doesNotMatch(source, /getLoadedLiveTimelineEvents/);
   assert.doesNotMatch(source, /setInterval\(scanRecent/);
   assert.doesNotMatch(source, /RECENT_MESSAGE_NOTIFICATION_MS/);
+});
+
+test('one bounded ciphertext observation reaches the subscription consumer without a handshake', async () => {
+  let handler: ((event: { payload: unknown }) => void) | undefined;
+  const received: NativeNotificationObservation[] = [];
+  const dispose = subscribeNativeNotificationObservations(
+    () => 7,
+    (observation) => received.push(observation),
+    {
+      desktopAvailable: true,
+      listen: async (_event, callback) => {
+        handler = callback as (event: { payload: unknown }) => void;
+        return () => undefined;
+      },
+    }
+  );
+  await Promise.resolve();
+  const ciphertext: NativeNotificationObservation = {
+    ...OBSERVATION,
+    eventType: 'm.room.encrypted',
+  };
+  delete ciphertext.agentApproval;
+  handler?.({ payload: ciphertext });
+  assert.deepEqual(received, [ciphertext]);
+  dispose();
+
+  // The mounted message route submits that single observation to Core. It
+  // cannot reinstate the retired two-emission handshake or ciphertext skip.
+  const source = readFileSync(
+    `${process.cwd()}/src/app/pages/client/ClientNonUIFeatures.tsx`,
+    'utf8'
+  );
+  const start = source.indexOf('const decideAndNotify = useCallback(');
+  assert.ok(start >= 0);
+  const end = source.indexOf('\n  useEffect(', start);
+  assert.ok(end > start);
+  const route = source.slice(start, end);
+  assert.match(route, /decideNotificationWithNativeOwner\(/);
+  assert.doesNotMatch(route, /encryptedFallbackRef|eventType\s*===\s*'m\.room\.encrypted'/);
+});
+
+test('late approval promotion uses the shared actionable presentation and exact source IDs', () => {
+  const candidate: NativeNotificationCandidate = {
+    candidateId: 'candidate',
+    roomId: OBSERVATION.roomId,
+    eventId: OBSERVATION.eventId,
+    kind: 'agent_approval',
+    title: 'Approval Required: Dangerous Command',
+    body: 'Review a request in Synara.',
+    suppressIfFocusedRoom: false,
+    isEncrypted: true,
+  };
+  const source = { roomId: OBSERVATION.roomId, eventId: OBSERVATION.eventId };
+  const presentation = buildNativeObservedNotificationPresentation(candidate, source);
+  assert.equal(presentation.title, candidate.title);
+  assert.equal(presentation.body, candidate.body);
+  assert.deepEqual(presentation.dismissKeys, [`room:${source.roomId}`, `event:${source.eventId}`]);
+  assert.deepEqual(presentation.actionContext, { kind: 'agent-approval', ...source });
+  assert.deepEqual(
+    presentation.actions?.map((action) => action.id),
+    ['agent-approval.approve-once', 'agent-approval.deny', 'agent-approval.review']
+  );
+  assert.ok(presentation.route?.includes(encodeURIComponent(source.eventId)));
+  for (const mismatched of [
+    { ...candidate, roomId: '!other:example.org' },
+    { ...candidate, eventId: '$other' },
+    { ...candidate, eventId: undefined },
+    { ...candidate, kind: 'later_reminder' as const },
+  ])
+    assert.throws(() => buildNativeObservedNotificationPresentation(mismatched, source));
+
+  const ordinary = buildNativeObservedNotificationPresentation(
+    { ...candidate, kind: 'message' },
+    source
+  );
+  assert.equal(ordinary.actions, undefined);
+  assert.equal(ordinary.actionContext, undefined);
+  assert.deepEqual(ordinary.dismissKeys, [`room:${source.roomId}`]);
+
+  // Both mounted delivery paths use this tested adapter. A late promotion
+  // must also get approval sound ownership instead of generic push tweaks.
+  const mounted = readFileSync(
+    `${process.cwd()}/src/app/pages/client/ClientNonUIFeatures.tsx`,
+    'utf8'
+  );
+  assert.equal(
+    (mounted.match(/buildNativeObservedNotificationPresentation\(candidate,/g) ?? []).length,
+    2
+  );
+  assert.match(mounted, /readback\.candidate\.kind === 'agent_approval'/);
+  assert.doesNotMatch(mounted, /approvalEventId/);
 });

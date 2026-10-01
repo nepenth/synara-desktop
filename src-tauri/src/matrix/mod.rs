@@ -15,9 +15,9 @@ pub mod cross_signing;
 pub mod crypto_store;
 pub mod dehydrated_devices;
 pub mod devices;
-// SNC-P1-2: matrix/dto moved into crates/synara-core; re-export so all
-// `crate::matrix::dto::…` paths keep resolving (path-only, no behavior change).
+#[cfg(test)]
 pub use synara_core::dto;
+
 // SNC-P1-3: matrix/ipc moved into crates/synara-core; re-export so all
 // `crate::matrix::ipc::…` paths keep resolving (path-only, no behavior change).
 pub use synara_core::transport as ipc;
