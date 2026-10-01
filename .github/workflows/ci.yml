@@ -619,20 +619,34 @@ jobs:
         working-directory: synara
 
       - name: Test real-layout timeline scrolling
+        id: browser_timeline
         run: npm run test:browser:timeline
         working-directory: synara
 
       - name: Test native timeline navigation in Chromium
+        id: browser_native_timeline
         run: npm run test:browser:native-timeline
         working-directory: synara
 
       - name: Test desktop room navigation and approvals in Chromium
+        id: browser_desktop_polish
         run: npm run test:browser:desktop-polish:ci
         working-directory: synara
 
       - name: Check production dependency advisories
         run: npm run check:security
         working-directory: synara
+
+      - name: Upload failed browser diagnostics
+        if: failure() && (steps.browser_timeline.outcome == 'failure' || steps.browser_native_timeline.outcome == 'failure' || steps.browser_desktop_polish.outcome == 'failure')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node-browser-failure-diagnostics
+          path: |
+            synara/test-results
+            synara/playwright-report
+          if-no-files-found: warn
+          retention-days: 3
 
   ios-tests:
     name: iOS simulator tests

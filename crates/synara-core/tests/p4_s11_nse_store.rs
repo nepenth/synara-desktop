@@ -127,12 +127,20 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(!shared_core.contains("matrix_backup_status"));
     assert!(!shared_core.contains("matrix_crypto_status"));
 
-    let ffi = include_str!("../src/shared_core_ffi.rs");
-    let nse = ffi
-        .split("pub async fn nse_open_read_only_store(")
-        .nth(1)
-        .and_then(|rest| rest.split("async fn space_null_command(").next())
-        .expect("nse methods");
+    let (ffi, _) = include_str!("../src/shared_core_ffi.rs")
+        .split_once("\n#[cfg(test)]\nmod tests;")
+        .expect("SharedCore FFI production/test module boundary");
+    assert!(ffi.contains("mod nse_preview;\npub use nse_preview::*;"));
+    assert!(ffi.contains("mod session_lifecycle;\npub use session_lifecycle::*;"));
+    let nse_domain = include_str!("../src/shared_core_ffi/nse_preview.rs");
+    let lifecycle = include_str!("../src/shared_core_ffi/session_lifecycle.rs");
+    // These exact wired domains contain production only. Fail closed if inline
+    // test code is later added rather than treating its tokens as implementation.
+    assert!(!nse_domain.contains("#[cfg(test)]"));
+    assert!(!lifecycle.contains("#[cfg(test)]"));
+    let (_, nse) = nse_domain
+        .split_once("pub async fn nse_open_read_only_store(")
+        .expect("NSE domain methods");
     assert!(nse.contains("nse_store_status"));
     assert!(nse.contains("nse_close_read_only_store"));
     assert!(nse.contains("nse_event_preview"));
@@ -145,8 +153,10 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(!nse.contains(".start()"));
     assert!(nse.contains("NotificationClient::new"));
     assert!(nse.contains("NotificationProcessSetup::MultipleProcesses"));
-    assert!(ffi.contains("with_cross_process_store_lock_holder"));
-    assert!(ffi.contains("config.with_cross_process_store_lock_holder(NSE_STORE_LOCK_HOLDER)"));
+    assert!(lifecycle.contains("with_cross_process_store_lock_holder"));
+    assert!(
+        lifecycle.contains("config.with_cross_process_store_lock_holder(NSE_STORE_LOCK_HOLDER)")
+    );
     assert!(ffi.contains("NSE_STORE_LOCK_HOLDER: &str = \"synara-nse-parent\""));
     assert!(nse.contains("get_notification"));
     assert!(nse.contains("NSE_RESOLUTION_TIMEOUT"));
@@ -162,8 +172,9 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(nse.contains("self.nse_event_preview_unbounded(room_id, event_id)"));
     assert!(nse.contains("NotificationEvent::Timeline"));
     assert!(!nse.contains("RawNotificationEvent::Timeline"));
-    assert!(ffi.contains("store_key_for_read_only"));
-    assert!(ffi.contains("handle_refresh_tokens = false"));
+    assert!(nse_domain.contains("store_key_for_read_only"));
+    assert!(lifecycle.contains("store_key_for_read_only(&self.secret_store, &identity)?"));
+    assert!(lifecycle.contains("handle_refresh_tokens = false"));
 }
 
 #[test]

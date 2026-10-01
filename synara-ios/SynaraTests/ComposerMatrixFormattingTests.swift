@@ -62,17 +62,46 @@ final class ComposerMatrixFormattingTests: XCTestCase {
             controls = bindings
             appeared.fulfill()
         })
-        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        let scene = try XCTUnwrap(
+            UIApplication.shared.connectedScenes
+                .compactMap { $0 as? UIWindowScene }
+                .first { $0.activationState == .foregroundActive },
+            "Use the hosted application's active window scene"
+        )
+        let previousKeyWindow = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.frame = CGRect(x: 0, y: 0, width: 390, height: 844)
         window.rootViewController = controller
         window.makeKeyAndVisible()
         defer {
             window.endEditing(true)
             window.isHidden = true
+            previousKeyWindow?.makeKey()
         }
         await fulfillment(of: [appeared], timeout: 5)
         let bindings = try XCTUnwrap(controls)
-        let textView = try XCTUnwrap(ComposerTextInputRegistry.activeTextView as? ComposerPasteTextView)
+        // onAppear installs bindings before every UIKit attachment/layout is
+        // necessarily complete. The global registry may hold a detached editor;
+        // ownership comes from this controller's actual hosted view hierarchy.
+        let editorReady = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                let editors = hostedComposerEditors(in: controller.view)
+                return editors.count == 1
+                    && editors[0].window === window
+                    && editors[0].bounds.width > 0
+                    && editors[0].bounds.height > 0
+            },
+            object: controller
+        )
+        await fulfillment(of: [editorReady], timeout: 5)
+        let editors = hostedComposerEditors(in: controller.view)
+        let textView = try XCTUnwrap(
+            editors.count == 1 ? editors.first : nil,
+            "Require one production editor in this hosted controller"
+        )
         XCTAssertTrue(textView.window === window, "Exercise the hosted production editor")
+        XCTAssertTrue(textView.isDescendant(of: controller.view))
+        XCTAssertTrue(window.isKeyWindow)
         XCTAssertFalse(textView.isFirstResponder)
 
         // A toolbar request must reach UIKit through the real representable update.
@@ -208,6 +237,12 @@ final class ComposerMatrixFormattingTests: XCTestCase {
 }
 
 #if canImport(UIKit)
+@MainActor
+private func hostedComposerEditors(in view: UIView) -> [ComposerPasteTextView] {
+    let current = (view as? ComposerPasteTextView).map { [$0] } ?? []
+    return current + view.subviews.flatMap { hostedComposerEditors(in: $0) }
+}
+
 private struct ComposerFocusTestControls {
     let text: Binding<String>
     let selection: Binding<ComposerTextSelection>

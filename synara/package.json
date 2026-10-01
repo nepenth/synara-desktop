@@ -21,7 +21,7 @@
     "typecheck": "tsc --noEmit",
     "prepare": "husky",
     "test:browser:native-timeline": "playwright test --config e2e/native-timeline-harness/playwright.config.ts",
-    "test:browser:desktop-polish:ci": "playwright test --config e2e/room-list-harness/playwright.config.ts --project=chromium && playwright test --config e2e/approvals-harness/playwright.config.ts --project=chromium && npm run test:browser:runtime-maturity",
+    "test:browser:desktop-polish:ci": "playwright test --config e2e/room-list-harness/playwright.config.ts --project=chromium && playwright test --config e2e/approvals-harness/playwright.config.ts --project=chromium && npm run test:browser:runtime-maturity -- --project=chromium",
     "test:browser:desktop-polish": "playwright test --config e2e/room-list-harness/playwright.config.ts && playwright test --config e2e/approvals-harness/playwright.config.ts && npm run test:browser:runtime-maturity",
     "test:browser:runtime-maturity": "playwright test --config e2e/runtime-maturity-harness/playwright.config.ts"
   },
@@ -36,6 +36,7 @@
     "@atlaskit/pragmatic-drag-and-drop": "4.0.0",
     "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "3.2.1",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "3.0.0",
+    "@fontsource-variable/inter": "5.3.0",
     "@tanstack/react-query": "5.104.0",
     "@tanstack/react-query-devtools": "5.104.0",
     "@tanstack/react-virtual": "3.14.13",
@@ -49,6 +50,7 @@
     "blurhash": "2.0.5",
     "chroma-js": "3.2.0",
     "classnames": "2.5.1",
+    "core-js": "3.50.0",
     "dayjs": "1.11.23",
     "domhandler": "6.0.1",
     "emojibase": "17.0.0",
@@ -64,6 +66,7 @@
     "immer": "11.1.18",
     "is-hotkey": "0.2.0",
     "jotai": "3.0.0",
+    "jotai-family": "1.1.0",
     "linkify-react": "4.3.3",
     "linkifyjs": "4.3.3",
     "millify": "6.1.0",
@@ -84,9 +87,7 @@
     "slate-dom": "0.126.0",
     "slate-history": "0.113.1",
     "slate-react": "0.127.1",
-    "ua-parser-js": "2.0.10",
-    "jotai-family": "1.1.0",
-    "@fontsource-variable/inter": "5.3.0"
+    "ua-parser-js": "2.0.10"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",
@@ -102,6 +103,7 @@
     "@types/sanitize-html": "2.16.1",
     "@typescript-eslint/eslint-plugin": "8.70.1",
     "@typescript-eslint/parser": "8.70.1",
+    "@typescript/native": "npm:typescript@7.0.2",
     "@vanilla-extract/vite-plugin": "5.2.6",
     "@vitejs/plugin-react": "6.1.1",
     "eslint": "9.39.5",
@@ -116,8 +118,7 @@
     "prettier": "2.8.8",
     "typescript": "npm:@typescript/typescript6@6.0.2",
     "vite": "8.3.1",
-    "vite-plugin-static-copy": "4.1.1",
-    "@typescript/native": "npm:typescript@7.0.2"
+    "vite-plugin-static-copy": "4.1.1"
   },
   "overrides": {
     "brace-expansion@1": "1.1.21",

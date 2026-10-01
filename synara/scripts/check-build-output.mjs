@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 const dist = join(root, 'dist');
 const files = [];
+let compatibilityApiFound = false;
 const walk = async (directory, prefix = '') => {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const relative = `${prefix}${entry.name}`;
@@ -22,6 +23,10 @@ for (const file of files) {
   if (file.endsWith('.js.map')) {
     const map = JSON.parse(await readFile(join(dist, file), 'utf8'));
     for (const source of map.sources ?? []) {
+      assert.doesNotMatch(source, /node_modules\/pdfjs-dist\/build\/pdf(?:\.min)?\.mjs$/);
+      if (/node_modules\/pdfjs-dist\/legacy\/build\/pdf\.mjs$/.test(source)) {
+        compatibilityApiFound = true;
+      }
       assert.doesNotMatch(
         source,
         /node_modules\/(?:@element-hq\/element-call-embedded|buffer|@esbuild-plugins\/node-globals-polyfill|vite-plugin-top-level-await)\//
@@ -29,9 +34,25 @@ for (const file of files) {
     }
   }
 }
+assert.ok(
+  compatibilityApiFound,
+  'The packaged PDF API must use the upstream compatibility distribution.'
+);
+const compatibilityWorker = JSON.parse(
+  await readFile(join(dist, 'pdf.compat.worker.js.map'), 'utf8')
+);
+for (const module of [
+  'es.promise.with-resolvers.js',
+  'es.array-buffer.transfer-to-fixed-length.js',
+]) {
+  assert.ok(
+    compatibilityWorker.sources.some((source) => source.endsWith(`/core-js/modules/${module}`)),
+    `The independent PDF worker must initialize the standard ${module} shim.`
+  );
+}
 assert.deepEqual(
   await readFile(join(dist, 'pdf.worker.min.js')),
-  await readFile(join(root, 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs')),
+  await readFile(join(root, 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs')),
   'The packaged PDF worker must match the installed PDF.js runtime.'
 );
 for (const locale of await readdir(join(root, 'public/locales'))) {

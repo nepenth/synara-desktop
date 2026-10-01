@@ -7,7 +7,7 @@ import buildConfig from './build.config.ts';
 const copyFiles = {
   targets: [
     {
-      src: 'node_modules/pdfjs-dist/build/pdf.worker.min.mjs',
+      src: 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
       dest: '',
       rename: { stripBase: true, name: 'pdf.worker.min.js' },
     },
@@ -36,6 +36,12 @@ export default defineConfig({
     },
   },
   plugins: [viteStaticCopy(copyFiles), vanillaExtractPlugin(), react()],
+  worker: {
+    format: 'es',
+    rollupOptions: {
+      output: { entryFileNames: 'pdf.compat.worker.js' },
+    },
+  },
   build: {
     // Native webviews support ES2022, including top-level await used by PDF.js.
     target: 'es2022',

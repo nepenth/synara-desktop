@@ -24,12 +24,13 @@ const nestedXmlNodes = new Document([
 ]);
 
 const createPdf = () => {
-  const stream = '1 0 0 rg 0 0 100 100 re f\n';
+  const stream = '1 0 0 rg 0 0 100 100 re f\n0 0 0 rg BT /F1 8 Tf 10 10 Td (Compatibility) Tj ET\n';
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
     '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
-    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << >> /Contents 4 0 R >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 100 100] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>',
     `<< /Length ${stream.length} >>\nstream\n${stream}endstream`,
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
   ];
   let body = '%PDF-1.4\n';
   const offsets = [0];
@@ -38,10 +39,10 @@ const createPdf = () => {
     body += `${index + 1} 0 obj\n${object}\nendobj\n`;
   });
   const xref = body.length;
-  body += `xref\n0 5\n0000000000 65535 f \n${offsets
+  body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets
     .slice(1)
     .map((offset) => `${String(offset).padStart(10, '0')} 00000 n \n`)
-    .join('')}trailer\n<< /Size 5 /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    .join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
   return URL.createObjectURL(new Blob([body], { type: 'application/pdf' }));
 };
 

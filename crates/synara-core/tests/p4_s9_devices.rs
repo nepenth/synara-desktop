@@ -64,7 +64,10 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(!udl.contains("matrix_backup_status"));
     assert!(!udl.contains("matrix_room_key_transfer_status"));
     assert!(!udl.contains("matrix_cross_signing_setup"));
-    assert!(!udl.contains("backup_setup"));
+    // Recovery is now an accepted typed Core family; legacy shell commands
+    // still cannot enter this surface or bypass the dedicated secret argument.
+    assert!(udl.contains("BackupStatusDto backup_setup(string passphrase)"));
+    assert!(!udl.contains("matrix_backup_setup"));
     assert!(!udl.contains("matrix_crypto_status"));
     assert!(!udl.contains("matrix_login_password"));
     let shared_core = udl

@@ -195,6 +195,27 @@ remains usable if worker APIs fail. An already controlled page may remain
 controlled until navigation; this unregistering neither deletes IndexedDB nor
 broadly removes other applications' workers. Vite targets ES2022 explicitly.
 
+PDF.js remains at patched `6.3.289`; the production API and verbatim worker use
+its matched upstream `legacy` distribution. A bounded `core-js` `3.50.0`
+initializer supplies `Promise.withResolvers` in both independent realms and
+`ArrayBuffer.transferToFixedLength` in the worker before PDF.js evaluates.
+These standard builtin shims serve active PDF code. The Vite worker entry loads
+the packaged upstream worker after initialization; build checks verify its
+exact installed bytes and the wrapper's shim provenance.
+
+The current [PDF.js browser support table](https://github.com/mozilla/pdf.js/wiki/Frequently-Asked-Questions#which-browsersenvironments-are-supported)
+starts legacy Safari support at 18. The
+[upstream compatibility report](https://github.com/mozilla/pdf.js/issues/20899)
+confirms newer builtin requirements affect both page and worker realms. The
+[core-js standard modules](https://github.com/zloirock/core-js#ecmascript-promise)
+provide maintained implementations rather than project-written polyfills.
+Retaining the patched dependency also covers the
+[July 2026 PDF.js scripting advisory](https://github.com/mozilla/pdf.js/security/advisories/GHSA-hq66-cqwq-w95j),
+whose upstream fix is `6.2.108`. Current Chromium and WebKit tests model missing
+newer builtins before both production imports, require a real worker and red PDF
+pixel, and reject fake-worker fallback. This corrects the tested builtin gap;
+it does not certify every PDF feature on physical macOS 13/WebKit 16.
+
 Unused direct `dateformat`, `vite-node`, and `@types/ua-parser-js` are removed.
 The proposed Babel 8 direct update is retired: Vite React 6 uses Oxc and no
 project Babel configuration or direct consumer exists. Legitimate transitive
@@ -216,14 +237,20 @@ Validated with pinned Node 24.13.1:
 | Normal `npm run test:modernization`, including runtime build pretest | 1,199 passed, zero failures or skips, including the accepted notification delivery/action adapters. |
 | Timeline Chromium browser command | 7 passed. |
 | Native-timeline Chromium browser command | 72 passed. |
-| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 4 runtime-maturity Chromium cases passed on the final sequential run. |
+| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 5 runtime-maturity Chromium cases passed. |
+| Normal release `test:browser:desktop-polish` command from a cold Vite cache | 12 room-list, 68 approvals, and 10 runtime-maturity Chromium/WebKit cases passed. |
 | Normal build output guard and `check:runtime-assets` | Matching installed PDF-worker bytes, config/locales at actual URLs, retired assets absent. |
 
 Both CI `desktop-polish:ci` and release `desktop-polish` npm entrypoints include
 runtime-maturity. It runs the typed update hook, dialog focus trap, production
 HTML parser, Slate composer, and real PDF worker, checks a rendered pixel, and rejects fake-worker
-fallback. Existing release WebKit coverage remains required; this frontend
-packet did not claim a fresh WebKit run. Sanitizer/PostCSS externalization
+fallback. The runtime harness uses unrestricted port 4191 for WebKit, normal
+Safari keyboard navigation for its focus trap, and explicitly preoptimizes/warms
+the active PDF/shim/Prism modules so cold dependency discovery cannot reload a
+page during the assertions. The final release command passed from a cold Vite
+cache with both actual browser engines; runtime-maturity uses their native user
+agents. This local WebKit run is distinct from physical minimum-system and installed native proof.
+Sanitizer/PostCSS externalization
 warnings remain visible. These harnesses do not prove authenticated live Matrix
 sessions or installed native behavior.
 

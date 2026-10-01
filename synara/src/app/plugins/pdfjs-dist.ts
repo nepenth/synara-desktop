@@ -1,16 +1,16 @@
 import { useCallback } from 'react';
+import 'core-js/modules/es.promise.with-resolvers.js';
+import pdfWorkerUrl from './pdfjs-worker?worker&url';
 import type * as PdfJsDist from 'pdfjs-dist';
 import type { GetViewportParameters } from 'pdfjs-dist/types/src/display/api';
 import { useAsyncCallback } from '../hooks/useAsyncCallback';
-import { trimTrailingSlash } from '../utils/common';
 
 export const usePdfJSLoader = () =>
   useAsyncCallback(
     useCallback(async () => {
-      const pdf = await import('pdfjs-dist');
-      pdf.GlobalWorkerOptions.workerSrc = `${trimTrailingSlash(
-        import.meta.env.BASE_URL
-      )}/pdf.worker.min.js`;
+      // Native minimum webviews need the upstream translated/polyfilled distribution.
+      const pdf = await import('pdfjs-dist/legacy/build/pdf.mjs');
+      pdf.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
       return pdf;
     }, [])
   );
