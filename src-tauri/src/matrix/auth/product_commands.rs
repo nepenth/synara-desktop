@@ -2410,10 +2410,9 @@ mod tests {
     #[test]
     fn store_recovery_ipc_is_explicit_registered_and_privacy_limited() {
         let commands = include_str!("product_commands.rs");
-        let production = commands
-            .split("#[cfg(test)]")
-            .next()
-            .expect("production command source");
+        let (production, _) = commands
+            .split_once("\n#[cfg(test)]\nmod tests {")
+            .expect("auth command test module boundary");
         let lib = include_str!("../../lib.rs");
         let build = include_str!("../../../build.rs");
         let capability = include_str!("../../../capabilities/main.json");
@@ -2529,10 +2528,9 @@ mod tests {
 
     #[test]
     fn session_install_and_every_logout_path_revoke_store_recovery() {
-        let production = include_str!("product_commands.rs")
-            .split("#[cfg(test)]")
-            .next()
-            .expect("production command source");
+        let (production, _) = include_str!("product_commands.rs")
+            .split_once("\n#[cfg(test)]\nmod tests {")
+            .expect("auth command test module boundary");
         let password_install = production
             .split("pub async fn matrix_login_password")
             .nth(1)
