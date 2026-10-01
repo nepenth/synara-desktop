@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+source "$repo_root/scripts/lib/rust-llvm-symbols.sh"
 
 product_path="${1:-}"
 diagnostics_dir="${2:-}"
@@ -46,10 +48,11 @@ if grep -Eiq 'SynaraCore|libsynara_core' <<<"$linked_images"; then
   exit 1
 fi
 
-if LC_ALL=C grep -a -q '_uniffi_synara_core_' "$executable"; then
-  echo "Notification-service executable contains forbidden full Core UniFFI exports." >&2
-  exit 1
-fi
+resolve_rust_llvm_nm "${SYNARA_NSE_ARCHIVE_NM:-}"
+# Release stripping can remove the final MachO symbol table. Successful final
+# decoding is complementary; per-architecture positive/negative static-archive
+# checks in the NSE generator remain the primary ABI isolation proof.
+symbol_report="$(inspect_nse_apple_symbols "$executable" 0)"
 
 report="notification_service_archive_report.txt"
 if [[ -n "$diagnostics_dir" ]]; then
@@ -64,6 +67,8 @@ fi
   echo "note=disk size is a regression guard, not physical phys_footprint proof"
   echo "$file_output"
   echo "$linked_images"
+  echo "symbol_reader=$NM_BIN"
+  echo "$symbol_report"
 } > "$report"
 
 echo "Notification-service archive checks passed (${executable_bytes} bytes)."

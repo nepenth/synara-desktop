@@ -318,3 +318,28 @@ test('nativeReactionsForViewer keeps recovered sender annotation ids', () => {
     ]
   );
 });
+
+test('retained approval action carries its original generation to native SDK admission', async () => {
+  const input = {
+    roomId: '!shared:example.org',
+    eventId: '$same',
+    actionId: 'agent-approval.approve-once',
+    notificationSessionGeneration: 7,
+  };
+  let installedGeneration = 7;
+  const admitted: number[] = [];
+  const invoke = async (_command: string, args?: Record<string, unknown>) => {
+    assert.equal(args?.notificationSessionGeneration, 7);
+    if (args?.notificationSessionGeneration !== installedGeneration)
+      throw new Error('stale session');
+    admitted.push(installedGeneration);
+    return {
+      available: true,
+      value: { roomId: input.roomId, eventId: input.eventId, status: 'applied' as const },
+    };
+  };
+  await decideAgentApprovalWithNativeOwner(input, invoke);
+  installedGeneration = 8;
+  await assert.rejects(decideAgentApprovalWithNativeOwner(input, invoke), /stale session/);
+  assert.deepEqual(admitted, [7]);
+});

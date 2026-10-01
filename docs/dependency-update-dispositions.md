@@ -213,7 +213,7 @@ Validated with pinned Node 24.13.1:
 | Full root/frontend `npm audit --json` | Zero findings at every severity, including development dependencies. |
 | Full TypeScript and modernization typechecks | Passed with native TypeScript 7. |
 | Full renderer lint | ESLint and Prettier passed. |
-| Normal `npm run test:modernization`, including runtime build pretest | 1,194 passed, zero failures or skips. |
+| Normal `npm run test:modernization`, including runtime build pretest | 1,199 passed, zero failures or skips, including the accepted notification delivery/action adapters. |
 | Timeline Chromium browser command | 7 passed. |
 | Native-timeline Chromium browser command | 72 passed. |
 | Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 4 runtime-maturity Chromium cases passed on the final sequential run. |

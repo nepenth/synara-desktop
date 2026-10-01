@@ -1,4 +1,5 @@
 import XCTest
+import SwiftUI
 @testable import Synara
 #if canImport(UIKit)
 import UIKit
@@ -53,6 +54,68 @@ final class ComposerMatrixFormattingTests: XCTestCase {
     }
 
     #if canImport(UIKit)
+    @MainActor
+    func testHostedComposerSynchronizesStateWithUIKitFocusAndFormattedTyping() async throws {
+        let appeared = expectation(description: "Composer bindings installed in a hosted view")
+        var controls: ComposerFocusTestControls?
+        let controller = UIHostingController(rootView: ComposerFocusTestHarness { bindings in
+            controls = bindings
+            appeared.fulfill()
+        })
+        let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 390, height: 844))
+        window.rootViewController = controller
+        window.makeKeyAndVisible()
+        defer {
+            window.endEditing(true)
+            window.isHidden = true
+        }
+        await fulfillment(of: [appeared], timeout: 5)
+        let bindings = try XCTUnwrap(controls)
+        let textView = try XCTUnwrap(ComposerTextInputRegistry.activeTextView as? ComposerPasteTextView)
+        XCTAssertTrue(textView.window === window, "Exercise the hosted production editor")
+        XCTAssertFalse(textView.isFirstResponder)
+
+        // A toolbar request must reach UIKit through the real representable update.
+        bindings.isFocused.wrappedValue = true
+        let focused = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in textView.isFirstResponder },
+            object: textView
+        )
+        await fulfillment(of: [focused], timeout: 5)
+        textView.insertText("draft")
+        XCTAssertEqual(bindings.text.wrappedValue, "draft")
+
+        // A programmatic dismissal and a subsequent native editing action must
+        // both update the same state, as happens around attachment presentation.
+        bindings.isFocused.wrappedValue = false
+        let dismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in !textView.isFirstResponder },
+            object: textView
+        )
+        await fulfillment(of: [dismissed], timeout: 5)
+        XCTAssertTrue(textView.becomeFirstResponder())
+        XCTAssertTrue(bindings.isFocused.wrappedValue)
+
+        let result = ComposerMarkdown.apply(
+            .bold,
+            to: bindings.text.wrappedValue,
+            selection: ComposerTextSelection(location: 0, length: 5)
+        )
+        bindings.text.wrappedValue = result.text
+        bindings.selection.wrappedValue = result.selection
+        bindings.formattingRevision.wrappedValue += 1
+        let formatted = XCTNSPredicateExpectation(
+            predicate: NSPredicate { _, _ in
+                textView.isFirstResponder && textView.text == "**draft**"
+            },
+            object: textView
+        )
+        await fulfillment(of: [formatted], timeout: 5)
+        textView.insertText("replacement")
+        XCTAssertEqual(bindings.text.wrappedValue, "**replacement**")
+        XCTAssertTrue(textView.isFirstResponder)
+    }
+
     func testEmptyComposerMeasuresWrappedPlaceholderAtAccessibilityScale() {
         let container = ComposerTextContainer()
         let accessibilityFont = UIFont.systemFont(ofSize: 31)
@@ -143,3 +206,41 @@ final class ComposerMatrixFormattingTests: XCTestCase {
     }
     #endif
 }
+
+#if canImport(UIKit)
+private struct ComposerFocusTestControls {
+    let text: Binding<String>
+    let selection: Binding<ComposerTextSelection>
+    let formattingRevision: Binding<Int>
+    let isFocused: Binding<Bool>
+}
+
+private struct ComposerFocusTestHarness: View {
+    let onReady: (ComposerFocusTestControls) -> Void
+    @State private var text = ""
+    @State private var selection = ComposerTextSelection.empty
+    @State private var height: CGFloat = 34
+    @State private var formattingRevision = 0
+    @State private var isFocused = false
+
+    var body: some View {
+        ComposerTextView(
+            text: $text,
+            selection: $selection,
+            height: $height,
+            placeholder: "Message",
+            formattingRevision: formattingRevision,
+            isFocused: $isFocused
+        )
+        .frame(height: height)
+        .onAppear {
+            onReady(ComposerFocusTestControls(
+                text: $text,
+                selection: $selection,
+                formattingRevision: $formattingRevision,
+                isFocused: $isFocused
+            ))
+        }
+    }
+}
+#endif

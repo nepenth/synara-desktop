@@ -2725,7 +2725,7 @@ fn product_client_persists_rotated_sdk_tokens_in_native_vault_and_logout_is_loca
         "load_session_material",
         "matrix_session_from_host_secrets",
         "persist_session_after_login",
-        "persist_with_retry_locator",
+        "save_credentials",
         "ensure_logout_retry_locator",
         "authenticated_login_identity",
     ] {
@@ -3390,7 +3390,8 @@ fn session_persistence_requires_durable_locator_and_retains_failed_cleanup_targe
     fs::write(&root, b"blocked directory creation").unwrap();
     let wrote = Cell::new(false);
     let cleaned = Cell::new(false);
-    assert!(persist_with_retry_locator(
+    assert!(persist_with_client_lease(
+        &SessionPersistenceLease::default(),
         || ensure_logout_retry_locator(&root, &identity),
         || {
             wrote.set(true);
@@ -3404,7 +3405,8 @@ fn session_persistence_requires_durable_locator_and_retains_failed_cleanup_targe
     .is_err());
     assert!(!wrote.get() && !cleaned.get());
     fs::remove_file(&root).unwrap();
-    let failed = persist_with_retry_locator(
+    let failed = persist_with_client_lease(
+        &SessionPersistenceLease::default(),
         || ensure_logout_retry_locator(&root, &identity),
         || {
             assert_eq!(read_active_identity(&root).unwrap(), identity);
@@ -3423,7 +3425,8 @@ fn session_persistence_requires_durable_locator_and_retains_failed_cleanup_targe
     assert!(!active_identity_path(&root).exists());
     // A failed write whose cleanup succeeds still reports failure, with neither
     // material nor locator left behind; it cannot publish a ready session.
-    let failed = persist_with_retry_locator(
+    let failed = persist_with_client_lease(
+        &SessionPersistenceLease::default(),
         || ensure_logout_retry_locator(&root, &identity),
         || {
             persist_session_material(&vault, &account, &material)
@@ -3680,24 +3683,26 @@ fn persistence_lease_waits_for_inflight_callback_before_teardown_cleanup() {
         let vault = vault.clone();
         let events = events.clone();
         std::thread::spawn(move || {
-            lease.save(|| {
-                ensure_logout_retry_locator(&root, &identity)?;
-                events.lock().unwrap().push("save-start");
-                entered_send.send(()).unwrap();
-                release_receive.recv().unwrap();
-                let account = account_identity(&identity)?;
-                let material = SessionMaterial::from_matrix_tokens(
-                    &account,
-                    "TEST",
-                    "unit-fixture-token",
-                    None,
-                )
-                .unwrap();
-                persist_session_material(vault.as_ref(), &account, &material)
-                    .map_err(|_| MatrixAuthCommandError::unavailable("test-persist-failed"))?;
-                events.lock().unwrap().push("save-end");
-                Ok(())
-            })
+            lease.save_credentials(
+                || ensure_logout_retry_locator(&root, &identity),
+                || {
+                    events.lock().unwrap().push("save-start");
+                    entered_send.send(()).unwrap();
+                    release_receive.recv().unwrap();
+                    let account = account_identity(&identity)?;
+                    let material = SessionMaterial::from_matrix_tokens(
+                        &account,
+                        "TEST",
+                        "unit-fixture-token",
+                        None,
+                    )
+                    .unwrap();
+                    persist_session_material(vault.as_ref(), &account, &material)
+                        .map_err(|_| MatrixAuthCommandError::unavailable("test-persist-failed"))?;
+                    events.lock().unwrap().push("save-end");
+                    Ok(())
+                },
+            )
         })
     };
     entered_receive.recv().unwrap();
@@ -3832,5 +3837,850 @@ fn failed_preinstall_persistence_revokes_callbacks_before_failed_cleanup() {
     assert_eq!(
         callback.save(|| Ok(())).unwrap_err().diagnostic_id,
         "d0.1-session-persistence-retired"
+    );
+}
+
+#[tokio::test]
+async fn install_rollback_preserves_restored_refresh_but_cleans_new_authentication() {
+    use crate::matrix::lifecycle::InMemorySessionMaterialVault;
+    use std::cell::Cell;
+    use synara_core::app::lifecycle::persist_session_material;
+    for origin in [
+        SessionInstallOrigin::Restored,
+        SessionInstallOrigin::NewAuthentication,
+    ] {
+        for stop_fails in [false, true] {
+            let restored = origin == SessionInstallOrigin::Restored;
+            let root = std::env::temp_dir().join(format!(
+                "synara-install-origin-{}-{restored}-{stop_fails}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&root);
+            let identity = MatrixLoginIdentity {
+                user_id: "@origin:example.org".into(),
+                device_id: "TEST".into(),
+                homeserver_url: "https://example.org".into(),
+            };
+            let account = account_identity(&identity).unwrap();
+            let vault = InMemorySessionMaterialVault::new();
+            let lease_owner = SessionPersistenceOwner::new();
+            let lease = lease_owner.callback_lease();
+            let old_material = SessionMaterial::from_matrix_tokens(
+                &account,
+                "TEST",
+                "old-unit-fixture-token",
+                None,
+            )
+            .unwrap();
+            ensure_logout_retry_locator(&root, &identity).unwrap();
+            persist_session_material(&vault, &account, &old_material).unwrap();
+            // A legitimate refresh completed before rollback takes its lease.
+            // Restored retry must keep this latest material, not the old token.
+            let latest_material = SessionMaterial::from_matrix_tokens(
+                &account,
+                "TEST",
+                "latest-unit-fixture-token",
+                Some("latest-unit-fixture-refresh"),
+            )
+            .unwrap();
+            lease
+                .save_credentials(
+                    || ensure_logout_retry_locator(&root, &identity),
+                    || {
+                        persist_session_material(&vault, &account, &latest_material)
+                            .map_err(|_| MatrixAuthCommandError::unavailable("test-refresh-failed"))
+                    },
+                )
+                .unwrap();
+            let gate = tokio::sync::Mutex::new(Some(1_u64));
+            let mut guard = gate.lock().await;
+            let remote_revoked = Cell::new(false);
+            let cleaned = Cell::new(false);
+            let stopped = Cell::new(false);
+            let core_active = Cell::new(true);
+            let result = finish_session_wiring(
+                Err(MatrixAuthCommandError::unavailable("p2-sync-attach-failed")),
+                || {
+                    finish_install_rollback(
+                        origin,
+                        &lease,
+                        || async {
+                            remote_revoked.set(true);
+                        },
+                        || async {
+                            stopped.set(true);
+                            assert_eq!(
+                                lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+                                "d0.1-session-persistence-retired"
+                            );
+                            if stop_fails {
+                                Err(MatrixAuthCommandError::unavailable(
+                                    "test-local-stop-failed",
+                                ))
+                            } else {
+                                Ok(())
+                            }
+                        },
+                        || {
+                            cleaned.set(true);
+                            clear_native_logout_material(&vault, &identity, &root)
+                        },
+                        || {
+                            *guard = None;
+                        },
+                        || async {
+                            assert!(
+                                gate.try_lock().is_err(),
+                                "origin-specific rollback retains auth gate through Core close"
+                            );
+                            core_active.set(false);
+                            Ok(())
+                        },
+                    )
+                },
+            )
+            .await;
+            assert_eq!(
+                result.unwrap_err().diagnostic_id,
+                if stop_fails {
+                    "test-local-stop-failed"
+                } else {
+                    "p2-sync-attach-failed"
+                }
+            );
+            assert!(stopped.get() && guard.is_none() && !core_active.get());
+            assert_eq!(remote_revoked.get(), !restored);
+            assert_eq!(cleaned.get(), !restored);
+            assert_eq!(
+                lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+                "d0.1-session-persistence-retired"
+            );
+            if restored {
+                assert_eq!(read_active_identity(&root).unwrap(), identity);
+                let retained = load_session_material(&vault, &account).unwrap().unwrap();
+                assert!(
+                    retained.as_bytes() == latest_material.as_bytes(),
+                    "latest restored vault material is preserved without printing secrets"
+                );
+            } else {
+                assert!(vault.is_empty() && !active_identity_path(&root).exists());
+            }
+            drop(guard);
+            assert!(gate.try_lock().unwrap().is_none());
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
+}
+
+#[tokio::test]
+async fn preparation_failure_after_callback_save_uses_origin_rollback_and_stops_owners() {
+    use crate::matrix::lifecycle::InMemorySessionMaterialVault;
+    use std::cell::Cell;
+    use synara_core::app::lifecycle::persist_session_material;
+    for origin in [
+        SessionInstallOrigin::Restored,
+        SessionInstallOrigin::NewAuthentication,
+    ] {
+        let restored = origin == SessionInstallOrigin::Restored;
+        let root = std::env::temp_dir().join(format!(
+            "synara-preparation-failure-{}-{restored}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let identity = MatrixLoginIdentity {
+            user_id: "@prepare:example.org".into(),
+            device_id: "TEST".into(),
+            homeserver_url: "https://example.org".into(),
+        };
+        let account = account_identity(&identity).unwrap();
+        let vault = InMemorySessionMaterialVault::new();
+        let owner = SessionPersistenceOwner::new();
+        let lease = owner.callback_lease();
+        let material = SessionMaterial::from_matrix_tokens(
+            &account,
+            "TEST",
+            "callback-unit-fixture-token",
+            Some("callback-unit-fixture-refresh"),
+        )
+        .unwrap();
+        // Uses the exact callback persistence coordinator, including durable
+        // locator creation, before a later owner-start step fails.
+        lease
+            .save_credentials(
+                || ensure_logout_retry_locator(&root, &identity),
+                || {
+                    persist_session_material(&vault, &account, &material).map_err(|_| {
+                        MatrixAuthCommandError::unavailable("test-callback-save-failed")
+                    })
+                },
+            )
+            .unwrap();
+        let started_sync = Cell::new(true);
+        let widgets_open = Cell::new(true);
+        let observed = Cell::new(true);
+        let core_closed = Cell::new(false);
+        let remote_revoked = Cell::new(false);
+        let gate = tokio::sync::Mutex::new(None::<u64>);
+        let guard = gate.lock().await;
+        let failed_preparation: Result<(), MatrixAuthCommandError> = Err(
+            MatrixAuthCommandError::unavailable("p2-own-profile-attach-failed"),
+        );
+        let result = finish_session_preparation(failed_preparation, || {
+            finish_install_rollback(
+                origin,
+                &lease,
+                || async {
+                    remote_revoked.set(true);
+                },
+                || async {
+                    started_sync.set(false);
+                    widgets_open.set(false);
+                    observed.set(false);
+                    Ok(())
+                },
+                || clear_native_logout_material(&vault, &identity, &root),
+                || {}, // preparation never installed a desktop owner
+                || async {
+                    assert!(gate.try_lock().is_err());
+                    core_closed.set(true);
+                    Ok(())
+                },
+            )
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err().diagnostic_id,
+            "p2-own-profile-attach-failed"
+        );
+        assert!(!started_sync.get() && !widgets_open.get() && !observed.get() && core_closed.get());
+        assert_eq!(remote_revoked.get(), !restored);
+        assert_eq!(
+            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            "d0.1-session-persistence-retired"
+        );
+        if restored {
+            assert_eq!(read_active_identity(&root).unwrap(), identity);
+            assert!(
+                load_session_material(&vault, &account)
+                    .unwrap()
+                    .unwrap()
+                    .as_bytes()
+                    == material.as_bytes()
+            );
+        } else {
+            assert!(vault.is_empty() && !active_identity_path(&root).exists());
+        }
+        drop(guard);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn new_auth_preparation_without_credential_write_preserves_previous_login() {
+    use crate::matrix::lifecycle::InMemorySessionMaterialVault;
+    use std::cell::Cell;
+    use synara_core::app::lifecycle::persist_session_material;
+    for fail_preflight in [false, true] {
+        let root = std::env::temp_dir().join(format!(
+            "synara-no-write-provenance-{}-{fail_preflight}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let identity = MatrixLoginIdentity {
+            user_id: "@provenance:example.org".into(),
+            device_id: "OLD".into(),
+            homeserver_url: "https://example.org".into(),
+        };
+        let account = account_identity(&identity).unwrap();
+        let vault = InMemorySessionMaterialVault::new();
+        let previous = SessionMaterial::from_matrix_tokens(
+            &account,
+            "OLD",
+            "old-unit-provenance-token",
+            Some("old-unit-provenance-refresh"),
+        )
+        .unwrap();
+        ensure_logout_retry_locator(&root, &identity).unwrap();
+        persist_session_material(&vault, &account, &previous).unwrap();
+        let lease = SessionPersistenceLease::default();
+        let cleaned = Cell::new(false);
+        let write_ran = Cell::new(false);
+        if fail_preflight {
+            let error = persist_with_client_lease(
+                &lease,
+                || {
+                    Err(MatrixAuthCommandError::unavailable(
+                        "test-locator-preflight-failed",
+                    ))
+                },
+                || {
+                    write_ran.set(true);
+                    Ok(())
+                },
+                || {
+                    cleaned.set(true);
+                    clear_native_logout_material(&vault, &identity, &root)
+                },
+            )
+            .unwrap_err();
+            assert_eq!(error.diagnostic_id, "test-locator-preflight-failed");
+        }
+        let remote_revoked = Cell::new(false);
+        let local_retired = Cell::new(false);
+        let core_closed = Cell::new(false);
+        let failed: Result<(), MatrixAuthCommandError> = Err(MatrixAuthCommandError::unavailable(
+            "test-pre-write-owner-start-failed",
+        ));
+        let error = finish_session_preparation(failed, || {
+            finish_install_rollback(
+                SessionInstallOrigin::NewAuthentication,
+                &lease,
+                || async {
+                    remote_revoked.set(true);
+                },
+                || async {
+                    local_retired.set(true);
+                    Ok(())
+                },
+                || {
+                    cleaned.set(true);
+                    clear_native_logout_material(&vault, &identity, &root)
+                },
+                || {},
+                || async {
+                    core_closed.set(true);
+                    Ok(())
+                },
+            )
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(error.diagnostic_id, "test-pre-write-owner-start-failed");
+        assert!(remote_revoked.get() && local_retired.get() && core_closed.get());
+        assert!(!write_ran.get() && !cleaned.get());
+        assert_eq!(read_active_identity(&root).unwrap(), identity);
+        assert!(
+            load_session_material(&vault, &account)
+                .unwrap()
+                .unwrap()
+                .as_bytes()
+                == previous.as_bytes()
+        );
+        assert_eq!(
+            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            "d0.1-session-persistence-retired"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn registration_compensation_runs_only_before_primary_rollback_checkpoint() {
+    use std::cell::Cell;
+    for primary_armed in [false, true] {
+        let attempts = Cell::new(0);
+        let primary_attempts = Cell::new(0);
+        let mut error: Result<(), MatrixAuthCommandError> = Err(
+            MatrixAuthCommandError::unavailable("test-registration-preparation-failed"),
+        );
+        if primary_armed {
+            let lease = SessionPersistenceLease::default();
+            error = finish_session_preparation(error, || {
+                finish_install_rollback(
+                    SessionInstallOrigin::NewAuthentication,
+                    &lease,
+                    || async {
+                        primary_attempts.set(primary_attempts.get() + 1);
+                    },
+                    || async { Ok(()) },
+                    || Ok(()),
+                    || {},
+                    || async { Ok(()) },
+                )
+            })
+            .await;
+        }
+        let result = finish_registration_install_attempt(error, primary_armed, || async {
+            attempts.set(attempts.get() + 1);
+        })
+        .await;
+        assert_eq!(
+            result.unwrap_err().diagnostic_id,
+            "test-registration-preparation-failed"
+        );
+        assert_eq!(attempts.get(), usize::from(!primary_armed));
+        assert_eq!(primary_attempts.get(), usize::from(primary_armed));
+        assert_eq!(
+            attempts.get() + primary_attempts.get(),
+            1,
+            "one route owns server revocation"
+        );
+    }
+    let attempts = Cell::new(0);
+    finish_registration_install_attempt(Ok(()), false, || async {
+        attempts.set(attempts.get() + 1);
+    })
+    .await
+    .unwrap();
+    assert_eq!(attempts.get(), 0);
+}
+
+#[tokio::test]
+async fn generation_bound_notification_acceptance_holds_gate_and_rejects_stale_generation() {
+    use std::cell::Cell;
+    let session = tokio::sync::Mutex::new(Some(1_u64));
+    let (started_send, started_receive) = tokio::sync::oneshot::channel();
+    let (release_send, release_receive) = tokio::sync::oneshot::channel();
+    let delivered = Cell::new(false);
+    let acceptance = with_generation_bound_acceptance(
+        &session,
+        1,
+        |generation| *generation,
+        || async {
+            started_send.send(()).unwrap();
+            release_receive.await.unwrap();
+            delivered.set(true);
+            Ok::<_, String>(true)
+        },
+    );
+    let replace = async {
+        started_receive.await.unwrap();
+        assert!(
+            session.try_lock().is_err(),
+            "replacement/logout cannot acquire gate during OS acceptance"
+        );
+        release_send.send(()).unwrap();
+        let mut guard = session.lock().await;
+        *guard = Some(2);
+    };
+    let (accepted, ()) = tokio::join!(acceptance, replace);
+    assert!(accepted.unwrap().unwrap());
+    assert!(delivered.replace(false));
+    let stale = with_generation_bound_acceptance(
+        &session,
+        1,
+        |generation| *generation,
+        || async {
+            delivered.set(true);
+            true
+        },
+    )
+    .await;
+    assert!(stale.is_none() && !delivered.get());
+    *session.lock().await = None;
+    let logged_out = with_generation_bound_acceptance(
+        &session,
+        2,
+        |generation| *generation,
+        || async {
+            delivered.set(true);
+            true
+        },
+    )
+    .await;
+    assert!(logged_out.is_none() && !delivered.get());
+}
+
+#[tokio::test]
+async fn registration_compensation_restores_returned_token_and_logs_out_via_sdk_memory_client() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    let server = MatrixMockServer::new().await;
+    server.mock_versions().ok().mount().await;
+    server
+        .mock_logout()
+        .expect_access_token("unit-compensation-access")
+        .ok()
+        .mock_once()
+        .mount()
+        .await;
+    let secrets = crate::matrix::auth::RegisterCompleteSecrets {
+        user_id: "@registration:example.org".into(),
+        device_id: "REGISTER".into(),
+        homeserver_url: server.uri(),
+        access_token: zeroize::Zeroizing::new("unit-compensation-access".into()),
+        refresh_token: None,
+    };
+    let unused_root = std::env::temp_dir().join(format!(
+        "synara-registration-compensation-metadata-{}",
+        std::process::id()
+    ));
+    assert!(
+        !unused_root.exists(),
+        "memory-only metadata root starts absent"
+    );
+    revoke_uninstalled_registration(&secrets).await.unwrap();
+    assert!(
+        !unused_root.exists(),
+        "compensation must not create a store or locator"
+    );
+    let requests = server.received_requests().await.unwrap();
+    assert!(
+        !requests
+            .iter()
+            .any(|request| request.url.path().ends_with("/login")
+                || request.url.path().ends_with("/register")),
+        "compensation only revokes the returned session"
+    );
+}
+
+#[tokio::test]
+async fn generation_bound_acceptance_retains_gate_when_waiting_caller_is_cancelled() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let session = Arc::new(tokio::sync::Mutex::new(Some(1_u64)));
+    let accepted = Arc::new(AtomicBool::new(false));
+    let (started_send, started_receive) = tokio::sync::oneshot::channel();
+    let (release_send, release_receive) = tokio::sync::oneshot::channel();
+    let owned_acceptance = {
+        let session = session.clone();
+        let accepted = accepted.clone();
+        tokio::spawn(async move {
+            with_generation_bound_acceptance(
+                &session,
+                1,
+                |generation| *generation,
+                || async {
+                    started_send.send(()).unwrap();
+                    release_receive.await.unwrap();
+                    accepted.store(true, Ordering::SeqCst);
+                    true
+                },
+            )
+            .await
+        })
+    };
+    // Native delivery owns the inner task; canceling the renderer's waiting
+    // future drops only its JoinHandle and must not cancel the OS acceptance.
+    let waiting_caller = tokio::spawn(owned_acceptance);
+    started_receive.await.unwrap();
+    waiting_caller.abort();
+    assert!(waiting_caller.await.unwrap_err().is_cancelled());
+    assert!(session.try_lock().is_err());
+    let replacement = {
+        let session = session.clone();
+        tokio::spawn(async move {
+            let mut guard = session.lock().await;
+            *guard = Some(2);
+        })
+    };
+    assert!(!accepted.load(Ordering::SeqCst));
+    release_send.send(()).unwrap();
+    replacement.await.unwrap();
+    assert!(accepted.load(Ordering::SeqCst));
+    assert_eq!(*session.lock().await, Some(2));
+}
+
+#[tokio::test]
+async fn password_login_activation_failure_revokes_token_before_metadata_without_clearing_old_vault(
+) {
+    use crate::matrix::lifecycle::InMemorySessionMaterialVault;
+    use matrix_sdk::{
+        ruma::{device_id, user_id},
+        test_utils::mocks::{LoginResponseTemplate200, MatrixMockServer},
+    };
+    use std::cell::Cell;
+    use synara_core::app::lifecycle::persist_session_material;
+    for case in ["activation", "http", "validation"] {
+        let root = std::env::temp_dir().join(format!(
+            "synara-login-activate-fault-{}-{case}",
+            std::process::id()
+        ));
+        let _ = fs::remove_dir_all(&root);
+        let sdk_store = root.join("sdk");
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .unlogged()
+            .on_builder(|builder| builder.sqlite_store(&sdk_store, None))
+            .build()
+            .await;
+        let identity = MatrixLoginIdentity {
+            user_id: "@activate:example.org".into(),
+            device_id: "OLD".into(),
+            homeserver_url: server.uri(),
+        };
+        let account = account_identity(&identity).unwrap();
+        let vault = InMemorySessionMaterialVault::new();
+        let previous =
+            SessionMaterial::from_matrix_tokens(&account, "OLD", "old-unit-activate-token", None)
+                .unwrap();
+        ensure_logout_retry_locator(&root, &identity).unwrap();
+        persist_session_material(&vault, &account, &previous).unwrap();
+        if case == "activation" {
+            // The store opens successfully. Only the later SDK activate read
+            // fails: tokens are installed before SELECT data FROM room_info.
+            let db =
+                rusqlite::Connection::open(sdk_store.join(matrix_sdk::STATE_STORE_DATABASE_NAME))
+                    .unwrap();
+            db.execute_batch("DROP TABLE room_info;").unwrap();
+            drop(db);
+            server
+                .mock_login()
+                .ok_with(LoginResponseTemplate200::new(
+                    "unit-activation-response-token",
+                    device_id!("NEW"),
+                    user_id!("@activate:example.org"),
+                ))
+                .mock_once()
+                .mount()
+                .await;
+        } else if case == "http" {
+            server.mock_login().error500().mock_once().mount().await;
+        }
+        server
+            .mock_logout()
+            .expect_access_token("unit-activation-response-token")
+            .ok()
+            .expect(if case == "activation" { 1_u64 } else { 0_u64 })
+            .mount()
+            .await;
+        let owner = SessionPersistenceOwner::new();
+        let lease = owner.callback_lease();
+        let attempt = login_with_password(
+            &client,
+            account.user_id(),
+            if case == "validation" {
+                ""
+            } else {
+                "unit-fixture-password"
+            },
+            &LoginOptions::default(),
+        )
+        .await;
+        let expected_diagnostic = attempt.as_ref().err().unwrap().diagnostic_id().to_owned();
+        assert!(
+            client.session().is_none(),
+            "failed activation never installs complete session metadata"
+        );
+        assert_eq!(
+            client.access_token().map(zeroize::Zeroizing::new).is_some(),
+            case == "activation"
+        );
+        if case == "activation" {
+            assert_eq!(expected_diagnostic, "p3.2-login-store-open-failed");
+        }
+        let cleaned = Cell::new(false);
+        let gate = tokio::sync::Mutex::new(None::<u64>);
+        let guard = gate.lock().await;
+        let failed = finish_password_login_attempt(attempt, &client, &lease, || {
+            cleaned.set(true);
+            assert!(gate.try_lock().is_err());
+            clear_persisted_logout_material(&vault, &root)
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(failed.diagnostic_id, expected_diagnostic);
+        assert!(
+            !cleaned.get(),
+            "no writer attempt may clear a previous login"
+        );
+        assert_eq!(
+            lease.save(|| Ok(())).unwrap_err().diagnostic_id,
+            "d0.1-session-persistence-retired"
+        );
+        assert_eq!(read_active_identity(&root).unwrap(), identity);
+        assert!(
+            load_session_material(&vault, &account)
+                .unwrap()
+                .unwrap()
+                .as_bytes()
+                == previous.as_bytes()
+        );
+        assert!(
+            gate.try_lock().is_err(),
+            "login error rollback retains the caller's auth gate"
+        );
+        drop(guard);
+        drop(owner);
+        drop(client);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[tokio::test]
+async fn suspend_resume_holds_session_gate_until_completion_and_selects_replacement_owner() {
+    use std::cell::Cell;
+    use std::sync::{
+        atomic::{AtomicU64, Ordering},
+        Mutex as StdMutex,
+    };
+    let session = tokio::sync::Mutex::new(Some(1_u64));
+    let recovery = tokio::sync::Mutex::new(RecoverGate::default());
+    let current = AtomicU64::new(1);
+    let events = StdMutex::new(Vec::new());
+    let (started_send, started_receive) = tokio::sync::oneshot::channel();
+    let (release_send, release_receive) = tokio::sync::oneshot::channel();
+    let resume = recover_installed_session_owner(
+        &session,
+        &recovery,
+        true,
+        |generation| *generation,
+        |active| active.copied(),
+        |generation| {
+            let current = &current;
+            let events = &events;
+            async move {
+                assert_eq!(generation, 1);
+                events.lock().unwrap().push("old-resume-start");
+                started_send.send(()).unwrap();
+                release_receive.await.unwrap();
+                assert_eq!(
+                    current.load(Ordering::Acquire),
+                    generation,
+                    "logout/replacement cannot retire a currently resuming owner"
+                );
+                events.lock().unwrap().push("old-resume-complete");
+                Ok::<_, ()>(Some(generation))
+            }
+        },
+    );
+    let replace = async {
+        started_receive.await.unwrap();
+        assert!(
+            session.try_lock().is_err(),
+            "teardown is blocked until old resume finishes"
+        );
+        // SDK work releases recovery. An observer may then wait for session
+        // while holding recovery; completion must drop session first.
+        let gate = recovery.lock().await;
+        assert!(gate.in_flight);
+        release_send.send(()).unwrap();
+        let mut active = session.lock().await;
+        events.lock().unwrap().push("old-stop-new-install");
+        current.store(2, Ordering::Release);
+        *active = Some(2);
+        drop(active);
+        drop(gate);
+    };
+    let (result, ()) = tokio::time::timeout(Duration::from_secs(5), async {
+        tokio::join!(resume, replace)
+    })
+    .await
+    .expect("resume releases session before reacquiring recovery bookkeeping");
+    assert_eq!(result.unwrap(), Some(1));
+    assert_eq!(
+        *events.lock().unwrap(),
+        [
+            "old-resume-start",
+            "old-resume-complete",
+            "old-stop-new-install"
+        ]
+    );
+    let called = Cell::new(false);
+    let observed = recover_installed_session_owner(
+        &session,
+        &recovery,
+        false,
+        |generation| *generation,
+        |active| active.copied(),
+        |_| async {
+            called.set(true);
+            Ok::<_, ()>(None)
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(observed, Some(2));
+    assert!(
+        !called.get(),
+        "successful recovery preserves renderer wall-clock cooldown"
+    );
+    let resumed = recover_installed_session_owner(
+        &session,
+        &recovery,
+        true,
+        |generation| *generation,
+        |active| active.copied(),
+        |generation| async move {
+            assert_eq!(
+                generation, 2,
+                "after replacement only the installed owner resumes"
+            );
+            assert_eq!(current.load(Ordering::Acquire), generation);
+            Ok::<_, ()>(Some(generation))
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(resumed, Some(2));
+    assert!(!recovery.lock().await.in_flight);
+    assert!(recovery.lock().await.last_success_wall.is_some());
+    *session.lock().await = None;
+    let logged_out = recover_installed_session_owner(
+        &session,
+        &recovery,
+        true,
+        |generation| *generation,
+        |active| active.copied(),
+        |_| async {
+            called.set(true);
+            Ok::<_, ()>(None)
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        logged_out.is_none() && !called.get(),
+        "no retained old owner resumes after logout"
+    );
+}
+
+#[tokio::test]
+async fn suspend_resume_inflight_and_error_preserve_recovery_gate_contract() {
+    use std::cell::Cell;
+    let session = tokio::sync::Mutex::new(Some(1_u64));
+    let recovery = tokio::sync::Mutex::new(RecoverGate {
+        in_flight: true,
+        last_success_wall: None,
+    });
+    let called = Cell::new(false);
+    assert_eq!(
+        recover_installed_session_owner(
+            &session,
+            &recovery,
+            true,
+            |generation| *generation,
+            |active| active.copied(),
+            |_| async {
+                called.set(true);
+                Ok::<_, &'static str>(None)
+            },
+        )
+        .await
+        .unwrap(),
+        Some(1)
+    );
+    assert!(
+        !called.get(),
+        "concurrent recovery observes instead of issuing a second resume"
+    );
+    recovery.lock().await.in_flight = false;
+    let error = recover_installed_session_owner(
+        &session,
+        &recovery,
+        false,
+        |generation| *generation,
+        |active| active.copied(),
+        |_| async { Err("fixture-resume-failed") },
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(error, "fixture-resume-failed");
+    let gate = recovery.lock().await;
+    assert!(!gate.in_flight && gate.last_success_wall.is_none());
+    drop(gate);
+    let retried = recover_installed_session_owner(
+        &session,
+        &recovery,
+        false,
+        |generation| *generation,
+        |active| active.copied(),
+        |generation| async move { Ok::<_, &'static str>(Some(generation)) },
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        retried,
+        Some(1),
+        "ordinary retry remains allowed after resume error"
     );
 }

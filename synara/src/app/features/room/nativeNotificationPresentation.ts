@@ -11,7 +11,7 @@ import type { NativeNotificationCandidate } from './nativeNotificationDecision';
  */
 export function buildNativeObservedNotificationPresentation(
   candidate: NativeNotificationCandidate,
-  source: { roomId: string; eventId: string }
+  source: { roomId: string; eventId: string; sessionGeneration: number }
 ): PlatformNotificationPayload {
   if (
     candidate.roomId !== source.roomId ||
@@ -24,10 +24,14 @@ export function buildNativeObservedNotificationPresentation(
   return {
     title: candidate.title,
     body: candidate.body,
+    sessionGeneration: source.sessionGeneration,
+    sound: approval ? 'default' : 'silent',
     route: candidate.route ?? buildDesktopNotificationRoomRoute(source.roomId, source.eventId),
-    dismissKeys: approval
-      ? [`room:${source.roomId}`, `event:${source.eventId}`]
-      : [`room:${source.roomId}`],
+    dismissKeys: [
+      `room:${source.roomId}`,
+      `event:${source.eventId}`,
+      `candidate:${candidate.candidateId}`,
+    ],
     ...(approval
       ? {
           actions: AGENT_APPROVAL_NATIVE_NOTIFICATION_ACTIONS,
@@ -51,6 +55,8 @@ export async function deliverNativeObservedNotificationCandidate(options: {
   presentOrdinaryMessages?: boolean;
   currentGeneration: () => number | undefined;
   deliver: (candidate: NativeNotificationCandidate) => Promise<'delivered' | 'failed' | undefined>;
+  commit?: (outcome: 'delivered' | 'failed' | undefined) => void;
+  cancelDelivery?: () => Promise<void>;
   acknowledge: (candidateId: string, outcome?: 'delivered' | 'failed') => Promise<unknown>;
 }): Promise<void> {
   let outcome: 'delivered' | 'failed' | undefined;
@@ -58,6 +64,11 @@ export async function deliverNativeObservedNotificationCandidate(options: {
     if (options.currentGeneration() !== options.observedGeneration) return;
     if (options.candidate.kind === 'message' && options.presentOrdinaryMessages === false) return;
     outcome = await options.deliver(options.candidate);
+    if (options.currentGeneration() !== options.observedGeneration) {
+      if (outcome === 'delivered') await options.cancelDelivery?.();
+      return;
+    }
+    options.commit?.(outcome);
   } catch {
     outcome = 'failed';
   } finally {
@@ -68,4 +79,45 @@ export async function deliverNativeObservedNotificationCandidate(options: {
       // old owner. Never turn a failed acknowledgement into a delivery retry.
     }
   }
+}
+
+/** Browser fallback items are owned by their exact Core candidate, not the room. */
+export function createObservedBrowserNotificationRegistry() {
+  const items = new Map<string, { close: () => void }>();
+  return {
+    track: (id: string, item: { close: () => void }) => {
+      items.set(id, item);
+      if (items.size > 256) {
+        const oldest = items.keys().next().value;
+        if (oldest !== undefined) {
+          items.get(oldest)?.close();
+          items.delete(oldest);
+        }
+      }
+    },
+    forget: (id: string) => {
+      items.delete(id);
+    },
+    cancel: (id: string) => {
+      items.get(id)?.close();
+      items.delete(id);
+    },
+    clear: () => {
+      for (const item of items.values()) item.close();
+      items.clear();
+    },
+  };
+}
+
+/** Retained OS actions are admitted only for the original live desktop session. */
+export function isNativeNotificationActionForSession(
+  originalGeneration: number | undefined,
+  currentGeneration: number | undefined
+): boolean {
+  return (
+    originalGeneration !== undefined &&
+    Number.isSafeInteger(originalGeneration) &&
+    originalGeneration >= 0 &&
+    originalGeneration === currentGeneration
+  );
 }

@@ -135,3 +135,21 @@ test('normalizeSystemNotificationRequest preserves dismiss keys without actions'
     }
   );
 });
+
+test('notification session binding is optional and rejects invalid generation values', () => {
+  for (const sessionGeneration of [-1, 1.5, NaN, Infinity, Number.MAX_SAFE_INTEGER + 1]) {
+    assert.equal(
+      normalizeSystemNotificationRequest({ title: 'Message', sessionGeneration }),
+      undefined
+    );
+  }
+  assert.equal(
+    normalizeSystemNotificationRequest({ title: 'Message', sessionGeneration: 7 })
+      ?.sessionGeneration,
+    7
+  );
+  assert.equal(
+    normalizeSystemNotificationRequest({ title: 'System notice' })?.sessionGeneration,
+    undefined
+  );
+});

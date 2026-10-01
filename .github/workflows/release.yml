@@ -181,6 +181,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -665,6 +666,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios
 
       - name: Cache Apple SynaraCore build

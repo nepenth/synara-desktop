@@ -14,7 +14,7 @@ export const AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW = 'agent-approval.review'
 export const AGENT_APPROVAL_NOTIFICATION_KIND = 'agent-approval';
 
 export const AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY =
-  'synara.agent-approval.native-action-dedupe';
+  'synara.agent-approval.native-action-dedupe.completed-v2';
 
 export const AGENT_APPROVAL_REACTION_KEYS = [
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
@@ -426,3 +426,21 @@ export const formatCoreAgentApprovalPrompt = (body: string): AgentApprovalPrompt
     replyInstructions,
   };
 };
+
+/** In-flight clicks are volatile; durable memory records successful Core actions only. */
+export async function executeAgentApprovalNativeActionOnce(options: {
+  key: string;
+  completed: AgentApprovalNativeActionDedupeStore;
+  inFlight: Set<string>;
+  execute: () => Promise<unknown>;
+}): Promise<boolean> {
+  if (options.completed.has(options.key) || options.inFlight.has(options.key)) return false;
+  options.inFlight.add(options.key);
+  try {
+    await options.execute();
+    options.completed.add(options.key);
+    return true;
+  } finally {
+    options.inFlight.delete(options.key);
+  }
+}

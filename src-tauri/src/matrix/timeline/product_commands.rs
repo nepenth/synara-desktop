@@ -157,11 +157,47 @@ pub async fn matrix_agent_approvals_list(
 
 #[tauri::command]
 pub async fn matrix_agent_approval_decide(
+    app: tauri::AppHandle,
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     event_id: String,
     action_id: String,
+    notification_session_generation: Option<u64>,
 ) -> Result<NativeAgentApprovalDecisionResult, MatrixAuthCommandError> {
+    if let Some(generation) = notification_session_generation {
+        let core = core.inner().clone();
+        // This task owns the admission gate through the SDK mutation even if
+        // the renderer drops its response waiter. Desktop and Core generation
+        // counters are distinct; never substitute this into the Core envelope.
+        return tauri::async_runtime::spawn(async move {
+            use tauri::Manager;
+            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
+            auth.with_session_generation(generation, || {
+                crate::bridge::timeline_reactions::agent_approval_decide(
+                    core.as_ref(),
+                    room_id,
+                    event_id,
+                    action_id,
+                )
+            })
+            .await
+            .unwrap_or_else(|| {
+                Err(MatrixAuthCommandError::new(
+                    "Forbidden",
+                    "This notification belongs to an inactive session.",
+                    "agent-approval-stale-notification-session",
+                ))
+            })
+        })
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Forbidden",
+                "The native approval action was interrupted.",
+                "agent-approval-notification-task-failed",
+            )
+        })?;
+    }
     crate::bridge::timeline_reactions::agent_approval_decide(
         core.inner().as_ref(),
         room_id,

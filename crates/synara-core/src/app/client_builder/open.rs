@@ -3,7 +3,7 @@
 //! This is the sole production construction site for `Client::builder` in
 //! `synara-core`. It never performs login, restore_session, or sync.
 
-use matrix_sdk::config::RequestConfig;
+use matrix_sdk::config::{RequestConfig, StoreConfig};
 use matrix_sdk::cross_process_lock::CrossProcessLockConfig;
 use matrix_sdk::encryption::{BackupDownloadStrategy, EncryptionSettings};
 #[cfg(feature = "search-index")]
@@ -23,8 +23,33 @@ use crate::transport::MatrixIpcErrorCategory;
 pub async fn build_unauthenticated_client(
     config: &ClientBuildConfig,
 ) -> Result<Client, ClientBuilderError> {
+    build_client(config, ClientStoreMode::Persistent).await
+}
+
+/// Build an unauthenticated client with explicit in-memory state, crypto,
+/// event-cache and media stores. Used only for bounded server-session cleanup
+/// before a product session exists. Creates no product layout, search index,
+/// session callback or vault entries; transport/encryption policy is shared.
+pub async fn build_memory_only_client(
+    config: &ClientBuildConfig,
+) -> Result<Client, ClientBuilderError> {
+    build_client(config, ClientStoreMode::Memory).await
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum ClientStoreMode {
+    Persistent,
+    Memory,
+}
+
+async fn build_client(
+    config: &ClientBuildConfig,
+    store_mode: ClientStoreMode,
+) -> Result<Client, ClientBuilderError> {
     config.validate()?;
-    config.ensure_store_dirs()?;
+    if store_mode == ClientStoreMode::Persistent {
+        config.ensure_store_dirs()?;
+    }
 
     let request_config = RequestConfig::new()
         .timeout(config.timeouts.request_timeout)
@@ -37,13 +62,17 @@ pub async fn build_unauthenticated_client(
         ..EncryptionSettings::default()
     };
 
+    let cross_process = match store_mode {
+        ClientStoreMode::Memory => CrossProcessLockConfig::SingleProcess,
+        ClientStoreMode::Persistent => {
+            CrossProcessLockConfig::multi_process(config.cross_process_store_lock_holder())
+        }
+    };
     let mut builder = Client::builder()
         .request_config(request_config)
         .user_agent(&config.user_agent)
         .with_encryption_settings(encryption_settings)
-        .cross_process_store_config(CrossProcessLockConfig::multi_process(
-            config.cross_process_store_lock_holder(),
-        ));
+        .cross_process_store_config(cross_process.clone());
 
     match config.homeserver_mode {
         HomeserverMode::ExplicitUrl => {
@@ -51,18 +80,25 @@ pub async fn build_unauthenticated_client(
         }
     }
 
-    // Prefer state dir + separate cache path so event-cache does not share the
-    // crypto/state tree root layout unnecessarily.
-    let passphrase = config.store_passphrase_hex();
-    builder = builder.sqlite_store_with_cache_path(
-        config.state_store_path(),
-        config.cache_store_path(),
-        passphrase.as_deref(),
-    );
-
-    #[cfg(feature = "search-index")]
-    {
-        builder = apply_encrypted_search_index(builder, config, passphrase.as_deref())?;
+    match store_mode {
+        ClientStoreMode::Memory => {
+            // StoreConfig::new explicitly selects SDK memory implementations
+            // for all four stores; do not rely on a future builder default.
+            builder = builder.store_config(StoreConfig::new(cross_process));
+        }
+        ClientStoreMode::Persistent => {
+            // Keep state and cache paths separate in the product layout.
+            let passphrase = config.store_passphrase_hex();
+            builder = builder.sqlite_store_with_cache_path(
+                config.state_store_path(),
+                config.cache_store_path(),
+                passphrase.as_deref(),
+            );
+            #[cfg(feature = "search-index")]
+            {
+                builder = apply_encrypted_search_index(builder, config, passphrase.as_deref())?;
+            }
+        }
     }
 
     if let Some(proxy) = &config.network.proxy_url {
@@ -85,7 +121,11 @@ pub async fn build_unauthenticated_client(
     #[cfg(feature = "x509-identity")]
     {
         crate::app::x509::ensure_aws_lc_rustls_provider();
-        builder = apply_x509_identity_hooks(builder, config.account_root());
+        builder = apply_x509_identity_hooks(
+            builder,
+            config.account_root(),
+            store_mode == ClientStoreMode::Persistent,
+        );
     }
 
     builder.build().await.map_err(map_build_error)
@@ -117,6 +157,7 @@ fn apply_encrypted_search_index(
 fn apply_x509_identity_hooks(
     mut builder: matrix_sdk::ClientBuilder,
     account_root: &std::path::Path,
+    record_configuration: bool,
 ) -> matrix_sdk::ClientBuilder {
     let runtime = crate::app::x509::load_runtime(account_root);
     let inject = runtime.should_inject_verifier();
@@ -131,11 +172,15 @@ fn apply_x509_identity_hooks(
                     builder = builder.with_x509_signer(Some(signer));
                 }
             }
-            crate::app::x509::record_applied(account_root, true);
+            if record_configuration {
+                crate::app::x509::record_applied(account_root, true);
+            }
             return builder;
         }
     }
-    crate::app::x509::record_applied(account_root, false);
+    if record_configuration {
+        crate::app::x509::record_applied(account_root, false);
+    }
     builder
 }
 
@@ -297,6 +342,64 @@ mod privacy_tests {
         for sensitive in ["/Users/", "https://", "access_token", "syt_LEAK"] {
             assert!(!message.contains(sensitive));
         }
+    }
+
+    #[tokio::test]
+    async fn memory_client_never_creates_product_layout_and_uses_configured_transport() {
+        use wiremock::{
+            matchers::{header, method, path},
+            Mock, MockServer, ResponseTemplate,
+        };
+        let fixture = StoreFixture::new();
+        let server = MockServer::start().await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/versions"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(serde_json::json!({"versions": ["v1.11"]})),
+            )
+            .mount(&server)
+            .await;
+        Mock::given(method("GET"))
+            .and(path("/_matrix/client/v3/login"))
+            .and(header("user-agent", "SynaraMemoryFactoryFixture"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"flows": []})),
+            )
+            .expect(1)
+            .mount(&server)
+            .await;
+        let absent_root = fixture.0.join("must-remain-absent");
+        let config = ClientBuildConfig::product_default(
+            &absent_root,
+            crate::app::store::AccountIdentity::new("@fixture:example.org", &server.uri()).unwrap(),
+            None,
+        )
+        .unwrap()
+        .with_user_agent("SynaraMemoryFactoryFixture")
+        .unwrap();
+        let client = build_memory_only_client(&config).await.unwrap();
+        assert!(client.user_id().is_none());
+        client.matrix_auth().get_login_types().await.unwrap();
+        assert!(!absent_root.exists(), "memory construction and SDK requests must not create any account/store/cache/search/X509 layout");
+    }
+
+    #[tokio::test]
+    async fn memory_client_rejects_invalid_transport_without_touching_store_paths() {
+        let fixture = StoreFixture::new();
+        let mut config = fixture.config();
+        config.network.ssl_verification = false;
+        assert!(matches!(
+            build_memory_only_client(&config).await,
+            Err(ClientBuilderError::InvalidConfig(_))
+        ));
+        config.network.ssl_verification = true;
+        config.network.proxy_url = Some("http://user:password@localhost:8080".into());
+        assert!(matches!(
+            build_memory_only_client(&config).await,
+            Err(ClientBuilderError::InvalidConfig(_))
+        ));
+        assert!(!config.account_root().exists());
     }
 
     #[test]

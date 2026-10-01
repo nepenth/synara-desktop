@@ -78,7 +78,7 @@ struct ComposerTextView: UIViewRepresentable {
     @Binding var height: CGFloat
     var placeholder: String
     var formattingRevision: Int
-    var isFocused: FocusState<Bool>.Binding
+    @Binding var isFocused: Bool
     var onPasteImages: ([UIImage]) -> Void = { _ in }
 
     func makeCoordinator() -> Coordinator {
@@ -168,8 +168,10 @@ struct ComposerTextView: UIViewRepresentable {
             }
         }
 
-        if isFocused.wrappedValue, textView.isFirstResponder == false {
+        if isFocused, textView.isFirstResponder == false {
             textView.becomeFirstResponder()
+        } else if isFocused == false, textView.isFirstResponder {
+            textView.resignFirstResponder()
         }
 
         context.coordinator.syncPlaceholder()
@@ -286,16 +288,16 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
-            if parent.isFocused.wrappedValue == false {
-                parent.isFocused.wrappedValue = true
+            if parent.isFocused == false {
+                parent.isFocused = true
             }
             syncPlaceholder()
             updateHeight(for: textView)
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
-            if parent.isFocused.wrappedValue {
-                parent.isFocused.wrappedValue = false
+            if parent.isFocused {
+                parent.isFocused = false
             }
             parent.text = ComposerAttributedMarkdown.markdown(
                 from: textView.attributedText,

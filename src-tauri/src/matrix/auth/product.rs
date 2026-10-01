@@ -313,6 +313,46 @@ struct RecoverGate {
     last_success_wall: Option<SystemTime>,
 }
 
+/// Serialize suspend recovery with logout/replacement for the installed owner.
+/// Recovery observers acquire recovery then session; completion must release
+/// session before reacquiring recovery to avoid reversing that lock order.
+async fn recover_installed_session_owner<Session, Owner, Snapshot, Error, ResumeFuture>(
+    session: &Mutex<Option<Session>>,
+    recover_gate: &Mutex<RecoverGate>,
+    ignore_cooldown: bool,
+    owner: impl FnOnce(&Session) -> Owner,
+    observe: impl FnOnce(Option<&Session>) -> Snapshot,
+    resume: impl FnOnce(Owner) -> ResumeFuture,
+) -> Result<Snapshot, Error>
+where
+    ResumeFuture: std::future::Future<Output = Result<Snapshot, Error>>,
+{
+    let mut gate = recover_gate.lock().await;
+    if gate.in_flight
+        || (!ignore_cooldown
+            && recover_cooldown_active(gate.last_success_wall, SystemTime::now(), RECOVER_COOLDOWN))
+    {
+        drop(gate);
+        let guard = session.lock().await;
+        return Ok(observe(guard.as_ref()));
+    }
+    let guard = session.lock().await;
+    let Some(active) = guard.as_ref() else {
+        return Ok(observe(None));
+    };
+    let owner = owner(active);
+    gate.in_flight = true;
+    drop(gate);
+    let result = resume(owner).await;
+    drop(guard);
+    let mut gate = recover_gate.lock().await;
+    gate.in_flight = false;
+    if result.is_ok() {
+        gate.last_success_wall = Some(SystemTime::now());
+    }
+    result
+}
+
 #[derive(Default)]
 pub struct MatrixAuthState {
     session: Mutex<Option<ManagedMatrixSession>>,
@@ -324,6 +364,27 @@ pub struct MatrixAuthState {
 impl MatrixAuthState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Accept a bound native notification only for the currently installed
+    /// generation, retaining the auth transition gate through OS acceptance.
+    /// The callback must not call back into this session gate.
+    pub(crate) async fn with_session_generation<T, Accept, AcceptFuture>(
+        &self,
+        expected_generation: u64,
+        accept: Accept,
+    ) -> Option<T>
+    where
+        Accept: FnOnce() -> AcceptFuture,
+        AcceptFuture: std::future::Future<Output = T>,
+    {
+        with_generation_bound_acceptance(
+            &self.session,
+            expected_generation,
+            |active| active.sync.session_generation(),
+            accept,
+        )
+        .await
     }
 
     /// Read the current SDK sync owner as the existing safe readiness DTO.
@@ -339,8 +400,9 @@ impl MatrixAuthState {
         }
     }
 
-    /// Restart the live SyncService after OS suspend. Clones the owner under
-    /// the session mutex, then releases both locks before stop/start.
+    /// Restart the live SyncService after OS suspend while retaining the
+    /// session transition gate through stop/start. Release the recovery gate
+    /// during SDK work, and release the session gate before recovery bookkeeping.
     /// Concurrent renderer and watchdog calls share an in-flight flag so we
     /// do not stop/start twice on the same wake. Renderer IPC keeps a
     /// wall-clock cooldown; the native watchdog skips that cooldown after a
@@ -359,35 +421,18 @@ impl MatrixAuthState {
         &self,
         ignore_cooldown: bool,
     ) -> Result<SyncReadinessSnapshot, SyncError> {
-        let owner = {
-            let mut gate = self.recover_gate.lock().await;
-            if gate.in_flight
-                || (!ignore_cooldown
-                    && recover_cooldown_active(
-                        gate.last_success_wall,
-                        SystemTime::now(),
-                        RECOVER_COOLDOWN,
-                    ))
-            {
-                drop(gate);
-                return Ok(self.sync_status_snapshot().await);
-            }
-            let session = self.session.lock().await;
-            let Some(active) = session.as_ref() else {
-                return Ok(unconfigured_snapshot(self.current_generation()));
-            };
-            let owner = active.sync.clone();
-            drop(session);
-            gate.in_flight = true;
-            owner
-        };
-        let result = owner.apply_intent(SyncIntent::Resume).await;
-        let mut gate = self.recover_gate.lock().await;
-        gate.in_flight = false;
-        if result.is_ok() {
-            gate.last_success_wall = Some(SystemTime::now());
-        }
-        result
+        recover_installed_session_owner(
+            &self.session,
+            &self.recover_gate,
+            ignore_cooldown,
+            |active| active.sync.clone(),
+            |active| match active {
+                Some(active) => active.sync.observe(),
+                None => unconfigured_snapshot(self.current_generation()),
+            },
+            |owner| async move { owner.apply_intent(SyncIntent::Resume).await },
+        )
+        .await
     }
 
     /// Read the existing crypto-status observation as a closed Core projection.

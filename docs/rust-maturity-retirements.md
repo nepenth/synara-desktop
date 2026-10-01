@@ -117,3 +117,51 @@ account delivery or acknowledgement retry. Protocol-relative and backslash
 notification routes are discarded while a valid notification can still deliver.
 The SDK retirement regression and the shared delivery helper fault tests are the
 acceptance oracles; native OS delivery still requires native execution evidence.
+
+
+The final notification acceptance boundary binds Core candidates to their authenticated
+session generation. The native command owns an acceptance task that keeps the auth
+transition gate through the OS submission callback even if the renderer waiter is
+cancelled. Bundled macOS uses UserNotifications request identifiers to remove both
+pending and delivered items; Linux uses its existing notification handles. Exact
+`candidate:notif-{generation}-{sequence}` keys isolate an old candidate from a
+successor notification for the same event. A dismissal racing the macOS receipt
+triggers a second removal after the callback. This contract governs acceptance;
+it does not promise control over OS display timing. Unbound system notices retain
+their existing route and deadline. Bound candidates fail closed in bare macOS
+development executables, whose legacy sender cannot provide that callback boundary. Permission lookup remains bounded before banner
+submission. Native compiler and platform execution evidence are separate from the
+source and mapping tests.
+
+Renderer cache and sound commits occur after the asynchronous receipt and a second
+session check. Browser fallback items have exact candidate ownership and close on
+account teardown. Ordinary native banners explicitly request silent presentation;
+the existing explicit message sound still follows the user preference and Core's
+SDK push-action sound verdict, independently of the banner preference. Approval
+banners retain native default sound and time-sensitive presentation; the web fallback
+plays its existing explicit sound. Core candidate text removes controls and bidi
+formatting, collapses whitespace, and keeps its Unicode character caps.
+
+Observation-owner destruction retires and aborts its tracked decryption follow-ups,
+including owners dropped without an explicit logout call. The regression uses the
+real owner/task registry and projection loop with a blocked loader; it does not claim
+an end-to-end sync-triggered SDK callback test. Native action clicks use volatile
+in-flight exclusion and persist only after Core succeeds. A new completed-action
+storage namespace ignores historical entries whose provisional status cannot be
+proven; crash-before-success and failed actions remain retryable. Successful actions
+remain bounded and account-scoped. Runtime helper regressions cover restart,
+concurrent clicks, failure, and successful persistence.
+
+
+Retained OS banner actions carry the original session generation in the native
+response context and emitted action event. Critical actions with no binding fail
+closed, as do stale bound action or review/navigation callbacks. The renderer checks
+this binding before invoking Core and passes it through native admission. The
+notification-bound approval command holds the auth transition gate throughout the
+existing Core SDK decision in an owned task, preventing account replacement or
+caller cancellation from rebinding a late mutation. Ordinary in-app decisions omit
+the optional notification binding and retain their existing route. Desktop session
+generation is never substituted into the distinct Core command-envelope counter.
+The reusable auth gate's real mutex/barrier tests cover replacement and cancellation;
+response-context and renderer tests cover preservation and forwarding of the original
+binding. Native command compilation and platform execution remain separate evidence.

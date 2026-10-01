@@ -305,3 +305,26 @@ atomically deployed static repository.
   Release-backed pacman repository; iOS uses TestFlight or the App Store.
 - Production publication is blocked unless the exact-tag workflow validates all
   configured clients and protected credentials.
+
+
+Apple artifact symbol checks require `rustup component add llvm-tools-preview
+--toolchain 1.96` before generating bindings. Apple CI installs this component
+explicitly in unit, UI, compile, diagnostics, and device release lanes. The NSE
+generator validates its reader before building and checks every completed
+XCFramework archive architecture before publication. Each architecture must
+expose `_uniffi_synara_nse_core_fn_method_nsepreviewrequest_resolve` and contain
+no full-Core `uniffi_synara_core_` exports. The decoder is the selected Rust
+sysroot's LLVM tool, with an exact LLVM version check; missing tools, decoder
+errors, empty archive symbol output, or missing positive exports fail closed.
+The explicit `SYNARA_NSE_ARCHIVE_NM` override exists for controlled fixtures
+and is subject to the same version/readback checks.
+
+The shipping extension checker decodes every final MachO architecture and
+checks linked images. Release stripping may remove final symbol-table entries;
+its report records unavailable final readback rather than treating empty output
+as standalone isolation proof. The mandatory positive and negative archive ABI
+readback is primary. Neither checker infers export absence from raw bytes.
+[LLVM's symbol tool documentation](https://llvm.org/docs/CommandGuide/llvm-nm.html)
+describes bitcode/object decoding and architecture selection; the
+[Rust component documentation](https://rust-lang.github.io/rustup/concepts/components.html)
+identifies the matching toolchain component.

@@ -874,7 +874,14 @@ final class SynaraUITests: XCTestCase {
         XCTAssertTrue(app.otherElements["AttachmentOptionsSheet"].waitForExistence(timeout: 5))
         tap(app.buttons["AttachmentOption-Photo or Video"])
 
+        let sheetDismissed = XCTNSPredicateExpectation(
+            predicate: NSPredicate(format: "exists == false"),
+            object: app.otherElements["AttachmentOptionsSheet"]
+        )
+        XCTAssertEqual(XCTWaiter.wait(for: [sheetDismissed], timeout: 5), .completed)
+        XCTAssertTrue(composer.isHittable)
         composer.tap()
+        XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "Tapping the composer must restore keyboard focus")
         composer.typeText("Accessible send")
         let send = app.buttons["ComposerSendButton"]
         XCTAssertTrue(send.waitForExistence(timeout: 5))

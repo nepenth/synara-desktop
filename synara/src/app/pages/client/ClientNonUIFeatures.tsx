@@ -41,6 +41,7 @@ import {
 import {
   buildAgentApprovalNativeActionDedupeKey,
   createAgentApprovalNativeActionDedupeStore,
+  executeAgentApprovalNativeActionOnce,
   planAgentApprovalNativeNotificationAction,
 } from '../../utils/agentApprovals';
 import { resolveMatrixThumbnailUrl } from '../../matrix/media';
@@ -61,6 +62,8 @@ import {
 } from '../../features/room/nativeNotificationDecision';
 import {
   buildNativeObservedNotificationPresentation,
+  createObservedBrowserNotificationRegistry,
+  isNativeNotificationActionForSession,
   deliverNativeObservedNotificationCandidate,
 } from '../../features/room/nativeNotificationPresentation';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
@@ -261,6 +264,8 @@ function MessageNotifications() {
   const submittedRef = useRef<Set<string>>(new Set());
 
   const mx = useMatrixClient();
+  const browserNotifications = useMemo(createObservedBrowserNotificationRegistry, []);
+  useEffect(() => () => browserNotifications.clear(), [mx, browserNotifications]);
   const useAuthentication = useMediaAuthentication();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
   const [notificationSound] = useSetting(settingsAtom, 'isNotificationSounds');
@@ -303,15 +308,21 @@ function MessageNotifications() {
       roomAvatar,
       roomId,
       eventId,
+      sessionGeneration,
     }: {
       candidate: NativeNotificationCandidate;
       roomAvatar?: string;
       roomId: string;
       eventId: string;
+      sessionGeneration: number;
     }): Promise<NativeNotificationDeliveryOutcome> => {
       let presentation;
       try {
-        presentation = buildNativeObservedNotificationPresentation(candidate, { roomId, eventId });
+        presentation = buildNativeObservedNotificationPresentation(candidate, {
+          roomId,
+          eventId,
+          sessionGeneration,
+        });
       } catch {
         return 'failed';
       }
@@ -336,6 +347,8 @@ function MessageNotifications() {
           silent: true,
         });
 
+        browserNotifications.track(candidate.candidateId, noti);
+        noti.onclose = () => browserNotifications.forget(candidate.candidateId);
         noti.onclick = () => {
           if (!window.closed) navigateRoom(roomId, eventId);
           noti.close();
@@ -349,7 +362,7 @@ function MessageNotifications() {
         return 'failed';
       }
     },
-    [navigateRoom]
+    [navigateRoom, browserNotifications]
   );
 
   const playSound = useCallback(() => {
@@ -405,19 +418,20 @@ function MessageNotifications() {
         return;
       }
       if (readback.decision !== 'show' || !readback.candidate) {
-        if (readback.reason === 'duplicate-event' || readback.reason === 'own-event') {
-          rememberSubmitted(roomId, eventId);
-        }
         return;
       }
+      const shownCandidate = readback.candidate;
       await deliverNativeObservedNotificationCandidate({
-        candidate: readback.candidate,
+        candidate: shownCandidate,
         observedGeneration: observation.sessionGeneration,
         presentOrdinaryMessages: !notificationSelected && !!room && !room.isSpaceRoom(),
         currentGeneration: () => mx.getSyncStateData()?.sessionGeneration,
         acknowledge: dismissNotificationWithNativeOwner,
+        cancelDelivery: async () => {
+          browserNotifications.cancel(shownCandidate.candidateId);
+          await dismissDesktopNotifications([`candidate:${shownCandidate.candidateId}`]);
+        },
         deliver: async (candidate) => {
-          rememberSubmitted(roomId, eventId);
           let outcome: NativeNotificationDeliveryOutcome | undefined;
           if (
             showNotifications &&
@@ -432,19 +446,24 @@ function MessageNotifications() {
                 : undefined,
               roomId,
               eventId,
+              sessionGeneration: observation.sessionGeneration,
             });
           }
-          if (candidate.kind === 'agent_approval') {
+          return outcome;
+        },
+        commit: (outcome) => {
+          rememberSubmitted(roomId, eventId);
+          if (shownCandidate.kind === 'agent_approval') {
             if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
           } else if (notificationSound && readback.sound === true && outcome !== 'failed') {
             playSound();
           }
-          return outcome;
         },
       });
     },
     [
       mx,
+      browserNotifications,
       notificationSound,
       notificationSelected,
       showNotifications,
@@ -480,14 +499,20 @@ function MessageNotifications() {
 function AgentApprovalNotifications() {
   const audioRef = useRef<HTMLAudioElement>(null);
   const mx = useMatrixClient();
+  const browserNotifications = useMemo(createObservedBrowserNotificationRegistry, []);
+  useEffect(() => () => browserNotifications.clear(), [mx, browserNotifications]);
   const accountScope = mx.getUserId();
-  const nativeActionDedupe = useMemo(
-    () =>
-      accountScope
+  const nativeActionState = useMemo(
+    () => ({
+      inFlight: new Set<string>(),
+      completed: accountScope
         ? createAgentApprovalNativeActionDedupeStore(getDurableApprovalStorage(), accountScope)
         : undefined,
+    }),
     [accountScope]
   );
+  const nativeActionsInFlight = nativeActionState.inFlight;
+  const nativeActionDedupe = nativeActionState.completed;
   const { navigateRoom } = useRoomNavigate();
   const [showNotifications] = useSetting(settingsAtom, 'showNotifications');
 
@@ -496,14 +521,17 @@ function AgentApprovalNotifications() {
       candidate,
       roomId,
       eventId,
+      sessionGeneration,
     }: {
       candidate: NativeNotificationCandidate;
       roomId: string;
       eventId: string;
+      sessionGeneration: number;
     }): Promise<NativeNotificationDeliveryOutcome> => {
       const presentation = buildNativeObservedNotificationPresentation(candidate, {
         roomId,
         eventId,
+        sessionGeneration,
       });
       if (supportsPlatformSystemNotifications()) {
         const shown = await showPlatformNotification(presentation);
@@ -515,21 +543,32 @@ function AgentApprovalNotifications() {
         body: presentation.body,
         silent: true,
       });
+      browserNotifications.track(candidate.candidateId, noti);
+      noti.onclose = () => browserNotifications.forget(candidate.candidateId);
       noti.onclick = () => {
         if (!window.closed) navigateRoom(roomId, eventId);
         noti.close();
       };
       return 'delivered';
     },
-    [navigateRoom]
+    [navigateRoom, browserNotifications]
   );
 
   const handleNativeNotificationAction = useCallback(
     async (payload: {
+      sessionGeneration?: number;
       actionId: string;
       context?: { kind: string; roomId?: string; eventId?: string };
     }) => {
-      const { actionId, context } = payload;
+      const { actionId, context, sessionGeneration } = payload;
+      if (
+        sessionGeneration === undefined ||
+        !isNativeNotificationActionForSession(
+          sessionGeneration,
+          mx.getSyncStateData()?.sessionGeneration
+        )
+      )
+        return;
       const earlyPlan = planAgentApprovalNativeNotificationAction({
         actionId,
         context,
@@ -569,30 +608,37 @@ function AgentApprovalNotifications() {
         return;
       }
       const provisionalDedupeKey = buildAgentApprovalNativeActionDedupeKey(roomId, eventId);
-      if (dedupe.has(provisionalDedupeKey)) {
-        return;
-      }
-
-      dedupe.add(provisionalDedupeKey);
       try {
-        await decideAgentApprovalWithNativeOwner({
-          roomId,
-          eventId,
-          actionId,
+        await executeAgentApprovalNativeActionOnce({
+          key: provisionalDedupeKey,
+          completed: dedupe,
+          inFlight: nativeActionsInFlight,
+          execute: () =>
+            decideAgentApprovalWithNativeOwner({
+              roomId,
+              eventId,
+              actionId,
+              notificationSessionGeneration: sessionGeneration,
+            }),
         });
       } catch (error) {
-        dedupe.remove(provisionalDedupeKey);
         // Expired, signed-out, stale, or otherwise rejected decisions fail
         // closed, then open the exact event so the action never appears to
         // have succeeded silently.
-        navigateRoom(roomId, eventId);
+        if (
+          isNativeNotificationActionForSession(
+            sessionGeneration,
+            mx.getSyncStateData()?.sessionGeneration
+          )
+        )
+          navigateRoom(roomId, eventId);
         if (import.meta.env?.DEV) {
           // eslint-disable-next-line no-console
           console.debug('[synara:agent-approval] native decision failed closed', error);
         }
       }
     },
-    [nativeActionDedupe, navigateRoom]
+    [mx, nativeActionDedupe, nativeActionsInFlight, navigateRoom]
   );
 
   useEffect(() => {
@@ -652,27 +698,39 @@ function AgentApprovalNotifications() {
         return;
       }
       if (readback.decision !== 'show' || !readback.candidate) return;
+      const shownCandidate = readback.candidate;
       await deliverNativeObservedNotificationCandidate({
-        candidate: readback.candidate,
+        candidate: shownCandidate,
         observedGeneration: observation.sessionGeneration,
         currentGeneration: () => mx.getSyncStateData()?.sessionGeneration,
         acknowledge: dismissNotificationWithNativeOwner,
+        cancelDelivery: async () => {
+          browserNotifications.cancel(shownCandidate.candidateId);
+          await dismissDesktopNotifications([`candidate:${shownCandidate.candidateId}`]);
+        },
         deliver: async (candidate) => {
-          notifiedEventIdsCache.add(eventId);
           let outcome: NativeNotificationDeliveryOutcome | undefined;
           if (
             showNotifications &&
             (supportsPlatformSystemNotifications() || notificationPermission('granted'))
           ) {
-            outcome = await notify({ roomId: observation.roomId, eventId, candidate });
+            outcome = await notify({
+              roomId: observation.roomId,
+              eventId,
+              candidate,
+              sessionGeneration: observation.sessionGeneration,
+            });
           }
+          return outcome;
+        },
+        commit: (outcome) => {
+          notifiedEventIdsCache.add(eventId);
           // Native approval delivery already owns its time-sensitive sound.
           if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
-          return outcome;
         },
       });
     },
-    [mx, notify, playSound, showNotifications]
+    [mx, browserNotifications, notify, playSound, showNotifications]
   );
 
   // Approval prompts ride the same Core observation stream as messages; the

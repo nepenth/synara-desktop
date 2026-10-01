@@ -113,6 +113,10 @@ need `--recursive` or any submodule command.
 - Node.js at the exact version in `.node-version` (currently 24.13.1).
 - Rust 1.96, pinned in `rust-toolchain.toml`. iOS builds also need the
   `aarch64-apple-ios` and `aarch64-apple-ios-sim` targets, which CI installs.
+  Apple generation/export checks require `llvm-tools-preview` from that same
+  toolchain: `rustup component add llvm-tools-preview --toolchain 1.96`.
+  The read-only checker resolves `llvm-nm` from the selected `rustc` sysroot;
+  it does not install tools or substitute Xcode's bitcode reader.
 - Tauri 2 platform prerequisites.
 - Xcode and XcodeGen for iOS work.
 - Linux system packages documented in [docs/linux.md](docs/linux.md) for Linux

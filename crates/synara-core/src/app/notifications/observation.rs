@@ -26,7 +26,7 @@
 //! verdicts.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use matrix_sdk::config::RequestConfig;
@@ -81,6 +81,7 @@ pub type NotificationObservationEmit = Arc<dyn Fn(NativeNotificationObservation)
 pub struct NativeNotificationObservationOwner {
     session_generation: u64,
     retired: Arc<AtomicBool>,
+    follow_ups: Arc<Mutex<Vec<tokio::task::AbortHandle>>>,
     _handler: EventHandlerDropGuard,
 }
 
@@ -96,9 +97,12 @@ impl NativeNotificationObservationOwner {
             .to_owned();
         let retired = Arc::new(AtomicBool::new(false));
         let retired_for_handler = retired.clone();
+        let follow_ups = Arc::new(Mutex::new(Vec::new()));
+        let follow_ups_for_handler = follow_ups.clone();
         let handler =
             client.add_event_handler(move |event: AnySyncMessageLikeEvent, room: Room| {
                 let retired = retired_for_handler.clone();
+                let follow_ups = follow_ups_for_handler.clone();
                 let emit = emit.clone();
                 let own_user_id = own_user_id.clone();
                 async move {
@@ -119,17 +123,19 @@ impl NativeNotificationObservationOwner {
                         if observation.is_none() {
                             return;
                         }
-                        tokio::spawn(async move {
+                        let retired_for_task = retired.clone();
+                        let task = tokio::spawn(async move {
                             follow_up_encrypted_observation(
                                 room,
                                 event,
                                 own_user_id,
                                 emit,
-                                retired,
+                                retired_for_task,
                                 session_generation,
                             )
                             .await;
                         });
+                        track_follow_up(&follow_ups, &retired, task.abort_handle());
                     } else if let Some(observation) = observation {
                         emit(observation);
                     }
@@ -138,6 +144,7 @@ impl NativeNotificationObservationOwner {
         Ok(Self {
             session_generation,
             retired,
+            follow_ups,
             _handler: client.event_handler_drop_guard(handler),
         })
     }
@@ -150,7 +157,35 @@ impl NativeNotificationObservationOwner {
     /// switch). Observations for a retired generation are never delivered.
     pub fn retire(&self) {
         self.retired.store(true, Ordering::Release);
+        for task in self
+            .follow_ups
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .drain(..)
+        {
+            task.abort();
+        }
     }
+}
+
+impl Drop for NativeNotificationObservationOwner {
+    fn drop(&mut self) {
+        self.retire();
+    }
+}
+
+fn track_follow_up(
+    tasks: &Mutex<Vec<tokio::task::AbortHandle>>,
+    retired: &AtomicBool,
+    task: tokio::task::AbortHandle,
+) {
+    let mut tasks = tasks.lock().unwrap_or_else(|p| p.into_inner());
+    if retired.load(Ordering::Acquire) {
+        task.abort();
+        return;
+    }
+    tasks.retain(|task| !task.is_finished());
+    tasks.push(task);
 }
 
 fn now_ms() -> u64 {
@@ -783,5 +818,60 @@ mod tests {
         )
         .await;
         assert!(output.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn owner_drop_without_explicit_retire_cancels_inflight_follow_up() {
+        use matrix_sdk::test_utils::mocks::MatrixMockServer;
+        let server = MatrixMockServer::new().await;
+        let client = server.client_builder().build().await;
+        let output = Arc::new(Mutex::new(Vec::new()));
+        let recorded = output.clone();
+        let emit: NotificationObservationEmit =
+            Arc::new(move |event| recorded.lock().unwrap().push(event));
+        let owner = NativeNotificationObservationOwner::start(&client, emit.clone(), 7).unwrap();
+        let retired = owner.retired.clone();
+        let (started_tx, started_rx) = tokio::sync::oneshot::channel();
+        let (_resolve_tx, resolve_rx) = tokio::sync::oneshot::channel::<()>();
+        let task_retired = retired.clone();
+        let task = tokio::spawn(async move {
+            let original = ciphertext(now_ms());
+            let mut started = Some(started_tx);
+            let mut resolve = Some(resolve_rx);
+            resolve_encrypted_observation(
+                EncryptedObservationContext {
+                    original_event: &original,
+                    room_id: ROOM,
+                    own_user_id: user_id!("@me:example.org"),
+                    emit: &emit,
+                    retired: &task_retired,
+                    session_generation: 7,
+                },
+                &[0],
+                || {
+                    started.take().unwrap().send(()).unwrap();
+                    let resolve = resolve.take().unwrap();
+                    async move {
+                        let _ = resolve.await;
+                        Some(AnySyncTimelineEvent::MessageLike(text(
+                            user_id!("@bob:example.org"),
+                            now_ms(),
+                            "plain",
+                        )))
+                    }
+                },
+            )
+            .await;
+        });
+        track_follow_up(&owner.follow_ups, &owner.retired, task.abort_handle());
+        started_rx.await.unwrap();
+        drop(owner);
+        assert!(retired.load(Ordering::Acquire));
+        assert!(task.await.unwrap_err().is_cancelled());
+        assert!(output.lock().unwrap().is_empty());
+        // A handler racing shutdown cannot register new detached work.
+        let late = tokio::spawn(std::future::pending::<()>());
+        track_follow_up(&Mutex::new(Vec::new()), &retired, late.abort_handle());
+        assert!(late.await.unwrap_err().is_cancelled());
     }
 }

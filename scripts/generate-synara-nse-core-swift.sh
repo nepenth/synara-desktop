@@ -48,6 +48,11 @@ publication_helper="$repo_root/scripts/lib/publish-generated-apple-pair.sh"
 # Validate the locked shipping graph before building or publishing either pair.
 node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"
 
+# Fail before the expensive build if matching symbol-reader prerequisites are missing.
+source "$repo_root/scripts/lib/rust-llvm-symbols.sh"
+resolve_rust_llvm_nm "${SYNARA_NSE_ARCHIVE_NM:-}"
+
+
 installed_targets="$(rustup target list --installed)"
 for target in "${targets[@]}"; do
   grep -Fxq "$target" <<<"$installed_targets" || {
@@ -159,6 +164,12 @@ elif [[ "$apple_slices" == "simulator-arm64" ]]; then
 fi
 create_xcframework+=(-output "$framework_tmp")
 "${create_xcframework[@]}"
+
+# Decode each completed XCFramework archive before publishing the pair.
+nse_archives=()
+while IFS= read -r archive; do nse_archives+=("$archive"); done < <(find "$framework_tmp" -name 'libsynara_nse_core*.a' -type f)
+[[ "${#nse_archives[@]}" -gt 0 ]] || fail "generated XCFramework contains no NSE archives"
+"$repo_root/scripts/check-synara-nse-core-archive-exports.sh" "${nse_archives[@]}"
 
 "$publication_helper" \
   "$swift_tmp/synara_nse_core.swift" \

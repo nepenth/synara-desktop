@@ -592,8 +592,8 @@ impl NativeNotificationDecisionOwner {
             room_id: input.room_id,
             event_id: input.event_id,
             kind: input.kind.as_dto(),
-            title: truncate_chars(&input.title, NOTIFICATION_TITLE_MAX_CHARS),
-            body: truncate_chars(&input.body, NOTIFICATION_BODY_MAX_CHARS),
+            title: sanitize_notification_text(&input.title, NOTIFICATION_TITLE_MAX_CHARS),
+            body: sanitize_notification_text(&input.body, NOTIFICATION_BODY_MAX_CHARS),
             route: input.route.and_then(sanitize_route),
             suppress_if_focused_room: input.suppress_if_focused_room,
             is_encrypted: input.is_encrypted,
@@ -779,12 +779,32 @@ fn suppressed(reason: NotificationSuppressReason) -> NotificationDecisionReadbac
     }
 }
 
-fn truncate_chars(value: &str, max_chars: usize) -> String {
-    let trimmed = value.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_owned();
+fn sanitize_notification_text(value: &str, max_chars: usize) -> String {
+    let mut output = String::new();
+    let mut length = 0;
+    let mut space_pending = false;
+    for ch in value.chars() {
+        if ch.is_whitespace() {
+            space_pending = !output.is_empty();
+            continue;
+        }
+        if ch.is_control()
+            || matches!(ch, '\u{00AD}' | '\u{061C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}')
+        {
+            continue;
+        }
+        if space_pending && length < max_chars {
+            output.push(' ');
+            length += 1;
+        }
+        if length == max_chars {
+            break;
+        }
+        output.push(ch);
+        length += 1;
+        space_pending = false;
     }
-    trimmed.chars().take(max_chars).collect()
+    output.trim_end().to_owned()
 }
 
 /// Internal deep-link routes only (`/` or `#` prefix, no control or
@@ -1413,6 +1433,26 @@ mod tests {
         )
         .is_err());
         assert_eq!(NotificationDeliveryOutcome::Delivered.as_str(), "delivered");
+    }
+
+    #[test]
+    fn candidate_text_is_one_visible_line_without_controls_or_bidi_and_keeps_caps() {
+        let owner = owner();
+        let mut entry = input(
+            "!r:example.org",
+            Some("$hostile-label"),
+            NotificationDecisionKind::Message,
+            NOTIFY,
+            false,
+        );
+        entry.title = "  Room\n\t\u{202e}name\u{2069}\u{0000}  ".into();
+        entry.body = format!("Member\r\n\u{200b}name\u{feff} {}", "🦀".repeat(600));
+        let shown = owner.decide(entry).unwrap().candidate.unwrap();
+        assert_eq!(shown.title, "Room name");
+        assert!(shown.body.starts_with("Member name 🦀"));
+        assert_eq!(shown.body.chars().count(), NOTIFICATION_BODY_MAX_CHARS);
+        assert!(!shown.body.chars().any(char::is_control));
+        assert!(!shown.body.contains('\u{200b}'));
     }
 
     #[test]

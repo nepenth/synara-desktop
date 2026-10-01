@@ -12,6 +12,7 @@ import {
   AGENT_APPROVAL_REACTION_DENY,
   buildAgentApprovalNativeActionDedupeKey,
   createAgentApprovalNativeActionDedupeStore,
+  executeAgentApprovalNativeActionOnce,
   formatCoreAgentApprovalPrompt,
   hasLocalAgentApprovalReactionFromSenders,
   planAgentApprovalNativeNotificationAction,
@@ -223,6 +224,73 @@ test('hasLocalAgentApprovalReactionFromSenders detects current user approval rea
       [[AGENT_APPROVAL_REACTION_DENY, ['@alice:matrix.org']]],
       '@alice:matrix.org'
     ),
+    true
+  );
+});
+
+test('native action dedupe persists only completed actions, permits restart retry, and excludes concurrent clicks', async () => {
+  const values = new Map<string, string>();
+  const storage = {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      values.set(key, value);
+    },
+  } as Storage;
+  const scope = '@user:example.org';
+  const key = buildAgentApprovalNativeActionDedupeKey('!room:example.org', '$event');
+  values.set(
+    `synara.agent-approval.native-action-dedupe.${encodeURIComponent(scope)}`,
+    JSON.stringify([key])
+  );
+  const completed = createAgentApprovalNativeActionDedupeStore(storage, scope);
+  assert.equal(completed.has(key), false, 'legacy provisional entries cannot veto a retry');
+  const inFlight = new Set<string>();
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let executions = 0;
+  const operation = {
+    key,
+    completed,
+    inFlight,
+    execute: async () => {
+      executions += 1;
+      await pending;
+    },
+  };
+  const first = executeAgentApprovalNativeActionOnce(operation);
+  assert.equal(await executeAgentApprovalNativeActionOnce(operation), false);
+  assert.equal(executions, 1);
+  assert.equal(
+    createAgentApprovalNativeActionDedupeStore(storage, scope).has(key),
+    false,
+    'a restarted process never inherits an unfinished action'
+  );
+  release();
+  assert.equal(await first, true);
+  assert.equal(createAgentApprovalNativeActionDedupeStore(storage, scope).has(key), true);
+  assert.equal(await executeAgentApprovalNativeActionOnce(operation), false);
+  assert.equal(inFlight.size, 0);
+
+  const retryKey = buildAgentApprovalNativeActionDedupeKey('!room:example.org', '$retry');
+  await assert.rejects(
+    executeAgentApprovalNativeActionOnce({
+      ...operation,
+      key: retryKey,
+      execute: async () => {
+        throw new Error('Core rejected');
+      },
+    })
+  );
+  assert.equal(inFlight.size, 0);
+  assert.equal(createAgentApprovalNativeActionDedupeStore(storage, scope).has(retryKey), false);
+  assert.equal(
+    await executeAgentApprovalNativeActionOnce({
+      ...operation,
+      key: retryKey,
+      execute: async () => undefined,
+    }),
     true
   );
 });

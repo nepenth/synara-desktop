@@ -21,8 +21,10 @@ use tauri::{AppHandle, Runtime};
 
 use super::{
     emit_notification_action, is_time_sensitive_agent_approval, macos_delivery,
-    navigate_main_window, sanitize_notification_action_context, sanitize_notification_actions,
-    sanitize_notification_route, DesktopNotificationAction, DesktopNotificationActionContext,
+    navigate_notification_route, sanitize_notification_action_context,
+    sanitize_notification_actions, sanitize_notification_route, DesktopNotificationAction,
+    DesktopNotificationActionContext, DesktopNotificationPayload, DesktopNotificationSoundPolicy,
+    DismissKeyIndex,
 };
 
 const CONTEXT_KEY: &str = "synara-response";
@@ -32,6 +34,8 @@ static DELEGATE: OnceLock<Retained<NotificationDelegate>> = OnceLock::new();
 static NEXT_IDENTIFIER: AtomicU64 = AtomicU64::new(0);
 static CATEGORIES: LazyLock<Mutex<BTreeMap<String, Vec<DesktopNotificationAction>>>> =
     LazyLock::new(|| Mutex::new(BTreeMap::new()));
+static DISMISS_INDEX: LazyLock<Mutex<DismissKeyIndex<String>>> =
+    LazyLock::new(|| Mutex::new(DismissKeyIndex::default()));
 
 define_class!(
     // SAFETY: NSObject has no subclassing requirements. The class has no
@@ -77,6 +81,8 @@ unsafe impl Sync for NotificationDelegate {}
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct ResponseContext {
+    #[serde(default)]
+    session_generation: Option<u64>,
     route: Option<String>,
     actions: Vec<DesktopNotificationAction>,
     action_context: Option<DesktopNotificationActionContext>,
@@ -96,10 +102,23 @@ fn decode_context(json: &str) -> Option<ResponseContext> {
     Some(context)
 }
 
+fn retained_response_has_required_binding(context: &ResponseContext) -> bool {
+    let critical = is_time_sensitive_agent_approval(context.action_context.as_ref())
+        || context
+            .actions
+            .iter()
+            .any(|action| action.id.starts_with("agent-approval."));
+    !critical || context.session_generation.is_some()
+}
+
 pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
     RESPONSE_HANDLER.get_or_init(|| {
         let app = app.clone();
         Box::new(move |response| {
+            DISMISS_INDEX
+                .lock()
+                .unwrap_or_else(|p| p.into_inner())
+                .unregister(response.notification().request().identifier().to_string());
             let user_info = response.notification().request().content().userInfo();
             let Some(value) = user_info.objectForKey(&NSString::from_str(CONTEXT_KEY)) else {
                 return;
@@ -110,17 +129,30 @@ pub(super) fn initialize<R: Runtime>(app: &AppHandle<R>) {
             let Some(context) = decode_context(&value.to_string()) else {
                 return;
             };
+            if !retained_response_has_required_binding(&context) {
+                return;
+            }
             let action = response.actionIdentifier();
             if &*action == unsafe { UNNotificationDefaultActionIdentifier } {
                 if let Some(route) = context.route {
-                    let _ = navigate_main_window(&app, &route);
+                    let _ = navigate_notification_route(
+                        &app,
+                        &route,
+                        context.session_generation,
+                        false,
+                    );
                 }
             } else if context
                 .actions
                 .iter()
                 .any(|item| item.id == action.to_string())
             {
-                let _ = emit_notification_action(&app, &action.to_string(), context.action_context);
+                let _ = emit_notification_action(
+                    &app,
+                    &action.to_string(),
+                    context.action_context,
+                    context.session_generation,
+                );
             }
         })
     });
@@ -222,14 +254,42 @@ fn register_category(actions: &[DesktopNotificationAction]) -> Retained<NSString
     NSString::from_str(&identifier)
 }
 
+fn remove_requests(identifiers: &[String]) {
+    if identifiers.is_empty() {
+        return;
+    }
+    let identifiers = identifiers
+        .iter()
+        .map(|id| NSString::from_str(id))
+        .collect::<Vec<_>>();
+    let identifiers = NSArray::from_retained_slice(&identifiers);
+    let center = UNUserNotificationCenter::currentNotificationCenter();
+    center.removePendingNotificationRequestsWithIdentifiers(&identifiers);
+    center.removeDeliveredNotificationsWithIdentifiers(&identifiers);
+}
+
+pub(super) fn dismiss(keys: &[String]) {
+    let ids = {
+        let mut index = DISMISS_INDEX.lock().unwrap_or_else(|p| p.into_inner());
+        let ids = index.ids_for_keys(keys);
+        for id in &ids {
+            index.unregister(id.clone());
+        }
+        ids
+    };
+    remove_requests(&ids);
+}
+
 pub(super) async fn show<R: Runtime>(
     app: &AppHandle<R>,
-    title: &str,
-    body: Option<&str>,
-    route: Option<&str>,
-    actions: &[DesktopNotificationAction],
-    action_context: Option<&DesktopNotificationActionContext>,
+    notification: &DesktopNotificationPayload,
 ) -> Result<bool, String> {
+    let title = notification.title.as_str();
+    let body = notification.body.as_deref();
+    let route = notification.route.as_deref();
+    let actions = notification.actions.as_deref().unwrap_or(&[]);
+    let action_context = notification.action_context.as_ref();
+    let dismiss_keys = notification.dismiss_keys.as_deref().unwrap_or(&[]);
     let permission = permission().await?;
     if permission == "denied"
         || (permission == "default" && request_permission().await? != "granted")
@@ -237,7 +297,7 @@ pub(super) async fn show<R: Runtime>(
         return Ok(false);
     }
     initialize(app);
-    let rx = {
+    let (rx, identifier) = {
         let content = UNMutableNotificationContent::new();
         content.setTitle(&NSString::from_str(title));
         if let Some(body) = body {
@@ -245,13 +305,16 @@ pub(super) async fn show<R: Runtime>(
         }
         if is_time_sensitive_agent_approval(action_context) {
             content.setSubtitle(&NSString::from_str("Time-sensitive · expires in 5 minutes"));
-            content.setSound(Some(&UNNotificationSound::defaultSound()));
+            if notification.sound != Some(DesktopNotificationSoundPolicy::Silent) {
+                content.setSound(Some(&UNNotificationSound::defaultSound()));
+            }
             content.setInterruptionLevel(UNNotificationInterruptionLevel::TimeSensitive);
         }
         if !actions.is_empty() {
             content.setCategoryIdentifier(&register_category(actions));
         }
         let context = serde_json::to_string(&ResponseContext {
+            session_generation: notification.session_generation,
             route: route.map(str::to_owned),
             actions: actions.to_vec(),
             action_context: action_context.cloned(),
@@ -273,6 +336,12 @@ pub(super) async fn show<R: Runtime>(
                 .as_nanos(),
             NEXT_IDENTIFIER.fetch_add(1, Ordering::Relaxed)
         ));
+        let identifier_text = identifier.to_string();
+        let evicted = DISMISS_INDEX
+            .lock()
+            .unwrap_or_else(|p| p.into_inner())
+            .register(identifier_text.clone(), dismiss_keys);
+        remove_requests(&evicted);
         let request = UNNotificationRequest::requestWithIdentifier_content_trigger(
             &identifier,
             &content,
@@ -289,19 +358,114 @@ pub(super) async fn show<R: Runtime>(
             UNUserNotificationCenter::currentNotificationCenter()
                 .addNotificationRequest_withCompletionHandler(&request, Some(&completion));
         }
-        rx
+        (rx, identifier_text)
     };
     // The submission callback is the OS acceptance receipt. It is independent
     // of banner visibility and of later click/action callbacks. Never resend.
-    tokio::time::timeout(macos_delivery::RECEIPT_TIMEOUT, rx)
-        .await
-        .map_err(|_| "macOS notification submission timed out".to_owned())?
-        .map_err(|_| "macOS notification submission closed".to_owned())
+    // Bound posts retain the auth transition gate until the actual OS
+    // callback completes. A renderer cancellation only drops its waiter;
+    // the owned acceptance task keeps running. Unbound system notices keep
+    // the existing receipt deadline. This governs acceptance, not display.
+    let accepted = if notification.session_generation.is_some() {
+        rx.await
+            .map_err(|_| "macOS notification submission closed".to_owned())
+    } else {
+        tokio::time::timeout(macos_delivery::RECEIPT_TIMEOUT, rx)
+            .await
+            .map_err(|_| "macOS notification submission timed out".to_owned())
+            .and_then(|result| {
+                result.map_err(|_| "macOS notification submission closed".to_owned())
+            })
+    };
+    let remove = settle_submission_receipt(
+        &mut DISMISS_INDEX.lock().unwrap_or_else(|p| p.into_inner()),
+        &identifier,
+        dismiss_keys.is_empty(),
+        matches!(accepted, Ok(true)),
+    );
+    if remove {
+        remove_requests(&[identifier]);
+        return accepted.map(|_| false);
+    }
+    accepted
+}
+
+// A dismissal may race OS acceptance. If the request was removed while its
+// callback was pending, remove it again after acceptance so it cannot survive
+// as a delivered banner. An exact candidate key never removes its successor.
+fn settle_submission_receipt(
+    index: &mut DismissKeyIndex<String>,
+    identifier: &str,
+    unkeyed: bool,
+    accepted: bool,
+) -> bool {
+    if !accepted || (!unkeyed && !index.keys_by_id.contains_key(identifier)) {
+        index.unregister(identifier.to_owned());
+        true
+    } else {
+        false
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn late_os_receipt_repeats_exact_removal_without_dismissing_successor() {
+        let mut index = DismissKeyIndex::<String>::default();
+        index.register(
+            "old-request".to_owned(),
+            &["candidate:notif-7-1".to_owned(), "event:$same".to_owned()],
+        );
+        index.register(
+            "new-request".to_owned(),
+            &["candidate:notif-8-1".to_owned(), "event:$same".to_owned()],
+        );
+        let cancelled = index.ids_for_keys(&["candidate:notif-7-1".to_owned()]);
+        assert_eq!(cancelled, vec!["old-request".to_owned()]);
+        for id in cancelled {
+            index.unregister(id);
+        }
+        assert!(settle_submission_receipt(
+            &mut index,
+            "old-request",
+            false,
+            true
+        ));
+        assert!(!settle_submission_receipt(
+            &mut index,
+            "new-request",
+            false,
+            true
+        ));
+        assert_eq!(
+            index.ids_for_keys(&["event:$same".to_owned()]),
+            vec!["new-request".to_owned()]
+        );
+        assert!(settle_submission_receipt(
+            &mut index,
+            "new-request",
+            false,
+            false
+        ));
+        assert!(index.ids_for_keys(&["event:$same".to_owned()]).is_empty());
+    }
+
+    #[test]
+    fn persisted_os_response_preserves_original_session_generation() {
+        let bound = decode_context(r#"{"sessionGeneration":7,"route":"/inbox/later/","actions":[{"id":"agent-approval.approve-once","label":"Approve once"}],"actionContext":{"kind":"agent-approval","roomId":"!shared:example.org","eventId":"$same"}}"#).unwrap();
+        assert_eq!(bound.session_generation, Some(7));
+        assert!(retained_response_has_required_binding(&bound));
+        let round_trip = decode_context(&serde_json::to_string(&bound).unwrap()).unwrap();
+        assert_eq!(round_trip.session_generation, Some(7));
+        let old = decode_context(r#"{"route":null,"actions":[],"actionContext":null}"#).unwrap();
+        assert!(old.session_generation.is_none());
+        assert!(retained_response_has_required_binding(&old));
+        let mut legacy_critical = bound;
+        legacy_critical.session_generation = None;
+        assert!(!retained_response_has_required_binding(&legacy_critical));
+    }
 
     #[test]
     fn persisted_response_rejects_external_routes() {

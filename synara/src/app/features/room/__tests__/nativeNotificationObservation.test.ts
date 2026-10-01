@@ -11,6 +11,8 @@ import {
 
 import {
   buildNativeObservedNotificationPresentation,
+  createObservedBrowserNotificationRegistry,
+  isNativeNotificationActionForSession,
   deliverNativeObservedNotificationCandidate,
 } from '../nativeNotificationPresentation';
 import type { NativeNotificationCandidate } from '../nativeNotificationDecision';
@@ -185,12 +187,22 @@ test('late approval promotion uses the shared actionable presentation and exact 
     suppressIfFocusedRoom: false,
     isEncrypted: true,
   };
-  const source = { roomId: OBSERVATION.roomId, eventId: OBSERVATION.eventId };
+  const source = { roomId: OBSERVATION.roomId, eventId: OBSERVATION.eventId, sessionGeneration: 7 };
   const presentation = buildNativeObservedNotificationPresentation(candidate, source);
   assert.equal(presentation.title, candidate.title);
   assert.equal(presentation.body, candidate.body);
-  assert.deepEqual(presentation.dismissKeys, [`room:${source.roomId}`, `event:${source.eventId}`]);
-  assert.deepEqual(presentation.actionContext, { kind: 'agent-approval', ...source });
+  assert.deepEqual(presentation.dismissKeys, [
+    `room:${source.roomId}`,
+    `event:${source.eventId}`,
+    `candidate:${candidate.candidateId}`,
+  ]);
+  assert.equal(presentation.sessionGeneration, 7);
+  assert.equal(presentation.sound, 'default');
+  assert.deepEqual(presentation.actionContext, {
+    kind: 'agent-approval',
+    roomId: source.roomId,
+    eventId: source.eventId,
+  });
   assert.deepEqual(
     presentation.actions?.map((action) => action.id),
     ['agent-approval.approve-once', 'agent-approval.deny', 'agent-approval.review']
@@ -210,7 +222,8 @@ test('late approval promotion uses the shared actionable presentation and exact 
   );
   assert.equal(ordinary.actions, undefined);
   assert.equal(ordinary.actionContext, undefined);
-  assert.deepEqual(ordinary.dismissKeys, [`room:${source.roomId}`]);
+  assert.deepEqual(ordinary.dismissKeys, presentation.dismissKeys);
+  assert.equal(ordinary.sound, 'silent');
 
   // Both mounted delivery paths use this tested adapter. A late promotion
   // must also get approval sound ownership instead of generic push tweaks.
@@ -286,7 +299,7 @@ test('shown candidate delivery always releases pending ownership after generatio
 });
 
 test('late authoritative approval reaches delivery during inbox triage with no renderer room metadata', async () => {
-  const source = { roomId: OBSERVATION.roomId, eventId: OBSERVATION.eventId };
+  const source = { roomId: OBSERVATION.roomId, eventId: OBSERVATION.eventId, sessionGeneration: 7 };
   const candidate: NativeNotificationCandidate = {
     candidateId: 'approval',
     ...source,
@@ -334,4 +347,76 @@ test('late authoritative approval reaches delivery during inbox triage with no r
     (routes.match(/await deliverNativeObservedNotificationCandidate\(/g) ?? []).length,
     2
   );
+});
+
+test('generation replacement during asynchronous OS acceptance cancels only the old candidate before committing sound or cache', async () => {
+  const registry = createObservedBrowserNotificationRegistry();
+  const closed: string[] = [];
+  registry.track('notif-7-1', { close: () => closed.push('old') });
+  registry.track('notif-8-1', { close: () => closed.push('successor') });
+  let generation: number | undefined = 7;
+  let accepted!: () => void;
+  const acceptance = new Promise<void>((resolve) => {
+    accepted = resolve;
+  });
+  let posting!: () => void;
+  const posted = new Promise<void>((resolve) => {
+    posting = resolve;
+  });
+  const committed: unknown[] = [];
+  const acknowledgements: string[] = [];
+  const cancelled: string[] = [];
+  const candidate: NativeNotificationCandidate = {
+    candidateId: 'notif-7-1',
+    roomId: OBSERVATION.roomId,
+    eventId: OBSERVATION.eventId,
+    kind: 'message',
+    title: 'Message',
+    body: 'New message',
+    suppressIfFocusedRoom: true,
+    isEncrypted: false,
+  };
+  const delivery = deliverNativeObservedNotificationCandidate({
+    candidate,
+    observedGeneration: 7,
+    currentGeneration: () => generation,
+    deliver: async () => {
+      posting();
+      await acceptance;
+      return 'delivered';
+    },
+    commit: (outcome) => {
+      committed.push(outcome);
+    },
+    cancelDelivery: async () => {
+      registry.cancel(candidate.candidateId);
+      cancelled.push(`candidate:${candidate.candidateId}`);
+    },
+    acknowledge: async (id) => {
+      acknowledgements.push(id);
+    },
+  });
+  await posted;
+  generation = 8;
+  accepted();
+  await delivery;
+  assert.deepEqual(committed, []);
+  assert.deepEqual(cancelled, ['candidate:notif-7-1']);
+  assert.deepEqual(closed, ['old']);
+  assert.deepEqual(acknowledgements, ['notif-7-1']);
+  registry.clear();
+  assert.deepEqual(closed, ['old', 'successor']);
+});
+
+test('retained OS actions reject missing and successor generations without rebinding', () => {
+  for (const [original, current] of [
+    [undefined, 8],
+    [7, undefined],
+    [7, 8],
+    [NaN, 7],
+    [1.5, 1.5],
+  ]) {
+    assert.equal(isNativeNotificationActionForSession(original, current), false);
+  }
+  assert.equal(isNativeNotificationActionForSession(7, 7), true);
 });

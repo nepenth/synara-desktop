@@ -37,6 +37,8 @@ export const showPlatformNotification = async (
     actions: normalized.actions,
     actionContext: normalized.actionContext,
     dismissKeys: normalized.dismissKeys,
+    sound: normalized.sound,
+    sessionGeneration: normalized.sessionGeneration,
   });
 };
 

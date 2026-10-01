@@ -282,6 +282,7 @@ jobs:
             scripts/check-synara-nse-core-isolation.mjs \
             scripts/check-synara-nse-core-production-features.mjs \
             scripts/check-synara-nse-core-archive-exports.sh \
+            scripts/lib/rust-llvm-symbols.sh \
             scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
@@ -649,6 +650,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin' || 'aarch64-apple-ios-sim' }}
 
       - name: Cache Apple SynaraCore build
@@ -700,6 +702,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -756,6 +759,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build

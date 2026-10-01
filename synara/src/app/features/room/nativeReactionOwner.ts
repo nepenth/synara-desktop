@@ -142,6 +142,7 @@ export async function decideAgentApprovalWithNativeOwner(
     roomId: string;
     eventId: string;
     actionId: string;
+    notificationSessionGeneration?: number;
   },
   invoke: NativeAgentApprovalInvoke = defaultAgentApprovalInvoke
 ): Promise<NativeAgentApprovalDecisionResult> {

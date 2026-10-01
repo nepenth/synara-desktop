@@ -69,7 +69,10 @@ test("the NSE isolation scaffold rejects a missing production checker", (t) => {
   assert.match(result.stderr, /check-synara-nse-core-production-features\.mjs/);
 });
 
-for (const generator of ["generate-synara-core-swift.sh", "generate-synara-nse-core-swift.sh"]) {
+for (const generator of [
+  "generate-synara-core-swift.sh",
+  "generate-synara-nse-core-swift.sh",
+]) {
   test(`${generator} rejects a failed production preflight before toolchains or publication`, (t) => {
     const root = mkdtempSync(join(tmpdir(), "synara-generator-preflight-"));
     t.after(() => rmSync(root, { recursive: true, force: true }));
@@ -77,19 +80,65 @@ for (const generator of ["generate-synara-core-swift.sh", "generate-synara-nse-c
     const bin = join(root, "bin");
     mkdirSync(join(scripts, "lib"), { recursive: true });
     mkdirSync(bin);
-    copyFileSync(join(repoRoot, "scripts", generator), join(scripts, generator));
+    copyFileSync(
+      join(repoRoot, "scripts", generator),
+      join(scripts, generator)
+    );
     const publication = join(scripts, "lib/publish-generated-apple-pair.sh");
-    writeFileSync(publication, '#!/bin/sh\nprintf "publication\\n" >> "$PREFLIGHT_LOG"\n');
+    writeFileSync(
+      publication,
+      '#!/bin/sh\nprintf "publication\\n" >> "$PREFLIGHT_LOG"\n'
+    );
     chmodSync(publication, 0o755);
-    writeFileSync(join(bin, "node"), '#!/bin/sh\nprintf "%s\\n" "$1" >> "$PREFLIGHT_LOG"\nexit 43\n');
+    writeFileSync(
+      join(bin, "node"),
+      '#!/bin/sh\nprintf "%s\\n" "$1" >> "$PREFLIGHT_LOG"\nexit 43\n'
+    );
     chmodSync(join(bin, "node"), 0o755);
     for (const command of ["cargo", "rustup", "xcrun", "xcodebuild"]) {
-      writeFileSync(join(bin, command), `#!/bin/sh\nprintf '${command}\\n' >> "$PREFLIGHT_LOG"\nexit 44\n`);
+      writeFileSync(
+        join(bin, command),
+        `#!/bin/sh\nprintf '${command}\\n' >> "$PREFLIGHT_LOG"\nexit 44\n`
+      );
       chmodSync(join(bin, command), 0o755);
     }
     const log = join(root, "calls");
-    const result = spawnSync("bash", [join(scripts, generator)], { encoding: "utf8", env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, PREFLIGHT_LOG: log } });
+    const result = spawnSync("bash", [join(scripts, generator)], {
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PATH: `${bin}:${process.env.PATH}`,
+        PREFLIGHT_LOG: log,
+      },
+    });
     assert.equal(result.status, 43, result.stderr);
-    assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), [join(scripts, "check-synara-nse-core-production-features.mjs")]);
+    assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), [
+      join(scripts, "check-synara-nse-core-production-features.mjs"),
+    ]);
   });
 }
+
+test("every Apple workflow entrypoint requires the matching LLVM component", (t) => {
+  for (const file of [
+    ".github/workflows/ci.yml",
+    ".github/workflows/release.yml",
+    ".github/workflows/ios-skeleton.yml",
+  ]) {
+    const isolated = fixture(t);
+    const original = readFileSync(join(isolated.root, file), "utf8");
+    const occurrence = original.indexOf(
+      "          components: llvm-tools-preview\n"
+    );
+    assert.ok(occurrence >= 0);
+    writeFileSync(
+      join(isolated.root, file),
+      original.slice(0, occurrence) +
+        original
+          .slice(occurrence)
+          .replace("          components: llvm-tools-preview\n", "")
+    );
+    const result = isolated.run();
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /missing llvm-tools-preview/);
+  }
+});
