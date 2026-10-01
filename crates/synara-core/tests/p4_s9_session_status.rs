@@ -35,10 +35,6 @@ impl IosSecretVault for MemoryCallbackVault {
     }
 }
 
-fn alice() -> AccountIdentity {
-    AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap()
-}
-
 fn temp_root(tag: &str) -> std::path::PathBuf {
     let nanos = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -187,17 +183,36 @@ fn session_status_oversize_payload_fails_closed_without_truncate_or_echo() {
 
 #[test]
 fn session_status_family_without_started_sync_returns_handler_result_without_echo() {
+    use matrix_sdk::test_utils::mocks::MatrixMockServer;
+    use wiremock::{
+        matchers::{header_exists, method, path_regex},
+        Mock, ResponseTemplate,
+    };
+    let rt = test_runtime();
+    let _enter = rt.enter();
+    let server = rt.block_on(MatrixMockServer::new());
+    rt.block_on(server.mock_versions().ok().mount());
+    rt.block_on(async {
+        Mock::given(method("GET"))
+            .and(path_regex(r"/account_data/m.secret_storage.default_key$"))
+            .and(header_exists("authorization"))
+            .respond_with(ResponseTemplate::new(403).set_body_json(serde_json::json!({
+                "errcode": "M_FORBIDDEN", "error": "private SDK status failure"
+            })))
+            .expect(1)
+            .up_to_n_times(1)
+            .mount(server.server())
+            .await;
+    });
     let access = "syt_s9_31_session_status_access";
     let refresh = "syr_s9_31_session_status_refresh";
-    let identity = alice();
+    let identity = AccountIdentity::new("@alice:example.org", &server.server().uri()).unwrap();
     let user_id = identity.user_id().to_owned();
     let homeserver = identity.homeserver_url().to_owned();
     let device_id = "DEVICEABC";
     let map = Arc::new(Mutex::new(HashMap::new()));
     let shared = SharedCore::new_with_secret_store(Box::new(MemoryCallbackVault(Arc::clone(&map))));
     let root = temp_root("session-status-no-start");
-    let rt = test_runtime();
-    let _enter = rt.enter();
     rt.block_on(shared.persist_planted_session_for_test(
         user_id.clone(),
         homeserver.clone(),
@@ -214,7 +229,28 @@ fn session_status_family_without_started_sync_returns_handler_result_without_ech
     let sync = sync_plain(&rt, &shared);
     let media = media_plain(&rt, &shared);
     let secret = secret_plain(&rt, &shared);
+    // A subsequent authoritative SDK readback is unconfigured, not a platform
+    // NoSession error. Its absent secrets cannot be mistaken for ready recovery.
+    rt.block_on(async {
+        Mock::given(method("GET"))
+            .and(path_regex(r"/account_data/.*$"))
+            .and(header_exists("authorization"))
+            .respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
+                "errcode": "M_NOT_FOUND", "error": "account data absent"
+            })))
+            .mount(server.server())
+            .await;
+    });
+    let unconfigured = secret_plain(&rt, &shared).expect("attached Core reads SDK secret state");
+    assert_eq!(unconfigured.session_generation, 1);
+    assert!(!unconfigured.exists);
+    assert!(!unconfigured.default_key_set);
+    assert!(!unconfigured.unlocked);
+    assert!(!unconfigured.passphrase_configured);
+    assert!(!unconfigured.bootstrap_ready);
+    assert_eq!(unconfigured.missing_secrets.len(), 4);
     drop(shared);
+    drop(server);
     drop(_enter);
     drop(rt);
     let _ = fs::remove_dir_all(&root);
@@ -237,10 +273,11 @@ fn session_status_family_without_started_sync_returns_handler_result_without_ech
         .err()
         .map(error_text)
         .expect("planted media_config must return the registered iOS platform diagnostic");
-    let secret_err =
-        secret.as_ref().err().map(error_text).expect(
-            "planted secret_storage_status must return the registered iOS platform diagnostic",
-        );
+    let secret_err = secret
+        .as_ref()
+        .err()
+        .map(error_text)
+        .expect("attached secret_storage_status must return the authoritative SDK failure");
 
     assert_eq!(sync.readiness, "idle");
     let sync_text = format!("{sync:?}");
@@ -255,8 +292,8 @@ fn session_status_family_without_started_sync_returns_handler_result_without_ech
         "media_config must return the registered no-session diagnostic: {media_err}"
     );
     assert!(
-        secret_err.contains("v-crypto.4-secret-storage-requires-session"),
-        "secret_storage_status must return the registered requires-session diagnostic: {secret_err}"
+        secret_err.contains("v-crypto.4-status-default-key-failed"),
+        "secret_storage_status must preserve the SDK default-key error: {secret_err}"
     );
     for (label, text) in [("media", &media_err), ("secret", &secret_err)] {
         assert!(

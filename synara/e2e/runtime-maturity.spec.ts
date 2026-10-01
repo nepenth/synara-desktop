@@ -230,12 +230,27 @@ test('the actual PDF viewer removes the old page and exposes render and retry fa
   const viewer = page.getByRole('region', { name: 'PDF viewer regression' });
   await expect(viewer.locator('canvas')).toHaveCount(1);
   await expect(viewer.getByText('1/2', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('pdf-status')).toHaveText('PDF rendered');
+  await expect(page.getByTestId('pdf-canvas')).toBeVisible();
   // Cause a real RenderTask to reject inside CanvasGraphics on the next page.
   // The actual viewer, PDF document, module worker and render owner remain unchanged.
   await page.evaluate(() => {
     const state = globalThis as typeof globalThis & { controlledPdfRenderFailures: number };
     state.controlledPdfRenderFailures = 0;
-    CanvasRenderingContext2D.prototype.fill = () => {
+    const standaloneCanvas = document.querySelector<HTMLCanvasElement>(
+      '[data-testid="pdf-canvas"]'
+    );
+    if (!standaloneCanvas) throw new Error('Standalone PDF must complete before fault injection');
+    const originalFill = CanvasRenderingContext2D.prototype.fill;
+    CanvasRenderingContext2D.prototype.fill = function (
+      this: CanvasRenderingContext2D,
+      ...args: unknown[]
+    ) {
+      // The independent harness render can never satisfy the viewer retry oracle.
+      if (this.canvas === standaloneCanvas) {
+        Reflect.apply(originalFill, this, args);
+        return;
+      }
       state.controlledPdfRenderFailures += 1;
       throw new Error('Controlled next-page paint failure');
     };
@@ -244,6 +259,12 @@ test('the actual PDF viewer removes the old page and exposes render and retry fa
   await expect(viewer.getByText('2/2', { exact: true })).toBeVisible();
   await expect(viewer.getByText('Failed to load PDF', { exact: true })).toBeVisible();
   await expect(viewer.locator('canvas')).toHaveCount(0);
+  const failuresBeforeRetry = await page.evaluate(
+    () =>
+      (globalThis as typeof globalThis & { controlledPdfRenderFailures: number })
+        .controlledPdfRenderFailures
+  );
+  expect(failuresBeforeRetry).toBeGreaterThan(0);
   await viewer.getByRole('button', { name: 'Retry', exact: true }).click();
   await expect
     .poll(() =>
@@ -253,7 +274,7 @@ test('the actual PDF viewer removes the old page and exposes render and retry fa
             .controlledPdfRenderFailures
       )
     )
-    .toBeGreaterThanOrEqual(2);
+    .toBeGreaterThan(failuresBeforeRetry);
   await expect(viewer.getByText('Failed to load PDF', { exact: true })).toBeVisible();
   await expect(viewer.locator('canvas')).toHaveCount(0);
   expect(errors).toEqual([]);

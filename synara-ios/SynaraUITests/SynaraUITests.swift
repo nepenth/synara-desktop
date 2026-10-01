@@ -68,7 +68,13 @@ final class SynaraUITests: XCTestCase {
         XCTAssertFalse(app.staticTexts["Device verified"].exists)
         XCTAssertTrue(app.staticTexts["Unverified"].exists)
         recordVerificationScreenshot(app, name: "verification-trust-pending")
-        app.buttons["DismissDeviceVerificationButton"].tap()
+        let done = app.buttons["DismissDeviceVerificationButton"]
+        expectation(for: NSPredicate { _, _ in
+            done.exists && done.isEnabled && done.isHittable
+        }, evaluatedWith: done)
+        waitForExpectations(timeout: 5)
+        done.tap()
+        recordVerificationScreenshot(app, name: "verification-trust-after-one-done-tap")
         assertVerificationStaysClosed(in: app)
     }
 

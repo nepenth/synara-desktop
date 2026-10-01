@@ -481,6 +481,10 @@ async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_
         },
         UserId,
     };
+    use synara_core::app::notifications::{
+        NativeNotificationDecideRequest, NativeNotificationDecisionOwner,
+    };
+    use synara_core::dto::NotificationKind;
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().logged_in_with_oauth().build().await;
     client.event_cache().subscribe().unwrap();
@@ -548,6 +552,27 @@ async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_
     let encrypted = wait_for(&owner, |snapshot| !snapshot.loading).await;
     assert!(encrypted.incomplete);
     assert!(encrypted.items.is_empty());
+    let decisions = NativeNotificationDecisionOwner::new(&client, 19).unwrap();
+    let notification_request = || NativeNotificationDecideRequest {
+        room_id: room_id.to_string(),
+        event_id: Some("$encrypted-approval".into()),
+        kind: "message".into(),
+        title: "Renderer summary".into(),
+        body: "New message".into(),
+        route: None,
+        suppress_if_focused_room: true,
+    };
+    for _ in 0..2 {
+        assert_eq!(
+            decisions
+                .decide_observed(notification_request())
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.event-not-ready"
+        );
+        assert!(decisions.list_pending().unwrap().is_empty());
+    }
     let keys = sender
         .store()
         .export_room_keys(|session| session.room_id() == room_id)
@@ -568,6 +593,47 @@ async fn encrypted_prompt_is_incomplete_until_native_key_arrival_then_uses_room_
     assert_eq!(decrypted.items[0].event_id, "$encrypted-approval");
     assert_eq!(decrypted.items[0].body, PROMPT);
     assert!(decrypted.items[0].can_send_reaction);
+    // Timeline and event-cache observers settle independently after key import.
+    // Wait on the actual SDK cache used by decisions, without retrying decisions
+    // or changing the encrypted event served by the fixture.
+    tokio::time::timeout(Duration::from_secs(10), async {
+        let room = client.get_room(room_id).unwrap();
+        loop {
+            let event = room
+                .load_or_fetch_event(event_id!("$encrypted-approval"), None)
+                .await
+                .unwrap();
+            if matches!(
+                event.raw().deserialize().unwrap(),
+                ruma::events::AnySyncTimelineEvent::MessageLike(
+                    ruma::events::AnySyncMessageLikeEvent::RoomMessage(_)
+                )
+            ) {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(25)).await;
+        }
+    })
+    .await
+    .expect("native key arrival resolves the notification SDK event cache");
+    let resolved = decisions
+        .decide_observed(notification_request())
+        .await
+        .unwrap();
+    assert_eq!(resolved.decision, "show");
+    let candidate = resolved.candidate.unwrap();
+    assert_eq!(candidate.kind, NotificationKind::AgentApproval);
+    assert_eq!(candidate.event_id.as_deref(), Some("$encrypted-approval"));
+    assert_eq!(decisions.pending_count().unwrap(), 1);
+    assert_eq!(
+        decisions
+            .decide_observed(notification_request())
+            .await
+            .unwrap()
+            .reason
+            .as_deref(),
+        Some("duplicate-event")
+    );
     let levels: RoomPowerLevelsEventContent = serde_json::from_value(serde_json::json!({
         "users": {own_user.as_str(): 0}, "events": {"m.reaction": 100}
     }))
