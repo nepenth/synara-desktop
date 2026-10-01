@@ -216,6 +216,16 @@ newer builtins before both production imports, require a real worker and red PDF
 pixel, and reject fake-worker fallback. This corrects the tested builtin gap;
 it does not certify every PDF feature on physical macOS 13/WebKit 16.
 
+PDF page publication awaits the actual `RenderTask.promise`. The viewer and
+runtime harness use the existing async request owner for page loading, completed
+canvas publication, and render failures; rejected retry promises are consumed
+while the error state remains visible. Deferred task tests prove that unfinished
+or failed rendering cannot publish a completed canvas. Both browser engines also
+exercise the production page owner through success, failure, and failed retry
+without global unhandled errors. A separate case mounts the actual PDF viewer,
+rejects a real next-page CanvasGraphics render task, and verifies that the old
+canvas is removed, the error is visible, and failed retry remains handled.
+
 Unused direct `dateformat`, `vite-node`, and `@types/ua-parser-js` are removed.
 The proposed Babel 8 direct update is retired: Vite React 6 uses Oxc and no
 project Babel configuration or direct consumer exists. Legitimate transitive
@@ -234,11 +244,11 @@ Validated with pinned Node 24.13.1:
 | Full root/frontend `npm audit --json` | Zero findings at every severity, including development dependencies. |
 | Full TypeScript and modernization typechecks | Passed with native TypeScript 7. |
 | Full renderer lint | ESLint and Prettier passed. |
-| Normal `npm run test:modernization`, including runtime build pretest | 1,199 passed, zero failures or skips, including the accepted notification delivery/action adapters. |
+| Normal `npm run test:modernization`, including runtime build pretest | 1,201 passed, zero failures or skips, including the accepted notification delivery/action adapters. |
 | Timeline Chromium browser command | 7 passed. |
 | Native-timeline Chromium browser command | 72 passed. |
-| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 5 runtime-maturity Chromium cases passed. |
-| Normal release `test:browser:desktop-polish` command from a cold Vite cache | 12 room-list, 68 approvals, and 10 runtime-maturity Chromium/WebKit cases passed. |
+| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 7 runtime-maturity Chromium cases passed. |
+| Normal release `test:browser:desktop-polish` command from a cold Vite cache | 12 room-list, 68 approvals, and 14 runtime-maturity Chromium/WebKit cases passed. |
 | Normal build output guard and `check:runtime-assets` | Matching installed PDF-worker bytes, config/locales at actual URLs, retired assets absent. |
 
 Both CI `desktop-polish:ci` and release `desktop-polish` npm entrypoints include

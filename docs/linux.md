@@ -317,7 +317,7 @@ only after the pacman repo path is stable and tested.
 #### GitHub Release-backed pacman repo notes
 
 The in-repo `packaging/arch/PKGBUILD` expects a release binary already built in
-`src-tauri/target/release/synara`. CI builds that binary inside an Arch
+`target/release/synara`. CI builds that binary inside an Arch
 container, runs `makepkg`, then runs:
 
 ```sh

@@ -75,11 +75,15 @@ npm run check:matrix-boundaries
 npm run check:quality-gates
 npm run check:synapse-harness
 npm --prefix synara run typecheck:modernization
-npm --prefix synara run test:modernization
+npm run test:modernization
 npm --prefix synara run check:eslint
 npm --prefix synara run check:prettier
-cargo check --manifest-path src-tauri/Cargo.toml --locked
-cargo test --manifest-path src-tauri/Cargo.toml --locked
+cargo clippy --locked -p synara --all-targets -- -D warnings
+cargo check --locked -p synara
+cargo test --locked -p synara
+cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings
+cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
+cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 npm run check:production-smoke
 ```
 
@@ -92,11 +96,32 @@ npm run check:synapse-harness
 scripts/synapse-integration.sh reset
 ```
 
-For timeline work, also run:
+The root modernization command includes its runtime build pretest. Shared-package
+and desktop tests select their packages explicitly; shipping NSE feature and
+archive isolation remains a separate check.
+
+For timeline work, run both the model harness and the native-timeline browser
+harness:
 
 ```bash
 npm --prefix synara run test:timeline-performance
+npm --prefix synara run test:browser:native-timeline
 ```
+
+The browser native-timeline harness uses one file worker to isolate its performance
+measurement from concurrent functional files. Its cases, budgets, sample windows,
+assertions, and retry policy remain unchanged.
+
+For renderer dependency and platform-runtime changes, run the release browser
+entrypoint, which includes runtime-maturity in Chromium and WebKit:
+
+```bash
+npm --prefix synara run test:browser:desktop-polish
+```
+
+Chromium-only CI coverage does not establish WebKit coverage. Current browser
+fixtures do not certify physical minimum-system WebKit or installed native URL
+transport.
 
 ## Local Builds
 

@@ -78,9 +78,10 @@ The repository has one Matrix application engine and two native UI shells:
 - `synara-ios/` owns the native SwiftUI app, Apple platform services, Keychain,
   APNs integration, and the notification service extension.
 
-The generic shared-core command envelope intentionally excludes credentials,
-recovery material, local file paths, and large media bytes. Platform adapters
-retain those responsibilities.
+The generic shared-core command envelope excludes credentials, recovery material,
+local file paths, and large media bytes. Narrow typed Core recovery APIs own SDK
+operations and postconditions; shells retain user confirmation, secret custody,
+one-time recovery-key display, and platform file/byte transfer.
 
 See [ADR 0004](docs/adr/0004-rust-language-boundaries.md) for the binding
 rules and [ADR 0003](docs/adr/0003-shared-native-rust-core.md) for the shared
@@ -92,6 +93,7 @@ migration record, not a statement that the core is unfinished.
 ```text
 .
 |-- crates/synara-core/       Shared Rust application core
+|-- crates/synara-nse-core/   Narrow notification-extension store/preview core
 |-- crates/synara-core-bindgen/
 |                             Swift binding generator
 |-- src-tauri/                macOS/Linux native shell and adapters
@@ -217,11 +219,12 @@ npm --prefix synara run check:prettier
 Rust checks:
 
 ```sh
-cargo test --workspace --locked
-cargo test --manifest-path src-tauri/Cargo.toml --locked
+cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
+cargo test --locked -p synara
 ```
 
-The complete release-oriented command list is maintained in
+These development-feature tests do not establish shipping NSE feature or archive
+isolation. The complete release-oriented command list is maintained in
 [docs/build-and-release.md](docs/build-and-release.md).
 
 ## Releases

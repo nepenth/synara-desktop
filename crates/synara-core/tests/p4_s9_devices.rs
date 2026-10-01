@@ -66,7 +66,6 @@ fn device_surface_exposes_only_the_registered_device_family() {
     assert!(!udl.contains("matrix_cross_signing_setup"));
     // Recovery is now an accepted typed Core family; legacy shell commands
     // still cannot enter this surface or bypass the dedicated secret argument.
-    assert!(udl.contains("BackupStatusDto backup_setup(string passphrase)"));
     assert!(!udl.contains("matrix_backup_setup"));
     assert!(!udl.contains("matrix_crypto_status"));
     assert!(!udl.contains("matrix_login_password"));
@@ -75,6 +74,7 @@ fn device_surface_exposes_only_the_registered_device_family() {
         .nth(1)
         .and_then(|rest| rest.split("};").next())
         .expect("SharedCore");
+    assert!(shared_core.contains("BackupStatusDto backup_setup(string passphrase);"));
     assert!(shared_core.contains("device_snapshot"));
     assert!(shared_core.contains("device_rename"));
     assert!(shared_core.contains("device_delete_start"));

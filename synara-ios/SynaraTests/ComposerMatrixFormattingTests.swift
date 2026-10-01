@@ -77,6 +77,8 @@ final class ComposerMatrixFormattingTests: XCTestCase {
             window.endEditing(true)
             window.isHidden = true
             previousKeyWindow?.makeKey()
+            window.rootViewController = nil
+            window.windowScene = nil
         }
         await fulfillment(of: [appeared], timeout: 5)
         let bindings = try XCTUnwrap(controls)
@@ -88,8 +90,11 @@ final class ComposerMatrixFormattingTests: XCTestCase {
                 let editors = hostedComposerEditors(in: controller.view)
                 return editors.count == 1
                     && editors[0].window === window
+                    && editors[0].isDescendant(of: controller.view)
                     && editors[0].bounds.width > 0
                     && editors[0].bounds.height > 0
+                    && window.isKeyWindow
+                    && !editors[0].isFirstResponder
             },
             object: controller
         )
@@ -99,10 +104,17 @@ final class ComposerMatrixFormattingTests: XCTestCase {
             editors.count == 1 ? editors.first : nil,
             "Require one production editor in this hosted controller"
         )
-        XCTAssertTrue(textView.window === window, "Exercise the hosted production editor")
-        XCTAssertTrue(textView.isDescendant(of: controller.view))
-        XCTAssertTrue(window.isKeyWindow)
-        XCTAssertFalse(textView.isFirstResponder)
+        guard textView.window === window,
+              textView.isDescendant(of: controller.view),
+              textView.bounds.width > 0,
+              textView.bounds.height > 0,
+              window.isKeyWindow,
+              !textView.isFirstResponder
+        else {
+            XCTFail("Hosted production editor was not laid out in the key test window: count=\(editors.count)")
+            struct HostedEditorNotReady: Error {}
+            throw HostedEditorNotReady()
+        }
 
         // A toolbar request must reach UIKit through the real representable update.
         bindings.isFocused.wrappedValue = true

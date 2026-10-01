@@ -1,5 +1,12 @@
 # 14 — Long-running Cloud Agent (continue the language-boundary loop)
 
+> **Historical migration operating guide.** The work queue, source paths,
+> command counts, resource constraints, and agent launch instructions below apply
+> to the recorded evidence tip. They are not the current operating policy. Use
+> the accepted ADRs, current source, and [build and release runbook](../build-and-release.md)
+> for new work; use the [consolidation ledger](../rust-maturity-retirements.md)
+> for validation and remaining proof limits.
+
 A normal Cloud Agent **stops when the current prompt ends**. A
 [Long-running agent](https://cursor.com/blog/long-running-agents) uses a
 different harness: it **proposes a plan, waits for approval**, then can

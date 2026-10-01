@@ -191,3 +191,70 @@ test('the production Slate composer edits, formats, splits paragraphs and restor
   await expect(editor).toContainText('second');
   expect(errors).toEqual([]);
 });
+
+test('PDF render status waits for completion and surfaces RenderTask failure through the production owner', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });
+  const lifecycle = page.getByRole('region', { name: 'PDF render lifecycle' });
+  await lifecycle.getByRole('button', { name: 'Start PDF render', exact: true }).click();
+  await expect(lifecycle.getByTestId('pdf-render-state')).toHaveText('loading');
+  await expect(lifecycle.locator('canvas')).toHaveCount(0);
+  await lifecycle.getByRole('button', { name: 'Finish PDF render', exact: true }).click();
+  await expect(lifecycle.getByTestId('pdf-render-state')).toHaveText('success');
+  await expect(lifecycle.locator('canvas')).toHaveCount(1);
+  await lifecycle.getByRole('button', { name: 'Start PDF render', exact: true }).click();
+  await expect(lifecycle.getByTestId('pdf-render-state')).toHaveText('loading');
+  await expect(lifecycle.locator('canvas')).toHaveCount(0);
+  await lifecycle.getByRole('button', { name: 'Fail PDF render', exact: true }).click();
+  await expect(lifecycle.getByTestId('pdf-render-state')).toHaveText('error');
+  await expect(lifecycle.getByRole('alert')).toContainText('Controlled render failure');
+  await expect(lifecycle.locator('canvas')).toHaveCount(0);
+  await lifecycle.getByRole('button', { name: 'Retry PDF render', exact: true }).click();
+  await expect(lifecycle.getByTestId('pdf-render-state')).toHaveText('loading');
+  await lifecycle.getByRole('button', { name: 'Fail PDF render', exact: true }).click();
+  await expect(lifecycle.getByTestId('pdf-render-state')).toHaveText('error');
+  await expect(lifecycle.getByRole('alert')).toContainText('Controlled render failure');
+  await expect(lifecycle.locator('canvas')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
+test('the actual PDF viewer removes the old page and exposes render and retry failures', async ({
+  page,
+}) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.goto('/e2e/runtime-maturity-harness/index.html', { waitUntil: 'domcontentloaded' });
+  const viewer = page.getByRole('region', { name: 'PDF viewer regression' });
+  await expect(viewer.locator('canvas')).toHaveCount(1);
+  await expect(viewer.getByText('1/2', { exact: true })).toBeVisible();
+  // Cause a real RenderTask to reject inside CanvasGraphics on the next page.
+  // The actual viewer, PDF document, module worker and render owner remain unchanged.
+  await page.evaluate(() => {
+    const state = globalThis as typeof globalThis & { controlledPdfRenderFailures: number };
+    state.controlledPdfRenderFailures = 0;
+    CanvasRenderingContext2D.prototype.fill = () => {
+      state.controlledPdfRenderFailures += 1;
+      throw new Error('Controlled next-page paint failure');
+    };
+  });
+  await viewer.getByText('Next', { exact: true }).click();
+  await expect(viewer.getByText('2/2', { exact: true })).toBeVisible();
+  await expect(viewer.getByText('Failed to load PDF', { exact: true })).toBeVisible();
+  await expect(viewer.locator('canvas')).toHaveCount(0);
+  await viewer.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          (globalThis as typeof globalThis & { controlledPdfRenderFailures: number })
+            .controlledPdfRenderFailures
+      )
+    )
+    .toBeGreaterThanOrEqual(2);
+  await expect(viewer.getByText('Failed to load PDF', { exact: true })).toBeVisible();
+  await expect(viewer.locator('canvas')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
