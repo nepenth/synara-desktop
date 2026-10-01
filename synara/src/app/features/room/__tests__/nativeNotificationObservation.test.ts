@@ -9,7 +9,10 @@ import {
   type NativeNotificationObservation,
 } from '../nativeNotificationObservation';
 
-import { buildNativeObservedNotificationPresentation } from '../nativeNotificationPresentation';
+import {
+  buildNativeObservedNotificationPresentation,
+  deliverNativeObservedNotificationCandidate,
+} from '../nativeNotificationPresentation';
 import type { NativeNotificationCandidate } from '../nativeNotificationDecision';
 
 const OBSERVATION: NativeNotificationObservation = {
@@ -219,6 +222,116 @@ test('late approval promotion uses the shared actionable presentation and exact 
     (mounted.match(/buildNativeObservedNotificationPresentation\(candidate,/g) ?? []).length,
     2
   );
-  assert.match(mounted, /readback\.candidate\.kind === 'agent_approval'/);
+  assert.match(mounted, /candidate\.kind === 'agent_approval'/);
   assert.doesNotMatch(mounted, /approvalEventId/);
+});
+
+test('shown candidate delivery always releases pending ownership after generation or delivery faults', async () => {
+  const candidate: NativeNotificationCandidate = {
+    candidateId: 'candidate-7',
+    roomId: OBSERVATION.roomId,
+    eventId: OBSERVATION.eventId,
+    kind: 'agent_approval',
+    title: 'Approval Required: Dangerous Command',
+    body: 'Review a request in Synara.',
+    suppressIfFocusedRoom: false,
+    isEncrypted: true,
+  };
+  for (const generation of [undefined, 6, 8]) {
+    const pending = new Set([candidate.candidateId]);
+    let deliveries = 0;
+    await deliverNativeObservedNotificationCandidate({
+      candidate,
+      observedGeneration: 7,
+      currentGeneration: () => generation,
+      deliver: async () => {
+        deliveries += 1;
+        return 'delivered';
+      },
+      acknowledge: async (id, outcome) => {
+        assert.equal(outcome, undefined);
+        pending.delete(id);
+      },
+    });
+    assert.equal(deliveries, 0, 'no stale or unknown account reaches platform delivery');
+    assert.equal(pending.size, 0, 'stale readback still releases its pending candidate');
+  }
+  let receipt: string | undefined;
+  await deliverNativeObservedNotificationCandidate({
+    candidate,
+    observedGeneration: 7,
+    currentGeneration: () => 7,
+    deliver: async () => {
+      throw new Error('platform delivery failed');
+    },
+    acknowledge: async (_id, outcome) => {
+      receipt = outcome;
+    },
+  });
+  assert.equal(receipt, 'failed');
+  let deliveries = 0;
+  await deliverNativeObservedNotificationCandidate({
+    candidate,
+    observedGeneration: 7,
+    currentGeneration: () => 7,
+    deliver: async () => {
+      deliveries += 1;
+      return 'delivered';
+    },
+    acknowledge: async () => {
+      throw new Error('owner already retired');
+    },
+  });
+  assert.equal(deliveries, 1, 'acknowledgement failure never retries platform delivery');
+});
+
+test('late authoritative approval reaches delivery during inbox triage with no renderer room metadata', async () => {
+  const source = { roomId: OBSERVATION.roomId, eventId: OBSERVATION.eventId };
+  const candidate: NativeNotificationCandidate = {
+    candidateId: 'approval',
+    ...source,
+    kind: 'agent_approval',
+    title: 'Approval Required: Dangerous Command',
+    body: 'Review a request in Synara.',
+    suppressIfFocusedRoom: false,
+    isEncrypted: true,
+  };
+  for (const kind of ['message', 'agent_approval'] as const) {
+    const posted: unknown[] = [];
+    let acknowledgements = 0;
+    await deliverNativeObservedNotificationCandidate({
+      candidate: { ...candidate, kind },
+      observedGeneration: 7,
+      currentGeneration: () => 7,
+      // This is the mounted value during inbox triage or missing room metadata.
+      presentOrdinaryMessages: false,
+      deliver: async (accepted) => {
+        posted.push(buildNativeObservedNotificationPresentation(accepted, source));
+        return 'delivered';
+      },
+      acknowledge: async (id) => {
+        assert.equal(id, candidate.candidateId);
+        acknowledgements += 1;
+      },
+    });
+    assert.equal(posted.length, kind === 'agent_approval' ? 1 : 0);
+    assert.equal(
+      acknowledgements,
+      1,
+      'both local suppress and delivered outcomes release ownership'
+    );
+  }
+  const mounted = readFileSync(
+    `${process.cwd()}/src/app/pages/client/ClientNonUIFeatures.tsx`,
+    'utf8'
+  );
+  const start = mounted.indexOf('function MessageNotifications()');
+  const end = mounted.indexOf('function LaterReminderNotifications()');
+  const routes = mounted.slice(start, end);
+  assert.doesNotMatch(routes, /if \(!room \|\| room\.isSpaceRoom\(\)\) return/);
+  assert.doesNotMatch(routes, /if \(notificationSelected\) return/);
+  assert.equal(
+    (routes.match(/await deliverNativeObservedNotificationCandidate\(/g) ?? []).length,
+    2
+  );
 });

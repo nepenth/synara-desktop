@@ -208,21 +208,42 @@ mod tests {
 
     #[test]
     fn core_cargo_toml_requests_widgets_directly_not_custom_to_device() {
-        let manifest = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/Cargo.toml"));
-        assert!(manifest.contains("\"experimental-widgets\""));
-        let features_block = manifest
-            .split("matrix-sdk = { version = \"=0.19.1\"")
+        // The package owns production feature requests; workspace inheritance
+        // owns the version/default policy. Exclude dev-only feature unification.
+        let production = CORE_CARGO
+            .split("[dependencies]")
             .nth(1)
-            .and_then(|rest| rest.split("matrix-sdk-ui").next())
-            .expect("direct matrix-sdk dependency features");
+            .and_then(|rest| rest.split("[dev-dependencies]").next())
+            .expect("Core production dependency section");
+        let features = requested_cargo_features(production, "matrix-sdk");
         assert!(
-            features_block.contains("experimental-widgets"),
-            "direct matrix-sdk features must compile in experimental-widgets"
+            features
+                .iter()
+                .any(|feature| feature == "experimental-widgets"),
+            "Core production must request the widget capability directly"
         );
         assert!(
-            !features_block.contains("experimental-send-custom-to-device"),
-            "experimental-send-custom-to-device must stay a transitive-only feature"
+            !features
+                .iter()
+                .any(|feature| feature == "experimental-send-custom-to-device"),
+            "custom to-device must remain transitive through the widget feature"
         );
+        assert!(forbidden_requested_features(production).is_empty());
+
+        let workspace = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/../../Cargo.toml"));
+        let needle = "matrix-sdk = {";
+        let inherited = cargo_table_block(
+            &production[production.find(needle).expect("Core SDK dependency") + needle.len()..],
+        )
+        .expect("Core SDK dependency table");
+        assert!(inherited.contains("workspace = true"));
+        let shared = cargo_table_block(
+            &workspace[workspace.find(needle).expect("workspace SDK dependency") + needle.len()..],
+        )
+        .expect("workspace SDK dependency table");
+        assert!(shared.contains(&format!(r#"version = "={MATRIX_SDK_PIN_VERSION}""#)));
+        assert!(shared.contains("default-features = false"));
+        assert!(forbidden_requested_features(workspace).is_empty());
     }
 
     #[test]

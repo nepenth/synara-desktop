@@ -59,7 +59,10 @@ import {
   type NativeNotificationDeliveryOutcome,
   type NativeNotificationCandidate,
 } from '../../features/room/nativeNotificationDecision';
-import { buildNativeObservedNotificationPresentation } from '../../features/room/nativeNotificationPresentation';
+import {
+  buildNativeObservedNotificationPresentation,
+  deliverNativeObservedNotificationCandidate,
+} from '../../features/room/nativeNotificationPresentation';
 import { markLaterRemindedWithNativeOwner } from '../../features/room/nativeLaterOwner';
 import {
   subscribeNativeNotificationObservations,
@@ -366,7 +369,6 @@ function MessageNotifications() {
         return;
       }
       const room = mx.getRoom(roomId);
-      if (!room || room.isSpaceRoom()) return;
 
       const cacheKey = `${roomId}:${eventId}`;
       if (submittedRef.current.has(cacheKey)) return;
@@ -386,9 +388,11 @@ function MessageNotifications() {
           kind: 'message',
           // Privacy-filtered product strings only: room name and a fixed
           // summary. Never message content, ciphertext, or identifiers.
-          title: room.name ?? 'Unknown',
+          title: room?.name ?? 'Unknown',
           body: `New inbox notification from ${
-            getMemberDisplayName(room, sender) ?? getMxIdLocalPart(sender) ?? sender
+            (room ? getMemberDisplayName(room, sender) : undefined) ??
+            getMxIdLocalPart(sender) ??
+            sender
           }`,
           route: buildDesktopNotificationRoomRoute(roomId, eventId),
           suppressIfFocusedRoom: true,
@@ -400,61 +404,49 @@ function MessageNotifications() {
         // fallback.
         return;
       }
-      if (mx.getSyncStateData()?.sessionGeneration !== observation.sessionGeneration) return;
-      // Remember only outcomes Core durably recorded: shown candidates and
-      // already-seen or own events. Core observes each event once, so this
-      // set is a guard against a duplicated observation, not a resubmit
-      // schedule; Core's own dedup remains the authority.
-      if (
-        readback.decision === 'show' ||
-        readback.reason === 'duplicate-event' ||
-        readback.reason === 'own-event'
-      ) {
-        rememberSubmitted(roomId, eventId);
+      if (readback.decision !== 'show' || !readback.candidate) {
+        if (readback.reason === 'duplicate-event' || readback.reason === 'own-event') {
+          rememberSubmitted(roomId, eventId);
+        }
+        return;
       }
-      if (readback.decision !== 'show' || !readback.candidate) return;
-      const shownCandidateId = readback.candidate.candidateId;
-
-      // Delivery receipt: undefined when nothing was attempted, otherwise the
-      // OS answer. The candidate stays pending in Core until the OS has
-      // answered, so the acknowledgement carries a real outcome.
-      let outcome: NativeNotificationDeliveryOutcome | undefined;
-      if (
-        showNotifications &&
-        (supportsPlatformSystemNotifications() || notificationPermission('granted'))
-      ) {
-        const avatarMxc =
-          room.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room.getMxcAvatarUrl();
-        outcome = await notify({
-          candidate: readback.candidate,
-          roomAvatar: avatarMxc
-            ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
-            : undefined,
-          roomId,
-          eventId,
-        });
-      }
-
-      // Sound follows the SDK push tweak Core echoed (one-to-one rooms,
-      // mentions, keywords, and any account rule that sets a sound), gated by
-      // the local preference. A notification the OS refused stays silent so
-      // sound never claims a delivery that did not happen.
-      if (readback.candidate.kind === 'agent_approval') {
-        // Native approval context owns time-sensitive sound, including a
-        // late SDK promotion of the originally opaque message observation.
-        if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
-      } else if (notificationSound && readback.sound === true && outcome !== 'failed') {
-        playSound();
-      }
-
-      // Ack with the receipt to release the pending candidate. Core retains
-      // bounded recent-event dedup independently of the pending queue and
-      // does not retry a failed delivery.
-      void dismissNotificationWithNativeOwner(shownCandidateId, outcome).catch(() => undefined);
+      await deliverNativeObservedNotificationCandidate({
+        candidate: readback.candidate,
+        observedGeneration: observation.sessionGeneration,
+        presentOrdinaryMessages: !notificationSelected && !!room && !room.isSpaceRoom(),
+        currentGeneration: () => mx.getSyncStateData()?.sessionGeneration,
+        acknowledge: dismissNotificationWithNativeOwner,
+        deliver: async (candidate) => {
+          rememberSubmitted(roomId, eventId);
+          let outcome: NativeNotificationDeliveryOutcome | undefined;
+          if (
+            showNotifications &&
+            (supportsPlatformSystemNotifications() || notificationPermission('granted'))
+          ) {
+            const avatarMxc =
+              room?.getAvatarFallbackMember()?.getMxcAvatarUrl() ?? room?.getMxcAvatarUrl();
+            outcome = await notify({
+              candidate,
+              roomAvatar: avatarMxc
+                ? resolveMatrixThumbnailUrl(mx, avatarMxc, 96, { useAuthentication })
+                : undefined,
+              roomId,
+              eventId,
+            });
+          }
+          if (candidate.kind === 'agent_approval') {
+            if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
+          } else if (notificationSound && readback.sound === true && outcome !== 'failed') {
+            playSound();
+          }
+          return outcome;
+        },
+      });
     },
     [
       mx,
       notificationSound,
+      notificationSelected,
       showNotifications,
       playSound,
       notify,
@@ -471,14 +463,11 @@ function MessageNotifications() {
     const dispose = subscribeNativeNotificationObservations(
       () => mx.getSyncStateData()?.sessionGeneration,
       (observation) => {
-        // The notification inbox triage view suppresses message toasts while
-        // the user is working through notifications.
-        if (notificationSelected) return;
         void decideAndNotify(observation);
       }
     );
     return dispose;
-  }, [mx, notificationSelected, decideAndNotify]);
+  }, [mx, decideAndNotify]);
 
   return (
     // eslint-disable-next-line jsx-a11y/media-has-caption
@@ -645,47 +634,43 @@ function AgentApprovalNotifications() {
       const { eventId, agentApproval } = observation;
       if (!agentApproval || agentApproval.expired) return;
       const room = mx.getRoom(observation.roomId);
-      if (!room || room.isSpaceRoom()) return;
 
       if (notifiedEventIdsCache.has(eventId)) return;
 
       let readback;
       try {
         readback = await decideNotificationWithNativeOwner({
-          roomId: room.roomId,
+          roomId: observation.roomId,
           eventId,
           kind: 'agent_approval',
           title: 'Approval Required: Dangerous Command',
-          body: `${room.name ?? 'Unknown'}: Review a request in Synara.`,
-          route: buildDesktopNotificationRoomRoute(room.roomId, eventId),
+          body: `${room?.name ?? 'Unknown'}: Review a request in Synara.`,
+          route: buildDesktopNotificationRoomRoute(observation.roomId, eventId),
           suppressIfFocusedRoom: false,
         });
       } catch {
         return;
       }
-      if (mx.getSyncStateData()?.sessionGeneration !== observation.sessionGeneration) return;
       if (readback.decision !== 'show' || !readback.candidate) return;
-      notifiedEventIdsCache.add(eventId);
-      let outcome: NativeNotificationDeliveryOutcome | undefined;
-      if (
-        showNotifications &&
-        (supportsPlatformSystemNotifications() || notificationPermission('granted'))
-      ) {
-        try {
-          outcome = await notify({
-            roomId: room.roomId,
-            eventId,
-            candidate: readback.candidate,
-          });
-        } catch {
-          outcome = 'failed';
-        }
-      }
-      // Native approval delivery already owns its time-sensitive sound.
-      if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
-      void dismissNotificationWithNativeOwner(readback.candidate.candidateId, outcome).catch(
-        () => undefined
-      );
+      await deliverNativeObservedNotificationCandidate({
+        candidate: readback.candidate,
+        observedGeneration: observation.sessionGeneration,
+        currentGeneration: () => mx.getSyncStateData()?.sessionGeneration,
+        acknowledge: dismissNotificationWithNativeOwner,
+        deliver: async (candidate) => {
+          notifiedEventIdsCache.add(eventId);
+          let outcome: NativeNotificationDeliveryOutcome | undefined;
+          if (
+            showNotifications &&
+            (supportsPlatformSystemNotifications() || notificationPermission('granted'))
+          ) {
+            outcome = await notify({ roomId: observation.roomId, eventId, candidate });
+          }
+          // Native approval delivery already owns its time-sensitive sound.
+          if (outcome === 'delivered' && !supportsPlatformSystemNotifications()) playSound();
+          return outcome;
+        },
+      });
     },
     [mx, notify, playSound, showNotifications]
   );

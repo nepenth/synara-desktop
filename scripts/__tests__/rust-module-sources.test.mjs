@@ -3,7 +3,10 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { readRustModuleSources } from "../lib/rust-module-sources.mjs";
+import {
+  readRustModuleSources,
+  rustDeclarationSurface,
+} from "../lib/rust-module-sources.mjs";
 
 function fixture(callback) {
   const root = mkdtempSync(join(tmpdir(), "synara-rust-modules-"));
@@ -237,6 +240,26 @@ test("unsupported Unicode module identifiers cannot omit compiled source silentl
       assert.throws(
         () => readRustModuleSources(entry),
         /Unsupported Rust module identifier/
+      );
+    }
+  });
+});
+
+test("valid raw C literals cannot declare modules or compiled includes", () => {
+  fixture((entry) => {
+    for (const literal of [
+      'cr"mod hidden;"',
+      'cr##"quoted "\nmod hidden;\ninclude!{"fake.rs"}\n"##',
+    ]) {
+      writeFileSync(
+        entry,
+        `const EXAMPLE: &std::ffi::CStr = ${literal};\nmod recovery;\n`
+      );
+      const result = readRustModuleSources(entry);
+      assert.equal(result.files.length, 2);
+      assert.doesNotMatch(
+        rustDeclarationSurface(result.source),
+        /mod hidden|include!/
       );
     }
   });

@@ -124,9 +124,10 @@ pub(crate) fn installed_session_projection(
     }
 }
 
-/// Mirror a session only after the desktop caller has installed it and released
-/// its async session mutex. No SDK client, vault material, or store location is
-/// accepted by this boundary.
+/// Mirror an installed session while the desktop caller retains its session
+/// transition gate through Core opening, owner attachment, and any rollback.
+/// Core opening does not call back into desktop auth. No SDK client, vault
+/// material, or store location is accepted by this projection boundary.
 pub(crate) async fn open_after_desktop_session_install(
     core: &Core,
     identity: &MatrixLoginIdentity,
@@ -137,8 +138,9 @@ pub(crate) async fn open_after_desktop_session_install(
         .map_err(|_| core_lifecycle_error())
 }
 
-/// Clear Core only after the desktop caller has removed its live session and
-/// released its async session mutex.
+/// Clear Core after desktop retirement while the caller retains its session
+/// transition gate. Core closing does not call back into desktop auth; keeping
+/// the gate prevents another installation from racing the close.
 pub(crate) async fn close_after_desktop_session_removal(
     core: &Core,
 ) -> Result<(), MatrixAuthCommandError> {
@@ -685,96 +687,5 @@ mod tests {
                 );
             }
         }
-    }
-
-    #[test]
-    fn lifecycle_inventory_covers_every_desktop_session_install_and_clear_site() {
-        let source = include_str!("../matrix/auth/product_commands.rs");
-        assert_eq!(
-            source.matches("*session = Some(ManagedMatrixSession {").count(),
-            3,
-            "password login, completed registration, and restore are the complete install inventory"
-        );
-        assert_eq!(
-            source.matches("*session = None;").count(),
-            1,
-            "logout is the sole desktop session clear site"
-        );
-        assert_eq!(
-            source
-                .matches("open_after_desktop_session_install(")
-                .count(),
-            3,
-            "every installed desktop session must mirror into Core"
-        );
-        assert_eq!(
-            source
-                .matches("close_after_desktop_session_removal(")
-                .count(),
-            2,
-            "logout closes Core both when already logged out and after desktop session removal"
-        );
-
-        for command in ["matrix_login_password", "matrix_restore_session"] {
-            let body = tauri_command_body(source, command);
-            let install = body
-                .find("*session = Some(ManagedMatrixSession {")
-                .expect("direct desktop session install");
-            let release = body.find("drop(session);").expect("session guard release");
-            let mirror = body
-                .find("open_after_desktop_session_install(")
-                .expect("Core session mirror");
-            assert!(
-                install < release && release < mirror,
-                "{command} must mirror only after installing and releasing the session guard"
-            );
-        }
-
-        let register = tauri_command_body(source, "matrix_register");
-        let register_install = register
-            .find("install_session_from_register_secrets")
-            .expect("completed registration install helper");
-        let register_release = register
-            .find("drop(session);")
-            .expect("session guard release");
-        let register_mirror = register
-            .find("open_after_desktop_session_install(")
-            .expect("Core session mirror");
-        assert!(
-            register_install < register_release && register_release < register_mirror,
-            "completed registration must release the session guard before its Core mirror"
-        );
-
-        let logout = tauri_command_body(source, "matrix_logout");
-        assert!(logout.contains("finish_active_logout("));
-        assert!(logout.contains("*session = None;"));
-        assert!(logout.contains("drop(session);"));
-        assert!(logout.contains("close_after_desktop_session_removal("));
-        let coordinator = source
-            .split("pub(super) async fn finish_active_logout<")
-            .nth(1)
-            .and_then(|body| {
-                body.split("pub(super) async fn finish_orphan_logout")
-                    .next()
-            })
-            .expect("logout coordinator");
-        let retire = coordinator.find("retire();").unwrap();
-        let close = coordinator.find("close().await").unwrap();
-        let deferred_cleanup = coordinator.find("cleanup_result?;").unwrap();
-        assert!(
-            retire < close && close < deferred_cleanup,
-            "retire callback releases desktop mutex before Core await and deferred cleanup errors"
-        );
-    }
-
-    fn tauri_command_body<'a>(source: &'a str, command: &str) -> &'a str {
-        let signature = format!("pub async fn {command}(");
-        let start = source.find(&signature).expect("Tauri command must exist");
-        let after_signature = &source[start..];
-        let end = after_signature
-            .find("#[tauri::command]")
-            .map(|offset| start + offset)
-            .unwrap_or(source.len());
-        &source[start..end]
     }
 }

@@ -191,7 +191,8 @@ test('the renderer acknowledges with the OS receipt after delivery and follows t
   // Delivery is awaited and its outcome reaches Core; the old fire-and-forget
   // `.catch(() => undefined)` around the OS call is gone from this path.
   assert.match(feature, /outcome = await notify\(/);
-  assert.match(feature, /dismissNotificationWithNativeOwner\(shownCandidateId, outcome\)/);
+  assert.match(feature, /acknowledge: dismissNotificationWithNativeOwner/);
+  assert.match(feature, /await deliverNativeObservedNotificationCandidate\(/);
   assert.match(feature, /const shown = await showPlatformNotification\(presentation\)/);
   assert.match(feature, /return shown \? 'delivered' : 'failed'/);
   assert.doesNotMatch(feature, /\}\)\.catch\(\(\) => undefined\);\s*return;/);

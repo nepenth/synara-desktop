@@ -86,6 +86,8 @@ matrix-sdk-crypto = { workspace = true }
 matrix-sdk-sqlite = { workspace = true, features = [
   "crypto-store",
 ] }
+# Typed SQLite codes distinguish proven corruption from unavailable/wrong keys.
+rusqlite = { workspace = true }
 # Feature-unifies Ruma's Matrix-spec HTML sanitizer with the SDK re-export.
 # Outbound composer Markdown is parsed and sanitized in one shared boundary.
 ruma = { workspace = true, features = ["html", "markdown"] }

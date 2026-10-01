@@ -30,7 +30,10 @@
 //! captures the exact authenticated identity at session attach and answers
 //! `owns_session` without ever serializing that identity.
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use std::time::Duration;
 
 use matrix_sdk::config::RequestConfig;
@@ -300,6 +303,7 @@ pub struct NotificationDecisionReadback {
 /// event and its SDK push evaluation.
 pub struct NativeNotificationDecisionOwner {
     session_generation: u64,
+    retired: AtomicBool,
     user_id: String,
     device_id: String,
     homeserver_url: String,
@@ -329,6 +333,7 @@ impl NativeNotificationDecisionOwner {
         let homeserver_url = client.homeserver().as_str().to_owned();
         Ok(Self {
             session_generation,
+            retired: AtomicBool::new(false),
             user_id,
             device_id,
             homeserver_url,
@@ -338,6 +343,8 @@ impl NativeNotificationDecisionOwner {
         })
     }
 
+    /// Immutable generation of this authenticated client binding. Retirement
+    /// permanently closes acceptance; it never rebinds this client to a successor.
     pub fn session_generation(&self) -> u64 {
         self.session_generation
     }
@@ -349,6 +356,7 @@ impl NativeNotificationDecisionOwner {
     pub fn for_tests(session_generation: u64) -> Self {
         Self {
             session_generation,
+            retired: AtomicBool::new(false),
             user_id: "@test:example.org".into(),
             device_id: "TESTDEVICE".into(),
             homeserver_url: "https://example.org".into(),
@@ -411,6 +419,11 @@ impl NativeNotificationDecisionOwner {
         &self,
         request: NativeNotificationDecideRequest,
     ) -> Result<NotificationDecisionReadback, NotificationError> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-retired",
+            });
+        }
         let mut kind = NotificationDecisionKind::parse(&request.kind)
             .map_err(|diagnostic_id| NotificationError::Invalid { diagnostic_id })?;
         let observed = match kind {
@@ -560,6 +573,11 @@ impl NativeNotificationDecisionOwner {
         &self,
         input: NotificationDecisionInput,
     ) -> Result<NotificationDecisionReadback, NotificationError> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-retired",
+            });
+        }
         if input.is_own_event {
             return Ok(suppressed(NotificationSuppressReason::OwnEvent));
         }
@@ -584,6 +602,13 @@ impl NativeNotificationDecisionOwner {
         let mut index = self.index.lock().map_err(|_| NotificationError::Invalid {
             diagnostic_id: "v-notify.owner-poisoned",
         })?;
+        // Retirement may have occurred during the SDK lookup. Check again
+        // under the index gate; detached work cannot create pending candidates.
+        if self.retired.load(Ordering::Acquire) {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-retired",
+            });
+        }
         // Classify the suppression exactly before enqueue: duplicates are
         // retained across dismiss within the recent-event bound; focus is
         // transient. `enqueue` checks focus first, so pre-read both signals
@@ -680,6 +705,7 @@ impl NativeNotificationDecisionOwner {
     /// Wipe pending state on logout / account switch. Generation advances;
     /// focus clears with the queue.
     pub fn retire_generation(&self, new_generation: u64) {
+        self.retired.store(true, Ordering::Release);
         if let Ok(mut index) = self.index.lock() {
             index.retire_generation(new_generation);
         }
@@ -769,10 +795,11 @@ fn sanitize_route(route: String) -> Option<String> {
     if trimmed.is_empty() || trimmed.chars().count() > NOTIFICATION_ROUTE_MAX_CHARS {
         return None;
     }
-    let internal = trimmed.starts_with('/') || trimmed.starts_with('#');
+    let internal = (trimmed.starts_with('/') && !trimmed.starts_with("//"))
+        || (trimmed.starts_with("#/") && !trimmed.starts_with("#//"));
     let clean = !trimmed
         .chars()
-        .any(|ch| ch.is_control() || ch.is_whitespace());
+        .any(|ch| ch.is_control() || ch.is_whitespace() || ch == '\\');
     (internal && clean).then(|| trimmed.to_owned())
 }
 
@@ -821,6 +848,7 @@ mod tests {
     fn owner() -> NativeNotificationDecisionOwner {
         NativeNotificationDecisionOwner {
             session_generation: 7,
+            retired: AtomicBool::new(false),
             user_id: "@u:example.org".into(),
             device_id: "DEV".into(),
             homeserver_url: "https://example.org".into(),
@@ -943,7 +971,7 @@ mod tests {
                     else { serde_json::json!({"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "AwgAE...", "sender_key": "abc", "session_id": "def", "device_id": "DEV"}) };
                 ResponseTemplate::new(200).set_body_json(serde_json::json!({"type": if ready { "m.room.message" } else { "m.room.encrypted" }, "room_id": room_id, "event_id": "$late-approval", "sender": *BOB, "origin_server_ts": at, "content": content}))
             }).mount(server.server()).await;
-        let owner = NativeNotificationDecisionOwner::new(&client, 8).unwrap();
+        let owner = Arc::new(NativeNotificationDecisionOwner::new(&client, 8).unwrap());
         owner.set_focused_room(Some(room_id.as_str())).unwrap();
         let request = || NativeNotificationDecideRequest {
             room_id: room_id.to_string(),
@@ -984,6 +1012,60 @@ mod tests {
                 .as_deref(),
             Some("duplicate-event")
         );
+
+        // Retirement follows an actual SDK HTTP lookup starting, before
+        // its delayed plaintext response can enqueue a candidate.
+        let lookup_started = Arc::new(tokio::sync::Notify::new());
+        let observed_lookup = lookup_started.clone();
+        Mock::given(method("GET")).and(path_regex(r".*/event/.*retiring$"))
+            .respond_with(move |_: &wiremock::Request| {
+                observed_lookup.notify_one();
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(100))
+                    .set_body_json(serde_json::json!({ "type": "m.room.message", "room_id": room_id,
+                        "event_id": "$retiring", "sender": *BOB, "origin_server_ts": at,
+                        "content": { "msgtype": "m.text", "body": "Approval Required: Dangerous Command\necho hello" } }))
+            }).mount(server.server()).await;
+        let mut delayed = request();
+        delayed.event_id = Some("$retiring".into());
+        let lookup_owner = owner.clone();
+        let pending = tokio::spawn(async move { lookup_owner.decide_observed(delayed).await });
+        tokio::time::timeout(Duration::from_secs(5), lookup_started.notified())
+            .await
+            .expect("SDK HTTP lookup starts before retirement");
+        owner.retire_generation(9);
+        assert_eq!(
+            pending.await.unwrap().unwrap_err().diagnostic_id(),
+            "v-notify.owner-retired"
+        );
+        assert_eq!(
+            owner.session_generation(),
+            8,
+            "authenticated binding never changes"
+        );
+        assert!(owner.list_pending().unwrap().is_empty());
+        assert_eq!(
+            owner
+                .decide_observed(request())
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.owner-retired"
+        );
+        assert_eq!(
+            owner
+                .decide(input(
+                    room_id.as_str(),
+                    Some("$successor"),
+                    NotificationDecisionKind::Message,
+                    NOTIFY,
+                    false
+                ))
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.owner-retired"
+        );
+        assert!(owner.list_pending().unwrap().is_empty());
     }
 
     #[test]
@@ -1391,10 +1473,27 @@ mod tests {
             NOTIFY,
             false,
         );
-        entry.route = Some("https://evil.example.com".into());
-        let readback = owner.decide(entry).unwrap();
-        assert_eq!(readback.decision, "show");
-        assert_eq!(readback.candidate.unwrap().route, None);
+        for (index, route) in [
+            "https://evil.example.com",
+            "//evil.example.com",
+            "#//evil.example.com",
+            r"/\evil.example.com",
+            r"#/\evil.example.com",
+            r"/home\evil.example.com",
+        ]
+        .iter()
+        .enumerate()
+        {
+            entry.event_id = Some(format!("$e-route-{index}"));
+            entry.route = Some((*route).into());
+            let readback = owner.decide(entry.clone()).unwrap();
+            assert_eq!(readback.decision, "show");
+            assert_eq!(
+                readback.candidate.unwrap().route,
+                None,
+                "unsafe route {route}"
+            );
+        }
     }
 
     #[test]

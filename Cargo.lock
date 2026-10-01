@@ -6776,6 +6776,7 @@ dependencies = [
  "mime",
  "reqwest",
  "ruma",
+ "rusqlite",
  "rustls",
  "serde",
  "serde_json",

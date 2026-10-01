@@ -265,6 +265,7 @@ impl MatrixAuthCommandError {
 
 struct ManagedMatrixSession {
     client: Client,
+    session_persistence: SessionPersistenceOwner,
     identity: MatrixLoginIdentity,
     sync: Arc<SyncServiceOwner>,
     invite_avatars: Arc<tokio::sync::Mutex<InviteAvatarHandles>>,

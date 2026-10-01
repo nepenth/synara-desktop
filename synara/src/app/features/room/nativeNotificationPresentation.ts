@@ -40,3 +40,32 @@ export function buildNativeObservedNotificationPresentation(
       : {}),
   };
 }
+
+/** Every shown candidate is acknowledged, including stale-generation and
+ * failed-delivery paths. A missing generation permits no platform delivery.
+ * Acknowledgement is best effort: Core may already have retired its owner.
+ */
+export async function deliverNativeObservedNotificationCandidate(options: {
+  candidate: NativeNotificationCandidate;
+  observedGeneration: number;
+  presentOrdinaryMessages?: boolean;
+  currentGeneration: () => number | undefined;
+  deliver: (candidate: NativeNotificationCandidate) => Promise<'delivered' | 'failed' | undefined>;
+  acknowledge: (candidateId: string, outcome?: 'delivered' | 'failed') => Promise<unknown>;
+}): Promise<void> {
+  let outcome: 'delivered' | 'failed' | undefined;
+  try {
+    if (options.currentGeneration() !== options.observedGeneration) return;
+    if (options.candidate.kind === 'message' && options.presentOrdinaryMessages === false) return;
+    outcome = await options.deliver(options.candidate);
+  } catch {
+    outcome = 'failed';
+  } finally {
+    try {
+      await options.acknowledge(options.candidate.candidateId, outcome);
+    } catch {
+      // Logout/account replacement may already have detached and cleared the
+      // old owner. Never turn a failed acknowledgement into a delivery retry.
+    }
+  }
+}

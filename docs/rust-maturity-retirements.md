@@ -47,7 +47,7 @@ examples from production declaration discovery. Compiler and hosted validation
 must assess the exact final tree; the source inventory itself is not build proof.
 
 Validation status: the desktop shell and three shared packages passed strict Clippy over all targets
-in the final bounded local compiler run. All 394 repository tooling tests also passed.
+in the final bounded local compiler run. All 395 repository tooling tests also passed.
 Clippy checks compilation and lints; native
 unit/integration test execution remains pending. The rewritten desktop lifecycle
 tests have source review and local compilation; hosted Linux compilation/execution is still pending.
@@ -90,3 +90,30 @@ mismatched candidate IDs; no renderer classifier or expiry timer is introduced.
 Frontend subscription execution and a message-route source contract cover
 forwarding one final observation; they do not prove OS delivery or decryption arriving after
 the retry budget. Those native/runtime results require their test lanes.
+
+
+The desktop lifecycle bridge's source-text installation counts and ordering test
+was retired. It required releasing the auth session guard before Core open/close
+based on a callback deadlock premise that those Core operations do not have.
+Auth transitions now retain the session gate through Core wiring, attachments,
+and rollback, and through both active and orphan logout closing. Actual async
+coordinator and fault tests owned by the auth implementation provide the
+serialization and cleanup oracle; the bridge's typed lifecycle, privacy, and
+SDK behavior tests remain. Source counts or reversed string-order assertions
+are not substitutes for those runtime tests. Execution of the final auth test
+packet must be recorded by its native validation lane; this structural cleanup
+does not prove concurrency by itself.
+
+
+Final notification follow-up checks also preserve the client binding generation
+on retirement. Retirement permanently rejects decision work, including an SDK
+lookup already in flight; it does not rebind the old client to the successor
+index generation. Core's detached-owner pointer check remains in place. Renderer
+room metadata and inbox triage no longer gate approval classification: the
+returned candidate kind controls ordinary-message presentation gates. A shared
+delivery helper makes a best-effort acknowledgement on every shown candidate,
+including missing/stale renderer generation and delivery errors, with no stale
+account delivery or acknowledgement retry. Protocol-relative and backslash
+notification routes are discarded while a valid notification can still deliver.
+The SDK retirement regression and the shared delivery helper fault tests are the
+acceptance oracles; native OS delivery still requires native execution evidence.

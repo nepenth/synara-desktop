@@ -59,7 +59,7 @@ pub async fn matrix_login_password(
             }
         };
     let indexed_message_search = indexed_message_search.unwrap_or(true);
-    let client = match build_client(
+    let (client, session_persistence) = match build_client(
         &app_data_root,
         requested_identity.clone(),
         indexed_message_search,
@@ -99,15 +99,13 @@ pub async fn matrix_login_password(
         }
     };
 
-    let live_identity = AccountIdentity::new(&result.user_id, &result.homeserver_url)
-        .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-login-identity-invalid"))?;
-    if live_identity != requested_identity {
-        return Err(MatrixAuthCommandError::new(
-            "InvalidRequest",
-            "The authenticated Matrix identity did not match the requested account.",
-            "d0.1-login-identity-mismatch",
-        ));
-    }
+    let live_identity = accept_authenticated_identity(
+        authenticated_login_identity(&result.user_id, &result.homeserver_url, &requested_identity),
+        || async {
+            let _ = client.matrix_auth().logout().await;
+        },
+    )
+    .await?;
 
     ensure_crypto_ready(&client).await?;
     let session_generation = state.next_generation();
@@ -179,25 +177,6 @@ pub async fn matrix_login_password(
     let sync = Arc::new(start_sync_owner(&client, session_generation).await?);
     let (own_profile, media_retention) =
         start_room_surface_owners(&client, app.clone(), session_generation)?;
-    let session_vault = KeyringSessionMaterialVault::new();
-    persist_session_after_login(&client, &live_identity, &session_vault)
-        .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))?;
-    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
-
-    let identity = MatrixLoginIdentity {
-        user_id: result.user_id,
-        device_id: result.device_id,
-        homeserver_url: result.homeserver_url,
-    };
-    if let Err(error) = write_active_identity(&app_data_root, &identity) {
-        let _ = clear_session_material(&session_vault, &live_identity);
-        return Err(error);
-    }
-    let timelines = Arc::new(NativeTimelineOwner::new(
-        &client,
-        crate::matrix::timeline::timeline_view_emit(app.clone()),
-        session_generation,
-    ));
     // A9 decision stream: account-bound Core policy owner. The shell keeps no
     // handle; Core drops it on logout alongside the timeline registry.
     let notification_decisions = Arc::new(
@@ -209,11 +188,40 @@ pub async fn matrix_login_password(
             MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
         })?,
     );
+    let identity = MatrixLoginIdentity {
+        user_id: result.user_id,
+        device_id: result.device_id,
+        homeserver_url: live_identity.homeserver_url().to_owned(),
+    };
+    let session_vault = KeyringSessionMaterialVault::new();
+    let persistence = persist_with_client_lease(
+        &session_persistence.lease,
+        || ensure_logout_retry_locator(&app_data_root, &identity),
+        || {
+            persist_session_after_login(&client, &live_identity, &session_vault)
+                .map(|_| ())
+                .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persist-failed"))
+        },
+        || clear_native_logout_material(&session_vault, &identity, &app_data_root),
+    );
+    if let Err(error) = persistence {
+        let _ = sync.stop().await;
+        let _ = client.matrix_auth().logout().await;
+        return Err(error);
+    }
+    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
+
+    let timelines = Arc::new(NativeTimelineOwner::new(
+        &client,
+        crate::matrix::timeline::timeline_view_emit(app.clone()),
+        session_generation,
+    ));
     // A successfully installed session supersedes every pending/awaiting
     // recovery capability, including one prepared by an earlier failed login.
     state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
+        session_persistence,
         identity: identity.clone(),
         sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
@@ -237,54 +245,17 @@ pub async fn matrix_login_password(
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
-    drop(session);
-    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+    let wiring = wire_desktop_session(
         core.inner().as_ref(),
-        &identity,
-        session_generation,
+        session.as_ref().expect("session installed above"),
+        notification_decisions,
     )
+    .await;
+    finish_session_wiring(wiring, || {
+        rollback_session_install(core.inner().as_ref(), &mut session, &app_data_root)
+    })
     .await?;
-    core.inner()
-        .attach_typing(typing)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
-    core.inner()
-        .attach_presence(presence)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
-    core.inner()
-        .attach_rtc_transports(rtc_transports)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-rtc-transports-attach-failed"))?;
-    core.inner()
-        .attach_user_status(user_status)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
-    core.inner()
-        .attach_widgets(widgets)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-widgets-attach-failed"))?;
-    core.inner()
-        .attach_verification(verification)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
-    core.inner()
-        .attach_devices(devices)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
-    core.inner()
-        .attach_dehydrated_devices(dehydrated_devices)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed"))?;
-    core.inner()
-        .attach_join_rules(join_rules)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
-    core.inner()
-        .attach_image_packs(image_packs)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
-    core.inner()
-        .attach_timelines(timelines)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
-    core.inner()
-        .attach_notification_decisions(notification_decisions)
-        .map_err(|_| {
-            MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
-        })?;
-    core.inner()
-        .attach_sync(sync)
-        .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
+    drop(session);
     Ok(identity)
 }
 
@@ -353,16 +324,34 @@ pub async fn matrix_store_recovery_confirm(
             "d0.1-session-already-active",
         ));
     }
-    let identity = state
-        .take_confirmed_store_recovery(&confirmation_id, &confirmation_text)
-        .await?;
-    let app_data_root = app_data_root(&app)?;
+    let (app_data_root, identity) = confirmed_store_recovery_target(
+        &state,
+        app_data_root(&app),
+        &confirmation_id,
+        &confirmation_text,
+    )
+    .await?;
     archive_and_rebuild_store(&app_data_root, &identity)?;
     drop(session);
 
     Ok(MatrixStoreRecoveryResult {
         status: "archived_and_rebuilt",
     })
+}
+
+pub(super) async fn confirmed_store_recovery_target(
+    state: &MatrixAuthState,
+    root: Result<PathBuf, MatrixAuthCommandError>,
+    confirmation_id: &str,
+    confirmation_text: &str,
+) -> Result<(PathBuf, AccountIdentity), MatrixAuthCommandError> {
+    let root = root?;
+    let identity = state
+        .take_confirmed_store_recovery(confirmation_id, confirmation_text)
+        .await?;
+    // After this point the capability stays consumed, including partial archive
+    // failure. Replaying it could apply a second archive to a changed layout.
+    Ok((root, identity))
 }
 
 /// V-AUTH.4a — request a password-reset email token (unauthenticated CS API).
@@ -480,6 +469,7 @@ pub async fn matrix_register(
         ));
     }
 
+    let app_data_root = app_data_root(&app)?;
     let password = zeroize::Zeroizing::new(password);
     let device_display_name = device_display_name
         .filter(|s| !s.trim().is_empty())
@@ -506,94 +496,19 @@ pub async fn matrix_register(
             error_message: challenge.error_message,
         }),
         RegisterSubmitOutcome::Complete(secrets) => {
-            let (identity, session_generation, notification_decisions) =
+            let (identity, _session_generation, notification_decisions) =
                 install_session_from_register_secrets(&app, &state, &mut session, secrets).await?;
-            let (
-                typing,
-                presence,
-                rtc_transports,
-                user_status,
-                widgets,
-                verification,
-                devices,
-                dehydrated_devices,
-                join_rules,
-                image_packs,
-                timelines,
-                sync,
-            ) = session
-                .as_ref()
-                .map(|active| {
-                    (
-                        active.typing.clone(),
-                        active.presence.clone(),
-                        active.rtc_transports.clone(),
-                        active.user_status.clone(),
-                        active.widgets.clone(),
-                        active.verification.clone(),
-                        active.devices.clone(),
-                        active.dehydrated_devices.clone(),
-                        active.join_rules.clone(),
-                        active._image_packs.clone(),
-                        active.timelines.clone(),
-                        active.sync.clone(),
-                    )
-                })
-                .ok_or_else(|| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
-            drop(session);
-            crate::bridge::session_lifecycle::open_after_desktop_session_install(
+            let wiring = wire_desktop_session(
                 core.inner().as_ref(),
-                &identity,
-                session_generation,
+                session.as_ref().expect("registration installed above"),
+                notification_decisions,
             )
+            .await;
+            finish_session_wiring(wiring, || {
+                rollback_session_install(core.inner().as_ref(), &mut session, &app_data_root)
+            })
             .await?;
-            core.inner()
-                .attach_typing(typing)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
-            core.inner()
-                .attach_presence(presence)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
-            core.inner()
-                .attach_rtc_transports(rtc_transports)
-                .map_err(|_| {
-                    MatrixAuthCommandError::unavailable("p2-rtc-transports-attach-failed")
-                })?;
-            core.inner()
-                .attach_user_status(user_status)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
-            core.inner()
-                .attach_widgets(widgets)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-widgets-attach-failed"))?;
-            core.inner()
-                .attach_verification(verification)
-                .map_err(|_| {
-                    MatrixAuthCommandError::unavailable("p2-verification-attach-failed")
-                })?;
-            core.inner()
-                .attach_devices(devices)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
-            core.inner()
-                .attach_dehydrated_devices(dehydrated_devices)
-                .map_err(|_| {
-                    MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed")
-                })?;
-            core.inner()
-                .attach_join_rules(join_rules)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
-            core.inner()
-                .attach_image_packs(image_packs)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
-            core.inner()
-                .attach_timelines(timelines)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
-            core.inner()
-                .attach_notification_decisions(notification_decisions)
-                .map_err(|_| {
-                    MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
-                })?;
-            core.inner()
-                .attach_sync(sync)
-                .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
+            drop(session);
             Ok(MatrixRegisterOutcome::Complete { identity })
         }
     }
@@ -620,7 +535,7 @@ pub(super) async fn install_session_from_register_secrets(
     })?;
     let app_data_root = app_data_root(app)?;
     let indexed_message_search = true;
-    let client = build_client(
+    let (client, session_persistence) = build_client(
         &app_data_root,
         live_identity.clone(),
         indexed_message_search,
@@ -727,20 +642,31 @@ pub(super) async fn install_session_from_register_secrets(
             MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
         })?,
     );
-    let session_vault = KeyringSessionMaterialVault::new();
-    persist_session_after_login(&client, &live_identity, &session_vault)
-        .map_err(|_| MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed"))?;
-    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
-
     let identity = MatrixLoginIdentity {
         user_id: secrets.user_id.clone(),
         device_id: secrets.device_id.clone(),
         homeserver_url,
     };
-    if let Err(error) = write_active_identity(&app_data_root, &identity) {
-        let _ = clear_session_material(&session_vault, &live_identity);
+    let session_vault = KeyringSessionMaterialVault::new();
+    let persistence = persist_with_client_lease(
+        &session_persistence.lease,
+        || ensure_logout_retry_locator(&app_data_root, &identity),
+        || {
+            persist_session_after_login(&client, &live_identity, &session_vault)
+                .map(|_| ())
+                .map_err(|_| {
+                    MatrixAuthCommandError::unavailable("v-auth.4b-session-persist-failed")
+                })
+        },
+        || clear_native_logout_material(&session_vault, &identity, &app_data_root),
+    );
+    if let Err(error) = persistence {
+        let _ = sync.stop().await;
+        let _ = client.matrix_auth().logout().await;
         return Err(error);
     }
+    crate::desktop_secret_store::clear_legacy_renderer_session_credentials();
+
     let timelines = Arc::new(NativeTimelineOwner::new(
         &client,
         crate::matrix::timeline::timeline_view_emit(app.clone()),
@@ -751,6 +677,7 @@ pub(super) async fn install_session_from_register_secrets(
     state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
+        session_persistence,
         identity: identity.clone(),
         sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
@@ -852,7 +779,6 @@ pub async fn matrix_logout(
     state.clear_store_recovery().await;
     let Some(active) = session.as_ref() else {
         // Even a path-resolution failure must not skip retirement of stale Core.
-        drop(session);
         finish_orphan_logout(
             crate::bridge::session_lifecycle::close_after_desktop_session_removal(
                 core.inner().as_ref(),
@@ -864,6 +790,7 @@ pub async fn matrix_logout(
             },
         )
         .await?;
+        drop(session);
         return Ok(MatrixSessionSnapshot::LoggedOut);
     };
 
@@ -871,6 +798,7 @@ pub async fn matrix_logout(
     // The coordinator preflights the locator before constructing any SDK or
     // widget teardown future; preflight failure leaves this session installed.
     let root = app_data_root(&app)?;
+    let persistence_lease = active.session_persistence.lease.clone();
     let client = active.client.clone();
     let sync = Arc::clone(&active.sync);
     let identity = active.identity.clone();
@@ -880,6 +808,7 @@ pub async fn matrix_logout(
     finish_active_logout(
         || ensure_logout_retry_locator(&root, &identity),
         || async move {
+            persistence_lease.revoke();
             // Remote revocation is best-effort; local cleanup remains mandatory.
             let _remote_logout_succeeded = client.matrix_auth().logout().await.is_ok();
             join_rules.retire();
@@ -891,9 +820,8 @@ pub async fn matrix_logout(
                 .map_err(|error| map_sync_error(error.diagnostic_id()))
         },
         || clear_native_logout_material(&KeyringSessionMaterialVault::new(), &identity, &root),
-        move || {
+        || {
             *session = None;
-            drop(session);
         },
         || {
             crate::bridge::session_lifecycle::close_after_desktop_session_removal(
@@ -902,6 +830,7 @@ pub async fn matrix_logout(
         },
     )
     .await?;
+    drop(session);
     Ok(MatrixSessionSnapshot::LoggedOut)
 }
 
@@ -919,9 +848,11 @@ pub async fn matrix_restore_session(
 
     let app_data_root = app_data_root(&app)?;
     let identity = read_active_identity(&app_data_root)?;
+    ensure_logout_retry_locator(&app_data_root, &identity)?;
     let account = account_identity(&identity)?;
     let indexed_message_search = indexed_message_search.unwrap_or(true);
-    let client = build_client(&app_data_root, account.clone(), indexed_message_search).await?;
+    let (client, session_persistence) =
+        build_client(&app_data_root, account.clone(), indexed_message_search).await?;
     let restored =
         restore_session_from_vault(&client, &account, &KeyringSessionMaterialVault::new())
             .await
@@ -1032,6 +963,7 @@ pub async fn matrix_restore_session(
     state.clear_store_recovery().await;
     *session = Some(ManagedMatrixSession {
         client,
+        session_persistence,
         identity: identity.clone(),
         sync: sync.clone(),
         invite_avatars: join_rules.invite_avatars(),
@@ -1055,55 +987,247 @@ pub async fn matrix_restore_session(
         selected_room_key_import: None,
         next_room_key_import_selection_id: 0,
     });
-    drop(session);
-    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+    let wiring = wire_desktop_session(
         core.inner().as_ref(),
-        &identity,
-        session_generation,
+        session.as_ref().expect("session installed above"),
+        notification_decisions,
+    )
+    .await;
+    finish_session_wiring(wiring, || {
+        rollback_session_install(core.inner().as_ref(), &mut session, &app_data_root)
+    })
+    .await?;
+    drop(session);
+    Ok(identity)
+}
+
+/// Called under the desktop auth gate. Core lifecycle only changes Core's
+/// own projection/owner locks and never calls the Platform session adapter.
+async fn wire_desktop_session(
+    core: &synara_core::Core,
+    active: &ManagedMatrixSession,
+    notification_decisions: Arc<synara_core::app::notifications::NativeNotificationDecisionOwner>,
+) -> Result<(), MatrixAuthCommandError> {
+    crate::bridge::session_lifecycle::open_after_desktop_session_install(
+        core,
+        &active.identity,
+        active.sync.session_generation(),
     )
     .await?;
-    core.inner()
-        .attach_typing(typing)
+    core.attach_typing(active.typing.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-typing-attach-failed"))?;
-    core.inner()
-        .attach_presence(presence)
+    core.attach_presence(active.presence.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-presence-attach-failed"))?;
-    core.inner()
-        .attach_rtc_transports(rtc_transports)
+    core.attach_rtc_transports(active.rtc_transports.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-rtc-transports-attach-failed"))?;
-    core.inner()
-        .attach_user_status(user_status)
+    core.attach_user_status(active.user_status.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-user-status-attach-failed"))?;
-    core.inner()
-        .attach_widgets(widgets)
+    core.attach_widgets(active.widgets.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-widgets-attach-failed"))?;
-    core.inner()
-        .attach_verification(verification)
+    core.attach_verification(active.verification.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-verification-attach-failed"))?;
-    core.inner()
-        .attach_devices(devices)
+    core.attach_devices(active.devices.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-device-attach-failed"))?;
-    core.inner()
-        .attach_dehydrated_devices(dehydrated_devices)
+    core.attach_dehydrated_devices(active.dehydrated_devices.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-dehydrated-devices-attach-failed"))?;
-    core.inner()
-        .attach_join_rules(join_rules)
+    core.attach_join_rules(active.join_rules.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-join-rule-attach-failed"))?;
-    core.inner()
-        .attach_image_packs(image_packs)
+    core.attach_image_packs(active._image_packs.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-image-pack-attach-failed"))?;
-    core.inner()
-        .attach_timelines(timelines)
+    core.attach_timelines(active.timelines.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-timeline-attach-failed"))?;
-    core.inner()
-        .attach_notification_decisions(notification_decisions)
+    core.attach_notification_decisions(notification_decisions)
         .map_err(|_| {
             MatrixAuthCommandError::unavailable("p2-notification-decision-attach-failed")
         })?;
-    core.inner()
-        .attach_sync(sync)
+    core.attach_sync(active.sync.clone())
         .map_err(|_| MatrixAuthCommandError::unavailable("p2-sync-attach-failed"))?;
-    Ok(identity)
+    Ok(())
+}
+
+pub(super) async fn finish_session_wiring<Rollback, RollbackFuture>(
+    wiring: Result<(), MatrixAuthCommandError>,
+    rollback: Rollback,
+) -> Result<(), MatrixAuthCommandError>
+where
+    Rollback: FnOnce() -> RollbackFuture,
+    RollbackFuture: std::future::Future<Output = Result<(), MatrixAuthCommandError>>,
+{
+    if let Err(error) = wiring {
+        // Credentials remaining after rollback take diagnostic precedence.
+        rollback().await?;
+        return Err(error);
+    }
+    Ok(())
+}
+
+async fn rollback_session_install(
+    core: &synara_core::Core,
+    session: &mut Option<ManagedMatrixSession>,
+    root: &Path,
+) -> Result<(), MatrixAuthCommandError> {
+    let active = session
+        .as_ref()
+        .expect("failed tentative install is present");
+    let persistence_lease = active.session_persistence.lease.clone();
+    let client = active.client.clone();
+    let sync = active.sync.clone();
+    let identity = active.identity.clone();
+    let join_rules = active.join_rules.clone();
+    let observations = active.notification_observations.clone();
+    let widgets = active.widgets.clone();
+    finish_active_logout(
+        // Installation already completed the durable locator preflight before
+        // any vault write. Once rollback begins, no new preflight may prevent
+        // retirement of the partially wired live/Core session.
+        || Ok(()),
+        || async move {
+            persistence_lease.revoke();
+            let _ = client.matrix_auth().logout().await;
+            join_rules.retire();
+            observations.retire();
+            widgets.retire_and_close().await;
+            sync.stop()
+                .await
+                .map(|_| ())
+                .map_err(|error| map_sync_error(error.diagnostic_id()))
+        },
+        || clear_native_logout_material(&KeyringSessionMaterialVault::new(), &identity, root),
+        || {
+            *session = None;
+        },
+        || crate::bridge::session_lifecycle::close_after_desktop_session_removal(core),
+    )
+    .await
+}
+
+/// Synchronous SDK save callbacks and teardown share this per-client fence.
+/// Revocation waits for a current save, then permanently rejects late saves.
+#[derive(Default)]
+pub(super) struct SessionPersistenceLease {
+    revoked: std::sync::Mutex<bool>,
+}
+
+impl SessionPersistenceLease {
+    pub(super) fn save<T>(
+        &self,
+        operation: impl FnOnce() -> Result<T, MatrixAuthCommandError>,
+    ) -> Result<T, MatrixAuthCommandError> {
+        let revoked = self
+            .revoked
+            .lock()
+            .map_err(|_| MatrixAuthCommandError::unavailable("d0.1-session-persistence-retired"))?;
+        if *revoked {
+            return Err(MatrixAuthCommandError::unavailable(
+                "d0.1-session-persistence-retired",
+            ));
+        }
+        // The guard covers both durable locator I/O and the vault write.
+        operation()
+    }
+
+    pub(super) fn revoke(&self) {
+        // Poison is also revoked: even a panic during a save cannot enable a
+        // subsequent callback or prevent teardown from waiting for its guard.
+        let mut revoked = self
+            .revoked
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        *revoked = true;
+    }
+}
+
+/// Moves from factory/pre-install custody into the installed desktop owner.
+/// Dropping any unsuccessful preparation retires its SDK save callbacks too.
+#[derive(Default)]
+pub(super) struct SessionPersistenceOwner {
+    lease: Arc<SessionPersistenceLease>,
+}
+
+impl SessionPersistenceOwner {
+    pub(super) fn new() -> Self {
+        Self {
+            lease: Arc::new(SessionPersistenceLease::default()),
+        }
+    }
+
+    pub(super) fn callback_lease(&self) -> Arc<SessionPersistenceLease> {
+        self.lease.clone()
+    }
+}
+
+impl Drop for SessionPersistenceOwner {
+    fn drop(&mut self) {
+        self.lease.revoke();
+    }
+}
+
+pub(super) fn persist_with_client_lease(
+    lease: &SessionPersistenceLease,
+    preflight: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    persist: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+) -> Result<(), MatrixAuthCommandError> {
+    let saved = lease.save(|| persist_with_retry_locator(preflight, persist, || Ok(())));
+    if let Err(error) = saved {
+        // No callback can race cleanup or resurrect this failed preparation.
+        lease.revoke();
+        cleanup()?;
+        return Err(error);
+    }
+    Ok(())
+}
+
+pub(super) fn persist_with_retry_locator(
+    preflight: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    persist: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+    cleanup: impl FnOnce() -> Result<(), MatrixAuthCommandError>,
+) -> Result<(), MatrixAuthCommandError> {
+    preflight()?;
+    if let Err(error) = persist() {
+        cleanup()?;
+        return Err(error);
+    }
+    Ok(())
+}
+
+pub(super) fn authenticated_login_identity(
+    user_id: &str,
+    homeserver_url: &str,
+    requested: &AccountIdentity,
+) -> Result<AccountIdentity, MatrixAuthCommandError> {
+    let normalized = normalize_homeserver_url(homeserver_url)
+        .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-login-identity-invalid"))?;
+    let identity = AccountIdentity::new(user_id, normalized.as_str())
+        .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-login-identity-invalid"))?;
+    let live_url = url::Url::parse(identity.homeserver_url())
+        .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-login-identity-invalid"))?;
+    let requested_url = url::Url::parse(requested.homeserver_url())
+        .map_err(|_| MatrixAuthCommandError::invalid_input("d0.1-login-identity-invalid"))?;
+    if identity.user_id() != requested.user_id() || live_url != requested_url {
+        return Err(MatrixAuthCommandError::new(
+            "InvalidRequest",
+            "The authenticated Matrix identity did not match the requested account.",
+            "d0.1-login-identity-mismatch",
+        ));
+    }
+    // URL equivalence must not silently rekey an existing account layout or
+    // Keyring lookup: keep the exact requested account identity on success.
+    Ok(requested.clone())
+}
+
+pub(super) async fn accept_authenticated_identity<Revoke, RevokeFuture>(
+    identity: Result<AccountIdentity, MatrixAuthCommandError>,
+    revoke: Revoke,
+) -> Result<AccountIdentity, MatrixAuthCommandError>
+where
+    Revoke: FnOnce() -> RevokeFuture,
+    RevokeFuture: std::future::Future<Output = ()>,
+{
+    if identity.is_err() {
+        revoke().await;
+    }
+    identity
 }
 
 impl MatrixAuthState {
@@ -1259,8 +1383,10 @@ async fn existing_login_device_id(
 fn map_store_client_build_error(error: ClientBuilderError) -> MatrixAuthCommandError {
     let diagnostic_id = match error.to_factory_error().category {
         crate::matrix::ipc::MatrixIpcErrorCategory::StoreLocked => "p3.2-login-store-locked",
-        crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable
-        | crate::matrix::ipc::MatrixIpcErrorCategory::StoreCorrupt => {
+        crate::matrix::ipc::MatrixIpcErrorCategory::StoreCorrupt => {
+            "p3.2-login-store-reset-required"
+        }
+        crate::matrix::ipc::MatrixIpcErrorCategory::StoreUnavailable => {
             "p3.2-login-store-open-failed"
         }
         _ => "p3.2-login-store-open-failed",
@@ -1272,7 +1398,7 @@ pub(super) async fn build_client(
     app_data_root: &Path,
     identity: AccountIdentity,
     indexed_message_search: bool,
-) -> Result<Client, MatrixAuthCommandError> {
+) -> Result<(Client, SessionPersistenceOwner), MatrixAuthCommandError> {
     // Probe before migration creates the account layout or revision manifest.
     // Once an account root already exists, a Keychain miss must fail closed:
     // generating a replacement key could make encrypted SQLite data
@@ -1301,8 +1427,14 @@ pub(super) async fn build_client(
     let client = build_unauthenticated_client(&config)
         .await
         .map_err(map_store_client_build_error)?;
-    install_session_rotation_callbacks(&client, identity)?;
-    Ok(client)
+    let session_persistence = SessionPersistenceOwner::new();
+    install_session_rotation_callbacks(
+        &client,
+        identity,
+        app_data_root,
+        session_persistence.callback_lease(),
+    )?;
+    Ok((client, session_persistence))
 }
 
 #[derive(Debug)]
@@ -1319,9 +1451,12 @@ impl std::error::Error for SessionRotationCallbackError {}
 fn install_session_rotation_callbacks(
     client: &Client,
     identity: AccountIdentity,
+    root: &Path,
+    persistence_lease: Arc<SessionPersistenceLease>,
 ) -> Result<(), MatrixAuthCommandError> {
     let reload_identity = identity.clone();
     let save_identity = identity;
+    let save_root = root.to_path_buf();
     client
         .set_session_callbacks(
             Box::new(move |_| {
@@ -1341,14 +1476,50 @@ fn install_session_rotation_callbacks(
                 Ok(session.tokens)
             }),
             Box::new(move |client| {
-                persist_session_after_login(
-                    &client,
+                let user_id = client.user_id().ok_or(SessionRotationCallbackError(
+                    "d0.1-session-rotation-identity-missing",
+                ))?;
+                let device_id = client.device_id().ok_or(SessionRotationCallbackError(
+                    "d0.1-session-rotation-identity-missing",
+                ))?;
+                let account = authenticated_login_identity(
+                    user_id.as_str(),
+                    client.homeserver().as_str(),
                     &save_identity,
-                    &KeyringSessionMaterialVault::new(),
                 )
                 .map_err(|_| {
-                    SessionRotationCallbackError("d0.1-session-rotation-persist-failed")
+                    SessionRotationCallbackError("d0.1-session-rotation-identity-mismatch")
                 })?;
+                let locator = MatrixLoginIdentity {
+                    user_id: account.user_id().to_owned(),
+                    device_id: device_id.to_string(),
+                    homeserver_url: account.homeserver_url().to_owned(),
+                };
+                // SDK rotation can run before the explicit login save. Every
+                // callback establishes the same durable cleanup target first.
+                persistence_lease
+                    .save(|| {
+                        persist_with_retry_locator(
+                            || ensure_logout_retry_locator(&save_root, &locator),
+                            || {
+                                persist_session_after_login(
+                                    &client,
+                                    &save_identity,
+                                    &KeyringSessionMaterialVault::new(),
+                                )
+                                .map(|_| ())
+                                .map_err(|_| {
+                                    MatrixAuthCommandError::unavailable(
+                                        "d0.1-session-rotation-persist-failed",
+                                    )
+                                })
+                            },
+                            || Ok(()),
+                        )
+                    })
+                    .map_err(|_| {
+                        SessionRotationCallbackError("d0.1-session-rotation-persist-failed")
+                    })?;
                 Ok(())
             }),
         )
@@ -1924,12 +2095,10 @@ mod tests {
             .and_then(|rest| rest.split("pub async fn ").next())
             .expect("explicit confirmation command body");
         assert!(recovery.contains("confirmation_text: String"));
-        assert!(recovery
-            .contains("take_confirmed_store_recovery(&confirmation_id, &confirmation_text)"));
-        assert!(recovery.contains("take_confirmed_store_recovery"));
+        assert!(recovery.contains("confirmed_store_recovery_target"));
         assert!(recovery.contains("archive_and_rebuild_store"));
         assert!(
-            recovery.find("take_confirmed_store_recovery")
+            recovery.find("confirmed_store_recovery_target")
                 < recovery.find("archive_and_rebuild_store"),
             "the host must validate both confirmations before filesystem recovery"
         );
@@ -2111,5 +2280,20 @@ mod tests {
             message: "store initialization failed".into(),
         });
         assert_eq!(unavailable.diagnostic_id, "p3.2-login-store-open-failed");
+        let corrupt = map_store_client_build_error(ClientBuilderError::SdkBuild {
+            category: crate::matrix::ipc::MatrixIpcErrorCategory::StoreCorrupt,
+            diagnostic_id: "test-confirmed-store-corrupt",
+            message: "confirmed corruption".into(),
+        });
+        assert_eq!(corrupt.diagnostic_id, "p3.2-login-store-reset-required");
+        assert!(is_recoverable_store_login_diagnostic(
+            &corrupt.diagnostic_id
+        ));
+        assert!(!is_recoverable_store_login_diagnostic(
+            &locked.diagnostic_id
+        ));
+        assert!(!is_recoverable_store_login_diagnostic(
+            &unavailable.diagnostic_id
+        ));
     }
 }
