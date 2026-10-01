@@ -115,25 +115,32 @@ final class ComposerMatrixFormattingTests: XCTestCase {
             struct HostedEditorNotReady: Error {}
             throw HostedEditorNotReady()
         }
+        let diagnostics = ComposerFocusTestDiagnostics(
+            bindings: bindings, textView: textView, window: window, rootView: controller.view
+        )
+        defer { diagnostics.stopObserving() }
+        diagnostics.record("hosted-editor-ready")
 
         // A toolbar request must reach UIKit through the real representable update.
         bindings.isFocused.wrappedValue = true
+        diagnostics.record("binding-focus-request-written")
         let focused = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in textView.isFirstResponder },
             object: textView
         )
-        await fulfillment(of: [focused], timeout: 5)
+        try await diagnostics.require(focused, stage: "binding-focus-reaches-UIKit", in: self)
         textView.insertText("draft")
         XCTAssertEqual(bindings.text.wrappedValue, "draft")
 
         // A programmatic dismissal and a subsequent native editing action must
         // both update the same state, as happens around attachment presentation.
         bindings.isFocused.wrappedValue = false
+        diagnostics.record("binding-dismiss-request-written")
         let dismissed = XCTNSPredicateExpectation(
             predicate: NSPredicate { _, _ in !textView.isFirstResponder },
             object: textView
         )
-        await fulfillment(of: [dismissed], timeout: 5)
+        try await diagnostics.require(dismissed, stage: "binding-dismiss-resigns-UIKit", in: self)
         XCTAssertTrue(textView.becomeFirstResponder())
         XCTAssertTrue(bindings.isFocused.wrappedValue)
 
@@ -151,7 +158,7 @@ final class ComposerMatrixFormattingTests: XCTestCase {
             },
             object: textView
         )
-        await fulfillment(of: [formatted], timeout: 5)
+        try await diagnostics.require(formatted, stage: "formatting-preserves-UIKit-focus", in: self)
         textView.insertText("replacement")
         XCTAssertEqual(bindings.text.wrappedValue, "**replacement**")
         XCTAssertTrue(textView.isFirstResponder)
@@ -260,6 +267,63 @@ private struct ComposerFocusTestControls {
     let selection: Binding<ComposerTextSelection>
     let formattingRevision: Binding<Int>
     let isFocused: Binding<Bool>
+}
+
+@MainActor
+private final class ComposerFocusTestDiagnostics {
+    private let bindings: ComposerFocusTestControls
+    private let textView: UITextView
+    private let window: UIWindow
+    private let rootView: UIView
+    private var records: [String] = []
+    private var observers: [NSObjectProtocol] = []
+
+    init(bindings: ComposerFocusTestControls, textView: UITextView, window: UIWindow, rootView: UIView) {
+        self.bindings = bindings
+        self.textView = textView
+        self.window = window
+        self.rootView = rootView
+        for (name, stage) in [
+            (UITextView.textDidBeginEditingNotification, "native-begin-editing"),
+            (UITextView.textDidEndEditingNotification, "native-end-editing"),
+        ] {
+            observers.append(NotificationCenter.default.addObserver(
+                forName: name, object: textView, queue: .main
+            ) { [weak self] _ in
+                MainActor.assumeIsolated { self?.record(stage) }
+            })
+        }
+    }
+
+    func record(_ stage: String) {
+        // Read owner state only. No draft, selection, identifiers or secrets.
+        records.append(
+            "stage=\(stage) requestedFocus=\(bindings.isFocused.wrappedValue) "
+                + "firstResponder=\(textView.isFirstResponder) keyWindow=\(window.isKeyWindow) "
+                + "attached=\(textView.window === window) descendant=\(textView.isDescendant(of: rootView)) "
+                + "laidOut=\(textView.bounds.width > 0 && textView.bounds.height > 0)"
+        )
+    }
+
+    func require(_ expectation: XCTestExpectation, stage: String, in test: XCTestCase) async throws {
+        expectation.expectationDescription = stage
+        let result = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
+        record("\(stage)-wait-completed")
+        guard result == .completed else {
+            let attachment = XCTAttachment(string: records.joined(separator: "\n"))
+            attachment.name = "hosted-composer-owner-state-\(stage)"
+            attachment.lifetime = .keepAlways
+            test.add(attachment)
+            XCTFail("Hosted composer stage '\(stage)' did not complete: \(result)")
+            struct ComposerFocusStageFailed: Error {}
+            throw ComposerFocusStageFailed()
+        }
+    }
+
+    func stopObserving() {
+        for observer in observers { NotificationCenter.default.removeObserver(observer) }
+        observers.removeAll()
+    }
 }
 
 private struct ComposerFocusTestHarness: View {
