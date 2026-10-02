@@ -135,6 +135,7 @@ struct ComposerTextView: UIViewRepresentable {
         container.placeholderLabel.adjustsFontForContentSizeCategory = true
         container.placeholderLabel.textColor = .placeholderText
         context.coordinator.container = container
+        context.coordinator.installFocusEditor(textView)
         context.coordinator.lastFormattingRevision = formattingRevision
         context.coordinator.lastPlaceholder = placeholder
         context.coordinator.performProgrammaticUpdate {
@@ -202,35 +203,17 @@ struct ComposerTextView: UIViewRepresentable {
             }
         }
 
-        #if DEBUG
-        ComposerFocusBoundaryProbe.record("before-focus-branch", editor: textView)
-        #endif
-        if isFocused, textView.isFirstResponder == false {
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("become-before", editor: textView, consumedFocus: true)
-            let result = textView.becomeFirstResponder()
-            ComposerFocusBoundaryProbe.record("become-after", editor: textView, consumedFocus: true, callResult: result)
-            #else
-            textView.becomeFirstResponder()
-            #endif
-        } else if isFocused == false, textView.isFirstResponder {
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("resign-before", editor: textView, consumedFocus: false)
-            let result = textView.resignFirstResponder()
-            ComposerFocusBoundaryProbe.record("resign-after", editor: textView, consumedFocus: false, callResult: result)
-            #else
-            textView.resignFirstResponder()
-            #endif
-        }
-        #if DEBUG
-        ComposerFocusBoundaryProbe.record("after-focus-branch", editor: textView)
-        #endif
+        context.coordinator.requestFocusUpdate(for: textView)
 
         context.coordinator.syncPlaceholder()
         context.coordinator.updateHeight(for: textView)
         #if DEBUG
         ComposerFocusBoundaryProbe.record("update-exit", editor: textView)
         #endif
+    }
+
+    static func dismantleUIView(_ uiView: ComposerTextContainer, coordinator: Coordinator) {
+        coordinator.retireFocusOwner(for: uiView.textView)
     }
 
     func sizeThatFits(_ proposal: ProposedViewSize, uiView: ComposerTextContainer, context: Context) -> CGSize? {
@@ -296,6 +279,11 @@ struct ComposerTextView: UIViewRepresentable {
         var lastPlaceholder = ""
         var lastAppearanceKey = ""
         private var isApplyingProgrammaticState = false
+        private weak var focusEditor: UITextView?
+        private weak var pendingFocusWindow: UIWindow?
+        private var focusRequestGeneration: UInt64 = 0
+        private var isFocusAttemptQueued = false
+        private var isFocusOwnerRetired = false
         private var lastMeasuredText: String?
         private var lastMeasuredWidth: CGFloat = 0
         private var lastMeasuredShowsPlaceholder: Bool?
@@ -305,6 +293,81 @@ struct ComposerTextView: UIViewRepresentable {
 
         init(parent: ComposerTextView) {
             self.parent = parent
+        }
+
+        func installFocusEditor(_ textView: UITextView) {
+            guard !isFocusOwnerRetired else { return }
+            invalidateFocusRequest()
+            focusEditor = textView
+        }
+
+        func requestFocusUpdate(for textView: UITextView) {
+            // A foreign/retired request cannot cancel the active editor's work.
+            guard !isFocusOwnerRetired, focusEditor === textView else { return }
+            guard let window = textView.window else {
+                invalidateFocusRequest()
+                return
+            }
+            if isFocusAttemptQueued {
+                // One valid queued attempt reads the latest Binding at execution.
+                if pendingFocusWindow === window { return }
+                invalidateFocusRequest()
+            }
+            guard parent.isFocused != textView.isFirstResponder else { return }
+            let generation = focusRequestGeneration
+            isFocusAttemptQueued = true
+            pendingFocusWindow = window
+            #if DEBUG
+            ComposerFocusBoundaryProbe.record("focus-attempt-enqueued", editor: textView)
+            #endif
+            DispatchQueue.main.async { [weak self, weak textView, weak window] in
+                guard let self, self.focusRequestGeneration == generation else { return }
+                self.isFocusAttemptQueued = false
+                self.pendingFocusWindow = nil
+                guard let textView, let window,
+                      !self.isFocusOwnerRetired,
+                      self.focusEditor === textView,
+                      textView.window === window
+                else { return }
+                // Includes Binding changes that precede another SwiftUI update.
+                let focused = self.parent.isFocused
+                #if DEBUG
+                ComposerFocusBoundaryProbe.record("deferred-focus-entry", editor: textView)
+                #endif
+                if focused, textView.isFirstResponder == false {
+                    #if DEBUG
+                    ComposerFocusBoundaryProbe.record("become-before", editor: textView, consumedFocus: true)
+                    let result = textView.becomeFirstResponder()
+                    ComposerFocusBoundaryProbe.record("become-after", editor: textView, consumedFocus: true, callResult: result)
+                    #else
+                    textView.becomeFirstResponder()
+                    #endif
+                } else if focused == false, textView.isFirstResponder {
+                    #if DEBUG
+                    ComposerFocusBoundaryProbe.record("resign-before", editor: textView, consumedFocus: false)
+                    let result = textView.resignFirstResponder()
+                    ComposerFocusBoundaryProbe.record("resign-after", editor: textView, consumedFocus: false, callResult: result)
+                    #else
+                    textView.resignFirstResponder()
+                    #endif
+                }
+                #if DEBUG
+                ComposerFocusBoundaryProbe.record("deferred-focus-exit", editor: textView)
+                #endif
+            }
+        }
+
+        private func invalidateFocusRequest() {
+            focusRequestGeneration &+= 1
+            isFocusAttemptQueued = false
+            pendingFocusWindow = nil
+        }
+
+        func retireFocusOwner(for textView: UITextView) {
+            guard !isFocusOwnerRetired, focusEditor === textView else { return }
+            isFocusOwnerRetired = true
+            invalidateFocusRequest()
+            focusEditor = nil
         }
 
         func publishContent(from textView: UITextView) {
@@ -320,6 +383,7 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidChange(_ textView: UITextView) {
+            guard !isFocusOwnerRetired, focusEditor === textView else { return }
             guard isApplyingProgrammaticState == false else {
                 return
             }
@@ -335,6 +399,7 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidChangeSelection(_ textView: UITextView) {
+            guard !isFocusOwnerRetired, focusEditor === textView else { return }
             guard isApplyingProgrammaticState == false else {
                 return
             }
@@ -343,9 +408,11 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidBeginEditing(_ textView: UITextView) {
+            guard !isFocusOwnerRetired, focusEditor === textView else { return }
             #if DEBUG
             ComposerFocusBoundaryProbe.record("did-begin-entry", editor: textView)
             #endif
+            invalidateFocusRequest()
             if parent.isFocused == false {
                 parent.isFocused = true
             }
@@ -357,9 +424,11 @@ struct ComposerTextView: UIViewRepresentable {
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
+            guard !isFocusOwnerRetired, focusEditor === textView else { return }
             #if DEBUG
             ComposerFocusBoundaryProbe.record("did-end-entry", editor: textView)
             #endif
+            invalidateFocusRequest()
             if parent.isFocused {
                 parent.isFocused = false
             }
