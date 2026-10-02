@@ -120,12 +120,6 @@ final class ComposerMatrixFormattingTests: XCTestCase {
         )
         defer { diagnostics.stopObserving() }
         diagnostics.record("hosted-editor-ready")
-        #if DEBUG
-        ComposerFocusBoundaryProbe.install(for: textView) { [weak diagnostics] event in
-            diagnostics?.recordBoundary(event)
-        }
-        defer { ComposerFocusBoundaryProbe.remove(for: textView) }
-        #endif
 
         // A toolbar request must reach UIKit through the real representable update.
         bindings.isFocused.wrappedValue = true
@@ -168,7 +162,6 @@ final class ComposerMatrixFormattingTests: XCTestCase {
         textView.insertText("replacement")
         XCTAssertEqual(bindings.text.wrappedValue, "**replacement**")
         XCTAssertTrue(textView.isFirstResponder)
-        diagnostics.attachEvidence(stage: "boundary-route-passed", in: self)
     }
 
     func testEmptyComposerMeasuresWrappedPlaceholderAtAccessibilityScale() {
@@ -282,8 +275,6 @@ private final class ComposerFocusTestDiagnostics {
     private let textView: UITextView
     private let window: UIWindow
     private let rootView: UIView
-    private let origin = ProcessInfo.processInfo.systemUptime
-    private var elapsed: TimeInterval { ProcessInfo.processInfo.systemUptime - origin }
     private var records: [String] = []
     private var observers: [NSObjectProtocol] = []
 
@@ -310,41 +301,23 @@ private final class ComposerFocusTestDiagnostics {
             "stage=\(stage) requestedFocus=\(bindings.isFocused.wrappedValue) "
                 + "firstResponder=\(textView.isFirstResponder) keyWindow=\(window.isKeyWindow) "
                 + "attached=\(textView.window === window) descendant=\(textView.isDescendant(of: rootView)) "
-                + "laidOut=\(textView.bounds.width > 0 && textView.bounds.height > 0) elapsed=\(elapsed)"
+                + "laidOut=\(textView.bounds.width > 0 && textView.bounds.height > 0)"
         )
     }
-
-    #if DEBUG
-    func recordBoundary(_ event: ComposerFocusBoundaryProbe.Event) {
-        // No Binding reads here: selected branch constants report consumed focus.
-        records.append(
-            "stage=\(event.stage) consumedFocus=\(event.consumedFocus.map(String.init) ?? "unknown") "
-                + "callResult=\(event.callResult.map(String.init) ?? "unknown") "
-                + "firstResponder=\(textView.isFirstResponder) keyWindow=\(window.isKeyWindow) "
-                + "attached=\(textView.window === window) descendant=\(textView.isDescendant(of: rootView)) "
-                + "laidOut=\(textView.bounds.width > 0 && textView.bounds.height > 0) elapsed=\(elapsed)"
-        )
-    }
-    #endif
 
     func require(_ expectation: XCTestExpectation, stage: String, in test: XCTestCase) async throws {
         expectation.expectationDescription = stage
-        record("\(stage)-wait-start")
         let result = await XCTWaiter.fulfillment(of: [expectation], timeout: 5)
-        record("\(stage)-wait-return-result-\(result)")
+        record("\(stage)-wait-completed")
         guard result == .completed else {
-            attachEvidence(stage: stage, in: test)
+            let attachment = XCTAttachment(string: records.joined(separator: "\n"))
+            attachment.name = "hosted-composer-owner-state-\(stage)"
+            attachment.lifetime = .keepAlways
+            test.add(attachment)
             XCTFail("Hosted composer stage '\(stage)' did not complete: \(result)")
             struct ComposerFocusStageFailed: Error {}
             throw ComposerFocusStageFailed()
         }
-    }
-
-    func attachEvidence(stage: String, in test: XCTestCase) {
-        let attachment = XCTAttachment(string: records.joined(separator: "\n"))
-        attachment.name = "hosted-composer-owner-state-\(stage)"
-        attachment.lifetime = .keepAlways
-        test.add(attachment)
     }
 
     func stopObserving() {

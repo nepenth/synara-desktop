@@ -86,7 +86,7 @@ final class ComposerFocusOwnershipTests: XCTestCase {
     func testEditorReplacementInvalidatesOldAttemptAndAdmitsNewEditor() async {
         let fixture = makeFixture(focused: true, responder: false)
         fixture.owner.requestFocusUpdate(for: fixture.editor)
-        let replacement = ComposerFocusResponderSpy()
+        let replacement = makeEditor()
         replacement.attachedWindow = fixture.window
         replacement.delegate = fixture.owner
         fixture.owner.installFocusEditor(replacement)
@@ -111,7 +111,7 @@ final class ComposerFocusOwnershipTests: XCTestCase {
         let state = ComposerFocusStateBox()
         state.focused = true
         let window = UIWindow()
-        var editor: ComposerFocusResponderSpy? = ComposerFocusResponderSpy()
+        var editor: ComposerFocusResponderSpy? = makeEditor()
         editor?.attachedWindow = window
         var owner: ComposerTextView.Coordinator? = ComposerTextView.Coordinator(parent: state.view())
         let lifetime = ComposerFocusWeakWitness(owner: owner, editor: editor)
@@ -144,7 +144,7 @@ final class ComposerFocusOwnershipTests: XCTestCase {
 
     func testOldBeginCannotCancelReplacementDismissalOrPublishFocus() async {
         let fixture = makeFixture(focused: false, responder: true)
-        let replacement = ComposerFocusResponderSpy()
+        let replacement = makeEditor()
         replacement.nativeFocus = true
         replacement.attachedWindow = fixture.window
         replacement.delegate = fixture.owner
@@ -160,8 +160,9 @@ final class ComposerFocusOwnershipTests: XCTestCase {
     func testOldEndCannotCancelReplacementFocusOrPublishText() async {
         let fixture = makeFixture(focused: true, responder: false)
         fixture.state.text = "current"
-        fixture.editor.attributedText = NSAttributedString(string: "stale")
-        let replacement = ComposerFocusResponderSpy()
+        prepareStalePayload(for: fixture.editor)
+        XCTAssertEqual(fixture.state.text, "current")
+        let replacement = makeEditor()
         replacement.attachedWindow = fixture.window
         replacement.delegate = fixture.owner
         fixture.owner.installFocusEditor(replacement)
@@ -179,8 +180,9 @@ final class ComposerFocusOwnershipTests: XCTestCase {
         fixture.state.text = "current"
         fixture.state.selection = ComposerTextSelection(location: 1, length: 2)
         let selection = fixture.state.selection
-        fixture.editor.attributedText = NSAttributedString(string: "stale")
-        fixture.editor.selectedRange = NSRange(location: 0, length: 5)
+        prepareStalePayload(for: fixture.editor, selection: NSRange(location: 0, length: 5))
+        XCTAssertEqual(fixture.state.text, "current")
+        XCTAssertEqual(fixture.state.selection, selection)
         fixture.owner.retireFocusOwner(for: fixture.editor)
         fixture.owner.textViewDidBeginEditing(fixture.editor)
         XCTAssertFalse(fixture.state.focused)
@@ -200,9 +202,10 @@ final class ComposerFocusOwnershipTests: XCTestCase {
         fixture.state.text = "current"
         fixture.state.selection = ComposerTextSelection(location: 1, length: 2)
         let selection = fixture.state.selection
-        fixture.editor.attributedText = NSAttributedString(string: "stale")
-        fixture.editor.selectedRange = NSRange(location: 0, length: 5)
-        let replacement = ComposerFocusResponderSpy()
+        prepareStalePayload(for: fixture.editor, selection: NSRange(location: 0, length: 5))
+        XCTAssertEqual(fixture.state.text, "current")
+        XCTAssertEqual(fixture.state.selection, selection)
+        let replacement = makeEditor()
         replacement.attachedWindow = fixture.window
         fixture.owner.installFocusEditor(replacement)
         fixture.owner.textViewDidChange(fixture.editor)
@@ -215,7 +218,7 @@ final class ComposerFocusOwnershipTests: XCTestCase {
 
     func testForeignRequestAndOldDismantleCannotCancelCurrentFocus() async {
         let fixture = makeFixture(focused: true, responder: false)
-        let foreign = ComposerFocusResponderSpy()
+        let foreign = makeEditor()
         foreign.attachedWindow = fixture.window
         fixture.owner.requestFocusUpdate(for: fixture.editor)
         fixture.owner.requestFocusUpdate(for: foreign)
@@ -241,10 +244,29 @@ final class ComposerFocusOwnershipTests: XCTestCase {
         await fulfillment(of: [drained], timeout: 5)
     }
 
+    private func makeEditor() -> ComposerFocusResponderSpy {
+        let editor = ComposerFocusResponderSpy()
+        // UIKit initialization calls resign through editable/selectable setup.
+        // The scenario's exact-call oracle starts after construction completes.
+        editor.beginFocusCallRecordingAfterInitialization()
+        return editor
+    }
+
+    private func prepareStalePayload(for editor: ComposerFocusResponderSpy, selection: NSRange? = nil) {
+        // Text/selection setters can synchronously notify an active delegate.
+        // Prepare the stale editor before the replacement/retirement scenario;
+        // restore its delegate before exercising the explicit late callbacks.
+        let delegate = editor.delegate
+        editor.delegate = nil
+        editor.attributedText = NSAttributedString(string: "stale")
+        if let selection { editor.selectedRange = selection }
+        editor.delegate = delegate
+    }
+
     private func makeFixture(focused: Bool, responder: Bool) -> ComposerFocusFixture {
         let state = ComposerFocusStateBox()
         state.focused = focused
-        let editor = ComposerFocusResponderSpy()
+        let editor = makeEditor()
         editor.nativeFocus = responder
         let window = UIWindow()
         editor.attachedWindow = window
@@ -302,6 +324,11 @@ private final class ComposerFocusResponderSpy: UITextView {
     var allowsTransition = true
     private(set) var becomeCalls = 0
     private(set) var resignCalls = 0
+
+    func beginFocusCallRecordingAfterInitialization() {
+        becomeCalls = 0
+        resignCalls = 0
+    }
 
     override var window: UIWindow? { attachedWindow }
     override var isFirstResponder: Bool { nativeFocus }

@@ -5,37 +5,6 @@ import UIKit
 #endif
 
 #if canImport(UIKit)
-#if DEBUG
-// Temporary owner-boundary readback, installed only by the hosted test.
-@MainActor
-enum ComposerFocusBoundaryProbe {
-    struct Event {
-        let stage: String
-        let consumedFocus: Bool?
-        let callResult: Bool?
-    }
-
-    private static weak var observedEditor: UITextView?
-    private static var observer: (@MainActor (Event) -> Void)?
-
-    static func install(for editor: UITextView, observer: @escaping @MainActor (Event) -> Void) {
-        observedEditor = editor
-        self.observer = observer
-    }
-
-    static func remove(for editor: UITextView) {
-        guard observedEditor === editor else { return }
-        observer = nil
-        observedEditor = nil
-    }
-
-    static func record(_ stage: String, editor: UITextView,
-                       consumedFocus: Bool? = nil, callResult: Bool? = nil) {
-        guard observedEditor === editor, let observer else { return }
-        observer(Event(stage: stage, consumedFocus: consumedFocus, callResult: callResult))
-    }
-}
-#endif
 enum ComposerTextMetrics {
     static let maxHeight: CGFloat = 240
     static let textContainerInset = UIEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
@@ -161,9 +130,6 @@ struct ComposerTextView: UIViewRepresentable {
 
     func updateUIView(_ uiView: ComposerTextContainer, context: Context) {
         let textView = uiView.textView
-        #if DEBUG
-        ComposerFocusBoundaryProbe.record("update-entry", editor: textView)
-        #endif
         context.coordinator.parent = self
         textView.onPasteImages = onPasteImages
         context.coordinator.performProgrammaticUpdate {
@@ -207,9 +173,6 @@ struct ComposerTextView: UIViewRepresentable {
 
         context.coordinator.syncPlaceholder()
         context.coordinator.updateHeight(for: textView)
-        #if DEBUG
-        ComposerFocusBoundaryProbe.record("update-exit", editor: textView)
-        #endif
     }
 
     static func dismantleUIView(_ uiView: ComposerTextContainer, coordinator: Coordinator) {
@@ -317,9 +280,6 @@ struct ComposerTextView: UIViewRepresentable {
             let generation = focusRequestGeneration
             isFocusAttemptQueued = true
             pendingFocusWindow = window
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("focus-attempt-enqueued", editor: textView)
-            #endif
             DispatchQueue.main.async { [weak self, weak textView, weak window] in
                 guard let self, self.focusRequestGeneration == generation else { return }
                 self.isFocusAttemptQueued = false
@@ -331,29 +291,11 @@ struct ComposerTextView: UIViewRepresentable {
                 else { return }
                 // Includes Binding changes that precede another SwiftUI update.
                 let focused = self.parent.isFocused
-                #if DEBUG
-                ComposerFocusBoundaryProbe.record("deferred-focus-entry", editor: textView)
-                #endif
                 if focused, textView.isFirstResponder == false {
-                    #if DEBUG
-                    ComposerFocusBoundaryProbe.record("become-before", editor: textView, consumedFocus: true)
-                    let result = textView.becomeFirstResponder()
-                    ComposerFocusBoundaryProbe.record("become-after", editor: textView, consumedFocus: true, callResult: result)
-                    #else
                     textView.becomeFirstResponder()
-                    #endif
                 } else if focused == false, textView.isFirstResponder {
-                    #if DEBUG
-                    ComposerFocusBoundaryProbe.record("resign-before", editor: textView, consumedFocus: false)
-                    let result = textView.resignFirstResponder()
-                    ComposerFocusBoundaryProbe.record("resign-after", editor: textView, consumedFocus: false, callResult: result)
-                    #else
                     textView.resignFirstResponder()
-                    #endif
                 }
-                #if DEBUG
-                ComposerFocusBoundaryProbe.record("deferred-focus-exit", editor: textView)
-                #endif
             }
         }
 
@@ -409,25 +351,16 @@ struct ComposerTextView: UIViewRepresentable {
 
         func textViewDidBeginEditing(_ textView: UITextView) {
             guard !isFocusOwnerRetired, focusEditor === textView else { return }
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("did-begin-entry", editor: textView)
-            #endif
             invalidateFocusRequest()
             if parent.isFocused == false {
                 parent.isFocused = true
             }
             syncPlaceholder()
             updateHeight(for: textView)
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("did-begin-exit", editor: textView)
-            #endif
         }
 
         func textViewDidEndEditing(_ textView: UITextView) {
             guard !isFocusOwnerRetired, focusEditor === textView else { return }
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("did-end-entry", editor: textView)
-            #endif
             invalidateFocusRequest()
             if parent.isFocused {
                 parent.isFocused = false
@@ -439,9 +372,6 @@ struct ComposerTextView: UIViewRepresentable {
             updateSelection(from: textView)
             syncPlaceholder()
             updateHeight(for: textView)
-            #if DEBUG
-            ComposerFocusBoundaryProbe.record("did-end-exit", editor: textView)
-            #endif
         }
 
         func performProgrammaticUpdate(_ update: () -> Void) {
