@@ -12,11 +12,6 @@ fn remote(user: &str, trust: IdentityTrust) -> RemoteIdentity {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_cross_signing_markers(), MATRIX_CROSS_SIGNING_MARKER);
-}
-
-#[test]
 fn local_keys_usable() {
     let mut store = CrossSigningStore::new(1);
     assert!(store.needs_attention());

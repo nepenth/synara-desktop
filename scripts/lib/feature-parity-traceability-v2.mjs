@@ -162,7 +162,7 @@ export const EXPECTED_CENTRAL_RISK_CONTRACT = Object.freeze({
     threat_ids: Object.freeze(["TM-T02", "TM-T07"]),
     boundary_ids: Object.freeze([]),
     closure_criteria: Object.freeze([
-      "Every filesystem, keyring, and session-state deletion is verified and fail-closed. Native credential-store or Matrix IndexedDB deletion failure produces a specified user-visible recoverable state and retry/support path, emits no completed result, causes no false completion or reload, preserves enough state for a safe idempotent retry, and never triggers automatic wipe. Injected failures for each deletion independently and together prove the behavior, and success is reported only after both removals are verified.",
+      "Every filesystem, keyring, and session-state deletion is verified and fail-closed. Native credential-store or native Matrix filesystem deletion failure produces a specified user-visible recoverable state and retry/support path, emits no completed result, causes no false completion or reload, preserves enough state for a safe idempotent retry, and never triggers automatic wipe. Injected failures for each deletion independently and together prove the behavior, and success is reported only after every native removal is verified. Legacy browser IndexedDB deletion has been retired and is not a completion precondition.",
     ]),
   }),
   "MRSDK-R030": Object.freeze({

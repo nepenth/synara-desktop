@@ -5,11 +5,6 @@ use crate::dto::UploadState;
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_media_markers(), MATRIX_MEDIA_MARKER);
-}
-
-#[test]
 fn enqueue_begin_progress_complete() {
     let mut q = UploadQueue::new(2);
     assert_eq!(q.session_generation(), 2);

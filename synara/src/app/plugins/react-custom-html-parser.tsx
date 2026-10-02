@@ -1,3 +1,5 @@
+import { isTag, isText, type ChildNode } from 'domhandler';
+import { reactDomNodes } from '../utils/reactDomNodes';
 /* eslint-disable jsx-a11y/alt-text */
 import React, {
   ComponentPropsWithoutRef,
@@ -7,20 +9,13 @@ import React, {
   useMemo,
   useState,
 } from 'react';
-import {
-  Element,
-  Text as DOMText,
-  HTMLReactParserOptions,
-  attributesToProps,
-  domToReact,
-} from 'html-react-parser';
+import { HTMLReactParserOptions, attributesToProps, domToReact } from 'html-react-parser';
 import type { MatrixClientReading } from '../utils/room';
 import classNames from 'classnames';
 import { Box, Chip, config, Header, Icon, IconButton, Icons, Scroll, Text, toRem } from 'folds';
 import { IntermediateRepresentation, Opts as LinkifyOpts, OptFn } from 'linkifyjs';
 import Linkify from 'linkify-react';
 import { ErrorBoundary } from 'react-error-boundary';
-import { ChildNode } from 'domhandler';
 import * as css from '../styles/CustomHtml.css';
 import {
   getMxIdLocalPart,
@@ -249,7 +244,7 @@ const extractTextFromChildren = (nodes: ChildNode[]): string => {
   nodes.forEach((node) => {
     if (node.type === 'text') {
       text += node.data;
-    } else if (node instanceof Element && node.children) {
+    } else if (isTag(node) && node.children) {
       text += extractTextFromChildren(node.children);
     }
   });
@@ -265,7 +260,7 @@ export function CodeBlock({
   opts: HTMLReactParserOptions;
 }) {
   const code = children[0];
-  const attribs = code instanceof Element && code.name === 'code' ? code.attribs : undefined;
+  const attribs = code && isTag(code) && code.name === 'code' ? code.attribs : undefined;
   const languageClass = attribs?.class;
   const customLabel = attribs?.['data-label'];
   const language =
@@ -336,7 +331,7 @@ export function CodeBlock({
           {largeCodeBlock && !expanded ? (
             <code className={languageClass}>{plainText}</code>
           ) : (
-            domToReact(children, opts)
+            domToReact(reactDomNodes(children), opts)
           )}
         </div>
       </Scroll>
@@ -437,14 +432,14 @@ export const getReactCustomHtmlParser = (
 ): HTMLReactParserOptions => {
   const opts: HTMLReactParserOptions = {
     replace: (domNode) => {
-      if (domNode instanceof Element && 'name' in domNode) {
+      if (isTag(domNode) && 'name' in domNode) {
         const { name, attribs, children, parent } = domNode;
         const props = attributesToProps(attribs);
 
         if (name === 'h1') {
           return (
             <Text {...props} className={css.Heading} size="H2">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -452,7 +447,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'h2') {
           return (
             <Text {...props} className={css.Heading} size="H3">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -460,7 +455,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'h3') {
           return (
             <Text {...props} className={css.Heading} size="H4">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -468,7 +463,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'h4') {
           return (
             <Text {...props} className={css.Heading} size="H4">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -476,7 +471,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'h5') {
           return (
             <Text {...props} className={css.Heading} size="H5">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -484,7 +479,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'h6') {
           return (
             <Text {...props} className={css.Heading} size="H6">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -492,7 +487,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'p') {
           return (
             <Text {...props} className={classNames(css.Paragraph, css.MarginSpaced)} size="Inherit">
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -516,7 +511,7 @@ export const getReactCustomHtmlParser = (
                 // eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex
                 tabIndex={0}
               >
-                <table {...props}>{domToReact(children, opts)}</table>
+                <table {...props}>{domToReact(reactDomNodes(children), opts)}</table>
               </div>
             </MatrixColorSurface>
           );
@@ -525,7 +520,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'blockquote') {
           return (
             <Text {...props} size="Inherit" as="blockquote" className={css.BlockQuote}>
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </Text>
           );
         }
@@ -533,23 +528,23 @@ export const getReactCustomHtmlParser = (
         if (name === 'ul') {
           return (
             <ul {...props} className={css.List}>
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </ul>
           );
         }
         if (name === 'ol') {
           return (
             <ol {...props} className={css.List}>
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </ol>
           );
         }
 
         if (name === 'code') {
           if (parent && 'name' in parent && parent.name === 'pre') {
-            const codeReact = domToReact(children, opts);
+            const codeReact = domToReact(reactDomNodes(children), opts);
             if (typeof codeReact === 'string') {
-              let lang = props.className;
+              let lang = typeof props.className === 'string' ? props.className : undefined;
               if (lang === 'language-rs') lang = 'language-rust';
               else if (lang === 'language-js') lang = 'language-javascript';
               else if (lang === 'language-ts') lang = 'language-typescript';
@@ -563,7 +558,7 @@ export const getReactCustomHtmlParser = (
             return (
               <MatrixColorSurface surface="inlineCode">
                 <Text as="code" size="T300" className={css.Code} {...props}>
-                  {domToReact(children, opts)}
+                  {domToReact(reactDomNodes(children), opts)}
                 </Text>
               </MatrixColorSurface>
             );
@@ -571,18 +566,23 @@ export const getReactCustomHtmlParser = (
         }
 
         if (name === 'strong' || name === 'b') {
-          return <strong className={css.Strong}>{domToReact(children, opts)}</strong>;
+          return (
+            <strong className={css.Strong}>{domToReact(reactDomNodes(children), opts)}</strong>
+          );
         }
 
-        if (name === 'a' && testMatrixTo(tryDecodeURIComponent(props.href))) {
-          const content = children.find((child) => !(child instanceof DOMText))
+        if (
+          name === 'a' &&
+          testMatrixTo(tryDecodeURIComponent(typeof props.href === 'string' ? props.href : ''))
+        ) {
+          const content = children.find((child) => !isText(child))
             ? undefined
-            : children.map((c) => (c instanceof DOMText ? c.data : '')).join();
+            : children.map((c) => (isText(c) ? c.data : '')).join();
 
           const mention = renderMatrixMention(
             mx,
             roomId,
-            tryDecodeURIComponent(props.href),
+            tryDecodeURIComponent(typeof props.href === 'string' ? props.href : ''),
             makeMentionCustomProps(params.handleMentionClick, content)
           );
 
@@ -592,7 +592,7 @@ export const getReactCustomHtmlParser = (
         if (name === 'a') {
           return (
             <a {...props} {...externalLinkProps}>
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </a>
           );
         }
@@ -604,7 +604,7 @@ export const getReactCustomHtmlParser = (
               foreground={attribs['data-mx-color']}
               background={attribs['data-mx-bg-color']}
             >
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </CompatibilitySpoiler>
           );
         }
@@ -615,14 +615,21 @@ export const getReactCustomHtmlParser = (
               foreground={attribs['data-mx-color']}
               background={attribs['data-mx-bg-color']}
             >
-              {domToReact(children, opts)}
+              {domToReact(reactDomNodes(children), opts)}
             </MatrixColorSpan>
           );
         }
 
         if (name === 'img') {
-          const htmlSrc = mxcUrlToHttp(mx, props.src, params.useAuthentication);
-          if (htmlSrc && props.src.startsWith('mxc://') === false) {
+          const htmlSrc = mxcUrlToHttp(
+            mx,
+            typeof props.src === 'string' ? props.src : '',
+            params.useAuthentication
+          );
+          if (
+            htmlSrc &&
+            (typeof props.src === 'string' ? props.src : '').startsWith('mxc://') === false
+          ) {
             return (
               <a href={htmlSrc} target="_blank" rel="noreferrer noopener">
                 {props.alt || props.title || htmlSrc}
@@ -642,7 +649,7 @@ export const getReactCustomHtmlParser = (
         }
       }
 
-      if (domNode instanceof DOMText) {
+      if (isText(domNode)) {
         const linkify =
           !(domNode.parent && 'name' in domNode.parent && domNode.parent.name === 'code') &&
           !(domNode.parent && 'name' in domNode.parent && domNode.parent.name === 'a');

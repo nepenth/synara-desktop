@@ -13,32 +13,42 @@ const nseManifest = read("crates/synara-nse-core/Cargo.toml");
 const nseUdl = read("crates/synara-nse-core/src/synara_nse_core.udl");
 const nseRust = read("crates/synara-nse-core/src/lib.rs");
 const generator = read("scripts/generate-synara-nse-core-swift.sh");
-const productionFeatures = read("scripts/check-synara-nse-core-production-features.mjs");
+const productionFeatures = read(
+  "scripts/check-synara-nse-core-production-features.mjs"
+);
 const archiveExports = read("scripts/check-synara-nse-core-archive-exports.sh");
+const symbolReader = read("scripts/lib/rust-llvm-symbols.sh");
+const ciWorkflow = read(".github/workflows/ci.yml");
+const releaseWorkflow = read(".github/workflows/release.yml");
+const diagnosticsWorkflow = read(".github/workflows/ios-skeleton.yml");
 const iosCiBuild = read("synara-ios/scripts/ci-build.sh");
 const publicationHelper = read("scripts/lib/publish-generated-apple-pair.sh");
 const generatorSyntax = spawnSync(
   "bash",
   ["-n", resolve(root, "scripts/generate-synara-nse-core-swift.sh")],
-  { encoding: "utf8" },
+  { encoding: "utf8" }
 );
 if (generatorSyntax.status !== 0) {
   throw new Error(
-    `SynaraNseCore generator shell syntax failed: ${generatorSyntax.stderr || generatorSyntax.stdout}`,
+    `SynaraNseCore generator shell syntax failed: ${
+      generatorSyntax.stderr || generatorSyntax.stdout
+    }`
   );
 }
 const archiveExportsSyntax = spawnSync(
   "bash",
   ["-n", resolve(root, "scripts/check-synara-nse-core-archive-exports.sh")],
-  { encoding: "utf8" },
+  { encoding: "utf8" }
 );
 if (archiveExportsSyntax.status !== 0) {
   throw new Error(
-    `SynaraNseCore archive export checker shell syntax failed: ${archiveExportsSyntax.stderr || archiveExportsSyntax.stdout}`,
+    `SynaraNseCore archive export checker shell syntax failed: ${
+      archiveExportsSyntax.stderr || archiveExportsSyntax.stdout
+    }`
   );
 }
 const notificationService = read(
-  "synara-ios/SynaraNotificationService/NotificationService.swift",
+  "synara-ios/SynaraNotificationService/NotificationService.swift"
 );
 const project = read("synara-ios/project.yml");
 
@@ -51,77 +61,210 @@ const forbidText = (source, needle, label) => {
 
 requireText(workspace, "[profile.nse-release]", "NSE size profile");
 requireText(workspace, 'lto = "fat"', "NSE cross-crate LTO");
-requireText(coreManifest, 'default = ["full-uniffi"]', "full Core default feature");
+requireText(
+  coreManifest,
+  'default = ["full-uniffi"]',
+  "full Core default feature"
+);
 requireText(coreManifest, "nse-preview = []", "NSE Core feature");
-requireText(coreManifest, 'search-index = ["matrix-sdk/experimental-search"]', "desktop search-index feature");
+requireText(
+  coreManifest,
+  'search-index = ["matrix-sdk/experimental-search"]',
+  "desktop search-index feature"
+);
 requireText(nseManifest, "default-features = false", "full binding exclusion");
 requireText(nseManifest, 'features = ["nse-preview"]', "NSE-only feature");
 forbidText(nseManifest, "search-index", "NSE search-index feature");
 forbidText(nseManifest, "x509-identity", "NSE X.509 Core feature");
-forbidText(coreManifest, 'default = ["full-uniffi", "x509-identity"]', "X.509 must not be Core default");
-requireText(coreManifest, "x509-identity = [", "desktop-optional X.509 feature");
-requireText(nseUdl, "interface NsePreviewRequest {", "cancelable request boundary");
+forbidText(
+  coreManifest,
+  'default = ["full-uniffi", "x509-identity"]',
+  "X.509 must not be Core default"
+);
+requireText(
+  coreManifest,
+  "x509-identity = [",
+  "desktop-optional X.509 feature"
+);
+requireText(
+  nseUdl,
+  "interface NsePreviewRequest {",
+  "cancelable request boundary"
+);
 requireText(nseUdl, "NsePreviewDto resolve();", "one-shot resolver");
 requireText(nseUdl, "void cancel();", "prompt cancellation operation");
 requireText(nseUdl, "bytes? get(string key);", "read-only secret callback");
-for (const forbidden of [" put(", " delete(", "close_read_only_store", "interface NseCore {"]) {
+for (const forbidden of [
+  " put(",
+  " delete(",
+  "close_read_only_store",
+  "interface NseCore {",
+]) {
   forbidText(nseUdl, forbidden, "NSE UDL capability");
 }
 if ((nseUdl.match(/\[Async/g) ?? []).length !== 1) {
   throw new Error("NSE UDL must expose exactly one async operation");
 }
-forbidText(nseRust, "synara_core::SharedCore", "full application owner in NSE Rust boundary");
-requireText(generator, '--profile "$rust_profile"', "NSE-specific Cargo profile");
-requireText(generator, 'headers_tmp="$headers_root/synara_nse_coreFFI"', "namespaced C module");
-requireText(generator, "simulator-arm64", "bounded local simulator generation mode");
-requireText(generator, "SYNARA_NSE_CORE_APPLE_SPACE_BOUNDED", "space-bounded build mode");
-requireText(generator, 'target_build_dir="$work_dir/cargo-target-$target"', "isolated target build");
-requireText(generator, 'remove_bounded_target_dir "$target_build_dir"', "bounded target cleanup");
+forbidText(
+  nseRust,
+  "synara_core::SharedCore",
+  "full application owner in NSE Rust boundary"
+);
+requireText(
+  generator,
+  '--profile "$rust_profile"',
+  "NSE-specific Cargo profile"
+);
+requireText(
+  generator,
+  'headers_tmp="$headers_root/synara_nse_coreFFI"',
+  "namespaced C module"
+);
+requireText(
+  generator,
+  "simulator-arm64",
+  "bounded local simulator generation mode"
+);
+requireText(
+  generator,
+  "SYNARA_NSE_CORE_APPLE_SPACE_BOUNDED",
+  "space-bounded build mode"
+);
+requireText(
+  generator,
+  'target_build_dir="$work_dir/cargo-target-$target"',
+  "isolated target build"
+);
+requireText(
+  generator,
+  'remove_bounded_target_dir "$target_build_dir"',
+  "bounded target cleanup"
+);
 requireText(generator, '"$publication_helper"', "shared artifact publication");
-requireText(publicationHelper, 'publication_state="publishing"', "transactional publication state");
-requireText(publicationHelper, 'publication_state="committed"', "coherent pair commit point");
-requireText(notificationService, "import SynaraNseCore", "NSE-only Swift module import");
-requireText(notificationService, "request.cancel()", "NSE deadline cancellation");
-forbidText(notificationService, "import SynaraCore", "full Core import in extension");
-requireText(project, "package: SynaraNseCore", "extension NSE-only package dependency");
+requireText(
+  publicationHelper,
+  'publication_state="publishing"',
+  "transactional publication state"
+);
+requireText(
+  publicationHelper,
+  'publication_state="committed"',
+  "coherent pair commit point"
+);
+requireText(
+  notificationService,
+  "import SynaraNseCore",
+  "NSE-only Swift module import"
+);
+requireText(
+  notificationService,
+  "request.cancel()",
+  "NSE deadline cancellation"
+);
+forbidText(
+  notificationService,
+  "import SynaraCore",
+  "full Core import in extension"
+);
+requireText(
+  project,
+  "package: SynaraNseCore",
+  "extension NSE-only package dependency"
+);
 requireText(
   iosCiBuild,
   'node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"',
-  "NSE production feature CI invocation",
+  "NSE production feature CI invocation"
 );
 requireText(
   iosCiBuild,
   '"$nse_archive_checker" "${nse_archives[@]}"',
-  "NSE archive export CI invocation",
+  "NSE archive export CI invocation"
 );
-requireText(archiveExports, "_uniffi_synara_core_", "NSE archive full-Core export needle");
-requireText(archiveExports, "Unknown attribute kind", "rustc 1.96 LLVM22 nm mismatch handling");
-for (const triple of ["aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios"]) {
-  requireText(productionFeatures, `"${triple}"`, `NSE production feature ${triple} query`);
+requireText(
+  symbolReader,
+  "uniffi_synara_core_",
+  "NSE full-Core export rejection"
+);
+requireText(
+  symbolReader,
+  "_uniffi_synara_nse_core_fn_method_nsepreviewrequest_resolve",
+  "positive NSE ABI export"
+);
+requireText(
+  symbolReader,
+  "LLVM version mismatch",
+  "matching selected Rust decoder"
+);
+requireText(
+  archiveExports,
+  'inspect_nse_apple_symbols "$archive" 1',
+  "mandatory archive positive readback"
+);
+if (/grep\s+-a|nm_cannot_read/.test(archiveExports + symbolReader))
+  throw new Error("NSE isolation cannot fall back to raw byte inspection");
+for (const [name, yaml, requiredSteps] of [
+  ["CI", ciWorkflow, 3],
+  ["release", releaseWorkflow, 2],
+  ["diagnostics", diagnosticsWorkflow, 1],
+]) {
+  const steps = [
+    ...yaml.matchAll(
+      / {6}- name: Install Rust 1\.96 and Apple targets\n([\s\S]*?)(?=\n {6}- name:|\n {2}\S|$)/g
+    ),
+  ];
+  if (steps.length !== requiredSteps)
+    throw new Error(
+      `${name} Apple generator toolchain entrypoints changed; reconcile LLVM prerequisites`
+    );
+  for (const step of steps) {
+    if (!/components:\s*[^\n]*\bllvm-tools-preview\b/.test(step[1]))
+      throw new Error(`${name} Apple toolchain is missing llvm-tools-preview`);
+  }
+}
+
+for (const triple of [
+  "aarch64-apple-ios",
+  "aarch64-apple-ios-sim",
+  "x86_64-apple-ios",
+]) {
+  requireText(
+    productionFeatures,
+    `"${triple}"`,
+    `NSE production feature ${triple} query`
+  );
 }
 requireText(
   productionFeatures,
   "automatic-room-key-forwarding",
-  "NSE production graph must reject automatic-room-key-forwarding",
+  "NSE production graph must reject automatic-room-key-forwarding"
 );
 requireText(
   coreManifest,
   'full-uniffi = ["room-key-forwarding"]',
-  "full-app room-key forwarding",
+  "full-app room-key forwarding"
 );
 requireText(
   coreManifest,
   "matrix-sdk/automatic-room-key-forwarding",
-  "SDK forwarding feature via Core",
+  "SDK forwarding feature via Core"
 );
 requireText(
   coreManifest,
   "matrix-sdk-crypto/automatic-room-key-forwarding",
-  "crypto forwarding feature via Core",
+  "crypto forwarding feature via Core"
 );
-requireText(productionFeatures, "matrix-sdk-search", "NSE local-index crate leak check");
+requireText(
+  productionFeatures,
+  "matrix-sdk-search",
+  "NSE local-index crate leak check"
+);
 requireText(productionFeatures, "tantivy", "NSE tantivy leak check");
 requireText(productionFeatures, "x509-identity", "NSE X.509 leak check");
-requireText(productionFeatures, "rust-x509-verifier-impl", "NSE X.509 verifier leak check");
+requireText(
+  productionFeatures,
+  "rust-x509-verifier-impl",
+  "NSE X.509 verifier leak check"
+);
 
 console.log("Synara NSE Core isolation scaffold checks passed.");

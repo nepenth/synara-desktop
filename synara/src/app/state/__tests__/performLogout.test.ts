@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 // Mock client type: local structural projection (js-sdk MatrixClient type no longer imported).
-import { performLogout } from '../../../client/initMatrix';
+import { reloadApplication, performLogout } from '../../../client/initMatrix';
 import {
   notifiedEventIdsCache,
   unreadNotificationCache,
@@ -51,19 +51,18 @@ const createMockMatrixClient = () => {
 };
 
 const createLogoutDeps = () => {
-  const clearPersistedCalls: Array<Record<string, unknown>> = [];
+  const clearPersistedCalls: void[] = [];
   let nativeLogoutCalls = 0;
   let reloaded = false;
 
   const deps = {
-    clearPersistedSessions: async (options?: Record<string, unknown>) => {
-      clearPersistedCalls.push(options ?? {});
+    clearPersistedSessions: async () => {
+      clearPersistedCalls.push(undefined);
     },
     clearSessionLocalStorage: () => undefined,
     logoutNativeSession: async () => {
       nativeLogoutCalls += 1;
     },
-    nativeSessionStore: {},
     reload: () => {
       reloaded = true;
     },
@@ -77,21 +76,20 @@ const createLogoutDeps = () => {
   };
 };
 
-test('performLogout with matrix client stops client, clears stores, and reloads', async () => {
+test('performLogout clears renderer state only after native logout completes', async () => {
   const { mx, calls } = createMockMatrixClient();
   const { deps, clearPersistedCalls, getReloaded } = createLogoutDeps();
 
   await performLogout(mx, {
     ...deps,
-    clearPersistedSessions: async (options) => {
+    clearPersistedSessions: async () => {
       calls.push('clearPersistedSessions');
-      await deps.clearPersistedSessions(options);
+      await deps.clearPersistedSessions();
     },
   });
 
-  assert.deepEqual(calls, ['stopClient', 'logout', 'clearPersistedSessions']);
+  assert.deepEqual(calls, ['logout', 'clearPersistedSessions']);
   assert.equal(clearPersistedCalls.length, 1);
-  assert.deepEqual(clearPersistedCalls[0], { nativeSessionStore: deps.nativeSessionStore });
   assert.equal(getReloaded(), true);
 });
 
@@ -147,3 +145,153 @@ test('performLogout without matrix client removes session keys only', async () =
   assert.equal(storage.getItem('settings'), JSON.stringify({ themeId: 'aurora', pageZoom: 120 }));
   assert.equal(reloaded, true);
 });
+
+for (const withClient of [false, true]) {
+  test(`native logout failure preserves renderer state and allows retry (client=${withClient})`, async () => {
+    const failure = new Error('native local credential deletion failed');
+    const { deps, clearPersistedCalls, getReloaded } = createLogoutDeps();
+    let attempts = 0;
+    const logout = async () => {
+      attempts += 1;
+      if (attempts === 1) throw failure;
+    };
+    const storage = createEnumeratedMemoryStorage({ after_login_redirect_url: '/home' });
+    const client = withClient ? ({ logout } as any) : undefined;
+    const options = { ...deps, storage, clearSessionLocalStorage, logoutNativeSession: logout };
+    notifiedEventIdsCache.add('$retry-retained');
+    await assert.rejects(performLogout(client, options), failure);
+    assert.equal(getReloaded(), false);
+    assert.equal(clearPersistedCalls.length, 0);
+    assert.equal(storage.getItem('after_login_redirect_url'), '/home');
+    assert.equal(notifiedEventIdsCache.has('$retry-retained'), true);
+    await performLogout(client, options);
+    assert.equal(attempts, 2);
+    assert.equal(getReloaded(), true);
+    assert.equal(storage.getItem('after_login_redirect_url'), null);
+    assert.equal(notifiedEventIdsCache.size, 0);
+  });
+}
+
+test('Reload Application clears renderer caches without logging out or invoking native deletion', async () => {
+  const originalWindow = globalThis.window;
+  const originalLocalStorage = globalThis.localStorage;
+  const storage = createEnumeratedMemoryStorage({ 'navToActivePath@alice:example.org': '/home' });
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: storage });
+  let reloaded = false;
+  let stopped = false;
+  notifiedEventIdsCache.add('$renderer-cache');
+  Object.defineProperty(globalThis, 'window', {
+    configurable: true,
+    value: {
+      location: {
+        reload: () => {
+          reloaded = true;
+        },
+      },
+      __SYNARA_DESKTOP__: {
+        invoke: async () => {
+          assert.fail('renderer refresh must not invoke native deletion');
+        },
+      },
+    },
+  });
+  try {
+    await reloadApplication({
+      stopClient: async () => {
+        stopped = true;
+      },
+      getSafeUserId: () => '@alice:example.org',
+      logout: async () => {
+        assert.fail('renderer refresh must not log out');
+      },
+    } as any);
+    assert.equal(stopped, true);
+    assert.equal(storage.getItem('navToActivePath@alice:example.org'), null);
+    assert.equal(reloaded, true);
+    assert.equal(notifiedEventIdsCache.size, 0);
+  } finally {
+    Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: originalLocalStorage,
+    });
+  }
+});
+
+for (const failingStep of ['bootstrap', 'storage']) {
+  test(`confirmed logout completes other cleanup and reload when ${failingStep} cleanup throws`, async () => {
+    const calls: string[] = [];
+    const storage = createEnumeratedMemoryStorage({ after_login_redirect_url: '/old' });
+    notifiedEventIdsCache.add('$old-account');
+    await performLogout(undefined, {
+      storage,
+      logoutNativeSession: async () => {
+        calls.push('native-logged-out');
+      },
+      clearPersistedSessions: async () => {
+        calls.push('bootstrap');
+        if (failingStep === 'bootstrap') throw new Error('renderer bootstrap cleanup failed');
+      },
+      clearSessionLocalStorage: (target) => {
+        calls.push('storage');
+        if (failingStep === 'storage') throw new Error('browser storage unavailable');
+        clearSessionLocalStorage(target);
+      },
+      reload: () => {
+        calls.push('reload');
+      },
+    });
+    assert.deepEqual(calls, ['native-logged-out', 'bootstrap', 'storage', 'reload']);
+    assert.equal(notifiedEventIdsCache.size, 0);
+    if (failingStep === 'bootstrap')
+      assert.equal(storage.getItem('after_login_redirect_url'), null);
+  });
+}
+
+for (const storageFails of [false, true]) {
+  test(`renderer recovery reloads after stop listener failure (storageFails=${storageFails})`, async () => {
+    const originalWindow = globalThis.window;
+    const originalStorage = globalThis.localStorage;
+    const calls: string[] = [];
+    notifiedEventIdsCache.add('$wedged-renderer');
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        removeItem: () => {
+          calls.push('navigation');
+          if (storageFails) throw new Error('storage unavailable');
+        },
+      },
+    });
+    Object.defineProperty(globalThis, 'window', {
+      configurable: true,
+      value: {
+        location: {
+          reload: () => {
+            calls.push('reload');
+          },
+        },
+      },
+    });
+    try {
+      await reloadApplication({
+        getSafeUserId: () => {
+          calls.push('identity');
+          return '@alice:example.org';
+        },
+        stopClient: async () => {
+          calls.push('stop');
+          throw new Error('renderer listener threw');
+        },
+      } as any);
+      assert.deepEqual(calls, ['identity', 'stop', 'navigation', 'reload']);
+      assert.equal(notifiedEventIdsCache.size, 0);
+    } finally {
+      Object.defineProperty(globalThis, 'window', { configurable: true, value: originalWindow });
+      Object.defineProperty(globalThis, 'localStorage', {
+        configurable: true,
+        value: originalStorage,
+      });
+    }
+  });
+}

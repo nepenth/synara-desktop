@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use super::url::is_safe_widget_url;
 
 pub const MAX_WIDGET_SESSIONS: usize = 32;
-pub const MATRIX_WIDGETS_MARKER: &str = "matrix-widgets-experimental-v1";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

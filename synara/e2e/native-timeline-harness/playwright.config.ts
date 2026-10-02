@@ -4,6 +4,8 @@ export default defineConfig({
   testDir: '..',
   testMatch: 'native-timeline-*.spec.ts',
   fullyParallel: false,
+  // Frame timing must not compete with another test file's browser workload.
+  workers: 1,
   retries: 0,
   timeout: 30000,
   reporter: 'line',

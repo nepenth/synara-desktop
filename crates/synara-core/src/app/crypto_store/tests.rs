@@ -3,11 +3,6 @@
 use super::*;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_crypto_store_markers(), MATRIX_CRYPTO_STORE_MARKER);
-}
-
-#[test]
 fn open_ready_continuous_reopen() {
     let mut c = CryptoStoreContinuity::new(1);
     c.begin_open().unwrap();

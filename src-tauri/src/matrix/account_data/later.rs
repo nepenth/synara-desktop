@@ -1,16 +1,13 @@
-//! Live `in.synara.later` Client RMW. Codec types live in synara-core.
-//!
-//! Implementation lives in synara-core. This module keeps the desktop
-//! `crate::matrix::account_data::later::*` path resolving.
-
+#[cfg(test)]
 pub use synara_core::app::account_data::{
-    clear_completed_later_items, clear_completed_later_live, complete_later_item,
-    complete_later_item_live, mark_later_reminded, mark_later_reminded_live,
-    normalize_later_content, normalize_later_item, put_later_item, snapshot_later,
-    snooze_later_item, snooze_later_item_live, upsert_later_item, NativeLaterSnapshot,
-    SynaraLaterContent, SynaraLaterItem, SynaraLaterItemKind, LATER_ACCOUNT_DATA_VERSION,
-    LATER_EVENT_TYPE,
+    clear_completed_later_items, complete_later_item, normalize_later_content, put_later_item,
+    snooze_later_item,
 };
+
+pub use synara_core::app::account_data::{NativeLaterSnapshot, SynaraLaterItem};
+
+#[cfg(test)]
+pub use synara_core::app::account_data::{SynaraLaterContent, SynaraLaterItemKind};
 
 #[cfg(test)]
 mod tests {

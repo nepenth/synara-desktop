@@ -1,0 +1,550 @@
+//! Core command adapters for profile media.
+
+use super::*;
+
+/// Exact React/Tauri payload for `matrix_media_config`.
+///
+/// The legacy command deliberately has no renderer-supplied input and returns
+/// this one-key object verbatim. Keep it independent from the Platform
+/// projection: Core owns the public field spelling and serializes only after
+/// checking the shared JavaScript-safe counter bound.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub(super) struct MatrixMediaConfigResponse {
+    #[serde(rename = "m.upload.size")]
+    pub(super) upload_size: u64,
+}
+
+impl MatrixMediaConfigResponse {
+    pub(super) fn from_platform(config: PlatformMediaConfig) -> Result<Self, MatrixIpcError> {
+        let response = Self {
+            upload_size: config.upload_size(),
+        };
+        (response.upload_size <= MAX_WIRE_COUNTER)
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-media-config-invalid-platform-projection"))
+    }
+}
+
+/// Exact React/Tauri envelope payload for `matrix_set_own_display_name`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixSetOwnDisplayNameRequest {
+    pub(super) display_name: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_set_own_avatar`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixSetOwnAvatarRequest {
+    pub(super) mxc: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixIgnoredUsersUserRequest {
+    pub(super) user_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_user_directory_search`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixUserDirectorySearchRequest {
+    pub(super) term: String,
+    #[serde(default)]
+    pub(super) limit: Option<u64>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_message_search`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixMessageSearchRequest {
+    pub(super) term: String,
+    #[serde(default)]
+    pub(super) next_token: Option<String>,
+    #[serde(default)]
+    pub(super) rooms: Option<Vec<String>>,
+    #[serde(default)]
+    pub(super) senders: Option<Vec<String>>,
+    #[serde(default)]
+    pub(super) order: Option<String>,
+    #[serde(default)]
+    pub(super) listing_kind: Option<String>,
+    #[serde(default)]
+    pub(super) from_ts: Option<u64>,
+    #[serde(default)]
+    pub(super) to_ts: Option<u64>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixThreepidAddressRequest {
+    pub(super) address: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixThreepidEmailRequest {
+    pub(super) email: String,
+}
+
+pub(super) fn own_profile_read_payload_is_empty(payload: &serde_json::Value) -> bool {
+    payload.is_null() || payload.as_object().is_some_and(serde_json::Map::is_empty)
+}
+
+/// Exact React/Tauri envelope payload for `matrix_media_preview`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixMediaPreviewRequest {
+    pub(super) room_id: String,
+    pub(super) session_generation: u64,
+    pub(super) url: String,
+    #[serde(default)]
+    pub(super) ts: Option<u64>,
+}
+
+pub(super) fn matrix_media_preview(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMediaPreviewRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-media-preview-invalid-payload"))?;
+        let owner = state.join_rule_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-media-preview-no-session")
+        })?;
+        let result: MatrixMediaPreviewSnapshot = owner
+            .get_media_preview(
+                &payload.room_id,
+                payload.session_generation,
+                &payload.url,
+                payload.ts,
+            )
+            .await
+            .map_err(media_preview_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-media-preview-serialization-failed"))
+    })
+}
+
+pub(super) fn media_preview_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-media-preview-invalid"
+        | "v-send.r-media-preview-url-invalid"
+        | "v-send.r-media-preview-room-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-media-preview-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-send.r-media-preview-stale-generation" => MatrixIpcErrorCategory::StaleSessionGeneration,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_set_own_display_name(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetOwnDisplayNameRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-own-display-name-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-own-display-name-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_own_display_name(&payload.display_name)
+            .await
+            .map_err(own_profile_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-own-display-name-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_set_own_avatar(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixSetOwnAvatarRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-set-own-avatar-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-set-own-avatar-no-session")
+        })?;
+        let result: MatrixProfileWriteResult = owner
+            .set_own_avatar(&payload.mxc)
+            .await
+            .map_err(own_profile_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-set-own-avatar-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_get_own_profile(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-get-own-profile-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-get-own-profile-no-session")
+        })?;
+        let result: MatrixOwnProfile = owner
+            .get_own_profile()
+            .await
+            .map_err(own_profile_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-get-own-profile-serialization-failed"))
+    })
+}
+
+pub(super) fn own_profile_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-avatar-display-name-too-long"
+        | "v-send.r-avatar-invalid-mxc"
+        | "v-send.r-avatar-upload-empty"
+        | "v-send.r-avatar-upload-invalid-mime"
+        | "v-send.r-avatar-upload-too-large" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-send.r-avatar-profile-no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn plain_media_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-send.r-media-invalid-content-uri" | "v-send.r-media-download-too-large" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn ignored_users_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-profile.ignore-invalid-user" | "v-profile.ignore-self" => {
+            MatrixIpcErrorCategory::SdkInvariant
+        }
+        "v-profile.ignore-no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn threepid_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-threepid.invalid-email"
+        | "v-threepid.password-empty"
+        | "v-threepid.not-pending"
+        | "v-threepid.auth-unsupported" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-threepid.no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_ignored_users_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error(
+                "p2-ignored-users-snapshot-invalid-payload",
+            ));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-ignored-users-snapshot-no-session")
+        })?;
+        let result: MatrixIgnoredUsersSnapshot = owner
+            .snapshot_ignored_users()
+            .await
+            .map_err(ignored_users_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-ignored-users-snapshot-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_ignored_users_ignore(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixIgnoredUsersUserRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-ignored-users-ignore-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-ignored-users-ignore-no-session")
+        })?;
+        let result: MatrixIgnoredUsersWriteResult = owner
+            .ignore_user(&payload.user_id)
+            .await
+            .map_err(ignored_users_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-ignored-users-ignore-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_ignored_users_unignore(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixIgnoredUsersUserRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-ignored-users-unignore-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-ignored-users-unignore-no-session")
+        })?;
+        let result: MatrixIgnoredUsersWriteResult = owner
+            .unignore_user(&payload.user_id)
+            .await
+            .map_err(ignored_users_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-ignored-users-unignore-serialization-failed"))
+    })
+}
+
+pub(super) fn user_directory_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-search.directory-empty-term"
+        | "v-search.directory-term-too-long"
+        | "v-search.directory-invalid-term"
+        | "v-search.directory-invalid-limit" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-search.directory-no-session" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_user_directory_search(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixUserDirectorySearchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-user-directory-search-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-user-directory-search-no-session")
+        })?;
+        let result: MatrixUserDirectorySearchResult = owner
+            .search_user_directory(&payload.term, payload.limit)
+            .await
+            .map_err(user_directory_search_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-user-directory-search-serialization-failed"))
+    })
+}
+
+pub(super) fn message_search_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-search.term-too-long"
+        | "v-search.invalid-term"
+        | "v-search.invalid-token"
+        | "v-search.invalid-order"
+        | "v-search.invalid-room"
+        | "v-search.invalid-sender"
+        | "v-search.invalid-listing"
+        | "v-search.invalid-range" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-search.no-session" => MatrixIpcErrorCategory::Forbidden,
+        // Off disables product search; no Client-Server `/search` fallback.
+        "v-search.index-disabled" => MatrixIpcErrorCategory::Unknown,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_message_search(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixMessageSearchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-message-search-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-message-search-no-session")
+        })?;
+        let listing_kind = payload
+            .listing_kind
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty());
+        let result: MatrixMessageSearchResult = if payload.term.trim().is_empty() {
+            if let Some(kind) = listing_kind {
+                let rooms = payload.rooms.as_deref().unwrap_or(&[]);
+                if rooms.len() != 1 {
+                    return Err(message_search_owner_error("v-search.invalid-room"));
+                }
+                let room_id = rooms[0].clone();
+                let from_ts = payload
+                    .from_ts
+                    .ok_or_else(|| message_search_owner_error("v-search.invalid-range"))?;
+                let to_ts = payload
+                    .to_ts
+                    .ok_or_else(|| message_search_owner_error("v-search.invalid-range"))?;
+                owner
+                    .list_room_attachments(&room_id, kind, from_ts, to_ts)
+                    .await
+                    .map_err(message_search_owner_error)?
+            } else {
+                owner
+                    .search_messages(
+                        &payload.term,
+                        payload.next_token.as_deref(),
+                        payload.rooms.as_deref(),
+                        payload.senders.as_deref(),
+                        payload.order.as_deref(),
+                    )
+                    .await
+                    .map_err(message_search_owner_error)?
+            }
+        } else {
+            owner
+                .search_messages(
+                    &payload.term,
+                    payload.next_token.as_deref(),
+                    payload.rooms.as_deref(),
+                    payload.senders.as_deref(),
+                    payload.order.as_deref(),
+                )
+                .await
+                .map_err(message_search_owner_error)?
+        };
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-message-search-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_threepid_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-threepid-snapshot-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-snapshot-no-session")
+        })?;
+        let result: MatrixThreepidSnapshot = owner
+            .snapshot_threepids()
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-snapshot-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_threepid_delete(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixThreepidAddressRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-threepid-delete-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-delete-no-session")
+        })?;
+        let result: MatrixThreepidWriteResult = owner
+            .delete_threepid_email(&payload.address)
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-delete-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_threepid_request_email_token(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixThreepidEmailRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-threepid-request-email-token-invalid-payload"))?;
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-request-email-token-no-session")
+        })?;
+        let result: MatrixThreepidEmailTokenResult = owner
+            .request_threepid_email_token(&payload.email)
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-request-email-token-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_threepid_add_email(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(core_state_error("p2-threepid-add-email-invalid-payload"));
+        }
+        let owner = state.image_pack_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-threepid-add-email-no-session")
+        })?;
+        let result: MatrixThreepidAddResult = owner
+            .add_threepid_email()
+            .await
+            .map_err(threepid_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-threepid-add-email-serialization-failed"))
+    })
+}
+
+/// `matrix_media_config` has no renderer payload. Core owns the envelope and
+/// exact legacy object serialization only; the Platform remains the sole owner
+/// of the Matrix SDK client/session/cache/store and its cache/network load.
+pub(super) fn matrix_media_config(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-media-config-invalid-payload"));
+        }
+        let platform = state.platform();
+        let config = platform
+            .media_config()
+            .await
+            .map_err(media_config_transport_error)?;
+        let response = MatrixMediaConfigResponse::from_platform(config)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-media-config-serialization-failed"))
+    })
+}
+
+/// Map the closed Platform media observation to static Core transport errors.
+/// No Platform string, SDK error, URL, credential, key, or Core error object
+/// enters this mapping. The desktop bridge uses only the resulting category to
+/// restore its established static command diagnostics.
+pub(super) fn media_config_transport_error(error: PlatformMediaConfigError) -> MatrixIpcError {
+    match error {
+        PlatformMediaConfigError::NoSession => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-media-config-no-session")
+        }
+        PlatformMediaConfigError::LoadFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("p2-media-config-load-failed")
+        }
+        // The source value was outside the shared JSON-safe range. Keep this
+        // distinct in Core so the bridge can retain the legacy unsafe-size
+        // diagnostic instead of conflating it with an SDK load failure.
+        PlatformMediaConfigError::UnsafeSize => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::MediaTooLarge)
+                .with_diagnostic("p2-media-config-unsafe-size")
+        }
+    }
+}

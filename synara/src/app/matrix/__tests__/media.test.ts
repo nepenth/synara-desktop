@@ -181,11 +181,9 @@ test('desktop media boundary has no JS encrypt/decrypt leftover', () => {
     join(process.cwd(), 'src/app/features/room/RoomInput.tsx'),
     'utf8'
   );
-  const sw = readFileSync(join(process.cwd(), 'src/sw.ts'), 'utf8');
   assert.doesNotMatch(media, /browser-encrypt-attachment|decryptFile|downloadEncryptedMedia/);
   assert.doesNotMatch(roomInput, /encryptFile|browser-encrypt-attachment/);
   assert.match(roomInput, /Native Matrix attachment send is unavailable/);
-  assert.doesNotMatch(sw, /_matrix\/client\/v1\/media|accessToken|Bearer/);
 });
 
 test('desktop leftover avatars resolve through native media src', () => {

@@ -1,32 +1,31 @@
 use super::*;
-use matrix_sdk::ruma::OwnedRoomId;
 
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_INVALID: &str = "v-send.r-room-profile-directory-visibility-invalid";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_REQUIRES_SESSION: &str =
     "v-send.r-room-profile-directory-visibility-requires-session";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_STALE_GENERATION: &str =
     "v-send.r-room-profile-directory-visibility-stale-generation";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_ROOM_NOT_FOUND: &str =
     "v-send.r-room-profile-directory-visibility-room-not-found";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_PERMISSION_DENIED: &str =
     "v-send.r-room-profile-directory-visibility-permission-denied";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_PERMISSION_STATE_UNAVAILABLE: &str =
     "v-send.r-room-profile-directory-visibility-permission-state-unavailable";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_GET_SDK_FAILED: &str =
     "v-send.r-room-profile-directory-visibility-get-sdk-failed";
+#[cfg(test)]
 const DIRECTORY_VISIBILITY_SET_SDK_FAILED: &str =
     "v-send.r-room-profile-directory-visibility-set-sdk-failed";
 
-const JOIN_RULE_INVALID: &str = "v-send.r-room-profile-join-rule-invalid";
-const JOIN_RULE_REQUIRES_SESSION: &str = "v-send.r-room-profile-join-rule-requires-session";
-const JOIN_RULE_STALE_GENERATION: &str = "v-send.r-room-profile-join-rule-stale-generation";
-const JOIN_RULE_ROOM_NOT_FOUND: &str = "v-send.r-room-profile-join-rule-room-not-found";
-const JOIN_RULE_ROOM_STATE_UNAVAILABLE: &str =
-    "v-send.r-room-profile-join-rule-room-state-unavailable";
-const JOIN_RULE_READ_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-read-sdk-failed";
-const JOIN_RULE_DESERIALIZE_FAILED: &str = "v-send.r-room-profile-join-rule-deserialize-failed";
-const JOIN_RULE_UNSUPPORTED: &str = "v-send.r-room-profile-join-rule-unsupported";
-const JOIN_RULE_SET_SDK_FAILED: &str = "v-send.r-room-profile-join-rule-set-sdk-failed";
+#[cfg(test)]
+use matrix_sdk::ruma::OwnedRoomId;
 
 pub use synara_core::app::room_profile::{
     MatrixRoomDirectoryVisibilityResult, MatrixRoomDirectoryVisibilityWriteResult,
@@ -196,7 +195,7 @@ pub async fn matrix_enable_room_encrypted_state(
     )
     .await
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_directory_visibility_room_id(
     room_id: &str,
 ) -> Result<OwnedRoomId, MatrixAuthCommandError> {
@@ -204,70 +203,7 @@ pub(super) fn parse_room_directory_visibility_room_id(
         .parse()
         .map_err(|_| map_room_directory_visibility_error(DIRECTORY_VISIBILITY_INVALID))
 }
-
-pub(super) fn parse_room_join_rule_room_id(
-    room_id: &str,
-) -> Result<OwnedRoomId, MatrixAuthCommandError> {
-    if room_id.is_empty()
-        || room_id.len() > 512
-        || room_id.trim() != room_id
-        || room_id.chars().any(char::is_whitespace)
-        || !room_id.starts_with('!')
-    {
-        return Err(map_room_join_rule_error(JOIN_RULE_INVALID));
-    }
-    room_id
-        .parse()
-        .map_err(|_| map_room_join_rule_error(JOIN_RULE_INVALID))
-}
-
-fn require_room_join_rule_session(
-    session: Option<&ManagedMatrixSession>,
-) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
-    session.ok_or_else(|| map_room_join_rule_error(JOIN_RULE_REQUIRES_SESSION))
-}
-
-fn require_room_join_rule_generation(
-    requested: u64,
-    live: u64,
-) -> Result<(), MatrixAuthCommandError> {
-    if requested == 0 || requested != live {
-        return Err(map_room_join_rule_error(JOIN_RULE_STALE_GENERATION));
-    }
-    Ok(())
-}
-
-pub(super) fn map_room_join_rule_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        JOIN_RULE_INVALID => (
-            "InvalidRequest",
-            "The native Matrix room join-rule request is invalid.",
-        ),
-        JOIN_RULE_REQUIRES_SESSION => ("Forbidden", "No native Matrix session is active."),
-        JOIN_RULE_STALE_GENERATION => (
-            "Forbidden",
-            "The native Matrix room join-rule session is stale.",
-        ),
-        JOIN_RULE_ROOM_NOT_FOUND => ("NotFound", "The native Matrix room is not available."),
-        JOIN_RULE_ROOM_STATE_UNAVAILABLE
-        | JOIN_RULE_DESERIALIZE_FAILED
-        | JOIN_RULE_UNSUPPORTED
-        | JOIN_RULE_READ_SDK_FAILED => (
-            "Unknown",
-            "The native Matrix room join rule is unavailable.",
-        ),
-        JOIN_RULE_SET_SDK_FAILED => (
-            "Unknown",
-            "The native Matrix room join rule could not be updated.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix room join-rule operation failed.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
+#[cfg(test)]
 pub(super) fn parse_room_directory_visibility(
     visibility: &str,
 ) -> Result<(Visibility, &'static str), MatrixAuthCommandError> {
@@ -279,7 +215,7 @@ pub(super) fn parse_room_directory_visibility(
         )),
     }
 }
-
+#[cfg(test)]
 pub(super) fn map_room_directory_visibility_error(
     diagnostic_id: &'static str,
 ) -> MatrixAuthCommandError {
@@ -320,45 +256,4 @@ pub(super) fn map_room_directory_visibility_error(
         ),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
-/// Parse and validate a room name. Empty/whitespace-only input clears the
-/// `m.room.name` state. Non-empty names are trimmed and capped.
-pub(super) fn parse_room_name(name: &str) -> Result<String, MatrixAuthCommandError> {
-    let trimmed = name.trim();
-    if trimmed.chars().count() > 255 {
-        return Err(map_room_profile_error(
-            "v-send.r-room-profile-name-too-long",
-        ));
-    }
-    Ok(trimmed.to_owned())
-}
-
-/// Parse and validate a room topic. Empty/whitespace-only input clears the
-/// `m.room.topic` state. Non-empty topics are trimmed and capped.
-pub(super) fn parse_room_topic(topic: &str) -> Result<String, MatrixAuthCommandError> {
-    let trimmed = topic.trim();
-    if trimmed.chars().count() > 2_048 {
-        return Err(map_room_profile_error(
-            "v-send.r-room-profile-topic-too-long",
-        ));
-    }
-    Ok(trimmed.to_owned())
-}
-
-pub(super) fn map_room_profile_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    match diagnostic_id {
-        "v-send.r-room-profile-name-too-long" | "v-send.r-room-profile-topic-too-long" => {
-            MatrixAuthCommandError::new(
-                "InvalidRequest",
-                "The native Matrix room profile request is invalid.",
-                diagnostic_id,
-            )
-        }
-        _ => MatrixAuthCommandError::new(
-            "Unknown",
-            "The native Matrix room profile operation failed.",
-            diagnostic_id,
-        ),
-    }
 }

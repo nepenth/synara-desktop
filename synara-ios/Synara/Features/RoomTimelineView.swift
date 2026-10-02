@@ -7415,7 +7415,13 @@ private struct ComposerView: View {
         #endif
     }()
 
-    @FocusState private var isComposerFocused: Bool
+    #if canImport(UIKit)
+        // The UIKit editor owns first-responder changes through its binding.
+        // FocusState requires a SwiftUI .focused field, which this branch does not use.
+        @State private var isComposerFocused = false
+    #else
+        @FocusState private var isComposerFocused: Bool
+    #endif
 
     var body: some View {
         VStack(alignment: .leading, spacing: SynaraSpacing.xSmall) {

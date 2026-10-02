@@ -96,7 +96,6 @@ jobs:
         with:
           workspaces: |
             . -> target
-            src-tauri -> target
           shared-key: release-exact-tag-desktop
 
       - name: Install Linux Tauri dependencies
@@ -133,9 +132,9 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         run: |
           cargo fmt --all -- --check
-          cargo clippy --locked --workspace --all-targets -- -D warnings
-          cargo check --locked --workspace
-          cargo test --locked --workspace
+          cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings
+          cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
+          cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 
       - name: Check and test Rust desktop shell
         if: steps.reuse.outputs.reuse != 'true'
@@ -182,6 +181,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -264,7 +264,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: src-tauri
+          workspaces: ". -> target"
           shared-key: release-linux-deb
 
       - name: Install Linux Tauri dependencies
@@ -292,7 +292,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gh-release-linux-deb
-          path: src-tauri/target/release/bundle/deb/Synara_*.deb
+          path: target/release/bundle/deb/Synara_*.deb
           if-no-files-found: error
 
       - name: Generate APT repository assets
@@ -399,7 +399,7 @@ jobs:
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: src-tauri
+          workspaces: ". -> target"
           shared-key: release-macos
 
       - name: Install desktop dependencies
@@ -504,14 +504,14 @@ jobs:
 
       - name: Verify macOS app signature
         run: |
-          codesign --verify --all-architectures --deep --strict --verbose=2 src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara.app
-          spctl --assess --type execute --verbose=4 src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara.app
+          codesign --verify --all-architectures --deep --strict --verbose=2 target/universal-apple-darwin/release/bundle/macos/Synara.app
+          spctl --assess --type execute --verbose=4 target/universal-apple-darwin/release/bundle/macos/Synara.app
 
       - name: Verify macOS distributable contents
         shell: bash
         run: |
-          dmg_path="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
-          updater_archive="$(find src-tauri/target/universal-apple-darwin/release/bundle/macos -name 'Synara.app.tar.gz' -print -quit)"
+          dmg_path="$(find target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
+          updater_archive="$(find target/universal-apple-darwin/release/bundle/macos -name 'Synara.app.tar.gz' -print -quit)"
           if [[ -z "$dmg_path" ]]; then
             echo "No Synara DMG found" >&2
             exit 1
@@ -543,7 +543,7 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
-          dmg_path="$(find src-tauri/target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
+          dmg_path="$(find target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
           if [[ -z "$dmg_path" ]]; then
             echo "No Synara DMG found" >&2
             exit 1
@@ -563,9 +563,9 @@ jobs:
 
       - name: Verify macOS notarization staple
         run: |
-          xcrun stapler validate src-tauri/target/universal-apple-darwin/release/bundle/macos/Synara.app
-          xcrun stapler validate src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
-          spctl --assess --type open --context context:primary-signature --verbose=4 src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
+          xcrun stapler validate target/universal-apple-darwin/release/bundle/macos/Synara.app
+          xcrun stapler validate target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
+          spctl --assess --type open --context context:primary-signature --verbose=4 target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
 
       - name: Collect macOS updater artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -573,18 +573,18 @@ jobs:
           name: macos-updater-artifacts
           if-no-files-found: error
           path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
+            target/universal-apple-darwin/release/bundle/macos/*.tar.gz
+            target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
 
       - name: Upload macOS release assets for GH release
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: gh-release-macos
           path: |
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
-            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.sig
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz
-            src-tauri/target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
+            target/universal-apple-darwin/release/bundle/dmg/Synara_*.dmg
+            target/universal-apple-darwin/release/bundle/dmg/*.sig
+            target/universal-apple-darwin/release/bundle/macos/*.tar.gz
+            target/universal-apple-darwin/release/bundle/macos/*.tar.gz.sig
           if-no-files-found: error
 
       - name: Cleanup macOS keychain
@@ -666,6 +666,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios
 
       - name: Cache Apple SynaraCore build

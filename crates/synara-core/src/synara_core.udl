@@ -820,6 +820,12 @@ dictionary SecretStorageStatusDto {
   string action;
 };
 
+// Explicit one-time display from a user-requested setup/reset, never persisted or logged.
+dictionary SecretStorageSetupDto {
+  SecretStorageStatusDto status;
+  string? recovery_key;
+};
+
 // Static source constants only. Never echo user id, homeserver, device id, token, or password.
 [Error]
 interface SessionStatusError {
@@ -2280,6 +2286,21 @@ interface SharedCore {
 
   [Async, Throws=SessionStatusError]
   SecretStorageStatusDto secret_storage_status();
+
+  [Async, Throws=SessionStatusError]
+  SecretStorageSetupDto secret_storage_bootstrap(string passphrase);
+
+  [Async, Throws=SessionStatusError]
+  SecretStorageStatusDto secret_storage_unlock(string recovery_secret);
+
+  [Async, Throws=SessionStatusError]
+  SecretStorageSetupDto secret_storage_reset(string passphrase);
+
+  [Async, Throws=LeftoverCommandError]
+  BackupStatusDto backup_setup(string passphrase);
+
+  [Async, Throws=LeftoverCommandError]
+  BackupStatusDto backup_repair(string recovery_secret);
 
   [Async, Throws=NseStoreError]
   NseStoreDto nse_open_read_only_store(

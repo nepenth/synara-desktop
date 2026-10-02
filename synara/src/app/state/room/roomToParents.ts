@@ -1,4 +1,4 @@
-import produce from 'immer';
+import { produce } from 'immer';
 import { atom, useSetAtom } from 'jotai';
 import { useEffect } from 'react';
 import { RoomToParents } from '../../../types/matrix/room';

@@ -25,7 +25,7 @@ import React, {
   useState,
 } from 'react';
 import {
-  clearCacheAndReload,
+  reloadApplication,
   initClient,
   performLogout,
   startClient,
@@ -79,7 +79,17 @@ function ClientRootLoading({ status }: { status: string }) {
   );
 }
 
-function ClientRootOptions({ mx }: { mx?: ClientMatrix }) {
+function ClientRootOptions({
+  mx,
+  logout,
+  logoutError,
+  loggingOut,
+}: {
+  mx?: ClientMatrix;
+  logout: () => Promise<void>;
+  logoutError?: string;
+  loggingOut: boolean;
+}) {
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const handleToggle: MouseEventHandler<HTMLButtonElement> = (evt) => {
@@ -122,14 +132,15 @@ function ClientRootOptions({ mx }: { mx?: ClientMatrix }) {
             <Menu>
               <Box direction="Column" gap="100" style={{ padding: config.space.S100 }}>
                 {mx && (
-                  <MenuItem onClick={() => clearCacheAndReload(mx)} size="300" radii="300">
+                  <MenuItem onClick={() => reloadApplication(mx)} size="300" radii="300">
                     <Text as="span" size="T300" truncate>
-                      Clear Cache and Reload
+                      Reload Application
                     </Text>
                   </MenuItem>
                 )}
                 <MenuItem
-                  onClick={() => performLogout(mx)}
+                  onClick={() => void logout()}
+                  disabled={loggingOut}
                   size="300"
                   radii="300"
                   variant="Critical"
@@ -139,6 +150,11 @@ function ClientRootOptions({ mx }: { mx?: ClientMatrix }) {
                     Logout
                   </Text>
                 </MenuItem>
+                {logoutError && (
+                  <Text role="alert" size="T300">
+                    {logoutError}
+                  </Text>
+                )}
               </Box>
             </Menu>
           </FocusTrap>
@@ -148,10 +164,10 @@ function ClientRootOptions({ mx }: { mx?: ClientMatrix }) {
   );
 }
 
-const useLogoutListener = (mx?: ClientMatrix) => {
+const useLogoutListener = (mx: ClientMatrix | undefined, logout: () => Promise<void>) => {
   useEffect(() => {
     const handleLogout = async () => {
-      await performLogout(mx);
+      await logout();
     };
 
     mx?.on('Session.logged_out' as unknown as Parameters<ClientMatrix['on']>[0], handleLogout);
@@ -161,7 +177,7 @@ const useLogoutListener = (mx?: ClientMatrix) => {
         handleLogout
       );
     };
-  }, [mx]);
+  }, [mx, logout]);
 };
 
 const useSyncResumeRetry = (mx?: ClientMatrix) => {
@@ -280,11 +296,26 @@ export function ClientRoot({ children }: ClientRootProps) {
     }, [])
   );
   const mx = loadState.status === AsyncStatus.Success ? loadState.data : undefined;
+  const [logoutError, setLogoutError] = useState<string>();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logout = useCallback(async () => {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError(undefined);
+    try {
+      await performLogout(mx);
+    } catch {
+      setLogoutError('Local sign out did not complete. Retry to finish local cleanup.');
+    } finally {
+      setLoggingOut(false);
+    }
+  }, [mx, loggingOut]);
+
   const [startState, startMatrix] = useAsyncCallback<void, Error, [ClientMatrix]>(
     useCallback((m) => startClient(m), [])
   );
 
-  useLogoutListener(mx);
+  useLogoutListener(mx, logout);
   useSyncResumeRetry(mx);
   useProactiveTokenRefresh(mx);
 
@@ -393,7 +424,14 @@ export function ClientRoot({ children }: ClientRootProps) {
     <AutoDiscovery userId={userId!} baseUrl={baseUrl!}>
       <SpecVersions baseUrl={baseUrl!}>
         {mx && <SyncStatus mx={mx} />}
-        {loading && <ClientRootOptions mx={mx} />}
+        {loading && (
+          <ClientRootOptions
+            mx={mx}
+            logout={logout}
+            logoutError={logoutError}
+            loggingOut={loggingOut}
+          />
+        )}
         {splashView === 'error' && (
           <SplashScreen>
             <Box
@@ -411,6 +449,7 @@ export function ClientRoot({ children }: ClientRootProps) {
                   {startState.status === AsyncStatus.Error && (
                     <Text>{`Failed to start. ${startState.error.message}`}</Text>
                   )}
+                  {logoutError && <Text role="alert">{logoutError}</Text>}
                   {continuityError ? (
                     <>
                       <Text size="T300" priority="400">
@@ -429,7 +468,11 @@ export function ClientRoot({ children }: ClientRootProps) {
                           </Text>
                         </Button>
                       )}
-                      <Button variant="Critical" onClick={() => void performLogout(mx)}>
+                      <Button
+                        variant="Critical"
+                        onClick={() => void logout()}
+                        disabled={loggingOut}
+                      >
                         <Text as="span" size="B400">
                           Sign Out and Delete Local Encryption Data
                         </Text>
@@ -459,11 +502,12 @@ export function ClientRoot({ children }: ClientRootProps) {
               <Dialog>
                 <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                   <Text>Sync is taking longer than expected.</Text>
+                  {logoutError && <Text role="alert">{logoutError}</Text>}
                   <Text size="T300" priority="400">
                     {splashStatus}
                   </Text>
                   <Text size="T300" priority="400">
-                    You can retry, clear the local cache, or sign out.
+                    You can retry, reload the application, or sign out.
                   </Text>
                   <Button variant="Primary" onClick={() => void handleSyncRecoveryRetry()}>
                     <Text as="span" size="B400">
@@ -471,13 +515,13 @@ export function ClientRoot({ children }: ClientRootProps) {
                     </Text>
                   </Button>
                   {mx && (
-                    <Button variant="Secondary" onClick={() => void clearCacheAndReload(mx)}>
+                    <Button variant="Secondary" onClick={() => void reloadApplication(mx)}>
                       <Text as="span" size="B400">
-                        Clear Cache and Reload
+                        Reload Application
                       </Text>
                     </Button>
                   )}
-                  <Button variant="Critical" onClick={() => void performLogout(mx)}>
+                  <Button variant="Critical" onClick={() => void logout()} disabled={loggingOut}>
                     <Text as="span" size="B400">
                       Logout
                     </Text>

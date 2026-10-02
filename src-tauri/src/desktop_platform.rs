@@ -136,7 +136,14 @@ impl<R: Runtime> Platform for TauriPlatform<R> {
     /// post is detached; the OS receipt is consumed on the renderer-driven
     /// `desktop_notify` command path, which acknowledges Core's ledger.
     fn notify(&self, candidate: NotificationCandidate) -> Result<(), MatrixIpcError> {
+        let session_generation = candidate
+            .candidate_id
+            .strip_prefix("notif-")
+            .and_then(|id| id.split_once('-'))
+            .and_then(|(generation, _)| generation.parse().ok());
         let payload = DesktopNotificationPayload {
+            session_generation,
+            sound: None,
             title: candidate.title,
             body: Some(candidate.body),
             route: candidate.route,

@@ -22,7 +22,7 @@ use matrix_sdk::{
 };
 use matrix_sdk_ui::timeline::EventSendState;
 
-use super::native::{NativeTimelineItem, NativeTimelineReaction, NativeTimelineReactionSender};
+use super::native::{NativeTimelineItem, NativeTimelineReaction};
 use super::view::{TimelineReaction, TimelineReactionSender, TimelineViewDeltaOp, TimelineViewRow};
 
 /// `(target_event_id, sender, key) → annotation event id`.

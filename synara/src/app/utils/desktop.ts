@@ -236,6 +236,8 @@ export type DesktopNotificationActionContext = {
 };
 
 export type DesktopNotificationPayload = {
+  sessionGeneration?: number;
+  sound?: 'default' | 'silent';
   title: string;
   body?: string;
   route?: string;
@@ -245,6 +247,7 @@ export type DesktopNotificationPayload = {
 };
 
 export type DesktopNotificationActionEventPayload = {
+  sessionGeneration?: number;
   actionId: string;
   context?: DesktopNotificationActionContext;
 };
@@ -349,6 +352,7 @@ export const sanitizeDesktopDismissKey = (value: unknown): string | undefined =>
   ) {
     return undefined;
   }
+  if (/^candidate:notif-[0-9]+-[0-9]+$/.test(trimmed)) return trimmed;
   const prefix = DESKTOP_DISMISS_KEY_PREFIXES.find((candidate) => trimmed.startsWith(candidate));
   if (!prefix || trimmed.length <= prefix.length) return undefined;
   if (!/^[A-Za-z0-9._:\-!$=/+@]+$/.test(trimmed)) return undefined;
@@ -1086,6 +1090,9 @@ export const showDesktopNotification = async (
     }
   }
 
+  if (notification.sound !== undefined) payload.sound = notification.sound;
+  if (notification.sessionGeneration !== undefined)
+    payload.sessionGeneration = notification.sessionGeneration;
   const result = await invokeDesktop<boolean>('desktop_notify', {
     notification: payload,
   });

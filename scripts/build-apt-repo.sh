@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-package_dir="${1:-src-tauri/target/release/bundle/deb}"
+package_dir="${1:-target/release/bundle/deb}"
 output_dir="${2:-dist/apt-repo}"
 repo_tag="${SYNARA_APT_REPO_TAG:-apt-repo}"
 

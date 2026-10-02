@@ -56,7 +56,7 @@ const readyInputs = {
         TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     files: |
-      src-tauri/target/universal-apple-darwin/release/bundle/macos/*.sig
+      target/universal-apple-darwin/release/bundle/macos/*.sig
       latest.json
     - name: Verify macOS distributable contents
       run: |
@@ -196,7 +196,7 @@ test("non-release gate requires workflow updater channel materialization when co
         TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       files: |
-        src-tauri/target/release/bundle/appimage/*.sig
+        target/release/bundle/appimage/*.sig
         latest.json
     `,
     requireEnabled: false,
@@ -217,7 +217,7 @@ test("release updater gate requires signed update metadata upload", () => {
         TAURI_SIGNING_PRIVATE_KEY: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         TAURI_SIGNING_PRIVATE_KEY_PASSWORD: \${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
       files: |
-        src-tauri/target/release/bundle/appimage/*.sig
+        target/release/bundle/appimage/*.sig
         latest.json
     `,
     requireEnabled: true,

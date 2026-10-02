@@ -36,7 +36,11 @@ for (const target of productionTargets) {
       "--target",
       target,
     ],
-    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }
+    {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, CARGO_TERM_COLOR: "never" },
+    }
   );
   if (result.error || result.status !== 0) {
     console.error(
@@ -59,18 +63,8 @@ for (const target of productionTargets) {
     );
     process.exit(1);
   }
-  if (
-    result.stdout.includes("x509-identity") ||
-    result.stdout.includes("experimental-x509-identity-verification") ||
-    result.stdout.includes("rust-x509-verifier-impl")
-  ) {
-    console.error(
-      `SynaraNseCore must not enable X.509 identity verification (${target})`
-    );
-    process.exit(1);
-  }
-  // Inverse synara-core readback does not list matrix-sdk-crypto features.
-  // Query the production graph and fail if gossip is compiled into NSE.
+  // Inverse Core readback cannot list upstream crypto features. Inspect their
+  // exact Cargo feature nodes in the forward production graph instead.
   const forwarding = spawnSync(
     "cargo",
     [
@@ -85,7 +79,11 @@ for (const target of productionTargets) {
       "--target",
       target,
     ],
-    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }
+    {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, CARGO_TERM_COLOR: "never" },
+    }
   );
   if (forwarding.error || forwarding.status !== 0) {
     console.error(
@@ -94,7 +92,17 @@ for (const target of productionTargets) {
     if (forwarding.stderr) console.error(forwarding.stderr.trim());
     process.exit(1);
   }
-  if (forwarding.stdout.includes("automatic-room-key-forwarding")) {
+  if (
+    /\bfeature "(?:x509-identity|experimental-x509-identity-verification|rust-x509-verifier-impl)"/.test(
+      forwarding.stdout
+    )
+  ) {
+    console.error(
+      `SynaraNseCore must not enable X.509 identity verification (${target})`
+    );
+    process.exit(1);
+  }
+  if (/\bfeature "automatic-room-key-forwarding"/.test(forwarding.stdout)) {
     console.error(
       `SynaraNseCore must not compile automatic-room-key-forwarding (${target})`
     );
@@ -114,7 +122,11 @@ for (const target of productionTargets) {
       "--target",
       target,
     ],
-    { encoding: "utf8", maxBuffer: 16 * 1024 * 1024 }
+    {
+      encoding: "utf8",
+      maxBuffer: 16 * 1024 * 1024,
+      env: { ...process.env, CARGO_TERM_COLOR: "never" },
+    }
   );
   if (tree.error || tree.status !== 0) {
     console.error(

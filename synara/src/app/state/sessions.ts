@@ -40,6 +40,8 @@ export const SESSION_LOCAL_STORAGE_EXACT_KEYS = [
   FALLBACK_SESSION_KEYS.sessionGeneration,
   AFTER_LOGIN_REDIRECT_PATH_KEY,
   PENDING_FRESH_LOGIN_IDENTITY_KEY,
+  'synara_last_bootstrapped_matrix_identity',
+  'synara_last_persisted_matrix_identity',
 ] as const;
 
 /** localStorage key prefixes removed on logout (e.g. per-user navigation state). */

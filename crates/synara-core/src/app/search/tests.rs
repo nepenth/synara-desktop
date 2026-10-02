@@ -26,11 +26,6 @@ fn page(query: &str, events: &[&str]) -> SearchResult {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_search_markers(), MATRIX_SEARCH_MARKER);
-}
-
-#[test]
 fn begin_apply_snapshot() {
     let mut s = SearchSession::new(1);
     let rid = s.begin("hello", None).unwrap();

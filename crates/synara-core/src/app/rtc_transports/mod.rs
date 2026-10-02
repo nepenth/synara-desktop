@@ -12,10 +12,3 @@ pub use native::{
     NativeRtcTransportsSnapshot, NativeRtcTransportsStatus, MAX_RTC_TRANSPORTS,
     RTC_TRANSPORTS_MARKER,
 };
-
-/// Touch discovery paths so they remain linked in non-test builds.
-pub fn matrix_rtc_transports_markers() -> &'static str {
-    debug_assert_eq!(RTC_TRANSPORTS_MARKER, "matrix-rtc-transports-msc4143");
-    debug_assert_eq!(MAX_RTC_TRANSPORTS, 8);
-    RTC_TRANSPORTS_MARKER
-}

@@ -3,11 +3,6 @@
 use super::*;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_room_ops_markers(), MATRIX_ROOM_OPS_MARKER);
-}
-
-#[test]
 fn create_join_lifecycle() {
     let mut q = RoomOpsQueue::new(1);
     let create = q.enqueue_create(Some("Team".into())).unwrap().clone();

@@ -1,21 +1,19 @@
 import {
   createNativeMatrixClient,
   type NativeMatrixClient,
+  type NativeSessionSnapshot,
 } from '../app/features/native-client/nativeClientFacade';
 import { clearNavToActivePathStore } from '../app/state/navToActivePath';
 import {
   clearPendingFreshLoginIdentity,
   clearPersistedSessions,
   isPendingFreshLoginIdentity,
-  setLastBootstrappedMatrixIdentity,
-  type SessionPersistenceOptions,
 } from '../app/state/sessionPersistence';
 import {
   clearSessionLocalStorage,
   type Session,
   type SessionLocalStorage,
 } from '../app/state/sessions';
-import { platformSessionStore } from '../app/platform';
 import { clearNotificationCaches } from '../app/notifications/notificationCaches';
 import { recordClientDiagnostic } from '../app/utils/clientDiagnostics';
 import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../app/utils/desktop';
@@ -84,25 +82,13 @@ const startMatrixClient = async (): Promise<MatrixClient> => {
 
 export type InitClientDeps = {
   isPendingFreshLoginIdentity?: typeof isPendingFreshLoginIdentity;
-  setLastBootstrappedMatrixIdentity?: typeof setLastBootstrappedMatrixIdentity;
   startMatrixClient?: typeof startMatrixClient;
-};
-
-const recordBootstrappedMatrixIdentity = (
-  session: MatrixClientSession,
-  setLastBootstrapped: InitClientDeps['setLastBootstrappedMatrixIdentity'] = setLastBootstrappedMatrixIdentity
-): void => {
-  setLastBootstrapped?.({
-    userId: session.userId,
-    deviceId: session.deviceId,
-  });
 };
 
 export const initClient = async (
   session: MatrixClientSession,
   {
     isPendingFreshLoginIdentity: isFreshLoginIdentity = isPendingFreshLoginIdentity,
-    setLastBootstrappedMatrixIdentity: setLastBootstrapped = setLastBootstrappedMatrixIdentity,
     startMatrixClient: startClient = startMatrixClient,
   }: InitClientDeps = {}
 ): Promise<MatrixClient> => {
@@ -110,17 +96,22 @@ export const initClient = async (
   const freshLogin = isFreshLoginIdentity(session);
   recordClientDiagnostic('session', 'matrix-client.bootstrap-decision', {
     freshLogin,
-    identityStoresCleared: false,
   });
 
   try {
     const client = await startClient();
-    recordBootstrappedMatrixIdentity(session, setLastBootstrapped);
     recordClientDiagnostic('session', 'matrix-client.bootstrap-completed', {
       outcome: 'initialized',
       durationMs: performance.now() - initStartedAtMs,
     });
-    if (freshLogin) {
+    if (
+      freshLogin &&
+      client.getUserId() === session.userId &&
+      client.getDeviceId() === session.deviceId &&
+      client.getBaseUrl() === session.baseUrl &&
+      client.getSessionGeneration() !== undefined &&
+      String(client.getSessionGeneration()) === session.sessionGeneration
+    ) {
       clearPendingFreshLoginIdentity(session);
     }
     return client;
@@ -139,19 +130,32 @@ export const startClient = async (mx: MatrixClient): Promise<void> => {
   await mx.startClient();
 };
 
-export const clearCacheAndReload = async (mx: MatrixClient) => {
-  await mx.stopClient();
-  clearNavToActivePathStore(mx.getSafeUserId());
-  clearNotificationCaches();
-  await invokeDesktopWithAvailability<boolean>('matrix_clear_session');
+/** Try every renderer cleanup step even if a listener or browser storage fails. */
+const finishRendererCleanup = async (steps: Array<() => void | Promise<void>>) => {
+  for (const step of steps) {
+    try {
+      await step();
+    } catch {
+      // Native session authority is independent; reload restores its actual state.
+    }
+  }
+};
+
+export const reloadApplication = async (mx: MatrixClient) => {
+  const userId = mx.getSafeUserId();
+  // stopClient only clears renderer cache/listeners; no native stop or wipe is invoked.
+  await finishRendererCleanup([
+    () => mx.stopClient(),
+    () => clearNavToActivePathStore(userId),
+    clearNotificationCaches,
+  ]);
   if (typeof window !== 'undefined') window.location.reload();
 };
 
 export type PerformLogoutDeps = {
-  clearPersistedSessions: (options?: SessionPersistenceOptions) => Promise<void>;
+  clearPersistedSessions: () => Promise<void>;
   clearSessionLocalStorage: typeof clearSessionLocalStorage;
   logoutNativeSession: () => Promise<void>;
-  nativeSessionStore: SessionPersistenceOptions['nativeSessionStore'];
   reload: () => void;
 };
 
@@ -159,9 +163,11 @@ const defaultPerformLogoutDeps = (): PerformLogoutDeps => ({
   clearPersistedSessions,
   clearSessionLocalStorage,
   logoutNativeSession: async () => {
-    await invokeDesktopWithAvailability('matrix_logout');
+    const result = await invokeDesktopWithAvailability<NativeSessionSnapshot>('matrix_logout');
+    if (!result.available || result.value?.status !== 'logged_out') {
+      throw new Error('Native logout did not complete. Retry before signing out.');
+    }
   },
-  nativeSessionStore: platformSessionStore,
   reload: () => (typeof window !== 'undefined' ? window.location.reload() : undefined),
 });
 
@@ -171,25 +177,21 @@ export const performLogout = async (
 ): Promise<void> => {
   const deps = { ...defaultPerformLogoutDeps(), ...depsOverrides };
 
+  // Native completion includes session and credential cleanup. Preserve renderer
+  // state on failure so the user can retry; the native owner handles remote errors.
   if (mx) {
-    try {
-      await mx.stopClient();
-      await mx.logout();
-    } catch {
-      // ignore if failed to logout
-    }
+    await mx.logout();
   } else {
-    try {
-      await deps.logoutNativeSession();
-    } catch {
-      // Renderer cleanup and reload still run if native cleanup reports an error.
-    }
+    await deps.logoutNativeSession();
   }
 
-  await deps.clearPersistedSessions({ nativeSessionStore: deps.nativeSessionStore });
-
-  deps.clearSessionLocalStorage(storage);
-  clearNotificationCaches();
+  // Once native confirms logout, every remaining renderer cleanup is attempted.
+  // A storage/listener failure must not leave the document appearing signed in.
+  await finishRendererCleanup([
+    deps.clearPersistedSessions,
+    () => deps.clearSessionLocalStorage(storage),
+    clearNotificationCaches,
+  ]);
   deps.reload();
 };
 

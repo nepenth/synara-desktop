@@ -15,9 +15,6 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p4.1-sync-readiness.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod capability;
 mod error;
 mod readiness;
@@ -39,22 +36,3 @@ pub use service::{
 };
 pub use sync_phase::SyncPhase;
 pub use wake::{recover_cooldown_active, suspend_detected, RECOVER_COOLDOWN, SUSPEND_WALL_SKEW};
-
-/// Static marker for link / schema smoke (no network, no Client).
-pub const MATRIX_SYNC_MARKER: &str = "matrix-sync-readiness-p4.1";
-
-/// Touch sync readiness paths so the foundation remains linked in non-test builds.
-pub fn matrix_sync_markers() -> &'static str {
-    let _phases = SyncReadiness::ALL.len();
-    let _idle = SyncReadiness::Idle.as_str();
-    let _ready = SyncReadiness::Running.is_product_ready();
-    let _action = decide_reconnect(SyncReadiness::Failed, SyncIntent::Recover);
-    let _cfg = SyncServiceConfig::default();
-    debug_assert_eq!(_phases, 6);
-    debug_assert_eq!(_idle, "idle");
-    debug_assert!(_ready);
-    debug_assert_eq!(_action, ReconnectAction::Restart);
-    debug_assert!(_cfg.offline_mode);
-    debug_assert_eq!(MATRIX_SYNC_MARKER, "matrix-sync-readiness-p4.1");
-    MATRIX_SYNC_MARKER
-}

@@ -1,20 +1,6 @@
-import {
-  clearSessionBootstrap,
-  type AsyncSessionStore,
-  type NativeSessionStoreError,
-} from './sessionBootstrap';
-import { clearMatrixLocalStores } from '../../client/matrixLocalStores';
+import { clearSessionBootstrap } from './sessionBootstrap';
 import { PENDING_FRESH_LOGIN_IDENTITY_KEY, type Session, type SessionStorage } from './sessions';
 import { recordClientDiagnostic } from '../utils/clientDiagnostics';
-
-export type { NativeSessionStoreError };
-
-/**
- * Non-secret Matrix account identity tracked across session persistence and client bootstrap.
- * Synara uses fixed IndexedDB store names, so only one Matrix account's local data can occupy
- * those stores at a time. Multi-account support remains a non-goal.
- */
-export type MatrixSessionIdentity = Pick<Session, 'userId' | 'deviceId'>;
 
 export type FreshLoginBootstrapIdentity = Pick<
   Session,
@@ -28,29 +14,8 @@ export type FreshLoginBootstrapMarker = Required<FreshLoginBootstrapIdentity> & 
 /** A fresh-device bootstrap should never survive beyond the login hand-off window. */
 export const FRESH_LOGIN_BOOTSTRAP_TTL_MS = 10 * 60 * 1000;
 
-export const LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY =
-  'synara_last_bootstrapped_matrix_identity' as const;
-export const LAST_PERSISTED_MATRIX_IDENTITY_KEY = 'synara_last_persisted_matrix_identity' as const;
-
 const getDefaultSessionStorage = (): SessionStorage | undefined =>
   typeof localStorage === 'undefined' ? undefined : localStorage;
-
-const parseMatrixSessionIdentity = (value: string | null): MatrixSessionIdentity | undefined => {
-  if (!value) {
-    return undefined;
-  }
-
-  try {
-    const parsed = JSON.parse(value) as Partial<MatrixSessionIdentity>;
-    if (typeof parsed.userId === 'string' && typeof parsed.deviceId === 'string') {
-      return { userId: parsed.userId, deviceId: parsed.deviceId };
-    }
-  } catch {
-    // Ignore invalid metadata.
-  }
-
-  return undefined;
-};
 
 const parseFreshLoginBootstrapMarker = (
   value: string | null
@@ -149,113 +114,12 @@ export const clearPendingFreshLoginIdentity = (
   resolvedStorage.removeItem(PENDING_FRESH_LOGIN_IDENTITY_KEY);
 };
 
-export const getLastBootstrappedMatrixIdentity = (
-  storage?: SessionStorage
-): MatrixSessionIdentity | undefined => {
-  const resolvedStorage = storage ?? getDefaultSessionStorage();
-  if (!resolvedStorage) {
-    return undefined;
-  }
-
-  return parseMatrixSessionIdentity(resolvedStorage.getItem(LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY));
-};
-
-export const setLastBootstrappedMatrixIdentity = (
-  identity: MatrixSessionIdentity,
-  storage?: SessionStorage
-): void => {
-  const resolvedStorage = storage ?? getDefaultSessionStorage();
-  if (!resolvedStorage) {
-    return;
-  }
-
-  resolvedStorage.setItem(LAST_BOOTSTRAPPED_MATRIX_IDENTITY_KEY, JSON.stringify(identity));
-};
-
-export const getLastPersistedMatrixIdentity = (
-  storage?: SessionStorage
-): MatrixSessionIdentity | undefined => {
-  const resolvedStorage = storage ?? getDefaultSessionStorage();
-  if (!resolvedStorage) {
-    return undefined;
-  }
-
-  return parseMatrixSessionIdentity(resolvedStorage.getItem(LAST_PERSISTED_MATRIX_IDENTITY_KEY));
-};
-
-export const setLastPersistedMatrixIdentity = (
-  identity: MatrixSessionIdentity,
-  storage?: SessionStorage
-): void => {
-  const resolvedStorage = storage ?? getDefaultSessionStorage();
-  if (!resolvedStorage) {
-    return;
-  }
-
-  resolvedStorage.setItem(LAST_PERSISTED_MATRIX_IDENTITY_KEY, JSON.stringify(identity));
-};
-
-export const matrixSessionIdentitiesMatch = (
-  left?: MatrixSessionIdentity,
-  right?: MatrixSessionIdentity
-): boolean => {
-  if (!left || !right) {
-    return false;
-  }
-
-  return left.userId === right.userId && left.deviceId === right.deviceId;
-};
-
-export const shouldClearMatrixStoresBeforeInit = (
-  session: MatrixSessionIdentity,
-  lastBootstrapped: MatrixSessionIdentity | undefined = getLastBootstrappedMatrixIdentity()
-): boolean => {
-  if (!lastBootstrapped) {
-    return false;
-  }
-
-  return !matrixSessionIdentitiesMatch(session, lastBootstrapped);
-};
-
-export type ClearMatrixStoresForIdentityChangeOptions = {
-  storage?: SessionStorage;
-  clearStores?: () => Promise<void>;
-};
-
-export const clearMatrixStoresForIdentityChange = async (
-  session: MatrixSessionIdentity,
-  { storage, clearStores = clearMatrixLocalStores }: ClearMatrixStoresForIdentityChangeOptions = {}
-): Promise<boolean> => {
-  if (!shouldClearMatrixStoresBeforeInit(session, getLastBootstrappedMatrixIdentity(storage))) {
-    return false;
-  }
-
-  await clearStores();
-  return true;
-};
-
-export type SessionPersistenceOptions = {
-  nativeSessionStore?: Pick<AsyncSessionStore, never>;
-};
-
-export const clearPersistedSessions = async ({
-  nativeSessionStore: _nativeSessionStore,
-}: SessionPersistenceOptions = {}): Promise<void> => {
+/** Clear only the renderer bootstrap; native session cleanup completes before this call. */
+export const clearPersistedSessions = async (): Promise<void> => {
   const clearStartedAtMs = performance.now();
-  let matrixStoreClearSuccess = false;
-  clearSessionBootstrap();
-
-  try {
-    await clearMatrixLocalStores();
-    matrixStoreClearSuccess = true;
-  } catch {
-    // Logout must continue even if IndexedDB cleanup is unavailable.
-  }
   clearSessionBootstrap();
   recordClientDiagnostic('session', 'persisted-session-clear.completed', {
     outcome: 'completed',
     durationMs: performance.now() - clearStartedAtMs,
-    nativeStoreConfigured: Boolean(_nativeSessionStore),
-    matrixStoreClearSuccess,
   });
 };

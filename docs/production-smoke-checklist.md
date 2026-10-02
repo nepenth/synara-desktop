@@ -13,8 +13,12 @@ is preserved as regression history. Earlier entries that call a manual case
 
 ## Current Baseline
 
-The latest consolidated automated, simulator, signed-live, and local macOS
-proof is [the 2026-08-17 shared-core proof](shared-native-core/15-2026-08-17-local-proof.md).
+The [2026-08-17 shared-core proof](shared-native-core/15-2026-08-17-local-proof.md)
+preserves dated automated, simulator, signed-live, and local macOS evidence.
+The later consolidation's automated validation and remaining proof limits are
+recorded in the [native maturity retirement ledger](rust-maturity-retirements.md)
+and [dependency update dispositions](dependency-update-dispositions.md). These
+records distinguish unsigned hosted builds from signed-live and physical proof.
 The core macOS Matrix path now also has Xcode-driven interactive evidence dated
 2026-08-18 in [desktop validation status](desktop-validation-status.md). Linux
 package/install interaction, physical-device iOS checks, and the unexercised

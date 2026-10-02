@@ -1,18 +1,15 @@
-//! Live `in.synara.room_notes` Client RMW. Codec types live in synara-core.
-//!
-//! Implementation lives in synara-core. This module keeps the desktop
-//! `crate::matrix::account_data::room_notes::*` path resolving.
+#[cfg(test)]
+pub use synara_core::app::account_data::{
+    complete_room_todo_item, move_room_todo_item, normalize_room_notes_content,
+    normalize_room_notes_content_checked, put_room_note_item, MAX_NOTE_BODY_LENGTH,
+};
 
 pub use synara_core::app::account_data::{
-    complete_room_todo_item, complete_room_todo_item_live, delete_room_note_item_live,
-    move_room_todo_item, move_room_todo_item_live, normalize_room_note_item,
-    normalize_room_notes_content, normalize_room_notes_content_checked, put_room_note_item,
-    remove_room_note_item, snapshot_room_notes, upsert_room_note_item, NativeRoomNotesSnapshot,
-    RoomNoteMoveDirection, SynaraRoomNoteItem, SynaraRoomNoteItemKind, SynaraRoomNotesContent,
-    SynaraRoomNotesRoom, MAX_MESSAGE_BODY_LENGTH, MAX_NOTE_BODY_LENGTH, MAX_NOTE_ID_LENGTH,
-    MAX_ROOM_NOTES_CONTENT_BYTES, MAX_SENDER_LENGTH, ROOM_NOTES_ACCOUNT_DATA_VERSION,
-    ROOM_NOTES_EVENT_TYPE,
+    NativeRoomNotesSnapshot, RoomNoteMoveDirection, SynaraRoomNoteItem,
 };
+
+#[cfg(test)]
+pub use synara_core::app::account_data::{SynaraRoomNoteItemKind, SynaraRoomNotesContent};
 
 #[cfg(test)]
 mod tests {

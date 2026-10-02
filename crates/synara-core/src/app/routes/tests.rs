@@ -4,11 +4,6 @@ use super::*;
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_routes_markers(), MATRIX_ROUTES_MARKER);
-}
-
-#[test]
 fn home_and_settings() {
     assert_eq!(resolve_path("/home").unwrap(), RouteTarget::Home);
     assert_eq!(resolve_path("/").unwrap(), RouteTarget::Home);

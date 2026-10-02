@@ -7,8 +7,10 @@ use matrix_sdk::{
     },
     Client,
 };
+#[cfg(test)]
 use serde::Deserialize;
 use serde_json::value::to_raw_value;
+#[cfg(test)]
 use serde_json::value::RawValue as RawJsonValue;
 
 use super::{
@@ -40,10 +42,12 @@ pub(super) fn parse_agent_approval_history_content(
 }
 
 #[derive(Deserialize)]
+#[cfg(test)]
 struct RawAgentApprovalHistorySyncEvent {
     content: Box<RawJsonValue>,
 }
 
+#[cfg(test)]
 pub(super) fn parse_agent_approval_history_sync_event(
     raw_event: &RawJsonValue,
     now_ms: f64,

@@ -788,6 +788,10 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     getDeviceId(): string | undefined {
       return cachedIdentity.deviceId;
     },
+    /** Generation from the same definitive native snapshot as the cached identity. */
+    getSessionGeneration(): number | undefined {
+      return cachedSessionGeneration;
+    },
 
     /** F6a — SYNCHRONOUS sync-state reads. */
     getSyncState(): NativeSyncState | null {
@@ -818,7 +822,15 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
     async logout(): Promise<void> {
       const result = await invoke('matrix_logout');
       if (!result.available) throw new Error(UNAVAILABLE_MESSAGE);
-      clearSession({ clearIdentity: true });
+      if (!result.value || (result.value as NativeSessionSnapshot).status !== 'logged_out') {
+        throw new Error('Native logout did not complete. Retry before signing out.');
+      }
+      try {
+        clearSession({ clearIdentity: true });
+      } catch {
+        // The authoritative logout is complete and caches are already cleared.
+        // A renderer listener must not report native cleanup failure to the caller.
+      }
     },
 
     /** F6a — SYNCHRONOUS room reads from the cache (evented projection). */

@@ -53,6 +53,9 @@ publication_helper="$repo_root/scripts/lib/publish-generated-apple-pair.sh"
 [[ -r "$publication_helper" ]] || fail "missing Apple pair publication helper: $publication_helper"
 [[ -x "$publication_helper" ]] || fail "Apple pair publication helper is not executable: $publication_helper"
 
+# Validate the locked shipping graph before building or publishing either pair.
+node "$repo_root/scripts/check-synara-nse-core-production-features.mjs"
+
 if [[ "$(uname -s)" != "Darwin" ]]; then
   fail "Apple binding generation requires macOS with Xcode and Apple Rust targets; host is $(uname -s). Run scripts/check-synara-core-swift-scaffold.mjs for host-neutral validation."
 fi
@@ -126,7 +129,7 @@ for target in "${targets[@]}"; do
   fi
   IPHONEOS_DEPLOYMENT_TARGET=16.0 \
     CARGO_TARGET_DIR="$target_build_dir" \
-    cargo build --locked --release --package synara-core --target "$target"
+    cargo build --locked --release --package synara-core --target "$target" --manifest-path "$repo_root/Cargo.toml"
 
   if [[ "$space_bounded" == "1" ]]; then
     built_archive="$target_build_dir/$target/release/libsynara_core.a"
@@ -146,7 +149,7 @@ if [[ "$space_bounded" == "1" ]]; then
   bindgen_target_dir="$work_dir/cargo-bindgen"
   mkdir -p "$bindgen_target_dir"
 fi
-CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --locked --package synara-core-bindgen \
+CARGO_TARGET_DIR="$bindgen_target_dir" cargo run --locked --package synara-core-bindgen --manifest-path "$repo_root/Cargo.toml" \
   -- generate "$core_udl" --language swift --out-dir "$swift_tmp" --no-format
 if [[ "$space_bounded" == "1" ]]; then
   remove_bounded_target_dir "$bindgen_target_dir"

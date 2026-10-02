@@ -4,83 +4,89 @@
 //! `matrix_sdk::Client` and all access/refresh tokens remain in the Rust host.
 
 use std::fs;
+
 use std::path::{Path, PathBuf};
+
 use std::sync::atomic::{AtomicU64, Ordering};
+
 use std::sync::Arc;
+
 use std::time::{Duration, Instant, SystemTime};
 
+#[cfg(test)]
+use matrix_sdk::ruma::{
+    api::client::room::{create_room, Visibility},
+    Int, OwnedRoomOrAliasId, OwnedServerName, OwnedUserId,
+};
+
 use matrix_sdk::{
-    authentication::matrix::MatrixSession,
     media::{MediaFormat, MediaRequestParameters},
     ruma::{
-        api::client::{
-            room::{create_room, Visibility},
-            uiaa,
-        },
-        events::{
-            relation::{Reply, Thread},
-            room::{
-                message::{
-                    AddMentions, MessageFormat, MessageType, Relation, RelationWithoutReplacement,
-                    ReplyWithinThread, RoomMessageEventContent,
-                },
-                ImageInfo, MediaSource,
-            },
-            AnyMessageLikeEventContent, AnySyncMessageLikeEvent, AnySyncTimelineEvent, Mentions,
-            StateEventType,
-        },
-        EventId, Int, MxcUri, OwnedEventId, OwnedMxcUri, OwnedRoomId, OwnedRoomOrAliasId,
-        OwnedServerName, OwnedTransactionId, OwnedUserId, UInt,
+        api::client::uiaa, events::room::MediaSource, OwnedEventId, OwnedMxcUri, OwnedRoomId,
+        OwnedTransactionId,
     },
-    Client, Room, SessionMeta, SessionTokens,
+    Client,
 };
+
+#[cfg(test)]
+use super::LoginFlow;
+
 use mime::Mime;
+
 use serde::{Deserialize, Serialize};
+
 use synara_core::platform::{
     PlatformCrossSigningOwnIdentity, PlatformCrossSigningPrivateState, PlatformCrossSigningStatus,
     PlatformCryptoCrossSigningState, PlatformCryptoStatus, PlatformMediaConfig,
     PlatformMediaConfigError, PlatformSecretStorageAction, PlatformSecretStorageMissingSecrets,
     PlatformSecretStorageState, PlatformSecretStorageStatus, PlatformSecretStorageStatusError,
 };
+
 use tauri::{AppHandle, Manager, State};
+
 use tokio::sync::Mutex;
+
 use zeroize::Zeroize;
 
 use super::{
     complete_password_reset, existing_sqlite_crypto_device_id, login_with_password,
     normalize_homeserver_url, password_reset_ephemeral_user_id, register_ephemeral_user_id,
     register_submit, request_password_email_token, request_register_email_token, AuthError,
-    LoginFlow, LoginOptions, PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage,
+    LoginOptions, PasswordEmailTokenResult, PasswordResetOutcome, RegisterAuthStage,
     RegisterFlowsProbe, RegisterSubmitOutcome, RegisterUiaFlow,
 };
+
 use crate::matrix::account_data::{
-    add_room_to_mdirect, clear_completed_later_live, complete_later_item_live,
-    complete_room_todo_item_live, delete_room_note_item_live, mark_later_reminded_live,
-    move_room_todo_item_live, remove_room_from_mdirect, set_global_image_packs,
-    set_room_image_pack, set_user_image_pack, snapshot_global_image_packs, snapshot_later,
-    snapshot_mdirect, snapshot_room_image_packs, snapshot_room_notes, snapshot_user_image_pack,
-    snooze_later_item_live, upsert_later_item, upsert_room_note_item,
     NativeAgentApprovalHistorySnapshot, NativeGlobalImagePacksSnapshot, NativeImagePackOwner,
     NativeLaterSnapshot, NativeMDirectMutationResult, NativeMDirectSnapshot,
     NativeRoomImagePacksSnapshot, NativeRoomNotesSnapshot, NativeUserImagePackSnapshot,
     RoomNoteMoveDirection, SynaraLaterItem, SynaraRoomNoteItem,
 };
+
 use crate::matrix::backup::live::{
     self as live_backup, NativeBackupOperationResult, NativeBackupStatus,
 };
+
 use crate::matrix::client_builder::{
     build_unauthenticated_client, ClientBuildConfig, ClientBuilderError,
 };
+
 use crate::matrix::cross_signing::live::{NativeCrossSigningSetupResult, NativeCrossSigningStatus};
+
 use crate::matrix::dehydrated_devices::NativeDehydratedDevicesOwner;
+
 use crate::matrix::devices::{NativeDeviceDeleteResult, NativeDeviceOwner, NativeDeviceSnapshot};
+
 use crate::matrix::lifecycle::{
     clear_session_material, load_session_material, matrix_session_from_host_secrets,
     persist_session_after_login, restore_session_from_vault, restore_session_onto_client,
     KeyringSessionMaterialVault, SessionMaterial,
 };
+
 use crate::matrix::notifications::NativeNotificationObservationOwner;
+
 use crate::matrix::presence::NativePresenceOwner;
+
 use crate::matrix::room_keys::{
     live::{
         self as live_room_keys, NativeRoomKeyFileSelection, NativeRoomKeyTransferResult,
@@ -88,55 +94,61 @@ use crate::matrix::room_keys::{
     },
     RoomKeyTransferFlow,
 };
-use crate::matrix::room_list::{
-    snapshot_invites, InviteAvatarHandles, NativeInvite, NativeInviteSnapshot,
-    NativeRoomListSnapshot,
-};
+
+use crate::matrix::room_list::{InviteAvatarHandles, NativeInviteSnapshot, NativeRoomListSnapshot};
+
 use crate::matrix::room_profile::NativeRoomJoinRuleOwner;
+
 use crate::matrix::rtc_transports::NativeRtcTransportsOwner;
+
 use crate::matrix::secret_storage::live::{
     self as live_secret_storage, NativeMissingSecret, NativeSecretStorageAction,
     NativeSecretStorageOperationResult, NativeSecretStorageState, NativeSecretStorageStatus,
 };
-use crate::matrix::send::{
-    normalize_poll, poll_response_content, poll_start_content, AttachmentEnqueue, AttachmentKind,
-    AttachmentSendQueue, SendQueue,
-};
+
+use crate::matrix::send::{AttachmentEnqueue, AttachmentKind, AttachmentSendQueue};
+
 use crate::matrix::spaces::{
     NativeRestrictedJoinReparentResult, NativeSpaceChildMutationResult,
     NativeSpaceChildrenSnapshot, NativeSpaceHierarchySnapshot, NativeSpaceParentsSnapshot,
 };
+
 use crate::matrix::store::{
     get_or_migrate_store_key, migrate_store_to_current, reset_store_for_recovery, AccountIdentity,
     KeyringStoreKeyVault, StoreKeyMaterial, StoreKeyVaultError, StoreMigrationError, StorePaths,
 };
+
 use crate::matrix::sync::{
     build_sync_service, recover_cooldown_active, suspend_detected, unconfigured_snapshot,
     SyncError, SyncIntent, SyncReadinessSnapshot, SyncServiceConfig, SyncServiceOwner,
     RECOVER_COOLDOWN, SUSPEND_WALL_SKEW,
 };
+
 use crate::matrix::timeline::{
-    format_forwarded_media_body, format_forwarded_plain_body, should_attach_formatted_body,
     NativeComposerClearReplyDraftRequest, NativeComposerReplyDraftReadback,
     NativeComposerReplyDraftRoomRequest, NativeComposerSetReplyDraftRequest,
-    NativePinnedEventsRequest, NativeReactionMutationResult, NativeTimelineActionKind,
-    NativeTimelineActionReadback, NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest,
-    NativeTimelineDirection, NativeTimelineEditTextRequest, NativeTimelineEventReadback,
-    NativeTimelineForwardMediaRequest, NativeTimelineForwardTextRequest,
-    NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineOwner, NativeTimelinePinRequest, NativeTimelinePollVoteRequest,
-    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
+    NativePinnedEventsRequest, NativeReactionMutationResult, NativeTimelineActionReadback,
+    NativeTimelineCallDeclineRequest, NativeTimelineCloseRequest, NativeTimelineEditTextRequest,
+    NativeTimelineEventReadback, NativeTimelineForwardMediaRequest,
+    NativeTimelineForwardTextRequest, NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback,
+    NativeTimelineOpenRequest, NativeTimelineOwner, NativeTimelinePinRequest,
+    NativeTimelinePollVoteRequest, NativeTimelineReadAction, NativeTimelineReadStateReadback,
     NativeTimelineReadStateRequest, NativeTimelineRedactRequest, NativeTimelineReportRequest,
-    NativeTimelineSnapshot, NativeTimelineViewPaginationRequest, PinnedEventsSnapshot,
-    TimelineMediaSource, NATIVE_TIMELINE_ACTION_SCHEMA_VERSION,
+    NativeTimelineViewPaginationRequest, PinnedEventsSnapshot, TimelineMediaSource,
 };
-use crate::matrix::typing::{set_typing_notice, NativeTypingOwner, NativeTypingSnapshot};
+
+use crate::matrix::typing::{NativeTypingOwner, NativeTypingSnapshot};
+
 use crate::matrix::user_profile::NativeOwnProfileOwner;
+
 use crate::matrix::user_status::NativeUserStatusOwner;
+
 use crate::matrix::verification::live::{
     NativeVerificationInbox, NativeVerificationOwner, NativeVerificationRequest,
 };
+
 use crate::matrix::widgets::NativeWidgetOwner;
+
 use synara_core::app::media_cache::NativeMediaRetentionOwner;
 
 const ACTIVE_SESSION_FILE: &str = "active-session.json";
@@ -189,31 +201,32 @@ pub struct MatrixAuthCommandError {
 }
 
 pub use synara_core::app::media::{
-    MatrixMediaConfigResult, MatrixMediaDownloadRequest, MatrixMediaDownloadResult,
-    MatrixMediaPreviewSnapshot, MatrixUploadMediaResult,
+    MatrixMediaConfigResult, MatrixMediaPreviewSnapshot, MatrixUploadMediaResult,
 };
+
+#[cfg(test)]
+pub use synara_core::app::media::{MatrixMediaDownloadRequest, MatrixMediaDownloadResult};
+
 pub use synara_core::app::members::NativeRoomMembersSnapshot;
+
 pub use synara_core::app::send::{
     MatrixPollRespondResult, MatrixSendAttachmentResult, MatrixSendPollResult, MatrixSendTextResult,
 };
+
 pub use synara_core::app::user_profile::MatrixProfileWriteResult;
 
-pub use synara_core::app::members::{
-    NativePowerLevelWriteResult, MAX_POWER_LEVEL_CONTENT_JSON_BYTES,
-};
+pub use synara_core::app::members::NativePowerLevelWriteResult;
+
+pub use synara_core::app::room_ops::MatrixRoomCreateRequest;
+
+#[cfg(test)]
 pub use synara_core::app::room_ops::{
     MatrixRoomCreateContent, MatrixRoomCreatePowerLevels, MatrixRoomCreatePreset,
-    MatrixRoomCreateRequest, MatrixRoomCreateVisibility,
+    MatrixRoomCreateVisibility,
 };
 
 /// Soft IPC/body cap for one-shot composer attachment transfer (bytes).
 const MAX_ATTACHMENT_IPC_BYTES: usize = 32 * 1024 * 1024;
-
-/// Maximum bounded identifier accepted by the direct CallWidget media path.
-const MAX_CALL_WIDGET_MEDIA_URI_BYTES: usize = 2 * 1024;
-
-/// V-SEND.R-CALL-MEDIA response ceiling. Never truncate over-limit content.
-const MAX_CALL_WIDGET_MEDIA_DOWNLOAD_BYTES: usize = MAX_ATTACHMENT_IPC_BYTES;
 
 /// Soft IPC/body cap for one-shot user-avatar media transfer (bytes).
 /// Avatars are small images; 8 MiB is generous and keeps the webview buffer
@@ -252,11 +265,11 @@ impl MatrixAuthCommandError {
 
 struct ManagedMatrixSession {
     client: Client,
+    session_persistence: SessionPersistenceOwner,
     identity: MatrixLoginIdentity,
     sync: Arc<SyncServiceOwner>,
     invite_avatars: Arc<tokio::sync::Mutex<InviteAvatarHandles>>,
     timelines: Arc<NativeTimelineOwner>,
-    sends: SendQueue,
     attachments: AttachmentSendQueue,
     verification: Arc<NativeVerificationOwner>,
     devices: Arc<NativeDeviceOwner>,
@@ -300,6 +313,46 @@ struct RecoverGate {
     last_success_wall: Option<SystemTime>,
 }
 
+/// Serialize suspend recovery with logout/replacement for the installed owner.
+/// Recovery observers acquire recovery then session; completion must release
+/// session before reacquiring recovery to avoid reversing that lock order.
+async fn recover_installed_session_owner<Session, Owner, Snapshot, Error, ResumeFuture>(
+    session: &Mutex<Option<Session>>,
+    recover_gate: &Mutex<RecoverGate>,
+    ignore_cooldown: bool,
+    owner: impl FnOnce(&Session) -> Owner,
+    observe: impl FnOnce(Option<&Session>) -> Snapshot,
+    resume: impl FnOnce(Owner) -> ResumeFuture,
+) -> Result<Snapshot, Error>
+where
+    ResumeFuture: std::future::Future<Output = Result<Snapshot, Error>>,
+{
+    let mut gate = recover_gate.lock().await;
+    if gate.in_flight
+        || (!ignore_cooldown
+            && recover_cooldown_active(gate.last_success_wall, SystemTime::now(), RECOVER_COOLDOWN))
+    {
+        drop(gate);
+        let guard = session.lock().await;
+        return Ok(observe(guard.as_ref()));
+    }
+    let guard = session.lock().await;
+    let Some(active) = guard.as_ref() else {
+        return Ok(observe(None));
+    };
+    let owner = owner(active);
+    gate.in_flight = true;
+    drop(gate);
+    let result = resume(owner).await;
+    drop(guard);
+    let mut gate = recover_gate.lock().await;
+    gate.in_flight = false;
+    if result.is_ok() {
+        gate.last_success_wall = Some(SystemTime::now());
+    }
+    result
+}
+
 #[derive(Default)]
 pub struct MatrixAuthState {
     session: Mutex<Option<ManagedMatrixSession>>,
@@ -311,6 +364,27 @@ pub struct MatrixAuthState {
 impl MatrixAuthState {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Accept a bound native notification only for the currently installed
+    /// generation, retaining the auth transition gate through OS acceptance.
+    /// The callback must not call back into this session gate.
+    pub(crate) async fn with_session_generation<T, Accept, AcceptFuture>(
+        &self,
+        expected_generation: u64,
+        accept: Accept,
+    ) -> Option<T>
+    where
+        Accept: FnOnce() -> AcceptFuture,
+        AcceptFuture: std::future::Future<Output = T>,
+    {
+        with_generation_bound_acceptance(
+            &self.session,
+            expected_generation,
+            |active| active.sync.session_generation(),
+            accept,
+        )
+        .await
     }
 
     /// Read the current SDK sync owner as the existing safe readiness DTO.
@@ -326,8 +400,9 @@ impl MatrixAuthState {
         }
     }
 
-    /// Restart the live SyncService after OS suspend. Clones the owner under
-    /// the session mutex, then releases both locks before stop/start.
+    /// Restart the live SyncService after OS suspend while retaining the
+    /// session transition gate through stop/start. Release the recovery gate
+    /// during SDK work, and release the session gate before recovery bookkeeping.
     /// Concurrent renderer and watchdog calls share an in-flight flag so we
     /// do not stop/start twice on the same wake. Renderer IPC keeps a
     /// wall-clock cooldown; the native watchdog skips that cooldown after a
@@ -346,35 +421,18 @@ impl MatrixAuthState {
         &self,
         ignore_cooldown: bool,
     ) -> Result<SyncReadinessSnapshot, SyncError> {
-        let owner = {
-            let mut gate = self.recover_gate.lock().await;
-            if gate.in_flight
-                || (!ignore_cooldown
-                    && recover_cooldown_active(
-                        gate.last_success_wall,
-                        SystemTime::now(),
-                        RECOVER_COOLDOWN,
-                    ))
-            {
-                drop(gate);
-                return Ok(self.sync_status_snapshot().await);
-            }
-            let session = self.session.lock().await;
-            let Some(active) = session.as_ref() else {
-                return Ok(unconfigured_snapshot(self.current_generation()));
-            };
-            let owner = active.sync.clone();
-            drop(session);
-            gate.in_flight = true;
-            owner
-        };
-        let result = owner.apply_intent(SyncIntent::Resume).await;
-        let mut gate = self.recover_gate.lock().await;
-        gate.in_flight = false;
-        if result.is_ok() {
-            gate.last_success_wall = Some(SystemTime::now());
-        }
-        result
+        recover_installed_session_owner(
+            &self.session,
+            &self.recover_gate,
+            ignore_cooldown,
+            |active| active.sync.clone(),
+            |active| match active {
+                Some(active) => active.sync.observe(),
+                None => unconfigured_snapshot(self.current_generation()),
+            },
+            |owner| async move { owner.apply_intent(SyncIntent::Resume).await },
+        )
+        .await
     }
 
     /// Read the existing crypto-status observation as a closed Core projection.
@@ -826,30 +884,6 @@ fn require_session(
     })
 }
 
-fn require_verification_session(
-    session: Option<&ManagedMatrixSession>,
-) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
-    session.ok_or_else(|| {
-        MatrixAuthCommandError::new(
-            "Forbidden",
-            "No native Matrix session is active.",
-            "v-crypto.1-verification-requires-session",
-        )
-    })
-}
-
-fn require_device_session(
-    session: Option<&ManagedMatrixSession>,
-) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
-    session.ok_or_else(|| {
-        MatrixAuthCommandError::new(
-            "Forbidden",
-            "No native Matrix session is active.",
-            "v-crypto.7-device-requires-session",
-        )
-    })
-}
-
 fn require_device_session_mut(
     session: Option<&mut ManagedMatrixSession>,
 ) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
@@ -858,18 +892,6 @@ fn require_device_session_mut(
             "Forbidden",
             "No native Matrix session is active.",
             "v-crypto.7-device-requires-session",
-        )
-    })
-}
-
-fn require_cross_signing_session(
-    session: Option<&ManagedMatrixSession>,
-) -> Result<&ManagedMatrixSession, MatrixAuthCommandError> {
-    session.ok_or_else(|| {
-        MatrixAuthCommandError::new(
-            "Forbidden",
-            "No native Matrix session is active.",
-            "v-crypto.2-cross-signing-requires-session",
         )
     })
 }
@@ -957,18 +979,6 @@ fn stale_room_key_generation_error() -> MatrixAuthCommandError {
     )
 }
 
-fn require_session_mut(
-    session: Option<&mut ManagedMatrixSession>,
-) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
-    session.ok_or_else(|| {
-        MatrixAuthCommandError::new(
-            "Forbidden",
-            "No native Matrix session is active.",
-            "d0.3-timeline-requires-session",
-        )
-    })
-}
-
 #[path = "../account_data/product_commands.rs"]
 mod account_data;
 #[path = "product_commands.rs"]
@@ -1020,31 +1030,67 @@ mod widgets;
 #[path = "../x509/product_commands.rs"]
 mod x509_identity;
 pub use account_data::*;
+
 pub use auth_commands::*;
+
 pub use backup::*;
+
 pub use cross_signing::*;
+
 pub use devices::*;
+
 pub use media::*;
+
 pub use members::*;
+
 pub use presence::*;
+
 pub use room_directory::*;
+
 pub use room_keys::*;
+
 pub use room_list::*;
+
 pub use room_ops::*;
+
 pub use room_profile::*;
+
 pub use rtc_transports::*;
+
 pub use search::*;
+
 pub use secret_storage::*;
+
 pub use send::*;
+
 pub use spaces::*;
+
 pub use timeline::*;
+
 pub use typing::*;
+
 pub use user_profile::*;
+
 pub use user_status::*;
+
 pub use verification::*;
+
 pub use widgets::*;
+
 pub use x509_identity::*;
 
 #[cfg(test)]
 #[path = "product_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+pub(crate) use send::message_content;
+
+#[cfg(test)]
+use send::{edit_message_content, parse_edit_event_id};
+
+#[cfg(test)]
+use user_profile::{parse_avatar_mxc, parse_display_name};
+
+#[cfg(test)]
+use media::validate_media_download_size;

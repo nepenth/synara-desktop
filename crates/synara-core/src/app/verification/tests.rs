@@ -25,11 +25,6 @@ fn flow(id: &str, phase: VerificationPhase) -> VerificationFlow {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_verification_markers(), MATRIX_VERIFICATION_MARKER);
-}
-
-#[test]
 fn upsert_list_open_order() {
     let mut inbox = VerificationInbox::new(1);
     inbox
@@ -202,13 +197,18 @@ fn advertised_methods_include_show_qr_and_sas_without_camera_scan() {
     assert!(source.contains("VerificationRequestState::Transitioned { .. }"));
     assert!(source.contains("with_show_qr"));
     assert!(source.contains("qr_image_dropped_sas_fallback"));
-    let ffi = include_str!("../../shared_core_ffi.rs");
+    // This platform-specific gate belongs to the extracted session installer.
+    // The live owner tests separately execute advertised methods for both gates.
+    let ffi = include_str!("../../shared_core_ffi/session_lifecycle.rs");
     assert!(
         ffi.contains("NativeVerificationOwner::with_show_qr("),
         "SharedCore must construct the verification owner with an explicit show-QR gate"
     );
     assert!(
-        ffi.contains("false,") && ffi.contains("iOS host"),
+        ffi.split("NativeVerificationOwner::with_show_qr(")
+            .nth(1)
+            .and_then(|rest| rest.split("));").next())
+            .is_some_and(|arguments| arguments.contains("false,")),
         "SharedCore must disable show-QR for iOS"
     );
     let watcher = source

@@ -10,13 +10,13 @@ export const PushRuleActionName = {
   Notify: 'notify',
   Coalesce: 'coalesce',
 } as const;
-export type PushRuleActionName = typeof PushRuleActionName[keyof typeof PushRuleActionName];
+export type PushRuleActionName = (typeof PushRuleActionName)[keyof typeof PushRuleActionName];
 
 export const TweakName = {
   Highlight: 'highlight',
   Sound: 'sound',
 } as const;
-export type TweakName = typeof TweakName[keyof typeof TweakName];
+export type TweakName = (typeof TweakName)[keyof typeof TweakName];
 
 export type PushRuleAction =
   | PushRuleActionName
@@ -58,7 +58,7 @@ export const PushRuleKind = {
   SenderSpecific: 'sender',
   Underride: 'underride',
 } as const;
-export type PushRuleKind = typeof PushRuleKind[keyof typeof PushRuleKind];
+export type PushRuleKind = (typeof PushRuleKind)[keyof typeof PushRuleKind];
 
 export type RuleId = string;
 export const RuleId = {

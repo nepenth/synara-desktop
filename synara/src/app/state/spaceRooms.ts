@@ -1,5 +1,5 @@
 import { atom } from 'jotai';
-import produce from 'immer';
+import { produce } from 'immer';
 import {
   atomWithLocalStorage,
   getLocalStorageItem,

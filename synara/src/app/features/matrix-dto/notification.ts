@@ -11,7 +11,7 @@ export const NOTIFICATION_KINDS = [
   'agent_approval',
   'later_reminder',
 ] as const;
-export type NotificationKind = typeof NOTIFICATION_KINDS[number];
+export type NotificationKind = (typeof NOTIFICATION_KINDS)[number];
 const KIND_SET = new Set<string>(NOTIFICATION_KINDS);
 
 export function isNotificationKind(value: unknown): value is NotificationKind {

@@ -324,7 +324,7 @@ async fn observations_outside_the_synced_state_fail_closed_or_fetch_once() {
 }
 
 #[tokio::test]
-async fn encrypted_room_events_notify_from_the_encrypted_rule_and_flag_encryption() {
+async fn unresolved_encrypted_events_fail_closed_without_consuming_notification_state() {
     let server = MatrixMockServer::new().await;
     let client = server.client_builder().build().await;
     client.event_cache().subscribe().unwrap();
@@ -332,8 +332,8 @@ async fn encrypted_room_events_notify_from_the_encrypted_rule_and_flag_encryptio
     let own_user_id = client.user_id().unwrap().to_owned();
     let f = EventFactory::new().room(room_id);
     // No Megolm session exists for this ciphertext, so the SDK keeps the
-    // event as `m.room.encrypted` (unable to decrypt). The default
-    // `.m.rule.encrypted` underride is what decides it in a group room.
+    // event as `m.room.encrypted`. Core must not evaluate push rules or
+    // classify the sender from this unresolved ciphertext.
     server
         .sync_room(
             &client,
@@ -372,36 +372,147 @@ async fn encrypted_room_events_notify_from_the_encrypted_rule_and_flag_encryptio
         .await;
     let owner = NativeNotificationDecisionOwner::new(&client, 7).expect("owner binds session");
 
-    let utd = owner
-        .decide_observed(request("!encrypted:example.org", Some("$utd")))
-        .await
-        .expect("undecryptable event decides");
-    assert_eq!(utd.decision, "show");
-    assert!(
-        !utd.highlight && !utd.sound,
-        "an undecryptable group event notifies without highlight or sound"
-    );
-    let candidate = utd.candidate.expect("show carries a candidate");
-    assert!(
-        candidate.is_encrypted,
-        "Core reports the room encryption state itself"
-    );
-    assert_eq!(candidate.event_id.as_deref(), Some("$utd"));
+    for event in ["$utd", "$utd-own", "$utd"] {
+        let unresolved = owner
+            .decide_observed(request("!encrypted:example.org", Some(event)))
+            .await
+            .expect_err("unresolved ciphertext cannot create a notification");
+        assert_eq!(unresolved.diagnostic_id(), "v-notify.event-not-ready");
+        assert!(owner.list_pending().unwrap().is_empty());
+        assert_eq!(
+            owner.delivery_ledger().unwrap(),
+            synara_core::app::notifications::NotificationDeliveryLedger::default()
+        );
+    }
+}
 
-    // Sender comparison does not depend on decryption.
-    let own = owner
-        .decide_observed(request("!encrypted:example.org", Some("$utd-own")))
-        .await
-        .expect("own encrypted event decides");
-    assert_eq!(own.reason.as_deref(), Some("own-event"));
+#[tokio::test]
+async fn real_late_room_keys_allow_same_event_push_rules_without_sticky_ciphertext_dedup() {
+    use matrix_sdk_crypto::{olm::EncryptionSettings, OlmMachine};
+    use ruma::{
+        device_id,
+        events::room::{encrypted::RoomEncryptedEventContent, message::RoomMessageEventContent},
+        UserId,
+    };
 
-    // Late decryption arrives under the same event id, so it can neither
-    // notify twice nor upgrade an already delivered notification.
-    let redelivered = owner
-        .decide_observed(request("!encrypted:example.org", Some("$utd")))
+    let server = MatrixMockServer::new().await;
+    let client = server.client_builder().logged_in_with_oauth().build().await;
+    client.event_cache().subscribe().unwrap();
+    let room_id = room_id!("!late-encrypted:example.org");
+    let own_user = client.user_id().unwrap().to_owned();
+    let f = EventFactory::new().room(room_id);
+    server
+        .sync_room(
+            &client,
+            JoinedRoomBuilder::new(room_id)
+                .add_state_event(f.create(&own_user, RoomVersionId::V11))
+                .add_state_event(f.room_encryption().sender(&own_user))
+                .add_state_event(f.member(&own_user).display_name("Me"))
+                .add_state_event(f.member(*BOB).display_name("Bob"))
+                .add_state_event(f.member(*CAROL).display_name("Carol")),
+        )
+        .await;
+    server
+        .mock_room_state_encryption()
+        .encrypted()
+        .mount()
+        .await;
+    let sender = OlmMachine::new(*BOB, device_id!("BOBDEVICE")).await;
+    sender
+        .share_room_key(
+            room_id,
+            std::iter::empty::<&UserId>(),
+            EncryptionSettings::default(),
+        )
         .await
-        .expect("re-observation decides");
-    assert_eq!(redelivered.reason.as_deref(), Some("duplicate-event"));
+        .unwrap();
+
+    // The homeserver always returns the same actual Megolm ciphertext. Only
+    // native room-key arrival changes what the SDK can resolve; no plaintext
+    // response replacement or decision bypass stands in for decryption.
+    for (id, mention) in [
+        (event_id!("$late-encrypted-plain"), false),
+        (event_id!("$late-encrypted-mention"), true),
+    ] {
+        let mut content = RoomMessageEventContent::text_plain("hello from encrypted room");
+        if mention {
+            content.mentions = Some(Mentions::with_user_ids([own_user.clone()]));
+        }
+        let encrypted = sender.encrypt_room_event(room_id, content).await.unwrap();
+        let content: RoomEncryptedEventContent =
+            serde_json::from_str(encrypted.content.json().get()).unwrap();
+        server
+            .mock_room_event()
+            .room(room_id)
+            .match_event_id()
+            .ok(f.event(content).sender(*BOB).event_id(id).into_event())
+            .mount()
+            .await;
+    }
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).unwrap();
+    for id in [
+        "$late-encrypted-plain",
+        "$late-encrypted-mention",
+        "$late-encrypted-mention",
+    ] {
+        let unresolved = owner
+            .decide_observed(request(room_id.as_str(), Some(id)))
+            .await
+            .expect_err("ciphertext stays nonsticky while the native key is absent");
+        assert_eq!(unresolved.diagnostic_id(), "v-notify.event-not-ready");
+        assert!(owner.list_pending().unwrap().is_empty());
+    }
+    let keys = sender
+        .store()
+        .export_room_keys(|session| session.room_id() == room_id)
+        .await
+        .unwrap();
+    assert!(
+        !keys.is_empty(),
+        "actual encrypted events have an exportable key"
+    );
+    client
+        .olm_machine_for_testing()
+        .await
+        .as_ref()
+        .unwrap()
+        .store()
+        .import_exported_room_keys(keys, |_, _| {})
+        .await
+        .unwrap();
+
+    for (id, mention) in [
+        ("$late-encrypted-plain", false),
+        ("$late-encrypted-mention", true),
+    ] {
+        let resolved = owner
+            .decide_observed(request(room_id.as_str(), Some(id)))
+            .await
+            .expect("same ciphertext resolves through the SDK after native key import");
+        assert_eq!(resolved.decision, "show");
+        assert_eq!(
+            resolved.highlight, mention,
+            "SDK plaintext push rules own highlight"
+        );
+        assert_eq!(
+            resolved.sound, mention,
+            "SDK plaintext push rules own sound"
+        );
+        let candidate = resolved
+            .candidate
+            .expect("resolved notification carries a candidate");
+        assert!(
+            candidate.is_encrypted,
+            "Core reports the encrypted room flag"
+        );
+        assert_eq!(candidate.event_id.as_deref(), Some(id));
+        let duplicate = owner
+            .decide_observed(request(room_id.as_str(), Some(id)))
+            .await
+            .unwrap();
+        assert_eq!(duplicate.reason.as_deref(), Some("duplicate-event"));
+    }
+    assert_eq!(owner.pending_count().unwrap(), 2);
 }
 
 #[tokio::test]
@@ -551,7 +662,15 @@ async fn synced_messages_reach_the_observation_stream_and_then_the_decision_owne
     assert_eq!(live.event_id, "$live");
     assert_eq!(live.sender, BOB.as_str());
     assert_eq!(live.event_type, "m.room.message");
-    assert_eq!(live.body.as_deref(), Some("hello everyone"));
+    assert!(
+        live.agent_approval.is_none(),
+        "ordinary messages have no approval classification"
+    );
+    let wire = serde_json::to_value(live).unwrap();
+    assert!(
+        wire.get("body").is_none(),
+        "raw plaintext is retired from observations"
+    );
 
     // The observation is exactly what the renderer hands back to the
     // decision owner; the SDK push rules still decide.

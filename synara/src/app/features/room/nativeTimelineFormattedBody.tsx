@@ -1,5 +1,7 @@
+import { isTag } from 'domhandler';
+import { reactDomNodes } from '../../utils/reactDomNodes';
 import React, { useEffect, useMemo, useState } from 'react';
-import { attributesToProps, domToReact, Element, HTMLReactParserOptions } from 'html-react-parser';
+import { attributesToProps, domToReact, HTMLReactParserOptions } from 'html-react-parser';
 import '../../plugins/react-prism/ReactPrism.css';
 import {
   NATIVE_PRISM_CHAR_LIMIT,
@@ -140,10 +142,11 @@ function NativeSpoiler({
 
 const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
   replace: (domNode) => {
-    if (!(domNode instanceof Element) || !('name' in domNode)) {
+    if (!isTag(domNode) || !('name' in domNode)) {
       return undefined;
     }
-    const parentName = domNode.parent instanceof Element ? domNode.parent.name : undefined;
+    const parentName =
+      domNode.parent !== null && isTag(domNode.parent) ? domNode.parent.name : undefined;
     const presentation = classifyNativeFormattedElement(domNode.name, domNode.attribs, parentName);
     if (presentation === 'table') {
       return (
@@ -157,7 +160,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
             tabIndex={0}
           >
             <table {...attributesToProps(domNode.attribs)}>
-              {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+              {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
             </table>
           </div>
         </MatrixColorSurface>
@@ -170,7 +173,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
           foreground={domNode.attribs['data-mx-color']}
           background={domNode.attribs['data-mx-bg-color']}
         >
-          {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+          {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
         </NativeSpoiler>
       );
     }
@@ -180,7 +183,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
           foreground={domNode.attribs['data-mx-color']}
           background={domNode.attribs['data-mx-bg-color']}
         >
-          {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+          {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
         </MatrixColorSpan>
       );
     }
@@ -200,7 +203,7 @@ const nativeFormattedHtmlParserOptions: HTMLReactParserOptions = {
       return (
         <MatrixColorSurface surface="inlineCode">
           <code {...attributesToProps(domNode.attribs)}>
-            {domToReact(domNode.children, nativeFormattedHtmlParserOptions)}
+            {domToReact(reactDomNodes(domNode.children), nativeFormattedHtmlParserOptions)}
           </code>
         </MatrixColorSurface>
       );

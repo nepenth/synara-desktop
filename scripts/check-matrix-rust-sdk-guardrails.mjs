@@ -16,7 +16,7 @@
  *    `allow-matrix-*` permission in `src-tauri/capabilities/main.json`.
  *
  * Product matrix-js-sdk usage outside greenfield zones remains allowed until cutover.
- * Link-smoke (`matrix_sdk_link_smoke`) is outside Zone B and may reference SDK types.
+ * Native SDK types remain confined to real owner implementations and adapters.
  *
  * Usage:
  *   node scripts/check-matrix-rust-sdk-guardrails.mjs

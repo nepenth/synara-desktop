@@ -212,15 +212,6 @@ pub(crate) fn parse_media_download_uri(
     Ok(owned)
 }
 
-pub(super) fn validate_media_download_size(byte_len: usize) -> Result<(), MatrixAuthCommandError> {
-    if byte_len > MAX_MEDIA_DOWNLOAD_BYTES {
-        return Err(map_media_download_error(
-            "v-send.r-media-download-too-large",
-        ));
-    }
-    Ok(())
-}
-
 pub(super) fn map_media_download_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let code = match diagnostic_id {
         "v-send.r-media-invalid-content-uri" => "InvalidRequest",
@@ -231,4 +222,14 @@ pub(super) fn map_media_download_error(diagnostic_id: &'static str) -> MatrixAut
         "The native media operation is unavailable.",
         diagnostic_id,
     )
+}
+
+#[cfg(test)]
+pub(super) fn validate_media_download_size(byte_len: usize) -> Result<(), MatrixAuthCommandError> {
+    if byte_len > MAX_MEDIA_DOWNLOAD_BYTES {
+        return Err(map_media_download_error(
+            "v-send.r-media-download-too-large",
+        ));
+    }
+    Ok(())
 }

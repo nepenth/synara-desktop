@@ -119,9 +119,9 @@ npm run tauri -- build \
   --config "$config_json"
 
 if [[ "$target" == "universal-apple-darwin" ]]; then
-  bundle_root="src-tauri/target/universal-apple-darwin/release/bundle"
+  bundle_root="target/universal-apple-darwin/release/bundle"
 else
-  bundle_root="src-tauri/target/release/bundle"
+  bundle_root="target/release/bundle"
 fi
 
 app_path="$bundle_root/macos/Synara.app"

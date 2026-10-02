@@ -1,0 +1,1139 @@
+//! Core command adapters for session crypto.
+
+use super::*;
+
+/// React-compatible payload for `matrix_session_snapshot`.
+///
+/// This deliberately selects only the fields returned by the desktop command,
+/// rather than serializing the broader safe session projection wholesale.
+#[derive(Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
+pub(super) enum MatrixSessionSnapshotResponse {
+    LoggedOut,
+    LoggedIn {
+        user_id: String,
+        device_id: String,
+        homeserver_url: String,
+        #[serde(rename = "sessionGeneration")]
+        session_generation: u64,
+    },
+}
+
+impl From<Option<SessionSnapshot>> for MatrixSessionSnapshotResponse {
+    fn from(snapshot: Option<SessionSnapshot>) -> Self {
+        match snapshot {
+            None => Self::LoggedOut,
+            Some(snapshot) => Self::LoggedIn {
+                user_id: snapshot.user_id,
+                device_id: snapshot.device_id,
+                homeserver_url: snapshot.homeserver_url,
+                session_generation: snapshot.session_generation,
+            },
+        }
+    }
+}
+
+/// Fixed public cross-signing state for `matrix_crypto_status`.
+///
+/// Core alone serializes this public vocabulary after a Platform has reduced
+/// its shell-owned SDK observation to a closed enum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixCryptoCrossSigningStateResponse {
+    Unavailable,
+    NotSetUp,
+    Partial,
+    Ready,
+}
+
+/// Exact React/Tauri payload for `matrix_crypto_status`.
+///
+/// Keep this separate from the Platform projection: this type owns the wire
+/// field names and is constructed only after Core validates the closed input.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MatrixCryptoStatusResponse {
+    pub(super) session_generation: u64,
+    pub(super) encryption_enabled: bool,
+    pub(super) cross_signing_state: MatrixCryptoCrossSigningStateResponse,
+}
+
+impl MatrixCryptoStatusResponse {
+    pub(super) fn from_platform(status: PlatformCryptoStatus) -> Result<Self, MatrixIpcError> {
+        let cross_signing_state = match status.cross_signing_state() {
+            PlatformCryptoCrossSigningState::Unavailable => {
+                MatrixCryptoCrossSigningStateResponse::Unavailable
+            }
+            PlatformCryptoCrossSigningState::NotSetUp => {
+                MatrixCryptoCrossSigningStateResponse::NotSetUp
+            }
+            PlatformCryptoCrossSigningState::Partial => {
+                MatrixCryptoCrossSigningStateResponse::Partial
+            }
+            PlatformCryptoCrossSigningState::Ready => MatrixCryptoCrossSigningStateResponse::Ready,
+        };
+        let response = Self {
+            session_generation: status.session_generation(),
+            encryption_enabled: status.encryption_enabled(),
+            cross_signing_state,
+        };
+        response
+            .is_valid()
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-crypto-status-invalid-platform-projection"))
+    }
+
+    pub(super) fn is_valid(&self) -> bool {
+        matches!(
+            (self.encryption_enabled, self.cross_signing_state),
+            (false, MatrixCryptoCrossSigningStateResponse::Unavailable)
+                | (true, MatrixCryptoCrossSigningStateResponse::NotSetUp)
+                | (true, MatrixCryptoCrossSigningStateResponse::Partial)
+                | (true, MatrixCryptoCrossSigningStateResponse::Ready)
+        )
+    }
+}
+
+/// Fixed public readiness vocabulary for `matrix_cross_signing_status`.
+///
+/// `recovery_required` remains a read-only legacy status label. This transport
+/// command performs no setup, recovery, or verification action.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixCrossSigningReadinessResponse {
+    Unavailable,
+    SetupRequired,
+    RecoveryRequired,
+    VerificationRequired,
+    Ready,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixCrossSigningKeyPublicationResponse {
+    Missing,
+    Published,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixCrossSigningPrivateIdentityResponse {
+    Missing,
+    Partial,
+    Complete,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixOwnIdentityVerificationResponse {
+    Missing,
+    Unverified,
+    Verified,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixCrossSigningBootstrapResponse {
+    Needed,
+    NotNeeded,
+}
+
+/// Exact legacy camel-case React/Tauri DTO for `matrix_cross_signing_status`.
+///
+/// This is deliberately separate from the Platform projection. Core alone
+/// reconstructs all public labels after it has received only a bounded
+/// generation and two closed private enums.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MatrixCrossSigningStatusResponse {
+    pub(super) session_generation: u64,
+    pub(super) readiness: MatrixCrossSigningReadinessResponse,
+    pub(super) master_signing: MatrixCrossSigningKeyPublicationResponse,
+    pub(super) self_signing: MatrixCrossSigningKeyPublicationResponse,
+    pub(super) user_signing: MatrixCrossSigningKeyPublicationResponse,
+    pub(super) private_identity: MatrixCrossSigningPrivateIdentityResponse,
+    pub(super) own_identity_verification: MatrixOwnIdentityVerificationResponse,
+    pub(super) bootstrap: MatrixCrossSigningBootstrapResponse,
+}
+
+impl MatrixCrossSigningStatusResponse {
+    pub(super) fn from_platform(
+        status: PlatformCrossSigningStatus,
+    ) -> Result<Self, MatrixIpcError> {
+        let private_identity = match status.private_state() {
+            PlatformCrossSigningPrivateState::Unavailable
+            | PlatformCrossSigningPrivateState::Missing => {
+                MatrixCrossSigningPrivateIdentityResponse::Missing
+            }
+            PlatformCrossSigningPrivateState::Partial => {
+                MatrixCrossSigningPrivateIdentityResponse::Partial
+            }
+            PlatformCrossSigningPrivateState::Complete => {
+                MatrixCrossSigningPrivateIdentityResponse::Complete
+            }
+        };
+        let (publication, own_identity_verification) = match status.own_identity() {
+            PlatformCrossSigningOwnIdentity::Missing => (
+                MatrixCrossSigningKeyPublicationResponse::Missing,
+                MatrixOwnIdentityVerificationResponse::Missing,
+            ),
+            PlatformCrossSigningOwnIdentity::Unverified => (
+                MatrixCrossSigningKeyPublicationResponse::Published,
+                MatrixOwnIdentityVerificationResponse::Unverified,
+            ),
+            PlatformCrossSigningOwnIdentity::Verified => (
+                MatrixCrossSigningKeyPublicationResponse::Published,
+                MatrixOwnIdentityVerificationResponse::Verified,
+            ),
+        };
+        let readiness = match (status.private_state(), status.own_identity()) {
+            (PlatformCrossSigningPrivateState::Unavailable, _) => {
+                MatrixCrossSigningReadinessResponse::Unavailable
+            }
+            (_, PlatformCrossSigningOwnIdentity::Missing) => {
+                MatrixCrossSigningReadinessResponse::SetupRequired
+            }
+            (
+                PlatformCrossSigningPrivateState::Missing
+                | PlatformCrossSigningPrivateState::Partial,
+                PlatformCrossSigningOwnIdentity::Unverified
+                | PlatformCrossSigningOwnIdentity::Verified,
+            ) => MatrixCrossSigningReadinessResponse::RecoveryRequired,
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Unverified,
+            ) => MatrixCrossSigningReadinessResponse::VerificationRequired,
+            (
+                PlatformCrossSigningPrivateState::Complete,
+                PlatformCrossSigningOwnIdentity::Verified,
+            ) => MatrixCrossSigningReadinessResponse::Ready,
+        };
+        let bootstrap = match (status.private_state(), status.own_identity()) {
+            (PlatformCrossSigningPrivateState::Unavailable, _)
+            | (
+                _,
+                PlatformCrossSigningOwnIdentity::Unverified
+                | PlatformCrossSigningOwnIdentity::Verified,
+            ) => MatrixCrossSigningBootstrapResponse::NotNeeded,
+            (_, PlatformCrossSigningOwnIdentity::Missing) => {
+                MatrixCrossSigningBootstrapResponse::Needed
+            }
+        };
+        let response = Self {
+            session_generation: status.session_generation(),
+            readiness,
+            master_signing: publication,
+            self_signing: publication,
+            user_signing: publication,
+            private_identity,
+            own_identity_verification,
+            bootstrap,
+        };
+        response
+            .is_valid()
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-cross-signing-status-invalid-platform-projection"))
+    }
+
+    /// Revalidate the complete legacy truth table before serializing it.
+    pub(super) fn is_valid(&self) -> bool {
+        if self.session_generation > MAX_WIRE_COUNTER
+            || self.master_signing != self.self_signing
+            || self.master_signing != self.user_signing
+        {
+            return false;
+        }
+
+        let identity_is_consistent = matches!(
+            (self.master_signing, self.own_identity_verification),
+            (
+                MatrixCrossSigningKeyPublicationResponse::Missing,
+                MatrixOwnIdentityVerificationResponse::Missing
+            ) | (
+                MatrixCrossSigningKeyPublicationResponse::Published,
+                MatrixOwnIdentityVerificationResponse::Unverified
+                    | MatrixOwnIdentityVerificationResponse::Verified
+            )
+        );
+        if !identity_is_consistent {
+            return false;
+        }
+
+        matches!(
+            (
+                self.readiness,
+                self.private_identity,
+                self.own_identity_verification,
+                self.bootstrap,
+            ),
+            (
+                MatrixCrossSigningReadinessResponse::Unavailable,
+                MatrixCrossSigningPrivateIdentityResponse::Missing,
+                _,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            ) | (
+                MatrixCrossSigningReadinessResponse::SetupRequired,
+                MatrixCrossSigningPrivateIdentityResponse::Missing
+                    | MatrixCrossSigningPrivateIdentityResponse::Partial
+                    | MatrixCrossSigningPrivateIdentityResponse::Complete,
+                MatrixOwnIdentityVerificationResponse::Missing,
+                MatrixCrossSigningBootstrapResponse::Needed,
+            ) | (
+                MatrixCrossSigningReadinessResponse::RecoveryRequired,
+                MatrixCrossSigningPrivateIdentityResponse::Missing
+                    | MatrixCrossSigningPrivateIdentityResponse::Partial,
+                MatrixOwnIdentityVerificationResponse::Unverified
+                    | MatrixOwnIdentityVerificationResponse::Verified,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            ) | (
+                MatrixCrossSigningReadinessResponse::VerificationRequired,
+                MatrixCrossSigningPrivateIdentityResponse::Complete,
+                MatrixOwnIdentityVerificationResponse::Unverified,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            ) | (
+                MatrixCrossSigningReadinessResponse::Ready,
+                MatrixCrossSigningPrivateIdentityResponse::Complete,
+                MatrixOwnIdentityVerificationResponse::Verified,
+                MatrixCrossSigningBootstrapResponse::NotNeeded,
+            )
+        )
+    }
+}
+
+/// Fixed public state vocabulary for `matrix_secret_storage_status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixSecretStorageStateResponse {
+    Unavailable,
+    NotSetUp,
+    Locked,
+    Ready,
+}
+
+/// Fixed public action vocabulary for `matrix_secret_storage_status`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub(super) enum MatrixSecretStorageActionResponse {
+    BootstrapRequired,
+    UnlockRequired,
+    None,
+}
+
+/// Exact React/Tauri DTO for `matrix_secret_storage_status`.
+///
+/// Core reconstructs this legacy object only from the platform's closed,
+/// scalar projection. The `missingSecrets` list is public wire shape; its
+/// canonical labels and ordering are owned here, not supplied by the shell.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(super) struct MatrixSecretStorageStatusResponse {
+    pub(super) session_generation: u64,
+    pub(super) state: MatrixSecretStorageStateResponse,
+    pub(super) exists: bool,
+    pub(super) unlocked: bool,
+    pub(super) default_key_set: bool,
+    pub(super) passphrase_configured: bool,
+    pub(super) bootstrap_ready: bool,
+    pub(super) missing_secrets: Vec<MatrixMissingSecretResponse>,
+    pub(super) action: MatrixSecretStorageActionResponse,
+}
+
+impl MatrixSecretStorageStatusResponse {
+    pub(super) fn from_platform(
+        status: PlatformSecretStorageStatus,
+    ) -> Result<Self, MatrixIpcError> {
+        let state = match status.state() {
+            PlatformSecretStorageState::Unavailable => {
+                MatrixSecretStorageStateResponse::Unavailable
+            }
+            PlatformSecretStorageState::NotSetUp => MatrixSecretStorageStateResponse::NotSetUp,
+            PlatformSecretStorageState::Locked => MatrixSecretStorageStateResponse::Locked,
+            PlatformSecretStorageState::Ready => MatrixSecretStorageStateResponse::Ready,
+        };
+        let action = match status.action() {
+            PlatformSecretStorageAction::BootstrapRequired => {
+                MatrixSecretStorageActionResponse::BootstrapRequired
+            }
+            PlatformSecretStorageAction::UnlockRequired => {
+                MatrixSecretStorageActionResponse::UnlockRequired
+            }
+            PlatformSecretStorageAction::None => MatrixSecretStorageActionResponse::None,
+        };
+        let missing = status.missing_secrets();
+        let mut missing_secrets = Vec::with_capacity(4);
+        if missing.cross_signing_master() {
+            missing_secrets.push(MatrixMissingSecretResponse::CrossSigningMaster);
+        }
+        if missing.cross_signing_self_signing() {
+            missing_secrets.push(MatrixMissingSecretResponse::CrossSigningSelfSigning);
+        }
+        if missing.cross_signing_user_signing() {
+            missing_secrets.push(MatrixMissingSecretResponse::CrossSigningUserSigning);
+        }
+        if missing.encryption_backup() {
+            missing_secrets.push(MatrixMissingSecretResponse::EncryptionBackup);
+        }
+        let response = Self {
+            session_generation: status.session_generation(),
+            state,
+            exists: status.exists(),
+            unlocked: status.unlocked(),
+            default_key_set: status.default_key_set(),
+            passphrase_configured: status.passphrase_configured(),
+            bootstrap_ready: status.bootstrap_ready(),
+            missing_secrets,
+            action,
+        };
+        response
+            .is_valid()
+            .then_some(response)
+            .ok_or_else(|| core_state_error("p2-secret-storage-status-invalid-platform-projection"))
+    }
+
+    pub(super) fn is_valid(&self) -> bool {
+        if self.session_generation > MAX_WIRE_COUNTER {
+            return false;
+        }
+        matches!(
+            (self.state, self.unlocked, self.action),
+            (
+                MatrixSecretStorageStateResponse::Unavailable,
+                false,
+                MatrixSecretStorageActionResponse::UnlockRequired,
+            ) | (
+                MatrixSecretStorageStateResponse::NotSetUp,
+                false,
+                MatrixSecretStorageActionResponse::BootstrapRequired,
+            ) | (
+                MatrixSecretStorageStateResponse::Locked,
+                false,
+                MatrixSecretStorageActionResponse::UnlockRequired,
+            ) | (
+                MatrixSecretStorageStateResponse::Ready,
+                true,
+                MatrixSecretStorageActionResponse::None,
+            )
+        )
+    }
+}
+
+/// Exact React/Tauri envelope payload for `matrix_login_flows`.
+///
+/// The renderer sends the camel-case `homeserverUrl` key; unknown keys are
+/// rejected so accidental credential fields do not cross this boundary.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixLoginFlowsRequest {
+    pub(super) homeserver_url: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_device_rename`.
+///
+/// The renderer sends camel-case `deviceId` and `displayName`; unknown keys
+/// are rejected so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixDeviceRenameRequest {
+    pub(super) device_id: String,
+    pub(super) display_name: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_device_delete_start`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixDeviceDeleteStartRequest {
+    pub(super) device_ids: Vec<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_device_delete_cancel`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixDeviceDeleteCancelRequest {
+    pub(super) operation_id: u64,
+    pub(super) session_generation: u64,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_accept`.
+///
+/// The renderer sends the camel-case `flowId` key; unknown keys are rejected
+/// so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationAcceptRequest {
+    pub(super) flow_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_begin_sas`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationBeginSasRequest {
+    pub(super) flow_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_cancel`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationCancelRequest {
+    pub(super) flow_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_confirm`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationConfirmRequest {
+    pub(super) flow_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_dismiss`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationDismissRequest {
+    pub(super) flow_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_mismatch`.
+///
+/// Shares accept's camel-case `flowId` key. Unknown keys are rejected so
+/// this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationMismatchRequest {
+    pub(super) flow_id: String,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_verification_start`.
+///
+/// The renderer sends optional camel-case `deviceId`. Unknown keys are
+/// rejected so this write cannot grow extra identity or session fields.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixVerificationStartRequest {
+    #[serde(default)]
+    pub(super) device_id: Option<String>,
+}
+
+/// Exact React/Tauri envelope payload for `matrix_register_flows`.
+///
+/// This read-only probe accepts exactly the existing camel-case homeserver
+/// field and rejects all credential or UIAA-continuation fields at the core
+/// boundary.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(super) struct MatrixRegisterFlowsRequest {
+    pub(super) homeserver_url: String,
+}
+
+/// Map live presence-owner diagnostics onto closed Core transport categories.
+/// Preserve the owner diagnostic id so the desktop bridge can restore the
+/// established Tauri error shape without leaking user ids or status text.
+pub(super) fn matrix_verification_list(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-verification-list-invalid-payload"));
+        }
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-list-no-session")
+        })?;
+        let inbox: NativeVerificationInbox = owner.list().await;
+        serde_json::to_value(inbox)
+            .map_err(|_| core_state_error("p2-verification-list-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_verification_accept(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationAcceptRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-accept-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-accept-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .accept(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-accept-serialization-failed"))
+    })
+}
+
+pub(super) fn verification_accept_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.1-flow-not-found"
+        | "v-crypto.1-sas-invalid-state"
+        | "v-crypto.1-confirm-before-sas"
+        | "v-crypto.1-sas-unavailable"
+        | "v-crypto.1-dismiss-active-flow"
+        | "v-crypto.1-device-not-found" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-crypto.1-start-requires-session" => MatrixIpcErrorCategory::Forbidden,
+        "v-crypto.1-own-identity-unavailable" => MatrixIpcErrorCategory::UnsupportedCapability,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_verification_begin_sas(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationBeginSasRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-begin-sas-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-begin-sas-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .begin_sas(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-begin-sas-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_verification_cancel(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationCancelRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-cancel-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-cancel-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .cancel(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-cancel-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_verification_confirm(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationConfirmRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-confirm-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-confirm-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .confirm(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-confirm-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_verification_dismiss(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationDismissRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-dismiss-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-dismiss-no-session")
+        })?;
+        owner
+            .dismiss(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+pub(super) fn matrix_verification_mismatch(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationMismatchRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-mismatch-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-mismatch-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .mismatch(&payload.flow_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-mismatch-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_verification_start(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixVerificationStartRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-verification-start-invalid-payload"))?;
+        let owner = state.verification_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-verification-start-no-session")
+        })?;
+        let request: NativeVerificationRequest = owner
+            .start(payload.device_id)
+            .await
+            .map_err(verification_accept_owner_error)?;
+        serde_json::to_value(request)
+            .map_err(|_| core_state_error("p2-verification-start-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_backup_status(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-backup-status-invalid-payload"));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-backup-status-no-session")
+        })?;
+        let snapshot: NativeBackupStatus = owner
+            .backup_status()
+            .await
+            .map_err(backup_status_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-backup-status-serialization-failed"))
+    })
+}
+
+pub(super) fn backup_status_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn restore_backup_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.3-recovery-secret-empty" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-crypto.3-restore-rejected" | "v-crypto.3-restore-incomplete" => {
+            MatrixIpcErrorCategory::RecoveryFailure
+        }
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_room_key_transfer_status(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error(
+                "p2-room-key-transfer-status-invalid-payload",
+            ));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-room-key-transfer-status-no-session")
+        })?;
+        let snapshot: NativeRoomKeyTransferStatus = owner.room_key_status().await;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-room-key-transfer-status-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_cross_signing_setup(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-cross-signing-setup-invalid-payload"));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-cross-signing-setup-no-session")
+        })?;
+        let result: NativeCrossSigningSetupResult = owner
+            .cross_signing_setup()
+            .await
+            .map_err(cross_signing_setup_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-cross-signing-setup-serialization-failed"))
+    })
+}
+
+pub(super) fn cross_signing_setup_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.2-cross-signing-auth-unsupported" => MatrixIpcErrorCategory::Forbidden,
+        "v-crypto.2-cross-signing-user-missing" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_device_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-device-snapshot-invalid-payload"));
+        }
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-snapshot-no-session")
+        })?;
+        let snapshot: NativeDeviceSnapshot = owner
+            .snapshot()
+            .await
+            .map_err(device_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-device-snapshot-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_device_rename(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixDeviceRenameRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-device-rename-invalid-payload"))?;
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-rename-no-session")
+        })?;
+        let snapshot: NativeDeviceSnapshot = owner
+            .rename(&payload.device_id, &payload.display_name)
+            .await
+            .map_err(device_snapshot_owner_error)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-device-rename-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_device_delete_start(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixDeviceDeleteStartRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-device-delete-start-invalid-payload"))?;
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-delete-start-no-session")
+        })?;
+        let result: NativeDeviceDeleteResult = owner
+            .delete_start(payload.device_ids)
+            .await
+            .map_err(device_snapshot_owner_error)?;
+        serde_json::to_value(result)
+            .map_err(|_| core_state_error("p2-device-delete-start-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_device_delete_cancel(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixDeviceDeleteCancelRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-device-delete-cancel-invalid-payload"))?;
+        let owner = state.device_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("p2-device-delete-cancel-no-session")
+        })?;
+        owner
+            .delete_cancel(payload.operation_id, payload.session_generation)
+            .map_err(device_snapshot_owner_error)?;
+        Ok(serde_json::Value::Null)
+    })
+}
+
+pub(super) fn device_snapshot_owner_error(diagnostic_id: &'static str) -> MatrixIpcError {
+    let category = match diagnostic_id {
+        "v-crypto.7-device-rename-empty"
+        | "v-crypto.7-device-delete-selection-empty"
+        | "v-crypto.7-device-delete-selection-invalid"
+        | "v-crypto.7-device-delete-not-pending"
+        | "v-crypto.7-device-delete-operation-mismatch"
+        | "v-crypto.7-device-delete-password-empty" => MatrixIpcErrorCategory::SdkInvariant,
+        "v-crypto.7-device-delete-stale-generation" => {
+            MatrixIpcErrorCategory::StaleSessionGeneration
+        }
+        "v-crypto.7-device-owner-user-missing"
+        | "v-crypto.7-device-snapshot-current-missing"
+        | "v-crypto.7-device-snapshot-user-missing"
+        | "v-crypto.7-device-delete-current-missing"
+        | "v-crypto.7-device-delete-user-missing"
+        | "v-crypto.7-device-delete-auth-unsupported" => MatrixIpcErrorCategory::Forbidden,
+        _ => MatrixIpcErrorCategory::Unknown,
+    };
+    MatrixIpcError::new(category).with_diagnostic(diagnostic_id)
+}
+
+pub(super) fn matrix_session_snapshot(
+    state: Arc<CoreState>,
+    _request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let response = MatrixSessionSnapshotResponse::from(state.session_snapshot()?);
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-session-snapshot-serialization-failed"))
+    })
+}
+
+/// Reconstruct the public status DTO from the string-free Platform projection.
+///
+/// This is the only Platform-to-public mapping: Core constructs the fixed
+/// `p4.1-sync-service-error` value from the closed failure enum, then validates
+/// the full DTO contract before it can be serialized.
+pub(super) fn public_sync_status(
+    status: PlatformSyncStatus,
+) -> Result<SyncReadinessSnapshot, MatrixIpcError> {
+    let failure_diagnostic_id = status
+        .failure()
+        .map(|PlatformSyncFailure::SyncService| SYNC_SERVICE_FAILURE_DIAGNOSTIC_ID);
+    let snapshot = SyncReadinessSnapshot {
+        readiness: status.readiness(),
+        session_generation: status.session_generation(),
+        offline_mode_enabled: status.offline_mode_enabled(),
+        failure_diagnostic_id,
+        sliding_sync_capable: status.sliding_sync_capable(),
+    };
+    snapshot
+        .is_valid_public_sync_status()
+        .then_some(snapshot)
+        .ok_or_else(|| core_state_error("p2-sync-status-invalid-platform-projection"))
+}
+
+/// `matrix_sync_status` is deliberately a payload-free observation. Core owns
+/// its registry entry and exact wire serialization; the Platform remains the
+/// sole owner of the live SDK client from which it reads the safe projection.
+pub(super) fn matrix_sync_status(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-sync-status-invalid-payload"));
+        }
+        let platform = state.platform();
+        let status = platform
+            .sync_status()
+            .await
+            // Platform status errors are closed enums, and Core still exposes
+            // only its static command error through this public observation.
+            .map_err(|_| core_state_error("p2-sync-status-platform-unavailable"))?;
+        let snapshot = public_sync_status(status)?;
+        serde_json::to_value(snapshot)
+            .map_err(|_| core_state_error("p2-sync-status-serialization-failed"))
+    })
+}
+
+/// `matrix_crypto_status` is deliberately a payload-free observation. Core
+/// owns its registry entry, validation, and exact wire serialization; the
+/// Platform remains the sole owner of the live SDK crypto observation.
+pub(super) fn matrix_crypto_status(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-crypto-status-invalid-payload"));
+        }
+        let platform = state.platform();
+        let status = platform
+            .crypto_status()
+            .await
+            // A Platform crypto error is a closed enum. Never attach a shell
+            // error, SDK diagnostic, identity, or key to the public command.
+            .map_err(|_| core_state_error("p2-crypto-status-platform-unavailable"))?;
+        let response = MatrixCryptoStatusResponse::from_platform(status)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-crypto-status-serialization-failed"))
+    })
+}
+
+/// `matrix_cross_signing_status` is a payload-free read observation. Core owns
+/// its registration, exact wire DTO, and legacy truth-table reconstruction;
+/// the Platform remains the sole owner of the Matrix SDK identity query and
+/// its client/crypto/store/network side effects.
+pub(super) fn matrix_cross_signing_status(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-cross-signing-status-invalid-payload"));
+        }
+        let status = state
+            .platform()
+            .cross_signing_status()
+            .await
+            .map_err(cross_signing_status_transport_error)?;
+        let response = MatrixCrossSigningStatusResponse::from_platform(status)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-cross-signing-status-serialization-failed"))
+    })
+}
+
+/// Convert only the closed desktop status failures into static Core errors.
+/// The three legacy pairs are reconstructed here; the desktop bridge accepts
+/// exactly those category/diagnostic pairs and no dynamic Core text.
+pub(super) fn cross_signing_status_transport_error(
+    error: PlatformCrossSigningStatusError,
+) -> MatrixIpcError {
+    match error {
+        PlatformCrossSigningStatusError::NoSession => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-crypto.2-cross-signing-requires-session")
+        }
+        PlatformCrossSigningStatusError::UserMissing => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-crypto.2-cross-signing-user-missing")
+        }
+        PlatformCrossSigningStatusError::IdentityQueryFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Unknown)
+                .with_diagnostic("v-crypto.2-cross-signing-identity-query-failed")
+        }
+        PlatformCrossSigningStatusError::UnsafeSessionGeneration => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::SdkInvariant)
+                .with_diagnostic("p2-cross-signing-status-unsafe-session-generation")
+        }
+    }
+}
+
+/// `matrix_secret_storage_status` is a payload-free read observation.
+///
+/// Core queries its managed SDK owner when attached. Before owner attachment,
+/// the platform bridge supplies the same shared domain projection through
+/// closed transport fields; neither status route carries secret material.
+pub(super) fn matrix_secret_storage_status(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !request.payload.is_null() {
+            return Err(core_state_error("p2-secret-storage-status-invalid-payload"));
+        }
+        if let Some(owner) = state.device_owner()? {
+            let status = owner.secret_storage_status().await.map_err(|diagnostic| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                    .with_diagnostic(diagnostic)
+            })?;
+            return serde_json::to_value(status)
+                .map_err(|_| core_state_error("p2-secret-storage-status-serialization-failed"));
+        }
+        let status = state
+            .platform()
+            .secret_storage_status()
+            .await
+            .map_err(secret_storage_status_transport_error)?;
+        let response = MatrixSecretStorageStatusResponse::from_platform(status)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-secret-storage-status-serialization-failed"))
+    })
+}
+
+/// Convert only the closed shell failures into the established public static
+/// error categories and diagnostics. No shell-provided text crosses this map.
+pub(super) fn secret_storage_status_transport_error(
+    error: PlatformSecretStorageStatusError,
+) -> MatrixIpcError {
+    match error {
+        PlatformSecretStorageStatusError::NoSession => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("v-crypto.4-secret-storage-requires-session")
+        }
+        PlatformSecretStorageStatusError::DefaultKeyLoadFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("v-crypto.4-status-default-key-failed")
+        }
+        PlatformSecretStorageStatusError::KeyInfoLoadFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("v-crypto.4-status-key-info-failed")
+        }
+        PlatformSecretStorageStatusError::SecretCheckFailed => {
+            MatrixIpcError::new(MatrixIpcErrorCategory::RecoveryFailure)
+                .with_diagnostic("v-crypto.4-status-secret-check-failed")
+        }
+        PlatformSecretStorageStatusError::UnsafeSessionGeneration
+        | PlatformSecretStorageStatusError::InvalidSnapshot => {
+            core_state_error("p2-secret-storage-status-invalid-platform-projection")
+        }
+    }
+}
+
+pub(super) fn matrix_login_flows(state: Arc<CoreState>, request: CommandEnvelope) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixLoginFlowsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-login-flows-invalid-payload"))?;
+        let transport =
+            HttpLoginFlowTransport::new_with_user_agent(state.platform().http_user_agent())
+                .map_err(auth_transport_error)?;
+        let result = discover_login_flows(&payload.homeserver_url, &transport)
+            .await
+            .map_err(auth_transport_error)?;
+        let response: MatrixLoginFlowsResponse = login_flows_response(result.flows);
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-login-flows-serialization-failed"))
+    })
+}
+
+pub(super) fn matrix_register_flows(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: MatrixRegisterFlowsRequest = serde_json::from_value(request.payload)
+            .map_err(|_| core_state_error("p2-register-flows-invalid-payload"))?;
+        let transport =
+            HttpRegisterFlowTransport::new_with_user_agent(state.platform().http_user_agent())
+                .map_err(auth_transport_error)?;
+        let response: RegisterFlowsProbe =
+            probe_register_flows(&payload.homeserver_url, &transport)
+                .await
+                .map_err(auth_transport_error)?;
+        serde_json::to_value(response)
+            .map_err(|_| core_state_error("p2-register-flows-serialization-failed"))
+    })
+}
+
+/// Convert the credential-free auth domain's static diagnostics into the
+/// versioned core transport error shape. Never attach input URLs, HTTP bodies,
+/// credentials, tokens, or a raw library error.
+pub(super) fn auth_transport_error(error: AuthError) -> MatrixIpcError {
+    let mut transport =
+        MatrixIpcError::new(error.category()).with_diagnostic(error.diagnostic_id());
+    if let AuthError::RateLimited {
+        retry_after_ms: Some(retry_after_ms),
+        ..
+    } = error
+    {
+        transport = transport.with_retry_after_ms(retry_after_ms);
+    }
+    transport
+}

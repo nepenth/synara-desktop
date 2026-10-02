@@ -1,4 +1,3 @@
-const MAX_AGENT_APPROVAL_BODY_CHARS = 100_000;
 const MAX_AGENT_APPROVAL_COMMAND_CHARS = 180;
 const MAX_AGENT_APPROVAL_COMMAND_BODY_CHARS = 8_000;
 /** Bounded original prompt body shown in approval cards for operator context. */
@@ -14,11 +13,8 @@ export const AGENT_APPROVAL_NOTIFICATION_ACTION_DENY = 'agent-approval.deny';
 export const AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW = 'agent-approval.review';
 export const AGENT_APPROVAL_NOTIFICATION_KIND = 'agent-approval';
 
-/** Max age of an approval prompt event (or native action) that can be acted on from OS notifications. */
-export const AGENT_APPROVAL_NATIVE_ACTION_TTL_MS = 5 * 60 * 1000;
-
 export const AGENT_APPROVAL_NATIVE_ACTION_DEDUP_STORAGE_KEY =
-  'synara.agent-approval.native-action-dedupe';
+  'synara.agent-approval.native-action-dedupe.completed-v2';
 
 export const AGENT_APPROVAL_REACTION_KEYS = [
   AGENT_APPROVAL_REACTION_APPROVE_ONCE,
@@ -125,17 +121,11 @@ export type AgentApprovalNativeActionContext = {
 export type PlanAgentApprovalNativeActionInput = {
   actionId: string;
   context?: AgentApprovalNativeActionContext;
-  nowMs?: number;
-  /** Origin event timestamp in ms, if known. */
-  eventTsMs?: number;
-  /** When the local notification was created, if tracked. */
-  notificationCreatedAtMs?: number;
-  ttlMs?: number;
   /** True when this client already recorded a successful native action for this target. */
   alreadyActed?: boolean;
   /** True when the current user already has a local approval reaction on the event. */
   alreadyReactedLocally?: boolean;
-  /** Result of running the approval detector against resolved event content. */
+  /** Core validation result, when available; never inferred from renderer prompt syntax. */
   isApprovalPrompt?: boolean;
   /** When true, the event was resolved (timeline or fetch). Required before send-reaction. */
   eventResolved?: boolean;
@@ -147,30 +137,9 @@ export const buildAgentApprovalNativeActionDedupeKey = (roomId: string, eventId:
 const isNonEmptyId = (value: string | undefined): value is string =>
   typeof value === 'string' && value.trim().length > 0;
 
-export const isAgentApprovalNativeActionExpired = ({
-  nowMs,
-  eventTsMs,
-  notificationCreatedAtMs,
-  ttlMs = AGENT_APPROVAL_NATIVE_ACTION_TTL_MS,
-}: {
-  nowMs: number;
-  eventTsMs?: number;
-  notificationCreatedAtMs?: number;
-  ttlMs?: number;
-}): boolean => {
-  if (ttlMs < 0) return false;
-  if (typeof eventTsMs === 'number' && Number.isFinite(eventTsMs)) {
-    if (Math.max(0, nowMs - eventTsMs) > ttlMs) return true;
-  }
-  if (typeof notificationCreatedAtMs === 'number' && Number.isFinite(notificationCreatedAtMs)) {
-    if (Math.max(0, nowMs - notificationCreatedAtMs) > ttlMs) return true;
-  }
-  return false;
-};
-
 /**
- * Pure decision planner for native OS notification approval actions.
- * Callers must revalidate the Matrix event (resolve + detector) before allowing send-reaction.
+ * Presentation planner for OS notification actions.
+ * Core independently resolves and validates the Matrix event before any reaction.
  */
 export const planAgentApprovalNativeNotificationAction = (
   input: PlanAgentApprovalNativeActionInput
@@ -179,34 +148,13 @@ export const planAgentApprovalNativeNotificationAction = (
   const kind = input.context?.kind?.trim().toLowerCase() ?? '';
   const roomId = input.context?.roomId?.trim() ?? '';
   const eventId = input.context?.eventId?.trim() ?? '';
-  const nowMs = input.nowMs ?? Date.now();
-
-  if (kind !== AGENT_APPROVAL_NOTIFICATION_KIND) {
-    return { type: 'reject', reason: 'invalid-kind' };
-  }
-  if (!isNonEmptyId(roomId) || !isNonEmptyId(eventId)) {
+  if (kind !== AGENT_APPROVAL_NOTIFICATION_KIND) return { type: 'reject', reason: 'invalid-kind' };
+  if (!isNonEmptyId(roomId) || !isNonEmptyId(eventId))
     return { type: 'reject', reason: 'missing-room-or-event-id' };
-  }
-  if (!isKnownAgentApprovalNotificationActionId(actionId)) {
+  if (!isKnownAgentApprovalNotificationActionId(actionId))
     return { type: 'reject', reason: 'unknown-action-id' };
-  }
-
-  // Review is navigation-only and remains safe and useful even after the
-  // five-minute reaction window has expired.
-  if (actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW) {
+  if (actionId === AGENT_APPROVAL_NOTIFICATION_ACTION_REVIEW)
     return { type: 'open-room', roomId, eventId, reason: 'review-requested' };
-  }
-
-  if (
-    isAgentApprovalNativeActionExpired({
-      nowMs,
-      eventTsMs: input.eventTsMs,
-      notificationCreatedAtMs: input.notificationCreatedAtMs,
-      ttlMs: input.ttlMs,
-    })
-  ) {
-    return { type: 'reject', reason: 'expired-ttl' };
-  }
 
   if (input.alreadyActed) {
     return { type: 'reject', reason: 'already-acted' };
@@ -355,40 +303,6 @@ const COMMAND_FENCE_RE = /```(?:[a-z0-9_-]+)?\s*\n([\s\S]*?)```/i;
 const CODE_BLOCK_LABEL_RE =
   /\bCode\b(?:\s|\n)+(?:Copy\b(?:\s|\n)+)?([\s\S]*?)(?=\n+Reason:|\n+Reply\s+[!/](?:approve|deny)\b|$)/i;
 const REPLY_INSTRUCTIONS_RE = /(Reply\s+[!/](?:approve|deny)\b[\s\S]*?)(?=\n{3,}|$)/i;
-const HTML_TAG_RE = /<[^>]+>/g;
-const APPROVAL_HEADINGS = [
-  'approval required: dangerous command',
-  'dangerous command requires approval',
-];
-
-// Match Rust `str::chars` rather than counting JavaScript UTF-16 code units.
-const isWithinCoreApprovalBodyLimit = (body: string): boolean =>
-  body.length <= MAX_AGENT_APPROVAL_BODY_CHARS ||
-  (body.length <= MAX_AGENT_APPROVAL_BODY_CHARS * 2 &&
-    Array.from(body).length <= MAX_AGENT_APPROVAL_BODY_CHARS);
-
-/**
- * Syntax prefilter for native notification observations. Keep this identical to
- * Core's `is_agent_approval_prompt`: the first nonempty line must normalize to
- * one exact heading. Core still owns sender, expiry, and reaction authority.
- */
-const hasCoreApprovalHeading = (body: string): boolean => {
-  if (!isWithinCoreApprovalBodyLimit(body)) return false;
-  // Rust `str::lines` splits LF/CRLF, and `split_whitespace` uses Unicode
-  // White_Space (not JS \s, which also treats U+FEFF as whitespace).
-  const firstLine = body.split('\n').find((line) => /[^\p{White_Space}]/u.test(line));
-  if (firstLine === undefined) return false;
-  const heading = firstLine
-    .split(/\p{White_Space}+/u)
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-    .replace(/^(?:⚠|\uFE0F|[ *])+/u, '')
-    .replace(/[ *:]+$/u, '')
-    .replace(/^ +| +$/g, '');
-  return APPROVAL_HEADINGS.includes(heading);
-};
-
 const normalizeWhitespace = (value: string): string => value.replace(/\s+/g, ' ').trim();
 
 const truncate = (value: string, maxChars: number): string =>
@@ -492,45 +406,6 @@ const extractReplyInstructions = (body: string): string | undefined => {
   return normalized ? truncate(normalized, MAX_AGENT_APPROVAL_REPLY_INSTRUCTIONS_CHARS) : undefined;
 };
 
-const scoreApprovalPrompt = (prompt: AgentApprovalPrompt): number => {
-  let score = 0;
-  if (prompt.command) score += Math.min(prompt.command.length, 2_000);
-  if (prompt.sourceContext) score += Math.min(prompt.sourceContext.length, 1_000);
-  if (prompt.replyInstructions) score += 80;
-  if (prompt.body && !/waiting for approval/i.test(prompt.body)) score += 40;
-  if (prompt.commandPreview) score += 10;
-  return score;
-};
-
-const decodeHtmlEntities = (value: string): string =>
-  value
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/&quot;/gi, '"')
-    .replace(/&#39;/gi, "'");
-
-const htmlToText = (value: string): string =>
-  decodeHtmlEntities(
-    value
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<(?:p|div|li|pre|code|blockquote|h[1-6])(?:\s[^>]*)?>/gi, '\n')
-      .replace(/<\/(?:p|div|li|pre|code|blockquote|h[1-6])>/gi, '\n')
-      .replace(HTML_TAG_RE, '')
-  );
-
-const getApprovalBodyCandidates = (content: Record<string, unknown>): string[] => {
-  const candidates: string[] = [];
-  const body = typeof content.body === 'string' ? content.body : undefined;
-  const formattedBody =
-    typeof content.formatted_body === 'string' ? htmlToText(content.formatted_body) : undefined;
-
-  if (body) candidates.push(body);
-  if (formattedBody && formattedBody !== body) candidates.push(formattedBody);
-  return candidates.filter(isWithinCoreApprovalBodyLimit);
-};
-
 /** Formatting only: the caller must obtain eligibility from Core. */
 export const formatCoreAgentApprovalPrompt = (body: string): AgentApprovalPrompt => {
   const command = extractCommand(body);
@@ -545,36 +420,27 @@ export const formatCoreAgentApprovalPrompt = (body: string): AgentApprovalPrompt
     body: reasonBody ?? 'A Hermes Agent command is waiting for approval.',
     command,
     commandPreview,
-    sourceContext: sourceContext || undefined,
+    sourceContext: sourceContext
+      ? truncate(sourceContext, MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS)
+      : undefined,
     replyInstructions,
   };
 };
 
-const detectAgentApprovalPromptBody = (body: string): AgentApprovalPrompt | undefined => {
-  if (!hasCoreApprovalHeading(body)) return undefined;
-  const prompt = formatCoreAgentApprovalPrompt(body);
-  return {
-    ...prompt,
-    sourceContext:
-      prompt.sourceContext &&
-      truncate(prompt.sourceContext, MAX_AGENT_APPROVAL_SOURCE_CONTEXT_CHARS),
-  };
-};
-
-export const detectAgentApprovalPrompt = (
-  content: Record<string, unknown>
-): AgentApprovalPrompt | undefined => {
-  // Core classifies the plain Matrix body. Rich HTML can improve presentation
-  // only after that body passes; it cannot turn an ordinary message or quote
-  // into an approval notification.
-  if (typeof content.body !== 'string' || !hasCoreApprovalHeading(content.body)) return undefined;
-  // Prefer the richest matching presentation (HTML can strip command lines).
-  const prompts = getApprovalBodyCandidates(content)
-    .map(detectAgentApprovalPromptBody)
-    .filter((prompt): prompt is AgentApprovalPrompt => Boolean(prompt));
-
-  if (prompts.length === 0) return undefined;
-  return prompts.reduce((best, candidate) =>
-    scoreApprovalPrompt(candidate) > scoreApprovalPrompt(best) ? candidate : best
-  );
-};
+/** In-flight clicks are volatile; durable memory records successful Core actions only. */
+export async function executeAgentApprovalNativeActionOnce(options: {
+  key: string;
+  completed: AgentApprovalNativeActionDedupeStore;
+  inFlight: Set<string>;
+  execute: () => Promise<unknown>;
+}): Promise<boolean> {
+  if (options.completed.has(options.key) || options.inFlight.has(options.key)) return false;
+  options.inFlight.add(options.key);
+  try {
+    await options.execute();
+    options.completed.add(options.key);
+    return true;
+  } finally {
+    options.inFlight.delete(options.key);
+  }
+}

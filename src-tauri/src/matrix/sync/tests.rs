@@ -1,15 +1,10 @@
 //! Unit tests for P4.1 sync readiness / reconnect foundation.
 
+use super::SyncPhase;
 use super::*;
-use crate::matrix::diagnostics::SyncPhase;
 use crate::matrix::ipc::MatrixIpcErrorCategory;
 use matrix_sdk_ui::sync_service::State as SdkSyncState;
 use std::sync::Arc;
-
-#[test]
-fn marker_stable() {
-    assert_eq!(matrix_sync_markers(), MATRIX_SYNC_MARKER);
-}
 
 #[test]
 fn readiness_labels_cover_all() {
@@ -271,7 +266,8 @@ fn assert_generation_detects_stale_owner_without_service() {
 /// baseline — the same shape SNC-P1-4 used to keep its desktop suite intact.
 #[cfg(test)]
 mod capability_mirror {
-    use super::server_supports_sliding_sync;
+    use synara_core::app::sync::server_supports_sliding_sync;
+
     use std::collections::BTreeMap;
 
     fn versions(list: &[&str]) -> Vec<String> {

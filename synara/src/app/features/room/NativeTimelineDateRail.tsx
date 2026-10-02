@@ -21,7 +21,7 @@ type NativeTimelineDateRailProps = {
   onCommitTimestamp: (timestampMs: number) => void;
 };
 
-export const NativeTimelineDateRail = React.memo(function NativeTimelineDateRail({
+export const NativeTimelineDateRail = React.memo(function TimelineDateRail({
   marks,
   axis,
   hour24Clock,

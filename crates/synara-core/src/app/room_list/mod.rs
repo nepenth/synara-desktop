@@ -21,9 +21,6 @@
 //! - `docs/matrix-rust-sdk/p4.3-membership-unread.md`
 //! - `docs/matrix-rust-sdk/p4.4-room-semantics.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod activity_recovery;
 mod counts;
 mod delta;
@@ -68,28 +65,3 @@ pub use live::{
 pub use projection::{reconstruct, RoomListProjection};
 pub use sort::{sort_rooms, sort_rooms_in_place, RoomListSort};
 pub use summary::RoomSummaryBuilder;
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_ROOM_LIST_MARKER: &str =
-    "matrix-room-list-p4.2+membership-unread-p4.3+semantics-p4.4";
-
-/// Touch room-list foundation paths so they remain linked in non-test builds.
-pub fn matrix_room_list_markers() -> &'static str {
-    let mut proj = RoomListProjection::new(1);
-    let snap = RoomListSnapshot::empty(1);
-    let _ = proj.apply_snapshot(snap);
-    let _scopes = RoomListScope::ALL.len();
-    let _counts = RoomListBadgeCounts::from_rooms(&[]);
-    let _sort = RoomListSort::RecentActivity.as_str();
-    debug_assert!(proj.is_empty());
-    debug_assert_eq!(proj.last_sequence(), 0);
-    debug_assert_eq!(RoomListDeltaOp::Clear.op_name(), "clear");
-    debug_assert_eq!(_scopes, 8);
-    debug_assert_eq!(_counts.joined, 0);
-    debug_assert_eq!(_sort, "recent_activity");
-    debug_assert_eq!(
-        MATRIX_ROOM_LIST_MARKER,
-        "matrix-room-list-p4.2+membership-unread-p4.3+semantics-p4.4"
-    );
-    MATRIX_ROOM_LIST_MARKER
-}

@@ -3,17 +3,13 @@
 use super::*;
 use crate::matrix::dto::{Membership, RoomSummary};
 use crate::matrix::ipc::MatrixIpcErrorCategory;
+use synara_core::app::room_list::{contains_bad_word, select_dm_avatar_source, DmAvatarSourceKind};
 
 fn room(id: &str, name: &str) -> RoomSummary {
     RoomSummaryBuilder::new(id)
         .name(name)
         .build()
         .expect("room summary")
-}
-
-#[test]
-fn marker_stable() {
-    assert_eq!(matrix_room_list_markers(), MATRIX_ROOM_LIST_MARKER);
 }
 
 #[test]

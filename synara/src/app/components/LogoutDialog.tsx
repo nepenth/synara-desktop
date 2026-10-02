@@ -59,13 +59,13 @@ export const LogoutDialog = forwardRef<HTMLDivElement, LogoutDialogProps>(
           <Text priority="400">You’re about to log out. Are you sure?</Text>
           {logoutState.status === AsyncStatus.Error && (
             <Text style={{ color: color.Critical.Main }} size="T300">
-              Failed to logout! {logoutState.error.message}
+              Local sign out did not complete. Retry to finish local cleanup.
             </Text>
           )}
           <Box direction="Column" gap="200">
             <Button
               variant="Critical"
-              onClick={logout}
+              onClick={() => void logout().catch(() => undefined)}
               disabled={ongoingLogout}
               before={ongoingLogout && <Spinner variant="Critical" fill="Solid" size="200" />}
             >

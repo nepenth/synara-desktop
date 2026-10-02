@@ -2,7 +2,6 @@ use super::*;
 
 pub use synara_core::app::members::{
     NativeRoomCreatorsSnapshot, NativeRoomPowerLevelTagsSnapshot, NativeRoomPowerLevelsSnapshot,
-    ROOM_CREATE_EVENT_TYPE, ROOM_POWER_LEVELS_EVENT_TYPE, ROOM_POWER_LEVEL_TAGS_EVENT_TYPE,
 };
 
 #[tauri::command]
@@ -37,25 +36,25 @@ pub async fn matrix_room_power_level_tags_snapshot(
     crate::bridge::room_members::room_power_level_tags_snapshot(core.inner().as_ref(), room_id)
         .await
 }
-
+#[cfg(test)]
 pub(super) fn project_room_creators(
     event: &serde_json::Value,
 ) -> Result<Vec<String>, &'static str> {
     synara_core::app::members::project_room_creators(event)
 }
-
+#[cfg(test)]
 pub(super) fn validate_power_levels_snapshot_content(
     content: &serde_json::Value,
 ) -> Result<(), &'static str> {
     synara_core::app::members::validate_power_levels_snapshot_content(content)
 }
-
+#[cfg(test)]
 pub(super) fn validate_power_level_tags_snapshot_content(
     content: &serde_json::Value,
 ) -> Result<(), &'static str> {
     synara_core::app::members::validate_power_level_tags_snapshot_content(content)
 }
-
+#[cfg(test)]
 pub(super) fn map_room_members_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-members-read-invalid-room" => (

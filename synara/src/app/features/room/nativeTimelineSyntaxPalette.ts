@@ -11,7 +11,7 @@ export const NATIVE_SYNTAX_ROLES = [
   'regex',
 ] as const;
 
-export type NativeSyntaxRole = typeof NATIVE_SYNTAX_ROLES[number];
+export type NativeSyntaxRole = (typeof NATIVE_SYNTAX_ROLES)[number];
 export type NativeSyntaxPalette = Record<NativeSyntaxRole, string>;
 
 /**

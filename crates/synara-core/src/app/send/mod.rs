@@ -10,9 +10,6 @@
 //! - `docs/matrix-rust-sdk/p6.1-send-queue.md`
 //! - `docs/matrix-rust-sdk/p7.4-attachment-send.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod attachment;
 mod attachment_queue;
 mod error;
@@ -52,21 +49,6 @@ pub use text::{
     validate_outbound_text_payload, validated_mentions, MAX_MATRIX_IDENTIFIER_BYTES,
     MAX_OUTBOUND_MENTION_COUNT, MAX_OUTBOUND_TEXT_PAYLOAD_BYTES,
 };
-
-/// Static marker for link / schema smoke (text + attachment queues).
-pub const MATRIX_SEND_MARKER: &str = "matrix-send-queue-p6.1+attachment-p7.4";
-
-/// Touch send-queue paths so they remain linked in non-test builds.
-pub fn matrix_send_markers() -> &'static str {
-    let q = SendQueue::new(0);
-    let a = AttachmentSendQueue::new(0);
-    debug_assert!(q.is_empty());
-    debug_assert!(a.is_empty());
-    debug_assert_eq!(q.active_count(), 0);
-    debug_assert_eq!(AttachmentKind::Image.as_str(), "image");
-    debug_assert_eq!(MATRIX_SEND_MARKER, "matrix-send-queue-p6.1+attachment-p7.4");
-    MATRIX_SEND_MARKER
-}
 
 #[cfg(test)]
 mod tests;

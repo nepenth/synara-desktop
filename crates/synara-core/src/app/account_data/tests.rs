@@ -4,11 +4,6 @@ use super::*;
 use std::collections::BTreeMap;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_account_data_markers(), MATRIX_ACCOUNT_DATA_MARKER);
-}
-
-#[test]
 fn fully_read_helper() {
     let mut idx = AccountDataIndex::new(1);
     idx.set_fully_read("!r:example.org", "$e1:example.org")

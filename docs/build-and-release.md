@@ -35,6 +35,34 @@ npm --prefix synara ci
 Linux system package details live in [linux.md](linux.md). macOS local signing
 and app replacement notes live in [macos-local-signing.md](macos-local-signing.md).
 
+## Rust workspace and output paths
+
+Desktop, shared Core, NSE, and bindgen use the root `Cargo.lock` and common
+workspace dependencies. Desktop package output is under
+`target/release/bundle/` (or `target/universal-apple-darwin/release/bundle/`
+for universal macOS builds). Apple generators explicitly use
+`target/synara-core-apple` for their isolated feature builds.
+
+A desktop `--manifest-path src-tauri/Cargo.toml` invocation uses the same
+workspace lockfile. CI validates the desktop package and the three shared
+packages separately to avoid repeating desktop checks. NSE shipping isolation
+is checked with its explicit production feature graph and archive exports;
+workspace-wide tests do not substitute for that check.
+
+Any shared Core source, nested FFI module, workspace manifest/lockfile,
+`.cargo` configuration, or toolchain change triggers the Apple compile gate
+on ordinary feature PRs and the applicable desktop package checks. Main pushes run Apple unit tests for shared-Core/iOS changes and keep the UI
+lane disabled. Releases, `needs-ios-ui` labels, nightly schedules, and manual
+full runs retain their fuller test policy.
+
+The CI workflow's manual inputs allow additional unsigned Apple validation:
+`apple_slices=all` builds the four full-Core slices and the three NSE slices;
+`check_ios_device_release=true` also builds the unsigned device Release app
+and inspects its NSE archive. The device opt-in installs all Apple targets even
+when the slice input retains its default. These inputs affect only the unit-test
+job, have a bounded 120-minute budget, and do not sign, upload, or publish a
+release. Defaults remain `simulator-arm64` and device Release disabled.
+
 ## Local Validation Gates
 
 Run these before accepting desktop/runtime changes:
@@ -47,11 +75,15 @@ npm run check:matrix-boundaries
 npm run check:quality-gates
 npm run check:synapse-harness
 npm --prefix synara run typecheck:modernization
-npm --prefix synara run test:modernization
+npm run test:modernization
 npm --prefix synara run check:eslint
 npm --prefix synara run check:prettier
-cargo check --manifest-path src-tauri/Cargo.toml --locked
-cargo test --manifest-path src-tauri/Cargo.toml --locked
+cargo clippy --locked -p synara --all-targets -- -D warnings
+cargo check --locked -p synara
+cargo test --locked -p synara
+cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings
+cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
+cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 npm run check:production-smoke
 ```
 
@@ -64,11 +96,32 @@ npm run check:synapse-harness
 scripts/synapse-integration.sh reset
 ```
 
-For timeline work, also run:
+The root modernization command includes its runtime build pretest. Shared-package
+and desktop tests select their packages explicitly; shipping NSE feature and
+archive isolation remains a separate check.
+
+For timeline work, run both the model harness and the native-timeline browser
+harness:
 
 ```bash
 npm --prefix synara run test:timeline-performance
+npm --prefix synara run test:browser:native-timeline
 ```
+
+The browser native-timeline harness uses one file worker to isolate its performance
+measurement from concurrent functional files. Its cases, budgets, sample windows,
+assertions, and retry policy remain unchanged.
+
+For renderer dependency and platform-runtime changes, run the release browser
+entrypoint, which includes runtime-maturity in Chromium and WebKit:
+
+```bash
+npm --prefix synara run test:browser:desktop-polish
+```
+
+Chromium-only CI coverage does not establish WebKit coverage. Current browser
+fixtures do not certify physical minimum-system WebKit or installed native URL
+transport.
 
 ## Local Builds
 
@@ -277,3 +330,26 @@ atomically deployed static repository.
   Release-backed pacman repository; iOS uses TestFlight or the App Store.
 - Production publication is blocked unless the exact-tag workflow validates all
   configured clients and protected credentials.
+
+
+Apple artifact symbol checks require `rustup component add llvm-tools-preview
+--toolchain 1.96` before generating bindings. Apple CI installs this component
+explicitly in unit, UI, compile, diagnostics, and device release lanes. The NSE
+generator validates its reader before building and checks every completed
+XCFramework archive architecture before publication. Each architecture must
+expose `_uniffi_synara_nse_core_fn_method_nsepreviewrequest_resolve` and contain
+no full-Core `uniffi_synara_core_` exports. The decoder is the selected Rust
+sysroot's LLVM tool, with an exact LLVM version check; missing tools, decoder
+errors, empty archive symbol output, or missing positive exports fail closed.
+The explicit `SYNARA_NSE_ARCHIVE_NM` override exists for controlled fixtures
+and is subject to the same version/readback checks.
+
+The shipping extension checker decodes every final MachO architecture and
+checks linked images. Release stripping may remove final symbol-table entries;
+its report records unavailable final readback rather than treating empty output
+as standalone isolation proof. The mandatory positive and negative archive ABI
+readback is primary. Neither checker infers export absence from raw bytes.
+[LLVM's symbol tool documentation](https://llvm.org/docs/CommandGuide/llvm-nm.html)
+describes bitcode/object decoding and architecture selection; the
+[Rust component documentation](https://rust-lang.github.io/rustup/concepts/components.html)
+identifies the matching toolchain component.

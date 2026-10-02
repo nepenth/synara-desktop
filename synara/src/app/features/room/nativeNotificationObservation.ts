@@ -12,9 +12,9 @@ import { isSynaraDesktop } from '../../utils/desktop';
  * and no sync-state gate on this path.
  *
  * An observation carries identity (`roomId`, `eventId`, `sender`), the event
- * type, its origin timestamp, and the bounded plaintext `body` of an
- * `m.room.message` (used only for agent-approval prompt detection). It never
- * carries a policy verdict: any `highlight`, `sound`, `notify`, or mode key
+ * type, its origin timestamp, and Core syntax/sender/expiry classification.
+ * Classification does not establish terminal reaction state; Core validates
+ * current reactions when an action is submitted. Push verdicts remain private: any `highlight`, `sound`, `notify`, or mode key
  * is rejected here so the wire cannot grow one silently.
  */
 
@@ -32,7 +32,7 @@ export type NativeNotificationObservation = {
   sender: string;
   eventType: NativeNotificationObservationEventType;
   originServerTs: number;
-  body?: string;
+  agentApproval?: { expiresAt: number; expired: boolean };
 };
 
 const OBSERVATION_KEYS = new Set([
@@ -42,7 +42,7 @@ const OBSERVATION_KEYS = new Set([
   'sender',
   'eventType',
   'originServerTs',
-  'body',
+  'agentApproval',
 ]);
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
@@ -60,14 +60,23 @@ export const parseNativeNotificationObservation = (
 ): NativeNotificationObservation | undefined => {
   if (!isRecord(value)) return undefined;
   if (!Object.keys(value).every((key) => OBSERVATION_KEYS.has(key))) return undefined;
-  const { sessionGeneration, roomId, eventId, sender, eventType, originServerTs, body } = value;
+  const { sessionGeneration, roomId, eventId, sender, eventType, originServerTs, agentApproval } =
+    value;
   if (!isSafeGeneration(sessionGeneration)) return undefined;
   if (typeof roomId !== 'string' || !roomId.startsWith('!')) return undefined;
   if (typeof eventId !== 'string' || !eventId.startsWith('$')) return undefined;
   if (typeof sender !== 'string' || !sender.startsWith('@')) return undefined;
   if (!isEventType(eventType)) return undefined;
   if (!isSafeGeneration(originServerTs)) return undefined;
-  if (body !== undefined && body !== null && typeof body !== 'string') return undefined;
+  if (agentApproval !== undefined && agentApproval !== null) {
+    if (
+      !isRecord(agentApproval) ||
+      Object.keys(agentApproval).some((key) => key !== 'expiresAt' && key !== 'expired')
+    )
+      return undefined;
+    if (!isSafeGeneration(agentApproval.expiresAt) || typeof agentApproval.expired !== 'boolean')
+      return undefined;
+  }
   return {
     sessionGeneration,
     roomId,
@@ -75,7 +84,14 @@ export const parseNativeNotificationObservation = (
     sender,
     eventType,
     originServerTs,
-    ...(typeof body === 'string' ? { body } : {}),
+    ...(isRecord(agentApproval)
+      ? {
+          agentApproval: {
+            expiresAt: agentApproval.expiresAt as number,
+            expired: agentApproval.expired as boolean,
+          },
+        }
+      : {}),
   };
 };
 

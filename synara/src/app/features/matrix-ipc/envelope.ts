@@ -41,7 +41,7 @@ export const MATRIX_IPC_KINDS = [
   'pong',
 ] as const;
 
-export type MatrixIpcKind = typeof MATRIX_IPC_KINDS[number];
+export type MatrixIpcKind = (typeof MATRIX_IPC_KINDS)[number];
 
 const KIND_SET = new Set<string>(MATRIX_IPC_KINDS);
 

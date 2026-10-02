@@ -15,8 +15,8 @@ Totals below count **import files** (static, `require()`, or dynamic `import()`)
 | Role       | Import files | Networking files | Networking findings |
 | ---------- | -----------: | ---------------: | ------------------: |
 | production |            0 |                1 |                   1 |
-| test       |            0 |                6 |                  25 |
-| tooling    |            2 |                2 |                   5 |
+| test       |            0 |                6 |                  24 |
+| tooling    |            2 |                3 |                   6 |
 | **total**  |        **2** |                  |                     |
 
 ### Role definitions
@@ -79,7 +79,7 @@ _None._
 
 | Path                       | Line | Kind                      | Indicator                  |
 | -------------------------- | ---: | ------------------------- | -------------------------- |
-| `synara/src/app/cs-api.ts` |  181 | `matrix_cs_path_template` | `/_matrix/client/versions` |
+| `synara/src/app/cs-api.ts` |  187 | `matrix_cs_path_template` | `/_matrix/client/versions` |
 
 ## Aggregates: test
 
@@ -104,7 +104,7 @@ _None._
 | Category                   | Files | Method candidates | Listener candidates | Constructor candidates | Networking |
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
 | `authenticated_media`      |     1 |                 0 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     6 |                 0 |                   0 |                      0 |         25 |
+| `direct_matrix_networking` |     6 |                 0 |                   0 |                      0 |         24 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -126,23 +126,22 @@ _None._
 | `scripts/__tests__/inventory-matrix-sdk-usage.test.mjs`       |  365 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  133 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 | `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  133 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  137 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  137 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  297 | `matrix_cs_path_literal`  | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  297 | `matrix_cs_path_template` | `/_matrix/client/v1/media/download`          |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  298 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  298 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  324 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
-| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  324 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   30 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   43 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   64 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
-| `synara/src/app/matrix/__tests__/media.test.ts`               |   72 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  136 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  136 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  296 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  296 | `matrix_cs_path_template` | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  317 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  338 | `matrix_cs_path_literal`  | `/_matrix/client/v3/sync`                    |
+| `scripts/__tests__/matrix-rust-p1.6-guardrails.test.mjs`      |  338 | `matrix_cs_path_template` | `/_matrix/client/v3/sync`                    |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   33 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   46 | `matrix_cs_path_literal`  | `/_matrix/media/v3/download/example/media`   |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   67 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
+| `synara/src/app/matrix/__tests__/media.test.ts`               |   75 | `matrix_cs_path_literal`  | `/_matrix/media/v3/thumbnail/example/avatar` |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`        |   37 | `matrix_cs_path_literal`  | `/_matrix/client/versions`                   |
 
 ## Aggregates: tooling
 
-Scope: **tooling only**. Import files: 2. Files with any finding: 4.
+Scope: **tooling only**. Import files: 2. Files with any finding: 5.
 
 ### Imported modules
 
@@ -170,7 +169,7 @@ Scope: **tooling only**. Import files: 2. Files with any finding: 4.
 | -------------------------- | ----: | ----------------: | ------------------: | ---------------------: | ---------: |
 | `client_methods`           |     2 |                 0 |                   0 |                      0 |          0 |
 | `uia_auth`                 |     1 |                 1 |                   0 |                      0 |          0 |
-| `direct_matrix_networking` |     2 |                 0 |                   0 |                      0 |          5 |
+| `direct_matrix_networking` |     3 |                 0 |                   0 |                      0 |          6 |
 
 ### Top method-name candidates (not type-proven)
 
@@ -187,6 +186,7 @@ Scope: **tooling only**. Import files: 2. Files with any finding: 4.
 | `scripts/audit-matrix-public.mjs`                                                                            |   99 | `matrix_cs_path_literal`  | `/_matrix/key/v2/server`         |
 | `scripts/audit-matrix-public.mjs`                                                                            |  100 | `matrix_cs_path_literal`  | `/_matrix/client/v3/login`       |
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts` |    6 | `matrix_cs_path_template` | `/_matrix/client/versions`       |
+| `scripts/synapse-v12-smoke.mjs`                                                                              |   32 | `matrix_cs_path_literal`  | `/_matrix/client/v3/`            |
 
 ## Files (import and networking inventory)
 
@@ -200,6 +200,7 @@ Scope: **tooling only**. Import files: 2. Files with any finding: 4.
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-in-matrix-ipc/synara/src/app/features/matrix-ipc/leakyImport.ts`         | tooling    | no      | —              | static       | `matrix-js-sdk` |
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/js-sdk-new-file/synara/src/app/features/brand-new-migration/NewClientBridge.ts` | tooling    | no      | —              | static       | `matrix-js-sdk` |
 | `scripts/fixtures/matrix-rust-p1.6/prohibited/raw-matrix-http/synara/src/app/features/matrix-ipc/rawHttp.ts`                  | tooling    | no      | —              | —            | —               |
+| `scripts/synapse-v12-smoke.mjs`                                                                                               | tooling    | no      | —              | —            | —               |
 | `synara/src/app/cs-api.ts`                                                                                                    | production | yes     | app-other      | —            | —               |
 | `synara/src/app/matrix/__tests__/media.test.ts`                                                                               | test       | yes     | media-boundary | —            | —               |
 | `synara/src/app/utils/__tests__/remoteContent.test.ts`                                                                        | test       | yes     | utility        | —            | —               |

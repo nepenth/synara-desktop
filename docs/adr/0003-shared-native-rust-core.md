@@ -59,8 +59,11 @@ session, sync, crypto, room, timeline, account-data, or Matrix-write authority.
 - `crates/synara-core-bindgen/` generates the iOS binding package/XCFramework.
 - Product Swift services import `SynaraCore`; direct `MatrixRustSDK` source
   imports are confined to the historical feasibility spike.
-- The consolidated implementation proof is recorded in the
-  [2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md).
+- The [2026-08-17 local proof](../shared-native-core/15-2026-08-17-local-proof.md)
+  preserves dated local and signed-live evidence. Later consolidation validation
+  and remaining proof limits are recorded in the
+  [native maturity retirement ledger](../rust-maturity-retirements.md) and
+  [dependency update dispositions](../dependency-update-dispositions.md).
 
 ## Consequences
 
@@ -78,6 +81,8 @@ session, sync, crypto, room, timeline, account-data, or Matrix-write authority.
 
 The P0–P5 plan—crate extraction, transport API, desktop adapter cutover,
 UniFFI adoption, and iOS release proof—explains how this decision was pursued.
-It is not an evergreen queue. Current status and stop conditions live in the
-[shared-Core program documentation](../shared-native-core/README.md), not in
-this ADR.
+It is not an evergreen queue. Current operating guidance is indexed in the
+[documentation index](../README.md) and maintained in the
+[build and release runbook](../build-and-release.md). The
+[shared-Core program documentation](../shared-native-core/README.md) preserves
+migration history.

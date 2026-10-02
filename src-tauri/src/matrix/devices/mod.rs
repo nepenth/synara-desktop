@@ -7,9 +7,3 @@ pub use synara_core::app::devices::*;
 
 pub mod live;
 pub use live::start as start_device_owner;
-
-pub const MATRIX_DEVICES_MARKER: &str = "matrix-devices-v-crypto-7";
-
-pub fn matrix_devices_markers() -> &'static str {
-    MATRIX_DEVICES_MARKER
-}

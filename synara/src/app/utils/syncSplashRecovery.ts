@@ -8,7 +8,7 @@ const SyncState = {
   Reconnecting: 'RECONNECTING',
 } as const;
 
-type SyncState = typeof SyncState[keyof typeof SyncState];
+type SyncState = (typeof SyncState)[keyof typeof SyncState];
 
 export const SYNC_PREPARED_TIMEOUT_MS = 30_000;
 

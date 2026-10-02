@@ -6,28 +6,10 @@
 
 use synara_core::app::lifecycle::LifecycleError;
 
-pub use synara_core::app::lifecycle::{
-    clear_session_material, load_session_material, persist_session_material,
-    rotate_persisted_session_tokens, HostMatrixSessionSecrets, InMemorySessionMaterialVault,
-    SessionMaterial, SessionMaterialId, SessionMaterialMeta, SessionMaterialVault,
-    SESSION_ENVELOPE_VERSION, SESSION_KIND_MATRIX, SESSION_MATERIAL_SERVICE,
-};
+#[cfg(test)]
+pub use synara_core::app::lifecycle::SESSION_MATERIAL_SERVICE;
 
-/// Non-secret service/account refs for the keyring-backed session vault.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct KeyringSessionMaterialRefs {
-    pub service: String,
-    pub account: String,
-}
-
-impl KeyringSessionMaterialRefs {
-    pub fn from_id(id: &SessionMaterialId) -> Self {
-        Self {
-            service: id.service().to_owned(),
-            account: id.account().to_owned(),
-        }
-    }
-}
+pub use synara_core::app::lifecycle::{SessionMaterial, SessionMaterialId, SessionMaterialVault};
 
 /// OS credential-store vault for Matrix session secrets (P3.5).
 ///
@@ -125,8 +107,7 @@ mod keyring_ref_tests {
         let id = SessionMaterialId::from_identity(
             &AccountIdentity::new("@alice:example.org", "https://matrix.example.org").unwrap(),
         );
-        let refs = KeyringSessionMaterialRefs::from_id(&id);
-        assert_eq!(refs.service, SESSION_MATERIAL_SERVICE);
-        assert!(refs.account.starts_with("matrix-session:"));
+        assert_eq!(id.service(), SESSION_MATERIAL_SERVICE);
+        assert!(id.account().starts_with("matrix-session:"));
     }
 }

@@ -5,11 +5,6 @@ use crate::dto::{BackupStatus, RecoveryStatus, SecurityStatus, VerificationState
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_security_markers(), MATRIX_SECURITY_MARKER);
-}
-
-#[test]
 fn default_unknown() {
     let store = SecurityStatusStore::new(1);
     let s = store.snapshot();

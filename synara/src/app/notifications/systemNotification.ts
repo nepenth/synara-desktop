@@ -15,6 +15,7 @@ export type SystemNotificationActionContext = {
 };
 
 export type SystemNotificationRequest = {
+  sessionGeneration?: number;
   title: string;
   body?: string;
   route?: string;
@@ -96,6 +97,11 @@ const normalizeDismissKeys = (keys: string[] | undefined): string[] | undefined 
 export const normalizeSystemNotificationRequest = (
   request: SystemNotificationRequest
 ): SystemNotificationRequest | undefined => {
+  if (
+    request.sessionGeneration !== undefined &&
+    (!Number.isSafeInteger(request.sessionGeneration) || request.sessionGeneration < 0)
+  )
+    return undefined;
   const title = normalizeText(request.title, MAX_TITLE_LENGTH);
   if (!title) return undefined;
 
@@ -111,6 +117,9 @@ export const normalizeSystemNotificationRequest = (
     route,
     privacy: request.privacy ?? 'standard',
     sound: request.sound ?? 'default',
+    ...(request.sessionGeneration !== undefined
+      ? { sessionGeneration: request.sessionGeneration }
+      : {}),
   };
   if (actions) {
     normalized.actions = actions;

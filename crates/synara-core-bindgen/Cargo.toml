@@ -1,10 +1,13 @@
 [package]
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
 name = "synara-core-bindgen"
 version = "0.1.0"
 description = "Project-owned, lockfile-pinned UniFFI generator for synara-core"
-license = "AGPL-3.0-only"
-edition = "2021"
-publish = false
+license.workspace = true
+edition.workspace = true
+publish.workspace = true
 
 [dependencies]
-uniffi = { version = "=0.28.3", features = ["cli"] }
+uniffi = { workspace = true, features = ["cli"] }
