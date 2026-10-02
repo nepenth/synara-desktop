@@ -159,8 +159,9 @@ writeText(
   )
 );
 
-// Refresh the root package entry in Cargo.lock before consistency validation.
-execFileSync("cargo", ["check", "--quiet"], {
+// Refresh workspace package versions without compiling or updating locked
+// registry dependencies. Release CI validates the new version's binaries.
+execFileSync("cargo", ["update", "--workspace", "--quiet"], {
   cwd: path.join(root, "src-tauri"),
   stdio: "inherit",
 });

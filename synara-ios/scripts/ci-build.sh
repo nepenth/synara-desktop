@@ -68,8 +68,10 @@ case "$TEST_SUITE" in
     ;;
   ui)
     TEST_ONLY_ARGS=(-only-testing:SynaraUITests)
-    PARALLEL_TESTING="${IOS_PARALLEL_TESTING:-YES}"
-    MAX_TEST_SIMULATORS="${IOS_MAX_TEST_SIMULATORS:-2}"
+    # Match the serial UI runner: one simulator owns foreground gestures.
+    # Explicit caller overrides remain available for controlled experiments.
+    PARALLEL_TESTING="${IOS_PARALLEL_TESTING:-NO}"
+    MAX_TEST_SIMULATORS="${IOS_MAX_TEST_SIMULATORS:-1}"
     ;;
   *)
     echo "IOS_TEST_SUITE must be all, unit, or ui (got $TEST_SUITE)" >&2

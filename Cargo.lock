@@ -6715,7 +6715,7 @@ dependencies = [
 
 [[package]]
 name = "synara"
-version = "2.1.42"
+version = "2.1.43"
 dependencies = [
  "block2",
  "eyeball-im",
