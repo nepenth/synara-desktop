@@ -25,7 +25,7 @@ import FileSaver from 'file-saver';
 import * as css from './PdfViewer.css';
 import { AsyncStatus } from '../../hooks/useAsyncCallback';
 import { useZoom } from '../../hooks/useZoom';
-import { createPage, usePdfDocumentLoader, usePdfJSLoader } from '../../plugins/pdfjs-dist';
+import { usePdfPageLoader, usePdfDocumentLoader, usePdfJSLoader } from '../../plugins/pdfjs-dist';
 import { stopPropagation } from '../../utils/keyboard';
 
 export type PdfViewerProps = {
@@ -45,37 +45,48 @@ export const PdfViewer = as<'div', PdfViewerProps>(
       pdfJSState.status === AsyncStatus.Success ? pdfJSState.data : undefined,
       src
     );
-    const isLoading =
-      pdfJSState.status === AsyncStatus.Loading || docState.status === AsyncStatus.Loading;
-    const isError =
-      pdfJSState.status === AsyncStatus.Error || docState.status === AsyncStatus.Error;
     const [pageNo, setPageNo] = useState(1);
+    const [pageState, loadPage] = usePdfPageLoader(
+      docState.status === AsyncStatus.Success ? docState.data : undefined,
+      pageNo,
+      zoom
+    );
+    const isLoading =
+      pdfJSState.status === AsyncStatus.Loading ||
+      docState.status === AsyncStatus.Loading ||
+      pageState.status === AsyncStatus.Loading;
+    const isError =
+      pdfJSState.status === AsyncStatus.Error ||
+      docState.status === AsyncStatus.Error ||
+      pageState.status === AsyncStatus.Error;
     const [jumpAnchor, setJumpAnchor] = useState<RectCords>();
 
     useEffect(() => {
-      loadPdfJS();
+      void loadPdfJS().catch(() => undefined);
     }, [loadPdfJS]);
     useEffect(() => {
       if (pdfJSState.status === AsyncStatus.Success) {
-        loadPdfDocument();
+        void loadPdfDocument().catch(() => undefined);
       }
     }, [pdfJSState, loadPdfDocument]);
 
     useEffect(() => {
-      if (docState.status === AsyncStatus.Success) {
-        const doc = docState.data;
-        if (pageNo < 0 || pageNo > doc.numPages) return;
-        createPage(doc, pageNo, { scale: zoom }).then((canvas) => {
-          const container = containerRef.current;
-          if (!container) return;
-          container.textContent = '';
-          container.append(canvas);
-          scrollRef.current?.scrollTo({
-            top: 0,
-          });
-        });
+      if (
+        docState.status === AsyncStatus.Success &&
+        pageNo >= 1 &&
+        pageNo <= docState.data.numPages
+      ) {
+        void loadPage().catch(() => undefined);
       }
-    }, [docState, pageNo, zoom]);
+    }, [docState, pageNo, loadPage]);
+    useEffect(() => {
+      if (pageState.status !== AsyncStatus.Success) return;
+      const container = containerRef.current;
+      if (!container) return;
+      container.textContent = '';
+      container.append(pageState.data);
+      scrollRef.current?.scrollTo({ top: 0 });
+    }, [pageState]);
 
     const handleDownload = () => {
       FileSaver.saveAs(src, name);
@@ -160,25 +171,30 @@ export const PdfViewer = as<'div', PdfViewerProps>(
                 size="300"
                 radii="300"
                 before={<Icon src={Icons.Warning} size="50" />}
-                onClick={loadPdfJS}
+                onClick={() => {
+                  void loadPdfJS().catch(() => undefined);
+                }}
               >
                 <Text size="B300">Retry</Text>
               </Button>
             </>
           )}
-          {docState.status === AsyncStatus.Success && (
-            <Scroll
-              ref={scrollRef}
-              size="300"
-              direction="Both"
-              variant="Surface"
-              visibility="Hover"
-            >
-              <Box>
-                <div className={css.PdfViewerContent} ref={containerRef} />
-              </Box>
-            </Scroll>
-          )}
+          {!isLoading &&
+            !isError &&
+            docState.status === AsyncStatus.Success &&
+            pageState.status === AsyncStatus.Success && (
+              <Scroll
+                ref={scrollRef}
+                size="300"
+                direction="Both"
+                variant="Surface"
+                visibility="Hover"
+              >
+                <Box>
+                  <div className={css.PdfViewerContent} ref={containerRef} />
+                </Box>
+              </Scroll>
+            )}
         </Box>
         {docState.status === AsyncStatus.Success && (
           <Header as="footer" className={css.PdfViewerFooter} size="400">

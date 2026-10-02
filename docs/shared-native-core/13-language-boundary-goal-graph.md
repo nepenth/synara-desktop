@@ -1,5 +1,12 @@
 # 13 — Language-boundary goal graph (loop operator)
 
+> **Historical migration operating guide.** The work queue, source paths,
+> command counts, resource constraints, and agent launch instructions below apply
+> to the recorded evidence tip. They are not the current operating policy. Use
+> the accepted ADRs, current source, and [build and release runbook](../build-and-release.md)
+> for new work; use the [consolidation ledger](../rust-maturity-retirements.md)
+> for validation and remaining proof limits.
+
 This is the loop that finishes the work [ADR 0004](../adr/0004-rust-language-boundaries.md)
 named. It does **not** replace the implementer playbook. It tells the next
 turn which node to run.

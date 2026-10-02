@@ -3,11 +3,6 @@
 use super::*;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_room_keys_markers(), MATRIX_ROOM_KEYS_MARKER);
-}
-
-#[test]
 fn export_success_path() {
     let mut flow = RoomKeyTransferFlow::new(1);
     let op = flow

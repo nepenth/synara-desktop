@@ -1,6 +1,9 @@
 //! Credential-free V-CRYPTO.4 secret-storage presentation DTOs.
 //!
-//! Live Client recovery I/O and host recovery-document writes stay in the desktop shell.
+//! Core owns SDK recovery I/O; platforms retain confirmation and one-time secret display.
+
+mod live;
+pub use live::{bootstrap, reset, status, unlock, SecretStorageSetup};
 
 use serde::Serialize;
 

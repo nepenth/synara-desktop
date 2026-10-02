@@ -6,9 +6,6 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.3-verification.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod inbox;
 mod live;
@@ -35,19 +32,6 @@ pub use native::{
 /// Tauri event: verification inbox/SAS may have changed. Signal only; UI
 /// re-lists via `matrix_verification_list`. Never carries keys, MACs, or tokens.
 pub const VERIFICATION_UPDATED_EVENT: &str = "matrix-verification-updated";
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_VERIFICATION_MARKER: &str = "matrix-verification-p8.3";
-
-/// Touch verification paths so they remain linked in non-test builds.
-pub fn matrix_verification_markers() -> &'static str {
-    let inbox = VerificationInbox::new(0);
-    debug_assert!(inbox.is_empty());
-    debug_assert_eq!(inbox.len(), 0);
-    debug_assert!(!inbox.has_pending_attention());
-    debug_assert_eq!(MATRIX_VERIFICATION_MARKER, "matrix-verification-p8.3");
-    MATRIX_VERIFICATION_MARKER
-}
 
 #[cfg(test)]
 mod tests;

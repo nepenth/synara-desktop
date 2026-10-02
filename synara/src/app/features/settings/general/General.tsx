@@ -38,7 +38,7 @@ import { useDateFormatItems } from '../../../hooks/useDateFormat';
 import { SequenceCardStyle, SettingsQuietControl } from '../styles.css';
 import { useClientConfig } from '../../../hooks/useClientConfig';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { clearCacheAndReload } from '../../../../client/initMatrix';
+import { reloadApplication } from '../../../../client/initMatrix';
 import { gifPickerEnabled } from '../../../utils/gifProvider';
 import {
   getPlatformIntegrationStatus,
@@ -768,19 +768,19 @@ function StorageSection() {
       {isDesktopPlatform() && <SecretStoreTile />}
       <SequenceCard className={SequenceCardStyle} variant="SurfaceVariant" direction="Column">
         <SettingTile
-          title="Clear Cache & Reload"
-          description="Remove locally cached data and reload everything from the server. You stay signed in."
+          title="Reload Application"
+          description="Reset navigation and notification caches, then reload the application. Your native message store and sign in are kept."
           after={
             <Button
               className={SettingsQuietControl}
-              onClick={() => clearCacheAndReload(mx)}
+              onClick={() => reloadApplication(mx)}
               variant="Critical"
               fill="None"
               size="300"
               radii="300"
               outlined
             >
-              <Text size="B300">Clear Cache</Text>
+              <Text size="B300">Reload</Text>
             </Button>
           }
         />

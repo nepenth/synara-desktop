@@ -1,5 +1,13 @@
 # Matrix Rust SDK Swift Feasibility Spike
 
+> Historical feasibility spike. The direct Swift Matrix SDK services described
+> below were retired by the shared Rust Core migration. Product iOS now
+> uses project-owned SynaraCore bindings; the Swift SDK experiment was
+> decommissioned on 2026-09-30. Refer to [ADR 0003](../../docs/adr/0003-shared-native-rust-core.md)
+> and [ADR 0004](../../docs/adr/0004-rust-language-boundaries.md) for current
+> ownership. Behavioral goals remain relevant; old service names and build
+> commands are historical evidence.
+
 Reviewed: 2026-07-21
 
 Status: package probe upgraded; live E2EE probe previously completed.

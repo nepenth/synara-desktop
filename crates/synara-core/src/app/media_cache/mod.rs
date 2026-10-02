@@ -6,9 +6,6 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p7.3-media-cache.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod index;
 mod live;
@@ -23,18 +20,6 @@ pub use policy::{
     build_media_retention_policy_spec, shortest_joined_max_lifetime, MediaRetentionPolicySpec,
     DEFAULT_CLEANUP_FREQUENCY, DEFAULT_LAST_ACCESS_EXPIRY,
 };
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_MEDIA_CACHE_MARKER: &str = "matrix-media-cache-p7.3";
-
-/// Touch media-cache paths so they remain linked in non-test builds.
-pub fn matrix_media_cache_markers() -> &'static str {
-    let idx = MediaCacheIndex::new(0);
-    debug_assert!(idx.is_empty());
-    debug_assert_eq!(MAX_CACHE_ENTRIES, 4_096);
-    debug_assert_eq!(MATRIX_MEDIA_CACHE_MARKER, "matrix-media-cache-p7.3");
-    MATRIX_MEDIA_CACHE_MARKER
-}
 
 #[cfg(test)]
 mod tests;

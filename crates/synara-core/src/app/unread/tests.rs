@@ -8,11 +8,6 @@ fn room_state(room: &str) -> RoomReadState {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_unread_markers(), MATRIX_UNREAD_MARKER);
-}
-
-#[test]
 fn unread_signal_opens_context_at_fully_read() {
     let mut store = UnreadPositionStore::new(1);
     let mut s = room_state("!r:example.org");

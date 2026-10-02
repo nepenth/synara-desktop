@@ -4,11 +4,6 @@ use super::*;
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_presence_markers(), MATRIX_PRESENCE_MARKER);
-}
-
-#[test]
 fn set_and_get() {
     let mut idx = PresenceIndex::new(3);
     let snap = idx

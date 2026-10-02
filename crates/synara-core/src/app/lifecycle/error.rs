@@ -31,11 +31,6 @@ pub enum LifecycleError {
         diagnostic_id: &'static str,
         category: MatrixIpcErrorCategory,
     },
-    /// Supervisor transition failed.
-    Supervisor {
-        diagnostic_id: &'static str,
-        detail: String,
-    },
 }
 
 impl std::fmt::Display for LifecycleError {
@@ -60,10 +55,6 @@ impl std::fmt::Display for LifecycleError {
                 diagnostic_id,
                 category,
             } => write!(f, "session vault error ({category:?}, {diagnostic_id})"),
-            Self::Supervisor {
-                diagnostic_id,
-                detail,
-            } => write!(f, "supervisor error ({diagnostic_id}): {detail}"),
         }
     }
 }

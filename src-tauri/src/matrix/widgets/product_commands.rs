@@ -3,8 +3,7 @@ use crate::matrix::widgets::host::{
     open_widget_window, session_id_from_widget_label, WIDGET_WINDOW_PREFIX,
 };
 use crate::matrix::widgets::{
-    AgentWidgetEntry, NativeWidgetOwner, WidgetKind, WidgetListSnapshot, WidgetOpenResult,
-    WidgetSessionRecord,
+    AgentWidgetEntry, WidgetKind, WidgetListSnapshot, WidgetOpenResult, WidgetSessionRecord,
 };
 use tauri::WebviewWindow;
 
@@ -146,17 +145,6 @@ pub(crate) fn map_widget_error(diagnostic_id: &'static str) -> MatrixAuthCommand
         _ => ("Unknown", "Native Matrix widgets are unavailable."),
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
-#[allow(dead_code)]
-pub(super) fn start_widget_owner_for_session(
-    client: &matrix_sdk::Client,
-    app: AppHandle,
-    session_generation: u64,
-) -> Result<Arc<NativeWidgetOwner>, MatrixAuthCommandError> {
-    crate::matrix::widgets::start_widget_owner(client, app, session_generation)
-        .map(Arc::new)
-        .map_err(map_widget_error)
 }
 
 #[cfg(test)]

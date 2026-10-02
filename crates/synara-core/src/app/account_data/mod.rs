@@ -6,9 +6,6 @@
 //! Live image-pack snapshot/set/owner, m.direct, later, and room-notes Client
 //! RMW live here.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod agent_approval_history;
 mod agent_approval_history_live;
 mod error;
@@ -84,18 +81,6 @@ pub use room_notes_live::{
     complete_room_todo_item_live, delete_room_note_item_live, move_room_todo_item_live,
     room_notes_now_ms, snapshot_room_notes, upsert_room_note_item,
 };
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_ACCOUNT_DATA_MARKER: &str = "matrix-account-data-p6.7";
-
-/// Touch account-data paths so they remain linked in non-test builds.
-pub fn matrix_account_data_markers() -> &'static str {
-    let idx = AccountDataIndex::new(0);
-    debug_assert!(idx.is_empty());
-    debug_assert_eq!(TYPE_FULLY_READ, "m.fully_read");
-    debug_assert_eq!(MATRIX_ACCOUNT_DATA_MARKER, "matrix-account-data-p6.7");
-    MATRIX_ACCOUNT_DATA_MARKER
-}
 
 #[cfg(test)]
 mod tests;

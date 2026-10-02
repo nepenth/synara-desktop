@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Runtime};
+use tauri::{AppHandle, Emitter, Manager, Runtime};
 use tauri_plugin_notification::NotificationExt;
 
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -53,13 +53,25 @@ pub struct DesktopNotificationActionContext {
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct DesktopNotificationActionEvent {
+    session_generation: Option<u64>,
     action_id: String,
     context: Option<DesktopNotificationActionContext>,
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum DesktopNotificationSoundPolicy {
+    Default,
+    Silent,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct DesktopNotificationPayload {
+    #[serde(default)]
+    pub session_generation: Option<u64>,
+    #[serde(default)]
+    pub sound: Option<DesktopNotificationSoundPolicy>,
     pub title: String,
     pub body: Option<String>,
     pub route: Option<String>,
@@ -93,6 +105,8 @@ fn sanitize_notification_payload(
     let dismiss_keys = sanitize_dismiss_keys(notification.dismiss_keys);
 
     Ok(DesktopNotificationPayload {
+        session_generation: notification.session_generation,
+        sound: notification.sound,
         title,
         body,
         route,
@@ -181,6 +195,14 @@ pub(crate) fn sanitize_dismiss_key(value: &str) -> Option<String> {
         return None;
     }
     let (prefix, rest) = trimmed.split_once(':')?;
+    if prefix == "candidate" {
+        let (generation, sequence) = rest.strip_prefix("notif-")?.split_once('-')?;
+        return (!generation.is_empty()
+            && !sequence.is_empty()
+            && generation.bytes().all(|b| b.is_ascii_digit())
+            && sequence.bytes().all(|b| b.is_ascii_digit()))
+        .then(|| trimmed.to_owned());
+    }
     if rest.is_empty() || (prefix != "room" && prefix != "event") {
         return None;
     }
@@ -218,38 +240,42 @@ fn sanitize_dismiss_keys(keys: Option<Vec<String>>) -> Option<Vec<String>> {
 }
 
 #[derive(Debug, Default)]
-#[allow(dead_code)] // Exercised on Linux and in unit tests.
-pub(crate) struct DismissKeyIndex {
-    by_key: HashMap<String, HashSet<u32>>,
-    keys_by_id: HashMap<u32, Vec<String>>,
-    order: VecDeque<u32>,
+pub(crate) struct DismissKeyIndex<Id = u32> {
+    by_key: HashMap<String, HashSet<Id>>,
+    keys_by_id: HashMap<Id, Vec<String>>,
+    order: VecDeque<Id>,
 }
 
-#[allow(dead_code)]
-impl DismissKeyIndex {
-    pub(crate) fn register(&mut self, id: u32, keys: &[String]) {
-        self.unregister(id);
+impl<Id: Clone + Eq + std::hash::Hash> DismissKeyIndex<Id> {
+    pub(crate) fn register(&mut self, id: Id, keys: &[String]) -> Vec<Id> {
+        let mut evicted = Vec::new();
+        self.unregister(id.clone());
         while self.keys_by_id.len() >= MAX_LINUX_NOTIFICATION_HANDLES {
             let Some(oldest) = self.order.pop_front() else {
                 break;
             };
-            self.unregister(oldest);
+            self.unregister(oldest.clone());
+            evicted.push(oldest);
         }
         let mut stored = Vec::new();
         for key in keys {
             if stored.iter().any(|existing| existing == key) {
                 continue;
             }
-            self.by_key.entry(key.clone()).or_default().insert(id);
+            self.by_key
+                .entry(key.clone())
+                .or_default()
+                .insert(id.clone());
             stored.push(key.clone());
         }
         if !stored.is_empty() {
-            self.keys_by_id.insert(id, stored);
+            self.keys_by_id.insert(id.clone(), stored);
             self.order.push_back(id);
         }
+        evicted
     }
 
-    pub(crate) fn unregister(&mut self, id: u32) {
+    pub(crate) fn unregister(&mut self, id: Id) {
         if let Some(keys) = self.keys_by_id.remove(&id) {
             self.order.retain(|candidate| *candidate != id);
             for key in keys {
@@ -263,11 +289,11 @@ impl DismissKeyIndex {
         }
     }
 
-    pub(crate) fn ids_for_keys(&self, keys: &[String]) -> Vec<u32> {
+    pub(crate) fn ids_for_keys(&self, keys: &[String]) -> Vec<Id> {
         let mut ids = HashSet::new();
         for key in keys {
             if let Some(set) = self.by_key.get(key) {
-                ids.extend(set.iter().copied());
+                ids.extend(set.iter().cloned());
             }
         }
         ids.into_iter().collect()
@@ -285,15 +311,55 @@ fn emit_notification_action<R: Runtime>(
     app: &AppHandle<R>,
     action_id: &str,
     context: Option<DesktopNotificationActionContext>,
+    session_generation: Option<u64>,
 ) -> Result<(), String> {
-    app.emit(
-        DESKTOP_NOTIFICATION_ACTION_EVENT,
-        DesktopNotificationActionEvent {
-            action_id: action_id.to_owned(),
-            context,
-        },
-    )
-    .map_err(|error| error.to_string())
+    if action_id.starts_with("agent-approval.") && session_generation.is_none() {
+        return Err("Native approval action has no bound session".to_owned());
+    }
+    let event = DesktopNotificationActionEvent {
+        session_generation,
+        action_id: action_id.to_owned(),
+        context,
+    };
+    if let Some(generation) = session_generation {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move {
+            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
+            let _ = auth
+                .with_session_generation(generation, || async {
+                    app.emit(DESKTOP_NOTIFICATION_ACTION_EVENT, event)
+                })
+                .await;
+        });
+        return Ok(());
+    }
+    app.emit(DESKTOP_NOTIFICATION_ACTION_EVENT, event)
+        .map_err(|error| error.to_string())
+}
+
+fn navigate_notification_route<R: Runtime>(
+    app: &AppHandle<R>,
+    route: &str,
+    session_generation: Option<u64>,
+    critical: bool,
+) -> Result<(), String> {
+    if critical && session_generation.is_none() {
+        return Err("Native approval review has no bound session".to_owned());
+    }
+    if let Some(generation) = session_generation {
+        let app = app.clone();
+        let route = route.to_owned();
+        tauri::async_runtime::spawn(async move {
+            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
+            let _ = auth
+                .with_session_generation(generation, || async {
+                    navigate_main_window(&app, &route)
+                })
+                .await;
+        });
+        return Ok(());
+    }
+    navigate_main_window(app, route).map_err(|_| "Native notification navigation failed".to_owned())
 }
 
 fn is_time_sensitive_agent_approval(context: Option<&DesktopNotificationActionContext>) -> bool {
@@ -357,7 +423,7 @@ fn register_linux_notification(
     handle: Arc<notify_rust::NotificationHandle>,
 ) {
     if !keys.is_empty() {
-        lock_mutex(linux_dismiss_index()).register(id, keys);
+        let _ = lock_mutex(linux_dismiss_index()).register(id, keys);
     }
     let evicted = {
         let mut handles = lock_mutex(linux_notification_handles());
@@ -420,14 +486,22 @@ async fn dismiss_linux_notifications(keys: &[String]) {
 #[cfg(target_os = "linux")]
 fn show_notification_with_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
-    title: &str,
-    body: Option<&str>,
-    route: Option<&str>,
-    actions: &[DesktopNotificationAction],
-    action_context: Option<&DesktopNotificationActionContext>,
-    dismiss_keys: &[String],
+    notification: &DesktopNotificationPayload,
 ) -> Result<(), String> {
+    let title = notification.title.as_str();
+    let body = notification.body.as_deref();
+    let route = notification.route.as_deref();
+    let actions = notification.actions.as_deref().unwrap_or(&[]);
+    let action_context = notification.action_context.as_ref();
+    let session_generation = notification.session_generation;
+    let critical = is_time_sensitive_agent_approval(action_context)
+        || actions
+            .iter()
+            .any(|action| action.id.starts_with("agent-approval."));
+    let dismiss_keys = notification.dismiss_keys.as_deref().unwrap_or(&[]);
+
     use notify_rust::{Notification, NotificationResponse, Urgency};
+    let notification_payload_sound = notification.sound;
 
     let mut notification = Notification::new();
     notification.summary(title);
@@ -435,6 +509,12 @@ fn show_notification_with_route_click_handler<R: Runtime>(
         notification.body(body);
     }
     notification.auto_icon();
+    if matches!(
+        notification_payload_sound,
+        Some(DesktopNotificationSoundPolicy::Silent)
+    ) {
+        notification.hint(notify_rust::Hint::SuppressSound(true));
+    }
     if is_time_sensitive_agent_approval(action_context) {
         notification.urgency(Urgency::Critical);
         notification.timeout(notify_rust::Timeout::Milliseconds(300_000));
@@ -463,7 +543,9 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                 let Some(route) = route.as_deref() else {
                     return;
                 };
-                if let Err(error) = navigate_main_window(&app, route) {
+                if let Err(error) =
+                    navigate_notification_route(&app, route, session_generation, critical)
+                {
                     eprintln!("failed to navigate from notification click: {error}");
                 }
             }
@@ -472,9 +554,12 @@ fn show_notification_with_route_click_handler<R: Runtime>(
                     .iter()
                     .any(|candidate| candidate == action)
                 {
-                    if let Err(error) =
-                        emit_notification_action(&app, action, action_context.clone())
-                    {
+                    if let Err(error) = emit_notification_action(
+                        &app,
+                        action,
+                        action_context.clone(),
+                        session_generation,
+                    ) {
                         eprintln!("failed to emit notification action: {error}");
                     }
                 }
@@ -805,17 +890,29 @@ mod macos_delivery {
 #[cfg(target_os = "macos")]
 async fn show_notification_with_route_click_handler<R: Runtime>(
     app: &AppHandle<R>,
-    title: &str,
-    body: Option<&str>,
-    route: Option<&str>,
-    actions: &[DesktopNotificationAction],
-    action_context: Option<&DesktopNotificationActionContext>,
-    _dismiss_keys: &[String],
+    notification: &DesktopNotificationPayload,
 ) -> Result<bool, String> {
+    let title = notification.title.as_str();
+    let body = notification.body.as_deref();
+    let route = notification.route.as_deref();
+    let actions = notification.actions.as_deref().unwrap_or(&[]);
+    let action_context = notification.action_context.as_ref();
+    let session_generation = notification.session_generation;
+    let critical = is_time_sensitive_agent_approval(action_context)
+        || actions
+            .iter()
+            .any(|action| action.id.starts_with("agent-approval."));
+    let _dismiss_keys = notification.dismiss_keys.as_deref().unwrap_or(&[]);
+
     use mac_notification_sys::{MainButton, Notification, NotificationResponse, Sound};
 
     if macos_delivery::is_bundled() {
-        return macos_modern::show(app, title, body, route, actions, action_context).await;
+        return macos_modern::show(app, notification).await;
+    }
+    if notification.session_generation.is_some() {
+        // A legacy development sender has no callback that can keep the auth
+        // gate through actual acceptance. Bound candidates fail closed there.
+        return Ok(false);
     }
     // Bare development executables retain their legacy Terminal identity.
     // Never mix that center with UserNotifications in a bundled application.
@@ -827,6 +924,7 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
     let route = route.map(str::to_owned);
     let action_context = action_context.cloned();
     let time_sensitive = is_time_sensitive_agent_approval(action_context.as_ref());
+    let silent = notification.sound == Some(DesktopNotificationSoundPolicy::Silent);
     let action_labels = actions
         .iter()
         .map(|action| action.label.clone())
@@ -854,7 +952,9 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
             }
             if time_sensitive {
                 notification.subtitle("Time-sensitive · expires in 5 minutes");
-                notification.sound(Sound::Default);
+                if !silent {
+                    notification.sound(Sound::Default);
+                }
             }
             if action_labels.len() == 1 {
                 notification.main_button(MainButton::SingleAction(action_labels[0].as_str()));
@@ -892,7 +992,9 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
                 let Some(route) = route.as_deref() else {
                     return;
                 };
-                if let Err(error) = navigate_main_window(&app, route) {
+                if let Err(error) =
+                    navigate_notification_route(&app, route, session_generation, critical)
+                {
                     eprintln!("failed to navigate from notification click: {error}");
                 }
             }
@@ -903,9 +1005,12 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
                 else {
                     return;
                 };
-                if let Err(error) =
-                    emit_notification_action(&app, action_id, action_context.clone())
-                {
+                if let Err(error) = emit_notification_action(
+                    &app,
+                    action_id,
+                    action_context.clone(),
+                    session_generation,
+                ) {
                     eprintln!("failed to emit notification action: {error}");
                 }
             }
@@ -921,58 +1026,30 @@ async fn show_notification_with_route_click_handler<R: Runtime>(
 #[cfg(target_os = "linux")]
 async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     app: &AppHandle<R>,
-    title: &str,
-    body: Option<&str>,
-    route: Option<&str>,
-    actions: &[DesktopNotificationAction],
-    action_context: Option<&DesktopNotificationActionContext>,
-    dismiss_keys: &[String],
+    notification: &DesktopNotificationPayload,
 ) -> Result<bool, String> {
-    show_notification_with_route_click_handler(
-        app,
-        title,
-        body,
-        route,
-        actions,
-        action_context,
-        dismiss_keys,
-    )
-    .map(|()| true)
+    show_notification_with_route_click_handler(app, notification).map(|()| true)
 }
 
 #[cfg(target_os = "macos")]
 async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     app: &AppHandle<R>,
-    title: &str,
-    body: Option<&str>,
-    route: Option<&str>,
-    actions: &[DesktopNotificationAction],
-    action_context: Option<&DesktopNotificationActionContext>,
-    dismiss_keys: &[String],
+    notification: &DesktopNotificationPayload,
 ) -> Result<bool, String> {
-    show_notification_with_route_click_handler(
-        app,
-        title,
-        body,
-        route,
-        actions,
-        action_context,
-        dismiss_keys,
-    )
-    .await
+    show_notification_with_route_click_handler(app, notification).await
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos")))]
 async fn show_notification_with_route_click_handler_receipt<R: Runtime>(
     app: &AppHandle<R>,
-    title: &str,
-    body: Option<&str>,
-    _route: Option<&str>,
-    _actions: &[DesktopNotificationAction],
-    _action_context: Option<&DesktopNotificationActionContext>,
-    _dismiss_keys: &[String],
+    notification: &DesktopNotificationPayload,
 ) -> Result<bool, String> {
-    show_notification_without_route_click_handler(app, title, body).map(|()| true)
+    show_notification_without_route_click_handler(
+        app,
+        &notification.title,
+        notification.body.as_deref(),
+    )
+    .map(|()| true)
 }
 
 #[tauri::command]
@@ -1019,30 +1096,43 @@ pub async fn desktop_notify<R: Runtime>(
     notification: DesktopNotificationPayload,
 ) -> Result<bool, String> {
     let notification = sanitize_notification_payload(notification)?;
-    let actions = notification.actions.as_deref().unwrap_or(&[]);
+    if let Some(generation) = notification.session_generation {
+        // The acceptance task owns the AppHandle and auth guard. Canceling a
+        // renderer waiter must not release that gate while the OS post runs.
+        return tauri::async_runtime::spawn(async move {
+            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
+            auth.with_session_generation(generation, || {
+                post_sanitized_notification(&app, &notification)
+            })
+            .await
+            .unwrap_or(Ok(false))
+        })
+        .await
+        .map_err(|_| "Native notification acceptance task failed".to_owned())?;
+    }
+    post_sanitized_notification(&app, &notification).await
+}
 
+async fn post_sanitized_notification<R: Runtime>(
+    app: &AppHandle<R>,
+    notification: &DesktopNotificationPayload,
+) -> Result<bool, String> {
     if cfg!(target_os = "macos")
         || notification.route.is_some()
-        || !actions.is_empty()
+        || notification
+            .actions
+            .as_ref()
+            .is_some_and(|actions| !actions.is_empty())
         || notification
             .dismiss_keys
             .as_ref()
             .is_some_and(|keys| !keys.is_empty())
+        || notification.sound == Some(DesktopNotificationSoundPolicy::Silent)
     {
-        return show_notification_with_route_click_handler_receipt(
-            &app,
-            &notification.title,
-            notification.body.as_deref(),
-            notification.route.as_deref(),
-            actions,
-            notification.action_context.as_ref(),
-            notification.dismiss_keys.as_deref().unwrap_or(&[]),
-        )
-        .await;
+        return show_notification_with_route_click_handler_receipt(app, notification).await;
     }
-
     show_notification_without_route_click_handler(
-        &app,
+        app,
         &notification.title,
         notification.body.as_deref(),
     )?;
@@ -1051,8 +1141,8 @@ pub async fn desktop_notify<R: Runtime>(
 
 /// Close delivered Linux notifications that were tagged with `dismissKeys`.
 ///
-/// macOS identifier tracking is receipt-matching, not a dismiss-key map, so
-/// this command is a documented no-op there.
+/// Bundled macOS cancels the mapped pending and delivered request identifiers.
+/// Legacy bare development executables and unsupported platforms have no mapping.
 #[tauri::command]
 pub async fn desktop_dismiss_notifications(keys: Vec<String>) -> Result<(), String> {
     let keys: Vec<String> = keys
@@ -1065,6 +1155,10 @@ pub async fn desktop_dismiss_notifications(keys: Vec<String>) -> Result<(), Stri
     }
     #[cfg(target_os = "linux")]
     dismiss_linux_notifications(&keys).await;
+    #[cfg(target_os = "macos")]
+    if macos_delivery::is_bundled() {
+        macos_modern::dismiss(&keys);
+    }
     Ok(())
 }
 
@@ -1075,6 +1169,8 @@ mod tests {
     #[test]
     fn sanitize_notification_payload_rejects_empty_title() {
         let result = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: None,
+            sound: None,
             title: "  ".to_owned(),
             body: Some("Body".to_owned()),
             route: None,
@@ -1089,6 +1185,8 @@ mod tests {
     #[test]
     fn sanitize_notification_payload_truncates_body() {
         let payload = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: None,
+            sound: None,
             title: "Reminder".to_owned(),
             body: Some("a".repeat(DESKTOP_NOTIFICATION_MAX_BODY_CHARS + 10)),
             route: Some("/inbox/".to_owned()),
@@ -1115,6 +1213,8 @@ mod tests {
             "#/room/abc"
         );
         let notification = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: None,
+            sound: None,
             title: "Later".to_owned(),
             body: Some("Reminder".to_owned()),
             route: Some("/inbox/later/".to_owned()),
@@ -1132,6 +1232,8 @@ mod tests {
     #[test]
     fn sanitize_notification_payload_accepts_safe_route() {
         let payload = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: None,
+            sound: None,
             title: "Reminder".to_owned(),
             body: Some("body".to_owned()),
             route: Some("/inbox/notifications/".to_owned()),
@@ -1146,6 +1248,8 @@ mod tests {
     #[test]
     fn sanitize_notification_payload_rejects_unsafe_route() {
         let result = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: None,
+            sound: None,
             title: "Reminder".to_owned(),
             body: Some("body".to_owned()),
             route: Some("https://evil.example.com".to_owned()),
@@ -1160,6 +1264,8 @@ mod tests {
     #[test]
     fn sanitize_notification_payload_sanitizes_actions_and_context() {
         let payload = sanitize_notification_payload(DesktopNotificationPayload {
+            session_generation: None,
+            sound: None,
             title: "Approval".to_owned(),
             body: Some("body".to_owned()),
             route: Some("/room/!room".to_owned()),
@@ -1221,6 +1327,35 @@ mod tests {
     }
 
     #[test]
+    fn native_payload_retains_closed_sound_policy_and_optional_generation_binding() {
+        let notification: DesktopNotificationPayload = serde_json::from_value(serde_json::json!({
+            "title": "Message", "sessionGeneration": 7, "sound": "silent",
+            "dismissKeys": ["candidate:notif-7-12"]
+        }))
+        .unwrap();
+        let sanitized = sanitize_notification_payload(notification).unwrap();
+        assert_eq!(sanitized.session_generation, Some(7));
+        assert_eq!(
+            sanitized.sound,
+            Some(DesktopNotificationSoundPolicy::Silent)
+        );
+        assert_eq!(
+            sanitized.dismiss_keys,
+            Some(vec!["candidate:notif-7-12".to_owned()])
+        );
+        for sound in ["muted", "other", "Silent"] {
+            assert!(serde_json::from_value::<DesktopNotificationPayload>(
+                serde_json::json!({"title": "Message", "sound": sound})
+            )
+            .is_err());
+        }
+        let unbound: DesktopNotificationPayload =
+            serde_json::from_value(serde_json::json!({"title": "System notice"})).unwrap();
+        assert!(unbound.session_generation.is_none());
+        assert!(unbound.sound.is_none());
+    }
+
+    #[test]
     fn sanitize_dismiss_key_allows_matrix_ids_and_rejects_unsafe_values() {
         assert_eq!(
             sanitize_dismiss_key("room:!room:example.org"),
@@ -1230,6 +1365,19 @@ mod tests {
             sanitize_dismiss_key("event:$event:example.org"),
             Some("event:$event:example.org".to_owned())
         );
+        assert_eq!(
+            sanitize_dismiss_key("candidate:notif-7-12"),
+            Some("candidate:notif-7-12".to_owned())
+        );
+        for key in [
+            "candidate:notif-7",
+            "candidate:notif-7-12-extra",
+            "candidate:notif-x-12",
+            "candidate:notif-7-1\n2",
+            "candidate:other-7-12",
+        ] {
+            assert_eq!(sanitize_dismiss_key(key), None, "{key:?}");
+        }
         assert_eq!(sanitize_dismiss_key("invite:abc"), None);
         assert_eq!(sanitize_dismiss_key("room:"), None);
         assert_eq!(sanitize_dismiss_key("room:!room example"), None);

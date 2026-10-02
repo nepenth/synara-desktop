@@ -1,16 +1,11 @@
-//! Desktop well-known HTTP adapter plus shared login-flow transport re-exports.
-//!
-//! Well-known fetching lives in `synara-core::app::auth`. This shell file
-//! constructs the product user-agent and re-exports the Core transport.
-
+#[cfg(test)]
 use super::error::AuthError;
+#[cfg(test)]
 use crate::matrix::client_builder::default_user_agent;
+#[cfg(test)]
+pub use synara_core::app::auth::{parse_well_known_client_json, HttpDiscoveryTransport};
 
-pub use synara_core::app::auth::{
-    parse_login_types_json, parse_well_known_client_json, HttpDiscoveryTransport,
-    HttpLoginFlowTransport, AUTH_HTTP_MAX_RESPONSE_BYTES, AUTH_HTTP_TIMEOUT_SECS,
-};
-
+#[cfg(test)]
 /// Product well-known transport (desktop user-agent).
 pub fn product_http_discovery_transport() -> Result<HttpDiscoveryTransport, AuthError> {
     HttpDiscoveryTransport::new_with_user_agent(default_user_agent())

@@ -157,11 +157,47 @@ pub async fn matrix_agent_approvals_list(
 
 #[tauri::command]
 pub async fn matrix_agent_approval_decide(
+    app: tauri::AppHandle,
     core: State<'_, Arc<synara_core::Core>>,
     room_id: String,
     event_id: String,
     action_id: String,
+    notification_session_generation: Option<u64>,
 ) -> Result<NativeAgentApprovalDecisionResult, MatrixAuthCommandError> {
+    if let Some(generation) = notification_session_generation {
+        let core = core.inner().clone();
+        // This task owns the admission gate through the SDK mutation even if
+        // the renderer drops its response waiter. Desktop and Core generation
+        // counters are distinct; never substitute this into the Core envelope.
+        return tauri::async_runtime::spawn(async move {
+            use tauri::Manager;
+            let auth = app.state::<crate::matrix::auth::MatrixAuthState>();
+            auth.with_session_generation(generation, || {
+                crate::bridge::timeline_reactions::agent_approval_decide(
+                    core.as_ref(),
+                    room_id,
+                    event_id,
+                    action_id,
+                )
+            })
+            .await
+            .unwrap_or_else(|| {
+                Err(MatrixAuthCommandError::new(
+                    "Forbidden",
+                    "This notification belongs to an inactive session.",
+                    "agent-approval-stale-notification-session",
+                ))
+            })
+        })
+        .await
+        .map_err(|_| {
+            MatrixAuthCommandError::new(
+                "Forbidden",
+                "The native approval action was interrupted.",
+                "agent-approval-notification-task-failed",
+            )
+        })?;
+    }
     crate::bridge::timeline_reactions::agent_approval_decide(
         core.inner().as_ref(),
         room_id,
@@ -374,33 +410,6 @@ pub async fn matrix_timeline_call_decline(
     .await
 }
 
-pub(super) fn map_timeline_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "d0.3-timeline-invalid-room-id" => (
-            "InvalidRequest",
-            "The native Matrix timeline request is invalid.",
-        ),
-        "d0.3-timeline-room-not-found" | "d0.3-timeline-not-open" => {
-            ("NotFound", "The native Matrix timeline is not available.")
-        }
-        _ => ("Unknown", "The native Matrix timeline is unavailable."),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
-pub(super) fn map_reaction_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let code = if diagnostic_id.contains("invalid") {
-        "InvalidRequest"
-    } else {
-        "Unknown"
-    };
-    MatrixAuthCommandError::new(
-        code,
-        "The native Matrix reaction operation could not be completed.",
-        diagnostic_id,
-    )
-}
-
 pub(super) fn require_send_session_mut(
     session: Option<&mut ManagedMatrixSession>,
 ) -> Result<&mut ManagedMatrixSession, MatrixAuthCommandError> {
@@ -437,22 +446,4 @@ pub(super) fn parse_reply_event_id(
                 .map_err(|_| map_send_error("d0.4-send-invalid-reply-event-id"))
         })
         .transpose()
-}
-
-pub(super) fn parse_required_event_id(
-    event_id: &str,
-    diagnostic_id: &'static str,
-) -> Result<OwnedEventId, MatrixAuthCommandError> {
-    event_id
-        .trim()
-        .parse()
-        .map_err(|_| map_timeline_action_error(diagnostic_id))
-}
-
-pub(super) fn map_timeline_action_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    MatrixAuthCommandError::new(
-        "InvalidRequest",
-        "The native Matrix timeline action request is invalid.",
-        diagnostic_id,
-    )
 }

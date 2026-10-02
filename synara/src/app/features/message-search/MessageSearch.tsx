@@ -19,7 +19,13 @@ import { decodeSearchParamValueArray, encodeSearchParamValueArray } from '../../
 import { useRooms } from '../../state/hooks/roomList';
 import { allRoomsAtom } from '../../state/room-list/roomList';
 import { mDirectAtom } from '../../state/mDirectList';
-import { MessageSearchParams, ResultGroup, ResultItem, useMessageSearch } from './useMessageSearch';
+import {
+  MessageSearchParams,
+  ResultGroup,
+  ResultItem,
+  type SearchResult,
+  useMessageSearch,
+} from './useMessageSearch';
 import { SearchResultGroup } from './SearchResultGroup';
 import { SearchInput } from './SearchInput';
 import { SearchFilters } from './SearchFilters';
@@ -155,7 +161,11 @@ export function MessageSearch({
       ) {
         const roomId = msgSearchParams.rooms?.[0];
         if (!roomId) {
-          return Promise.resolve({ highlights: [], groups: [] });
+          return Promise.resolve({
+            highlights: [],
+            groups: [],
+            nextToken: undefined,
+          } as SearchResult);
         }
         return listRoomAttachments({
           roomId,

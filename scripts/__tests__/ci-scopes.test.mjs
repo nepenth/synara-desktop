@@ -95,7 +95,6 @@ for (const file of [
   "Cargo.toml",
   "Cargo.lock",
   "rust-toolchain.toml",
-  "src-tauri/Cargo.lock",
   ".cargo/config.toml",
 ]) {
   test(`${file} alone runs Rust compile and tests`, () => {
@@ -160,12 +159,22 @@ test("adding an icon cannot hide a workflow or dependency edit", () => {
   );
 });
 
-
 test("iOS path changes on an unlabeled feature PR run the compile gate only", () => {
   for (const file of [
     "synara-ios/Synara/App/SynaraApp.swift",
     "crates/synara-core/src/synara_core.udl",
     "crates/synara-core/src/ffi.rs",
+    "crates/synara-core/src/core.rs",
+    "crates/synara-core/src/core/notifications.rs",
+    "crates/synara-core/src/app/notifications/decision.rs",
+    "crates/synara-core/src/shared_core_ffi/inbox_notifications.rs",
+    "crates/synara-core/Cargo.toml",
+    "crates/synara-nse-core/src/lib.rs",
+    "crates/synara-core-bindgen/Cargo.toml",
+    "Cargo.toml",
+    "Cargo.lock",
+    "rust-toolchain.toml",
+    ".cargo/config.toml",
     "scripts/generate-synara-core-swift.sh",
   ]) {
     const result = scopes([file]);
@@ -176,7 +185,9 @@ test("iOS path changes on an unlabeled feature PR run the compile gate only", ()
 });
 test("the compile gate never runs alongside or instead of a scheduled simulator lane", () => {
   // Labeled opt-in: full lane, compile gate redundant.
-  const labeled = scopes(["synara-ios/project.yml"], { PR_LABELS: "needs-ios" });
+  const labeled = scopes(["synara-ios/project.yml"], {
+    PR_LABELS: "needs-ios",
+  });
   assert.equal(labeled.ios, "true");
   assert.equal(labeled.ios_compile, "false");
   // Release PR: full lane.
@@ -191,12 +202,12 @@ test("the compile gate never runs alongside or instead of a scheduled simulator 
     GITHUB_REF_NAME: "main",
   });
   assert.equal(mainPush.ios, "true");
+  assert.equal(mainPush.ios_ui, "false");
   assert.equal(mainPush.ios_compile, "false");
   // No iOS paths at all: nothing Apple-side runs.
   for (const result of [
     scopes(["docs/releases/v2.1.2.md"]),
     scopes(["synara/src/app/pages/auth/AuthFooter.tsx"]),
-    scopes(["crates/synara-core/src/app/notifications/decision.rs"]),
   ]) {
     assert.equal(result.ios, "false");
     assert.equal(result.ios_compile, "false");
@@ -208,19 +219,59 @@ test("the compile gate never runs alongside or instead of a scheduled simulator 
     "false"
   );
 });
-test("NSE production feature guard changes run both iOS gates", () => {
-  const result = scopes(["scripts/check-synara-nse-core-production-features.mjs"], {
-    EVENT_NAME: "push",
-    GITHUB_REF_NAME: "main",
-  });
+test("NSE production feature guard changes run the unit gate on main", () => {
+  const result = scopes(
+    ["scripts/check-synara-nse-core-production-features.mjs"],
+    {
+      EVENT_NAME: "push",
+      GITHUB_REF_NAME: "main",
+    }
+  );
   assert.equal(result.ios, "true");
-  assert.equal(result.ios_ui, "true");
+  assert.equal(result.ios_ui, "false");
 });
-test("NSE archive export guard changes run both iOS gates", () => {
+test("NSE archive export guard changes run the unit gate on main", () => {
   const result = scopes(["scripts/check-synara-nse-core-archive-exports.sh"], {
     EVENT_NAME: "push",
     GITHUB_REF_NAME: "main",
   });
   assert.equal(result.ios, "true");
-  assert.equal(result.ios_ui, "true");
+  assert.equal(result.ios_ui, "false");
+});
+
+test("shared Core changes on main run Apple unit tests without enabling UI tests", () => {
+  for (const file of [
+    "crates/synara-core/src/app/notifications/decision.rs",
+    "crates/synara-core/src/shared_core_ffi/inbox_notifications.rs",
+    "crates/synara-core/src/core.rs",
+  ]) {
+    const result = scopes([file], {
+      EVENT_NAME: "push",
+      GITHUB_REF_NAME: "main",
+    });
+    assert.equal(result.ios, "true", file);
+    assert.equal(result.ios_ui, "false", file);
+    assert.equal(result.ios_compile, "false", file);
+  }
+});
+test("release pushes and scheduled/manual full runs retain both Apple test lanes", () => {
+  for (const env of [
+    { EVENT_NAME: "push", GITHUB_REF_NAME: "release/v2.1.2" },
+    { EVENT_NAME: "schedule" },
+    { EVENT_NAME: "workflow_dispatch" },
+  ]) {
+    const result = scopes(["crates/synara-core/src/core.rs"], env);
+    assert.equal(result.ios, "true");
+    assert.equal(result.ios_ui, "true");
+    assert.equal(result.ios_compile, "false");
+  }
+});
+test("a main push with missing diff metadata still keeps UI tests opt-in", () => {
+  const result = scopes(["crates/synara-core/src/core.rs"], {
+    EVENT_NAME: "push",
+    GITHUB_REF_NAME: "main",
+    BASE_SHA: "",
+  });
+  assert.equal(result.ios, "true");
+  assert.equal(result.ios_ui, "false");
 });

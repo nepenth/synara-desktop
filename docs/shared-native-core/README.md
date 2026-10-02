@@ -4,8 +4,10 @@
 > application engine for desktop and iOS. Commit IDs, phase labels, and
 > incomplete-state claims below are retained as dated migration evidence. See
 > [ADR 0003](../adr/0003-shared-native-rust-core.md) and
-> [the 2026-08-17 local proof](15-2026-08-17-local-proof.md) for current
-> architecture and the latest consolidated validation.
+> [the 2026-08-17 local proof](15-2026-08-17-local-proof.md) for dated local and
+> signed-live evidence. The later consolidation's validation and remaining proof
+> limits are recorded in the [native maturity retirement ledger](../rust-maturity-retirements.md)
+> and [dependency update dispositions](../dependency-update-dispositions.md).
 
 A plan to unify the **desktop** (Tauri, macOS and Linux) and **iOS** (SwiftUI)
 clients onto **one transport-agnostic Rust application-logic core** —

@@ -5,11 +5,6 @@ use crate::dto::LocalEchoState;
 use crate::transport::MatrixIpcErrorCategory;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_send_markers(), MATRIX_SEND_MARKER);
-}
-
-#[test]
 fn text_payload_budget_is_combined_utf8_bytes_and_shared_by_send_and_edit() {
     let at_limit = "🙂".repeat(MAX_OUTBOUND_TEXT_PAYLOAD_BYTES / "🙂".len());
     assert_eq!(at_limit.len(), MAX_OUTBOUND_TEXT_PAYLOAD_BYTES);

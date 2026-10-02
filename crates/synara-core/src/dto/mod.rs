@@ -10,9 +10,6 @@
 //! Independent of `matrix::ipc` transport envelopes (P1.3). Domain bodies may
 //! later compose into snapshot/delta payloads; P1.3 envelopes remain stable.
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod ids;
 mod media;
 mod member;
@@ -44,9 +41,6 @@ pub use thread::*;
 pub use timeline::*;
 pub use typing::*;
 pub use upload::*;
-
-/// Marker that domain DTO modules are linked (no Client / network / Tauri cmds).
-pub const MATRIX_DTO_MARKER: &str = "matrix-domain-dtos-p1.4";
 
 /// Policy: media bytes must never ride JSON IPC (mirrors IPC constant).
 pub const FORBID_MEDIA_BYTES_OVER_JSON_IPC: bool = true;

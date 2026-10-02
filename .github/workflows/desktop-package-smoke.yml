@@ -102,6 +102,11 @@ jobs:
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             .github/workflows/desktop-package-smoke.yml \
             .node-version \
+            rust-toolchain.toml \
+            Cargo.toml \
+            Cargo.lock \
+            .cargo \
+            crates \
             config.json \
             package.json \
             package-lock.json \
@@ -159,7 +164,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: synara-linux-deb
-          path: src-tauri/target/release/bundle/deb/Synara_*.deb
+          path: target/release/bundle/deb/Synara_*.deb
           if-no-files-found: error
           retention-days: 1
 
@@ -266,13 +271,13 @@ jobs:
           NODE_OPTIONS: "--max_old_space_size=4096"
 
       - name: Verify macOS app signature
-        run: codesign --verify --deep --strict --verbose=2 src-tauri/target/release/bundle/macos/Synara.app
+        run: codesign --verify --deep --strict --verbose=2 target/release/bundle/macos/Synara.app
 
       - name: Upload macOS app artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: synara-macos-app
-          path: src-tauri/target/release/bundle/macos/Synara.app
+          path: target/release/bundle/macos/Synara.app
           if-no-files-found: error
           retention-days: 1
 

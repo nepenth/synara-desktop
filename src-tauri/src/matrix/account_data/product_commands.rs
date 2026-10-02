@@ -285,73 +285,12 @@ pub async fn matrix_room_notes_move_todo(
     .await
 }
 
-pub(super) fn map_mdirect_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "v-rooms.5-mdirect-invalid-room" | "v-rooms.5-mdirect-invalid-user" => (
-            "InvalidRequest",
-            "The native Matrix direct-room request is invalid.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix direct-room map is unavailable.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
 pub(super) fn map_pack_read_subscribe_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     MatrixAuthCommandError::new(
         "Unknown",
         "The native Matrix image pack subscription could not be started.",
         diagnostic_id,
     )
-}
-
-pub(super) fn map_pack_read_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "v-send.r-pack-read-invalid-room" => (
-            "InvalidRequest",
-            "The native Matrix image-pack request is invalid.",
-        ),
-        "v-send.r-pack-read-room-missing" => (
-            "NotFound",
-            "The native Matrix image-pack room was not found.",
-        ),
-        "v-send.r-pack-read-no-user" => ("Forbidden", "No native Matrix session is active."),
-        _ => (
-            "Unknown",
-            "The native Matrix image-pack projection is unavailable.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
-pub(super) fn map_pack_write_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "v-send.r-pack-write-invalid-content" => (
-            "InvalidRequest",
-            "The native Matrix image-pack write is invalid.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix image-pack write is unavailable.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
-}
-
-pub(super) fn map_later_notes_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
-    let (code, message) = match diagnostic_id {
-        "v-timeline-later-invalid-item" | "v-timeline-room-notes-invalid-item" => (
-            "InvalidRequest",
-            "The native Matrix later/notes request is invalid.",
-        ),
-        _ => (
-            "Unknown",
-            "The native Matrix later/notes account data is unavailable.",
-        ),
-    };
-    MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
 
 /// A9 decision stream: record the platform-observed focused room in Core.

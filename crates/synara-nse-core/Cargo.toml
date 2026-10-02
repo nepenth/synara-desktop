@@ -1,26 +1,29 @@
 [package]
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
 name = "synara-nse-core"
 version = "0.1.0"
 description = "Notification-extension-only bindings for the Synara native core"
-license = "AGPL-3.0-only"
-edition = "2021"
-publish = false
+license.workspace = true
+edition.workspace = true
+publish.workspace = true
 
 [lib]
 crate-type = ["lib", "staticlib"]
 
 [dependencies]
 synara-core = { path = "../synara-core", default-features = false, features = ["nse-preview"] }
-tokio = { version = "1", features = ["macros"] }
+tokio = { workspace = true, features = ["macros"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-uniffi = { version = "=0.28.3", features = ["tokio"] }
+uniffi = { workspace = true, features = ["tokio"] }
 
 [build-dependencies]
-uniffi = { version = "=0.28.3", features = ["build"] }
+uniffi = { workspace = true, features = ["build"] }
 
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt", "time"] }
+tokio = { workspace = true, features = ["macros", "rt", "time"] }
 # Live fixture setup alone uses the normal product login/sync owner. The
 # shipping extension dependency above remains explicitly narrow.
 synara-core = { path = "../synara-core", features = ["full-uniffi"] }
-url = "2"
+url = { workspace = true }

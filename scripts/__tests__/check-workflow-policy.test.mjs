@@ -25,7 +25,7 @@ test("accepts the repository workflow policy", () => {
 
 test("rejects mutable action references", () => {
   const result = inspect("ci.yml", (workflow) =>
-    workflow.replace(/actions\/checkout@[0-9a-f]{40}/, "actions/checkout@main")
+    workflow.replace(/actions\/checkout@[0-9a-f]{40}/, "actions/checkout@main"),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /full commit SHA/);
@@ -33,12 +33,12 @@ test("rejects mutable action references", () => {
 
 test("rejects missing least-privilege permissions and timeouts", () => {
   const noPermissions = inspect("ios-skeleton.yml", (workflow) =>
-    workflow.replace("permissions:\n  contents: read\n\n", "")
+    workflow.replace("permissions:\n  contents: read\n\n", ""),
   );
   assert.match(noPermissions.errors.join("\n"), /contents: read/);
 
   const noTimeout = inspect("ios-skeleton.yml", (workflow) =>
-    workflow.replace("    timeout-minutes: 90\n", "")
+    workflow.replace("    timeout-minutes: 90\n", ""),
   );
   assert.match(noTimeout.errors.join("\n"), /must have a 1-120 minute timeout/);
 });
@@ -47,8 +47,8 @@ test("rejects secrets exposed to an entire job", () => {
   const result = inspect("macos-signed-build.yml", (workflow) =>
     workflow.replace(
       "    steps:\n",
-      "    env:\n      LEAKED: ${{ secrets.APPLE_ID }}\n    steps:\n"
-    )
+      "    env:\n      LEAKED: ${{ secrets.APPLE_ID }}\n    steps:\n",
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /scope secrets/);
@@ -57,13 +57,13 @@ test("rejects secrets exposed to an entire job", () => {
 test("requires task PR validation on the Matrix Rust integration branch", () => {
   for (const workflowName of validationWorkflows) {
     const result = inspect(workflowName, (workflow) =>
-      workflow.replace(`, "${integrationBranch}"`, "")
+      workflow.replace(`, "${integrationBranch}"`, ""),
     );
     assert.equal(result.ok, false, workflowName);
     assert.match(
       result.errors.join("\n"),
       /must validate pull requests targeting/,
-      workflowName
+      workflowName,
     );
   }
 });
@@ -73,22 +73,22 @@ test("requires a cancellable validation lane per branch", () => {
     const noBranchLane = inspect(workflowName, (workflow) =>
       workflow.replace(
         "${{ github.head_ref || github.ref_name }}",
-        "${{ github.ref }}"
-      )
+        "${{ github.ref }}",
+      ),
     );
     assert.match(
       noBranchLane.errors.join("\n"),
       /share one cancellable lane per branch/,
-      workflowName
+      workflowName,
     );
 
     const noCancellation = inspect(workflowName, (workflow) =>
-      workflow.replace("cancel-in-progress: true", "cancel-in-progress: false")
+      workflow.replace("cancel-in-progress: true", "cancel-in-progress: false"),
     );
     assert.match(
       noCancellation.errors.join("\n"),
       /must cancel obsolete runs within the same branch lane/,
-      workflowName
+      workflowName,
     );
   }
 });
@@ -97,8 +97,8 @@ test("rejects an unstable or skippable package gate", () => {
   const result = inspect("desktop-package-smoke.yml", (workflow) =>
     workflow.replace(
       `  pull_request:\n    branches: [main, "${integrationBranch}", "release/**"]`,
-      `  pull_request:\n    branches: [main, "${integrationBranch}", "release/**"]\n    paths: ["src-tauri/**"]`
-    )
+      `  pull_request:\n    branches: [main, "${integrationBranch}", "release/**"]\n    paths: ["src-tauri/**"]`,
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /stable aggregate check/);
@@ -106,15 +106,15 @@ test("rejects an unstable or skippable package gate", () => {
 
 test("rejects weakened package change detection", () => {
   const missingPath = inspect("desktop-package-smoke.yml", (workflow) =>
-    workflow.replace("            src-tauri \\\n", "")
+    workflow.replace("            src-tauri \\\n", ""),
   );
   assert.match(missingPath.errors.join("\n"), /must retain the src-tauri path/);
 
   const noDiff = inspect("desktop-package-smoke.yml", (workflow) =>
     workflow.replace(
       'git diff --quiet "$BASE_SHA" "$HEAD_SHA" --',
-      "git diff --quiet --"
-    )
+      "git diff --quiet --",
+    ),
   );
   assert.match(noDiff.errors.join("\n"), /PR diff-based package change/);
 });
@@ -125,14 +125,20 @@ test("requires strict desktop-shell and shared-workspace Rust gates in CI", () =
     ["cargo clippy --locked --all-targets -- -D warnings", /strict Rust lint/],
     ["cargo fmt --all -- --check", /shared workspace formatting/],
     [
-      "cargo clippy --locked --workspace --all-targets -- -D warnings",
+      "cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings",
       /shared workspace lint/,
     ],
-    ["cargo check --locked --workspace", /shared workspace check/],
-    ["cargo test --locked --workspace", /shared workspace tests/],
+    [
+      "cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
+      /shared workspace check/,
+    ],
+    [
+      "cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
+      /shared workspace tests/,
+    ],
   ]) {
     const result = inspect("ci.yml", (workflow) =>
-      workflow.replace(command, "cargo --version")
+      workflow.replace(command, "cargo --version"),
     );
     assert.equal(result.ok, false, command);
     assert.match(result.errors.join("\n"), expected, command);
@@ -142,20 +148,20 @@ test("requires strict desktop-shell and shared-workspace Rust gates in CI", () =
 test("requires exact-tag shared Rust workspace validation", () => {
   const result = inspect("release.yml", (workflow) =>
     workflow.replace(
-      "          cargo test --locked --workspace",
-      "          cargo --version"
-    )
+      "          cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
+      "          cargo --version",
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(
     result.errors.join("\n"),
-    /Exact-tag desktop quality must validate the shared Rust workspace/
+    /Exact-tag desktop quality must validate the shared Rust workspace/,
   );
 });
 
 test("rejects per-tag production release concurrency", () => {
   const result = inspect("release.yml", (workflow) =>
-    workflow.replace("group: production-release", "group: ${{ github.ref }}")
+    workflow.replace("group: production-release", "group: ${{ github.ref }}"),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /serialized concurrency lane/);
@@ -170,32 +176,74 @@ test("rejects ungrouped dependency update fan-out", () => {
   assert.match(result.errors.join("\n"), /grouped github-actions-updates/);
 });
 
+test("Cargo dependency updates use exactly one root workspace lane", () => {
+  for (const dependabot of [
+    valid.dependabot.replace(
+      "  - package-ecosystem: cargo\n    directory: /",
+      "  - package-ecosystem: cargo\n    directory: /src-tauri",
+    ),
+    `${valid.dependabot}\n  - package-ecosystem: cargo\n    directory: /src-tauri\n`,
+  ]) {
+    const result = inspectWorkflowPolicy({ ...valid, dependabot });
+    assert.equal(result.ok, false);
+    assert.match(
+      result.errors.join("\n"),
+      /exactly one Cargo update lane at the root/,
+    );
+  }
+});
+
+test("package publication and Rust caches use canonical workspace paths", () => {
+  for (const [name, original, replacement] of [
+    [
+      "desktop-package-smoke.yml",
+      "target/release/bundle/deb/",
+      "src-tauri/target/release/bundle/deb/",
+    ],
+    [
+      "release.yml",
+      "target/universal-apple-darwin/release/bundle/",
+      "src-tauri/target/universal-apple-darwin/release/bundle/",
+    ],
+    ["ci.yml", ". -> target", "src-tauri -> target"],
+  ]) {
+    const result = inspect(name, (workflow) =>
+      workflow.replace(original, replacement),
+    );
+    assert.equal(result.ok, false, name);
+    assert.match(
+      result.errors.join("\n"),
+      /root Cargo lockfile, workspace cache, and target output paths/,
+    );
+  }
+});
+
 test("requires immutable version guards before validation and publication", () => {
   const missingValidationGuard = inspect("release.yml", (workflow) =>
     workflow.replace(
       "      - name: Require a fresh incremented release version\n        env:\n          GH_TOKEN: ${{ github.token }}\n        run: node scripts/assert-release-version.mjs\n\n",
-      ""
-    )
+      "",
+    ),
   );
   assert.match(
     missingValidationGuard.errors.join("\n"),
-    /immutable release-version guard/
+    /immutable release-version guard/,
   );
 
   const misplacedPublishGuard = inspect("release.yml", (workflow) =>
     workflow
       .replace(
         "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n",
-        ""
+        "",
       )
       .replace(
         "      - name: Create fixed pacman repository release\n",
-        "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n      - name: Create fixed pacman repository release\n"
-      )
+        "      - name: Recheck immutable release version before publication\n        run: node scripts/assert-release-version.mjs\n\n      - name: Create fixed pacman repository release\n",
+      ),
   );
   assert.match(
     misplacedPublishGuard.errors.join("\n"),
-    /must run immediately before/
+    /must run immediately before/,
   );
 });
 
@@ -207,6 +255,6 @@ test("rejects a retained alternate semantic-release publisher", () => {
   assert.equal(result.ok, false);
   assert.match(
     result.errors.join("\n"),
-    /alternate semantic-release publisher/
+    /alternate semantic-release publisher/,
   );
 });

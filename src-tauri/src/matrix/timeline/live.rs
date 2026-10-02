@@ -7,17 +7,18 @@ use std::sync::Arc;
 
 use tauri::{AppHandle, Emitter};
 
+#[cfg(test)]
 pub use synara_core::app::timeline::{
-    NativeDecryptionState, NativeReactionMutation, NativeReactionMutationResult,
-    NativeTimelineCloseRequest, NativeTimelineDirection, NativeTimelineEventReadback,
-    NativeTimelineFollowLiveRequest, NativeTimelineItem, NativeTimelineJumpLatestRequest,
-    NativeTimelineOpenPosition, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
-    NativeTimelineOwner, NativeTimelineReaction, NativeTimelineReactionSender,
-    NativeTimelineReadAction, NativeTimelineReadIntent, NativeTimelineReadStateReadback,
-    NativeTimelineReadStateRequest, NativeTimelineRegistry, NativeTimelineSnapshot,
-    NativeTimelineTimestampToEventReadback, NativeTimelineViewPaginationRequest,
-    NativeTimelineViewportHint, NativeUtdPhase, NativeUtdStatus, TimelineViewUpdateEmit,
-    NATIVE_TIMELINE_OPEN_SCHEMA_VERSION, NATIVE_TIMELINE_VIEWPORT_RESTORE_TTL_MS,
+    NativeReactionMutation, NativeTimelineReaction, NativeTimelineRegistry,
+};
+
+#[cfg(test)]
+pub use synara_core::app::timeline::NativeTimelineDirection;
+pub use synara_core::app::timeline::{
+    NativeReactionMutationResult, NativeTimelineCloseRequest, NativeTimelineEventReadback,
+    NativeTimelineJumpLatestRequest, NativeTimelineOpenReadback, NativeTimelineOpenRequest,
+    NativeTimelineOwner, NativeTimelineReadAction, NativeTimelineReadStateReadback,
+    NativeTimelineReadStateRequest, NativeTimelineViewPaginationRequest, TimelineViewUpdateEmit,
     NATIVE_TIMELINE_VIEW_UPDATED_EVENT,
 };
 

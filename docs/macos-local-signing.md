@@ -52,7 +52,7 @@ xcrun stapler validate
 Outputs are under:
 
 ```text
-src-tauri/target/universal-apple-darwin/release/bundle/
+target/universal-apple-darwin/release/bundle/
 ```
 
 ## Troubleshooting

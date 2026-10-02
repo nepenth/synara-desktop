@@ -451,6 +451,7 @@ test('platform notifications normalize shared requests before desktop delivery',
       route: 'https://example.org',
       privacy: 'private',
       sound: 'silent',
+      sessionGeneration: 7,
     });
 
     assert.equal(result, true);
@@ -461,6 +462,8 @@ test('platform notifications normalize shared requests before desktop delivery',
           notification: {
             title: 'Reminder',
             body: 'Due now.',
+            sound: 'silent',
+            sessionGeneration: 7,
             route: undefined,
           },
         },
@@ -506,6 +509,7 @@ test('platform notifications forward approval actions after shared normalization
           notification: {
             title: 'Approval',
             body: undefined,
+            sound: 'default',
             route: undefined,
             actions: [
               { id: 'agent-approval.approve-once', label: 'Approve once' },

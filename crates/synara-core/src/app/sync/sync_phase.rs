@@ -2,7 +2,7 @@
 //!
 //! Moved from src-tauri `matrix/diagnostics/health.rs` into the shared core so
 //! the core sync module can depend on it without an src-tauri import cycle.
-//! `health.rs` re-exports this name so every `crate::matrix::diagnostics::
+//! Owner status and presentation projections share this `SyncPhase`
 //! SyncPhase` path keeps resolving identically.
 
 use serde::{Deserialize, Serialize};

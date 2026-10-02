@@ -529,7 +529,7 @@ test('logout clears the facade identity after the native command succeeds', asyn
       homeserver_url: 'https://matrix.example.org',
       sessionGeneration: 8,
     },
-    matrix_logout: { status: 'ok' },
+    matrix_logout: { status: 'logged_out' },
   });
   const client = createNativeMatrixClient(invoke);
   await client.refresh();
@@ -537,6 +537,35 @@ test('logout clears the facade identity after the native command succeeds', asyn
 
   assert.equal(client.getUserId(), null);
   assert.equal(client.getSafeUserId(), '');
+});
+
+test('native logout rejects unavailable, malformed, and failed completion without clearing identity', async () => {
+  for (const outcome of [
+    unavailable,
+    ok({ status: 'logged_in' }),
+    ok(undefined),
+    new Error('local deletion failed'),
+  ]) {
+    const client = createNativeMatrixClient(async (command) => {
+      if (command === 'matrix_logout') {
+        if (outcome instanceof Error) throw outcome;
+        return outcome;
+      }
+      if (command === 'matrix_session_snapshot')
+        return ok({
+          status: 'logged_in',
+          user_id: '@alice:example.org',
+          device_id: 'DEVICE',
+          homeserver_url: 'https://matrix.example.org',
+          sessionGeneration: 8,
+        });
+      return unavailable;
+    });
+    await client.refresh();
+    await assert.rejects(client.logout());
+    assert.equal(client.getUserId(), '@alice:example.org');
+    assert.equal(client.getSafeUserId(), '@alice:example.org');
+  }
 });
 
 test('F2 fetchRoomEvent proxies matrix_timeline_event_readback', async () => {
@@ -933,4 +962,27 @@ test('F6c-2a crypto reading exposes getOwnDeviceKeys continuity surfaceless stub
     getOwnDeviceKeys?(): Promise<{ ed25519: string; curve25519: string }>;
   };
   assert.ok(!crypto.getOwnDeviceKeys, 'D1C: renderer crypto must not expose own-device keys');
+});
+
+test('confirmed native logout clears identity even when a stopped-sync listener throws', async () => {
+  const { invoke } = invokingWith({
+    matrix_session_snapshot: {
+      status: 'logged_in',
+      userId: '@alice:example.org',
+      deviceId: 'DEVICE',
+      homeserverUrl: 'https://matrix.example.org',
+      sessionGeneration: 7,
+    },
+    matrix_sync_status: { readiness: 'running', sessionGeneration: 7 },
+    matrix_logout: { status: 'logged_out' },
+  });
+  const client = createNativeMatrixClient(invoke);
+  await client.refresh();
+  assert.equal(client.getSessionGeneration(), 7);
+  client.on('sync', () => {
+    throw new Error('renderer listener failed');
+  });
+  await client.logout();
+  assert.equal(client.getSafeUserId(), '');
+  assert.equal(client.getSessionGeneration(), undefined);
 });

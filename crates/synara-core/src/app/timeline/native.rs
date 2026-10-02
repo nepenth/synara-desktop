@@ -5,10 +5,12 @@
 
 use serde::{Deserialize, Serialize};
 
+#[cfg(test)]
 use super::view::{
     TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineViewCapabilities,
-    TimelineViewPosition, TimelineViewSnapshot, TIMELINE_VIEW_SCHEMA_VERSION,
+    TIMELINE_VIEW_SCHEMA_VERSION,
 };
+use super::view::{TimelineViewPosition, TimelineViewSnapshot};
 
 /// Version of the bounded native timeline-open contract.
 pub const NATIVE_TIMELINE_OPEN_SCHEMA_VERSION: u32 = 1;

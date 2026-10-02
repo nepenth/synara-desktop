@@ -3,6 +3,10 @@
 use super::*;
 use crate::matrix::dto::{TimelineItem, TimelineMessageItem};
 use crate::matrix::ipc::MatrixIpcErrorCategory;
+use synara_core::app::timeline::{
+    TimelinePageState, TimelinePaginationState, TimelineReadState, TimelineViewCapabilities,
+    TimelineViewPosition,
+};
 
 fn msg(id: &str, body: &str) -> TimelineItem {
     TimelineItem::Message(TimelineMessageItem {
@@ -19,11 +23,6 @@ fn msg(id: &str, body: &str) -> TimelineItem {
         is_redacted: None,
         thread_root_id: None,
     })
-}
-
-#[test]
-fn marker_stable() {
-    assert_eq!(matrix_timeline_markers(), MATRIX_TIMELINE_MARKER);
 }
 
 #[test]
@@ -798,6 +797,7 @@ fn p5_4_retire_generation_cancels_in_flight() {
 
 mod actions_pure {
     use super::*;
+    use synara_core::app::timeline::should_attach_formatted_body;
 
     #[test]
     fn formatted_body_attaches_only_when_it_differs_from_plain_text() {

@@ -149,8 +149,3 @@ fn sha256_prefix_hex(input: &str, hex_chars: usize) -> String {
     let n = hex_chars.min(encoded.len());
     encoded[..n].to_owned()
 }
-
-#[cfg(test)]
-pub(super) fn fingerprint_for_test(canonical: &str) -> String {
-    sha256_prefix_hex(canonical, 32)
-}

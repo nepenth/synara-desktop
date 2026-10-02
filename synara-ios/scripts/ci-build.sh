@@ -171,9 +171,8 @@ if [[ "${#nse_archives[@]}" -eq 0 ]]; then
   echo "SynaraNseCore XCFramework is missing libsynara_nse_core archives" >&2
   exit 1
 fi
-# Capture completed inspection output. Apple nm cannot read rustc 1.96 /
-# LLVM 22 bitcode; the checker skips that reader mismatch without treating it
-# as a failed compile, and still rejects full-Core UniFFI exports.
+# Decode each published archive architecture with the selected Rust LLVM tools;
+# require the NSE ABI export and reject full-Core symbols. Decoder errors fail.
 "$nse_archive_checker" "${nse_archives[@]}"
 for generated_ffi_file in synara_coreFFI.h module.modulemap; do
   if ! find "SynaraCore/Artifacts/SynaraCore.xcframework" \

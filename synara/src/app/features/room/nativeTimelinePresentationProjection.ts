@@ -1,4 +1,6 @@
-import { Element, Text, htmlToDOM, type DOMNode } from 'html-react-parser';
+import { isTag, isText } from 'domhandler';
+import { htmlToDOM, type DOMNode } from 'html-react-parser';
+import type { ChildNode } from 'domhandler';
 import { prepareNativeFormattedBody } from './nativeTimelineRichText';
 
 export type NativeFormattedElementPresentation =
@@ -56,9 +58,9 @@ export const classifyNativeFormattedElement = (
   return 'passthrough';
 };
 
-const exactText = (node: DOMNode): string => {
-  if (node instanceof Text) return node.data;
-  if (node instanceof Element) return node.children.map(exactText).join('');
+const exactText = (node: ChildNode): string => {
+  if (isText(node)) return node.data;
+  if (isTag(node)) return node.children.map(exactText).join('');
   return '';
 };
 
@@ -82,9 +84,9 @@ export const projectNativeFormattedBody = (
   const inlineImageFallbacks: string[] = [];
   const resourceOwningElements = (sanitizedHtml.match(/<img\b/gi) ?? []).length;
 
-  const visit = (node: DOMNode): void => {
-    if (!(node instanceof Element)) return;
-    const parentName = node.parent instanceof Element ? node.parent.name : undefined;
+  const visit = (node: ChildNode): void => {
+    if (!isTag(node)) return;
+    const parentName = node.parent !== null && isTag(node.parent) ? node.parent.name : undefined;
     const presentation = classifyNativeFormattedElement(node.name, node.attribs, parentName);
 
     if (node.name === 'strong' || node.name === 'b') semanticKinds.add('bold');

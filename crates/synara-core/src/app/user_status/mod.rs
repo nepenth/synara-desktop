@@ -16,11 +16,3 @@ pub use native::{
     NativeUserStatusSnapshot, NativeUserStatusWriteResult, StatusWrite, MAX_STATUS_EMOJI_BYTES,
     MAX_STATUS_TEXT_BYTES, USER_STATUS_MARKER,
 };
-
-/// Touch MSC4426 paths so they remain linked in non-test builds.
-pub fn matrix_user_status_markers() -> &'static str {
-    debug_assert_eq!(USER_STATUS_MARKER, "matrix-user-status-msc4426");
-    debug_assert_eq!(MAX_STATUS_EMOJI_BYTES, 32);
-    debug_assert_eq!(MAX_STATUS_TEXT_BYTES, 256);
-    USER_STATUS_MARKER
-}

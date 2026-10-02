@@ -17,14 +17,6 @@ fn hit(room_id: &str, name: &str) -> DirectoryRoomHit {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(
-        matrix_room_directory_markers(),
-        MATRIX_ROOM_DIRECTORY_MARKER
-    );
-}
-
-#[test]
 fn begin_apply_dedup_stale() {
     let mut s = RoomDirectorySession::new(1);
     let rid = s.begin("matrix", Some("matrix.org".into())).unwrap();

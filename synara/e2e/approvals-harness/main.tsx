@@ -5,7 +5,7 @@ import { MemoryRouter, useNavigate } from 'react-router-dom';
 import { decideAgentApprovalWithNativeOwner } from '../../src/app/features/room/nativeReactionOwner';
 import { Box, Icon, IconButton, Icons, Text, configClass, varsClass, color } from 'folds';
 import 'folds/dist/style.css';
-import '@fontsource/inter/variable.css';
+import '@fontsource-variable/inter';
 import '../../src/index.css';
 import { darkTheme, synaraLightTheme } from '../../src/colors.css';
 import {

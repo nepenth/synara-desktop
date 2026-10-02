@@ -1,5 +1,12 @@
 # 09 — References
 
+> **Historical migration operating guide.** The work queue, source paths,
+> command counts, resource constraints, and agent launch instructions below apply
+> to the recorded evidence tip. They are not the current operating policy. Use
+> the accepted ADRs, current source, and [build and release runbook](../build-and-release.md)
+> for new work; use the [consolidation ledger](../rust-maturity-retirements.md)
+> for validation and remaining proof limits.
+
 ## In-repo source of truth
 
 - **Implementer playbook (start here):**

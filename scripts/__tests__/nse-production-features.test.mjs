@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync, chmodSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { spawnSync } from "node:child_process";
@@ -162,3 +162,65 @@ for (const target of [
     assert.match(result.stderr, /must not enable the full Core UniFFI feature/);
   });
 }
+
+for (const feature of [
+  "x509-identity",
+  "experimental-x509-identity-verification",
+  "rust-x509-verifier-impl",
+]) {
+  test(`upstream-only ${feature} is rejected in the forward feature graph`, (t) => {
+    const manifest = fixture(t);
+    const root = dirname(manifest);
+    mkdirSync(join(root, "crypto/src"), { recursive: true });
+    writeFileSync(join(root, "crypto/src/lib.rs"), "");
+    writeFileSync(join(root, "crypto/Cargo.toml"), `[package]
+name = "matrix-sdk-crypto"
+version = "0.1.0"
+edition = "2021"
+[features]
+${feature} = []
+`);
+    writeFileSync(manifest, readFileSync(manifest, "utf8").replace('"core", "nse"', '"core", "nse", "crypto"'));
+    const core = join(root, "core/Cargo.toml");
+    writeFileSync(core, readFileSync(core, "utf8") + `
+[dependencies]
+matrix-sdk-crypto = { path = "../crypto", features = ["${feature}"] }
+`);
+    const lock = spawnSync("cargo", ["generate-lockfile", "--offline", "--manifest-path", manifest], { encoding: "utf8" });
+    assert.equal(lock.status, 0, lock.stderr);
+    const inverse = spawnSync("cargo", ["tree", "--locked", "--manifest-path", manifest, "-p", "synara-nse-core", "-e", "normal,build,features", "-i", "synara-core", "--target", "aarch64-apple-ios"], { encoding: "utf8", env: { ...process.env, CARGO_TERM_COLOR: "never" } });
+    assert.equal(inverse.status, 0, inverse.stderr);
+    assert.doesNotMatch(inverse.stdout, new RegExp(`feature "${feature}"`));
+    const result = check(manifest);
+    assert.equal(result.status, 1, result.stderr);
+    assert.match(result.stderr, /must not enable X\.509 identity verification/);
+  });
+}
+
+test("every Cargo query overrides inherited color before matching feature nodes", (t) => {
+  const root = mkdtempSync(join(tmpdir(), "synara-nse-color-"));
+  t.after(() => rmSync(root, { recursive: true, force: true }));
+  const cargo = join(root, "cargo");
+  const log = join(root, "calls");
+  writeFileSync(cargo, String.raw`#!/bin/sh
+printf '%s\n' "$CARGO_TERM_COLOR" >> "$QUERY_LOG"
+if [ "$CARGO_TERM_COLOR" != never ]; then
+  printf 'matrix-sdk-crypto feature "\033[31mexperimental-x509-identity-verification\033[0m"\n'
+  exit 0
+fi
+case "$*" in
+  *"-i synara-core"*) printf 'synara-core feature "nse-preview"\n' ;;
+  *"normal,build,features"*)
+    if [ "$QUERY_LEAK" = 1 ]; then printf 'matrix-sdk-crypto feature "experimental-x509-identity-verification"\n'; fi ;;
+  *) printf 'synara-core v0.1.0 (/fixture/x509-identity)\n' ;;
+esac
+`);
+  chmodSync(cargo, 0o755);
+  const env = { ...process.env, PATH: `${root}:${process.env.PATH}`, CARGO_TERM_COLOR: "always", QUERY_LOG: log };
+  const clean = spawnSync(process.execPath, [checker, "fixture.toml"], { encoding: "utf8", env });
+  assert.equal(clean.status, 0, clean.stderr);
+  assert.deepEqual(readFileSync(log, "utf8").trim().split("\n"), Array(12).fill("never"));
+  const leaking = spawnSync(process.execPath, [checker, "fixture.toml"], { encoding: "utf8", env: { ...env, QUERY_LEAK: "1" } });
+  assert.equal(leaking.status, 1, leaking.stderr);
+  assert.match(leaking.stderr, /must not enable X\.509 identity verification/);
+});

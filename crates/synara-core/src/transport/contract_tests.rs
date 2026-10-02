@@ -701,12 +701,8 @@ fn fixture_inventory_matches_contract_lists() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn ipc_module_marker_has_no_sdk_surface() {
-    // SNC-P1-3: `matrix_ipc_schema_markers` is composed in the src-tauri shell
-    // from these transport constants via the `crate::matrix::ipc` re-export;
-    // from synara-core we assert the transport module's own protocol marker
-    // identity instead — the wire modules stay free of matrix_sdk types either
-    // way (compile-time + marker).
+fn ipc_wire_policy_constants_remain_closed() {
+    // Validate the current closed wire policy constants directly.
     assert_eq!(MATRIX_IPC_PROTOCOL_VERSION, 1);
     assert!(!MATRIX_IPC_KINDS.is_empty());
     assert!(!MatrixIpcErrorCategory::ALL.is_empty());

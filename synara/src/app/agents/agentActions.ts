@@ -14,7 +14,7 @@ export const AGENT_ACTION_KINDS = [
   'open_url',
 ] as const;
 
-export type AgentActionKind = typeof AGENT_ACTION_KINDS[number];
+export type AgentActionKind = (typeof AGENT_ACTION_KINDS)[number];
 
 export type AgentActionPayload = {
   id: string;

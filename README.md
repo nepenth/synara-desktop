@@ -78,9 +78,10 @@ The repository has one Matrix application engine and two native UI shells:
 - `synara-ios/` owns the native SwiftUI app, Apple platform services, Keychain,
   APNs integration, and the notification service extension.
 
-The generic shared-core command envelope intentionally excludes credentials,
-recovery material, local file paths, and large media bytes. Platform adapters
-retain those responsibilities.
+The generic shared-core command envelope excludes credentials, recovery material,
+local file paths, and large media bytes. Narrow typed Core recovery APIs own SDK
+operations and postconditions; shells retain user confirmation, secret custody,
+one-time recovery-key display, and platform file/byte transfer.
 
 See [ADR 0004](docs/adr/0004-rust-language-boundaries.md) for the binding
 rules and [ADR 0003](docs/adr/0003-shared-native-rust-core.md) for the shared
@@ -92,6 +93,7 @@ migration record, not a statement that the core is unfinished.
 ```text
 .
 |-- crates/synara-core/       Shared Rust application core
+|-- crates/synara-nse-core/   Narrow notification-extension store/preview core
 |-- crates/synara-core-bindgen/
 |                             Swift binding generator
 |-- src-tauri/                macOS/Linux native shell and adapters
@@ -113,6 +115,10 @@ need `--recursive` or any submodule command.
 - Node.js at the exact version in `.node-version` (currently 24.13.1).
 - Rust 1.96, pinned in `rust-toolchain.toml`. iOS builds also need the
   `aarch64-apple-ios` and `aarch64-apple-ios-sim` targets, which CI installs.
+  Apple generation/export checks require `llvm-tools-preview` from that same
+  toolchain: `rustup component add llvm-tools-preview --toolchain 1.96`.
+  The read-only checker resolves `llvm-nm` from the selected `rustc` sysroot;
+  it does not install tools or substitute Xcode's bitcode reader.
 - Tauri 2 platform prerequisites.
 - Xcode and XcodeGen for iOS work.
 - Linux system packages documented in [docs/linux.md](docs/linux.md) for Linux
@@ -213,11 +219,12 @@ npm --prefix synara run check:prettier
 Rust checks:
 
 ```sh
-cargo test --workspace --locked
-cargo test --manifest-path src-tauri/Cargo.toml --locked
+cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
+cargo test --locked -p synara
 ```
 
-The complete release-oriented command list is maintained in
+These development-feature tests do not establish shipping NSE feature or archive
+isolation. The complete release-oriented command list is maintained in
 [docs/build-and-release.md](docs/build-and-release.md).
 
 ## Releases
@@ -272,7 +279,9 @@ and release workflows take precedence.
 - [Code of conduct](CODE_OF_CONDUCT.md)
 - [Security reports](SECURITY.md). Do not file credentials or recovery keys in a public issue.
 
-`probes/` holds old SDK compile experiments. It is not the application.
+`probes/` holds provenance records for retired SDK experiments. Their executable
+code, manifests, and lockfiles are removed; the README records identify the
+Git revision containing the original experiments.
 `docs/matrix-rust-sdk/` and `docs/shared-native-core/` are historical migration
 records. Current architecture is the ADRs above.
 

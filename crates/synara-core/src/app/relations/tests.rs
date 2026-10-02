@@ -17,11 +17,6 @@ fn ann(room: &str, target: &str, key: &str, sender: &str) -> RelationRef {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_relations_markers(), MATRIX_RELATIONS_MARKER);
-}
-
-#[test]
 fn annotations_aggregate_and_me() {
     let mut idx = RelationIndex::new(1);
     idx.apply(ann("!r:example.org", "$e1", "👍", "@alice:example.org"))

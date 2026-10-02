@@ -2,9 +2,9 @@
 /**
  * P1.6 — Architectural CI guardrails for Matrix Rust SDK full replacement.
  *
- * Phased checks (must not break the still-JS product during migration):
- *   1. JS SDK imports: hard-ban in matrix-ipc / matrix-dto; freeze new
- *      production importers outside the committed allowlist.
+ * Current production checks:
+ *   1. JS SDK imports: hard-ban in matrix-ipc / matrix-dto and all
+ *      production paths (the committed importer allowlist is empty).
  *   2. Raw Matrix runtime HTTP: ban `/_matrix/` in product client code
  *      outside approved exception paths.
  *   3. Unversioned Matrix IPC: require protocolVersion on wire envelopes
@@ -12,8 +12,7 @@
  *   4. SDK types in DTO/IPC wire modules: ban matrix_sdk / ruma imports
  *      and type paths under src-tauri/src/matrix/{ipc,dto} and TS mirrors.
  *
- * Residual: full ban of matrix-js-sdk across all product paths waits until
- * cutover (plan Phase 11/14). Documented in
+ * The Matrix JS SDK cutover is complete. Historical rule provenance is in
  * docs/matrix-rust-sdk/p1.6-architectural-guardrails.md
  *
  * Usage:
@@ -52,16 +51,8 @@ export const PRODUCT_RUNTIME_PREFIXES = [
 /** Approved product paths that may contain `/_matrix/` literals. */
 export const RAW_MATRIX_HTTP_ALLOWLIST = new Map([
   [
-    "synara/src/sw.ts",
-    "DESKTOP-REST-EXCEPTION-001: service worker injects Matrix auth for media.",
-  ],
-  [
     "synara/src/app/cs-api.ts",
     "DESKTOP-REST-EXCEPTION-002: login-time homeserver version discovery helper.",
-  ],
-  [
-    "src-tauri/src/matrix/auth/http_transport.rs",
-    "R0.7-CS-API-001: read-only well-known + login-types listing (no credentials; no dual-backend).",
   ],
 ]);
 
@@ -442,7 +433,7 @@ export function checkRawMatrixHttp(ctx) {
       rule: "raw-matrix-http",
       path: rel,
       message:
-        "raw /_matrix/ usage outside approved product exception paths (use Matrix Rust SDK; exceptions: sw.ts, cs-api.ts)",
+        "raw /_matrix/ usage outside approved product exception paths (use Matrix Rust SDK; exception: cs-api.ts read-only server-version discovery)",
       hits,
     });
   }

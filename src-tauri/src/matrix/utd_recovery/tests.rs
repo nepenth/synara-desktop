@@ -3,11 +3,6 @@
 use super::*;
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_utd_recovery_markers(), MATRIX_UTD_RECOVERY_MARKER);
-}
-
-#[test]
 fn retry_succeed_clears_pending() {
     let mut c = UtdRecoveryCoordinator::new(1);
     let op = c

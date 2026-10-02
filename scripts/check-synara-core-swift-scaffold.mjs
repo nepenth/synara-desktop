@@ -9,6 +9,8 @@ import { constants } from "node:fs";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { readRustModuleSources } from "./lib/rust-module-sources.mjs";
+import { inspectTypedRecoveryBoundaries } from "./lib/typed-recovery-boundaries.mjs";
 
 const root = resolve(fileURLToPath(new URL("..", import.meta.url)));
 const required = [
@@ -87,10 +89,10 @@ const sessionProjectionFfi = readFileSync(
   resolve(root, "crates/synara-core/src/session_projection_ffi.rs"),
   "utf8"
 );
-const sharedCoreFfi = readFileSync(
+const sharedCoreFfi = readRustModuleSources(
   resolve(root, "crates/synara-core/src/shared_core_ffi.rs"),
-  "utf8"
-);
+  { includeTests: true }
+).source;
 const sessionProjectionAdapter = readFileSync(
   resolve(root, "synara-ios/Synara/Services/MatrixSessionProjectionMirror.swift"),
   "utf8"
@@ -309,8 +311,9 @@ const ciWorkflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8
 
 const assertions = [
   [cargo, 'crate-type = ["lib", "staticlib", "cdylib"]', "Apple library crate types"],
-  [cargo, 'uniffi = { version = "=0.28.3", features = ["tokio"] }', "pinned Tokio-aware UniFFI runtime"],
-  [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { version = "=0.28.3", features = ["cli"] }', "pinned project-owned UniFFI generator"],
+  [cargo, 'uniffi = { workspace = true, features = ["tokio"] }', "workspace Tokio-aware UniFFI runtime"],
+  [readFileSync(resolve(root, "Cargo.toml"), "utf8"), 'uniffi = "=0.32.2"', "pinned shared UniFFI version"],
+  [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { workspace = true, features = ["cli"] }', "pinned project-owned UniFFI generator"],
   [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
   [udl, "binding_scaffold_version", "P4-1 binding bootstrap"],
@@ -372,7 +375,7 @@ const assertions = [
   [swiftBindingsTests, "try await core.close()", "Swift generated FFI close execution"],
   [swiftBindingsTests, "testSharedCoreConstructsOverGeneratedRustFFI", "Swift P4-S2 Core construction test"],
   [swiftBindingsTests, "testSharedCoreAcceptsInMemorySecretStore", "Swift P4-S3a vault constructor test"],
-  [swiftBindingsTests, "SharedCore.newWithSecretStore(store:", "Swift P4-S3a UniFFI 0.28 named vault factory"],
+  [swiftBindingsTests, "SharedCore.newWithSecretStore(store:", "Swift P4-S3a UniFFI 0.32 named vault factory"],
   [swiftBindingsTests, "testSharedCoreRestoreWithoutVaultFailsClosed", "Swift P4-S3b fail-closed restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreRejectsHostileIdentityWithoutEcho", "Swift P4-S3b hostile-identity restore test"],
   [swiftBindingsTests, "testSharedCoreRestoreHoldsInstanceAcrossCalls", "Swift P4-S3b helper keeps caller-owned SharedCore"],
@@ -965,8 +968,8 @@ const assertions = [
   [udl, "NseStoreDto nse_store_status()", "P4-S11 SharedCore NSE status"],
   [udl, "NseEventPreviewDto nse_event_preview(", "P4-S11 SharedCore NSE preview"],
   [udl, "interface NseStoreError", "P4-S11 static NSE store error"],
-  [udl, "constructor();", "UniFFI 0.28 primary SharedCore constructor"],
-  [udl, "[Name=\"new_with_secret_store\"]", "UniFFI 0.28 named secret-store constructor"],
+  [udl, "constructor();", "UniFFI 0.32 primary SharedCore constructor"],
+  [udl, "[Name=\"new_with_secret_store\"]", "UniFFI 0.32 named secret-store constructor"],
   [swiftBindingsTests, "testSharedCoreNseStoreWithoutSessionFailsClosed", "Swift P4-S11 fail-closed NSE store test"],
   [sharedCoreNseStore, "openReadOnly", "P4-S11 product NSE open helper"],
   [sharedCoreNseStore, "eventPreview", "P4-S11 product NSE preview helper"],
@@ -1006,7 +1009,6 @@ const assertions = [
   [ffi, "HttpLoginFlowTransport::new()", "bounded Core login-flow transport"],
   [ffi, "probe_register_flows", "shared-core registration-flow probe call"],
   [ffi, "HttpRegisterFlowTransport::new()", "bounded Core registration-flow transport"],
-  [readFileSync(resolve(root, "crates/synara-core/build.rs"), "utf8"), "unexpected UniFFI 0.28.3 metadata-doc shape", "fail-closed generated-scaffolding lint patch"],
   [packageManifest, 'name: "SynaraCore"', "Swift package target"],
   [packageManifest, 'name: "synara_coreFFI"', "generated C FFI binary target"],
   [packageManifest, '.binaryTarget(', "generated XCFramework binary target"],
@@ -1828,7 +1830,7 @@ if (!sharedCoreBody.includes('[Name="new_with_secret_store"]')) {
 }
 if (swiftBindingsTests.includes("SharedCore(store:")) {
   throw new Error(
-    "UniFFI 0.28 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
+    "UniFFI 0.32 Swift has no SharedCore(store:) init; use SharedCore.newWithSecretStore(store:)"
   );
 }
 if (!sharedCoreBody.includes("typing_snapshot") || !sharedCoreBody.includes("typing_set")) {
@@ -1991,9 +1993,13 @@ for (const required of ["session_snapshot(", "sync_status(", "media_config(", "s
     throw new Error(`P4-S9-31 SharedCore must expose ${required}`);
   }
 }
-for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "backup_setup", "matrix_cross_signing_status"]) {
+// Dedicated recovery methods are now accepted. Generic envelopes and the
+// unrelated historical phase exclusions remain forbidden at this boundary.
+const recoveryBoundary = inspectTypedRecoveryBoundaries({ udl, ffi: sharedCoreFfi });
+if (!recoveryBoundary.ok) throw new Error(recoveryBoundary.errors.join("\n"));
+for (const forbidden of ["command(", "matrix_login_password", "persist_planted", "attach_typing", "matrix_send_poll", "matrix_edit_message", "matrix_poll_respond", "matrix_timeline_edit_text", "matrix_timeline_redact", "matrix_timeline_report", "matrix_timeline_pin", "matrix_timeline_unpin", "matrix_timeline_poll_vote", "matrix_timeline_call_decline", "matrix_timeline_forward_text", "matrix_timeline_forward_media", "matrix_session_snapshot", "matrix_sync_status", "matrix_media_config", "matrix_secret_storage_status", "matrix_backup_status", "matrix_room_key_transfer_status", "cross_signing_setup", "set_room_join_rule", "matrix_crypto_status", "matrix_cross_signing_status"]) {
   if (sharedCoreBody.includes(forbidden)) {
-    throw new Error(`SharedCore must not expose ${forbidden} in P4-S9-31`);
+    throw new Error(`SharedCore must not expose generic or unapproved ${forbidden}`);
   }
 }
 if (!udl.includes("callback interface IosSecretVault")) {
@@ -2552,7 +2558,9 @@ if (!attachDto) throw new Error("missing SessionAttachDto");
 if (/\bpassword\b/.test(attachDto[1]) || /\btoken\b/.test(attachDto[1])) {
   throw new Error("SessionAttachDto must not carry password or token fields");
 }
-const productionSharedCoreFfi = sharedCoreFfi.split("#[cfg(test)]")[0];
+const productionSharedCoreFfi = readRustModuleSources(
+  resolve(root, "crates/synara-core/src/shared_core_ffi.rs")
+).source;
 if (productionSharedCoreFfi.includes("p4-s3b-store-key")) {
   throw new Error("P4-S3b must use StoreKeyId store-key: accounts, not an invented prefix");
 }

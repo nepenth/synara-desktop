@@ -6,9 +6,6 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p8.6-room-key-export.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod flow;
 mod native;
@@ -22,19 +19,6 @@ pub use native::{
     NativeRoomKeyTransferPhase, NativeRoomKeyTransferResult, NativeRoomKeyTransferStatus,
     EXPORT_FILE_NAME,
 };
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_ROOM_KEYS_MARKER: &str = "matrix-room-keys-p8.6";
-
-/// Touch room-key transfer paths so they remain linked in non-test builds.
-pub fn matrix_room_keys_markers() -> &'static str {
-    let flow = RoomKeyTransferFlow::new(0);
-    debug_assert!(!flow.is_active());
-    debug_assert_eq!(flow.phase(), RoomKeyTransferPhase::Idle);
-    debug_assert_eq!(RoomKeyTransferKind::Export.as_str(), "export");
-    debug_assert_eq!(MATRIX_ROOM_KEYS_MARKER, "matrix-room-keys-p8.6");
-    MATRIX_ROOM_KEYS_MARKER
-}
 
 #[cfg(test)]
 mod tests;

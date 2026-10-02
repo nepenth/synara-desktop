@@ -193,7 +193,7 @@ test('P1.5 typical fixture envelope within payload bounds', () => {
 // ---------------------------------------------------------------------------
 
 test('P1.5 all kinds constructible via makeEnvelope and re-parse', () => {
-  const samples: Array<{ kind: typeof MATRIX_IPC_KINDS[number]; payload: unknown }> = [
+  const samples: Array<{ kind: (typeof MATRIX_IPC_KINDS)[number]; payload: unknown }> = [
     {
       kind: 'hello',
       payload: { clientProtocolVersion: 1, clientName: 'synara-web' },

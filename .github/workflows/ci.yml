@@ -10,6 +10,16 @@ on:
     # Nightly full client suite, including the XCUITest lane.
     - cron: "17 11 * * *"
   workflow_dispatch:
+    inputs:
+      apple_slices:
+        description: Apple Rust slices to validate in the unsigned unit-test lane
+        type: choice
+        options: [simulator-arm64, all]
+        default: simulator-arm64
+      check_ios_device_release:
+        description: Also compile the unsigned iOS device Release app and inspect its NSE archive
+        type: boolean
+        default: false
 
 # One event per SHA: push covers main after merge, pull_request covers
 # candidate and feature branches. A shared lane can cancel stale runs of
@@ -73,7 +83,11 @@ jobs:
             echo "rust_audit=true" >> "$GITHUB_OUTPUT"
             echo "validate_frontend=true" >> "$GITHUB_OUTPUT"
             echo "ios=true" >> "$GITHUB_OUTPUT"
-            echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+            if [[ "${EVENT_NAME}" == "push" && "${GITHUB_REF_NAME:-}" == "main" ]]; then
+              echo "ios_ui=false" >> "$GITHUB_OUTPUT"
+            else
+              echo "ios_ui=true" >> "$GITHUB_OUTPUT"
+            fi
             echo "ios_compile=false" >> "$GITHUB_OUTPUT"
             echo "synapse_native_reactions=true" >> "$GITHUB_OUTPUT"
             echo "synapse_native_attachments=true" >> "$GITHUB_OUTPUT"
@@ -239,7 +253,6 @@ jobs:
             .github/workflows/ci.yml \
             Cargo.lock \
             Cargo.toml \
-            src-tauri/Cargo.lock \
             src-tauri/Cargo.toml \
             crates/synara-core/Cargo.toml \
             crates/synara-nse-core/Cargo.toml \
@@ -251,22 +264,15 @@ jobs:
             RUST_AUDIT=true
           fi
 
-          # iOS path probe. Mechanical P1 moves under
-          # crates/synara-core/src/app/ stay on validate-rust. The long
-          # simulator jobs are gated again below: feature PRs into main skip
-          # them unless labeled needs-ios / needs-ios-ui.
+          # Any shared Core production or contract change can affect Apple
+          # bindings and runtime compilation. Simulator scheduling is applied
+          # below; ordinary feature PRs still run the compile gate.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             rust-toolchain.toml \
             Cargo.toml \
             Cargo.lock \
-            crates/synara-core/Cargo.toml \
-            crates/synara-core/build.rs \
-            crates/synara-core/src/lib.rs \
-            crates/synara-core/src/synara_core.udl \
-            crates/synara-core/src/ffi.rs \
-            crates/synara-core/src/app/nse_preview.rs \
-            crates/synara-core/src/session_projection_ffi.rs \
-            crates/synara-core/src/shared_core_ffi.rs \
+            .cargo \
+            crates/synara-core \
             crates/synara-nse-core \
             crates/synara-core-bindgen \
             .github/workflows/ci.yml \
@@ -276,6 +282,7 @@ jobs:
             scripts/check-synara-nse-core-isolation.mjs \
             scripts/check-synara-nse-core-production-features.mjs \
             scripts/check-synara-nse-core-archive-exports.sh \
+            scripts/lib/rust-llvm-symbols.sh \
             scripts/check-synara-core-swift-scaffold.mjs \
             synara-ios; then
             echo "ios=false" >> "$GITHUB_OUTPUT"
@@ -329,6 +336,9 @@ jobs:
             IOS=true
             echo "ios_ui=true" >> "$GITHUB_OUTPUT"
             IOS_UI=true
+          elif [[ "${EVENT_NAME}" == "push" && "${GITHUB_REF_NAME:-}" == "main" ]]; then
+            echo "ios_ui=false" >> "$GITHUB_OUTPUT"
+            IOS_UI=false
           fi
 
           # Cheap iOS compile gate. When the diff touched Swift/FFI/iOS paths
@@ -468,7 +478,6 @@ jobs:
         with:
           workspaces: |
             . -> target
-            src-tauri -> target
           shared-key: validate-rust-desktop
 
       - name: Install Linux Tauri dependencies
@@ -486,14 +495,14 @@ jobs:
         working-directory: src-tauri
 
       - name: Lint shared Rust workspace
-        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings
 
       - name: Check Rust desktop shell
         run: cargo check --locked
         working-directory: src-tauri
 
       - name: Check shared Rust workspace
-        run: cargo check --locked --workspace
+        run: cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 
       - name: Test Rust desktop shell
         if: needs.changes.outputs.validate_rust_tests == 'true'
@@ -502,7 +511,7 @@ jobs:
 
       - name: Test shared Rust workspace
         if: needs.changes.outputs.validate_rust_tests == 'true'
-        run: cargo test --locked --workspace
+        run: cargo test --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
 
       - name: Check Matrix integration boundaries
         # Runs on any src-tauri diff (the Node job only fires on frontend changes);
@@ -527,13 +536,8 @@ jobs:
       - name: Install cargo-audit
         run: cargo install cargo-audit --version 0.22.2 --locked
 
-      # .cargo/audit.toml holds the short documented allowlist (quick-xml via
-      # plist=tauri-bundler, fixed upstream at >=0.41.0, unreachable in-chain).
-      - name: Audit Rust dependencies (RustSec advisory DB)
-        run: cargo audit
-        working-directory: src-tauri
-
-      - name: Audit shared Rust workspace dependencies (RustSec advisory DB)
+      # Desktop, full Core, bindgen, and NSE resolve from one root lockfile.
+      - name: Audit Rust workspace dependencies (RustSec advisory DB)
         run: cargo audit
   validate-frontend:
     name: Validate Node desktop runtime
@@ -615,14 +619,17 @@ jobs:
         working-directory: synara
 
       - name: Test real-layout timeline scrolling
+        id: browser_timeline
         run: npm run test:browser:timeline
         working-directory: synara
 
       - name: Test native timeline navigation in Chromium
+        id: browser_native_timeline
         run: npm run test:browser:native-timeline
         working-directory: synara
 
       - name: Test desktop room navigation and approvals in Chromium
+        id: browser_desktop_polish
         run: npm run test:browser:desktop-polish:ci
         working-directory: synara
 
@@ -630,14 +637,25 @@ jobs:
         run: npm run check:security
         working-directory: synara
 
+      - name: Upload failed browser diagnostics
+        if: failure() && (steps.browser_timeline.outcome == 'failure' || steps.browser_native_timeline.outcome == 'failure' || steps.browser_desktop_polish.outcome == 'failure')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: node-browser-failure-diagnostics
+          path: |
+            synara/test-results
+            synara/playwright-report
+          if-no-files-found: warn
+          retention-days: 3
+
   ios-tests:
     name: iOS simulator tests
     needs: [changes]
     if: needs.changes.outputs.ios == 'true'
     runs-on: macos-26
-    # PR default: arm64 simulator slice + SynaraTests only. XCUITests and
-    # the device-Release NSE archive proof are separate lanes.
-    timeout-minutes: 50
+    # Default: arm64 simulator + unit tests. Manual all-slice/device opt-ins
+    # compile the full Apple graph and unsigned device Release NSE here.
+    timeout-minutes: 120
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -646,13 +664,14 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
-          targets: aarch64-apple-ios-sim
+          components: llvm-tools-preview
+          targets: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin' || 'aarch64-apple-ios-sim' }}
 
       - name: Cache Apple SynaraCore build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple-simulator-arm64
+          shared-key: ci-synara-core-apple
 
       - name: Install XcodeGen
         run: |
@@ -671,7 +690,8 @@ jobs:
         env:
           RUN_IOS_TESTS: "1"
           IOS_TEST_SUITE: unit
-          SYNARA_CORE_APPLE_SLICES: simulator-arm64
+          SYNARA_CORE_APPLE_SLICES: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'all' || 'simulator-arm64' }}
+          CHECK_IOS_DEVICE_RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.check_ios_device_release && '1' || '0' }}
 
       - name: Upload iOS result bundles
         if: always()
@@ -696,6 +716,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build
@@ -752,6 +773,7 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+          components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
       - name: Cache Apple SynaraCore build

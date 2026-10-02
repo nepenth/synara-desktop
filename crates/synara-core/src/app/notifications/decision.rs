@@ -30,7 +30,10 @@
 //! captures the exact authenticated identity at session attach and answers
 //! `owns_session` without ever serializing that identity.
 
-use std::sync::Mutex;
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Mutex,
+};
 use std::time::Duration;
 
 use matrix_sdk::config::RequestConfig;
@@ -143,9 +146,9 @@ impl NotificationPushEvaluation {
         }
     }
 
-    /// Kinds without a timeline event (invites, agent approvals, Later
-    /// reminders) are explicit user commitments and always surface, subject
-    /// to focus and dedup.
+    /// Invites, Later reminders and SDK-validated fresh approvals surface
+    /// subject to focus and dedup. Approval eligibility is resolved before
+    /// this projection; approval reactions use the separate action owner.
     pub const fn surface() -> Self {
         Self {
             notify: true,
@@ -300,6 +303,7 @@ pub struct NotificationDecisionReadback {
 /// event and its SDK push evaluation.
 pub struct NativeNotificationDecisionOwner {
     session_generation: u64,
+    retired: AtomicBool,
     user_id: String,
     device_id: String,
     homeserver_url: String,
@@ -315,6 +319,7 @@ struct ObservedEvent {
     is_own_event: bool,
     is_encrypted: bool,
     push: NotificationPushEvaluation,
+    agent_approval: bool,
 }
 
 impl NativeNotificationDecisionOwner {
@@ -328,6 +333,7 @@ impl NativeNotificationDecisionOwner {
         let homeserver_url = client.homeserver().as_str().to_owned();
         Ok(Self {
             session_generation,
+            retired: AtomicBool::new(false),
             user_id,
             device_id,
             homeserver_url,
@@ -337,6 +343,8 @@ impl NativeNotificationDecisionOwner {
         })
     }
 
+    /// Immutable generation of this authenticated client binding. Retirement
+    /// permanently closes acceptance; it never rebinds this client to a successor.
     pub fn session_generation(&self) -> u64 {
         self.session_generation
     }
@@ -348,6 +356,7 @@ impl NativeNotificationDecisionOwner {
     pub fn for_tests(session_generation: u64) -> Self {
         Self {
             session_generation,
+            retired: AtomicBool::new(false),
             user_id: "@test:example.org".into(),
             device_id: "TESTDEVICE".into(),
             homeserver_url: "https://example.org".into(),
@@ -410,29 +419,48 @@ impl NativeNotificationDecisionOwner {
         &self,
         request: NativeNotificationDecideRequest,
     ) -> Result<NotificationDecisionReadback, NotificationError> {
-        let kind = NotificationDecisionKind::parse(&request.kind)
+        if self.retired.load(Ordering::Acquire) {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-retired",
+            });
+        }
+        let mut kind = NotificationDecisionKind::parse(&request.kind)
             .map_err(|diagnostic_id| NotificationError::Invalid { diagnostic_id })?;
         let observed = match kind {
-            NotificationDecisionKind::Message => {
-                self.observe_message_event(&request.room_id, request.event_id.as_deref())
+            NotificationDecisionKind::Message | NotificationDecisionKind::AgentApproval => {
+                self.observe_message_event(&request.room_id, request.event_id.as_deref(), kind)
                     .await?
             }
-            NotificationDecisionKind::Invite
-            | NotificationDecisionKind::AgentApproval
-            | NotificationDecisionKind::LaterReminder => ObservedEvent {
-                is_own_event: false,
-                is_encrypted: false,
-                push: NotificationPushEvaluation::surface(),
-            },
+            NotificationDecisionKind::Invite | NotificationDecisionKind::LaterReminder => {
+                ObservedEvent {
+                    is_own_event: false,
+                    is_encrypted: false,
+                    push: NotificationPushEvaluation::surface(),
+                    agent_approval: false,
+                }
+            }
         };
+        if observed.agent_approval {
+            kind = NotificationDecisionKind::AgentApproval;
+        }
         self.decide(NotificationDecisionInput {
             room_id: request.room_id,
             event_id: request.event_id,
             kind,
-            title: request.title,
-            body: request.body,
+            title: if observed.agent_approval {
+                "Approval Required: Dangerous Command".into()
+            } else {
+                request.title
+            },
+            body: if observed.agent_approval {
+                "Review a request in Synara.".into()
+            } else {
+                request.body
+            },
             route: request.route,
-            suppress_if_focused_room: request.suppress_if_focused_room,
+            // SDK-validated approvals remain actionable even in the focused room,
+            // including a message request promoted after late decryption.
+            suppress_if_focused_room: !observed.agent_approval && request.suppress_if_focused_room,
             is_encrypted: observed.is_encrypted,
             push: observed.push,
             is_own_event: observed.is_own_event,
@@ -443,6 +471,7 @@ impl NativeNotificationDecisionOwner {
         &self,
         room_id: &str,
         event_id: Option<&str>,
+        requested_kind: NotificationDecisionKind,
     ) -> Result<ObservedEvent, NotificationError> {
         let client = self.client.as_ref().ok_or(NotificationError::Invalid {
             diagnostic_id: "v-notify.no-client",
@@ -483,6 +512,38 @@ impl NativeNotificationDecisionOwner {
         let is_own_event = event
             .sender()
             .is_some_and(|sender| sender.as_str() == self.user_id);
+        let timeline = event
+            .raw()
+            .deserialize()
+            .map_err(|_| NotificationError::Invalid {
+                diagnostic_id: "v-notify.event-unavailable",
+            })?;
+        if matches!(
+            timeline,
+            matrix_sdk::ruma::events::AnySyncTimelineEvent::MessageLike(
+                matrix_sdk::ruma::events::AnySyncMessageLikeEvent::RoomEncrypted(_)
+            )
+        ) {
+            // Nonsticky: no push evaluation or candidate enqueue has occurred.
+            // The decrypted follow-up can classify this same event ID later.
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.event-not-ready",
+            });
+        }
+        let approval = authoritative_approval(
+            &timeline,
+            &self.user_id,
+            notification_now_ms(),
+            requested_kind,
+        )?;
+        if approval {
+            return Ok(ObservedEvent {
+                is_own_event,
+                is_encrypted: room.encryption_state().is_encrypted(),
+                push: NotificationPushEvaluation::surface(),
+                agent_approval: true,
+            });
+        }
         // Sync stores computed actions as `Some` (possibly empty). `None`
         // means they were never computed for this event (for example a
         // `/event` fetch before room state settled), so recompute once with
@@ -502,6 +563,7 @@ impl NativeNotificationDecisionOwner {
             is_own_event,
             is_encrypted: room.encryption_state().is_encrypted(),
             push: NotificationPushEvaluation::from_actions(&actions),
+            agent_approval: false,
         })
     }
 
@@ -511,6 +573,11 @@ impl NativeNotificationDecisionOwner {
         &self,
         input: NotificationDecisionInput,
     ) -> Result<NotificationDecisionReadback, NotificationError> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-retired",
+            });
+        }
         if input.is_own_event {
             return Ok(suppressed(NotificationSuppressReason::OwnEvent));
         }
@@ -525,8 +592,8 @@ impl NativeNotificationDecisionOwner {
             room_id: input.room_id,
             event_id: input.event_id,
             kind: input.kind.as_dto(),
-            title: truncate_chars(&input.title, NOTIFICATION_TITLE_MAX_CHARS),
-            body: truncate_chars(&input.body, NOTIFICATION_BODY_MAX_CHARS),
+            title: sanitize_notification_text(&input.title, NOTIFICATION_TITLE_MAX_CHARS),
+            body: sanitize_notification_text(&input.body, NOTIFICATION_BODY_MAX_CHARS),
             route: input.route.and_then(sanitize_route),
             suppress_if_focused_room: input.suppress_if_focused_room,
             is_encrypted: input.is_encrypted,
@@ -535,6 +602,13 @@ impl NativeNotificationDecisionOwner {
         let mut index = self.index.lock().map_err(|_| NotificationError::Invalid {
             diagnostic_id: "v-notify.owner-poisoned",
         })?;
+        // Retirement may have occurred during the SDK lookup. Check again
+        // under the index gate; detached work cannot create pending candidates.
+        if self.retired.load(Ordering::Acquire) {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.owner-retired",
+            });
+        }
         // Classify the suppression exactly before enqueue: duplicates are
         // retained across dismiss within the recent-event bound; focus is
         // transient. `enqueue` checks focus first, so pre-read both signals
@@ -631,6 +705,7 @@ impl NativeNotificationDecisionOwner {
     /// Wipe pending state on logout / account switch. Generation advances;
     /// focus clears with the queue.
     pub fn retire_generation(&self, new_generation: u64) {
+        self.retired.store(true, Ordering::Release);
         if let Ok(mut index) = self.index.lock() {
             index.retire_generation(new_generation);
         }
@@ -638,6 +713,60 @@ impl NativeNotificationDecisionOwner {
             *ledger = NotificationDeliveryLedger::default();
         }
     }
+}
+
+fn notification_now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|time| time.as_millis() as u64)
+        .unwrap_or(0)
+}
+
+/// Classify the SDK-resolved event again at decision time. A renderer cannot
+/// turn an ordinary message into a critical approval by supplying kind/title.
+fn authoritative_approval(
+    event: &matrix_sdk::ruma::events::AnySyncTimelineEvent,
+    user_id: &str,
+    now_ms: u64,
+    requested_kind: NotificationDecisionKind,
+) -> Result<bool, NotificationError> {
+    use matrix_sdk::ruma::events::{
+        AnySyncMessageLikeEvent, AnySyncTimelineEvent, SyncMessageLikeEvent,
+    };
+    let classification = match event {
+        AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(
+            SyncMessageLikeEvent::Original(message),
+        )) if !matches!(
+            message.content.relates_to,
+            Some(matrix_sdk::ruma::events::room::message::Relation::Replacement(_))
+        ) =>
+        {
+            crate::app::agent_approvals::classify_agent_approval(
+                message.content.body(),
+                message.sender.as_str(),
+                user_id,
+                message.origin_server_ts.0.into(),
+                now_ms,
+                std::iter::empty(),
+            )
+            .ok()
+        }
+        _ => None,
+    };
+    if let Some(classification) = classification {
+        if classification.expired {
+            return Err(NotificationError::Invalid {
+                diagnostic_id: "v-notify.approval-expired",
+            });
+        }
+        return Ok(true);
+    }
+    if requested_kind == NotificationDecisionKind::AgentApproval {
+        return Err(NotificationError::Invalid {
+            diagnostic_id: "v-notify.approval-invalid",
+        });
+    }
+    Ok(false)
 }
 
 fn suppressed(reason: NotificationSuppressReason) -> NotificationDecisionReadback {
@@ -650,12 +779,32 @@ fn suppressed(reason: NotificationSuppressReason) -> NotificationDecisionReadbac
     }
 }
 
-fn truncate_chars(value: &str, max_chars: usize) -> String {
-    let trimmed = value.trim();
-    if trimmed.chars().count() <= max_chars {
-        return trimmed.to_owned();
+fn sanitize_notification_text(value: &str, max_chars: usize) -> String {
+    let mut output = String::new();
+    let mut length = 0;
+    let mut space_pending = false;
+    for ch in value.chars() {
+        if ch.is_whitespace() {
+            space_pending = !output.is_empty();
+            continue;
+        }
+        if ch.is_control()
+            || matches!(ch, '\u{00AD}' | '\u{061C}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2066}'..='\u{2069}' | '\u{FEFF}')
+        {
+            continue;
+        }
+        if space_pending && length < max_chars {
+            output.push(' ');
+            length += 1;
+        }
+        if length == max_chars {
+            break;
+        }
+        output.push(ch);
+        length += 1;
+        space_pending = false;
     }
-    trimmed.chars().take(max_chars).collect()
+    output.trim_end().to_owned()
 }
 
 /// Internal deep-link routes only (`/` or `#` prefix, no control or
@@ -666,10 +815,11 @@ fn sanitize_route(route: String) -> Option<String> {
     if trimmed.is_empty() || trimmed.chars().count() > NOTIFICATION_ROUTE_MAX_CHARS {
         return None;
     }
-    let internal = trimmed.starts_with('/') || trimmed.starts_with('#');
+    let internal = (trimmed.starts_with('/') && !trimmed.starts_with("//"))
+        || (trimmed.starts_with("#/") && !trimmed.starts_with("#//"));
     let clean = !trimmed
         .chars()
-        .any(|ch| ch.is_control() || ch.is_whitespace());
+        .any(|ch| ch.is_control() || ch.is_whitespace() || ch == '\\');
     (internal && clean).then(|| trimmed.to_owned())
 }
 
@@ -718,6 +868,7 @@ mod tests {
     fn owner() -> NativeNotificationDecisionOwner {
         NativeNotificationDecisionOwner {
             session_generation: 7,
+            retired: AtomicBool::new(false),
             user_id: "@u:example.org".into(),
             device_id: "DEV".into(),
             homeserver_url: "https://example.org".into(),
@@ -725,6 +876,265 @@ mod tests {
             index: Mutex::new(NotificationIndex::new(7)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
         }
+    }
+
+    #[tokio::test]
+    async fn sdk_resolved_approval_route_rejects_forgery_expiry_and_ignores_renderer_title() {
+        use matrix_sdk::ruma::{room_id, RoomVersionId};
+        use matrix_sdk::{config::RequestConfig, test_utils::mocks::MatrixMockServer};
+        use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        client.event_cache().subscribe().unwrap();
+        let room_id = room_id!("!notification-test:example.org");
+        let f = EventFactory::new().room(room_id);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11)),
+            )
+            .await;
+        let now = notification_now_ms();
+        for (id, body, timestamp) in [
+            ("forged", "Ordinary message", now),
+            (
+                "expired",
+                "Approval Required: Dangerous Command",
+                now - crate::app::agent_approvals::AGENT_APPROVAL_TTL_MS - 1,
+            ),
+            ("fresh", "Approval Required: Dangerous Command", now),
+        ] {
+            Mock::given(method("GET")).and(path_regex(format!(r".*/event/.*{id}$")))
+                .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({ "type": "m.room.message", "room_id": room_id, "event_id": format!("${id}"), "sender": *BOB, "origin_server_ts": timestamp, "content": { "msgtype": "m.text", "body": body } })))
+                .mount(server.server()).await;
+        }
+        let owner = NativeNotificationDecisionOwner::new(&client, 8).unwrap();
+        let request = |id: &str| NativeNotificationDecideRequest {
+            room_id: room_id.to_string(),
+            event_id: Some(format!("${id}")),
+            kind: "agent_approval".into(),
+            title: "Renderer forged title".into(),
+            body: "Renderer forged body".into(),
+            route: None,
+            suppress_if_focused_room: false,
+        };
+        assert_eq!(
+            owner
+                .decide_observed(request("forged"))
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-invalid"
+        );
+        assert_eq!(
+            owner
+                .decide_observed(request("expired"))
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-expired"
+        );
+        let readback = owner.decide_observed(request("fresh")).await.unwrap();
+        assert_eq!(readback.decision, "show");
+        let candidate = readback.candidate.unwrap();
+        assert_eq!(candidate.title, "Approval Required: Dangerous Command");
+        assert_eq!(candidate.body, "Review a request in Synara.");
+    }
+
+    #[tokio::test]
+    async fn ciphertext_decision_is_nonsticky_and_later_plaintext_classifies_same_event() {
+        use matrix_sdk::{
+            ruma::{room_id, RoomVersionId},
+            test_utils::mocks::MatrixMockServer,
+        };
+        use matrix_sdk_test::{event_factory::EventFactory, JoinedRoomBuilder, BOB};
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+        use wiremock::{
+            matchers::{method, path_regex},
+            Mock, ResponseTemplate,
+        };
+        let server = MatrixMockServer::new().await;
+        let client = server
+            .client_builder()
+            .on_builder(|builder| builder.request_config(RequestConfig::new().disable_retry()))
+            .build()
+            .await;
+        client.event_cache().subscribe().unwrap();
+        let room_id = room_id!("!notification-race:example.org");
+        let f = EventFactory::new().room(room_id);
+        server
+            .sync_room(
+                &client,
+                JoinedRoomBuilder::new(room_id)
+                    .add_state_event(f.create(client.user_id().unwrap(), RoomVersionId::V11)),
+            )
+            .await;
+        let plaintext_ready = Arc::new(AtomicBool::new(false));
+        let phase = plaintext_ready.clone();
+        let at = notification_now_ms();
+        Mock::given(method("GET")).and(path_regex(r".*/event/.*late-approval$"))
+            .respond_with(move |_: &wiremock::Request| {
+                let ready = phase.load(Ordering::Acquire);
+                let content = if ready { serde_json::json!({"msgtype": "m.text", "body": "Approval Required: Dangerous Command\necho hello"}) }
+                    else { serde_json::json!({"algorithm": "m.megolm.v1.aes-sha2", "ciphertext": "AwgAE...", "sender_key": "abc", "session_id": "def", "device_id": "DEV"}) };
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({"type": if ready { "m.room.message" } else { "m.room.encrypted" }, "room_id": room_id, "event_id": "$late-approval", "sender": *BOB, "origin_server_ts": at, "content": content}))
+            }).mount(server.server()).await;
+        let owner = Arc::new(NativeNotificationDecisionOwner::new(&client, 8).unwrap());
+        owner.set_focused_room(Some(room_id.as_str())).unwrap();
+        let request = || NativeNotificationDecideRequest {
+            room_id: room_id.to_string(),
+            event_id: Some("$late-approval".into()),
+            kind: "message".into(),
+            title: "Renderer summary".into(),
+            body: "New message".into(),
+            route: None,
+            suppress_if_focused_room: true,
+        };
+        for _ in 0..2 {
+            assert_eq!(
+                owner
+                    .decide_observed(request())
+                    .await
+                    .unwrap_err()
+                    .diagnostic_id(),
+                "v-notify.event-not-ready"
+            );
+            assert!(owner.list_pending().unwrap().is_empty());
+        }
+        plaintext_ready.store(true, Ordering::Release);
+        let readback = owner.decide_observed(request()).await.unwrap();
+        assert_eq!(readback.decision, "show");
+        let candidate = readback.candidate.unwrap();
+        assert_eq!(candidate.kind, NotificationKind::AgentApproval);
+        assert!(!candidate.suppress_if_focused_room);
+        assert_eq!(candidate.room_id, room_id.as_str());
+        assert_eq!(candidate.event_id.as_deref(), Some("$late-approval"));
+        assert_eq!(candidate.title, "Approval Required: Dangerous Command");
+        assert_eq!(candidate.body, "Review a request in Synara.");
+        assert_eq!(
+            owner
+                .decide_observed(request())
+                .await
+                .unwrap()
+                .reason
+                .as_deref(),
+            Some("duplicate-event")
+        );
+
+        // Retirement follows an actual SDK HTTP lookup starting, before
+        // its delayed plaintext response can enqueue a candidate.
+        let lookup_started = Arc::new(tokio::sync::Notify::new());
+        let observed_lookup = lookup_started.clone();
+        Mock::given(method("GET")).and(path_regex(r".*/event/.*retiring$"))
+            .respond_with(move |_: &wiremock::Request| {
+                observed_lookup.notify_one();
+                ResponseTemplate::new(200)
+                    .set_delay(Duration::from_millis(100))
+                    .set_body_json(serde_json::json!({ "type": "m.room.message", "room_id": room_id,
+                        "event_id": "$retiring", "sender": *BOB, "origin_server_ts": at,
+                        "content": { "msgtype": "m.text", "body": "Approval Required: Dangerous Command\necho hello" } }))
+            }).mount(server.server()).await;
+        let mut delayed = request();
+        delayed.event_id = Some("$retiring".into());
+        let lookup_owner = owner.clone();
+        let pending = tokio::spawn(async move { lookup_owner.decide_observed(delayed).await });
+        tokio::time::timeout(Duration::from_secs(5), lookup_started.notified())
+            .await
+            .expect("SDK HTTP lookup starts before retirement");
+        owner.retire_generation(9);
+        assert_eq!(
+            pending.await.unwrap().unwrap_err().diagnostic_id(),
+            "v-notify.owner-retired"
+        );
+        assert_eq!(
+            owner.session_generation(),
+            8,
+            "authenticated binding never changes"
+        );
+        assert!(owner.list_pending().unwrap().is_empty());
+        assert_eq!(
+            owner
+                .decide_observed(request())
+                .await
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.owner-retired"
+        );
+        assert_eq!(
+            owner
+                .decide(input(
+                    room_id.as_str(),
+                    Some("$successor"),
+                    NotificationDecisionKind::Message,
+                    NOTIFY,
+                    false
+                ))
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.owner-retired"
+        );
+        assert!(owner.list_pending().unwrap().is_empty());
+    }
+
+    #[test]
+    fn requested_approval_kind_requires_authoritative_sdk_prompt_and_fresh_timestamp() {
+        fn event(
+            body: &str,
+            sender: &str,
+            timestamp: u64,
+        ) -> matrix_sdk::ruma::events::AnySyncTimelineEvent {
+            serde_json::from_value(serde_json::json!({ "type": "m.room.message", "event_id": "$approval", "sender": sender, "origin_server_ts": timestamp, "content": { "msgtype": "m.text", "body": body } })).unwrap()
+        }
+        let now = 1_700_000_000_000;
+        let kind = NotificationDecisionKind::AgentApproval;
+        let ordinary = event("An ordinary message", "@bot:example.org", now);
+        assert_eq!(
+            authoritative_approval(&ordinary, "@u:example.org", now, kind)
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-invalid"
+        );
+        let body = "Approval Required: Dangerous Command\necho hello";
+        let prompt = event(body, "@bot:example.org", now);
+        assert!(authoritative_approval(
+            &prompt,
+            "@u:example.org",
+            now,
+            NotificationDecisionKind::Message
+        )
+        .unwrap());
+        assert_eq!(
+            authoritative_approval(
+                &prompt,
+                "@u:example.org",
+                now + crate::app::agent_approvals::AGENT_APPROVAL_TTL_MS,
+                kind
+            )
+            .unwrap_err()
+            .diagnostic_id(),
+            "v-notify.approval-expired"
+        );
+        let own = event(body, "@u:example.org", now);
+        assert_eq!(
+            authoritative_approval(&own, "@u:example.org", now, kind)
+                .unwrap_err()
+                .diagnostic_id(),
+            "v-notify.approval-invalid"
+        );
+        let future = event(body, "@bot:example.org", now + 60_001);
+        assert!(authoritative_approval(&future, "@u:example.org", now, kind).is_err());
     }
 
     #[test]
@@ -1026,6 +1436,26 @@ mod tests {
     }
 
     #[test]
+    fn candidate_text_is_one_visible_line_without_controls_or_bidi_and_keeps_caps() {
+        let owner = owner();
+        let mut entry = input(
+            "!r:example.org",
+            Some("$hostile-label"),
+            NotificationDecisionKind::Message,
+            NOTIFY,
+            false,
+        );
+        entry.title = "  Room\n\t\u{202e}name\u{2069}\u{0000}  ".into();
+        entry.body = format!("Member\r\n\u{200b}name\u{feff} {}", "🦀".repeat(600));
+        let shown = owner.decide(entry).unwrap().candidate.unwrap();
+        assert_eq!(shown.title, "Room name");
+        assert!(shown.body.starts_with("Member name 🦀"));
+        assert_eq!(shown.body.chars().count(), NOTIFICATION_BODY_MAX_CHARS);
+        assert!(!shown.body.chars().any(char::is_control));
+        assert!(!shown.body.contains('\u{200b}'));
+    }
+
+    #[test]
     fn malformed_focus_is_fail_closed_and_titles_truncate() {
         let owner = owner();
         assert!(owner.set_focused_room(Some("not-a-room")).is_err());
@@ -1083,10 +1513,27 @@ mod tests {
             NOTIFY,
             false,
         );
-        entry.route = Some("https://evil.example.com".into());
-        let readback = owner.decide(entry).unwrap();
-        assert_eq!(readback.decision, "show");
-        assert_eq!(readback.candidate.unwrap().route, None);
+        for (index, route) in [
+            "https://evil.example.com",
+            "//evil.example.com",
+            "#//evil.example.com",
+            r"/\evil.example.com",
+            r"#/\evil.example.com",
+            r"/home\evil.example.com",
+        ]
+        .iter()
+        .enumerate()
+        {
+            entry.event_id = Some(format!("$e-route-{index}"));
+            entry.route = Some((*route).into());
+            let readback = owner.decide(entry.clone()).unwrap();
+            assert_eq!(readback.decision, "show");
+            assert_eq!(
+                readback.candidate.unwrap().route,
+                None,
+                "unsafe route {route}"
+            );
+        }
     }
 
     #[test]

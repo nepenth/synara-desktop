@@ -24,7 +24,7 @@ const desktopPackage = readJson("package.json");
 const desktopPackageLock = readJson("package-lock.json");
 const tauriConfig = readJson("src-tauri/tauri.conf.json");
 const cargoToml = readText("src-tauri/Cargo.toml");
-const cargoLock = readText("src-tauri/Cargo.lock");
+const cargoLock = readText("Cargo.lock");
 const runtimePackage = readJson("synara/package.json");
 const runtimePackageLock = readJson("synara/package-lock.json");
 const iosProject = readText("synara-ios/Synara.xcodeproj/project.pbxproj");
@@ -42,7 +42,7 @@ const cargoVersion = matchRequired(
   /^\[package\][\s\S]*?^version = "([^"]+)"/m
 );
 const cargoLockVersion = matchRequired(
-  "src-tauri/Cargo.lock synara package version",
+  "Cargo.lock synara package version",
   cargoLock,
   /\[\[package\]\]\s*\nname = "synara"\s*\nversion = "([^"]+)"/
 );
@@ -57,7 +57,7 @@ assertEqual(
   expectedVersion
 );
 assertEqual("src-tauri/Cargo.toml version", cargoVersion, expectedVersion);
-assertEqual("src-tauri/Cargo.lock synara version", cargoLockVersion, expectedVersion);
+assertEqual("Cargo.lock synara version", cargoLockVersion, expectedVersion);
 assertEqual("synara/package.json version", runtimePackage.version, expectedVersion);
 assertEqual("synara/package-lock.json version", runtimePackageLock.version, expectedVersion);
 assertEqual(
@@ -94,7 +94,7 @@ const parseMajorMinor = (version) => {
 };
 
 const cargoTauriVersion = matchRequired(
-  "src-tauri/Cargo.lock tauri crate version",
+  "Cargo.lock tauri crate version",
   cargoLock,
   /name = "tauri"\nversion = "([^"]+)"/
 );

@@ -6,9 +6,6 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p6.8-search.md`
 
-#![allow(dead_code)]
-#![allow(unused_imports)]
-
 mod error;
 mod ipc;
 mod listing;
@@ -32,21 +29,6 @@ pub use live::{
     MAX_MESSAGE_SEARCH_TERM_CHARS, MESSAGE_SEARCH_LIMIT,
 };
 pub use session::{SearchSession, SearchState, MAX_RESULTS_PER_SEARCH};
-
-/// Static marker for link / schema smoke.
-pub const MATRIX_SEARCH_MARKER: &str = "matrix-search-p6.8";
-
-/// Touch search paths so they remain linked in non-test builds.
-pub fn matrix_search_markers() -> &'static str {
-    let s = SearchSession::new(0);
-    debug_assert_eq!(s.state(), SearchState::Idle);
-    debug_assert!(s.items().is_empty());
-    debug_assert_eq!(parse_message_search_term("").ok(), Some(None));
-    debug_assert!(parse_attachment_listing_kind("media").is_ok());
-    debug_assert_eq!(MESSAGE_SEARCH_LIMIT, 20);
-    debug_assert_eq!(MATRIX_SEARCH_MARKER, "matrix-search-p6.8");
-    MATRIX_SEARCH_MARKER
-}
 
 #[cfg(test)]
 mod tests;

@@ -11,11 +11,6 @@ fn map(pairs: &[(&str, ContentValue)]) -> BTreeMap<String, ContentValue> {
 }
 
 #[test]
-fn marker_stable() {
-    assert_eq!(matrix_raw_content_markers(), MATRIX_RAW_CONTENT_MARKER);
-}
-
-#[test]
 fn extract_allowlisted_and_unknown() {
     let mut ext = RawContentExtractor::new(1);
     let content = map(&[

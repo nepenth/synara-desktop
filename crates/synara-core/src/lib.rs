@@ -129,28 +129,29 @@ pub use shared_core_ffi::{
     RoomNotificationSnapshotDto, RoomNotificationWriteDto, RoomNotificationsSnapshotDto,
     RoomPowerLevelCommandError, RoomPowerLevelTagsSnapshotDto, RoomPowerLevelWriteDto,
     RoomPowerLevelsSnapshotDto, RoomProfileCommandError, RoomProfileWriteDto, RtcTransportDto,
-    RtcTransportsCommandError, RtcTransportsSnapshotDto, SecretStorageStatusDto, SendPollDto,
-    SendPollError, SendRoomAttachmentDto, SendRoomAttachmentError, SendTextDto, SendTextError,
-    SessionAttachDto, SessionAttachError, SessionLoginDto, SessionLoginError, SessionRestoreDto,
-    SessionRestoreError, SessionSnapshotDto, SessionStatusError, SharedCore, SpaceChildEdgeDto,
-    SpaceChildMutationDto, SpaceChildrenSnapshotDto, SpaceCommandError, SpaceHierarchyRoomDto,
-    SpaceHierarchySnapshotDto, SpaceParentEntryDto, SpaceParentsSnapshotDto, SyncStartDto,
-    SyncStartError, SyncStatusDto, SyncStopDto, SyncStopError, ThreepidAddDto,
-    ThreepidCommandError, ThreepidEmailDto, ThreepidEmailTokenDto, ThreepidSnapshotDto,
-    ThreepidWriteDto, TimelineError, TimelineEventItemDto, TimelineEventReadbackDto,
-    TimelineForwardDto, TimelineForwardError, TimelineMediaError, TimelineMutateDto,
-    TimelineMutateError, TimelineOpenDto, TimelineOpenPositionDto, TimelinePinDto,
-    TimelinePinError, TimelineReactionDto, TimelineReactionError, TimelineReactionMutationDto,
-    TimelineReactionSenderDto, TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto,
-    TimelineViewPollAnswerDto, TimelineViewPollDto, TimelineViewPositionDto,
-    TimelineViewReactionDto, TimelineViewReplyPreviewDto, TimelineViewRowCapabilitiesDto,
-    TimelineViewRowDto, TimelineViewThreadSummaryDto, TimelineViewUpdateDto,
-    TimelineViewUpdateError, TimelineVoteDeclineDto, TimelineVoteDeclineError, TypingCommandError,
-    TypingRoomDto, TypingSnapshotDto, UserDirectoryHitDto, UserDirectorySearchDto,
-    UserDirectorySearchError, UserImagePackSnapshotDto, UserInCallDto, UserStatusCommandError,
-    UserStatusFieldDto, UserStatusSnapshotDto, UserStatusWriteDto, VerificationEmojiDto,
-    VerificationInboxDto, VerificationListError, VerificationQrDto, VerificationRequestDto,
-    VerificationSasDto, VerificationSasError,
+    RtcTransportsCommandError, RtcTransportsSnapshotDto, SecretStorageSetupDto,
+    SecretStorageStatusDto, SendPollDto, SendPollError, SendRoomAttachmentDto,
+    SendRoomAttachmentError, SendTextDto, SendTextError, SessionAttachDto, SessionAttachError,
+    SessionLoginDto, SessionLoginError, SessionRestoreDto, SessionRestoreError, SessionSnapshotDto,
+    SessionStatusError, SharedCore, SpaceChildEdgeDto, SpaceChildMutationDto,
+    SpaceChildrenSnapshotDto, SpaceCommandError, SpaceHierarchyRoomDto, SpaceHierarchySnapshotDto,
+    SpaceParentEntryDto, SpaceParentsSnapshotDto, SyncStartDto, SyncStartError, SyncStatusDto,
+    SyncStopDto, SyncStopError, ThreepidAddDto, ThreepidCommandError, ThreepidEmailDto,
+    ThreepidEmailTokenDto, ThreepidSnapshotDto, ThreepidWriteDto, TimelineError,
+    TimelineEventItemDto, TimelineEventReadbackDto, TimelineForwardDto, TimelineForwardError,
+    TimelineMediaError, TimelineMutateDto, TimelineMutateError, TimelineOpenDto,
+    TimelineOpenPositionDto, TimelinePinDto, TimelinePinError, TimelineReactionDto,
+    TimelineReactionError, TimelineReactionMutationDto, TimelineReactionSenderDto,
+    TimelineReadStateDto, TimelineReadStateError, TimelineSnapshotDto, TimelineViewPollAnswerDto,
+    TimelineViewPollDto, TimelineViewPositionDto, TimelineViewReactionDto,
+    TimelineViewReplyPreviewDto, TimelineViewRowCapabilitiesDto, TimelineViewRowDto,
+    TimelineViewThreadSummaryDto, TimelineViewUpdateDto, TimelineViewUpdateError,
+    TimelineVoteDeclineDto, TimelineVoteDeclineError, TypingCommandError, TypingRoomDto,
+    TypingSnapshotDto, UserDirectoryHitDto, UserDirectorySearchDto, UserDirectorySearchError,
+    UserImagePackSnapshotDto, UserInCallDto, UserStatusCommandError, UserStatusFieldDto,
+    UserStatusSnapshotDto, UserStatusWriteDto, VerificationEmojiDto, VerificationInboxDto,
+    VerificationListError, VerificationQrDto, VerificationRequestDto, VerificationSasDto,
+    VerificationSasError,
 };
 
 mod core;
@@ -164,7 +165,5 @@ pub use app::room_list::{
 
 pub mod dto;
 pub mod platform;
-
-pub mod task;
 
 pub mod transport;

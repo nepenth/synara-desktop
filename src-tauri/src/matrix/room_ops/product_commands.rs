@@ -198,7 +198,7 @@ pub async fn matrix_invites_block_sender(
 ) -> Result<NativeInviteSnapshot, MatrixAuthCommandError> {
     crate::bridge::invites_snapshot::invites_block_sender(core.inner().as_ref(), room_id).await
 }
-
+#[cfg(test)]
 pub(super) fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-room-leave-invalid-room" => (
@@ -212,7 +212,7 @@ pub(super) fn map_room_leave_error(diagnostic_id: &'static str) -> MatrixAuthCom
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
-
+#[cfg(test)]
 pub(super) fn map_room_moderation_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-members-moderation-invalid-room"
@@ -232,7 +232,7 @@ pub(super) fn map_room_moderation_error(diagnostic_id: &'static str) -> MatrixAu
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
-
+#[cfg(test)]
 pub(super) fn map_power_level_write_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-power-levels-invalid-room"
@@ -265,21 +265,21 @@ pub(super) fn map_power_level_write_error(diagnostic_id: &'static str) -> Matrix
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
-
+#[cfg(test)]
 pub(super) fn validate_room_power_levels_content(
     content: &serde_json::Value,
 ) -> Result<(), MatrixAuthCommandError> {
     synara_core::app::members::validate_room_power_levels_content(content)
         .map_err(map_power_level_write_error)
 }
-
+#[cfg(test)]
 pub(super) fn validate_power_level_tags_content(
     content: &serde_json::Value,
 ) -> Result<(), MatrixAuthCommandError> {
     synara_core::app::members::validate_power_level_tags_content(content)
         .map_err(map_power_level_write_error)
 }
-
+#[cfg(test)]
 pub(super) fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-room-create-invalid-name"
@@ -300,24 +300,24 @@ pub(super) fn map_room_create_error(diagnostic_id: &'static str) -> MatrixAuthCo
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
-
+#[cfg(test)]
 pub(super) fn build_room_create_request(
     input: MatrixRoomCreateRequest,
 ) -> Result<create_room::v3::Request, MatrixAuthCommandError> {
     synara_core::app::room_ops::build_room_create_request(input).map_err(map_room_create_error)
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_leave_id(room_id: &str) -> Result<OwnedRoomId, MatrixAuthCommandError> {
     room_id
         .trim()
         .parse()
         .map_err(|_| map_room_leave_error("v-rooms-room-leave-invalid-room"))
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_members_room_id(room_id: &str) -> Result<OwnedRoomId, &'static str> {
     synara_core::app::members::parse_room_members_room_id(room_id)
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_moderation_room_id(
     room_id: &str,
 ) -> Result<OwnedRoomId, MatrixAuthCommandError> {
@@ -326,7 +326,7 @@ pub(super) fn parse_room_moderation_room_id(
         .parse()
         .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invalid-room"))
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_moderation_user_id(
     user_id: &str,
 ) -> Result<OwnedUserId, MatrixAuthCommandError> {
@@ -335,7 +335,7 @@ pub(super) fn parse_room_moderation_user_id(
         .parse()
         .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invalid-user"))
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_moderation_power_level(
     power_level: i64,
 ) -> Result<Int, MatrixAuthCommandError> {
@@ -343,13 +343,13 @@ pub(super) fn parse_room_moderation_power_level(
         .try_into()
         .map_err(|_| map_room_moderation_error("v-rooms-members-moderation-invalid-power-level"))
 }
-
+#[cfg(test)]
 pub(super) fn normalize_moderation_reason(reason: Option<String>) -> Option<String> {
     reason
         .map(|value| value.trim().to_owned())
         .filter(|value| !value.is_empty())
 }
-
+#[cfg(test)]
 pub(super) fn map_room_join_error(diagnostic_id: &'static str) -> MatrixAuthCommandError {
     let (code, message) = match diagnostic_id {
         "v-rooms-room-join-invalid-room" | "v-rooms-room-join-invalid-via-server" => (
@@ -360,7 +360,7 @@ pub(super) fn map_room_join_error(diagnostic_id: &'static str) -> MatrixAuthComm
     };
     MatrixAuthCommandError::new(code, message, diagnostic_id)
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_join_target(
     room_id_or_alias: &str,
 ) -> Result<OwnedRoomOrAliasId, MatrixAuthCommandError> {
@@ -369,7 +369,7 @@ pub(super) fn parse_room_join_target(
         .parse()
         .map_err(|_| map_room_join_error("v-rooms-room-join-invalid-room"))
 }
-
+#[cfg(test)]
 pub(super) fn parse_room_join_via_servers(
     via_servers: Option<&[String]>,
 ) -> Result<Vec<OwnedServerName>, MatrixAuthCommandError> {
