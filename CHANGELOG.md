@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## [2.1.43] - 2026-10-02
+
+- Matrix: consolidate shared session, encryption recovery, notifications, and timeline behavior in the Rust core used by desktop and iOS; strengthen cancellation and account-generation ownership.
+- Security: keep recovery keys and passphrases out of generic command payloads and diagnostics, and make session wipe and restoration authoritative in the native store.
+- Desktop: retire legacy Matrix JavaScript, IndexedDB deletion, unused call/PWA scaffolding, and obsolete runtime polyfills while retaining the React interface.
+- Dependencies: consolidate the four Rust packages into one workspace and lockfile, update supported Rust and frontend dependencies, and record the disposition of all four dependency-update PRs.
+- iOS: harden notification approval, deduplication, receipt handling, and extension isolation; preserve composer text and timeline position during updates.
+- Validation: expand SDK-backed recovery/session fixtures, cross-device Synapse coverage, async bridge checks, browser runtime checks, and Apple archive validation.
+
 ## [2.1.42] - 2026-09-26
 
 - Prepare the public project README with desktop, iPhone, and iPad interface images captured from disposable sample accounts, plus contribution and security guidance.

@@ -1,6 +1,6 @@
 {
   "name": "synara-desktop",
-  "version": "2.1.42",
+  "version": "2.1.43",
   "description": "Synara Desktop, a Matrix client for macOS and Linux with a shared Rust core.",
   "engines": {
     "node": ">=24.13.1"
