@@ -361,3 +361,74 @@ pub(super) fn matrix_notification_pending_snapshot(
             .map_err(|_| core_state_error("p2-notification-pending-snapshot-serialization-failed"))
     })
 }
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AgentPreferencesSetRequest {
+    preferences: crate::app::notifications::AgentNotificationPreferences,
+}
+fn agent_preferences_error(diagnostic: &'static str) -> MatrixIpcError {
+    MatrixIpcError::new(if diagnostic.ends_with("no-session") {
+        MatrixIpcErrorCategory::Forbidden
+    } else if diagnostic.ends_with("invalid") {
+        MatrixIpcErrorCategory::SdkInvariant
+    } else {
+        MatrixIpcErrorCategory::Unknown
+    })
+    .with_diagnostic(diagnostic)
+}
+pub(super) fn matrix_agent_notification_preferences_snapshot(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        if !own_profile_read_payload_is_empty(&request.payload) {
+            return Err(agent_preferences_error(
+                "agent-notification-preferences-invalid",
+            ));
+        }
+        let owner = state
+            .notification_decision_owner()?
+            .ok_or_else(|| agent_preferences_error("agent-notification-preferences-no-session"))?;
+        let preferences = owner
+            .agent_notification_preferences_snapshot()
+            .await
+            .map_err(agent_preferences_error)?;
+        if !state
+            .notification_decision_owner()?
+            .is_some_and(|current| Arc::ptr_eq(&owner, &current))
+        {
+            return Err(agent_preferences_error(
+                "agent-notification-preferences-no-session",
+            ));
+        }
+        serde_json::to_value(preferences)
+            .map_err(|_| agent_preferences_error("agent-notification-preferences-invalid"))
+    })
+}
+pub(super) fn matrix_agent_notification_preferences_set(
+    state: Arc<CoreState>,
+    request: CommandEnvelope,
+) -> CommandFuture {
+    Box::pin(async move {
+        let payload: AgentPreferencesSetRequest = serde_json::from_value(request.payload)
+            .map_err(|_| agent_preferences_error("agent-notification-preferences-invalid"))?;
+        let owner = state
+            .notification_decision_owner()?
+            .ok_or_else(|| agent_preferences_error("agent-notification-preferences-no-session"))?;
+        let preferences = owner
+            .agent_notification_preferences_set(payload.preferences)
+            .await
+            .map_err(agent_preferences_error)?;
+        if !state
+            .notification_decision_owner()?
+            .is_some_and(|current| Arc::ptr_eq(&owner, &current))
+        {
+            return Err(agent_preferences_error(
+                "agent-notification-preferences-no-session",
+            ));
+        }
+        serde_json::to_value(preferences)
+            .map_err(|_| agent_preferences_error("agent-notification-preferences-invalid"))
+    })
+}

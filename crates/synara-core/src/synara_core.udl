@@ -1356,6 +1356,18 @@ interface PushRulesCommandError {
   Failed(string code, string description);
 };
 
+dictionary AgentNotificationPreferencesDto {
+  u32 schema_version;
+  sequence<string> agent_user_ids;
+  boolean notify_tool_activity;
+  boolean notify_commentary;
+  boolean notify_final_responses;
+};
+[Error]
+interface AgentNotificationPreferencesError {
+  Failed(string code, string description);
+};
+
 dictionary RoomNotificationSnapshotDto {
   string room_id;
   string mode;
@@ -2065,6 +2077,15 @@ interface SharedCore {
 
   [Async, Throws=PushRulesCommandError]
   PushRulesWriteDto push_rules_remove_keyword(string keyword);
+
+  [Async, Throws=AgentNotificationPreferencesError]
+  boolean agent_notification_event_allowed(string room_id, string event_id);
+
+  [Async, Throws=AgentNotificationPreferencesError]
+  AgentNotificationPreferencesDto agent_notification_preferences_snapshot();
+
+  [Async, Throws=AgentNotificationPreferencesError]
+  AgentNotificationPreferencesDto agent_notification_preferences_set(AgentNotificationPreferencesDto preferences);
 
   [Async, Throws=RoomNotificationCommandError]
   RoomNotificationSnapshotDto room_notification_snapshot(string room_id);

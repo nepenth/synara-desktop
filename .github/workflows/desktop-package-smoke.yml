@@ -266,7 +266,7 @@ jobs:
         run: npm run check:versions
 
       - name: Build macOS app bundle
-        run: npm run tauri build -- --bundles app --config '{"bundle":{"createUpdaterArtifacts":false}}'
+        run: npm run tauri build -- --bundles app --config '{"bundle":{"createUpdaterArtifacts":false,"macOS":{"entitlements":"Entitlements.adhoc.plist"}}}'
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
 

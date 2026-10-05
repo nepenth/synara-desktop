@@ -364,20 +364,22 @@ impl SharedCore {
             ));
         };
         let notification_client =
-            NotificationClient::new(client, NotificationProcessSetup::MultipleProcesses)
+            NotificationClient::new(client.clone(), NotificationProcessSetup::MultipleProcesses)
                 .await
-                .map_err(|_| {
+                .map_err(|error| {
                     nse_failed(
-                        NSE_CLIENT_INIT_FAILED_CODE,
+                        crate::app::notifications::nse_notification_initialization_error_code(
+                            &error,
+                        ),
                         NSE_CLIENT_INIT_FAILED_DESCRIPTION,
                     )
                 })?;
         let status = notification_client
             .get_notification(&parsed_room, &parsed_event)
             .await
-            .map_err(|_| {
+            .map_err(|error| {
                 nse_failed(
-                    NSE_EVENT_FETCH_FAILED_CODE,
+                    crate::app::notifications::nse_notification_error_code(&error),
                     NSE_EVENT_FETCH_FAILED_DESCRIPTION,
                 )
             })?;
@@ -407,6 +409,29 @@ impl SharedCore {
                 NSE_EVENT_NOT_IN_STORE_DESCRIPTION,
             ));
         };
+        let preferences =
+            if crate::app::agent_approvals::is_agent_approval_prompt(original.content.body()) {
+                Default::default()
+            } else {
+                match tokio::time::timeout(
+                    Duration::from_secs(2),
+                    crate::app::notifications::fetch_agent_notification_preferences(&client),
+                )
+                .await
+                {
+                    Ok(Ok(value)) => value,
+                    Ok(Err("agent-notification-preferences-invalid")) => Default::default(),
+                    _ => crate::app::notifications::cached_agent_notification_preferences(&client)
+                        .await
+                        .unwrap_or_default(),
+                }
+            };
+        if preferences.suppresses(original.sender.as_str(), original.content.body()) {
+            return Err(nse_failed(
+                "p4-s11-nse-agent-policy-filtered",
+                "The notification was excluded by agent notification settings.",
+            ));
+        }
         let body = Some(bounded_nse_preview_text(original.content.body(), 240));
         let message_type = nse_message_type(&original.content.msgtype)
             .map(|value| bounded_nse_preview_text(value, 64));

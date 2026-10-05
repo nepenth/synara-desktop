@@ -175,6 +175,7 @@ pub type ImagePackUpdateEmit = Arc<dyn Fn(NativeImagePackUpdateSignal) + Send + 
 pub enum NativeAccountDataWakeupKind {
     ImagePacks,
     AgentApprovalHistory,
+    AgentNotificationPreferences,
 }
 
 #[derive(Debug, Clone, Copy, Serialize)]
@@ -191,6 +192,8 @@ fn account_data_wakeup_kinds(
     event_type: &str,
 ) -> impl Iterator<Item = NativeAccountDataWakeupKind> {
     [
+        (event_type == crate::app::notifications::AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE)
+            .then_some(NativeAccountDataWakeupKind::AgentNotificationPreferences),
         (event_type == AGENT_APPROVAL_HISTORY_EVENT_TYPE)
             .then_some(NativeAccountDataWakeupKind::AgentApprovalHistory),
         is_image_pack_account_data_type(event_type)

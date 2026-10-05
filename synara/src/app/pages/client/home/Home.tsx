@@ -67,7 +67,7 @@ import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
 import { useCategoryHandler } from '../../../hooks/useCategoryHandler';
 import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMapper';
 import { PageNav, PageNavHeader, PageNavContent } from '../../../components/page';
-import { useRoomsUnread } from '../../../state/hooks/unread';
+import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
 import { stopPropagation } from '../../../utils/keyboard';
@@ -85,8 +85,7 @@ type HomeMenuProps = {
   requestClose: () => void;
 };
 const HomeMenu = forwardRef<HTMLDivElement, HomeMenuProps>(({ requestClose }, ref) => {
-  const orphanRooms = useHomeRooms();
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const { roomIds: orphanRooms, unread } = useNativeNavigationScope('home');
   const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {

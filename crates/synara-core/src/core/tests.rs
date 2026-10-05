@@ -329,6 +329,8 @@ async fn default_registry_dispatches_matrix_session_snapshot() {
             "matrix_agent_approval_decide",
             "matrix_agent_approval_history_snapshot",
             "matrix_agent_approvals_list",
+            "matrix_agent_notification_preferences_set",
+            "matrix_agent_notification_preferences_snapshot",
             "matrix_backup_status",
             "matrix_composer_clear_reply_draft",
             "matrix_composer_get_reply_draft",

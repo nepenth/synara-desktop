@@ -119,17 +119,31 @@ export function SystemNotification() {
     ? platformNotifPermission ?? 'prompt'
     : browserNotifPermission;
 
-  const requestNotificationPermission = async () => {
-    if (platformNotifications) {
-      const permission = await requestPlatformNotificationPermission();
-      setPlatformNotifPermission(permission);
-      if (permission === 'granted') setShowNotifications(true);
-      return;
-    }
+  const [isRequestingPermission, setIsRequestingPermission] = useState(false);
+  const [permissionMessage, setPermissionMessage] = useState<string | null>(null);
 
-    if ('Notification' in window) {
-      const permission = await window.Notification.requestPermission();
-      if (permission === 'granted') setShowNotifications(true);
+  const requestNotificationPermission = async () => {
+    if (isRequestingPermission) return;
+    setIsRequestingPermission(true);
+    setPermissionMessage(null);
+    try {
+      if (platformNotifications) {
+        const permission = await requestPlatformNotificationPermission();
+        setPlatformNotifPermission(permission);
+        if (permission === 'granted' && notifPermission !== 'granted') setShowNotifications(true);
+        setPermissionMessage(
+          'Notification permission checked. Critical Alerts depend on macOS permission and support in this build.'
+        );
+      } else if ('Notification' in window) {
+        const permission = await window.Notification.requestPermission();
+        if (permission === 'granted') setShowNotifications(true);
+      }
+    } catch {
+      setPermissionMessage(
+        'Notification permission could not be requested. Check your system notification settings.'
+      );
+    } finally {
+      setIsRequestingPermission(false);
     }
   };
 
@@ -147,7 +161,9 @@ export function SystemNotification() {
           description={
             notifPermission === 'denied' ? (
               <Text as="span" style={{ color: color.Critical.Main }} size="T200">
-                {'Notification' in window
+                {platformNotifications
+                  ? 'Notification permission is blocked. Allow Synara in your system notification settings.'
+                  : 'Notification' in window
                   ? 'Notification permission is blocked. Please allow notification permission from browser address bar.'
                   : 'Notifications are not supported by the system.'}
               </Text>
@@ -163,6 +179,7 @@ export function SystemNotification() {
                 radii="300"
                 variant="Primary"
                 fill="Soft"
+                disabled={isRequestingPermission}
                 onClick={requestNotificationPermission}
               >
                 <Text size="B300">Enable</Text>
@@ -176,6 +193,31 @@ export function SystemNotification() {
             )
           }
         />
+        {platformNotifications && notifPermission !== 'prompt' && (
+          <SettingTile
+            title="Notification Permission"
+            description="On supported macOS builds, requesting permission also lets you opt into Critical Alerts for verified agent approvals. Your macOS notification settings control which alerts can be delivered."
+          >
+            <Button
+              className={SettingsQuietControl}
+              size="300"
+              radii="300"
+              variant="Secondary"
+              fill="Soft"
+              disabled={isRequestingPermission}
+              onClick={requestNotificationPermission}
+            >
+              <Text size="B300">
+                {isRequestingPermission ? 'Requesting…' : 'Request notification permission'}
+              </Text>
+            </Button>
+          </SettingTile>
+        )}
+        {permissionMessage && (
+          <Text size="T200" role="status">
+            {permissionMessage}
+          </Text>
+        )}
       </SequenceCard>
       <SequenceCard
         className={SequenceCardStyle}

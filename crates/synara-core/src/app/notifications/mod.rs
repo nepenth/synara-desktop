@@ -6,12 +6,16 @@
 //!
 //! Authoritative design note: `docs/matrix-rust-sdk/p7.1-notifications.md`
 
+mod agent_preferences;
+pub use agent_preferences::*;
 mod decision;
 mod edit_policy;
 mod error;
 mod http_pusher;
 mod inbox;
 mod index;
+mod nse_error;
+pub use nse_error::{nse_notification_error_code, nse_notification_initialization_error_code};
 mod observation;
 mod push_rules;
 mod room_notification;

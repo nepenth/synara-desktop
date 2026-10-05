@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-matrix-agent-notification-preferences-set"
+description = "Enables the matrix_agent_notification_preferences_set command without any pre-configured scope."
+commands.allow = ["matrix_agent_notification_preferences_set"]
+
+[[permission]]
+identifier = "deny-matrix-agent-notification-preferences-set"
+description = "Denies the matrix_agent_notification_preferences_set command without any pre-configured scope."
+commands.deny = ["matrix_agent_notification_preferences_set"]

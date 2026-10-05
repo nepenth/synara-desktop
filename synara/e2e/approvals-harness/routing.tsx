@@ -1,6 +1,6 @@
 // Production Approvals, navigation hooks, back handler, and route patterns.
 // Only Matrix/inbox data and the destination room's content are fixtures.
-import React from 'react';
+import React, { ReactNode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { createStore, Provider } from 'jotai';
 import { MemoryRouter, Routes, Route, useLocation, useParams } from 'react-router-dom';
@@ -19,7 +19,11 @@ import { ScreenSize, ScreenSizeProvider } from '../../src/app/hooks/useScreenSiz
 import { useNavigateToApprovals } from '../../src/app/hooks/useNavigateToApprovals';
 import { BackRouteHandler } from '../../src/app/components/BackRouteHandler';
 import { roomToParentsAtom } from '../../src/app/state/room/roomToParents';
-import { mDirectAtom } from '../../src/app/state/mDirectList';
+import {
+  useBindAllRoomsAtom,
+  useNativeRoomListSnapshot,
+} from '../../src/app/state/room-list/roomList';
+import type { RoomSummary } from '../../src/app/features/matrix-dto/room';
 import type { MatrixClient } from '../../src/client/initMatrix';
 import {
   APPROVALS_PATH,
@@ -55,11 +59,54 @@ const mx = {
   getUserId: () => '@reader:example.test',
 } as unknown as MatrixClient;
 const store = createStore();
-store.set(mDirectAtom, { type: 'INITIALIZE', rooms: new Set(kind === 'direct' ? [roomId] : []) });
 store.set(roomToParentsAtom, {
   type: 'INITIALIZE',
   roomToParents: new Map(kind === 'space' ? [[roomId, new Set([firstParent, originParent])]] : []),
 });
+// Classify the route from the same authoritative native projection as shipped
+// navigation. The separate m.direct renderer projection is deliberately absent.
+const nativeRooms: RoomSummary[] = rooms.map((item) => ({
+  roomId: item.roomId,
+  name: item.name,
+  membership: 'join',
+  isDirect: item.roomId === roomId && kind === 'direct',
+  isSpace: item.roomId !== roomId,
+  isCall: false,
+  hasActiveCall: false,
+  activeCallParticipantCount: 0,
+  isFavorite: false,
+  isEncrypted: false,
+  encryptionStatus: 'not_encrypted',
+  unreadCount: 0,
+  highlightCount: 0,
+  markedUnread: false,
+  lastMessageIsAgentApproval: false,
+}));
+window.__SYNARA_DESKTOP__ = {
+  platform: 'tauri',
+  invoke: async <T,>(command: string) => {
+    if (command === 'matrix_session_snapshot')
+      return {
+        status: 'logged_in',
+        sessionGeneration: 1,
+        user_id: '@reader:example.test',
+        device_id: 'TEST',
+        homeserver_url: 'https://example.test',
+      } as T;
+    if (command === 'matrix_room_list_snapshot')
+      return {
+        sessionGeneration: 1,
+        orderedRoomIds: nativeRooms.map((item) => item.roomId),
+        rooms: nativeRooms,
+      } as T;
+    throw new Error(`Unexpected routing fixture command ${command}`);
+  },
+};
+function NativeRoutingOwner({ children }: { children: ReactNode }) {
+  useBindAllRoomsAtom();
+  const snapshot = useNativeRoomListSnapshot();
+  return snapshot.sessionGeneration === 1 ? children : null;
+}
 const now = Date.now();
 const inbox: ApprovalInboxContextValue = {
   sessionGeneration: 1,
@@ -130,24 +177,26 @@ const origin =
 document.body.classList.add(configClass, varsClass, darkTheme, 'dark-theme');
 createRoot(document.getElementById('root')!).render(
   <Provider store={store}>
-    <MatrixClientProvider value={mx}>
-      <ScreenSizeProvider value={ScreenSize.Mobile}>
-        <ApprovalInboxContext.Provider value={inbox}>
-          <MemoryRouter initialEntries={[origin]}>
-            <LocationOutput />
-            <Routes>
-              <Route path={APPROVALS_PATH} element={<Approvals />} />
-              <Route path={HOME_ROOM_PATH} element={<Destination />} />
-              <Route path={DIRECT_ROOM_PATH} element={<Destination />} />
-              <Route path={SPACE_ROOM_PATH} element={<Destination />} />
-              <Route path={HOME_PATH} element={<Entry />} />
-              <Route path={DIRECT_PATH} element={<Entry />} />
-              <Route path={`${INBOX_PATH}*`} element={<Entry />} />
-              <Route path={SPACE_PATH} element={<Entry />} />
-            </Routes>
-          </MemoryRouter>
-        </ApprovalInboxContext.Provider>
-      </ScreenSizeProvider>
-    </MatrixClientProvider>
+    <NativeRoutingOwner>
+      <MatrixClientProvider value={mx}>
+        <ScreenSizeProvider value={ScreenSize.Mobile}>
+          <ApprovalInboxContext.Provider value={inbox}>
+            <MemoryRouter initialEntries={[origin]}>
+              <LocationOutput />
+              <Routes>
+                <Route path={APPROVALS_PATH} element={<Approvals />} />
+                <Route path={HOME_ROOM_PATH} element={<Destination />} />
+                <Route path={DIRECT_ROOM_PATH} element={<Destination />} />
+                <Route path={SPACE_ROOM_PATH} element={<Destination />} />
+                <Route path={HOME_PATH} element={<Entry />} />
+                <Route path={DIRECT_PATH} element={<Entry />} />
+                <Route path={`${INBOX_PATH}*`} element={<Entry />} />
+                <Route path={SPACE_PATH} element={<Entry />} />
+              </Routes>
+            </MemoryRouter>
+          </ApprovalInboxContext.Provider>
+        </ScreenSizeProvider>
+      </MatrixClientProvider>
+    </NativeRoutingOwner>
   </Provider>
 );

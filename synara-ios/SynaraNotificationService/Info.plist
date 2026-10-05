@@ -29,7 +29,11 @@
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).NotificationService</string>
 	</dict>
+	<key>SynaraCriticalAlertsEnabled</key>
+	<string>$(SYNARA_CRITICAL_ALERTS_ENABLED)</string>
 	<key>SynaraKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.whylandcreative.synara.shared</string>
+	<key>SynaraNotificationFilteringEnabled</key>
+	<string>$(SYNARA_NOTIFICATION_FILTERING_ENABLED)</string>
 </dict>
 </plist>

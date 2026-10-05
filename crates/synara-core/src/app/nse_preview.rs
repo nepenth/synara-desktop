@@ -200,23 +200,53 @@ async fn resolve_event_preview_unbounded(
     let notification_client =
         NotificationClient::new(client.clone(), NotificationProcessSetup::MultipleProcesses)
             .await
-            .map_err(|_| {
+            .map_err(|error| {
                 failed(
-                    "p4-s11-nse-client-init-failed",
+                    crate::app::notifications::nse_notification_initialization_error_code(&error),
                     "The notification client could not be opened.",
                 )
             })?;
     let status = notification_client
         .get_notification(&parsed_room, &parsed_event)
         .await
-        .map_err(|_| {
+        .map_err(|error| {
             failed(
-                "p4-s11-nse-event-fetch-failed",
-                "The notification event could not be fetched.",
+                crate::app::notifications::nse_notification_error_code(&error),
+                "The notification event could not be resolved.",
             )
         })?;
 
-    let preview = preview_from_status(status)?;
+    let approval = match &status {
+        NotificationStatus::Event(item) => match &item.event {
+            NotificationEvent::Timeline(event) => match event.as_ref() {
+                AnySyncTimelineEvent::MessageLike(AnySyncMessageLikeEvent::RoomMessage(
+                    message,
+                )) => message.as_original().is_some_and(|original| {
+                    crate::app::agent_approvals::is_agent_approval_prompt(original.content.body())
+                }),
+                _ => false,
+            },
+            _ => false,
+        },
+        _ => false,
+    };
+    let preferences = if approval {
+        Default::default()
+    } else {
+        match tokio::time::timeout(
+            Duration::from_secs(2),
+            crate::app::notifications::fetch_agent_notification_preferences(&client),
+        )
+        .await
+        {
+            Ok(Ok(value)) => value,
+            Ok(Err("agent-notification-preferences-invalid")) => Default::default(),
+            _ => crate::app::notifications::cached_agent_notification_preferences(&client)
+                .await
+                .unwrap_or_default(),
+        }
+    };
+    let preview = preview_from_status_with_preferences(status, &preferences)?;
     drop(notification_client);
     drop(client);
     Ok(preview)
@@ -239,7 +269,14 @@ fn valid_store_root(value: &str) -> Result<&Path, NsePreviewError> {
     Ok(path)
 }
 
+#[cfg(test)]
 fn preview_from_status(status: NotificationStatus) -> Result<NseEventPreview, NsePreviewError> {
+    preview_from_status_with_preferences(status, &Default::default())
+}
+fn preview_from_status_with_preferences(
+    status: NotificationStatus,
+    preferences: &crate::app::notifications::AgentNotificationPreferences,
+) -> Result<NseEventPreview, NsePreviewError> {
     let item = match status {
         NotificationStatus::Event(item) => item,
         NotificationStatus::EventFilteredOut => {
@@ -277,6 +314,12 @@ fn preview_from_status(status: NotificationStatus) -> Result<NseEventPreview, Ns
         return Err(event_unavailable());
     };
 
+    if preferences.suppresses(original.sender.as_str(), original.content.body()) {
+        return Err(failed(
+            "p4-s11-nse-agent-policy-filtered",
+            "The notification was excluded by agent notification settings.",
+        ));
+    }
     Ok(NseEventPreview {
         event_type: "m.room.message".to_owned(),
         sender_id: Some(bounded(
@@ -337,6 +380,67 @@ mod tests {
             self.keys.lock().expect("keys").push(key.to_owned());
             Ok(None)
         }
+    }
+
+    fn policy_status(sender: &str, body: &str) -> NotificationStatus {
+        use matrix_sdk::ruma::serde::Raw;
+        use matrix_sdk_ui::notification_client::{NotificationItem, RawNotificationEvent};
+        let raw: Raw<AnySyncTimelineEvent> = Raw::from_json(serde_json::value::to_raw_value(&serde_json::json!({"type":"m.room.message","event_id":"$event","sender":sender,"origin_server_ts":1000,"content":{"msgtype":"m.text","body":body}})).unwrap());
+        NotificationStatus::Event(Box::new(NotificationItem {
+            event: NotificationEvent::Timeline(Box::new(raw.deserialize().unwrap())),
+            raw_event: RawNotificationEvent::Timeline(raw),
+            sender_display_name: Some("Forge".into()),
+            sender_avatar_url: None,
+            is_sender_name_ambiguous: false,
+            room_computed_display_name: "Room".into(),
+            room_avatar_url: None,
+            room_canonical_alias: None,
+            room_topic: None,
+            room_join_rule: None,
+            is_room_encrypted: Some(true),
+            is_direct_message_room: false,
+            joined_members_count: 3,
+            service_members: vec![],
+            active_service_members_count: 0,
+            is_space: false,
+            is_noisy: Some(true),
+            has_mention: Some(false),
+            thread_id: None,
+            actions: None,
+            room_is_dm: false,
+        }))
+    }
+    #[test]
+    fn nse_policy_filters_actual_sender_before_truncation_but_never_approval() {
+        let p = crate::app::notifications::AgentNotificationPreferences {
+            agent_user_ids: vec!["@forge:example.org".into()],
+            notify_tool_activity: false,
+            notify_commentary: false,
+            notify_final_responses: false,
+            ..Default::default()
+        };
+        let tools = "**🛠 Tool activity (7 updates)**\n1. terminal";
+        assert_eq!(
+            preview_from_status_with_preferences(policy_status("@forge:example.org", tools), &p)
+                .unwrap_err()
+                .code(),
+            "p4-s11-nse-agent-policy-filtered"
+        );
+        // Same display name never grants identity to a different sender.
+        assert!(preview_from_status_with_preferences(
+            policy_status("@human:example.org", tools),
+            &p
+        )
+        .is_ok());
+        let approval = preview_from_status_with_preferences(
+            policy_status(
+                "@forge:example.org",
+                "Approval Required: Dangerous Command\nrm file",
+            ),
+            &p,
+        )
+        .unwrap();
+        assert!(approval.is_agent_approval);
     }
 
     #[test]

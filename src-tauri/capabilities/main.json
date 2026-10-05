@@ -199,6 +199,8 @@
     "allow-matrix-room-notes-delete",
     "allow-matrix-room-notes-complete-todo",
     "allow-matrix-room-notes-move-todo",
+    "allow-matrix-agent-notification-preferences-set",
+    "allow-matrix-agent-notification-preferences-snapshot",
     "allow-matrix-room-notification-set",
     "allow-matrix-room-notification-snapshot",
     "allow-matrix-room-notifications-snapshot",

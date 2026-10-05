@@ -102,6 +102,10 @@ protocol MatrixClientServicing: AnyObject {
     func ignoreUser(_ userID: String) async -> Bool
     func unignoreUser(_ userID: String) async -> Bool
     func pushRulesSnapshot() async -> SynaraPushRulesSnapshot?
+    func agentNotificationPreferences() async throws -> SynaraAgentNotificationPreferences
+    func agentNotificationEventAllowed(roomID: String, eventID: String, session: AuthenticatedSession) async -> Bool
+    func agentNotificationPreferenceUpdates() -> AsyncStream<Void>
+    func setAgentNotificationPreferences(_ preferences: SynaraAgentNotificationPreferences) async throws -> SynaraAgentNotificationPreferences
     func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool
     func setPushRuleMention(ruleID: String, enabled: Bool) async -> Bool
     func addPushKeyword(_ keyword: String) async -> Bool
@@ -1390,7 +1394,12 @@ struct UserNotificationPermissionService: NotificationPermissionServicing {
         let runID = UUID()
         SynaraNotificationDiagnostics.record(.permissionRequested, runID: runID)
         do {
-            _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .badge, .sound])
+            let center = UNUserNotificationCenter.current()
+            _ = try await center.requestAuthorization(options:
+                SynaraNotificationAuthorizationPolicy.options(
+                    criticalAlertsSupported: SynaraNotificationCapabilities.criticalAlertsEnabled()
+                )
+            )
             let status = await currentStatus()
             let diagnosticStage: SynaraNotificationDiagnostics.Stage
             switch status {

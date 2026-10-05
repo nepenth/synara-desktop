@@ -2,7 +2,12 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: '..',
-  testMatch: ['room-list-scroll.spec.ts', 'avatar-lifetime.spec.ts', 'room-list-live-call.spec.ts'],
+  testMatch: [
+    'room-list-scroll.spec.ts',
+    'avatar-lifetime.spec.ts',
+    'room-list-live-call.spec.ts',
+    'navigation-unread.spec.ts',
+  ],
   fullyParallel: false,
   retries: 0,
   timeout: 30000,
@@ -17,6 +22,10 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
-    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+    {
+      name: 'webkit',
+      testMatch: 'navigation-unread.spec.ts',
+      use: { ...devices['Desktop Safari'] },
+    },
   ],
 });

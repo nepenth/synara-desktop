@@ -705,6 +705,33 @@ impl Core {
             })
     }
 
+    /// Read-only policy for a foreground remote notification; no delivery ledger mutation.
+    pub async fn agent_notification_event_allowed(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<bool, MatrixIpcError> {
+        let owner = self.state.notification_decision_owner()?.ok_or_else(|| {
+            MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("agent-notification-preferences-no-session")
+        })?;
+        let allowed = owner
+            .agent_notification_event_allowed(room_id, event_id)
+            .await
+            .map_err(|code| {
+                MatrixIpcError::new(MatrixIpcErrorCategory::Unknown).with_diagnostic(code)
+            })?;
+        if !self
+            .state
+            .notification_decision_owner()?
+            .is_some_and(|current| Arc::ptr_eq(&owner, &current))
+        {
+            return Err(MatrixIpcError::new(MatrixIpcErrorCategory::Forbidden)
+                .with_diagnostic("agent-notification-preferences-no-session"));
+        }
+        Ok(allowed)
+    }
+
     /// Password UIAA for a pending email 3PID attach. Password is a method
     /// argument, never a `Core::command` JSON field.
     pub async fn threepid_add_email_password(
@@ -1358,6 +1385,18 @@ fn built_in_registry() -> CommandRegistry {
     registry
         .register("matrix_message_search", matrix_message_search)
         .expect("built-in matrix_message_search must remain in the command census");
+    registry
+        .register(
+            "matrix_agent_notification_preferences_snapshot",
+            matrix_agent_notification_preferences_snapshot,
+        )
+        .expect("agent preferences snapshot census");
+    registry
+        .register(
+            "matrix_agent_notification_preferences_set",
+            matrix_agent_notification_preferences_set,
+        )
+        .expect("agent preferences set census");
     registry
         .register("matrix_push_rules_snapshot", matrix_push_rules_snapshot)
         .expect("built-in matrix_push_rules_snapshot must remain in the command census");

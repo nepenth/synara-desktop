@@ -18,5 +18,12 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 30000,
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [
+    { name: 'chromium', use: { ...devices['Desktop Chrome'] } },
+    {
+      name: 'webkit',
+      testMatch: 'native-timeline-hermes-layout.spec.ts',
+      use: { ...devices['Desktop Safari'] },
+    },
+  ],
 });

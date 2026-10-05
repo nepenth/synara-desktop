@@ -17,28 +17,20 @@ final class NotificationService: UNNotificationServiceExtension {
         _ request: UNNotificationRequest,
         withContentHandler contentHandler: @escaping (UNNotificationContent) -> Void
     ) {
-        let requestID = coordinator.begin(content: request.content, handler: contentHandler)
+        let content = SynaraNotificationPresentationPolicy.fallback(from: request.content)
+        let requestID = coordinator.begin(content: content, handler: contentHandler)
         SynaraNotificationDiagnostics.record(.received, runID: requestID)
-
-        guard let content = request.content.mutableCopy() as? UNMutableNotificationContent else {
-            logger.error("preview stage=content-copy-failed")
-            SynaraNotificationDiagnostics.record(.contentCopyFailed, runID: requestID)
-            deliver(request.content, requestID: requestID)
-            return
-        }
 
         let showPreview = SynaraNotificationPreviewPreference.isEnabled()
         let timeSensitiveApprovals = SynaraTimeSensitiveAgentApprovalPreference.isEnabled()
-        // Gateway metadata can request extension execution, but it cannot grant
-        // reaction controls. Remove any proxy-provided approval presentation
-        // before local decryption and let the shared classifier add it back.
-        if content.categoryIdentifier == "synara.agent-approval" {
-            content.categoryIdentifier = ""
-            content.interruptionLevel = .active
-        }
-        guard let payload = SynaraNotificationPreviewPayloadParser.payload(from: request.content.userInfo) else {
+        let payload: SynaraNotificationPreviewPayload
+        switch SynaraNotificationPreviewPayloadParser.parse(request.content.userInfo) {
+        case .success(let reference):
+            payload = reference
+        case .failure(let failure):
             logger.info("preview stage=payload-invalid")
             SynaraNotificationDiagnostics.record(.payloadInvalid, runID: requestID)
+            SynaraNotificationDiagnostics.record(failure.stage, runID: requestID)
             deliver(content, requestID: requestID)
             return
         }
@@ -48,7 +40,7 @@ final class NotificationService: UNNotificationServiceExtension {
             deliver(content, requestID: requestID)
             return
         }
-        guard showPreview || timeSensitiveApprovals else {
+        guard showPreview || timeSensitiveApprovals || SynaraNotificationCapabilities.filteringEnabled() else {
             logger.info("preview stage=preferences-disabled")
             SynaraNotificationDiagnostics.record(.preferencesDisabled, runID: requestID)
             deliver(content, requestID: requestID)
@@ -75,7 +67,8 @@ final class NotificationService: UNNotificationServiceExtension {
                 }
                 return
             }
-            if let resolved = await resolver.resolve(
+            SynaraNotificationDiagnostics.record(.resolutionStarted, runID: requestID)
+            let resolved = await resolver.resolve(
                 for: payload,
                 retainMessageBody: showPreview,
                 onRequest: { request in
@@ -87,34 +80,48 @@ final class NotificationService: UNNotificationServiceExtension {
                 recordStage: { stage in
                     SynaraNotificationDiagnostics.record(stage, runID: requestID)
                 }
-            ) {
-                var diagnosticStage = SynaraNotificationDiagnostics.Stage.resolvedWithoutPreview
-                if showPreview, let preview = resolved.preview {
-                    content.title = preview.title
-                    content.body = preview.body
-                    diagnosticStage = .resolvedPreview
-                }
-                if timeSensitiveApprovals,
-                   resolved.isAgentApproval,
+            )
+            await resolutionGate.release()
+            if case .event(let resolved) = resolved {
+                // Ordinary previews do not wait on another OS settings lookup.
+                // The Matrix owner is already dropped; release its gate before
+                // querying notification authorization for a verified approval.
+                var criticalAlertsAuthorized = false
+                if SynaraNotificationCapabilities.criticalAlertsEnabled(),
+                   timeSensitiveApprovals, resolved.isAgentApproval,
                    SynaraAgentApprovalFreshness.isFresh(
-                       originServerTimestampMS: resolved.originServerTimestampMS
-                   )
-                {
-                    if showPreview == false {
-                        content.title = "Agent approval needed"
-                        content.body = "Review a time-sensitive request in Synara."
-                    }
-                    content.categoryIdentifier = "synara.agent-approval"
-                    content.interruptionLevel = .timeSensitive
-                    content.sound = .default
-                    diagnosticStage = .resolvedApproval
+                    originServerTimestampMS: resolved.originServerTimestampMS
+                   ) {
+                    let settings = await UNUserNotificationCenter.current().notificationSettings()
+                    criticalAlertsAuthorized = settings.criticalAlertSetting == .enabled
                 }
+                guard Task.isCancelled == false else { return }
+                let diagnosticStage = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+                    to: content,
+                    preview: resolved.preview,
+                    showPreview: showPreview,
+                    approvalAlertsEnabled: timeSensitiveApprovals,
+                    isAgentApproval: resolved.isAgentApproval,
+                    originServerTimestampMS: resolved.originServerTimestampMS,
+                    criticalAlertsAuthorized: criticalAlertsAuthorized
+                )
                 logger.info("preview stage=resolved")
                 SynaraNotificationDiagnostics.record(diagnosticStage, runID: requestID)
+            } else if case .agentPolicyFiltered = resolved {
+                guard Task.isCancelled == false else { return }
+                if let suppressed = SynaraAgentNotificationSuppressionPolicy.content(
+                    for: .agentPolicyFiltered,
+                    filteringEnabled: SynaraNotificationCapabilities.filteringEnabled()
+                ) {
+                    coordinator.deliver(suppressed, requestID: requestID) {
+                        SynaraNotificationDiagnostics.record(.agentPolicySuppressed, runID: requestID)
+                        SynaraNotificationDiagnostics.record(.delivered, runID: requestID)
+                    }
+                    return
+                }
             } else {
                 logger.error("preview stage=resolution-failed")
             }
-            await resolutionGate.release()
             coordinator.deliver(content, requestID: requestID) {
                 SynaraNotificationDiagnostics.record(.delivered, runID: requestID)
             }
@@ -209,22 +216,22 @@ private struct MatrixNotificationPreviewResolver {
         retainMessageBody: Bool,
         onRequest: (NsePreviewRequest) -> Void,
         recordStage: (SynaraNotificationDiagnostics.Stage) -> Void
-    ) async -> ResolvedNotificationEvent? {
+    ) async -> NotificationPreviewResolution {
         let fileManager = FileManager.default
         guard Task.isCancelled == false else {
             logger.info("preview stage=cancelled-before-restore")
-            return nil
+            return .unavailable
         }
         guard let session = sessionStore.load() else {
             logger.error("preview stage=shared-session-missing")
             recordStage(.sharedSessionMissing)
-            return nil
+            return .unavailable
         }
         guard let storeRoot = SynaraSharedConstants.sharedCoreStoreRoot(fileManager: fileManager),
               SynaraSharedConstants.sharedCoreStoreIsReady(at: storeRoot, fileManager: fileManager) else {
             logger.error("preview stage=shared-store-not-ready")
             recordStage(.sharedStoreNotReady)
-            return nil
+            return .unavailable
         }
 
         let memorySampler = NotificationMemorySampler()
@@ -248,14 +255,15 @@ private struct MatrixNotificationPreviewResolver {
             onRequest(request)
             guard Task.isCancelled == false else {
                 request.cancel()
-                return nil
+                return .unavailable
             }
+            recordStage(.coreResolutionStarted)
             let event = try await request.resolve()
             await memorySampler.capture()
             let peakKB = await memorySampler.peakFootprintKB
             logger.info("preview memory peak_footprint_kb=\(peakKB, privacy: .public)")
-            guard Task.isCancelled == false else { return nil }
-            return ResolvedNotificationEvent(
+            guard Task.isCancelled == false else { return .unavailable }
+            return .event(ResolvedNotificationEvent(
                 preview: SynaraMatrixEventPreviewComposer.preview(from: SynaraMatrixEventPreviewInput(
                     eventType: event.eventType,
                     senderID: event.senderId,
@@ -264,7 +272,7 @@ private struct MatrixNotificationPreviewResolver {
                 )),
                 isAgentApproval: event.isAgentApproval,
                 originServerTimestampMS: event.originServerTs
-            )
+            ))
         } catch {
             await memorySampler.capture()
             let peakKB = await memorySampler.peakFootprintKB
@@ -273,12 +281,19 @@ private struct MatrixNotificationPreviewResolver {
             if let coreError = error as? NseCoreError,
                case let .Failed(code, _) = coreError {
                 recordStage(SynaraNotificationDiagnostics.previewFailureStage(coreCode: code))
+                if code == "p4-s11-nse-agent-policy-filtered" { return .agentPolicyFiltered }
             } else {
                 recordStage(.coreResolutionFailed)
             }
-            return nil
+            return .unavailable
         }
     }
+}
+
+private enum NotificationPreviewResolution {
+    case event(ResolvedNotificationEvent)
+    case agentPolicyFiltered
+    case unavailable
 }
 
 private struct ResolvedNotificationEvent {

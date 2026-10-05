@@ -32,7 +32,7 @@
 
 use std::sync::{
     atomic::{AtomicBool, Ordering},
-    Mutex,
+    Arc, Mutex,
 };
 use std::time::Duration;
 
@@ -106,6 +106,7 @@ impl NotificationDecisionKind {
 #[serde(rename_all = "snake_case")]
 pub enum NotificationSuppressReason {
     OwnEvent,
+    AgentPolicy,
     /// The SDK-evaluated push rules produced no `notify` action: muted room,
     /// mentions-only room without a mention/keyword, suppressed edit, or any
     /// other server-side rule the user configured.
@@ -118,6 +119,7 @@ impl NotificationSuppressReason {
     pub fn as_str(self) -> &'static str {
         match self {
             Self::OwnEvent => "own-event",
+            Self::AgentPolicy => "agent-policy",
             Self::PushRulesNoNotify => "push-rules-no-notify",
             Self::FocusedRoom => "focused-room",
             Self::DuplicateEvent => "duplicate-event",
@@ -312,6 +314,29 @@ pub struct NativeNotificationDecisionOwner {
     client: Option<Client>,
     index: Mutex<NotificationIndex>,
     delivery: Mutex<NotificationDeliveryLedger>,
+    agent_preferences_pending: Arc<Mutex<AgentPreferencesProjection>>,
+    agent_preferences_operation: tokio::sync::Mutex<()>,
+    _agent_preferences_sync: Option<matrix_sdk::event_handler::EventHandlerDropGuard>,
+}
+
+/// A /sync event wins over reads/writes already in flight, including equal-value resets.
+#[derive(Default)]
+struct AgentPreferencesProjection {
+    revision: u64,
+    pending: Option<super::AgentNotificationPreferences>,
+}
+impl AgentPreferencesProjection {
+    fn synchronized(&mut self) {
+        self.revision = self.revision.wrapping_add(1);
+        self.pending = None;
+    }
+    fn install(&mut self, revision: u64, preferences: super::AgentNotificationPreferences) -> bool {
+        if self.revision != revision {
+            return false;
+        }
+        self.pending = Some(preferences);
+        true
+    }
 }
 
 /// Facts Core resolved from the SDK for one observed timeline event.
@@ -320,6 +345,7 @@ struct ObservedEvent {
     is_encrypted: bool,
     push: NotificationPushEvaluation,
     agent_approval: bool,
+    agent_policy_filtered: bool,
 }
 
 impl NativeNotificationDecisionOwner {
@@ -331,6 +357,22 @@ impl NativeNotificationDecisionOwner {
             .to_owned();
         let device_id = client.device_id().ok_or("v-notify.no-session")?.to_string();
         let homeserver_url = client.homeserver().as_str().to_owned();
+        let agent_preferences_pending = Arc::new(Mutex::new(AgentPreferencesProjection::default()));
+        let sync_pending = Arc::clone(&agent_preferences_pending);
+        let handle = client.add_event_handler(
+            move |event: matrix_sdk::ruma::events::AnyGlobalAccountDataEvent| {
+                let pending = Arc::clone(&sync_pending);
+                async move {
+                    if event.event_type().to_string()
+                        == super::AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE
+                    {
+                        if let Ok(mut pending) = pending.lock() {
+                            pending.synchronized();
+                        }
+                    }
+                }
+            },
+        );
         Ok(Self {
             session_generation,
             retired: AtomicBool::new(false),
@@ -340,7 +382,137 @@ impl NativeNotificationDecisionOwner {
             client: Some(client.clone()),
             index: Mutex::new(NotificationIndex::new(session_generation)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
+            agent_preferences_pending,
+            agent_preferences_operation: tokio::sync::Mutex::new(()),
+            _agent_preferences_sync: Some(client.event_handler_drop_guard(handle)),
         })
+    }
+
+    /// Read-only foreground policy. Never touches dedup, pending delivery or focus.
+    pub async fn agent_notification_event_allowed(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<bool, &'static str> {
+        tokio::time::timeout(
+            Duration::from_secs(2),
+            self.resolve_agent_notification_event_allowed(room_id, event_id),
+        )
+        .await
+        .map_err(|_| "agent-notification-event-unavailable")?
+    }
+    async fn resolve_agent_notification_event_allowed(
+        &self,
+        room_id: &str,
+        event_id: &str,
+    ) -> Result<bool, &'static str> {
+        if self.retired.load(Ordering::Acquire) {
+            return Err("agent-notification-preferences-no-session");
+        }
+        let client = self
+            .client
+            .as_ref()
+            .ok_or("agent-notification-preferences-no-session")?;
+        let room_id = RoomId::parse(room_id).map_err(|_| "agent-notification-event-invalid")?;
+        let event_id = EventId::parse(event_id).map_err(|_| "agent-notification-event-invalid")?;
+        let room = client
+            .get_room(&room_id)
+            .ok_or("agent-notification-event-unavailable")?;
+        let event = room
+            .load_or_fetch_event(
+                &event_id,
+                Some(
+                    RequestConfig::new()
+                        .timeout(Duration::from_secs(2))
+                        .disable_retry(),
+                ),
+            )
+            .await
+            .map_err(|_| "agent-notification-event-unavailable")?;
+        let timeline = event
+            .raw()
+            .deserialize()
+            .map_err(|_| "agent-notification-event-unavailable")?;
+        let matrix_sdk::ruma::events::AnySyncTimelineEvent::MessageLike(
+            matrix_sdk::ruma::events::AnySyncMessageLikeEvent::RoomMessage(message),
+        ) = timeline
+        else {
+            return Err("agent-notification-event-unavailable");
+        };
+        let original = message
+            .as_original()
+            .ok_or("agent-notification-event-unavailable")?;
+        let preferences =
+            if crate::app::agent_approvals::is_agent_approval_prompt(original.content.body()) {
+                Default::default()
+            } else {
+                self.effective_agent_preferences().await
+            };
+        if self.retired.load(Ordering::Acquire) {
+            return Err("agent-notification-preferences-no-session");
+        }
+        Ok(!preferences.suppresses(original.sender.as_str(), original.content.body()))
+    }
+
+    pub async fn agent_notification_preferences_snapshot(
+        &self,
+    ) -> Result<super::AgentNotificationPreferences, &'static str> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or("agent-notification-preferences-no-session")?;
+        let _operation = self.agent_preferences_operation.lock().await;
+        self.refresh_agent_preferences(client).await
+    }
+    pub async fn agent_notification_preferences_set(
+        &self,
+        preferences: super::AgentNotificationPreferences,
+    ) -> Result<super::AgentNotificationPreferences, &'static str> {
+        let client = self
+            .client
+            .as_ref()
+            .ok_or("agent-notification-preferences-no-session")?;
+        let _operation = self.agent_preferences_operation.lock().await;
+        super::store_agent_notification_preferences(client, &preferences).await?;
+        self.refresh_agent_preferences(client).await
+    }
+    async fn refresh_agent_preferences(
+        &self,
+        client: &Client,
+    ) -> Result<super::AgentNotificationPreferences, &'static str> {
+        // A delayed older /sync can overlap an authoritative GET. Refetch once
+        // after that event instead of equating sync arrival with server write order.
+        for _ in 0..2 {
+            let revision = self
+                .agent_preferences_pending
+                .lock()
+                .map_err(|_| "agent-notification-preferences-load-failed")?
+                .revision;
+            let fresh = super::fetch_agent_notification_preferences(client).await?;
+            if self
+                .agent_preferences_pending
+                .lock()
+                .map_err(|_| "agent-notification-preferences-load-failed")?
+                .install(revision, fresh.clone())
+            {
+                return Ok(fresh);
+            }
+        }
+        super::cached_agent_notification_preferences(client).await
+    }
+    async fn effective_agent_preferences(&self) -> super::AgentNotificationPreferences {
+        let Some(client) = self.client.as_ref() else {
+            return Default::default();
+        };
+        let cached = super::cached_agent_notification_preferences(client)
+            .await
+            .unwrap_or_default();
+        if let Ok(pending) = self.agent_preferences_pending.lock() {
+            if let Some(fresh) = pending.pending.as_ref() {
+                return fresh.clone();
+            }
+        }
+        cached
     }
 
     /// Immutable generation of this authenticated client binding. Retirement
@@ -363,6 +535,9 @@ impl NativeNotificationDecisionOwner {
             client: None,
             index: Mutex::new(NotificationIndex::new(session_generation)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
+            agent_preferences_pending: Arc::new(Mutex::new(AgentPreferencesProjection::default())),
+            agent_preferences_operation: tokio::sync::Mutex::new(()),
+            _agent_preferences_sync: None,
         }
     }
 
@@ -437,9 +612,13 @@ impl NativeNotificationDecisionOwner {
                     is_encrypted: false,
                     push: NotificationPushEvaluation::surface(),
                     agent_approval: false,
+                    agent_policy_filtered: false,
                 }
             }
         };
+        if observed.agent_policy_filtered {
+            return Ok(suppressed(NotificationSuppressReason::AgentPolicy));
+        }
         if observed.agent_approval {
             kind = NotificationDecisionKind::AgentApproval;
         }
@@ -542,7 +721,25 @@ impl NativeNotificationDecisionOwner {
                 is_encrypted: room.encryption_state().is_encrypted(),
                 push: NotificationPushEvaluation::surface(),
                 agent_approval: true,
+                agent_policy_filtered: false,
             });
+        }
+        let preferences = self.effective_agent_preferences().await;
+        if let matrix_sdk::ruma::events::AnySyncTimelineEvent::MessageLike(
+            matrix_sdk::ruma::events::AnySyncMessageLikeEvent::RoomMessage(message),
+        ) = &timeline
+        {
+            if let Some(original) = message.as_original() {
+                if preferences.suppresses(original.sender.as_str(), original.content.body()) {
+                    return Ok(ObservedEvent {
+                        is_own_event,
+                        is_encrypted: room.encryption_state().is_encrypted(),
+                        push: NotificationPushEvaluation::surface(),
+                        agent_approval: false,
+                        agent_policy_filtered: true,
+                    });
+                }
+            }
         }
         // Sync stores computed actions as `Some` (possibly empty). `None`
         // means they were never computed for this event (for example a
@@ -564,6 +761,7 @@ impl NativeNotificationDecisionOwner {
             is_encrypted: room.encryption_state().is_encrypted(),
             push: NotificationPushEvaluation::from_actions(&actions),
             agent_approval: false,
+            agent_policy_filtered: false,
         })
     }
 
@@ -875,6 +1073,9 @@ mod tests {
             client: None,
             index: Mutex::new(NotificationIndex::new(7)),
             delivery: Mutex::new(NotificationDeliveryLedger::default()),
+            agent_preferences_pending: Arc::new(Mutex::new(AgentPreferencesProjection::default())),
+            agent_preferences_operation: tokio::sync::Mutex::new(()),
+            _agent_preferences_sync: None,
         }
     }
 
@@ -1646,5 +1847,22 @@ mod tests {
             ))
             .unwrap();
         assert_eq!(again.reason.as_deref(), Some("duplicate-event"));
+    }
+}
+
+#[cfg(test)]
+mod agent_preferences_projection_tests {
+    use super::*;
+    #[test]
+    fn sync_supersedes_inflight_fetch_and_equal_value_reset() {
+        let mut state = AgentPreferencesProjection::default();
+        let revision = state.revision;
+        state.synchronized();
+        assert!(!state.install(revision, Default::default()));
+        assert!(state.pending.is_none());
+        let revision = state.revision;
+        assert!(state.install(revision, Default::default()));
+        state.synchronized();
+        assert!(state.pending.is_none());
     }
 }

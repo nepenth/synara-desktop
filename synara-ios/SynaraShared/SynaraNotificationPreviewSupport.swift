@@ -1,4 +1,100 @@
 import Foundation
+import UserNotifications
+
+/// These flags opt signed release configurations into restricted Apple
+/// capabilities. Actual Critical delivery additionally requires OS permission.
+enum SynaraNotificationCapabilities {
+    static func criticalAlertsEnabled(bundle: Bundle = .main) -> Bool {
+        enabled("SynaraCriticalAlertsEnabled", bundle: bundle)
+    }
+
+    static func filteringEnabled(bundle: Bundle = .main) -> Bool {
+        enabled("SynaraNotificationFilteringEnabled", bundle: bundle)
+    }
+
+    private static func enabled(_ key: String, bundle: Bundle) -> Bool {
+        if let value = bundle.object(forInfoDictionaryKey: key) as? NSNumber {
+            return value.boolValue
+        }
+        guard let value = bundle.object(forInfoDictionaryKey: key) as? String else { return false }
+        return ["YES", "TRUE", "1"].contains(value.uppercased())
+    }
+}
+
+/// Unsupported builds continue requesting ordinary notification permission.
+enum SynaraNotificationAuthorizationPolicy {
+    static func options(criticalAlertsSupported: Bool) -> UNAuthorizationOptions {
+        var options: UNAuthorizationOptions = [.alert, .badge, .sound]
+        if criticalAlertsSupported {
+            options.insert(.criticalAlert)
+        }
+        return options
+    }
+}
+
+enum SynaraNotificationPresentationPolicy {
+    static let approvalCategory = "synara.agent-approval"
+
+    /// Register this sanitized snapshot as the deadline fallback too. Gateway
+    /// hints never grant actions, urgency, or disclosure of message content.
+    static func fallback(from original: UNNotificationContent) -> UNMutableNotificationContent {
+        let content = original.mutableCopy() as? UNMutableNotificationContent
+            ?? UNMutableNotificationContent()
+        content.userInfo = original.userInfo
+        content.badge = original.badge
+        content.title = "Synara"
+        content.subtitle = ""
+        content.body = "New activity"
+        content.categoryIdentifier = ""
+        content.interruptionLevel = .active
+        content.sound = original.sound == nil ? nil : .default
+        return content
+    }
+
+    @discardableResult
+    static func applyResolvedEvent(
+        to content: UNMutableNotificationContent,
+        preview: SynaraNotificationPreview?,
+        showPreview: Bool,
+        approvalAlertsEnabled: Bool,
+        isAgentApproval: Bool,
+        originServerTimestampMS: UInt64,
+        criticalAlertsAuthorized: Bool,
+        now: Date = Date()
+    ) -> SynaraNotificationDiagnostics.Stage {
+        var stage = SynaraNotificationDiagnostics.Stage.resolvedWithoutPreview
+        if showPreview, let preview {
+            content.title = preview.title
+            content.body = preview.body
+            stage = .resolvedPreview
+        }
+        guard approvalAlertsEnabled, isAgentApproval,
+              SynaraAgentApprovalFreshness.isFresh(
+                originServerTimestampMS: originServerTimestampMS, now: now
+              ) else { return stage }
+
+        if !showPreview || preview == nil {
+            content.title = "Agent approval needed"
+            content.body = "Review a time-sensitive request in Synara."
+        }
+        content.categoryIdentifier = approvalCategory
+        content.interruptionLevel = criticalAlertsAuthorized ? .critical : .timeSensitive
+        content.sound = criticalAlertsAuthorized ? .defaultCritical : .default
+        return criticalAlertsAuthorized ? .resolvedCriticalApproval : .resolvedApproval
+    }
+}
+
+enum SynaraAgentNotificationSuppressionPolicy {
+    static func content(
+        for stage: SynaraNotificationDiagnostics.Stage,
+        filteringEnabled: Bool
+    ) -> UNNotificationContent? {
+        guard filteringEnabled, stage == .agentPolicyFiltered else { return nil }
+        // Apple permits an empty result to drop a remote alert only for an NSE
+        // signed with com.apple.developer.usernotifications.filtering.
+        return UNNotificationContent()
+    }
+}
 
 enum SynaraSharedConstants {
     static let appGroupIdentifier = "group.com.whylandcreative.synara"
@@ -70,9 +166,18 @@ enum SynaraNotificationDiagnostics {
         case received
         case contentCopyFailed = "content-copy-failed"
         case payloadInvalid = "payload-invalid"
+        case payloadNoEventReference = "payload-no-event-reference"
+        case payloadMissingRoom = "payload-missing-room"
+        case payloadMissingEvent = "payload-missing-event"
+        case payloadIdentifierTypeInvalid = "payload-identifier-type-invalid"
+        case payloadIdentifiersAmbiguous = "payload-identifiers-ambiguous"
+        case payloadIdentifiersInvalid = "payload-identifiers-invalid"
+        case payloadComplexityExceeded = "payload-complexity-exceeded"
         case preferencesDisabled = "preferences-disabled"
         case appGroupUnavailable = "app-group-unavailable"
         case resolutionQueued = "resolution-queued"
+        case resolutionStarted = "resolution-started"
+        case coreResolutionStarted = "core-resolution-started"
         case resolutionCancelled = "resolution-cancelled"
         case sharedSessionMissing = "shared-session-missing"
         case sharedStoreNotReady = "shared-store-not-ready"
@@ -81,6 +186,20 @@ enum SynaraNotificationDiagnostics {
         case coreStoreUnavailable = "core-store-unavailable"
         case coreRestoreFailed = "core-restore-failed"
         case coreFetchFailed = "core-fetch-failed"
+        case coreClientInitFailed = "core-client-init-failed"
+        case coreNetworkTimeout = "core-network-timeout"
+        case coreNetworkUnavailable = "core-network-unavailable"
+        case coreSessionRejected = "core-session-rejected"
+        case coreAccessDenied = "core-access-denied"
+        case coreRateLimited = "core-rate-limited"
+        case coreAPIIncompatible = "core-api-incompatible"
+        case coreStoreLockFailed = "core-store-lock-failed"
+        case coreCryptoUnavailable = "core-crypto-unavailable"
+        case coreRoomUnavailable = "core-room-unavailable"
+        case coreInvalidEvent = "core-invalid-event"
+        case coreContextMissingEvent = "core-context-missing-event"
+        case coreSlidingSyncVersionMissing = "core-sliding-sync-version-missing"
+        case coreInvalidResponse = "core-invalid-response"
         case coreResolutionTimedOut = "core-resolution-timed-out"
         case coreEventFiltered = "core-event-filtered"
         case coreEventRedacted = "core-event-redacted"
@@ -89,6 +208,9 @@ enum SynaraNotificationDiagnostics {
         case resolvedWithoutPreview = "resolved-without-preview"
         case resolvedPreview = "resolved-preview"
         case resolvedApproval = "resolved-approval"
+        case resolvedCriticalApproval = "resolved-critical-approval"
+        case agentPolicyFiltered = "agent-policy-filtered"
+        case agentPolicySuppressed = "agent-policy-suppressed"
         case delivered = "delivered"
         case systemDeadline = "system-deadline"
         case permissionRequested = "permission-requested"
@@ -115,10 +237,26 @@ enum SynaraNotificationDiagnostics {
     /// codes collapse to the existing fixed generic stage.
     static func previewFailureStage(coreCode: String) -> Stage {
         switch coreCode {
+        case "p4-s11-nse-agent-policy-filtered": return .agentPolicyFiltered
         case "p4-s3b-material-missing": return .coreSessionUnavailable
         case "p4-s3b-restore-failed": return .coreRestoreFailed
         case "nse-secret-vault-unavailable", "p4-s3-secret-vault-unavailable": return .coreStoreUnavailable
-        case "p4-s11-nse-event-fetch-failed", "p4-s11-nse-client-init-failed": return .coreFetchFailed
+        case "p4-s11-nse-event-fetch-failed": return .coreFetchFailed
+        case "p4-s11-nse-client-init-failed": return .coreClientInitFailed
+        case "p4-s11-nse-network-timeout": return .coreNetworkTimeout
+        case "p4-s11-nse-network-unavailable": return .coreNetworkUnavailable
+        case "p4-s11-nse-session-rejected": return .coreSessionRejected
+        case "p4-s11-nse-access-denied": return .coreAccessDenied
+        case "p4-s11-nse-rate-limited": return .coreRateLimited
+        case "p4-s11-nse-api-incompatible": return .coreAPIIncompatible
+        case "p4-s11-nse-store-unavailable": return .coreStoreUnavailable
+        case "p4-s11-nse-store-lock-failed": return .coreStoreLockFailed
+        case "p4-s11-nse-crypto-unavailable": return .coreCryptoUnavailable
+        case "p4-s11-nse-room-unavailable": return .coreRoomUnavailable
+        case "p4-s11-nse-invalid-event": return .coreInvalidEvent
+        case "p4-s11-nse-context-missing-event": return .coreContextMissingEvent
+        case "p4-s11-nse-sliding-sync-version-missing": return .coreSlidingSyncVersionMissing
+        case "p4-s11-nse-invalid-response": return .coreInvalidResponse
         case "p4-s11-nse-resolution-timeout": return .coreResolutionTimedOut
         case "p4-s11-nse-event-filtered": return .coreEventFiltered
         case "p4-s11-nse-event-redacted": return .coreEventRedacted
@@ -229,19 +367,98 @@ struct SynaraNotificationPreviewPayload: Equatable {
 }
 
 enum SynaraNotificationPreviewPayloadParser {
-    static func payload(from userInfo: [AnyHashable: Any]) -> SynaraNotificationPreviewPayload? {
-        let flattened = flatten(userInfo)
-        guard let roomID = firstString(flattened, keys: ["room_id", "roomId"]),
-              let eventID = firstString(flattened, keys: ["event_id", "eventId"]) else {
-            return nil
-        }
+    struct Reference: Equatable {
+        let roomID: String
+        let eventID: String
+    }
 
-        return SynaraNotificationPreviewPayload(
-            roomID: roomID,
-            eventID: eventID,
-            kind: firstString(flattened, keys: ["kind", "synara.kind"]),
-            category: firstString(flattened, keys: ["aps.category", "category"])
-        )
+    enum ReferenceFailure: Error {
+        case noEventReference, missingRoom, missingEvent, invalidType
+        case ambiguous, invalidIdentifier, complexityExceeded
+
+        var stage: SynaraNotificationDiagnostics.Stage {
+            switch self {
+            case .noEventReference: return .payloadNoEventReference
+            case .missingRoom: return .payloadMissingRoom
+            case .missingEvent: return .payloadMissingEvent
+            case .invalidType: return .payloadIdentifierTypeInvalid
+            case .ambiguous: return .payloadIdentifiersAmbiguous
+            case .invalidIdentifier: return .payloadIdentifiersInvalid
+            case .complexityExceeded: return .payloadComplexityExceeded
+            }
+        }
+    }
+
+    static func payload(from userInfo: [AnyHashable: Any]) -> SynaraNotificationPreviewPayload? {
+        try? parse(userInfo).get()
+    }
+
+    static func parse(_ userInfo: [AnyHashable: Any]) -> Result<SynaraNotificationPreviewPayload, ReferenceFailure> {
+        reference(from: userInfo, trimWhitespace: true).map { reference in
+            let flattened = flatten(userInfo)
+            return SynaraNotificationPreviewPayload(
+                roomID: reference.roomID,
+                eventID: reference.eventID,
+                kind: firstString(flattened, keys: ["kind", "synara.kind"]),
+                category: firstString(flattened, keys: ["aps.category", "category"])
+            )
+        }
+    }
+
+    /// Accumulate every candidate before deduplication. Flattened dictionaries
+    /// can overwrite conflicting literal dotted keys and nested fields.
+    static func reference(
+        from userInfo: [AnyHashable: Any],
+        trimWhitespace: Bool
+    ) -> Result<Reference, ReferenceFailure> {
+        var rooms: [Any] = []
+        var events: [Any] = []
+        var nodes = 0
+        var exceeded = false
+        func visit(_ dictionary: [AnyHashable: Any], depth: Int) {
+            guard depth <= 12 else { exceeded = true; return }
+            for (rawKey, value) in dictionary {
+                nodes += 1
+                guard nodes <= 512 else { exceeded = true; return }
+                guard let key = rawKey as? String else { continue }
+                let leaf = key.split(separator: ".").last.map(String.init)
+                if leaf == "room_id" || leaf == "roomId" { rooms.append(value) }
+                if leaf == "event_id" || leaf == "eventId" { events.append(value) }
+                if let nested = value as? [AnyHashable: Any] { visit(nested, depth: depth + 1) }
+                if exceeded { return }
+            }
+        }
+        visit(userInfo, depth: 0)
+        guard !exceeded else { return .failure(.complexityExceeded) }
+        if rooms.isEmpty && events.isEmpty { return .failure(.noEventReference) }
+        if rooms.isEmpty { return .failure(.missingRoom) }
+        if events.isEmpty { return .failure(.missingEvent) }
+        guard (rooms + events).allSatisfy({ $0 is String }) else { return .failure(.invalidType) }
+        func normalized(_ values: [Any]) -> Set<String> {
+            Set(values.compactMap { value in
+                guard let text = value as? String else { return nil }
+                return trimWhitespace ? text.trimmingCharacters(in: .whitespacesAndNewlines) : text
+            })
+        }
+        let roomIDs = normalized(rooms), eventIDs = normalized(events)
+        guard roomIDs.count == 1, eventIDs.count == 1 else { return .failure(.ambiguous) }
+        guard let roomID = roomIDs.first, let eventID = eventIDs.first,
+              validID(roomID, prefix: "!"), validID(eventID, prefix: "$") else { return .failure(.invalidIdentifier) }
+        // Room version 12 IDs have no server suffix. For legacy IDs, reject
+        // empty components; shared Core remains the exact ID authority.
+        if let separator = roomID.firstIndex(of: ":"),
+           (separator == roomID.index(after: roomID.startIndex) || roomID.index(after: separator) == roomID.endIndex) {
+            return .failure(.invalidIdentifier)
+        }
+        return .success(Reference(roomID: roomID, eventID: eventID))
+    }
+
+    private static func validID(_ id: String, prefix: Character) -> Bool {
+        id.first == prefix && id.count > 1 && id.utf8.count <= 255 &&
+        !id.unicodeScalars.contains {
+            CharacterSet.whitespacesAndNewlines.contains($0) ||
+            CharacterSet.controlCharacters.contains($0) || $0.properties.generalCategory == .format
+        }
     }
 
     static func flatten(_ payload: [AnyHashable: Any]) -> [String: Any] {

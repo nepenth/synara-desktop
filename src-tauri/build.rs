@@ -120,6 +120,8 @@ const DESKTOP_COMMANDS: &[&str] = &[
     "matrix_push_rules_set_default",
     "matrix_push_rules_set_mention",
     "matrix_push_rules_snapshot",
+    "matrix_agent_notification_preferences_set",
+    "matrix_agent_notification_preferences_snapshot",
     "matrix_room_notification_set",
     "matrix_room_notification_snapshot",
     "matrix_room_notifications_snapshot",
