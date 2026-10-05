@@ -214,7 +214,9 @@ const useSyncResumeRetry = (mx?: ClientMatrix) => {
         documentVisible: document.visibilityState === 'visible',
         online: navigator.onLine,
       });
-      mx.retryImmediately();
+      void mx.retryImmediately().catch(() => {
+        // The native status poll owns connection state after a failed wake.
+      });
     };
 
     const scheduleRetry = (reason: SyncWakeReason, persisted?: boolean) => {
@@ -273,6 +275,8 @@ export function ClientRoot({ children }: ClientRootProps) {
   const syncStateRef = useRef<string | null>(syncState);
   syncStateRef.current = syncState;
   const syncRetryInFlightRef = useRef(false);
+  const [syncRetryPending, setSyncRetryPending] = useState(false);
+  const [syncRecoveryError, setSyncRecoveryError] = useState<string>();
   const { baseUrl, userId } = getActiveSession() ?? {};
 
   const [loadState, loadMatrix] = useAsyncCallback<ClientMatrix, Error, []>(
@@ -328,13 +332,23 @@ export function ClientRoot({ children }: ClientRootProps) {
 
   useEffect(() => {
     if (loadState.status === AsyncStatus.Idle) {
-      loadMatrix();
+      void loadMatrix().catch(() => {
+        // useAsyncCallback exposes restore errors without losing the session.
+      });
     }
   }, [loadState, loadMatrix]);
 
+  const retryLoadMatrix = useCallback(() => {
+    void loadMatrix().catch(() => {
+      // The error splash owns a rejected restore, including a manual retry.
+    });
+  }, [loadMatrix]);
+
   useEffect(() => {
-    if (mx && !mx.clientRunning) {
-      startMatrix(mx);
+    if (mx && !mx.clientRunning()) {
+      void startMatrix(mx).catch(() => {
+        // useAsyncCallback exposes the startup error in the splash screen.
+      });
     }
   }, [mx, startMatrix]);
 
@@ -382,22 +396,25 @@ export function ClientRoot({ children }: ClientRootProps) {
   const handleSyncRecoveryRetry = useCallback(async () => {
     if (!mx || syncRetryInFlightRef.current) return;
     syncRetryInFlightRef.current = true;
-    setSyncTimedOut(false);
+    setSyncRetryPending(true);
+    setSyncRecoveryError(undefined);
     recordClientDiagnostic('session', 'sync.recovery-requested', {
       source: 'user',
       syncState: String(syncState ?? 'null'),
     });
 
     try {
-      if (mx.clientRunning()) {
-        mx.retryImmediately();
-        return;
-      }
-      if (startState.status !== AsyncStatus.Loading) {
-        await startMatrix(mx);
-      }
+      // startClient only hydrates renderer reads. Every explicit sync Retry
+      // must reach the native owner, including offline/failed/stopped states.
+      await mx.retryImmediately();
+      if (startState.status === AsyncStatus.Error) await startMatrix(mx);
+      // Only observed PREPARED readiness completes recovery. A successful
+      // command can still leave the SDK starting or offline.
+    } catch {
+      setSyncRecoveryError('Could not restart sync. You can retry or reload the application.');
     } finally {
       syncRetryInFlightRef.current = false;
+      setSyncRetryPending(false);
     }
   }, [mx, startMatrix, startState.status, syncState]);
 
@@ -462,7 +479,7 @@ export function ClientRoot({ children }: ClientRootProps) {
                         permanently removes this device&apos;s local encryption data.
                       </Text>
                       {canRetryCryptoStoreContinuityFailure(continuityError) && (
-                        <Button variant="Primary" onClick={loadMatrix}>
+                        <Button variant="Primary" onClick={retryLoadMatrix}>
                           <Text as="span" size="B400">
                             Retry Safety Check
                           </Text>
@@ -479,11 +496,18 @@ export function ClientRoot({ children }: ClientRootProps) {
                       </Button>
                     </>
                   ) : (
-                    <Button variant="Critical" onClick={mx ? () => startMatrix(mx) : loadMatrix}>
-                      <Text as="span" size="B400">
-                        Retry
-                      </Text>
-                    </Button>
+                    <>
+                      {syncRecoveryError && <Text role="alert">{syncRecoveryError}</Text>}
+                      <Button
+                        variant="Critical"
+                        disabled={syncRetryPending}
+                        onClick={mx ? () => void handleSyncRecoveryRetry() : retryLoadMatrix}
+                      >
+                        <Text as="span" size="B400">
+                          Retry
+                        </Text>
+                      </Button>
+                    </>
                   )}
                 </Box>
               </Dialog>
@@ -503,13 +527,18 @@ export function ClientRoot({ children }: ClientRootProps) {
                 <Box direction="Column" gap="400" style={{ padding: config.space.S400 }}>
                   <Text>Sync is taking longer than expected.</Text>
                   {logoutError && <Text role="alert">{logoutError}</Text>}
+                  {syncRecoveryError && <Text role="alert">{syncRecoveryError}</Text>}
                   <Text size="T300" priority="400">
                     {splashStatus}
                   </Text>
                   <Text size="T300" priority="400">
                     You can retry, reload the application, or sign out.
                   </Text>
-                  <Button variant="Primary" onClick={() => void handleSyncRecoveryRetry()}>
+                  <Button
+                    variant="Primary"
+                    disabled={syncRetryPending}
+                    onClick={() => void handleSyncRecoveryRetry()}
+                  >
                     <Text as="span" size="B400">
                       Retry
                     </Text>
