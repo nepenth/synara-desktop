@@ -274,6 +274,45 @@ requirements of this bounded NSE experiment, not a measured peak requirement
 for Kache or a budget for full Apple/Xcode builds. If the scratch guard still
 fires, record the incomplete run and reassess the budget before retrying.
 
+The retry on 2026-10-05 at clean commit `291787b6` completed all four
+measurements with the **3 GiB scratch guard** and **3 GiB free-space reserve**.
+Its Rust source fingerprint matched the earlier trial. Rust 1.96.1 and Kache
+0.28.1 were unchanged; the downloaded Kache release archive was verified
+against the SHA-256 digest published in GitHub release metadata.
+
+| Fresh-target run              | Seconds | Cache-counter delta         |
+| ----------------------------- | ------: | --------------------------- |
+| Wrapper-free baseline, first  |  162.30 | —                           |
+| Wrapper-free baseline, repeat |  152.97 | —                           |
+| Kache cold                    |  240.49 | 457 misses, zero hits       |
+| Kache warm                    |    6.82 | 457 local hits, zero misses |
+
+The warm local run demonstrates compiler-artifact reuse, while the cold run
+was slower than either baseline. Completed cold/warm scratch footprints were
+approximately **2.10 GiB logical**, with **1.06 GiB targets** and a **1.04 GiB
+cache**. These are end-of-run measurements, not a sampled peak. The cache
+exceeded its nominal 512 MiB asynchronous eviction target and the recorded GC
+had evicted no entries; this does not establish steady-state hit rates at a
+512 MiB budget. The report also records APFS clone coverage, so equivalent
+Linux filesystem behavior must be measured rather than assumed. An unrelated
+Xcode build was observed during the run, and the fixed-order experiment can
+benefit from filesystem warming. These timings exclude GitHub restore/save
+and do not compare Kache against the production Swatinem backend.
+
+The complete [local pilot report](reviews/2026-10-05-kache-local-pilot.json)
+retains the source fingerprint, toolchain, timings, hit/miss deltas and storage
+readbacks.
+
+The benchmark stopped its private daemon and removed its isolated target,
+cache and runtime; the temporary tool install was removed separately. Before
+this retry, selective local cleanup recovered approximately **2.9 GiB** from
+superseded check-only Rust metadata, incremental state, older test executables,
+duplicate temporary Node installs and completed compiler/Vite fixtures.
+Compiled dependency libraries, current test executables, source fixtures,
+review evidence and all existing worktrees were retained. Two of the checked
+worktrees contained local changes, and several branch tips were not ancestors
+of the integration branch, so their checkouts were preserved.
+
 The pinned Swatinem backend remains production policy pending comparable
 whole-job measurements. Kache's GitHub-backed store also inherits branch
 isolation and immutable snapshots. Any S3-backed trial needs its own trusted
