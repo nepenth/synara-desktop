@@ -1,0 +1,287 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-10-05T18:13:45.399Z",
+  "status": "passed",
+  "scope": "In-job host NSE dev build only. Excludes dependency downloads, GitHub cache restore/save, source changes, Apple cross-compilation, Xcode, signing and full desktop builds. Fixed order can favor later runs through filesystem warming.",
+  "sourceFingerprint": "38d0f1d3b2e5bb2c72e4373d62cf58681d1ff6634c3d7461668bca31a61c70d6",
+  "spaceMeasurement": "Logical file sizes; hardlinks count per path. A separate filesystem free-space reserve protects shared disk.",
+  "resourceLimits": {
+    "maxScratchBytes": 87906119680,
+    "minFreeBytes": 3221225472,
+    "initialFreeBytes": 91127345152
+  },
+  "workload": {
+    "package": "synara-nse-core",
+    "profile": "dev",
+    "target": "host",
+    "incremental": false,
+    "debug": 0,
+    "codegenUnits": 16,
+    "jobs": 2
+  },
+  "cache": {
+    "version": "1.0.0",
+    "action": "1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
+    "maxSize": "5GiB",
+    "remote": false,
+    "githubCache": false,
+    "limitation": "The production-sized store uses asynchronous LRU eviction. Actual filesystem free space, a reserve and an optional caller scratch budget protect disk headroom; there is no pilot-only scratch cap.",
+    "installedVersion": "kache 1.0.0"
+  },
+  "runs": [
+    {
+      "name": "baseline-first",
+      "seconds": 160.155691856,
+      "targetBytes": 1345259202,
+      "cacheBytes": 160,
+      "scratchBytes": 1345259541,
+      "buildStatus": 0
+    },
+    {
+      "name": "baseline-repeat",
+      "seconds": 153.538842299,
+      "targetBytes": 1345259202,
+      "cacheBytes": 160,
+      "scratchBytes": 1345259541,
+      "buildStatus": 0
+    },
+    {
+      "name": "kache-cold",
+      "seconds": 159.713481127,
+      "targetBytes": 1339025388,
+      "cacheBytes": 1320530787,
+      "scratchBytes": 2660593957,
+      "stats": {
+        "schema_version": 1,
+        "command": "stats",
+        "success": true,
+        "disk": {
+          "store_bytes": 1308732327,
+          "store_limit_bytes": 5368709120,
+          "disk_private_bytes": 153991875,
+          "cloned_into_targets_bytes": 1154740452,
+          "snapshot_retained_bytes": 0,
+          "cloned_coverage": "partial"
+        },
+        "stores": [
+          {
+            "path": "<scratch>/cache",
+            "bytes": 1320039263,
+            "max_size": 5368709120,
+            "entries": 841,
+            "blob_stats": {
+              "total_blobs": 1717,
+              "total_blob_size": 1308732327,
+              "total_logical_size": 1320039263,
+              "savings": 11306936
+            },
+            "error": null
+          }
+        ],
+        "index_bytes": 10799848,
+        "index_wal_bytes": 4692712,
+        "index_rowid_high_water": {
+          "blobs": 1717,
+          "cc_preprocess_memos": 384,
+          "entries": 841,
+          "entry_blobs": 2110,
+          "eviction_tombstones": 0,
+          "input_predictions": 877
+        },
+        "gc": {
+          "last_run": "2026-10-05T18:19:09.049468828+00:00",
+          "entries_evicted": 0,
+          "bytes_freed": 0,
+          "disk_bytes_reclaimed": 0,
+          "blobs_removed": 0,
+          "duration_ms": 8,
+          "source": "daemon",
+          "entries_pinned": 0,
+          "entries_unreclaimable": 0,
+          "bytes_held": 0,
+          "entries_failed": 0,
+          "entries_locked": 0,
+          "entries_busy_snapshot": 0,
+          "entries_recent_prefiltered": 0,
+          "entries_import_pinned": 0,
+          "evict_write_ms": 0,
+          "key_locks_removed": 0,
+          "key_locks_remaining": 0,
+          "predictions_pruned": 0,
+          "file_hashes_pruned": 0
+        },
+        "lifetime": {
+          "since": "2026-10-05T18:19:09.094975448Z",
+          "hits": 0,
+          "hit_compile_time_ms": 0,
+          "zero_copy_bytes": 0,
+          "copied_bytes": 0,
+          "pruned_automatic_bytes": 0,
+          "pruned_requested_bytes": 0
+        },
+        "entries": 841,
+        "hit_rate_pct": 0,
+        "weighted_hit_rate_pct": 0,
+        "time_saved_ms": 0,
+        "hit_elapsed_ms": 0,
+        "miss_elapsed_ms": 339888,
+        "total_elapsed_ms": 339888,
+        "local_hits": 0,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "dups": 0,
+        "misses": 841,
+        "daemon_connected": true,
+        "daemon_version": "1.0.0",
+        "daemon_epoch": 1791224023,
+        "hours": 24,
+        "since_secs": 86400,
+        "since": "24h",
+        "next": [
+          {
+            "argv": [
+              "kache",
+              "clean",
+              "--tracked",
+              "--stale",
+              "14d",
+              "--dry-run"
+            ],
+            "why": "tracked build outputs still hold blocks; cleaning stale target directories is what frees disk"
+          }
+        ]
+      },
+      "statsDelta": {
+        "local_hits": 0,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "misses": 841,
+        "dups": 0
+      },
+      "buildStatus": 0
+    },
+    {
+      "name": "kache-warm",
+      "seconds": 3.7778680659999955,
+      "targetBytes": 1339025388,
+      "cacheBytes": 1320649891,
+      "scratchBytes": 2661365089,
+      "stats": {
+        "schema_version": 1,
+        "command": "stats",
+        "success": true,
+        "disk": {
+          "store_bytes": 1308732327,
+          "store_limit_bytes": 5368709120,
+          "disk_private_bytes": 29582787,
+          "cloned_into_targets_bytes": 1279149540,
+          "snapshot_retained_bytes": 0,
+          "cloned_coverage": "partial"
+        },
+        "stores": [
+          {
+            "path": "<scratch>/cache",
+            "bytes": 1320039263,
+            "max_size": 5368709120,
+            "entries": 841,
+            "blob_stats": {
+              "total_blobs": 1717,
+              "total_blob_size": 1308732327,
+              "total_logical_size": 1320039263,
+              "savings": 11306936
+            },
+            "error": null
+          }
+        ],
+        "index_bytes": 10918632,
+        "index_wal_bytes": 4692712,
+        "index_rowid_high_water": {
+          "blobs": 1717,
+          "cc_preprocess_memos": 384,
+          "entries": 841,
+          "entry_blobs": 2110,
+          "eviction_tombstones": 0,
+          "input_predictions": 877
+        },
+        "gc": {
+          "last_run": "2026-10-05T18:19:09.049468828+00:00",
+          "entries_evicted": 0,
+          "bytes_freed": 0,
+          "disk_bytes_reclaimed": 0,
+          "blobs_removed": 0,
+          "duration_ms": 8,
+          "source": "daemon",
+          "entries_pinned": 0,
+          "entries_unreclaimable": 0,
+          "bytes_held": 0,
+          "entries_failed": 0,
+          "entries_locked": 0,
+          "entries_busy_snapshot": 0,
+          "entries_recent_prefiltered": 0,
+          "entries_import_pinned": 0,
+          "evict_write_ms": 0,
+          "key_locks_removed": 0,
+          "key_locks_remaining": 0,
+          "predictions_pruned": 0,
+          "file_hashes_pruned": 0
+        },
+        "lifetime": {
+          "since": "2026-10-05T18:19:09.094975448Z",
+          "hits": 457,
+          "hit_compile_time_ms": 303030,
+          "zero_copy_bytes": 1279149540,
+          "copied_bytes": 26773824,
+          "pruned_automatic_bytes": 0,
+          "pruned_requested_bytes": 0
+        },
+        "entries": 841,
+        "hit_rate_pct": 35.208012326656394,
+        "weighted_hit_rate_pct": 48.12024105377659,
+        "time_saved_ms": 303030,
+        "hit_elapsed_ms": 3357,
+        "miss_elapsed_ms": 339888,
+        "total_elapsed_ms": 343245,
+        "local_hits": 457,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "dups": 0,
+        "misses": 841,
+        "daemon_connected": true,
+        "daemon_version": "1.0.0",
+        "daemon_epoch": 1791224023,
+        "hours": 24,
+        "since_secs": 86400,
+        "since": "24h",
+        "next": [
+          {
+            "argv": [
+              "kache",
+              "clean",
+              "--tracked",
+              "--stale",
+              "14d",
+              "--dry-run"
+            ],
+            "why": "tracked build outputs still hold blocks; cleaning stale target directories is what frees disk"
+          }
+        ]
+      },
+      "statsDelta": {
+        "local_hits": 457,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "misses": 0,
+        "dups": 0
+      },
+      "buildStatus": 0
+    }
+  ],
+  "toolchain": "cargo 1.96.1 (356927216 2026-06-26)",
+  "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)\nbinary: rustc\ncommit-hash: 31fca3adb283cc9dfd56b49cdee9a96eb9c96ffd\ncommit-date: 2026-06-26\nhost: x86_64-unknown-linux-gnu\nrelease: 1.96.1\nLLVM version: 22.1.2",
+  "commit": "a52729444470e9ecb4bab591faa8930a63f57e6f",
+  "dirty": false,
+  "verdict": "warm-cache-hits-observed",
+  "completedAt": "2026-10-05T18:21:54.742Z",
+  "workflowRun": "https://github.com/nepenth/synara-desktop/actions/runs/37354309448",
+  "proofScope": "One GitHub-hosted Linux runner and unchanged main source graph; isolated host NSE compiler reuse with fresh Cargo targets. Does not include cross-job cache transfer, Swift or complete application/CI performance."
+}
