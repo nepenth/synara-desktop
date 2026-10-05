@@ -120,7 +120,8 @@ Apple archive ABI and extension-size guards remain in the generation route.
 Both Apple generators share the persistent host tool directory
 `target/synara-core-bindgen`; `SYNARA_APPLE_BINDGEN_TARGET_DIR` overrides it.
 Space-bounded mode deletes architecture intermediates while preserving this
-host directory. Apple CI caches both it and `target/synara-core-apple`.
+host directory. Apple CI restores Kache compiler objects for both generators;
+it does not archive these Cargo target directories.
 
 Under the existing publication lock, both generators compare the entire staged
 Swift/XCFramework pair with the existing pair: file bytes, directory entries,
