@@ -312,8 +312,8 @@ const ciWorkflow = readFileSync(resolve(root, ".github/workflows/ci.yml"), "utf8
 const assertions = [
   [cargo, 'crate-type = ["lib", "staticlib", "cdylib"]', "Apple library crate types"],
   [cargo, 'uniffi = { workspace = true, features = ["tokio"] }', "workspace Tokio-aware UniFFI runtime"],
-  [readFileSync(resolve(root, "Cargo.toml"), "utf8"), 'uniffi = "=0.32.2"', "pinned shared UniFFI version"],
-  [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { workspace = true, features = ["cli"] }', "pinned project-owned UniFFI generator"],
+  [readFileSync(resolve(root, "Cargo.toml"), "utf8"), 'uniffi = { version = "=0.32.2", default-features = false }', "pinned shared UniFFI runtime without Cargo metadata discovery"],
+  [readFileSync(resolve(root, "crates/synara-core-bindgen/Cargo.toml"), "utf8"), 'uniffi = { workspace = true, features = ["cli", "cargo-metadata"] }', "pinned project-owned UniFFI generator with Cargo metadata discovery"],
   [cargo, 'features = ["build"]', "UniFFI build scaffolding"],
   [udl, "namespace synara_core", "project-owned UniFFI namespace"],
   [udl, "binding_scaffold_version", "P4-1 binding bootstrap"],
