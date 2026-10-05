@@ -354,10 +354,19 @@ records this local correctness scope without claiming application performance.
 The standalone benchmark derives
 scratch headroom from actual free space after a 3 GiB filesystem reserve;
 `--max-scratch-mib` is an optional caller budget, not a default pilot ceiling.
-`--max-cache-mib` can select a different eviction target. Hosted measurements
+`--max-cache-mib` can select a different eviction target. Whole-job hosted measurements
 still require seeded main runs; the local pilot proves reuse for its recorded
 graph, not all platform performance. GitHub branch isolation and immutable
 archives still apply. Any future S3 backend needs a separate trust/storage design.
+
+The first hosted Kache 1.0.0 benchmark passed on the unchanged, clean main
+commit `a5272944`. Fresh host NSE targets took 160.16 s and 153.54 s without a
+wrapper, 159.71 s with a cold cache, and 3.78 s with a warm cache. The warm
+stage recorded 457 local hits, zero misses and zero duplicates. The
+[hosted benchmark report](reviews/2026-10-05-kache-hosted-benchmark.json) links
+the successful workflow run and records the toolchain and source fingerprint.
+These measurements use one Linux runner and an isolated compiler store;
+they exclude cross-job cache transfer, Swift and full application/CI timing.
 
 The production-sized rerun on 2026-10-05 used the new `cc` 1.2.66 lock graph,
 Kache 0.28.1, a 5 GiB eviction target and actual available scratch headroom with
@@ -615,7 +624,10 @@ If an exact build uploads successfully but only its TestFlight promotion job
 fails, repair the cause on `main` and use **TestFlight Promotion Recovery** with
 the existing release tag and exact uploaded build number. This recovery checks
 that the tag is on `main`, reads the release notes from `main`, and promotes the
-already uploaded build. It does not rebuild or republish desktop assets. 4. Confirm hosted macOS `latest.json`. 5. Verify the fixed Linux repository URLs:
+already uploaded build. It does not rebuild or republish desktop assets.
+
+After publication, confirm hosted macOS `latest.json` and verify the fixed
+Linux repository URLs:
 
 ```text
 https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db

@@ -45,7 +45,7 @@ test("PR and tag snapshots do not count as reusable main cache seeds", () => {
     { ref: "refs/tags/v1.0.0", count: 1, bytes: 200 },
     { ref: "refs/heads/main", count: 2, bytes: 150 },
   ]);
-  assert.equal(report.limitBytes, 10_000_000_000);
+  assert.equal(report.limitBytes, 10 * 2 ** 30);
   assert.equal(report.retentionDays, 7);
   assert.equal(report.caches[0].size_in_bytes, 300);
 });
@@ -60,7 +60,7 @@ test("an empty cache inventory needs all seed families", () => {
   assert.equal(report.missingMainFamilies.length, 9);
   assert.deepEqual(report.scopes, []);
   assert.equal(report.utilization, 0);
-  assert.equal(report.limitBytes, 20_000_000_000);
+  assert.equal(report.limitBytes, 20 * 2 ** 30);
 });
 
 test("Swift compiler cache seeds must belong to main, independently of Rust seeds", () => {
@@ -115,4 +115,72 @@ test("obsolete target snapshots neither satisfy Kache seeds nor disappear from s
   assert.ok(!report.missingMainFamilies.includes("release-macos"));
   assert.ok(!report.missingMainFamilies.includes("cargo-downloads"));
   assert.equal(report.scopes[0].bytes, 200);
+});
+
+test("GitHub's binary storage limit gives exact utilization and remaining capacity", () => {
+  const gib = 2 ** 30;
+  const input = {
+    caches: [],
+    usage: { active_caches_size_in_bytes: 8 * gib, active_caches_count: 0 },
+    storageLimit: { max_cache_size_gb: 10 },
+    retentionLimit: { max_cache_retention_days: 7 },
+  };
+  const atEightyPercent = summarizeCaches(input);
+  assert.equal(atEightyPercent.limitBytes, 10_737_418_240);
+  assert.equal(atEightyPercent.utilization, 0.8);
+  assert.equal(
+    atEightyPercent.limitBytes - atEightyPercent.activeBytes,
+    2 * gib,
+  );
+
+  // The observed rollout snapshot is decimal 8.69 GB, or binary 8.09 GiB.
+  const rollout = summarizeCaches({
+    ...input,
+    usage: {
+      active_caches_size_in_bytes: 8_687_835_058,
+      active_caches_count: 9,
+    },
+  });
+  assert.ok(rollout.utilization > 0.809 && rollout.utilization < 0.81);
+  assert.equal(rollout.limitBytes - rollout.activeBytes, 2_049_583_182);
+
+  // A concurrent upload can temporarily exceed the limit. Preserve that
+  // signal instead of rounding or clamping its utilization to 100%.
+  const overLimit = summarizeCaches({
+    ...input,
+    usage: { active_caches_size_in_bytes: 11 * gib, active_caches_count: 0 },
+  });
+  assert.equal(overLimit.utilization, 1.1);
+  assert.equal(overLimit.limitBytes - overLimit.activeBytes, -gib);
+});
+
+test("native macOS host cache cannot satisfy the universal macOS seed requirement", () => {
+  const host = {
+    key: "synara-kache-v1-release-macos-host-macOS-ARM64-toolchain-lock-head",
+    ref: "refs/heads/main",
+    size_in_bytes: 799_037_184,
+  };
+  const input = {
+    caches: [host],
+    usage: {
+      active_caches_size_in_bytes: host.size_in_bytes,
+      active_caches_count: 1,
+    },
+    storageLimit: { max_cache_size_gb: 10 },
+    retentionLimit: { max_cache_retention_days: 7 },
+  };
+  const hostOnly = summarizeCaches(input);
+  assert.ok(!hostOnly.missingMainFamilies.includes("release-macos-host"));
+  assert.ok(hostOnly.missingMainFamilies.includes("release-macos"));
+
+  const universal = {
+    ...host,
+    key: "synara-kache-v1-release-macos-macOS-ARM64-toolchain-lock-head",
+  };
+  const universalOnly = summarizeCaches({ ...input, caches: [universal] });
+  assert.ok(universalOnly.missingMainFamilies.includes("release-macos-host"));
+  assert.ok(!universalOnly.missingMainFamilies.includes("release-macos"));
+  const both = summarizeCaches({ ...input, caches: [host, universal] });
+  assert.ok(!both.missingMainFamilies.includes("release-macos-host"));
+  assert.ok(!both.missingMainFamilies.includes("release-macos"));
 });

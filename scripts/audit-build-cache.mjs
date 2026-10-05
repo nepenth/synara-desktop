@@ -28,11 +28,18 @@ export function summarizeCaches({
     scopes.set(scope, summary);
   }
   const mainCaches = caches.filter((cache) => cache.ref === "refs/heads/main");
-  const missingMainFamilies = rustFamilies.filter(
-    (family) =>
-      !mainCaches.some((cache) =>
+  // Select the longest family prefix: release-macos-host must not satisfy
+  // the separate release-macos universal seed requirement.
+  const longestFirst = [...rustFamilies].sort((a, b) => b.length - a.length);
+  const mainRustFamilies = new Set(
+    mainCaches.map((cache) =>
+      longestFirst.find((family) =>
         cache.key.startsWith(`synara-kache-v1-${family}-`),
       ),
+    ),
+  );
+  const missingMainFamilies = rustFamilies.filter(
+    (family) => !mainRustFamilies.has(family),
   );
   if (!mainCaches.some((cache) => cache.key.startsWith("synara-cargo-v1-")))
     missingMainFamilies.push("cargo-downloads");
@@ -43,7 +50,8 @@ export function summarizeCaches({
   const legacyRustCaches = caches.filter((cache) =>
     cache.key.startsWith("v0-rust-"),
   );
-  const limitBytes = storageLimit.max_cache_size_gb * 1_000_000_000;
+  // GitHub Actions names this setting GB but measures binary gigabytes (GiB).
+  const limitBytes = storageLimit.max_cache_size_gb * 2 ** 30;
   return {
     activeBytes: usage.active_caches_size_in_bytes,
     activeCount: usage.active_caches_count,
@@ -84,14 +92,14 @@ function audit() {
     );
     return;
   }
-  const gb = (bytes) => `${(bytes / 1_000_000_000).toFixed(2)} GB`;
+  const gib = (bytes) => `${(bytes / 2 ** 30).toFixed(2)} GiB`;
   console.log(
-    `${nameWithOwner}: ${gb(report.activeBytes)} / ${gb(report.limitBytes)} (${Math.round(report.utilization * 100)}%), ${report.activeCount} caches, ${report.retentionDays}-day retention.`,
+    `${nameWithOwner}: ${gib(report.activeBytes)} / ${gib(report.limitBytes)} (${Math.round(report.utilization * 100)}%), ${report.activeCount} caches, ${report.retentionDays}-day retention.`,
   );
   console.log("Scope                         Caches    Size");
   for (const scope of report.scopes) {
     console.log(
-      `${scope.ref.padEnd(30)} ${String(scope.count).padStart(5)}    ${gb(scope.bytes)}`,
+      `${scope.ref.padEnd(30)} ${String(scope.count).padStart(5)}    ${gib(scope.bytes)}`,
     );
   }
   if (report.missingMainFamilies.length) {
@@ -101,7 +109,7 @@ function audit() {
   }
   if (report.legacyRustCount) {
     console.log(
-      `Legacy Cargo target snapshots: ${report.legacyRustCount} caches, ${gb(report.legacyRustBytes)}. The Kache workflows do not reuse them.`,
+      `Legacy Cargo target snapshots: ${report.legacyRustCount} caches, ${gib(report.legacyRustBytes)}. The Kache workflows do not reuse them.`,
     );
   }
   if (report.utilization >= 0.8) {

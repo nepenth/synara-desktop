@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [2.1.45] - 2026-10-05
+
+- Desktop: let restored sessions start syncing without a successful homeserver metadata probe; improve native sync startup and connection Retry progress and failure handling.
+- Dependencies: integrate the Rust and JavaScript dependency updates, including ESLint 10 and Prettier 3, and retire the frontend asset-copy dependency.
+- Builds: adopt pinned Kache 1.0 compiler caching for local and CI Rust builds, narrow compilation inputs, preserve unchanged Apple bindings/frameworks and reuse bounded native Xcode compilation caches.
+- CI: designate trusted cache writers and compatible cache families, add unsigned release-cache seeds and an isolated benchmark, and verify the Kache daemon lifecycle before compilation.
+
 ## [2.1.44] - 2026-10-04
 
 - Notifications: add account-synced agent preferences for Tool activity, Commentary, and final/other responses while preserving verified approval prompts; expose controls on desktop and iOS.

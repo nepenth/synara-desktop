@@ -1,0 +1,1 @@
+Update shared dependencies and improve build reuse for the iOS app and notification extension. This maintenance release also improves desktop connection recovery. Existing account, messaging and notification features are retained.
