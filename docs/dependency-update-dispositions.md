@@ -7,8 +7,7 @@ and Prettier **3.9.9**. The tables and validation below this section preserve
 the earlier consolidation's versions and observations; they are historical
 records, not assertions about the current dependency graph.
 
-React, import, and JSX accessibility plugins still declare ESLint peers through
-9. Their installed versions are wrapped with the official `@eslint/compat`
+React, import, and JSX accessibility plugins still declare ESLint peers through 9. Their installed versions are wrapped with the official `@eslint/compat`
 **2.1.1** rule bridge, which supports ESLint 10. All configured rules remain
 enabled. Negative fixtures verify that state mutation, undeclared dependencies,
 missing image text, and conditional hooks are still rejected. Remove these
@@ -36,14 +35,14 @@ The bridge addresses removed rule APIs, not upstream peer declarations.
 Current validation on pinned Node **24.13.1** passed the full renderer ESLint,
 Prettier, both TypeScript gates, the production build/output guard, all **1,208**
 modernization tests, nine inventory tests, and the four negative plugin fixtures.
-The fifteen traceability-v2 tests also passed. Production npm audit is clean.
-Full renderer audit currently
-reports three development-only high entries from
-`vite-plugin-static-copy -> chokidar -> braces`, all tracing to
-[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
-The registry's latest `braces` remains affected **3.0.3**. npm's proposed
-`vite-plugin-static-copy` downgrade to **0.2.0** was not applied. These current
-findings supersede the historical zero-findings result recorded below.
+The fifteen traceability-v2 tests also passed. Both complete npm audits now
+report zero findings, including development dependencies. The subsequent build
+audit removed `vite-plugin-static-copy` and its 15-package dependency chain,
+including the affected `chokidar -> braces` edge. Project-owned Vite hooks emit
+the PDF worker, config and locale assets with unchanged URLs and bytes; real
+dev-server and production-build fixtures exercise root and nested base URLs.
+The normal production output guard also verifies every copied asset against
+its source. No dependency downgrade or advisory suppression was needed.
 
 ## Historical consolidation record (verified 2026-10-02)
 
@@ -65,13 +64,13 @@ Desktop's independent lockfile is retired. Builds use selected package
 production features and `--locked`; unified workspace test features do not
 prove a shipping Apple or NSE graph.
 
-| PR | Crate | Previous | PR proposal and resolved branch version | Manifest policy and outcome |
-| --- | --- | --- | --- | --- |
-| #1159 | `tauri` | 2.11.5 | 2.11.6 | Integrated; desktop requires `~2.11.6`. npm API/CLI use the matching 2.11 family. |
-| #1159 | `tauri-plugin-updater` | 2.11.0 | 2.12.0 | Integrated; desktop requires `~2.12.0`, matching npm updater 2.12.0. |
-| #1159 | `tauri-plugin-single-instance` | 2.4.4 | 2.4.5 | Integrated; compatible major requirement with a 2.4.5 floor. |
-| #1159 | `zbus` | 5.16.0 | 5.19.0 | Integrated; compatible major requirement with a 5.19.0 floor. |
-| #1162 | `uniffi` | 0.28.3 | 0.32.2 | Integrated; exact `=0.32.2` shared by Core/NSE runtime, build dependencies, and project bindgen. |
+| PR    | Crate                          | Previous | PR proposal and resolved branch version | Manifest policy and outcome                                                                      |
+| ----- | ------------------------------ | -------- | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| #1159 | `tauri`                        | 2.11.5   | 2.11.6                                  | Integrated; desktop requires `~2.11.6`. npm API/CLI use the matching 2.11 family.                |
+| #1159 | `tauri-plugin-updater`         | 2.11.0   | 2.12.0                                  | Integrated; desktop requires `~2.12.0`, matching npm updater 2.12.0.                             |
+| #1159 | `tauri-plugin-single-instance` | 2.4.4    | 2.4.5                                   | Integrated; compatible major requirement with a 2.4.5 floor.                                     |
+| #1159 | `zbus`                         | 5.16.0   | 5.19.0                                  | Integrated; compatible major requirement with a 5.19.0 floor.                                    |
+| #1162 | `uniffi`                       | 0.28.3   | 0.32.2                                  | Integrated; exact `=0.32.2` shared by Core/NSE runtime, build dependencies, and project bindgen. |
 
 Matrix SDK and its sibling crates remain exactly 0.19.1. Generated async UniFFI
 exports retain Tokio bridges through the shared signature-aware helper.
@@ -87,88 +86,88 @@ policy, patched XML/RNG entries, and production feature-graph checks.
 
 ## npm PR #1161: all three root updates
 
-| Package | Previous | PR proposal | Branch outcome | Disposition |
-| --- | --- | --- | --- | --- |
-| `@tauri-apps/api` | `2.11.0` | `2.11.1` | `2.11.1` | integrated |
-| `@tauri-apps/plugin-updater` | `2.11.0` | `2.12.0` | `2.12.0` | integrated |
-| `@tauri-apps/cli` | `2.11.2` | `2.11.5` | `2.11.5` | integrated |
+| Package                      | Previous | PR proposal | Branch outcome | Disposition |
+| ---------------------------- | -------- | ----------- | -------------- | ----------- |
+| `@tauri-apps/api`            | `2.11.0` | `2.11.1`    | `2.11.1`       | integrated  |
+| `@tauri-apps/plugin-updater` | `2.11.0` | `2.12.0`    | `2.12.0`       | integrated  |
+| `@tauri-apps/cli`            | `2.11.2` | `2.11.5`    | `2.11.5`       | integrated  |
 
 ## npm PR #1163: all 69 renderer/tooling updates
 
 “Integrated” means the proposal is in the manifest and lockfile. Compatible
 replacements and retired packages are deliberate outcomes explained below.
 
-| Package | Previous | PR proposal | Branch outcome | Disposition |
-| --- | --- | --- | --- | --- |
-| `@atlaskit/pragmatic-drag-and-drop` | `1.1.6` | `4.0.0` | `4.0.0` | integrated |
-| `@atlaskit/pragmatic-drag-and-drop-auto-scroll` | `1.3.0` | `3.2.1` | `3.2.1` | integrated |
-| `@atlaskit/pragmatic-drag-and-drop-hitbox` | `1.0.3` | `3.0.0` | `3.0.0` | integrated |
-| `@fontsource/inter` | `4.5.14` | `5.3.0` | `@fontsource-variable/inter@5.3.0` | compatible replacement |
-| `@tanstack/react-query` | `5.24.1` | `5.104.0` | `5.104.0` | integrated |
-| `@tanstack/react-query-devtools` | `5.24.1` | `5.104.0` | `5.104.0` | integrated |
-| `@tanstack/react-virtual` | `3.14.7` | `3.14.13` | `3.14.13` | integrated |
-| `@tauri-apps/api` | `2.11.0` | `2.11.1` | `2.11.1` | integrated |
-| `@tauri-apps/plugin-updater` | `2.11.0` | `2.12.0` | `2.12.0` | integrated |
-| `@vanilla-extract/css` | `1.20.1` | `1.21.2` | `1.21.2` | integrated |
-| `blurhash` | `2.0.4` | `2.0.5` | `2.0.5` | integrated |
-| `chroma-js` | `3.1.2` | `3.2.0` | `3.2.0` | integrated |
-| `classnames` | `2.3.2` | `2.5.1` | `2.5.1` | integrated |
-| `dayjs` | `1.11.10` | `1.11.23` | `1.11.23` | integrated |
-| `domhandler` | `5.0.3` | `6.0.1` | `6.0.1` | integrated |
-| `emojibase` | `15.3.1` | `17.0.0` | `17.0.0` | integrated |
-| `emojibase-data` | `15.3.2` | `17.0.0` | `17.0.0` | integrated |
-| `focus-trap-react` | `10.0.2` | `12.0.3` | `12.0.3` | integrated |
-| `folds` | `2.6.2` | `2.7.2` | `2.7.2` | integrated |
-| `html-dom-parser` | `4.0.0` | `8.0.2` | `8.0.2` | integrated |
-| `html-react-parser` | `4.2.0` | `6.1.8` | `6.1.8` | integrated |
-| `i18next` | `23.12.2` | `26.4.2` | `26.4.2` | integrated |
-| `i18next-browser-languagedetector` | `8.0.0` | `8.2.1` | `8.2.1` | integrated |
-| `i18next-http-backend` | `4.0.0` | `4.0.2` | `4.0.2` | integrated |
-| `immer` | `9.0.16` | `11.1.18` | `11.1.18` | integrated |
-| `jotai` | `2.6.0` | `3.0.0` | `3.0.0` | integrated |
-| `linkify-react` | `4.3.2` | `4.3.3` | `4.3.3` | integrated |
-| `linkifyjs` | `4.3.2` | `4.3.3` | `4.3.3` | integrated |
-| `pdfjs-dist` | `6.2.108` | `6.3.289` | `6.3.289` | integrated |
-| `react` | `19.2.6` | `19.3.0` | `19.3.0` | integrated |
-| `react-aria` | `3.29.1` | `3.52.1` | `3.52.1` | integrated |
-| `react-blurhash` | `0.2.0` | `0.3.0` | `0.3.0` | integrated |
-| `react-colorful` | `5.6.1` | `5.8.1` | `5.8.1` | integrated |
-| `react-dom` | `19.2.6` | `19.3.0` | `19.3.0` | integrated |
-| `react-error-boundary` | `4.0.13` | `6.1.6` | `6.1.6` | integrated |
-| `react-google-recaptcha` | `2.1.0` | `3.1.0` | `3.1.0` | integrated |
-| `react-i18next` | `15.0.0` | `17.0.15` | `17.0.15` | integrated |
-| `react-range` | `1.8.14` | `1.10.0` | `1.10.0` | integrated |
-| `react-router-dom` | `7.18.2` | `7.18.4` | `7.18.4` | integrated |
-| `slate` | `0.123.0` | `0.126.2` | `0.126.2` | integrated |
-| `slate-dom` | `0.123.0` | `0.126.0` | `0.126.0` | integrated |
-| `slate-react` | `0.123.0` | `0.127.1` | `0.127.1` | integrated |
-| `ua-parser-js` | `1.0.35` | `2.0.10` | `2.0.10` | integrated |
-| `@babel/core` | `7.29.7` | `8.0.6` | Removed | retired |
-| `@element-hq/element-call-embedded` | `0.22.0` | `0.26.0` | Removed | retired |
-| `@eslint/js` | `9.39.4` | `10.0.1` | `9.39.5` | compatible replacement |
-| `@playwright/test` | `1.61.1` | `1.63.0` | `1.63.0` | integrated |
-| `@rollup/plugin-inject` | `5.0.3` | `5.0.5` | Removed | retired |
-| `@types/chroma-js` | `3.1.1` | `3.1.2` | `3.1.2` | integrated |
-| `@types/file-saver` | `2.0.5` | `2.0.7` | `2.0.7` | integrated |
-| `@types/node` | `24.13.3` | `26.6.3` | `24.13.3` | compatible replacement |
-| `@types/prismjs` | `1.26.0` | `1.26.6` | `1.26.6` | integrated |
-| `@types/react` | `19.2.14` | `19.3.0` | `19.3.0` | integrated |
-| `@types/react-dom` | `19.2.3` | `19.3.0` | `19.3.0` | integrated |
-| `@types/react-google-recaptcha` | `2.1.8` | `2.1.9` | `2.1.9` | integrated |
-| `@types/sanitize-html` | `2.9.0` | `2.16.1` | `2.16.1` | integrated |
-| `@types/ua-parser-js` | `0.7.36` | `0.7.39` | Removed | retired |
-| `@typescript-eslint/eslint-plugin` | `8.59.4` | `8.70.1` | `8.70.1` | integrated |
-| `@typescript-eslint/parser` | `8.59.4` | `8.70.1` | `8.70.1` | integrated |
-| `@vanilla-extract/vite-plugin` | `5.2.5` | `5.2.6` | `5.2.6` | integrated |
-| `@vitejs/plugin-react` | `5.2.0` | `6.1.1` | `6.1.1` | integrated |
-| `eslint` | `9.39.4` | `10.11.0` | `9.39.5` | compatible replacement |
-| `globals` | `16.5.0` | `17.12.0` | `17.12.0` | integrated |
-| `lint-staged` | `16.3.2` | `17.6.0` | `17.6.0` | integrated |
-| `prettier` | `2.8.1` | `3.9.9` | `2.8.8` | compatible replacement |
-| `typescript` | `5.7.3` | `7.0.2` | `npm:@typescript/typescript6@6.0.2` | compatible replacement |
-| `vite` | `7.3.6` | `8.3.1` | `8.3.1` | integrated |
-| `vite-plugin-static-copy` | `3.4.0` | `4.1.1` | `4.1.1` | integrated |
-| `vite-plugin-top-level-await` | `1.4.4` | `1.6.0` | Removed | retired |
+| Package                                         | Previous  | PR proposal | Branch outcome                      | Disposition            |
+| ----------------------------------------------- | --------- | ----------- | ----------------------------------- | ---------------------- |
+| `@atlaskit/pragmatic-drag-and-drop`             | `1.1.6`   | `4.0.0`     | `4.0.0`                             | integrated             |
+| `@atlaskit/pragmatic-drag-and-drop-auto-scroll` | `1.3.0`   | `3.2.1`     | `3.2.1`                             | integrated             |
+| `@atlaskit/pragmatic-drag-and-drop-hitbox`      | `1.0.3`   | `3.0.0`     | `3.0.0`                             | integrated             |
+| `@fontsource/inter`                             | `4.5.14`  | `5.3.0`     | `@fontsource-variable/inter@5.3.0`  | compatible replacement |
+| `@tanstack/react-query`                         | `5.24.1`  | `5.104.0`   | `5.104.0`                           | integrated             |
+| `@tanstack/react-query-devtools`                | `5.24.1`  | `5.104.0`   | `5.104.0`                           | integrated             |
+| `@tanstack/react-virtual`                       | `3.14.7`  | `3.14.13`   | `3.14.13`                           | integrated             |
+| `@tauri-apps/api`                               | `2.11.0`  | `2.11.1`    | `2.11.1`                            | integrated             |
+| `@tauri-apps/plugin-updater`                    | `2.11.0`  | `2.12.0`    | `2.12.0`                            | integrated             |
+| `@vanilla-extract/css`                          | `1.20.1`  | `1.21.2`    | `1.21.2`                            | integrated             |
+| `blurhash`                                      | `2.0.4`   | `2.0.5`     | `2.0.5`                             | integrated             |
+| `chroma-js`                                     | `3.1.2`   | `3.2.0`     | `3.2.0`                             | integrated             |
+| `classnames`                                    | `2.3.2`   | `2.5.1`     | `2.5.1`                             | integrated             |
+| `dayjs`                                         | `1.11.10` | `1.11.23`   | `1.11.23`                           | integrated             |
+| `domhandler`                                    | `5.0.3`   | `6.0.1`     | `6.0.1`                             | integrated             |
+| `emojibase`                                     | `15.3.1`  | `17.0.0`    | `17.0.0`                            | integrated             |
+| `emojibase-data`                                | `15.3.2`  | `17.0.0`    | `17.0.0`                            | integrated             |
+| `focus-trap-react`                              | `10.0.2`  | `12.0.3`    | `12.0.3`                            | integrated             |
+| `folds`                                         | `2.6.2`   | `2.7.2`     | `2.7.2`                             | integrated             |
+| `html-dom-parser`                               | `4.0.0`   | `8.0.2`     | `8.0.2`                             | integrated             |
+| `html-react-parser`                             | `4.2.0`   | `6.1.8`     | `6.1.8`                             | integrated             |
+| `i18next`                                       | `23.12.2` | `26.4.2`    | `26.4.2`                            | integrated             |
+| `i18next-browser-languagedetector`              | `8.0.0`   | `8.2.1`     | `8.2.1`                             | integrated             |
+| `i18next-http-backend`                          | `4.0.0`   | `4.0.2`     | `4.0.2`                             | integrated             |
+| `immer`                                         | `9.0.16`  | `11.1.18`   | `11.1.18`                           | integrated             |
+| `jotai`                                         | `2.6.0`   | `3.0.0`     | `3.0.0`                             | integrated             |
+| `linkify-react`                                 | `4.3.2`   | `4.3.3`     | `4.3.3`                             | integrated             |
+| `linkifyjs`                                     | `4.3.2`   | `4.3.3`     | `4.3.3`                             | integrated             |
+| `pdfjs-dist`                                    | `6.2.108` | `6.3.289`   | `6.3.289`                           | integrated             |
+| `react`                                         | `19.2.6`  | `19.3.0`    | `19.3.0`                            | integrated             |
+| `react-aria`                                    | `3.29.1`  | `3.52.1`    | `3.52.1`                            | integrated             |
+| `react-blurhash`                                | `0.2.0`   | `0.3.0`     | `0.3.0`                             | integrated             |
+| `react-colorful`                                | `5.6.1`   | `5.8.1`     | `5.8.1`                             | integrated             |
+| `react-dom`                                     | `19.2.6`  | `19.3.0`    | `19.3.0`                            | integrated             |
+| `react-error-boundary`                          | `4.0.13`  | `6.1.6`     | `6.1.6`                             | integrated             |
+| `react-google-recaptcha`                        | `2.1.0`   | `3.1.0`     | `3.1.0`                             | integrated             |
+| `react-i18next`                                 | `15.0.0`  | `17.0.15`   | `17.0.15`                           | integrated             |
+| `react-range`                                   | `1.8.14`  | `1.10.0`    | `1.10.0`                            | integrated             |
+| `react-router-dom`                              | `7.18.2`  | `7.18.4`    | `7.18.4`                            | integrated             |
+| `slate`                                         | `0.123.0` | `0.126.2`   | `0.126.2`                           | integrated             |
+| `slate-dom`                                     | `0.123.0` | `0.126.0`   | `0.126.0`                           | integrated             |
+| `slate-react`                                   | `0.123.0` | `0.127.1`   | `0.127.1`                           | integrated             |
+| `ua-parser-js`                                  | `1.0.35`  | `2.0.10`    | `2.0.10`                            | integrated             |
+| `@babel/core`                                   | `7.29.7`  | `8.0.6`     | Removed                             | retired                |
+| `@element-hq/element-call-embedded`             | `0.22.0`  | `0.26.0`    | Removed                             | retired                |
+| `@eslint/js`                                    | `9.39.4`  | `10.0.1`    | `9.39.5`                            | compatible replacement |
+| `@playwright/test`                              | `1.61.1`  | `1.63.0`    | `1.63.0`                            | integrated             |
+| `@rollup/plugin-inject`                         | `5.0.3`   | `5.0.5`     | Removed                             | retired                |
+| `@types/chroma-js`                              | `3.1.1`   | `3.1.2`     | `3.1.2`                             | integrated             |
+| `@types/file-saver`                             | `2.0.5`   | `2.0.7`     | `2.0.7`                             | integrated             |
+| `@types/node`                                   | `24.13.3` | `26.6.3`    | `24.13.3`                           | compatible replacement |
+| `@types/prismjs`                                | `1.26.0`  | `1.26.6`    | `1.26.6`                            | integrated             |
+| `@types/react`                                  | `19.2.14` | `19.3.0`    | `19.3.0`                            | integrated             |
+| `@types/react-dom`                              | `19.2.3`  | `19.3.0`    | `19.3.0`                            | integrated             |
+| `@types/react-google-recaptcha`                 | `2.1.8`   | `2.1.9`     | `2.1.9`                             | integrated             |
+| `@types/sanitize-html`                          | `2.9.0`   | `2.16.1`    | `2.16.1`                            | integrated             |
+| `@types/ua-parser-js`                           | `0.7.36`  | `0.7.39`    | Removed                             | retired                |
+| `@typescript-eslint/eslint-plugin`              | `8.59.4`  | `8.70.1`    | `8.70.1`                            | integrated             |
+| `@typescript-eslint/parser`                     | `8.59.4`  | `8.70.1`    | `8.70.1`                            | integrated             |
+| `@vanilla-extract/vite-plugin`                  | `5.2.5`   | `5.2.6`     | `5.2.6`                             | integrated             |
+| `@vitejs/plugin-react`                          | `5.2.0`   | `6.1.1`     | `6.1.1`                             | integrated             |
+| `eslint`                                        | `9.39.4`  | `10.11.0`   | `9.39.5`                            | compatible replacement |
+| `globals`                                       | `16.5.0`  | `17.12.0`   | `17.12.0`                           | integrated             |
+| `lint-staged`                                   | `16.3.2`  | `17.6.0`    | `17.6.0`                            | integrated             |
+| `prettier`                                      | `2.8.1`   | `3.9.9`     | `2.8.8`                             | compatible replacement |
+| `typescript`                                    | `5.7.3`   | `7.0.2`     | `npm:@typescript/typescript6@6.0.2` | compatible replacement |
+| `vite`                                          | `7.3.6`   | `8.3.1`     | `8.3.1`                             | integrated             |
+| `vite-plugin-static-copy`                       | `3.4.0`   | `4.1.1`     | `4.1.1`                             | integrated             |
+| `vite-plugin-top-level-await`                   | `1.4.4`   | `1.6.0`     | Removed                             | retired                |
 
 ## Compatibility choices and follow-up conditions
 
@@ -295,18 +294,18 @@ which passed 409 tooling, 1,201 modernization, and 126 Chromium cases against
 Its fresh PDFv3 release and CI browser results are separate from unchanged
 production/compiled v2 checks retained with their original evidence scope.
 
-| Gate | Recorded outcome |
-| --- | --- |
-| Ordinary root `npm ci` and `npm --prefix synara ci` | Passed without peer bypass flags. |
-| Full root/frontend `npm audit --json` | Zero findings at every severity, including development dependencies. |
-| Full TypeScript and modernization typechecks | Passed with native TypeScript 7. |
-| Full renderer lint | ESLint and Prettier passed. |
-| Normal `npm run test:modernization`, including runtime build pretest | 1,201 passed, zero failures or skips, including the accepted notification delivery/action adapters. |
-| Timeline Chromium browser command | 7 passed. |
-| Native-timeline Chromium browser command | 72 passed. |
-| Normal `test:browser:desktop-polish:ci` command | 6 room-list, 34 approvals, and 7 runtime-maturity Chromium cases passed. |
-| Normal release `test:browser:desktop-polish` command from a cold Vite cache | 12 room-list, 68 approvals, and 14 runtime-maturity Chromium/WebKit cases passed. |
-| Normal build output guard and `check:runtime-assets` | Matching installed PDF-worker bytes, config/locales at actual URLs, retired assets absent. |
+| Gate                                                                        | Recorded outcome                                                                                    |
+| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| Ordinary root `npm ci` and `npm --prefix synara ci`                         | Passed without peer bypass flags.                                                                   |
+| Full root/frontend `npm audit --json`                                       | Zero findings at every severity, including development dependencies.                                |
+| Full TypeScript and modernization typechecks                                | Passed with native TypeScript 7.                                                                    |
+| Full renderer lint                                                          | ESLint and Prettier passed.                                                                         |
+| Normal `npm run test:modernization`, including runtime build pretest        | 1,201 passed, zero failures or skips, including the accepted notification delivery/action adapters. |
+| Timeline Chromium browser command                                           | 7 passed.                                                                                           |
+| Native-timeline Chromium browser command                                    | 72 passed.                                                                                          |
+| Normal `test:browser:desktop-polish:ci` command                             | 6 room-list, 34 approvals, and 7 runtime-maturity Chromium cases passed.                            |
+| Normal release `test:browser:desktop-polish` command from a cold Vite cache | 12 room-list, 68 approvals, and 14 runtime-maturity Chromium/WebKit cases passed.                   |
+| Normal build output guard and `check:runtime-assets`                        | Matching installed PDF-worker bytes, config/locales at actual URLs, retired assets absent.          |
 
 Both CI `desktop-polish:ci` and release `desktop-polish` npm entrypoints include
 runtime-maturity. It runs the typed update hook, dialog focus trap, production

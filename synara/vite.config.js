@@ -1,27 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
-import { viteStaticCopy } from 'vite-plugin-static-copy';
+import { runtimeAssetsPlugin } from './scripts/runtime-assets-plugin.mjs';
 import { vanillaExtractPlugin } from '@vanilla-extract/vite-plugin';
 import buildConfig from './build.config.ts';
-
-const copyFiles = {
-  targets: [
-    {
-      src: 'node_modules/pdfjs-dist/legacy/build/pdf.worker.min.mjs',
-      dest: '',
-      rename: { stripBase: true, name: 'pdf.worker.min.js' },
-    },
-    {
-      src: 'config.json',
-      dest: '',
-    },
-    {
-      src: 'public/locales',
-      dest: 'public/',
-      rename: { stripBase: 1 },
-    },
-  ],
-};
 
 export default defineConfig({
   appType: 'spa',
@@ -35,7 +16,7 @@ export default defineConfig({
       allow: ['..'],
     },
   },
-  plugins: [viteStaticCopy(copyFiles), vanillaExtractPlugin(), react()],
+  plugins: [runtimeAssetsPlugin(), vanillaExtractPlugin(), react()],
   worker: {
     format: 'es',
     rollupOptions: {
