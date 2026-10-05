@@ -146,15 +146,16 @@ Compiled target caches are kept separate for Ubuntu, Arch, native macOS,
 universal macOS and Apple target/profile graphs. Registry-only families do not
 store compiled objects and keep the first rollout within the storage budget.
 
-| Family                                 | Writer                                                       | Readers                                                           |
-| -------------------------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------- |
-| `validate-rust-desktop`                | CI Rust validation on `main`                                 | PR validation, exact-tag validation and six native Synapse proofs |
-| `ci-synara-core-apple-simulator-arm64` | CI unit lane on `main`, simulator-only without device opt-in | UI, compile, diagnostics and exact-tag simulator lanes            |
-| `release-linux-deb`                    | Desktop Package Smoke dispatched on `main`                   | PR `.deb` smoke and tagged `.deb` release                         |
-| `release-macos`                        | Unsigned macOS seed or intended signed build on `main`       | Tagged universal macOS release                                    |
-| `desktop-registry-arch`                | Desktop Package Smoke dispatched on `main`                   | Arch smoke and release; registry only                             |
-| `desktop-registry-macos-host`          | Desktop Package Smoke dispatched on `main`                   | Native macOS smoke; registry only                                 |
-| `release-synara-core-apple-device`     | Unsigned device seed on `main`                               | Tagged TestFlight device release                                  |
+| Family                                 | Writer                                                         | Readers                                                              |
+| -------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `validate-rust-desktop`                | CI Rust validation on `main`                                   | PR validation, exact-tag validation and six native Synapse proofs    |
+| `ci-synara-core-apple-simulator-arm64` | CI unit lane on `main`, simulator-only without device opt-in   | UI, compile, diagnostics and exact-tag simulator lanes               |
+| `release-linux-deb`                    | Desktop Package Smoke dispatched on `main`                     | PR `.deb` smoke and tagged `.deb` release                            |
+| `release-macos`                        | Unsigned macOS seed or intended signed build on `main`         | Tagged universal macOS release                                       |
+| `desktop-registry-arch`                | Desktop Package Smoke dispatched on `main`                     | Arch smoke and release; registry only                                |
+| `desktop-registry-macos-host`          | Desktop Package Smoke dispatched on `main`                     | Native macOS smoke; registry only                                    |
+| `release-synara-core-apple-device`     | Unsigned device seed on `main`                                 | Tagged TestFlight device release                                     |
+| `xcode-compilation-v1`                 | Successful CI iOS unit lane on `main`; weekly, at most 512 MiB | Simulator/UI/compile/diagnostics, exact-tag iOS and TestFlight lanes |
 
 GitHub can restore current/default/base-branch caches, but a PR merge-ref cache
 does not warm sibling PRs or `main`, and one tag cannot warm another tag.
@@ -266,6 +267,13 @@ default. Both retain a separate **3 GiB filesystem free-space reserve** and the
 compiler-reuse conclusion, and whole-job restore/save measurements are still
 required before selecting a production backend.
 
+For a local retry with `--max-scratch-mib 3072`, start with at least **6 GiB
+free** (3 GiB scratch plus the 3 GiB filesystem reserve). **8–10 GiB free** is
+the practical target to leave room for unrelated disk activity. These are the
+requirements of this bounded NSE experiment, not a measured peak requirement
+for Kache or a budget for full Apple/Xcode builds. If the scratch guard still
+fires, record the incomplete run and reassess the budget before retrying.
+
 The pinned Swatinem backend remains production policy pending comparable
 whole-job measurements. Kache's GitHub-backed store also inherits branch
 isolation and immutable snapshots. Any S3-backed trial needs its own trusted
@@ -278,6 +286,64 @@ features, while a narrow NSE host check verifies that its shared primitives
 compile without full application owners. Apple release gates still inspect the
 actual archive ABI and extension size; graph counts alone cannot replace those
 checks or predict archive-size reductions.
+
+### Swift and Xcode build reuse
+
+The reachable Swift package graph is currently entirely local: `SynaraCore`
+and `SynaraNseCore` wrap the generated Rust archives. No remote SwiftPM download
+cache or synthetic `Package.resolved` is needed. All supported project build
+scripts inspect this graph; if remote dependencies are added, a reviewed lock
+becomes required and automatic resolution/package updates are disabled.
+
+Local command-line builds now keep persistent caches under
+`~/Library/Caches/Synara/Xcode/<checkout identity>/<toolchain identity>`.
+The identity includes the selected compiler, Xcode build, Swift version, iOS
+and simulator SDK versions and architecture. Separate DerivedData lanes cover
+simulator, UI, unsigned device and signed archive builds. Explicit path
+overrides remain available. XcodeGen uses its native spec/source-list cache
+plus checks of generated outputs, so unchanged projects, schemes and plists
+retain timestamps; changed or missing outputs force regeneration. Generated
+Swift/XCFramework pairs already preserve identical outputs.
+
+[Apple compilation caching](https://developer.apple.com/documentation/xcode-release-notes/xcode-26-release-notes)
+is enabled for Xcode 26 and newer in local build scripts and the checked-in
+project, including direct IDE builds. CLI builds use a dedicated local-only
+compiler CAS directory shared by their build lanes. IDE builds use Xcode's
+normal cache location. Ordinary incremental DerivedData reuse remains useful;
+the native cache can also reuse compilation results after those intermediates
+are gone. Custom compiler prefix mapping is not introduced.
+
+CI restores **only compiler CAS objects**, using the exact selected toolchain
+identity with no fallback across toolchains. The native size limit is 256M per
+database, with an independent **512 MiB aggregate publication gate**. Oversized,
+empty and already-published weekly snapshots are skipped. Only successful main
+iOS unit builds save; PRs, diagnostics and release lanes read. Weekly immutable
+keys reduce cache churn; missing objects compile normally. DerivedData,
+SourcePackages, signing credentials, result bundles, archives and products are
+excluded. Inspect `npm run audit:build-cache` and the workflow cache summaries
+before increasing budgets or generations, especially with the current 10 GB
+repository limit. Toolchain changes can temporarily add extra snapshots.
+
+Apple CI jobs select **Xcode 26.6 / 17F113** using
+`DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer`, a version
+available in the [macOS 26 runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md).
+The selected version is checked before Swift cache work; the unsigned device
+seed checks it directly. Apple Rust cache environment keys include
+`DEVELOPER_DIR` in addition to the pinned action's normal inputs, so changing
+SDK installations also invalidates those compiled dependency snapshots. When
+upgrading Xcode, update all Apple job paths, the version assertions and workflow
+policy together, then validate the simulator/device lanes. Local tools remain
+free to select another installed Xcode; their own cache identity isolates it.
+
+A disposable real Xcode 27.0 / Swift 6.4 proof on 2026-10-05 built a small tool
+with a local Swift package, resource-generated accessor and intentional warning.
+The first build took **10.78s with 0/74 cache hits**; after removing only the
+fixture's DerivedData, the repeat took **3.69s with 74/74 hits**. Warning replay
+and executable output were preserved; compiler objects occupied approximately
+119 MiB. This proves the configured mechanism on this toolchain, not Synara
+application build acceleration. Full app and hosted comparisons still require
+real builds, including restore/save costs. CI emits native cache diagnostic
+remarks and build timing summaries to support those measurements.
 
 ## Local Validation Gates
 

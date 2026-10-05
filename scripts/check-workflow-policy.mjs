@@ -213,10 +213,11 @@ function inspectRustCachePolicy(workflows, errors) {
     if (family.includes("synara-core-apple")) {
       if (
         !step.includes(". -> target/synara-core-apple") ||
-        !step.includes(". -> target/synara-core-bindgen")
+        !step.includes(". -> target/synara-core-bindgen") ||
+        input("env-vars") !== "DEVELOPER_DIR"
       ) {
         errors.push(
-          `${label} must cache the Apple archives and isolated host bindgen target directories.`,
+          `${label} must cache the Apple archives and isolated host bindgen target directories with the selected Xcode in cache identity.`,
         );
       }
     } else if (!step.includes(". -> target")) {
@@ -230,8 +231,120 @@ export function inspectWorkflowPolicy({
   dependabot,
   runtimePackage = "",
   nodeSetupAction = "",
+  xcodeSetupAction = "",
+  xcodeSaveAction = "",
 }) {
   const errors = [];
+
+  for (const [name, action] of [
+    ["setup-xcode-cache", xcodeSetupAction],
+    ["save-xcode-cache", xcodeSaveAction],
+  ]) {
+    for (const reference of action.matchAll(/^\s*uses:\s*([^\s#]+)/gm)) {
+      if (!/^[^@\s]+@[0-9a-f]{40}$/.test(reference[1]))
+        errors.push(`${name} actions must use a full commit SHA.`);
+    }
+  }
+  if (
+    !xcodeSetupAction.includes(
+      "expected_xcode=$'Xcode 26.6\\nBuild version 17F113'",
+    ) ||
+    !xcodeSetupAction.includes('"$actual_xcode" != "$expected_xcode"') ||
+    !xcodeSetupAction.includes(
+      "source synara-ios/scripts/lib/xcode-cache.sh",
+    ) ||
+    !xcodeSetupAction.includes(
+      "xcode-compilation-v1-${RUNNER_OS}-${RUNNER_ARCH}-${SYNARA_XCODE_TOOLCHAIN_KEY}-",
+    ) ||
+    !xcodeSetupAction.includes("date -u +%G-W%V") ||
+    !xcodeSetupAction.includes("SYNARA_IOS_COMPILATION_CACHE_LIMIT=256M") ||
+    !xcodeSetupAction.includes("actions/cache/restore@") ||
+    !xcodeSetupAction.includes("path: ${{ steps.paths.outputs.cache-path }}") ||
+    !xcodeSetupAction.includes(
+      "restore-keys: ${{ steps.paths.outputs.cache-prefix }}",
+    ) ||
+    /actions\/cache(?:\/save)?@/.test(xcodeSetupAction)
+  ) {
+    errors.push(
+      "Xcode cache setup must restore only compiler objects using an exact toolchain prefix and weekly bounded snapshots.",
+    );
+  }
+  if (
+    !xcodeSaveAction.includes(
+      'expected_path="$GITHUB_WORKSPACE/.xcode-cache/CompilationCache.noindex"',
+    ) ||
+    !xcodeSaveAction.includes(
+      '"$CACHE_PATH" != "$expected_path" || -L "$CACHE_PATH"',
+    ) ||
+    !xcodeSaveAction.includes("size_kib > 524288") ||
+    !xcodeSaveAction.includes("size_kib == 0") ||
+    !xcodeSaveAction.includes('"$CACHE_HIT" == true') ||
+    !xcodeSaveAction.includes(
+      "if: github.ref == 'refs/heads/main' && steps.budget.outputs.publish == 'true'",
+    ) ||
+    !xcodeSaveAction.includes("actions/cache/save@") ||
+    !xcodeSaveAction.includes("path: ${{ inputs.cache-path }}")
+  ) {
+    errors.push(
+      "Xcode compiler cache publication must be nonempty, at most 512 MiB, scoped to the owned CAS directory and main only.",
+    );
+  }
+  const swiftJobs = [
+    ["ci.yml", "ios-tests"],
+    ["ci.yml", "ios-ui-tests"],
+    ["ci.yml", "ios-compile"],
+    ["ios-skeleton.yml", "test"],
+    ["release.yml", "exact-tag-ios-quality"],
+    ["release.yml", "ios-testflight-upload"],
+  ];
+  for (const [filename, jobName] of swiftJobs) {
+    const job = (parseJobs(workflows[filename] ?? "").get(jobName) ?? []).join(
+      "\n",
+    );
+    if (job.split("uses: ./.github/actions/setup-xcode-cache").length !== 2)
+      errors.push(
+        `${filename} ${jobName} must restore the shared Xcode compiler cache exactly once.`,
+      );
+  }
+  for (const [filename, jobName] of [
+    ...swiftJobs,
+    ["build-cache-seed.yml", "ios-device"],
+  ]) {
+    const job = (parseJobs(workflows[filename] ?? "").get(jobName) ?? []).join(
+      "\n",
+    );
+    if (
+      !job.includes(
+        "DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer",
+      )
+    )
+      errors.push(
+        `${filename} ${jobName} must select the pinned Xcode 26.6 toolchain before Apple build or cache work.`,
+      );
+  }
+  for (const [filename, workflow] of Object.entries(workflows)) {
+    for (const [jobName, lines] of parseJobs(workflow)) {
+      const writers = lines
+        .join("\n")
+        .split(/^      - /m)
+        .filter((step) =>
+          step.includes("uses: ./.github/actions/save-xcode-cache"),
+        );
+      if (writers.length && (filename !== "ci.yml" || jobName !== "ios-tests"))
+        errors.push(
+          `${filename} ${jobName} cannot publish the shared Xcode compiler cache.`,
+        );
+      if (
+        filename === "ci.yml" &&
+        jobName === "ios-tests" &&
+        (writers.length !== 1 ||
+          !writers[0].includes("if: github.ref == 'refs/heads/main'"))
+      )
+        errors.push(
+          "Only the successful main iOS unit lane may publish Xcode compiler objects.",
+        );
+    }
+  }
 
   if (
     !nodeSetupAction.includes(
@@ -626,6 +739,14 @@ export function loadWorkflowPolicyInputs(repositoryRoot = root) {
     ),
     nodeSetupAction: readFileSync(
       path.join(repositoryRoot, ".github/actions/setup-node/action.yml"),
+      "utf8",
+    ),
+    xcodeSetupAction: readFileSync(
+      path.join(repositoryRoot, ".github/actions/setup-xcode-cache/action.yml"),
+      "utf8",
+    ),
+    xcodeSaveAction: readFileSync(
+      path.join(repositoryRoot, ".github/actions/save-xcode-cache/action.yml"),
       "utf8",
     ),
   };

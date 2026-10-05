@@ -35,6 +35,7 @@ test("PR and tag snapshots do not count as reusable main cache seeds", () => {
     "ci-synara-core-apple-simulator-arm64",
     "release-macos",
     "release-synara-core-apple-device",
+    "xcode-compilation",
   ]);
   assert.deepEqual(report.scopes, [
     { ref: "refs/pull/10/merge", count: 1, bytes: 300 },
@@ -53,8 +54,31 @@ test("an empty cache inventory needs all seed families", () => {
     storageLimit: { max_cache_size_gb: 20 },
     retentionLimit: { max_cache_retention_days: 14 },
   });
-  assert.equal(report.missingMainFamilies.length, 5);
+  assert.equal(report.missingMainFamilies.length, 6);
   assert.deepEqual(report.scopes, []);
   assert.equal(report.utilization, 0);
   assert.equal(report.limitBytes, 20_000_000_000);
+});
+
+test("Swift compiler cache seeds must belong to main, independently of Rust seeds", () => {
+  const cache = {
+    key: "xcode-compilation-v1-macOS-ARM64-toolchain-2026-W41",
+    ref: "refs/pull/20/merge",
+    size_in_bytes: 100,
+  };
+  const input = {
+    caches: [cache],
+    usage: { active_caches_size_in_bytes: 100, active_caches_count: 1 },
+    storageLimit: { max_cache_size_gb: 10 },
+    retentionLimit: { max_cache_retention_days: 7 },
+  };
+  assert.ok(
+    summarizeCaches(input).missingMainFamilies.includes("xcode-compilation"),
+  );
+  const main = summarizeCaches({
+    ...input,
+    caches: [{ ...cache, ref: "refs/heads/main" }],
+  });
+  assert.ok(!main.missingMainFamilies.includes("xcode-compilation"));
+  assert.equal(main.missingMainFamilies.length, 5);
 });

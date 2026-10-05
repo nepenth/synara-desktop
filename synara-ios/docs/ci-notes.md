@@ -33,11 +33,13 @@ Apple compiler intermediates still use the existing per-architecture temporary
 directories in bounded mode. Hosted Rust caches should include the dedicated
 bindgen directory alongside `target/synara-core-apple`.
 
-That script regenerates the Xcode project with XcodeGen, performs an unsigned
+That script updates the Xcode project with XcodeGen, performs an unsigned
 generic iOS Simulator app build, and compiles the test bundles with
 `build-for-testing`. It keeps Xcode derived data, SwiftPM package cache, Clang
-module cache, SwiftPM module cache, and result bundles under `/private/tmp` by
-default so local CI runs do not depend on mutable user-level Xcode cache state.
+module cache and compiler cache in a persistent directory scoped to this
+checkout and the selected Xcode/Swift/SDK toolchain. Result bundles remain under
+`/private/tmp/synara-ios-results` by default. An unchanged generated project
+keeps its timestamps; missing or edited generated outputs trigger regeneration.
 
 Full `xcodebuild test` execution requires a concrete installed Simulator
 runtime. Local machines can run:
@@ -52,8 +54,17 @@ runner has a different simulator set.
 
 ## Cache And Sandbox Controls
 
-The script accepts these overrides when a runner needs explicit cache or result
-locations:
+Local command-line cache paths default to
+`~/Library/Caches/Synara/Xcode/<checkout identity>/<toolchain identity>`.
+Simulator, UI, unsigned device and signed archive builds use separate
+DerivedData lanes and share compiler/module and package storage. Set a cache
+root explicitly when desired:
+
+```sh
+SYNARA_IOS_CACHE_ROOT=/path/to/synara-xcode-cache scripts/ci-build.sh
+```
+
+The existing individual overrides remain supported:
 
 ```sh
 DERIVED_DATA_PATH=/private/tmp/synara-ios-derived \
@@ -69,15 +80,12 @@ For an offline or network-restricted runner, prewarm the Swift package checkout
 once in a normal macOS shell, then pass the existing Xcode SourcePackages path:
 
 ```sh
-IOS_CLONED_SOURCE_PACKAGES_DIR_PATH="$HOME/Library/Developer/Xcode/DerivedData/Synara-fndcpnswhlujwfdbtgdwzppgoujz/SourcePackages" \
+IOS_CLONED_SOURCE_PACKAGES_DIR_PATH=/path/to/known/SourcePackages \
 scripts/ci-build.sh
 ```
 
-If the DerivedData hash changes, locate the active checkout with:
-
-```sh
-find "$HOME/Library/Developer/Xcode/DerivedData" -path '*Synara*/SourcePackages' -type d
-```
+The current app graph needs no remote package checkout; this override is useful
+if remote dependencies are introduced later.
 
 The script regenerates the project from `project.yml` and verifies the generated
 Swift package graph. The current app graph contains only the local `SynaraCore`
@@ -90,6 +98,28 @@ walks only path dependencies in the generated app graph, so comments,
 multiline declarations, and unrelated package experiments cannot change the
 result. It uses the system SCM provider and writes timestamped `.xcresult`
 bundles under `IOS_RESULT_BUNDLE_DIR`.
+
+Xcode 26 and newer use Apple's native compilation cache. CLI builds use their
+scoped `CompilationCache.noindex`; the checked-in project also enables caching
+for normal IDE builds at Xcode's default location. CLI native cache storage is
+local-only, with a default 1G limit per database. Set
+`SYNARA_IOS_COMPILATION_CACHE_LIMIT` to tune that native limit, and
+`SYNARA_IOS_CACHE_REMARKS=YES` to inspect compiler cache hits/misses. Native
+limits do not bound all DerivedData/module/package storage. Build commands emit
+`-showBuildTimingSummary`; compare complete runs using the same toolchain and
+configuration before claiming an application speedup.
+
+Hosted CI sets a workspace-owned `.xcode-cache` root. Only native compiler
+objects persist between jobs, with exact toolchain restore keys, a 256M native
+limit per database and a 512 MiB aggregate save gate. Successful main unit
+builds publish a weekly immutable snapshot; other jobs only read. No archives,
+products, signing state or full DerivedData are uploaded as caches. Job summaries
+report snapshot identity, size and publication decisions. The read-only
+`npm run audit:build-cache` inventory also identifies missing main Swift seeds.
+Apple jobs explicitly select Xcode 26.6 / 17F113; cache setup verifies that
+selection and Apple Rust cache keys also include `DEVELOPER_DIR`. Upgrade the
+job paths, version assertions and workflow policy together when moving CI to
+another Xcode release. Local builds use the developer's selected toolchain.
 
 ## Local Automation Requirements
 

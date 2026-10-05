@@ -71,6 +71,79 @@ test("release seeds require unsigned manual builds with main cache writers", () 
   }
 });
 
+test("Xcode compiler caches reject broad restore keys, unbounded publication and mutable actions", () => {
+  for (const [property, before, after] of [
+    ["xcodeSetupAction", "Build version 17F113", "Build version unknown"],
+    ["xcodeSetupAction", "${SYNARA_XCODE_TOOLCHAIN_KEY}-", ""],
+    ["xcodeSetupAction", "date -u +%G-W%V", "date -u +%s"],
+    [
+      "xcodeSetupAction",
+      "restore-keys: ${{ steps.paths.outputs.cache-prefix }}",
+      "restore-keys: xcode-compilation-v1-",
+    ],
+    [
+      "xcodeSetupAction",
+      "actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25",
+      "actions/cache/restore@v5",
+    ],
+    ["xcodeSaveAction", "size_kib > 524288", "size_kib > 9999999"],
+    ["xcodeSaveAction", "CompilationCache.noindex", "DerivedData"],
+    [
+      "xcodeSaveAction",
+      "if: github.ref == 'refs/heads/main' && steps.budget.outputs.publish == 'true'",
+      "if: always()",
+    ],
+  ]) {
+    assert.ok(valid[property].includes(before), before);
+    const result = inspectWorkflowPolicy({
+      ...valid,
+      [property]: valid[property].replace(before, after),
+    });
+    assert.equal(result.ok, false, `${property}: ${before}`);
+  }
+});
+
+test("Apple jobs select a pinned Xcode and include it in Rust dependency cache identity", () => {
+  for (const filename of [
+    "ci.yml",
+    "release.yml",
+    "ios-skeleton.yml",
+    "build-cache-seed.yml",
+  ]) {
+    for (const [before, after] of [
+      [
+        "DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer",
+        "DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer",
+      ],
+      ["env-vars: DEVELOPER_DIR", "env-vars: UNUSED_INPUT"],
+    ]) {
+      const result = inspect(filename, (workflow) =>
+        workflow.replace(before, after),
+      );
+      assert.equal(result.ok, false, `${filename}: ${before}`);
+    }
+  }
+});
+
+test("only the main iOS unit lane writes Swift compiler snapshots; other lanes remain readers", () => {
+  const noWriterGuard = inspect("ci.yml", (workflow) =>
+    workflow.replace(
+      "if: github.ref == 'refs/heads/main'\n        uses: ./.github/actions/save-xcode-cache",
+      "if: always()\n        uses: ./.github/actions/save-xcode-cache",
+    ),
+  );
+  assert.equal(noWriterGuard.ok, false);
+  for (const filename of ["ios-skeleton.yml", "release.yml"]) {
+    const unexpectedWriter = inspect(filename, (workflow) =>
+      workflow.replace(
+        "uses: ./.github/actions/setup-xcode-cache",
+        "uses: ./.github/actions/save-xcode-cache",
+      ),
+    );
+    assert.equal(unexpectedWriter.ok, false, filename);
+  }
+});
+
 test("Rust audits retain exact versions, checksum verification and exact-tag coverage", () => {
   for (const filename of ["ci.yml", "release.yml"]) {
     for (const mutate of [

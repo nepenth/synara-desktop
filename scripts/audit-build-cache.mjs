@@ -3,7 +3,7 @@ import path from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const reusableFamilies = [
+const rustFamilies = [
   "validate-rust-desktop",
   "ci-synara-core-apple-simulator-arm64",
   "release-linux-deb",
@@ -26,10 +26,14 @@ export function summarizeCaches({
     scopes.set(scope, summary);
   }
   const mainCaches = caches.filter((cache) => cache.ref === "refs/heads/main");
-  const missingMainFamilies = reusableFamilies.filter(
+  const missingMainFamilies = rustFamilies.filter(
     (family) =>
       !mainCaches.some((cache) => cache.key.startsWith(`v0-rust-${family}-`)),
   );
+  if (
+    !mainCaches.some((cache) => cache.key.startsWith("xcode-compilation-v1-"))
+  )
+    missingMainFamilies.push("xcode-compilation");
   const limitBytes = storageLimit.max_cache_size_gb * 1_000_000_000;
   return {
     activeBytes: usage.active_caches_size_in_bytes,

@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-/private/tmp/synara-ios-ui-tests-derived}"
-PACKAGE_CACHE_PATH="${IOS_PACKAGE_CACHE_PATH:-/private/tmp/synara-ios-package-cache}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/lib/xcode-cache.sh"
+synara_configure_xcode_cache "$SCRIPT_DIR/.."
+DERIVED_DATA_PATH="${DERIVED_DATA_PATH:-$SYNARA_XCODE_DERIVED_DATA_ROOT/ui-tests}"
 TEST_DESTINATION="${IOS_TEST_DESTINATION:-platform=iOS Simulator,name=iPhone 17 Pro}"
 TEST_EXECUTION_TIME_ALLOWANCE="${IOS_UI_TEST_EXECUTION_TIME_ALLOWANCE:-60}"
 SIGNING_MODE="${SYNARA_UI_TEST_SIGNING_MODE:-unsigned}"
@@ -33,14 +35,16 @@ case "$SIGNING_MODE" in
     ;;
 esac
 
+cd "$SCRIPT_DIR/.."
+synara_xcode_package_args "$PWD"
+
 COMMON_XCODEBUILD_ARGS=(
   -project Synara.xcodeproj
   -scheme Synara
   -destination "$TEST_DESTINATION"
   -derivedDataPath "$DERIVED_DATA_PATH"
-  -packageCachePath "$PACKAGE_CACHE_PATH"
-  -onlyUsePackageVersionsFromResolvedFile
-  -skipPackageUpdates
+  "${SYNARA_XCODE_PACKAGE_ARGS[@]}"
+  ${SYNARA_XCODE_COMPILATION_ARGS[@]+"${SYNARA_XCODE_COMPILATION_ARGS[@]}"}
   -skipPackagePluginValidation
   -skipPackageSignatureValidation
   -parallel-testing-enabled NO
@@ -48,11 +52,10 @@ COMMON_XCODEBUILD_ARGS=(
   -test-timeouts-enabled YES
   -default-test-execution-time-allowance "$TEST_EXECUTION_TIME_ALLOWANCE"
   -collect-test-diagnostics never
+  -showBuildTimingSummary
   COMPILER_INDEX_STORE_ENABLE=NO
   ONLY_ACTIVE_ARCH=YES
 )
-
-cd "$(dirname "$0")/.."
 
 run_shard() {
   local shard_name="$1"
