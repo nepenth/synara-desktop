@@ -25,6 +25,14 @@ removed before the next architecture starts:
 SYNARA_APPLE_SPACE_BOUNDED=1 scripts/ci-build.sh
 ```
 
+Both generators retain their shared, lockfile-pinned host UniFFI generator in
+`target/synara-core-bindgen`, including in bounded mode. This avoids rebuilding
+the generator for each package and subsequent run. Override its location with
+`SYNARA_APPLE_BINDGEN_TARGET_DIR`; the generators never delete this directory.
+Apple compiler intermediates still use the existing per-architecture temporary
+directories in bounded mode. Hosted Rust caches should include the dedicated
+bindgen directory alongside `target/synara-core-apple`.
+
 That script regenerates the Xcode project with XcodeGen, performs an unsigned
 generic iOS Simulator app build, and compiles the test bundles with
 `build-for-testing`. It keeps Xcode derived data, SwiftPM package cache, Clang

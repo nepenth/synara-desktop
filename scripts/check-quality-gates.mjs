@@ -302,6 +302,7 @@ function pathFilteredCiAggregateError(jobLines) {
   const expectedNeedsMonolith = [
     "changes",
     "validate",
+    "rust-dependency-audit",
     "ios-tests",
     "ios-ui-tests",
     "synapse-native-reactions",
@@ -315,6 +316,7 @@ function pathFilteredCiAggregateError(jobLines) {
     "changes",
     "validate-rust",
     "validate-frontend",
+    "rust-dependency-audit",
     "ios-tests",
     "ios-ui-tests",
     "ios-compile",
@@ -347,6 +349,9 @@ function pathFilteredCiAggregateError(jobLines) {
     )?.[0];
     const desktopFrontendVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.validate-frontend.result }}"
+    )?.[0];
+    const rustAuditVar = [...environment.entries()].find(
+      ([, value]) => value === "${{ needs.rust-dependency-audit.result }}"
     )?.[0];
     const iosVar = [...environment.entries()].find(
       ([, value]) => value === "${{ needs.ios-tests.result }}"
@@ -385,6 +390,7 @@ function pathFilteredCiAggregateError(jobLines) {
     if (
       !changesVar ||
       !desktopOk ||
+      !rustAuditVar ||
       !iosVar ||
       !iosUiVar ||
       !iosCompileOk ||
@@ -426,6 +432,10 @@ function pathFilteredCiAggregateError(jobLines) {
       : true;
     if (
       !desktopRefsOk ||
+      !runLines.some((line) =>
+        line.startsWith("ok ") && line.includes(`"$${rustAuditVar}"`) &&
+        line.endsWith("|| fail=1")
+      ) ||
       !iosCompileRefOk ||
       !runText.includes(`"$${iosVar}"`) ||
       !runText.includes(`"$${iosUiVar}"`) ||

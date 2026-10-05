@@ -258,3 +258,86 @@ test("rejects a retained alternate semantic-release publisher", () => {
     /alternate semantic-release publisher/,
   );
 });
+
+function editJob(workflow, job, transform) {
+  // The next job boundary, rather than an end-of-line match, scopes mutations.
+  const start = workflow.indexOf(`  ${job}:\n`);
+  assert.ok(start >= 0);
+  const suffix = workflow.slice(start);
+  const next = suffix.slice(1).search(/^  [a-z][a-z-]*:\n/m);
+  const end = next < 0 ? workflow.length : start + next + 1;
+  return (
+    workflow.slice(0, start) +
+    transform(workflow.slice(start, end)) +
+    workflow.slice(end)
+  );
+}
+
+test("native proofs restore the main validation cache without freezing narrower outputs", () => {
+  const result = inspect("ci.yml", (workflow) =>
+    editJob(workflow, "synapse-native-polls", (job) =>
+      job.replace('save-if: "false"', 'save-if: "true"')
+    )
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /synapse-native-polls.*save-if/);
+});
+
+test("release tags cannot replace the main release cache writer", () => {
+  const result = inspect("release.yml", (workflow) =>
+    editJob(workflow, "linux-deb", (job) =>
+      job.replace('save-if: "false"', 'save-if: "true"')
+    )
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /linux-deb.*save-if/);
+});
+
+test("manual all-slice Apple builds cannot inflate the normal simulator cache", () => {
+  const result = inspect("ci.yml", (workflow) =>
+    editJob(workflow, "ios-tests", (job) =>
+      job.replace(
+        /^ {10}save-if: .*$/m,
+        "          save-if: ${{ github.ref == 'refs/heads/main' }}"
+      )
+    )
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /ios-tests.*save-if/);
+});
+
+test("Apple cache includes the isolated host generator output", () => {
+  const result = inspect("ios-skeleton.yml", (workflow) =>
+    workflow.replace("            . -> target/synara-core-bindgen\n", "")
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /isolated host bindgen/);
+});
+
+test("Arch and native macOS smoke limit cache growth to registry coverage", () => {
+  for (const jobName of ["linux-arch", "macos-app"]) {
+    const result = inspect("desktop-package-smoke.yml", (workflow) =>
+      editJob(workflow, jobName, (job) =>
+        job.replace("cache-targets: false", "cache-targets: true")
+      )
+    );
+    assert.equal(result.ok, false);
+    assert.match(result.errors.join("\n"), /cache only the Cargo registry/);
+  }
+});
+
+test("cache readers must keep the writer's canonical build family", () => {
+  const result = inspect("ci.yml", (workflow) =>
+    editJob(workflow, "synapse-native-threads", (job) =>
+      job.replace(
+        "shared-key: validate-rust-desktop",
+        "shared-key: threads-only"
+      )
+    )
+  );
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /synapse-native-threads.*cache family/
+  );
+});

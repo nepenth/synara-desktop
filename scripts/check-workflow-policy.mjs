@@ -88,6 +88,138 @@ function hasIntegrationPullRequestTarget(workflow) {
   return pullRequestBlock(workflow).includes(`"${integrationBranch}"`);
 }
 
+// Cache readers must share the writer's build family and target paths. Keeping
+// PR/tag jobs read-only preserves main's reusable entries within the 10 GB cap.
+function inspectRustCachePolicy(workflows, errors) {
+  const mainWriter = "${{ github.ref == 'refs/heads/main' }}";
+  const manualMainWriter =
+    "${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}";
+  const simulatorWriter =
+    "${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}";
+  const readers = '"false"';
+  const contracts = [
+    ["ci.yml", "validate-rust", "validate-rust-desktop", mainWriter],
+    ...[
+      "reactions",
+      "attachments",
+      "polls",
+      "rich-messages",
+      "threads",
+      "receipts",
+    ].map((proof) => [
+      "ci.yml",
+      `synapse-native-${proof}`,
+      "validate-rust-desktop",
+      readers,
+    ]),
+    [
+      "release.yml",
+      "exact-tag-desktop-quality",
+      "validate-rust-desktop",
+      readers,
+    ],
+    [
+      "ci.yml",
+      "ios-tests",
+      "ci-synara-core-apple-simulator-arm64",
+      simulatorWriter,
+    ],
+    ["ci.yml", "ios-ui-tests", "ci-synara-core-apple-simulator-arm64", readers],
+    ["ci.yml", "ios-compile", "ci-synara-core-apple-simulator-arm64", readers],
+    [
+      "release.yml",
+      "exact-tag-ios-quality",
+      "ci-synara-core-apple-simulator-arm64",
+      readers,
+    ],
+    [
+      "ios-skeleton.yml",
+      "test",
+      "ci-synara-core-apple-simulator-arm64",
+      readers,
+    ],
+    [
+      "desktop-package-smoke.yml",
+      "linux-deb",
+      "release-linux-deb",
+      manualMainWriter,
+    ],
+    ["release.yml", "linux-deb", "release-linux-deb", readers],
+    [
+      "macos-signed-build.yml",
+      "macos-signed-build",
+      "release-macos",
+      manualMainWriter,
+    ],
+    ["release.yml", "macos", "release-macos", readers],
+    [
+      "desktop-package-smoke.yml",
+      "linux-arch",
+      "desktop-registry-arch",
+      manualMainWriter,
+      true,
+    ],
+    ["release.yml", "linux-arch", "desktop-registry-arch", readers, true],
+    [
+      "desktop-package-smoke.yml",
+      "macos-app",
+      "desktop-registry-macos-host",
+      manualMainWriter,
+      true,
+    ],
+    // Device archives have no main seed entrypoint yet. Preserve tag-rerun
+    // caching until an unsigned, explicitly requested main seed lane exists.
+    [
+      "release.yml",
+      "ios-testflight-upload",
+      "release-synara-core-apple-device",
+      '"true"',
+    ],
+  ];
+  for (const [filename, jobName, family, save, registryOnly] of contracts) {
+    const job = parseJobs(workflows[filename] ?? "").get(jobName) ?? [];
+    const cacheSteps = job
+      .join("\n")
+      .split(/^      - /m)
+      .filter((step) => /uses: Swatinem\/rust-cache@/.test(step));
+    const label = `${filename} ${jobName}`;
+    if (cacheSteps.length !== 1) {
+      errors.push(
+        `${label} must declare exactly one Rust cache for ${family}.`
+      );
+      continue;
+    }
+    const step = cacheSteps[0];
+    const input = (key) =>
+      step.match(new RegExp(`^ {10}${key}: (.*)$`, "m"))?.[1];
+    if (input("shared-key") !== family || input("save-if") !== save) {
+      errors.push(
+        `${label} must use cache family ${family} with save-if: ${save}.`
+      );
+    }
+    if (registryOnly && input("cache-targets") !== "false") {
+      errors.push(
+        `${label} must cache only the Cargo registry (cache-targets: false).`
+      );
+    }
+    if (!registryOnly && input("cache-targets") === "false") {
+      errors.push(`${label} must restore compiled Rust dependencies.`);
+    }
+    if (family.includes("synara-core-apple")) {
+      if (
+        !step.includes(". -> target/synara-core-apple") ||
+        !step.includes(". -> target/synara-core-bindgen")
+      ) {
+        errors.push(
+          `${label} must cache the Apple archives and isolated host bindgen target directories.`
+        );
+      }
+    } else if (!step.includes(". -> target")) {
+      errors.push(`${label} must use the root workspace target directory.`);
+    }
+  }
+}
+
 export function inspectWorkflowPolicy({
   workflows,
   dependabot,
@@ -394,6 +526,8 @@ export function inspectWorkflowPolicy({
       );
     }
   }
+
+  inspectRustCachePolicy(workflows, errors);
 
   return { ok: errors.length === 0, errors };
 }

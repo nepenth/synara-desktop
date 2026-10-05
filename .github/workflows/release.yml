@@ -90,13 +90,20 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Test Rust build input invalidation
+        if: steps.reuse.outputs.reuse != 'true'
+        run: |
+          rustc --edition=2021 --test src-tauri/build_support/build_inputs.rs -o "$RUNNER_TEMP/synara-build-input-tests"
+          "$RUNNER_TEMP/synara-build-input-tests"
+
       - name: Cache Rust build artifacts
         if: steps.reuse.outputs.reuse != 'true'
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
-          shared-key: release-exact-tag-desktop
+          shared-key: validate-rust-desktop
+          save-if: "false"
 
       - name: Install Linux Tauri dependencies
         if: steps.reuse.outputs.reuse != 'true'
@@ -188,8 +195,11 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: ". -> target/synara-core-apple"
+          workspaces: |
+            . -> target/synara-core-apple
+            . -> target/synara-core-bindgen
           shared-key: ci-synara-core-apple-simulator-arm64
+          save-if: "false"
 
       - name: Install XcodeGen
         if: steps.reuse.outputs.reuse != 'true'
@@ -261,6 +271,7 @@ jobs:
         with:
           workspaces: ". -> target"
           shared-key: release-linux-deb
+          save-if: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -338,6 +349,14 @@ jobs:
           rustup toolchain install 1.96 --profile minimal --component rustfmt,clippy
           rustup default 1.96
 
+      - name: Restore Arch Cargo registry
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: desktop-registry-arch
+          save-if: "false"
+          cache-targets: false
+
       - name: Install desktop dependencies
         run: npm ci
 
@@ -396,6 +415,7 @@ jobs:
         with:
           workspaces: ". -> target"
           shared-key: release-macos
+          save-if: "false"
 
       - name: Install desktop dependencies
         run: npm ci
@@ -711,8 +731,11 @@ jobs:
       - name: Cache Apple SynaraCore build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: ". -> target/synara-core-apple"
+          workspaces: |
+            . -> target/synara-core-apple
+            . -> target/synara-core-bindgen
           shared-key: release-synara-core-apple-device
+          save-if: "true"
 
       - name: Generate SynaraCore Swift bindings and XCFramework
         run: |

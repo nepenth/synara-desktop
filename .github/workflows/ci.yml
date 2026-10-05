@@ -473,12 +473,18 @@ jobs:
           toolchain: 1.96
           components: rustfmt, clippy
 
+      - name: Test Rust build input invalidation
+        run: |
+          rustc --edition=2021 --test src-tauri/build_support/build_inputs.rs -o "$RUNNER_TEMP/synara-build-input-tests"
+          "$RUNNER_TEMP/synara-build-input-tests"
+
       - name: Cache Rust build artifacts
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: |
             . -> target
           shared-key: validate-rust-desktop
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -679,8 +685,11 @@ jobs:
       - name: Cache Apple SynaraCore build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: ". -> target/synara-core-apple"
-          shared-key: ci-synara-core-apple
+          workspaces: |
+            . -> target/synara-core-apple
+            . -> target/synara-core-bindgen
+          shared-key: ci-synara-core-apple-simulator-arm64
+          save-if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}
 
       - name: Install XcodeGen
         run: |
@@ -731,8 +740,11 @@ jobs:
       - name: Cache Apple SynaraCore build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: ". -> target/synara-core-apple"
+          workspaces: |
+            . -> target/synara-core-apple
+            . -> target/synara-core-bindgen
           shared-key: ci-synara-core-apple-simulator-arm64
+          save-if: "false"
 
       - name: Install XcodeGen
         run: |
@@ -788,8 +800,11 @@ jobs:
       - name: Cache Apple SynaraCore build
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          workspaces: ". -> target/synara-core-apple"
+          workspaces: |
+            . -> target/synara-core-apple
+            . -> target/synara-core-bindgen
           shared-key: ci-synara-core-apple-simulator-arm64
+          save-if: "false"
 
       - name: Install XcodeGen
         run: |
@@ -833,6 +848,13 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: validate-rust-desktop
+          save-if: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -866,6 +888,13 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+
+      - name: Restore desktop Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: validate-rust-desktop
+          save-if: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -901,6 +930,13 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: validate-rust-desktop
+          save-if: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -934,6 +970,13 @@ jobs:
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
         with:
           toolchain: 1.96
+
+      - name: Restore desktop Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: validate-rust-desktop
+          save-if: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -969,6 +1012,13 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: validate-rust-desktop
+          save-if: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -1003,6 +1053,13 @@ jobs:
         with:
           toolchain: 1.96
 
+      - name: Restore desktop Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: validate-rust-desktop
+          save-if: "false"
+
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
@@ -1027,7 +1084,7 @@ jobs:
     # still runs after job failures; skip when this workflow was cancelled so a
     # superseded push run cannot fail the required check on the surviving SHA.
     if: always() && !cancelled()
-    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs: [changes, validate-rust, validate-frontend, rust-dependency-audit, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -1035,6 +1092,7 @@ jobs:
         env:
           DESKTOP_RUST_RESULT: ${{ needs.validate-rust.result }}
           DESKTOP_FRONTEND_RESULT: ${{ needs.validate-frontend.result }}
+          RUST_AUDIT_RESULT: ${{ needs.rust-dependency-audit.result }}
           IOS_RESULT: ${{ needs.ios-tests.result }}
           IOS_UI_RESULT: ${{ needs.ios-ui-tests.result }}
           IOS_COMPILE_RESULT: ${{ needs.ios-compile.result }}
@@ -1067,6 +1125,7 @@ jobs:
           fail=0
           ok "Desktop/runtime Rust validation" "$DESKTOP_RUST_RESULT" || fail=1
           ok "Desktop/runtime Node validation" "$DESKTOP_FRONTEND_RESULT" || fail=1
+          ok "Rust dependency audit" "$RUST_AUDIT_RESULT" || fail=1
           ok "iOS simulator tests" "$IOS_RESULT" || fail=1
           ok "iOS simulator UI tests" "$IOS_UI_RESULT" || fail=1
           ok "iOS compile gate" "$IOS_COMPILE_RESULT" || fail=1

@@ -36,6 +36,13 @@ jobs:
           toolchain: 1.96
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
+      - name: Cache universal macOS Rust dependencies
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: ". -> target"
+          shared-key: release-macos
+          save-if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+
       - name: Install desktop dependencies
         run: npm ci
 

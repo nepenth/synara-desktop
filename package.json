@@ -33,7 +33,8 @@
     "pretest:modernization": "node scripts/build-runtime.mjs",
     "tauri": "cp config.json synara/ && tauri",
     "test:modernization": "npm --prefix synara run test:modernization",
-    "typecheck:modernization": "npm --prefix synara run typecheck:modernization"
+    "typecheck:modernization": "npm --prefix synara run typecheck:modernization",
+    "audit:build-cache": "node scripts/audit-build-cache.mjs"
   },
   "keywords": [
     "matrix",
