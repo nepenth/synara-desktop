@@ -101,6 +101,7 @@ jobs:
           # PRs into main / release/**: path-sensitive package builds.
           if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
             .github/workflows/desktop-package-smoke.yml \
+            .github/actions \
             .node-version \
             rust-toolchain.toml \
             Cargo.toml \
@@ -131,11 +132,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
+      - name: Setup Node.js and npm download cache
+        uses: ./.github/actions/setup-node
 
       - name: Install Rust 1.96
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
@@ -212,6 +210,9 @@ jobs:
           rustup toolchain install 1.96 --profile minimal --component rustfmt,clippy
           rustup default 1.96
 
+      - name: Setup pinned Node.js and npm download cache
+        uses: ./.github/actions/setup-node
+
       - name: Cache Cargo registry
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -259,11 +260,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
+      - name: Setup Node.js and npm download cache
+        uses: ./.github/actions/setup-node
 
       - name: Install Rust 1.96
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96

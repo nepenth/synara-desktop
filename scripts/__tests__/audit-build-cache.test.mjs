@@ -34,6 +34,7 @@ test("PR and tag snapshots do not count as reusable main cache seeds", () => {
     "validate-rust-desktop",
     "ci-synara-core-apple-simulator-arm64",
     "release-macos",
+    "release-synara-core-apple-device",
   ]);
   assert.deepEqual(report.scopes, [
     { ref: "refs/pull/10/merge", count: 1, bytes: 300 },
@@ -52,7 +53,7 @@ test("an empty cache inventory needs all seed families", () => {
     storageLimit: { max_cache_size_gb: 20 },
     retentionLimit: { max_cache_retention_days: 14 },
   });
-  assert.equal(report.missingMainFamilies.length, 4);
+  assert.equal(report.missingMainFamilies.length, 5);
   assert.deepEqual(report.scopes, []);
   assert.equal(report.utilization, 0);
   assert.equal(report.limitBytes, 20_000_000_000);

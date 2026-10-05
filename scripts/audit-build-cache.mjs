@@ -8,6 +8,7 @@ const reusableFamilies = [
   "ci-synara-core-apple-simulator-arm64",
   "release-linux-deb",
   "release-macos",
+  "release-synara-core-apple-device",
 ];
 
 export function summarizeCaches({

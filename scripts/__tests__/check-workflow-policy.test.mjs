@@ -23,6 +23,70 @@ test("accepts the repository workflow policy", () => {
   assert.deepEqual(inspectWorkflowPolicy(valid), { ok: true, errors: [] });
 });
 
+test("npm download caching rejects branch writers, mutable actions and installed dependencies", () => {
+  for (const mutate of [
+    (action) =>
+      action.replace("if: github.ref == 'refs/heads/main'", "if: always()"),
+    (action) =>
+      action.replace(
+        "actions/cache@caa296126883cff596d87d8935842f9db880ef25",
+        "actions/cache@v5",
+      ),
+    (action) =>
+      action.replace(
+        "path: ${{ steps.npm-cache.outputs.path }}",
+        "path: node_modules",
+      ),
+    (action) =>
+      action.replace("'synara/package-lock.json'", "'wrong/package-lock.json'"),
+  ]) {
+    assert.equal(
+      inspectWorkflowPolicy({
+        ...valid,
+        nodeSetupAction: mutate(valid.nodeSetupAction),
+      }).ok,
+      false,
+    );
+  }
+});
+
+test("release seeds require unsigned manual builds with main cache writers", () => {
+  for (const mutate of [
+    (workflow) => workflow.replace("--no-bundle", "--bundles app"),
+    (workflow) =>
+      workflow.replace("${{ github.ref == 'refs/heads/main' }}", '"true"'),
+    (workflow) => workflow.replace("  workflow_dispatch:", "  push:"),
+    (workflow) =>
+      workflow.replace(
+        "SYNARA_NSE_CORE_APPLE_SLICES: device",
+        "SYNARA_NSE_CORE_APPLE_SLICES: all",
+      ),
+    (workflow) =>
+      workflow.replace(
+        "    steps:",
+        "    env:\n      SIGNING: ${{ secrets.APPLE_ID }}\n    steps:",
+      ),
+  ]) {
+    assert.equal(inspect("build-cache-seed.yml", mutate).ok, false);
+  }
+});
+
+test("Rust audits retain exact versions, checksum verification and exact-tag coverage", () => {
+  for (const filename of ["ci.yml", "release.yml"]) {
+    for (const mutate of [
+      (workflow) =>
+        workflow.replace("tool: cargo-audit@0.22.2", "tool: cargo-audit"),
+      (workflow) => workflow.replace("checksum: true", "checksum: false"),
+      (workflow) =>
+        workflow.replace("fallback: none", "fallback: cargo-install"),
+      (workflow) =>
+        workflow.replace("run: cargo audit", "run: echo skipped audit"),
+    ]) {
+      assert.equal(inspect(filename, mutate).ok, false);
+    }
+  }
+});
+
 test("rejects mutable action references", () => {
   const result = inspect("ci.yml", (workflow) =>
     workflow.replace(/actions\/checkout@[0-9a-f]{40}/, "actions/checkout@main"),
@@ -57,7 +121,7 @@ test("rejects secrets exposed to an entire job", () => {
 test("requires task PR validation on the Matrix Rust integration branch", () => {
   for (const workflowName of validationWorkflows) {
     const result = inspect(workflowName, (workflow) =>
-      workflow.replace(`, "${integrationBranch}"`, ""),
+      workflow.replace(`"${integrationBranch}"`, ""),
     );
     assert.equal(result.ok, false, workflowName);
     assert.match(
@@ -276,8 +340,8 @@ function editJob(workflow, job, transform) {
 test("native proofs restore the main validation cache without freezing narrower outputs", () => {
   const result = inspect("ci.yml", (workflow) =>
     editJob(workflow, "synapse-native-polls", (job) =>
-      job.replace('save-if: "false"', 'save-if: "true"')
-    )
+      job.replace('save-if: "false"', 'save-if: "true"'),
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /synapse-native-polls.*save-if/);
@@ -286,8 +350,8 @@ test("native proofs restore the main validation cache without freezing narrower 
 test("release tags cannot replace the main release cache writer", () => {
   const result = inspect("release.yml", (workflow) =>
     editJob(workflow, "linux-deb", (job) =>
-      job.replace('save-if: "false"', 'save-if: "true"')
-    )
+      job.replace('save-if: "false"', 'save-if: "true"'),
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /linux-deb.*save-if/);
@@ -298,9 +362,9 @@ test("manual all-slice Apple builds cannot inflate the normal simulator cache", 
     editJob(workflow, "ios-tests", (job) =>
       job.replace(
         /^ {10}save-if: .*$/m,
-        "          save-if: ${{ github.ref == 'refs/heads/main' }}"
-      )
-    )
+        "          save-if: ${{ github.ref == 'refs/heads/main' }}",
+      ),
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /ios-tests.*save-if/);
@@ -308,7 +372,7 @@ test("manual all-slice Apple builds cannot inflate the normal simulator cache", 
 
 test("Apple cache includes the isolated host generator output", () => {
   const result = inspect("ios-skeleton.yml", (workflow) =>
-    workflow.replace("            . -> target/synara-core-bindgen\n", "")
+    workflow.replace("            . -> target/synara-core-bindgen\n", ""),
   );
   assert.equal(result.ok, false);
   assert.match(result.errors.join("\n"), /isolated host bindgen/);
@@ -318,8 +382,8 @@ test("Arch and native macOS smoke limit cache growth to registry coverage", () =
   for (const jobName of ["linux-arch", "macos-app"]) {
     const result = inspect("desktop-package-smoke.yml", (workflow) =>
       editJob(workflow, jobName, (job) =>
-        job.replace("cache-targets: false", "cache-targets: true")
-      )
+        job.replace("cache-targets: false", "cache-targets: true"),
+      ),
     );
     assert.equal(result.ok, false);
     assert.match(result.errors.join("\n"), /cache only the Cargo registry/);
@@ -331,13 +395,13 @@ test("cache readers must keep the writer's canonical build family", () => {
     editJob(workflow, "synapse-native-threads", (job) =>
       job.replace(
         "shared-key: validate-rust-desktop",
-        "shared-key: threads-only"
-      )
-    )
+        "shared-key: threads-only",
+      ),
+    ),
   );
   assert.equal(result.ok, false);
   assert.match(
     result.errors.join("\n"),
-    /synapse-native-threads.*cache family/
+    /synapse-native-threads.*cache family/,
   );
 });

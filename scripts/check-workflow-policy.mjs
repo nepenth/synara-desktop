@@ -152,6 +152,13 @@ function inspectRustCachePolicy(workflows, errors) {
       manualMainWriter,
     ],
     ["release.yml", "macos", "release-macos", readers],
+    ["build-cache-seed.yml", "macos-universal", "release-macos", mainWriter],
+    [
+      "build-cache-seed.yml",
+      "ios-device",
+      "release-synara-core-apple-device",
+      mainWriter,
+    ],
     [
       "desktop-package-smoke.yml",
       "linux-arch",
@@ -167,13 +174,11 @@ function inspectRustCachePolicy(workflows, errors) {
       manualMainWriter,
       true,
     ],
-    // Device archives have no main seed entrypoint yet. Preserve tag-rerun
-    // caching until an unsigned, explicitly requested main seed lane exists.
     [
       "release.yml",
       "ios-testflight-upload",
       "release-synara-core-apple-device",
-      '"true"',
+      readers,
     ],
   ];
   for (const [filename, jobName, family, save, registryOnly] of contracts) {
@@ -185,7 +190,7 @@ function inspectRustCachePolicy(workflows, errors) {
     const label = `${filename} ${jobName}`;
     if (cacheSteps.length !== 1) {
       errors.push(
-        `${label} must declare exactly one Rust cache for ${family}.`
+        `${label} must declare exactly one Rust cache for ${family}.`,
       );
       continue;
     }
@@ -194,12 +199,12 @@ function inspectRustCachePolicy(workflows, errors) {
       step.match(new RegExp(`^ {10}${key}: (.*)$`, "m"))?.[1];
     if (input("shared-key") !== family || input("save-if") !== save) {
       errors.push(
-        `${label} must use cache family ${family} with save-if: ${save}.`
+        `${label} must use cache family ${family} with save-if: ${save}.`,
       );
     }
     if (registryOnly && input("cache-targets") !== "false") {
       errors.push(
-        `${label} must cache only the Cargo registry (cache-targets: false).`
+        `${label} must cache only the Cargo registry (cache-targets: false).`,
       );
     }
     if (!registryOnly && input("cache-targets") === "false") {
@@ -211,7 +216,7 @@ function inspectRustCachePolicy(workflows, errors) {
         !step.includes(". -> target/synara-core-bindgen")
       ) {
         errors.push(
-          `${label} must cache the Apple archives and isolated host bindgen target directories.`
+          `${label} must cache the Apple archives and isolated host bindgen target directories.`,
         );
       }
     } else if (!step.includes(". -> target")) {
@@ -224,8 +229,32 @@ export function inspectWorkflowPolicy({
   workflows,
   dependabot,
   runtimePackage = "",
+  nodeSetupAction = "",
 }) {
   const errors = [];
+
+  if (
+    !nodeSetupAction.includes(
+      "if: github.ref == 'refs/heads/main'\n      uses: actions/cache@",
+    ) ||
+    !nodeSetupAction.includes(
+      "if: github.ref != 'refs/heads/main'\n      uses: actions/cache/restore@",
+    ) ||
+    nodeSetupAction.split(
+      "hashFiles('package-lock.json', 'synara/package-lock.json')",
+    ).length !== 3 ||
+    !nodeSetupAction.includes("path: ${{ steps.npm-cache.outputs.path }}") ||
+    nodeSetupAction.includes("node_modules")
+  ) {
+    errors.push(
+      "Shared Node setup must cache npm downloads from both lockfiles with only main writers.",
+    );
+  }
+  for (const reference of nodeSetupAction.matchAll(/^\s*uses:\s*([^\s#]+)/gm)) {
+    if (!/^[^@\s]+@[0-9a-f]{40}$/.test(reference[1])) {
+      errors.push("Shared Node setup actions must use a full commit SHA.");
+    }
+  }
 
   for (const [filename, workflow] of Object.entries(workflows).sort()) {
     const permissions = topLevelBlock(workflow, "permissions");
@@ -336,6 +365,7 @@ export function inspectWorkflowPolicy({
     "Cargo.lock",
     "rust-toolchain.toml",
     ".cargo",
+    ".github/actions",
   ]) {
     if (!packageDiffContract.includes(pathRoot)) {
       errors.push(
@@ -364,6 +394,14 @@ export function inspectWorkflowPolicy({
   ];
   const ciValidationContract = ciValidateRust.join("\n");
   for (const [label, command] of [
+    [
+      "Core shipping features",
+      "node scripts/check-synara-core-production-features.mjs",
+    ],
+    [
+      "NSE shipping features",
+      "node scripts/check-synara-nse-core-production-features.mjs",
+    ],
     ["formatting", "cargo fmt --check"],
     ["lint", "cargo clippy --locked --all-targets -- -D warnings"],
     ["shared workspace formatting", "cargo fmt --all -- --check"],
@@ -405,7 +443,25 @@ export function inspectWorkflowPolicy({
   const exactTagDesktopQuality = (
     releaseJobs.get("exact-tag-desktop-quality") ?? []
   ).join("\n");
+  for (const [label, contract] of [
+    ["CI", (ciJobs.get("rust-dependency-audit") ?? []).join("\n")],
+    ["Exact-tag", exactTagDesktopQuality],
+  ]) {
+    if (
+      !contract.includes("tool: cargo-audit@0.22.2") ||
+      !contract.includes("checksum: true") ||
+      !contract.includes("fallback: none") ||
+      !contract.includes("run: cargo audit") ||
+      contract.includes("cargo install cargo-audit")
+    ) {
+      errors.push(
+        `${label} Rust audit must use the pinned checksum-verified binary and remain required.`,
+      );
+    }
+  }
   for (const command of [
+    "node scripts/check-synara-core-production-features.mjs",
+    "node scripts/check-synara-nse-core-production-features.mjs",
     "cargo fmt --all -- --check",
     "cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings",
     "cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen",
@@ -529,6 +585,21 @@ export function inspectWorkflowPolicy({
 
   inspectRustCachePolicy(workflows, errors);
 
+  const seeds = workflows["build-cache-seed.yml"] ?? "";
+  if (
+    !seeds.includes("  workflow_dispatch:") ||
+    /secrets\.|production-release|notariz|testflight-upload|schedule:/.test(
+      seeds,
+    ) ||
+    !seeds.includes("--target universal-apple-darwin --no-bundle") ||
+    !seeds.includes("SYNARA_CORE_APPLE_SLICES: device") ||
+    !seeds.includes("SYNARA_NSE_CORE_APPLE_SLICES: device")
+  ) {
+    errors.push(
+      "Release cache seeds must be manual unsigned universal/device builds without signing or publication.",
+    );
+  }
+
   return { ok: errors.length === 0, errors };
 }
 
@@ -551,6 +622,10 @@ export function loadWorkflowPolicyInputs(repositoryRoot = root) {
     ),
     runtimePackage: readFileSync(
       path.join(repositoryRoot, "synara", "package.json"),
+      "utf8",
+    ),
+    nodeSetupAction: readFileSync(
+      path.join(repositoryRoot, ".github/actions/setup-node/action.yml"),
       "utf8",
     ),
   };

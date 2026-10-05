@@ -110,6 +110,7 @@ for (const file of [
   "devAssets/index.html",
   "packaging/arch/PKGBUILD",
   ".github/workflows/release.yml",
+  ".github/actions/setup-node/action.yml",
 ]) {
   test(`${file} alone runs frontend validation`, () => {
     assert.equal(scopes([file]).validate_frontend, "true");

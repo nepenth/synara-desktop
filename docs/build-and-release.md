@@ -75,12 +75,34 @@ See [Cargo feature resolution](https://doc.rust-lang.org/cargo/reference/feature
 and [build-cache layout](https://doc.rust-lang.org/cargo/reference/build-cache.html).
 
 Desktop no longer declares unused direct SDK/utility dependencies. Its direct
-HTTP and Matrix UI test imports live in dev dependencies. UniFFI's default
-tooling features are disabled centrally; only `synara-core-bindgen` enables
-`cli` and `cargo-metadata`. Comparing distinct package/version identities on
-normal production edges, the audit reduced NSE iOS from 320 to 317, full Core
-iOS from 319 to 316, desktop macOS from 520 to 518 and Linux from 604 to 602.
-These are dependency identities, not compiler invocations or speedup estimates.
+HTTP and Matrix UI test imports live in dev dependencies. Core's `full-app`
+feature owns shared desktop/iOS services and SDK capabilities. Desktop opts
+out of Core defaults and enables `full-app`, `search-index` and `x509-identity`;
+it compiles neither Apple binding owners nor the UniFFI runtime/build tools.
+Apple's full generator explicitly enables `full-uniffi`, which adds bindings
+to `full-app`. Standalone Core retains that default for compatibility. UniFFI's
+tooling defaults are disabled centrally; only `synara-core-bindgen` enables
+`cli` and `cargo-metadata`.
+
+Shipping NSE's `nse-preview` graph excludes Core command owners, DTO/Platform
+surfaces, timeline/sync/room-list owners and desktop notification delivery.
+It retains shared client/store/lifecycle primitives, notification preferences,
+agent classification and fail-closed error policy. QR, Markdown, widget and
+MSC4426 SDK capabilities belong to `full-app`; encryption, encrypted-state
+store compatibility and SQLite remain explicit in the common client graph.
+Matrix SDK UI's NotificationClient still brings its upstream timeline
+dependencies; separating those would require
+an SDK API change rather than duplicating its notification implementation.
+
+Compared with the previous audit commit, distinct package/version identities
+on **normal and build** production edges fall from 551 to 526 for desktop
+`aarch64-apple-darwin`, 643 to 619 for desktop `x86_64-unknown-linux-gnu`, and
+352 to 346 for NSE `aarch64-apple-ios`. Full Core iOS retains its exact 351-package
+set. These comparisons use the same lockfile and include build tooling; they
+are dependency identities, not compiler invocations or measured speedups.
+`npm run check:core-features` checks desktop, Apple and NSE shipping graph
+feature sets, including forwarded Cargo features and target-specific build
+dependencies.
 
 Keep full Core, desktop and shipping NSE package builds separate. In particular,
 NSE still requires its no-default-features Core edge, narrow exported ABI and
@@ -88,10 +110,26 @@ size-optimized `nse-release` profile. Combining them in a production build to
 save compilation can enable capabilities that the extension must not ship.
 Ordinary workspace tests are useful but do not prove the shipping graph.
 
+Core and NSE ordinary builds emit only a Rust library. Apple generators use
+`cargo rustc --lib --crate-type staticlib` explicitly with the existing release
+or `nse-release` profile. This avoids building an unused Core dynamic library
+and static archives during normal desktop and Rust test runs. A real minimal
+Cargo fixture verifies both ordinary-library and explicit-staticlib modes;
+Apple archive ABI and extension-size guards remain in the generation route.
+
 Both Apple generators share the persistent host tool directory
 `target/synara-core-bindgen`; `SYNARA_APPLE_BINDGEN_TARGET_DIR` overrides it.
 Space-bounded mode deletes architecture intermediates while preserving this
 host directory. Apple CI caches both it and `target/synara-core-apple`.
+
+Under the existing publication lock, both generators compare the entire staged
+Swift/XCFramework pair with the existing pair: file bytes, directory entries,
+modes and symlink targets. Identical pairs keep their inodes and timestamps;
+any difference uses the existing atomic publication and rollback route.
+Comparison failures abort before replacement, and NSE archive export checks
+still run before publication. Generator fixtures cover identical reruns in
+normal, bounded and overridden-cache modes; actual Xcode timing remains a
+hosted/local Apple-toolchain measurement.
 
 Desktop's build script preserves an unchanged release-hardening capability
 file's modification time instead of rewriting a watched input. Its Git input
@@ -113,22 +151,23 @@ store compiled objects and keep the first rollout within the storage budget.
 | `validate-rust-desktop`                | CI Rust validation on `main`                                 | PR validation, exact-tag validation and six native Synapse proofs |
 | `ci-synara-core-apple-simulator-arm64` | CI unit lane on `main`, simulator-only without device opt-in | UI, compile, diagnostics and exact-tag simulator lanes            |
 | `release-linux-deb`                    | Desktop Package Smoke dispatched on `main`                   | PR `.deb` smoke and tagged `.deb` release                         |
-| `release-macos`                        | macOS Signed Build dispatched on `main`                      | Tagged universal macOS release                                    |
+| `release-macos`                        | Unsigned macOS seed or intended signed build on `main`       | Tagged universal macOS release                                    |
 | `desktop-registry-arch`                | Desktop Package Smoke dispatched on `main`                   | Arch smoke and release; registry only                             |
 | `desktop-registry-macos-host`          | Desktop Package Smoke dispatched on `main`                   | Native macOS smoke; registry only                                 |
-| `release-synara-core-apple-device`     | Existing tagged device release                               | Reruns of that tag; no reusable main seed yet                     |
+| `release-synara-core-apple-device`     | Unsigned device seed on `main`                               | Tagged TestFlight device release                                  |
 
 GitHub can restore current/default/base-branch caches, but a PR merge-ref cache
 does not warm sibling PRs or `main`, and one tag cannot warm another tag.
 See [GitHub cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
 Consequently the Linux/universal release families need a successful main seed.
 After these changes land, an authorized maintainer can explicitly dispatch
-Desktop Package Smoke on `main` to seed Ubuntu and registry families. The
-universal macOS seed requires the existing signed-build workflow, which also
-signs and notarizes a candidate: run it as part of an intended candidate build.
-No expensive warming schedule, cache deletion or storage-limit increase is
-introduced. Device release keeps its tag writer until an unsigned main seed
-route exists; disabling it now would only remove rerun reuse.
+Desktop Package Smoke on `main` to seed Ubuntu and registry families. The manual **Seed unsigned release build caches** workflow independently
+builds universal macOS executables (`--no-bundle`) or generates and validates
+Core/NSE device archives. Neither lane accesses signing secrets or publishes
+client releases. Only `main` saves those cache families; branch runs and tagged
+releases read them. The existing signed macOS lane may also seed during an
+intended candidate build. No warming schedule or storage-limit increase is
+introduced.
 
 Adding the isolated host bindgen directory changes the Apple cache archive
 paths/version. The first new main simulator seed may therefore be cold, even
@@ -143,7 +182,7 @@ families or additional generations. Old PR/tag caches can expire naturally;
 do not use blanket cleanup that deletes active main seeds. GitHub permits a
 paid storage-limit increase, but that is a separate operational decision.
 
-### Measured baseline and remaining opportunities
+### Build measurements and cache rollout
 
 Recent successful [desktop smoke](https://github.com/nepenth/synara-desktop/actions/runs/37263529083)
 build steps took 20m42 (`.deb`), 21m53 (Arch) and 23m03 (macOS), without Rust
@@ -154,33 +193,72 @@ integration-test binaries. Cache work does not remove that execution time;
 the tests remain enabled. Six native proof jobs also compiled the same desktop
 test dependency graph without a cache, then ran brief individual proofs.
 
-Core currently has 73 integration-test binaries. Combining compatible suites
-into fewer test targets is a separate experiment that could reduce link and
-process-startup work. It must first account for shared fixtures and global
-process/environment state; preserving the same test declarations alone does
-not establish safe parallel execution.
+Core's 73 integration-test targets are now seven: four domain harnesses,
+the isolated self-reexecuting authorized live proof, feature-gated indexed
+search, and the small UniFFI source transformation/registration target. Original
+sources and fixture paths remain in place. All 286 original test declarations
+are retained; an added registration guard rejects orphaned sources or missing
+harnesses. With four test threads, default suites passed 281 tests with the
+existing live proof ignored; indexed search passed five. Initial linking took
+2m39 locally, default execution 112s, and seven executables totaled 902 MiB.
+These measurements use debug=0/jobs=2 on this host and are not a comparable
+hosted speedup claim. Shared CI test steps explicitly cap test threads at four.
+The desktop crate's SharedCore queue-teardown proof now lives in Core's
+lifecycle harness and passed there with every assertion preserved; desktop
+tests no longer need Apple bindings. The registration guard passes with the
+added source. Final Core unit tests passed 1,117 cases, retaining four existing
+ignored cases, and both desktop and shared-workspace strict Clippy checks pass.
+
+Run a focused suite through its module filter, for example:
+`cargo test -p synara-core --test sdk_behaviors offline_timeline_cold_restart::`.
+
+Node installation jobs share a content-verified npm download cache keyed by
+both lockfiles, OS and architecture. Only main writes; PRs and tags restore.
+Installed `node_modules` directories are never cached. Arch packaging now uses
+`.node-version` rather than whichever Node major pacman currently provides.
+Pure Node checks that install no packages do not restore this cache.
+
+Rust dependency auditing installs the pinned `cargo-audit` 0.22.2 binary using
+a pinned [installer with embedded release checksums](https://github.com/taiki-e/install-action).
+Source-build fallbacks are disabled, avoiding repeated compilation of the audit
+tool. Exact-tag fallback validation also runs the audit when it cannot reuse
+successful CI evidence; the required Quality gate includes the CI audit result.
+
+Renderer assets use project-owned Vite hooks instead of a generic glob/copy
+plugin. PDF worker bytes, config and locale URLs are unchanged, verified with
+actual dev servers (root and nested bases), production build fixtures and the
+normal runtime output guard. Removing the copy plugin eliminates 15 packages
+and the remaining development advisory chain; both full npm audits are clean.
 
 These timings are the old baseline. Local fixtures and dependency graph checks
 establish correctness, not hosted speedup. Compare seeded/warm whole-job times
 at the same commit and toolchain, including restore/save costs and cache bytes,
 before claiming improvement or changing cache backends.
 
-Kache remains a candidate for that comparison, especially workspace outputs
-and local worktrees. Its GitHub-backed store inherits branch isolation and
-immutable snapshots, so changing the backend alone does not fix writer
-placement or quota. An S3-backed trial would need its own trusted writers,
-retention and storage design. Pin both the action and executable version,
-disable automatic PR comments, bound the store, and compare cold, unchanged,
-source-edit and lockfile-edit builds against this baseline.
+The manual **Rust Cache Benchmark** workflow installs a pinned
+[Kache action](https://github.com/kunobi-ninja/kache-action) and executable
+0.28.1. It compares two fresh host NSE builds without a wrapper, then a cold
+and warm Kache build, removing only its private Cargo target between stages.
+The store is local-only and capped at 512 MiB; GitHub persistence and automatic
+PR comments are disabled. Source fingerprints reject changes during the
+experiment, disk limits stop oversized runs, and interruption/failure cleanup
+removes owned scratch. JSON and job summaries include timings, hit/miss deltas,
+logical bytes, commit and toolchain. This experiment measures compiler reuse;
+it excludes Swatinem/GitHub restore/save, downloads, source edits, Apple/Xcode
+and full desktop builds, and a small store may evict useful entries.
 
-Two architectural opportunities remain larger than cache configuration:
-NSE's `nse-preview` feature still compiles nearly all Core app modules, and
-desktop currently enables Core's Apple UniFFI surface through default features.
-A future split should separate reusable primitives, app services and Apple
-bindings while proving behavior, feature isolation and archive size. Identical
-Apple generation also currently republishes both outputs; preserving identical
-complete pairs under the existing publication lock may improve Xcode local
-reruns, but needs unchanged-rerun validation with the real toolchain.
+The pinned Swatinem backend remains production policy pending comparable
+whole-job measurements. Kache's GitHub-backed store also inherits branch
+isolation and immutable snapshots. Any S3-backed trial needs its own trusted
+writers, retention and storage design.
+
+Core now separates common notification/store primitives, full application
+services and Apple bindings with explicit additive Cargo features. Validate
+shipping package graphs separately: workspace tests can intentionally unify
+features, while a narrow NSE host check verifies that its shared primitives
+compile without full application owners. Apple release gates still inspect the
+actual archive ABI and extension size; graph counts alone cannot replace those
+checks or predict archive-size reductions.
 
 ## Local Validation Gates
 

@@ -1,6 +1,7 @@
 experiment
 dist
 node_modules
+.npm-download-cache/
 artifacts/
 # Cargo workspace build output at repo root (src-tauri has its own /target/).
 target/

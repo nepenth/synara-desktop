@@ -77,12 +77,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: node scripts/reuse-proven-quality-gate.mjs
 
-      - name: Setup Node.js
+      - name: Setup Node.js and npm download cache
         if: steps.reuse.outputs.reuse != 'true'
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
+        uses: ./.github/actions/setup-node
 
       - name: Install Rust 1.96
         if: steps.reuse.outputs.reuse != 'true'
@@ -95,6 +92,18 @@ jobs:
         run: |
           rustc --edition=2021 --test src-tauri/build_support/build_inputs.rs -o "$RUNNER_TEMP/synara-build-input-tests"
           "$RUNNER_TEMP/synara-build-input-tests"
+
+      - name: Install cargo-audit for exact-tag fallback
+        if: steps.reuse.outputs.reuse != 'true'
+        uses: taiki-e/install-action@e407f7bafb71fd004bc5c2da3032e5470cbb6ef0 # v2, pinned installer/checksums
+        with:
+          tool: cargo-audit@0.22.2
+          checksum: true
+          fallback: none
+
+      - name: Audit exact-tag Rust dependencies
+        if: steps.reuse.outputs.reuse != 'true'
+        run: cargo audit
 
       - name: Cache Rust build artifacts
         if: steps.reuse.outputs.reuse != 'true'
@@ -137,7 +146,11 @@ jobs:
 
       - name: Check and test shared Rust workspace
         if: steps.reuse.outputs.reuse != 'true'
+        env:
+          RUST_TEST_THREADS: 4
         run: |
+          node scripts/check-synara-core-production-features.mjs
+          node scripts/check-synara-nse-core-production-features.mjs
           cargo fmt --all -- --check
           cargo clippy --locked -p synara-core -p synara-nse-core -p synara-core-bindgen --all-targets -- -D warnings
           cargo check --locked -p synara-core -p synara-nse-core -p synara-core-bindgen
@@ -255,11 +268,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
+      - name: Setup Node.js and npm download cache
+        uses: ./.github/actions/setup-node
 
       - name: Install Rust 1.96
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
@@ -349,6 +359,9 @@ jobs:
           rustup toolchain install 1.96 --profile minimal --component rustfmt,clippy
           rustup default 1.96
 
+      - name: Setup pinned Node.js and npm download cache
+        uses: ./.github/actions/setup-node
+
       - name: Restore Arch Cargo registry
         uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -398,11 +411,8 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Setup Node.js
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: .node-version
-          package-manager-cache: false
+      - name: Setup Node.js and npm download cache
+        uses: ./.github/actions/setup-node
 
       - name: Install Rust 1.96
         uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # pinned action; toolchain 1.96
@@ -735,7 +745,7 @@ jobs:
             . -> target/synara-core-apple
             . -> target/synara-core-bindgen
           shared-key: release-synara-core-apple-device
-          save-if: "true"
+          save-if: "false"
 
       - name: Generate SynaraCore Swift bindings and XCFramework
         run: |
