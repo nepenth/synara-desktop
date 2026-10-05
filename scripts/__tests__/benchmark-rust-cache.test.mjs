@@ -40,7 +40,7 @@ else if (command === "cargo" && args[0] === "build") {
   if (env.KACHE_S3_BUCKET || env.KACHE_HOST_CONFIG !== "") throw Error("ambient cache escaped isolation");
   const calls = fs.existsSync(env.BENCHMARK_CALL_LOG) ? fs.readFileSync(env.BENCHMARK_CALL_LOG, "utf8").trim().split("\\n").map(JSON.parse) : [];
   const phase = calls.filter(call => call.command === "cargo" && call.args[0] === "build").length + 1;
-  log({ phase, target: env.CARGO_TARGET_DIR, wrapper: env.RUSTC_WRAPPER });
+  log({ phase, target: env.CARGO_TARGET_DIR, wrapper: env.RUSTC_WRAPPER, cLauncher: env.CMAKE_C_COMPILER_LAUNCHER, cxxLauncher: env.CMAKE_CXX_COMPILER_LAUNCHER });
   if (env.FAIL_PHASE === String(phase)) process.exit(7);
   if (env.HANG_PHASE === String(phase)) setInterval(() => {}, 1000);
   if (env.CHANGE_GRAPH_PHASE === String(phase)) fs.appendFileSync(path.join(process.cwd(), "Cargo.toml"), "changed");
@@ -80,6 +80,8 @@ else throw Error("unexpected command " + command + " " + args.join(" "));
       PATH: `${bin}:${process.env.PATH}`,
       GITHUB_STEP_SUMMARY: join(directory, "summary.md"),
       KACHE_S3_BUCKET: "must-be-removed",
+      CMAKE_C_COMPILER_LAUNCHER: "ambient-wrapper",
+      CMAKE_CXX_COMPILER_LAUNCHER: "ambient-wrapper",
     },
     calls: () =>
       existsSync(log)
@@ -92,6 +94,11 @@ test("compares four actual codegen builds with fresh disposable targets and isol
   const f = fixture(t);
   const report = await benchmark(f);
   assert.equal(report.status, "passed");
+  assert.equal(report.cache.maxSize, "5GiB");
+  assert.equal(
+    report.resourceLimits.maxScratchBytes,
+    report.resourceLimits.initialFreeBytes - report.resourceLimits.minFreeBytes,
+  );
   assert.equal(report.verdict, "warm-cache-hits-observed");
   assert.deepEqual(
     report.runs.map((run) => run.name),
@@ -107,8 +114,11 @@ test("compares four actual codegen builds with fresh disposable targets and isol
     builds.map((call) => Boolean(call.wrapper)),
     [false, false, true, true],
   );
-  for (const build of builds)
+  for (const build of builds) {
     assert.ok(build.args.includes("--lib") && build.args.includes("--locked"));
+    assert.equal(build.cLauncher, build.wrapper);
+    assert.equal(build.cxxLauncher, build.wrapper);
+  }
   assert.ok(
     f
       .calls()
@@ -247,8 +257,8 @@ test("benchmark workflow stays manually invoked, version pinned and outside pers
     assert.match(workflow, new RegExp(`${input}: "false"`));
   assert.match(workflow, /strict: "true"/);
   assert.match(workflow, /version: v0\.28\.1/);
-  assert.match(workflow, /max-size: 512MiB/);
-  assert.match(workflow, /--max-scratch-mib 3072/);
+  assert.match(workflow, /max-size: 5GiB/);
+  assert.doesNotMatch(workflow, /--max-scratch-mib|512MiB|1\.8GiB/);
   assert.doesNotMatch(workflow, /secrets\.|s3-bucket|pull-requests: write/);
 });
 

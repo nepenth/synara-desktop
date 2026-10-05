@@ -88,8 +88,8 @@ function hasIntegrationPullRequestTarget(workflow) {
   return pullRequestBlock(workflow).includes(`"${integrationBranch}"`);
 }
 
-// Cache readers must share the writer's build family and target paths. Keeping
-// PR/tag jobs read-only preserves main's reusable entries within the 10 GB cap.
+// Cache readers share compiler object families with main writers. PR and tag
+// lanes remain read-only; target directories are never archived.
 function inspectRustCachePolicy(workflows, errors) {
   const mainWriter = "${{ github.ref == 'refs/heads/main' }}";
   const manualMainWriter =
@@ -162,17 +162,15 @@ function inspectRustCachePolicy(workflows, errors) {
     [
       "desktop-package-smoke.yml",
       "linux-arch",
-      "desktop-registry-arch",
+      "release-linux-arch",
       manualMainWriter,
-      true,
     ],
-    ["release.yml", "linux-arch", "desktop-registry-arch", readers, true],
+    ["release.yml", "linux-arch", "release-linux-arch", readers],
     [
       "desktop-package-smoke.yml",
       "macos-app",
-      "desktop-registry-macos-host",
+      "release-macos-host",
       manualMainWriter,
-      true,
     ],
     [
       "release.yml",
@@ -181,12 +179,14 @@ function inspectRustCachePolicy(workflows, errors) {
       readers,
     ],
   ];
-  for (const [filename, jobName, family, save, registryOnly] of contracts) {
+  for (const [filename, jobName, family, save] of contracts) {
     const job = parseJobs(workflows[filename] ?? "").get(jobName) ?? [];
     const cacheSteps = job
       .join("\n")
       .split(/^      - /m)
-      .filter((step) => /uses: Swatinem\/rust-cache@/.test(step));
+      .filter((step) =>
+        /uses: \.\/\.github\/actions\/setup-rust-cache/.test(step),
+      );
     const label = `${filename} ${jobName}`;
     if (cacheSteps.length !== 1) {
       errors.push(
@@ -197,33 +197,161 @@ function inspectRustCachePolicy(workflows, errors) {
     const step = cacheSteps[0];
     const input = (key) =>
       step.match(new RegExp(`^ {10}${key}: (.*)$`, "m"))?.[1];
-    if (input("shared-key") !== family || input("save-if") !== save) {
+    if (input("family") !== family || input("save-cache") !== save) {
       errors.push(
-        `${label} must use cache family ${family} with save-if: ${save}.`,
+        `${label} must use cache family ${family} with save-cache: ${save}.`,
       );
     }
-    if (registryOnly && input("cache-targets") !== "false") {
+    if (
+      /^ {10}(workspaces|cache-targets|env-vars|shared-key|save-if):/m.test(
+        step,
+      )
+    ) {
       errors.push(
-        `${label} must cache only the Cargo registry (cache-targets: false).`,
+        `${label} must use the shared Kache compiler cache contract without target archives.`,
       );
-    }
-    if (!registryOnly && input("cache-targets") === "false") {
-      errors.push(`${label} must restore compiled Rust dependencies.`);
-    }
-    if (family.includes("synara-core-apple")) {
-      if (
-        !step.includes(". -> target/synara-core-apple") ||
-        !step.includes(". -> target/synara-core-bindgen") ||
-        input("env-vars") !== "DEVELOPER_DIR"
-      ) {
-        errors.push(
-          `${label} must cache the Apple archives and isolated host bindgen target directories with the selected Xcode in cache identity.`,
-        );
-      }
-    } else if (!step.includes(". -> target")) {
-      errors.push(`${label} must use the root workspace target directory.`);
     }
   }
+}
+
+function inspectCompilerCacheAction(action, identity, localCache, errors) {
+  const steps = action.split(/^    - /m).slice(1);
+  const upstream = steps.filter((step) =>
+    /uses: kunobi-ninja\/kache-action@/.test(step),
+  );
+  const input = (step, key) =>
+    step
+      .match(new RegExp(`^ {8}${key}: (.*)$`, "m"))?.[1]
+      ?.replace(/^["']|["']$/g, "");
+  if (
+    upstream.length !== 1 ||
+    !upstream[0].includes(
+      "kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
+    ) ||
+    input(upstream[0], "version") !== "v0.28.1" ||
+    input(upstream[0], "github-cache") !== "false" ||
+    input(upstream[0], "save-cache") !== "false" ||
+    input(upstream[0], "cache-executables") !== "true" ||
+    input(upstream[0], "cache-c-cpp") !== "true" ||
+    input(upstream[0], "pr-comment") !== "false" ||
+    input(upstream[0], "strict") !== "true" ||
+    input(upstream[0], "cache-dir") !==
+      "${{ github.workspace }}/.kache-cache" ||
+    input(upstream[0], "max-size") !== "${{ inputs.max-size }}"
+  ) {
+    errors.push(
+      "Shared Rust cache action must install pinned Kache 0.28.1 with executable/native caching and custom persistence, without PR comments.",
+    );
+  }
+  const fetchSteps = steps.filter((step) => /run: cargo fetch\b/.test(step));
+  if (
+    fetchSteps.length !== 1 ||
+    !fetchSteps[0].includes(
+      "run: cargo fetch --locked --manifest-path Cargo.toml",
+    ) ||
+    !fetchSteps[0].includes(
+      "if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'",
+    ) ||
+    (upstream.length === 1 &&
+      steps.indexOf(fetchSteps[0]) >= steps.indexOf(upstream[0]))
+  ) {
+    errors.push(
+      "Cargo download writers must fetch the complete locked workspace before installing Kache; readers must not fetch eagerly.",
+    );
+  }
+  const cacheSteps = steps.filter((step) =>
+    /uses: actions\/cache(?:\/restore)?@/.test(step),
+  );
+  const compilerSteps = cacheSteps.filter(
+    (step) => input(step, "path") === "${{ github.workspace }}/.kache-cache",
+  );
+  const cargoSteps = cacheSteps.filter((step) =>
+    step.includes("~/.cargo/registry/index"),
+  );
+  if (
+    upstream.length === 1 &&
+    steps.indexOf(upstream[0]) <=
+      Math.max(...cacheSteps.map((step) => steps.indexOf(step)))
+  ) {
+    errors.push(
+      "Kache setup must follow cache restoration so daemon shutdown precedes snapshot publication.",
+    );
+  }
+  if (
+    compilerSteps.length !== 2 ||
+    cargoSteps.length !== 2 ||
+    cacheSteps.length !== 4
+  )
+    errors.push(
+      "Shared Rust cache action must separate compiler objects and Cargo download stores with reader/writer lanes.",
+    );
+  for (const step of cacheSteps) {
+    const writer = /uses: actions\/cache@/.test(step);
+    if (
+      !step.includes(
+        writer
+          ? "if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'"
+          : "if: inputs.save-cache != 'true'",
+      )
+    )
+      errors.push(
+        "Shared Rust cache publication must be restricted to authorized main writers; readers only restore.",
+      );
+  }
+  for (const step of compilerSteps) {
+    if (
+      input(step, "key") !==
+        "${{ steps.identity.outputs.compiler-prefix }}-${{ hashFiles('Cargo.lock') }}-${{ github.sha }}" ||
+      input(step, "restore-keys") !==
+        "${{ steps.identity.outputs.compiler-prefix }}-"
+    )
+      errors.push(
+        "Kache snapshots must refresh by commit within the compiler/family/toolchain namespace.",
+      );
+  }
+  for (const step of cargoSteps) {
+    if (
+      !step.includes("~/.cargo/registry/cache") ||
+      !step.includes("~/.cargo/git/db") ||
+      input(step, "key") !==
+        "synara-cargo-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('Cargo.lock') }}" ||
+      input(step, "restore-keys") !==
+        "synara-cargo-v1-${{ runner.os }}-${{ runner.arch }}-"
+    )
+      errors.push(
+        "Cargo caching must store downloads under platform-specific lockfile keys.",
+      );
+  }
+  if (/registry\/src|\/target\b|DerivedData|KACHE_RUNTIME_DIR/.test(action))
+    errors.push(
+      "Shared Rust cache snapshots must exclude targets, expanded Cargo sources and daemon runtime files.",
+    );
+  if (
+    !action.includes("run: bash scripts/ci-rust-cache-identity.sh") ||
+    !action.includes("SYNARA_CACHE_FAMILY: ${{ inputs.family }}") ||
+    !action.includes("SYNARA_CACHE_WRITER: ${{ inputs.save-cache }}") ||
+    !identity.includes("Only main may publish Rust caches") ||
+    !identity.includes('"${GITHUB_REF:-}" == refs/heads/main') ||
+    !identity.includes("source scripts/lib/rust-cache.sh") ||
+    !identity.includes(
+      `identity="kache $SYNARA_KACHE_VERSION"$'\\n'"$(rustc -vV)"`,
+    ) ||
+    !/^SYNARA_KACHE_VERSION=0\.28\.1$/m.test(localCache) ||
+    !identity.includes("xcodebuild -version") ||
+    !identity.includes("DEVELOPER_DIR") ||
+    !identity.includes("xcrun --sdk macosx --show-sdk-version") ||
+    !identity.includes("xcrun --sdk iphoneos --show-sdk-version") ||
+    !identity.includes("xcrun --sdk iphonesimulator --show-sdk-version") ||
+    !identity.includes(
+      "synara-kache-v1-${SYNARA_CACHE_FAMILY}-${RUNNER_OS}-${RUNNER_ARCH}-${digest}",
+    ) ||
+    !identity.includes('echo "CARGO_INCREMENTAL=0"') ||
+    !identity.includes('echo "KACHE_CONFIG=$GITHUB_WORKSPACE/.kache.toml"') ||
+    !identity.includes('echo "KACHE_HOST_CONFIG="')
+  )
+    errors.push(
+      "Rust cache identity must bind family, platform, Rust compiler and selected Apple SDKs while disabling incremental and ambient cache configuration.",
+    );
 }
 
 export function inspectWorkflowPolicy({
@@ -233,10 +361,14 @@ export function inspectWorkflowPolicy({
   nodeSetupAction = "",
   xcodeSetupAction = "",
   xcodeSaveAction = "",
+  rustSetupAction = "",
+  rustCacheIdentity = "",
+  rustLocalCache = "",
 }) {
   const errors = [];
 
   for (const [name, action] of [
+    ["setup-rust-cache", rustSetupAction],
     ["setup-xcode-cache", xcodeSetupAction],
     ["save-xcode-cache", xcodeSaveAction],
   ]) {
@@ -697,6 +829,19 @@ export function inspectWorkflowPolicy({
   }
 
   inspectRustCachePolicy(workflows, errors);
+  inspectCompilerCacheAction(
+    rustSetupAction,
+    rustCacheIdentity,
+    rustLocalCache,
+    errors,
+  );
+  for (const [filename, workflow] of Object.entries(workflows)) {
+    if (/uses: Swatinem\/rust-cache@/.test(workflow)) {
+      errors.push(
+        `${filename} must use Kache instead of archiving Cargo target directories.`,
+      );
+    }
+  }
 
   const seeds = workflows["build-cache-seed.yml"] ?? "";
   if (
@@ -739,6 +884,18 @@ export function loadWorkflowPolicyInputs(repositoryRoot = root) {
     ),
     nodeSetupAction: readFileSync(
       path.join(repositoryRoot, ".github/actions/setup-node/action.yml"),
+      "utf8",
+    ),
+    rustLocalCache: readFileSync(
+      path.join(repositoryRoot, "scripts/lib/rust-cache.sh"),
+      "utf8",
+    ),
+    rustCacheIdentity: readFileSync(
+      path.join(repositoryRoot, "scripts/ci-rust-cache-identity.sh"),
+      "utf8",
+    ),
+    rustSetupAction: readFileSync(
+      path.join(repositoryRoot, ".github/actions/setup-rust-cache/action.yml"),
       "utf8",
     ),
     xcodeSetupAction: readFileSync(

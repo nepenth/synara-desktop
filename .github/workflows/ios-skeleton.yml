@@ -29,15 +29,11 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
-      - name: Restore Apple simulator Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore Apple simulator Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: ci-synara-core-apple-simulator-arm64
-          save-if: "false"
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
 
       - name: Install XcodeGen
         run: |

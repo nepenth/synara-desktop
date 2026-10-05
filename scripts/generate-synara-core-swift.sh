@@ -75,6 +75,9 @@ for target in "${targets[@]}"; do
   fi
 done
 
+source "$repo_root/scripts/lib/rust-cache.sh"
+synara_configure_rust_cache "$repo_root"
+
 work_dir="$(mktemp -d "${TMPDIR:-/tmp}/synara-core-uniffi.XXXXXX")"
 cleanup_work_dir() {
   rm -rf -- "$work_dir"

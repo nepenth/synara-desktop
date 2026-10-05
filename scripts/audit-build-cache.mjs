@@ -7,6 +7,8 @@ const rustFamilies = [
   "validate-rust-desktop",
   "ci-synara-core-apple-simulator-arm64",
   "release-linux-deb",
+  "release-linux-arch",
+  "release-macos-host",
   "release-macos",
   "release-synara-core-apple-device",
 ];
@@ -28,12 +30,19 @@ export function summarizeCaches({
   const mainCaches = caches.filter((cache) => cache.ref === "refs/heads/main");
   const missingMainFamilies = rustFamilies.filter(
     (family) =>
-      !mainCaches.some((cache) => cache.key.startsWith(`v0-rust-${family}-`)),
+      !mainCaches.some((cache) =>
+        cache.key.startsWith(`synara-kache-v1-${family}-`),
+      ),
   );
+  if (!mainCaches.some((cache) => cache.key.startsWith("synara-cargo-v1-")))
+    missingMainFamilies.push("cargo-downloads");
   if (
     !mainCaches.some((cache) => cache.key.startsWith("xcode-compilation-v1-"))
   )
     missingMainFamilies.push("xcode-compilation");
+  const legacyRustCaches = caches.filter((cache) =>
+    cache.key.startsWith("v0-rust-"),
+  );
   const limitBytes = storageLimit.max_cache_size_gb * 1_000_000_000;
   return {
     activeBytes: usage.active_caches_size_in_bytes,
@@ -42,6 +51,11 @@ export function summarizeCaches({
     retentionDays: retentionLimit.max_cache_retention_days,
     utilization: usage.active_caches_size_in_bytes / limitBytes,
     missingMainFamilies,
+    legacyRustCount: legacyRustCaches.length,
+    legacyRustBytes: legacyRustCaches.reduce(
+      (total, cache) => total + cache.size_in_bytes,
+      0,
+    ),
     scopes: [...scopes.values()].sort((a, b) => b.bytes - a.bytes),
     caches: [...caches].sort((a, b) => b.size_in_bytes - a.size_in_bytes),
   };
@@ -85,9 +99,14 @@ function audit() {
       `Missing reusable main seeds: ${report.missingMainFamilies.join(", ")}.`,
     );
   }
+  if (report.legacyRustCount) {
+    console.log(
+      `Legacy Cargo target snapshots: ${report.legacyRustCount} caches, ${gb(report.legacyRustBytes)}. The Kache workflows do not reuse them.`,
+    );
+  }
   if (report.utilization >= 0.8) {
     console.log(
-      "Storage is above 80%: inspect generations and PR/tag scopes before adding compiled-artifact families.",
+      "Storage is above 80%: inspect generations and PR/tag scopes and obsolete Cargo target snapshots before increasing compiler cache budgets.",
     );
   }
   console.log(

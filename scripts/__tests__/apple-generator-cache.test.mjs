@@ -29,6 +29,7 @@ function fixture(t, { bounded, override }) {
     "generate-synara-nse-core-swift.sh",
     "lib/publish-generated-apple-pair.sh",
     "lib/compare-generated-apple-pair.mjs",
+    "lib/rust-cache.sh",
   ]) {
     copyFileSync(join(repoRoot, "scripts", name), join(root, "scripts", name));
   }
@@ -59,9 +60,10 @@ const command = path.basename(process.argv[1], ".mjs");
 const args = process.argv.slice(2);
 const targetDir = process.env.CARGO_TARGET_DIR;
 const log = (extra = {}) => fs.appendFileSync(process.env.CACHE_LOG,
-  JSON.stringify({ command, args, targetDir, ...extra }) + "\\n");
+  JSON.stringify({ command, args, targetDir, wrapper: process.env.RUSTC_WRAPPER, incremental: process.env.CARGO_INCREMENTAL, ...extra }) + "\\n");
 const value = (name) => args[args.indexOf(name) + 1];
-if (command === "uname") console.log("Darwin");
+if (command === "kache") console.log("kache 0.28.1");
+else if (command === "uname") console.log("Darwin");
 else if (command === "rustup") console.log([
   "aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios", "aarch64-apple-darwin",
 ].join("\\n"));
@@ -107,7 +109,14 @@ else if (command === "cargo" && args[0] === "rustc") {
 else throw new Error("unexpected mock invocation: " + command + " " + args.join(" "));
 `;
   // Each command is a separate .mjs entry so Node treats it as an ES module.
-  for (const command of ["uname", "rustup", "cargo", "xcrun", "xcodebuild"]) {
+  for (const command of [
+    "uname",
+    "rustup",
+    "cargo",
+    "xcrun",
+    "xcodebuild",
+    "kache",
+  ]) {
     const file = join(bin, `${command}.mjs`);
     writeFileSync(file, mock);
     chmodSync(file, 0o755);
@@ -121,6 +130,13 @@ else throw new Error("unexpected mock invocation: " + command + " " + args.join(
   const env = {
     ...process.env,
     PATH: `${bin}:${process.env.PATH}`,
+    SYNARA_KACHE_BIN: join(bin, "kache"),
+    RUSTC_WRAPPER: "",
+    RUSTC_WORKSPACE_WRAPPER: "",
+    CARGO_BUILD_RUSTC_WRAPPER: "",
+    CARGO_BUILD_RUSTC_WORKSPACE_WRAPPER: "",
+    KACHE_CACHE_DIR: join(root, "compiler-cache"),
+    KACHE_RUNTIME_DIR: join(root, "compiler-cache/run"),
     CACHE_LOG: log,
     LAST_APPLE_TARGET: join(root, "last-apple-target"),
     SYNARA_APPLE_SPACE_BOUNDED: bounded ? "1" : "0",
@@ -177,6 +193,10 @@ for (const bounded of [false, true]) {
       );
       assert.deepEqual(outputMetadata(), originalOutputs);
       const calls = f.calls();
+      for (const call of calls.filter((call) => call.command === "cargo")) {
+        assert.equal(call.wrapper, join(f.root, "bin/kache"));
+        assert.equal(call.incremental, "0");
+      }
       assert.equal(calls[0].command, "preflight");
       const hostRuns = calls.filter(
         (call) => call.command === "cargo" && call.args[0] === "run",

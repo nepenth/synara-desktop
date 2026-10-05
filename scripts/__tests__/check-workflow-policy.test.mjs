@@ -115,7 +115,6 @@ test("Apple jobs select a pinned Xcode and include it in Rust dependency cache i
         "DEVELOPER_DIR: /Applications/Xcode_26.6.app/Contents/Developer",
         "DEVELOPER_DIR: /Applications/Xcode.app/Contents/Developer",
       ],
-      ["env-vars: DEVELOPER_DIR", "env-vars: UNUSED_INPUT"],
     ]) {
       const result = inspect(filename, (workflow) =>
         workflow.replace(before, after),
@@ -342,7 +341,7 @@ test("package publication and Rust caches use canonical workspace paths", () => 
       "target/universal-apple-darwin/release/bundle/",
       "src-tauri/target/universal-apple-darwin/release/bundle/",
     ],
-    ["ci.yml", ". -> target", "src-tauri -> target"],
+    ["ci.yml", "Cargo.lock", "src-tauri/Cargo.lock"],
   ]) {
     const result = inspect(name, (workflow) =>
       workflow.replace(original, replacement),
@@ -413,63 +412,66 @@ function editJob(workflow, job, transform) {
 test("native proofs restore the main validation cache without freezing narrower outputs", () => {
   const result = inspect("ci.yml", (workflow) =>
     editJob(workflow, "synapse-native-polls", (job) =>
-      job.replace('save-if: "false"', 'save-if: "true"'),
+      job.replace('save-cache: "false"', 'save-cache: "true"'),
     ),
   );
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /synapse-native-polls.*save-if/);
+  assert.match(result.errors.join("\n"), /synapse-native-polls.*save-cache/);
 });
 
 test("release tags cannot replace the main release cache writer", () => {
   const result = inspect("release.yml", (workflow) =>
     editJob(workflow, "linux-deb", (job) =>
-      job.replace('save-if: "false"', 'save-if: "true"'),
+      job.replace('save-cache: "false"', 'save-cache: "true"'),
     ),
   );
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /linux-deb.*save-if/);
+  assert.match(result.errors.join("\n"), /linux-deb.*save-cache/);
 });
 
 test("manual all-slice Apple builds cannot inflate the normal simulator cache", () => {
   const result = inspect("ci.yml", (workflow) =>
     editJob(workflow, "ios-tests", (job) =>
       job.replace(
-        /^ {10}save-if: .*$/m,
-        "          save-if: ${{ github.ref == 'refs/heads/main' }}",
+        /^ {10}save-cache: .*$/m,
+        "          save-cache: ${{ github.ref == 'refs/heads/main' }}",
       ),
     ),
   );
   assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /ios-tests.*save-if/);
+  assert.match(result.errors.join("\n"), /ios-tests.*save-cache/);
 });
 
-test("Apple cache includes the isolated host generator output", () => {
-  const result = inspect("ios-skeleton.yml", (workflow) =>
-    workflow.replace("            . -> target/synara-core-bindgen\n", ""),
-  );
-  assert.equal(result.ok, false);
-  assert.match(result.errors.join("\n"), /isolated host bindgen/);
-});
-
-test("Arch and native macOS smoke limit cache growth to registry coverage", () => {
+test("Rust lanes cannot reintroduce target-directory cache configuration", () => {
   for (const jobName of ["linux-arch", "macos-app"]) {
     const result = inspect("desktop-package-smoke.yml", (workflow) =>
       editJob(workflow, jobName, (job) =>
-        job.replace("cache-targets: false", "cache-targets: true"),
+        job.replace(
+          "          family:",
+          "          workspaces: . -> target\n          family:",
+        ),
       ),
     );
     assert.equal(result.ok, false);
-    assert.match(result.errors.join("\n"), /cache only the Cargo registry/);
+    assert.match(result.errors.join("\n"), /without target archives/);
   }
+});
+
+test("Rust lanes cannot bypass the shared compiler cache action", () => {
+  const result = inspect("ios-skeleton.yml", (workflow) =>
+    workflow.replace(
+      "uses: ./.github/actions/setup-rust-cache",
+      "uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6",
+    ),
+  );
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join("\n"), /must use Kache/);
 });
 
 test("cache readers must keep the writer's canonical build family", () => {
   const result = inspect("ci.yml", (workflow) =>
     editJob(workflow, "synapse-native-threads", (job) =>
-      job.replace(
-        "shared-key: validate-rust-desktop",
-        "shared-key: threads-only",
-      ),
+      job.replace("family: validate-rust-desktop", "family: threads-only"),
     ),
   );
   assert.equal(result.ok, false);
@@ -477,4 +479,134 @@ test("cache readers must keep the writer's canonical build family", () => {
     result.errors.join("\n"),
     /synapse-native-threads.*cache family/,
   );
+});
+
+test("Kache setup rejects unsafe publication, stale immutable snapshots and compiler cache bypasses", () => {
+  for (const [property, before, after] of [
+    [
+      "rustLocalCache",
+      "SYNARA_KACHE_VERSION=0.28.1",
+      "SYNARA_KACHE_VERSION=0.29.0",
+    ],
+    [
+      "rustCacheIdentity",
+      "source scripts/lib/rust-cache.sh",
+      "# version omitted",
+    ],
+    [
+      "rustSetupAction",
+      "kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
+      "kunobi-ninja/kache-action@main",
+    ],
+    ["rustSetupAction", "version: v0.28.1", "version: latest"],
+    [
+      "rustSetupAction",
+      "hashFiles('Cargo.lock')",
+      "hashFiles('**/Cargo.lock')",
+    ],
+    [
+      "rustSetupAction",
+      "cargo fetch --locked --manifest-path Cargo.toml",
+      "cargo fetch --manifest-path Cargo.toml",
+    ],
+    ["rustSetupAction", 'github-cache: "false"', 'github-cache: "true"'],
+    ["rustSetupAction", 'save-cache: "false"', 'save-cache: "true"'],
+    [
+      "rustSetupAction",
+      'cache-executables: "true"',
+      'cache-executables: "false"',
+    ],
+    ["rustSetupAction", 'cache-c-cpp: "true"', 'cache-c-cpp: "false"'],
+    ["rustSetupAction", 'pr-comment: "false"', 'pr-comment: "true"'],
+    ["rustSetupAction", 'strict: "true"', 'strict: "false"'],
+    [
+      "rustSetupAction",
+      "if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'",
+      "if: always()",
+    ],
+    ["rustSetupAction", "if: inputs.save-cache != 'true'", "if: always()"],
+    ["rustSetupAction", "-${{ github.sha }}", ""],
+    [
+      "rustSetupAction",
+      "restore-keys: ${{ steps.identity.outputs.compiler-prefix }}-",
+      "restore-keys: synara-kache-v1-",
+    ],
+    [
+      "rustSetupAction",
+      "path: ${{ github.workspace }}/.kache-cache",
+      "path: target",
+    ],
+    ["rustSetupAction", "~/.cargo/git/db", "~/.cargo/registry/src"],
+    [
+      "rustCacheIdentity",
+      'echo "CARGO_INCREMENTAL=0"',
+      'echo "CARGO_INCREMENTAL=1"',
+    ],
+    [
+      "rustCacheIdentity",
+      '"${GITHUB_REF:-}" == refs/heads/main',
+      '"${GITHUB_REF:-}" != refs/heads/main',
+    ],
+    ["rustCacheIdentity", "${SYNARA_CACHE_FAMILY}-", ""],
+    [
+      "rustCacheIdentity",
+      "xcrun --sdk iphoneos --show-sdk-version",
+      "echo unknown-sdk",
+    ],
+    ["rustCacheIdentity", 'echo "KACHE_HOST_CONFIG="', 'echo "IGNORED="'],
+  ]) {
+    assert.ok(valid[property].includes(before), `${property}: ${before}`);
+    const result = inspectWorkflowPolicy({
+      ...valid,
+      [property]: valid[property].replace(before, after),
+    });
+    assert.equal(result.ok, false, `${property}: ${before}`);
+  }
+});
+
+test("Kache daemon cleanup runs before custom compiler snapshot publication", () => {
+  const marker = "    - name: Install pinned Kache compiler wrapper";
+  const index = valid.rustSetupAction.indexOf(marker);
+  assert.ok(index >= 0);
+  const prefix = valid.rustSetupAction.slice(0, index);
+  const split = prefix.indexOf("    - name:");
+  const action =
+    prefix.slice(0, split) +
+    valid.rustSetupAction.slice(index) +
+    prefix.slice(split);
+  const result = inspectWorkflowPolicy({ ...valid, rustSetupAction: action });
+  assert.equal(result.ok, false);
+  assert.match(
+    result.errors.join("\n"),
+    /daemon shutdown precedes snapshot publication/,
+  );
+});
+
+test("only permitted main writers eagerly fill the whole Cargo download snapshot", () => {
+  const fetchStep = valid.rustSetupAction
+    .split(/^    - /m)
+    .find((step) =>
+      step.includes("run: cargo fetch --locked --manifest-path Cargo.toml"),
+    );
+  assert.ok(fetchStep);
+  for (const changed of [
+    fetchStep.replace(
+      "if: inputs.save-cache == 'true' && github.ref == 'refs/heads/main'",
+      "if: always()",
+    ),
+    fetchStep.replace(
+      "cargo fetch --locked --manifest-path Cargo.toml",
+      "echo fetch-disabled",
+    ),
+  ]) {
+    const result = inspectWorkflowPolicy({
+      ...valid,
+      rustSetupAction: valid.rustSetupAction.replace(fetchStep, changed),
+    });
+    assert.equal(result.ok, false);
+    assert.match(
+      result.errors.join("\n"),
+      /fetch the complete locked workspace/,
+    );
+  }
 });

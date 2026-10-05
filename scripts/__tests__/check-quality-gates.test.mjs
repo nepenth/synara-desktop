@@ -462,8 +462,8 @@ test("the split CI layout must aggregate the iOS compile gate", () => {
   });
 
   const withoutNeed = realCiWorkflow.replace(
-    "ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions",
-    "ios-tests, ios-ui-tests, synapse-native-reactions"
+    /ios-ui-tests,\s*ios-compile,/,
+    "ios-ui-tests,"
   );
   assert.notEqual(withoutNeed, realCiWorkflow);
   const missingNeed = inspect({ ciWorkflow: withoutNeed });

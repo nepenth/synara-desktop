@@ -5,7 +5,13 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
-    branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
+    branches:
+      [
+        main,
+        "feature/matrix-rust-sdk-full-replacement",
+        "feature/shared-native-core",
+        "release/**",
+      ]
   schedule:
     # Nightly full client suite, including the XCUITest lane.
     - cron: "17 11 * * *"
@@ -185,6 +191,12 @@ jobs:
           if [[ "$VALIDATE" == "true" ]]; then
             if git diff --quiet "$BASE_SHA" "$HEAD_SHA" -- \
               .github/workflows/ci.yml \
+              .github/actions/setup-rust-cache \
+              .kache.toml \
+              scripts/ci-rust-cache-identity.sh \
+              scripts/setup-rust-cache.sh \
+              scripts/with-rust-cache.sh \
+              scripts/lib/rust-cache.sh \
               Cargo.toml \
               Cargo.lock \
               .cargo \
@@ -282,6 +294,12 @@ jobs:
             scripts/generate-synara-nse-core-swift.sh \
             synara-ios/scripts/check-notification-service-archive.sh \
             scripts/generate-xcode-project.mjs \
+            .github/actions/setup-rust-cache \
+            .kache.toml \
+            scripts/ci-rust-cache-identity.sh \
+            scripts/setup-rust-cache.sh \
+            scripts/with-rust-cache.sh \
+            scripts/lib/rust-cache.sh \
             .github/actions/setup-xcode-cache \
             .github/actions/save-xcode-cache \
             scripts/check-synara-nse-core-isolation.mjs \
@@ -486,13 +504,11 @@ jobs:
           rustc --edition=2021 --test src-tauri/build_support/build_inputs.rs -o "$RUNNER_TEMP/synara-build-input-tests"
           "$RUNNER_TEMP/synara-build-input-tests"
 
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target
-          shared-key: validate-rust-desktop
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          family: validate-rust-desktop
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -697,15 +713,11 @@ jobs:
           components: llvm-tools-preview
           targets: ${{ github.event_name == 'workflow_dispatch' && (inputs.apple_slices == 'all' || inputs.check_ios_device_release) && 'aarch64-apple-ios,aarch64-apple-ios-sim,x86_64-apple-ios,aarch64-apple-darwin' || 'aarch64-apple-ios-sim' }}
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: ci-synara-core-apple-simulator-arm64
-          save-if: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: ${{ github.ref == 'refs/heads/main' && (github.event_name != 'workflow_dispatch' || (inputs.apple_slices != 'all' && !inputs.check_ios_device_release)) }}
 
       - name: Install XcodeGen
         run: |
@@ -767,15 +779,11 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: ci-synara-core-apple-simulator-arm64
-          save-if: "false"
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
 
       - name: Install XcodeGen
         run: |
@@ -834,15 +842,11 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: ci-synara-core-apple-simulator-arm64
-          save-if: "false"
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
 
       - name: Install XcodeGen
         run: |
@@ -890,12 +894,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Restore desktop Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -931,12 +934,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Restore desktop Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -972,12 +974,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Restore desktop Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -1013,12 +1014,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Restore desktop Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -1054,12 +1054,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Restore desktop Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -1095,12 +1094,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Restore desktop Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore desktop Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -1126,7 +1124,22 @@ jobs:
     # still runs after job failures; skip when this workflow was cancelled so a
     # superseded push run cannot fail the required check on the surviving SHA.
     if: always() && !cancelled()
-    needs: [changes, validate-rust, validate-frontend, rust-dependency-audit, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs:
+      [
+        changes,
+        validate-rust,
+        validate-frontend,
+        rust-dependency-audit,
+        ios-tests,
+        ios-ui-tests,
+        ios-compile,
+        synapse-native-reactions,
+        synapse-native-attachments,
+        synapse-native-polls,
+        synapse-native-rich-messages,
+        synapse-native-threads,
+        synapse-native-receipts,
+      ]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:

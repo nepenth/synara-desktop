@@ -1,0 +1,251 @@
+{
+  "schemaVersion": 1,
+  "startedAt": "2026-10-05T15:49:57.824Z",
+  "status": "passed",
+  "scope": "In-job host NSE dev build only. Excludes dependency downloads, GitHub cache restore/save, source changes, Apple cross-compilation, Xcode, signing and full desktop builds. Fixed order can favor later runs through filesystem warming.",
+  "sourceFingerprint": "38d0f1d3b2e5bb2c72e4373d62cf58681d1ff6634c3d7461668bca31a61c70d6",
+  "spaceMeasurement": "Logical file sizes; hardlinks count per path. A separate filesystem free-space reserve protects shared disk.",
+  "resourceLimits": {
+    "maxScratchBytes": 6143578112,
+    "minFreeBytes": 3221225472,
+    "initialFreeBytes": 9364803584
+  },
+  "workload": {
+    "package": "synara-nse-core",
+    "profile": "dev",
+    "target": "host",
+    "incremental": false,
+    "debug": 0,
+    "codegenUnits": 16,
+    "jobs": 2
+  },
+  "cache": {
+    "version": "0.28.1",
+    "action": "1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
+    "maxSize": "5GiB",
+    "remote": false,
+    "githubCache": false,
+    "limitation": "The production-sized store uses asynchronous LRU eviction. Actual filesystem free space, a reserve and an optional caller scratch budget protect disk headroom; there is no pilot-only scratch cap.",
+    "installedVersion": "kache 0.28.1"
+  },
+  "runs": [
+    {
+      "name": "baseline-first",
+      "seconds": 200.42855225,
+      "targetBytes": 1144158910,
+      "cacheBytes": 160,
+      "scratchBytes": 1144159337,
+      "buildStatus": 0
+    },
+    {
+      "name": "baseline-repeat",
+      "seconds": 182.821912583,
+      "targetBytes": 1144158910,
+      "cacheBytes": 160,
+      "scratchBytes": 1144159337,
+      "buildStatus": 0
+    },
+    {
+      "name": "kache-cold",
+      "seconds": 304.00783095800006,
+      "targetBytes": 1136059519,
+      "cacheBytes": 1123498417,
+      "scratchBytes": 2260626503,
+      "stats": {
+        "schema_version": 1,
+        "command": "stats",
+        "disk": {
+          "store_bytes": 1110034074,
+          "store_limit_bytes": 5368709120,
+          "disk_private_bytes": 9342324,
+          "cloned_into_targets_bytes": 1100691750,
+          "snapshot_retained_bytes": 0,
+          "cloned_coverage": "full"
+        },
+        "stores": [
+          {
+            "path": "<isolated-benchmark>/cache",
+            "bytes": 1116575518,
+            "max_size": 5368709120,
+            "entries": 836,
+            "blob_stats": {
+              "total_blobs": 1701,
+              "total_blob_size": 1110034074,
+              "total_logical_size": 1116575518,
+              "savings": 6541444
+            },
+            "error": null
+          }
+        ],
+        "index_bytes": 12393576,
+        "index_wal_bytes": 4758632,
+        "index_rowid_high_water": {
+          "blobs": 1701,
+          "cc_preprocess_memos": 378,
+          "entries": 836,
+          "entry_blobs": 2086,
+          "eviction_tombstones": 0,
+          "input_predictions": 875
+        },
+        "gc": {
+          "last_run": "2026-10-05T15:56:24.890012+00:00",
+          "entries_evicted": 0,
+          "bytes_freed": 0,
+          "disk_bytes_reclaimed": 0,
+          "blobs_removed": 0,
+          "duration_ms": 11,
+          "source": "daemon",
+          "entries_pinned": 0,
+          "entries_unreclaimable": 0,
+          "bytes_held": 0,
+          "entries_failed": 0,
+          "entries_locked": 0,
+          "entries_busy_snapshot": 0,
+          "entries_recent_prefiltered": 0,
+          "entries_import_pinned": 0,
+          "evict_write_ms": 0,
+          "key_locks_removed": 0,
+          "key_locks_remaining": 0,
+          "predictions_pruned": 0,
+          "file_hashes_pruned": 0
+        },
+        "entries": 836,
+        "hit_rate_pct": 0,
+        "local_hits": 0,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "dups": 11,
+        "misses": 825,
+        "daemon_connected": true,
+        "hours": 24,
+        "since_secs": 86400,
+        "since": "24h",
+        "next": [
+          {
+            "argv": [
+              "kache",
+              "clean",
+              "--tracked",
+              "--stale",
+              "14d",
+              "--dry-run"
+            ],
+            "why": "tracked build outputs still hold blocks; cleaning stale target directories is what frees disk"
+          }
+        ]
+      },
+      "statsDelta": {
+        "local_hits": 0,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "misses": 825,
+        "dups": 11
+      },
+      "buildStatus": 0
+    },
+    {
+      "name": "kache-warm",
+      "seconds": 8.795223582999897,
+      "targetBytes": 1136059519,
+      "cacheBytes": 1123642097,
+      "scratchBytes": 2261445821,
+      "stats": {
+        "schema_version": 1,
+        "command": "stats",
+        "disk": {
+          "store_bytes": 1110034074,
+          "store_limit_bytes": 5368709120,
+          "disk_private_bytes": 16749370,
+          "cloned_into_targets_bytes": 1093284704,
+          "snapshot_retained_bytes": 0,
+          "cloned_coverage": "full"
+        },
+        "stores": [
+          {
+            "path": "<isolated-benchmark>/cache",
+            "bytes": 1116575518,
+            "max_size": 5368709120,
+            "entries": 836,
+            "blob_stats": {
+              "total_blobs": 1701,
+              "total_blob_size": 1110034074,
+              "total_logical_size": 1116575518,
+              "savings": 6541444
+            },
+            "error": null
+          }
+        ],
+        "index_bytes": 12536936,
+        "index_wal_bytes": 4758632,
+        "index_rowid_high_water": {
+          "blobs": 1701,
+          "cc_preprocess_memos": 378,
+          "entries": 836,
+          "entry_blobs": 2086,
+          "eviction_tombstones": 0,
+          "input_predictions": 875
+        },
+        "gc": {
+          "last_run": "2026-10-05T15:56:24.890012+00:00",
+          "entries_evicted": 0,
+          "bytes_freed": 0,
+          "disk_bytes_reclaimed": 0,
+          "blobs_removed": 0,
+          "duration_ms": 11,
+          "source": "daemon",
+          "entries_pinned": 0,
+          "entries_unreclaimable": 0,
+          "bytes_held": 0,
+          "entries_failed": 0,
+          "entries_locked": 0,
+          "entries_busy_snapshot": 0,
+          "entries_recent_prefiltered": 0,
+          "entries_import_pinned": 0,
+          "evict_write_ms": 0,
+          "key_locks_removed": 0,
+          "key_locks_remaining": 0,
+          "predictions_pruned": 0,
+          "file_hashes_pruned": 0
+        },
+        "entries": 836,
+        "hit_rate_pct": 35.394126738794434,
+        "local_hits": 458,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "dups": 11,
+        "misses": 825,
+        "daemon_connected": true,
+        "hours": 24,
+        "since_secs": 86400,
+        "since": "24h",
+        "next": [
+          {
+            "argv": [
+              "kache",
+              "clean",
+              "--tracked",
+              "--stale",
+              "14d",
+              "--dry-run"
+            ],
+            "why": "tracked build outputs still hold blocks; cleaning stale target directories is what frees disk"
+          }
+        ]
+      },
+      "statsDelta": {
+        "local_hits": 458,
+        "prefetch_hits": 0,
+        "remote_hits": 0,
+        "misses": 0,
+        "dups": 0
+      },
+      "buildStatus": 0
+    }
+  ],
+  "toolchain": "cargo 1.96.1 (356927216 2026-06-26)",
+  "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)\nbinary: rustc\ncommit-hash: 31fca3adb283cc9dfd56b49cdee9a96eb9c96ffd\ncommit-date: 2026-06-26\nhost: aarch64-apple-darwin\nrelease: 1.96.1\nLLVM version: 22.1.2",
+  "commit": "b144b7a16a7455ea0de4ae9a31cd833a3d756347",
+  "dirty": true,
+  "verdict": "warm-cache-hits-observed",
+  "completedAt": "2026-10-05T16:01:40.385Z"
+}

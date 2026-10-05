@@ -105,14 +105,12 @@ jobs:
         if: steps.reuse.outputs.reuse != 'true'
         run: cargo audit
 
-      - name: Cache Rust build artifacts
+      - name: Cache Rust compilation
         if: steps.reuse.outputs.reuse != 'true'
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target
-          shared-key: validate-rust-desktop
-          save-if: "false"
+          family: validate-rust-desktop
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         if: steps.reuse.outputs.reuse != 'true'
@@ -206,16 +204,12 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios-sim
 
-      - name: Cache Apple SynaraCore build
+      - name: Cache Apple SynaraCore Rust compilation
         if: steps.reuse.outputs.reuse != 'true'
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: ci-synara-core-apple-simulator-arm64
-          save-if: "false"
+          family: ci-synara-core-apple-simulator-arm64
+          save-cache: "false"
 
       - name: Install XcodeGen
         if: steps.reuse.outputs.reuse != 'true'
@@ -284,12 +278,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: release-linux-deb
-          save-if: "false"
+          family: release-linux-deb
+          save-cache: "false"
 
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
@@ -370,13 +363,11 @@ jobs:
       - name: Setup pinned Node.js and npm download cache
         uses: ./.github/actions/setup-node
 
-      - name: Restore Arch Cargo registry
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Restore Arch Rust compilation cache
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: desktop-registry-arch
-          save-if: "false"
-          cache-targets: false
+          family: release-linux-arch
+          save-cache: "false"
 
       - name: Install desktop dependencies
         run: npm ci
@@ -428,12 +419,11 @@ jobs:
           toolchain: 1.96
           targets: aarch64-apple-darwin,x86_64-apple-darwin
 
-      - name: Cache Rust build artifacts
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: release-macos
-          save-if: "false"
+          family: release-macos
+          save-cache: "false"
 
       - name: Install desktop dependencies
         run: npm ci
@@ -748,15 +738,11 @@ jobs:
           components: llvm-tools-preview
           targets: aarch64-apple-ios
 
-      - name: Cache Apple SynaraCore build
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple SynaraCore Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: release-synara-core-apple-device
-          save-if: "false"
+          family: release-synara-core-apple-device
+          save-cache: "false"
 
       - name: Restore native Xcode compilation cache
         id: xcode_cache

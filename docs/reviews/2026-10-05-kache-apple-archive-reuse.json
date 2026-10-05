@@ -1,0 +1,33 @@
+{
+  "status": "passed",
+  "scope": "Real shipping simulator-arm64 NSE nse-release static archive and host Swift binding generator through local Kache. Space-bounded mode uses fresh temporary target paths on each invocation; second invocation preserves published outputs. No Swift app or device build.",
+  "kacheVersion": "0.28.1",
+  "rustc": "rustc 1.96.1 (31fca3adb 2026-06-26)\nbinary: rustc\ncommit-hash: 31fca3adb283cc9dfd56b49cdee9a96eb9c96ffd\ncommit-date: 2026-06-26\nhost: aarch64-apple-darwin\nrelease: 1.96.1\nLLVM version: 22.1.2",
+  "xcode": "Xcode 27.0\nBuild version 27A266a",
+  "warmGeneratorSeconds": 177.064,
+  "unchangedPublishedOutputs": true,
+  "before": {
+    "swiftSha256": "0bed3fb07e74bbb8596d52ee04dc9748c0b03cc5ab15ac71b7812ece70b9cdb1",
+    "swiftMtimeNs": 1791216769339658424,
+    "frameworkSha256": "c77bc5e27bd72f375c999a2ef5072882568c8b41204880bbe6187c99b8802143",
+    "frameworkInode": 253313379
+  },
+  "after": {
+    "swiftSha256": "0bed3fb07e74bbb8596d52ee04dc9748c0b03cc5ab15ac71b7812ece70b9cdb1",
+    "swiftMtimeNs": 1791216769339658424,
+    "frameworkSha256": "c77bc5e27bd72f375c999a2ef5072882568c8b41204880bbe6187c99b8802143",
+    "frameworkInode": 253313379
+  },
+  "archiveAbi": "arm64; 4824 symbols; required NSE preview export present",
+  "warmEventCounts": {
+    "passthrough": 4,
+    "local_hit": 437,
+    "dup": 26
+  },
+  "eventWindow": "Kache compilation events since the warm invocation log was created; no other repository compiler build was active.",
+  "coldCargoNseReleaseSeconds": 325,
+  "warmCargoNseReleaseSeconds": 169,
+  "coldHostBindgenSeconds": 51.2,
+  "warmHostBindgenSeconds": 0.34,
+  "limitations": "Local Xcode 27.0, not pinned hosted Xcode 26.6. Cold run overlapped strict Clippy; not a controlled whole-job speedup comparison. Duplicate-result events mean some compilations still ran despite artifact deduplication."
+}

@@ -102,6 +102,7 @@ npm ci
 cd synara
 npm ci
 cd ..
+npm run cache:setup
 npm run tauri dev
 ```
 
@@ -253,6 +254,7 @@ npm ci
 cd synara
 npm ci
 cd ..
+npm run cache:setup
 npm run tauri build
 cd packaging/arch
 makepkg -f
@@ -293,6 +295,7 @@ npm ci
 cd synara
 npm ci
 cd ..
+npm run cache:setup
 npm run tauri build
 cd packaging/arch
 makepkg -f

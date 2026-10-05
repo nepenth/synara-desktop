@@ -90,3 +90,6 @@ docs/**/*-session-handoff.md
 # Local runtime logs
 *.log
 logs/
+
+# Job-local Kache compiler store (never source or release artifacts).
+/.kache-cache/

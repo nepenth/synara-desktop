@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   benchmark:
-    name: Host NSE baseline and Kache trial
+    name: Host NSE baseline and production-sized Kache
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -30,7 +30,7 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Install isolated Kache trial
+      - name: Install isolated pinned Kache
         uses: kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c # pinned 2026-10-03
         with:
           version: v0.28.1
@@ -41,12 +41,11 @@ jobs:
           strict: "true"
           cache-executables: "true"
           cache-dir: ${{ runner.temp }}/kache-action-trial
-          max-size: 512MiB
+          max-size: 5GiB
 
       - name: Compare fresh NSE builds with a local compiler cache
-        # Store eviction is asynchronous. Allow transient writes on this
-        # disposable runner; local CLI keeps its conservative 1.8GiB default.
-        run: node scripts/benchmark-rust-cache.mjs --output "$RUNNER_TEMP/build-cache-benchmark.json" --max-scratch-mib 3072
+        # Use available disk headroom with the filesystem reserve, without pilot caps.
+        run: node scripts/benchmark-rust-cache.mjs --output "$RUNNER_TEMP/build-cache-benchmark.json"
 
       - name: Upload benchmark measurements
         if: always()

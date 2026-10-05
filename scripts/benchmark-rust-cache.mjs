@@ -170,14 +170,19 @@ export async function benchmark({
   root = repository,
   output = join(tmpdir(), "synara-build-cache-benchmark.json"),
   cargo = "cargo",
-  kache = "kache",
+  kache = process.env.RUSTC_WRAPPER || "kache",
   scratchParent = tmpdir(),
   env = process.env,
-  maxBytes = 1.8 * 1024 ** 3,
+  maxBytes,
+  cacheMaxSize = "5GiB",
   minFreeBytes = 3 * 1024 ** 3,
 } = {}) {
   // All destructive cleanup is confined to this freshly created directory.
   const scratch = mkdtempSync(join(scratchParent, "synara-cache-bench-"));
+  // Bound only by real available disk unless the caller requests a smaller budget.
+  const filesystem = statfsSync(scratch);
+  const initialFreeBytes = filesystem.bavail * filesystem.bsize;
+  maxBytes ??= Math.max(0, initialFreeBytes - minFreeBytes);
   const target = join(scratch, "target");
   const cache = join(scratch, "cache");
   const runtime = join(scratch, "run");
@@ -193,17 +198,18 @@ export async function benchmark({
     CARGO_BUILD_JOBS: "2",
     RUSTC_WRAPPER: "",
     RUSTC_WORKSPACE_WRAPPER: "",
+    CMAKE_C_COMPILER_LAUNCHER: "",
+    CMAKE_CXX_COMPILER_LAUNCHER: "",
     KACHE_CONFIG: config,
     KACHE_HOST_CONFIG: "",
     KACHE_CACHE_DIR: cache,
     KACHE_RUNTIME_DIR: runtime,
-    KACHE_LOCAL_ONLY: "1",
-    KACHE_MAX_SIZE: "512MiB",
+    KACHE_MAX_SIZE: cacheMaxSize,
     KACHE_CACHE_EXECUTABLES: "1",
   });
   writeFileSync(
     config,
-    `[cache]\nlocal_only = true\nlocal_store = ${JSON.stringify(cache)}\nruntime_dir = ${JSON.stringify(runtime)}\nlocal_max_size = "512MiB"\ncache_executables = true\n`,
+    `[cache]\nlocal_only = true\nlocal_store = ${JSON.stringify(cache)}\nruntime_dir = ${JSON.stringify(runtime)}\nlocal_max_size = ${JSON.stringify(cacheMaxSize)}\ncache_executables = true\n`,
   );
   const commandOptions = {
     root,
@@ -220,7 +226,11 @@ export async function benchmark({
     sourceFingerprint: sourceFingerprint(root),
     spaceMeasurement:
       "Logical file sizes; hardlinks count per path. A separate filesystem free-space reserve protects shared disk.",
-    resourceLimits: { maxScratchBytes: maxBytes, minFreeBytes },
+    resourceLimits: {
+      maxScratchBytes: maxBytes,
+      minFreeBytes,
+      initialFreeBytes,
+    },
     workload: {
       package: "synara-nse-core",
       profile: "dev",
@@ -233,11 +243,11 @@ export async function benchmark({
     cache: {
       version: "0.28.1",
       action: "1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
-      maxBytes: 512 * 1024 ** 2,
+      maxSize: cacheMaxSize,
       remote: false,
       githubCache: false,
       limitation:
-        "512MiB is an asynchronous eviction target, not a hard peak disk cap. Transient store writes can exceed it; the independent scratch guard bounds the experiment. The small store may evict useful entries.",
+        "The production-sized store uses asynchronous LRU eviction. Actual filesystem free space, a reserve and an optional caller scratch budget protect disk headroom; there is no pilot-only scratch cap.",
     },
     runs: [],
   };
@@ -297,6 +307,8 @@ export async function benchmark({
         throw new Error("benchmark target was not removed");
       const wrapped = name.startsWith("kache-");
       isolatedEnv.RUSTC_WRAPPER = wrapped ? kache : "";
+      isolatedEnv.CMAKE_C_COMPILER_LAUNCHER = wrapped ? kache : "";
+      isolatedEnv.CMAKE_CXX_COMPILER_LAUNCHER = wrapped ? kache : "";
       console.error(`Benchmark: ${name} (fresh Cargo target)`);
       kacheStarted ||= wrapped;
       const before = wrapped
@@ -392,16 +404,23 @@ if (
     const options = {};
     for (let index = 0; index < args.length; index += 2) {
       const value = args[index + 1];
-      if (!value || !["--output", "--max-scratch-mib"].includes(args[index]))
+      if (
+        !value ||
+        !["--output", "--max-scratch-mib", "--max-cache-mib"].includes(
+          args[index],
+        )
+      )
         throw new Error(
-          "Usage: node scripts/benchmark-rust-cache.mjs [--output path] [--max-scratch-mib positive-number]",
+          "Usage: node scripts/benchmark-rust-cache.mjs [--output path] [--max-scratch-mib positive-number] [--max-cache-mib positive-number]",
         );
       if (args[index] === "--output") options.output = value;
       else {
         const mib = Number(value);
         if (!Number.isFinite(mib) || mib <= 0)
-          throw new Error("--max-scratch-mib must be a positive finite number");
-        options.maxBytes = mib * 1024 ** 2;
+          throw new Error(`${args[index]} must be a positive finite number`);
+        if (args[index] === "--max-cache-mib")
+          options.cacheMaxSize = `${mib}MiB`;
+        else options.maxBytes = mib * 1024 ** 2;
       }
     }
     const report = await benchmark(options);

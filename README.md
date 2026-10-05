@@ -17,22 +17,22 @@ Synara does not ship a standalone browser client. The React/Vite package under
 
 Current desktop release: [v2.1.41](https://github.com/nepenth/synara-desktop/releases/tag/v2.1.41).
 
-| Platform | What you get | Where |
-| --- | --- | --- |
-| macOS | Universal signed and notarized disk image | The `DMG` asset on that release |
-| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`) | [Linux install](docs/linux.md) |
-| Arch, CachyOS, and related | x86_64 pacman package | [Linux install](docs/linux.md) |
+| Platform                    | What you get                                           | Where                           |
+| --------------------------- | ------------------------------------------------------ | ------------------------------- |
+| macOS                       | Universal signed and notarized disk image              | The `DMG` asset on that release |
+| Debian, Ubuntu, and related | x86_64 `.deb` and an APT repo (`Architectures: amd64`) | [Linux install](docs/linux.md)  |
+| Arch, CachyOS, and related  | x86_64 pacman package                                  | [Linux install](docs/linux.md)  |
 
 Linux packages are x86_64 only. Source builds need Node.js 24.13.1 and Rust 1.96.
 
 ## Current capabilities
 
-| In this release | Not in this release |
-| --- | --- |
-| End-to-end encrypted messaging, rooms, and spaces on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls |
-| Desktop client for macOS and x86_64 Linux | Windows, Android, and a standalone web app |
-| Device verification, secret storage, and encrypted media through the Rust core | An ARM Linux package |
-| iOS app on the same core, internal TestFlight only | App Store distribution |
+| In this release                                                                                      | Not in this release                        |
+| ---------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| End-to-end encrypted messaging, rooms, and spaces on the shared Rust core (`matrix-rust-sdk` 0.19.1) | Voice and video calls                      |
+| Desktop client for macOS and x86_64 Linux                                                            | Windows, Android, and a standalone web app |
+| Device verification, secret storage, and encrypted media through the Rust core                       | An ARM Linux package                       |
+| iOS app on the same core, internal TestFlight only                                                   | App Store distribution                     |
 
 ## Interface
 
@@ -56,11 +56,11 @@ These screenshots show sample rooms on a disposable account.
 
 ## Product Channels
 
-| Client | User interface  | Matrix/application core                           | Distribution                                 |
-| ------ | --------------- | ------------------------------------------------- | -------------------------------------------- |
-| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG               |
-| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb` and Arch-family packages       |
-| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only                     |
+| Client | User interface  | Matrix/application core                           | Distribution                           |
+| ------ | --------------- | ------------------------------------------------- | -------------------------------------- |
+| macOS  | Tauri 2 + React | Shared Rust core with native macOS adapters       | Signed/notarized universal DMG         |
+| Linux  | Tauri 2 + React | Shared Rust core with native Linux adapters       | x86_64 `.deb` and Arch-family packages |
+| iOS    | SwiftUI         | Shared Rust core through generated Swift bindings | Internal TestFlight only               |
 
 Windows, Android, and public web distribution are not currently supported.
 
@@ -129,7 +129,15 @@ Install JavaScript dependencies from the repository root:
 ```sh
 npm ci
 npm --prefix synara ci
+npm run cache:setup
 ```
+
+Rust builds use the pinned Kache 0.28.1 compiler cache. Tauri and Apple build
+scripts configure it automatically after setup. Use `npm run cargo -- <arguments>`
+for Rust commands, or export its environment with
+`eval "$(scripts/setup-rust-cache.sh --env)"` before direct Cargo commands.
+See the [cache runbook](docs/build-and-release.md#cache-families-and-writers)
+for paths, sizing, statistics and cleanup.
 
 ## Desktop Development
 

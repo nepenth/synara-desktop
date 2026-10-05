@@ -143,12 +143,11 @@ jobs:
       - name: Install Linux Tauri dependencies
         run: scripts/install-linux-tauri-dependencies.sh
 
-      - name: Cache Rust dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: release-linux-deb
-          save-if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
+          family: release-linux-deb
+          save-cache: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
 
       - name: Install desktop dependencies
         run: npm ci
@@ -213,13 +212,11 @@ jobs:
       - name: Setup pinned Node.js and npm download cache
         uses: ./.github/actions/setup-node
 
-      - name: Cache Cargo registry
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: desktop-registry-arch
-          save-if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
-          cache-targets: false
+          family: release-linux-arch
+          save-cache: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
 
       - name: Install desktop dependencies
         run: npm ci
@@ -268,13 +265,11 @@ jobs:
         with:
           toolchain: 1.96
 
-      - name: Cache Cargo registry
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: desktop-registry-macos-host
-          save-if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
-          cache-targets: false
+          family: release-macos-host
+          save-cache: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' }}
 
       - name: Install desktop dependencies
         run: npm ci

@@ -35,10 +35,15 @@ Xcode, the configured Apple Rust targets, and XcodeGen.
 
 ```sh
 cd ..
+npm run cache:setup
 scripts/generate-synara-core-swift.sh
 cd synara-ios
 xcodegen generate
 ```
+
+Rust generators and the build script share the persistent Kache compiler cache.
+Swift builds use native Xcode compilation caching and persistent DerivedData;
+see the [cache runbook](../docs/build-and-release.md#swift-and-xcode-build-reuse).
 
 Compile the simulator app and test bundles:
 

@@ -82,6 +82,9 @@ cleanup() {
 trap cleanup EXIT
 
 repo_root="$(cd .. && pwd)"
+source "$repo_root/scripts/lib/rust-cache.sh"
+synara_configure_rust_cache "$repo_root"
+
 checker="$repo_root/scripts/check-synara-core-swift-scaffold.mjs"
 if [[ ! -f "$checker" ]]; then
   echo "SynaraCore Swift scaffold checker is required at $checker" >&2

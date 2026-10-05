@@ -140,11 +140,30 @@ and exact-tag fallback validation, without compiling the application first.
 
 ### Cache families and writers
 
-The pinned `Swatinem/rust-cache` remains the baseline. Equivalent jobs share a
-family; readers cannot replace it with their narrower dependency subset.
-Compiled target caches are kept separate for Ubuntu, Arch, native macOS,
-universal macOS and Apple target/profile graphs. Registry-only families do not
-store compiled objects and keep the first rollout within the storage budget.
+Rust compilation now uses **Kache 0.28.1** through the pinned shared
+`.github/actions/setup-rust-cache` action. It caches compiler outputs, including
+executables and supported C/C++ objects, instead of Cargo `target` directories.
+`CARGO_INCREMENTAL=0` keeps compiler invocations cacheable. Cargo registry
+archives/indexes and Git databases have a separate download cache. Main writers
+fetch the complete locked workspace graph before publishing, so a narrow Apple
+lane cannot freeze an incomplete download snapshot. Extracted
+sources, build fingerprints and incremental state are excluded. The `cc` crate
+is pinned to 1.2.66 so it recognizes the wrapper after selecting each target's
+compiler. CMake launchers also preserve cross compiler selection.
+
+Only designated main-branch writers publish snapshots; PRs and tags restore.
+Keys include family, host OS/architecture, the exact Rust compiler, Apple
+Xcode/SDK identity, lockfiles and commit. Restore prefixes retain the same
+family and toolchain. Commit-specific publication refreshes project artifacts
+when lockfiles stay unchanged; Kache's content keys validate each invocation.
+The upstream action's own immutable lockfile snapshots are disabled in favor
+of repository-owned persistence. Its post step stops the private daemon before
+the outer cache action saves the store.
+
+The CI store is colocated with the checkout for linking/cloning into targets,
+including Arch containers. Its configurable **5 GiB LRU eviction target** is
+asynchronous, not a hard peak disk cap. Local stores use Kache's adaptive sizing
+unless overridden. No S3 backend or automatic PR comments are enabled.
 
 | Family                                 | Writer                                                         | Readers                                                              |
 | -------------------------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------- |
@@ -152,8 +171,8 @@ store compiled objects and keep the first rollout within the storage budget.
 | `ci-synara-core-apple-simulator-arm64` | CI unit lane on `main`, simulator-only without device opt-in   | UI, compile, diagnostics and exact-tag simulator lanes               |
 | `release-linux-deb`                    | Desktop Package Smoke dispatched on `main`                     | PR `.deb` smoke and tagged `.deb` release                            |
 | `release-macos`                        | Unsigned macOS seed or intended signed build on `main`         | Tagged universal macOS release                                       |
-| `desktop-registry-arch`                | Desktop Package Smoke dispatched on `main`                     | Arch smoke and release; registry only                                |
-| `desktop-registry-macos-host`          | Desktop Package Smoke dispatched on `main`                     | Native macOS smoke; registry only                                    |
+| `release-linux-arch`                   | Desktop Package Smoke dispatched on `main`                     | Arch smoke and release; compiler outputs                             |
+| `release-macos-host`                   | Desktop Package Smoke dispatched on `main`                     | Native macOS smoke; compiler outputs                                 |
 | `release-synara-core-apple-device`     | Unsigned device seed on `main`                                 | Tagged TestFlight device release                                     |
 | `xcode-compilation-v1`                 | Successful CI iOS unit lane on `main`; weekly, at most 512 MiB | Simulator/UI/compile/diagnostics, exact-tag iOS and TestFlight lanes |
 
@@ -162,7 +181,7 @@ does not warm sibling PRs or `main`, and one tag cannot warm another tag.
 See [GitHub cache scope rules](https://docs.github.com/en/actions/reference/workflows-and-actions/dependency-caching#restrictions-for-accessing-a-cache).
 Consequently the Linux/universal release families need a successful main seed.
 After these changes land, an authorized maintainer can explicitly dispatch
-Desktop Package Smoke on `main` to seed Ubuntu and registry families. The manual **Seed unsigned release build caches** workflow independently
+Desktop Package Smoke on `main` to seed Ubuntu, Arch and native macOS families. The manual **Seed unsigned release build caches** workflow independently
 builds universal macOS executables (`--no-bundle`) or generates and validates
 Core/NSE device archives. Neither lane accesses signing secrets or publishes
 client releases. Only `main` saves those cache families; branch runs and tagged
@@ -170,18 +189,27 @@ releases read them. The existing signed macOS lane may also seed during an
 intended candidate build. No warming schedule or storage-limit increase is
 introduced.
 
-Adding the isolated host bindgen directory changes the Apple cache archive
-paths/version. The first new main simulator seed may therefore be cold, even
-when the inventory lists an older entry with the same family. Inventory entries
-are candidates; the job's restore log establishes an actual compatible hit.
+The Kache namespace is new; the first main builds are cold. The inventory
+reports old Swatinem snapshots as obsolete; they can expire under retention.
+Use `npm run audit:build-cache` for read-only sizes, refs, compiler/download/Swift
+entries and missing main seeds, or append `-- --json`. The previous inventory
+had approximately 8.52 GB against a configured 10 GB maximum. Commit snapshots
+and multiple families can cause eviction: monitor compressed archive bytes,
+hit rates and whole-job restore/save costs as seeds populate. Review obsolete
+generations before increasing storage; avoid deleting active main seeds blindly.
 
-Use `npm run audit:build-cache` for a read-only inventory, or append `-- --json`
-for machine-readable sizes, refs, entries and missing main seeds. The audit
-snapshot had approximately 8.52 GB against the configured 10 GB maximum and
-7-day retention. Inspect storage before adding compiled Arch/native-macOS
-families or additional generations. Old PR/tag caches can expire naturally;
-do not use blanket cleanup that deletes active main seeds. GitHub permits a
-paid storage-limit increase, but that is a separate operational decision.
+Install the SHA256-verified local tool once with `npm run cache:setup`.
+`npm run cargo -- <arguments>`, `npm run tauri -- <arguments>` and supported
+Apple/macOS scripts configure the same persistent cache. Direct Cargo needs
+`eval "$(scripts/setup-rust-cache.sh --env)"` in the current shell. No global
+Cargo or shell settings are modified. Remove existing Rust workspace wrappers,
+including any in Cargo configuration, before selecting the cache owner.
+`npm run cache:status` shows statistics and tracked targets. `npm run cache:clean`
+previews tracked targets stale for 14 days; append `-- --yes` to apply cleanup.
+Automatic target cleanup is disabled. `SYNARA_RUST_CACHE_ROOT`,
+`SYNARA_RUST_CACHE_TOOLS_DIR` and `SYNARA_RUST_CACHE_MAX_SIZE` override local
+paths/size; explicitly supplied `KACHE_*` settings remain authoritative.
+Local stores stay local; Swift and Xcode retain their native cache described below.
 
 ### Build measurements and cache rollout
 
@@ -234,18 +262,18 @@ and the remaining development advisory chain; both full npm audits are clean.
 These timings are the old baseline. Local fixtures and dependency graph checks
 establish correctness, not hosted speedup. Compare seeded/warm whole-job times
 at the same commit and toolchain, including restore/save costs and cache bytes,
-before claiming improvement or changing cache backends.
+before claiming a whole-job improvement from this migration.
 
 The manual **Rust Cache Benchmark** workflow installs a pinned
 [Kache action](https://github.com/kunobi-ninja/kache-action) and executable
 0.28.1. It compares two fresh host NSE builds without a wrapper, then a cold
 and warm Kache build, removing only its private Cargo target between stages.
-The store is local-only and capped at 512 MiB; GitHub persistence and automatic
+The store is local-only with a production 5 GiB eviction target; persistence and automatic
 PR comments are disabled. Source fingerprints reject changes during the
-experiment, disk limits stop oversized runs, and interruption/failure cleanup
+experiment, a filesystem reserve protects disk headroom, and interruption/failure cleanup
 removes owned scratch. JSON and job summaries include timings, hit/miss deltas,
 logical bytes, commit and toolchain. This experiment measures compiler reuse;
-it excludes Swatinem/GitHub restore/save, downloads, source edits, Apple/Xcode
+it excludes GitHub restore/save, downloads, source edits, Apple/Xcode
 and full desktop builds, and a small store may evict useful entries.
 
 The source-stable local trial on 2026-10-05 (macOS arm64, Rust 1.96.1,
@@ -257,17 +285,13 @@ completion; the warm Kache build was not measured. Cleanup stopped the private
 daemon and removed the owned scratch outputs. This trial establishes a local
 footprint limit; it provides no evidence of a caching speedup.
 
-Kache's 512 MiB setting is an eviction target rather than a hard peak disk
-limit: its [size-pressure garbage collection runs asynchronously](https://github.com/kunobi-ninja/kache/blob/v0.28.1/src/config.rs#L453),
-so transient writes can exceed the store limit. The manually dispatched hosted
-trial therefore uses an explicit **3 GiB scratch budget** through
-`--max-scratch-mib 3072`, while the local CLI retains its conservative 1.8 GiB
-default. Both retain a separate **3 GiB filesystem free-space reserve** and the
-512 MiB store target. The hosted experiment must complete before drawing any
-compiler-reuse conclusion, and whole-job restore/save measurements are still
-required before selecting a production backend.
+The pilot's 512 MiB setting was an eviction target, not a hard peak disk limit:
+[size-pressure collection runs asynchronously](https://github.com/kunobi-ninja/kache/blob/v0.28.1/src/config.rs#L453).
+Its retry used an explicit 3 GiB scratch budget and 3 GiB filesystem reserve.
+These historical pilot limits have been removed from the current default;
+the production benchmark uses actual disk headroom and a 5 GiB store target.
 
-For a local retry with `--max-scratch-mib 3072`, start with at least **6 GiB
+For the historical retry with `--max-scratch-mib 3072`, we required at least **6 GiB
 free** (3 GiB scratch plus the 3 GiB filesystem reserve). **8–10 GiB free** is
 the practical target to leave room for unrelated disk activity. These are the
 requirements of this bounded NSE experiment, not a measured peak requirement
@@ -297,7 +321,7 @@ had evicted no entries; this does not establish steady-state hit rates at a
 Linux filesystem behavior must be measured rather than assumed. An unrelated
 Xcode build was observed during the run, and the fixed-order experiment can
 benefit from filesystem warming. These timings exclude GitHub restore/save
-and do not compare Kache against the production Swatinem backend.
+and do not establish hosted whole-job performance for the new backend.
 
 The complete [local pilot report](reviews/2026-10-05-kache-local-pilot.json)
 retains the source fingerprint, toolchain, timings, hit/miss deltas and storage
@@ -313,10 +337,60 @@ review evidence and all existing worktrees were retained. Two of the checked
 worktrees contained local changes, and several branch tips were not ancestors
 of the integration branch, so their checkouts were preserved.
 
-The pinned Swatinem backend remains production policy pending comparable
-whole-job measurements. Kache's GitHub-backed store also inherits branch
-isolation and immutable snapshots. Any S3-backed trial needs its own trusted
-writers, retention and storage design.
+Kache is now the production Rust cache backend. The standalone benchmark derives
+scratch headroom from actual free space after a 3 GiB filesystem reserve;
+`--max-scratch-mib` is an optional caller budget, not a default pilot ceiling.
+`--max-cache-mib` can select a different eviction target. Hosted measurements
+still require seeded main runs; the local pilot proves reuse for its recorded
+graph, not all platform performance. GitHub branch isolation and immutable
+archives still apply. Any future S3 backend needs a separate trust/storage design.
+
+The production-sized rerun on 2026-10-05 used the new `cc` 1.2.66 lock graph,
+Kache 0.28.1, a 5 GiB eviction target and actual available scratch headroom with
+no pilot ceiling. The source graph remained unchanged throughout the run.
+
+| Fresh-target run              | Seconds | Counter delta                        |
+| ----------------------------- | ------: | ------------------------------------ |
+| Wrapper-free baseline, first  |  200.43 | —                                    |
+| Wrapper-free baseline, repeat |  182.82 | —                                    |
+| Kache cold                    |  304.01 | 825 misses, zero hits, 11 duplicates |
+| Kache warm                    |    8.80 | 458 local hits, zero misses          |
+
+The cold/warm endpoint footprints were about 2.11 GiB logical. Native compilation
+and build-script reuse can change the number of wrapper requests between runs;
+these counters are not counts of unique Rust crates. The cold run was slower
+than both baselines. An unrelated Xcode workload was active, and the fixed order
+can favor later builds through filesystem warming. These are local host NSE
+measurements; they do not include GitHub persistence or prove hosted/full-desktop
+speedups. The [production benchmark report](reviews/2026-10-05-kache-production-benchmark.json)
+records the dirty feature checkout, exact source fingerprint, toolchain and
+per-run readbacks. The benchmark stopped its private daemon and removed scratch.
+
+A separate real default-dev Rust/C executable fixture used the repository local
+helper and `.kache.toml`, with debug information enabled. Fresh-target warm builds
+had six hits and zero misses. Changing native C source changed the executed
+result from `42` to `43`; that rebuild had three misses and four hits, followed
+by another six-hit, zero-miss build returning `43`. Its
+[native reuse report](reviews/2026-10-05-kache-native-reuse.json) demonstrates both
+reuse and invalidation with `cc` 1.2.66; it excludes CI transport and Apple slices.
+The verified binary remains installed for local entrypoints. Fixture outputs
+were removed. Additional cleanup removed six superseded generated files:
+pre-update test executables and host NSE static archives that the current
+manifest no longer produces. This preserved source and current shipping archives.
+
+The actual simulator-arm64 NSE generator also passed twice through Kache,
+including its shipping `nse-release` static archive, host bindgen and archive
+export check (arm64, required preview export present). Each bounded invocation
+used a new temporary target path. The second invocation preserved Swift and
+XCFramework hashes, the Swift timestamp and the framework inode. Its full
+invocation took 177.06 seconds; Cargo reported 169 seconds for the archive and
+0.34 seconds for host bindgen, compared with 325 and 51.20 seconds on the first
+invocation. This demonstrates partial reuse, not elimination of release/LTO
+compilation: duplicate-result events still represent compiler work. The cold
+run overlapped Clippy, and the local Xcode was 27.0 rather than CI's pinned
+26.6, so these are correctness/readback observations rather than a controlled
+hosted speedup comparison. The [Apple archive reuse report](reviews/2026-10-05-kache-apple-archive-reuse.json)
+records toolchains, output identities and warm compilation events.
 
 Core now separates common notification/store primitives, full application
 services and Apple bindings with explicit additive Cargo features. Validate
@@ -367,9 +441,9 @@ Apple CI jobs select **Xcode 26.6 / 17F113** using
 `DEVELOPER_DIR=/Applications/Xcode_26.6.app/Contents/Developer`, a version
 available in the [macOS 26 runner image](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md).
 The selected version is checked before Swift cache work; the unsigned device
-seed checks it directly. Apple Rust cache environment keys include
-`DEVELOPER_DIR` in addition to the pinned action's normal inputs, so changing
-SDK installations also invalidates those compiled dependency snapshots. When
+seed checks it directly. Apple Rust cache identities include
+`DEVELOPER_DIR`, Xcode build, macOS/iOS/simulator SDK versions and Rust compiler,
+so SDK changes select a different compatible snapshot family. When
 upgrading Xcode, update all Apple job paths, the version assertions and workflow
 policy together, then validate the simulator/device lanes. Local tools remain
 free to select another installed Xcode; their own cache identity isolates it.

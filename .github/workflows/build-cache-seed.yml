@@ -33,12 +33,11 @@ jobs:
         with:
           toolchain: 1.96
           targets: aarch64-apple-darwin,x86_64-apple-darwin
-      - name: Cache universal macOS dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache universal macOS Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: ". -> target"
-          shared-key: release-macos
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          family: release-macos
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - name: Install desktop and runtime dependencies
         run: |
           npm ci
@@ -72,15 +71,11 @@ jobs:
           toolchain: 1.96
           components: llvm-tools-preview
           targets: aarch64-apple-ios
-      - name: Cache Apple device dependencies
-        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+      - name: Cache Apple device Rust compilation
+        uses: ./.github/actions/setup-rust-cache
         with:
-          workspaces: |
-            . -> target/synara-core-apple
-            . -> target/synara-core-bindgen
-          env-vars: DEVELOPER_DIR
-          shared-key: release-synara-core-apple-device
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          family: release-synara-core-apple-device
+          save-cache: ${{ github.ref == 'refs/heads/main' }}
       - name: Generate and validate device bindings and archives
         run: |
           scripts/generate-synara-core-swift.sh
