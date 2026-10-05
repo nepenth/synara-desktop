@@ -6,6 +6,9 @@ pub(super) fn account_data_owner_update_family(
     kind: NativeAccountDataWakeupKind,
 ) -> Option<&'static str> {
     match kind {
+        NativeAccountDataWakeupKind::AgentNotificationPreferences => {
+            Some("agent_notification_preferences")
+        }
         NativeAccountDataWakeupKind::ImagePacks => Some("image_packs"),
         // Older iOS waiters ignore unknown families, so this cannot mis-route
         // into the image-pack UI. New iOS refetches history on this family.

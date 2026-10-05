@@ -218,12 +218,7 @@ jobs:
   quality-gate:
     name: Exact-tag quality gate
     if: always()
-    needs:
-      [
-        validate,
-        exact-tag-desktop-quality,
-        exact-tag-ios-quality,
-      ]
+    needs: [validate, exact-tag-desktop-quality, exact-tag-ios-quality]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
@@ -427,6 +422,7 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
@@ -438,6 +434,7 @@ jobs:
             APPLE_ID \
             APPLE_APP_SPECIFIC_PASSWORD \
             APPLE_TEAM_ID \
+            MACOS_PROVISIONING_PROFILE_BASE64 \
             TAURI_SIGNING_PRIVATE_KEY \
             TAURI_SIGNING_PRIVATE_KEY_PASSWORD; do
             if [[ -z "${!name}" ]]; then
@@ -491,8 +488,36 @@ jobs:
           security find-identity -v -p codesigning "$keychain_path"
           security find-identity -v -p codesigning "$keychain_path" | grep -F "$APPLE_SIGNING_IDENTITY"
 
+      - name: Validate and prepare Developer ID notification profile
+        shell: bash
+        env:
+          MACOS_PROVISIONING_PROFILE_BASE64: ${{ secrets.MACOS_PROVISIONING_PROFILE_BASE64 }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          umask 077
+          profile_path="$RUNNER_TEMP/synara-desktop.provisionprofile"
+          entitlements_path="$RUNNER_TEMP/synara-desktop-signing.entitlements"
+          printf '%s' "$MACOS_PROVISIONING_PROFILE_BASE64" | /usr/bin/base64 -D > "$profile_path"
+          python3 scripts/check-macos-provisioning-profile.py "$profile_path" \
+            --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" \
+            --entitlements src-tauri/Entitlements.plist --entitlements-output "$entitlements_path"
+          echo "SYNARA_MACOS_PROVISIONING_PROFILE=$profile_path" >> "$GITHUB_ENV"
+          echo "SYNARA_MACOS_SIGNING_ENTITLEMENTS=$entitlements_path" >> "$GITHUB_ENV"
+
       - name: Build macOS universal release packages
-        run: npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "{\"bundle\":{\"macOS\":{\"signingIdentity\":\"${APPLE_SIGNING_IDENTITY}\",\"providerShortName\":\"${APPLE_TEAM_ID}\"}}}"
+        shell: bash
+        run: |
+          config_json="$(node - <<'NODE'
+          process.stdout.write(JSON.stringify({ bundle: { macOS: {
+            signingIdentity: process.env.APPLE_SIGNING_IDENTITY,
+            providerShortName: process.env.APPLE_TEAM_ID,
+            entitlements: process.env.SYNARA_MACOS_SIGNING_ENTITLEMENTS,
+            files: { "embedded.provisionprofile": process.env.SYNARA_MACOS_PROVISIONING_PROFILE },
+          } } }));
+          NODE
+          )"
+          npm run tauri build -- --target universal-apple-darwin --bundles app,dmg --config "$config_json"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
           APPLE_ID: ${{ secrets.APPLE_ID }}
@@ -503,12 +528,20 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
 
       - name: Verify macOS app signature
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           codesign --verify --all-architectures --deep --strict --verbose=2 target/universal-apple-darwin/release/bundle/macos/Synara.app
           spctl --assess --type execute --verbose=4 target/universal-apple-darwin/release/bundle/macos/Synara.app
+          python3 scripts/check-macos-provisioning-profile.py "$SYNARA_MACOS_PROVISIONING_PROFILE" \
+            --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" --app "target/universal-apple-darwin/release/bundle/macos/Synara.app"
 
       - name: Verify macOS distributable contents
         shell: bash
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           dmg_path="$(find target/universal-apple-darwin/release/bundle/dmg -name 'Synara_*.dmg' -print -quit)"
           updater_archive="$(find target/universal-apple-darwin/release/bundle/macos -name 'Synara.app.tar.gz' -print -quit)"
@@ -532,10 +565,14 @@ jobs:
           hdiutil attach "$dmg_path" -readonly -nobrowse -mountpoint "$mount_dir"
           codesign --verify --all-architectures --deep --strict --verbose=2 "$mount_dir/Synara.app"
           spctl --assess --type execute --verbose=4 "$mount_dir/Synara.app"
+          python3 scripts/check-macos-provisioning-profile.py "$SYNARA_MACOS_PROVISIONING_PROFILE" \
+            --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" --app "$mount_dir/Synara.app"
 
           tar -xzf "$updater_archive" -C "$extract_dir"
           codesign --verify --all-architectures --deep --strict --verbose=2 "$extract_dir/Synara.app"
           spctl --assess --type execute --verbose=4 "$extract_dir/Synara.app"
+          python3 scripts/check-macos-provisioning-profile.py "$SYNARA_MACOS_PROVISIONING_PROFILE" \
+            --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" --app "$extract_dir/Synara.app"
 
       - name: Notarize and staple macOS DMG
         env:
@@ -593,7 +630,9 @@ jobs:
           security delete-keychain "$RUNNER_TEMP/synara-signing.keychain-db" >/dev/null 2>&1 || true
           rm -f -- \
             "$RUNNER_TEMP/developer-id-application.p12" \
-            "$RUNNER_TEMP/synara-updater-signing-probe.txt"
+            "$RUNNER_TEMP/synara-updater-signing-probe.txt" \
+            "$RUNNER_TEMP/synara-desktop.provisionprofile" \
+            "$RUNNER_TEMP/synara-desktop-signing.entitlements"
 
   updater-metadata:
     name: Signed macOS updater metadata

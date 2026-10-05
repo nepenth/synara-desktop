@@ -1,5 +1,7 @@
 import PhotosUI
 import SwiftUI
+import UIKit
+import UserNotifications
 
 struct SettingsView: View {
     @Environment(\.appEnvironment) private var environment
@@ -870,6 +872,7 @@ private struct NotificationSettingsView: View {
     @State private var keywordDraft = ""
     @State private var pushRulesMessage: String?
     @State private var notificationDiagnostics: [SynaraNotificationDiagnosticEntry] = []
+    @State private var notificationDiagnosticReport = ""
 
     var body: some View {
         Form {
@@ -889,7 +892,7 @@ private struct NotificationSettingsView: View {
                     if isRequestingNotifications {
                         ProgressView()
                     } else {
-                        Text(notificationStatus == .notDetermined ? "Enable Notifications" : "Refresh Notification Status")
+                        Text(notificationStatus == .notDetermined ? "Enable Notifications" : "Request Notification Permission")
                     }
                 }
                 .disabled(isRequestingNotifications)
@@ -918,7 +921,7 @@ private struct NotificationSettingsView: View {
             }
 
             Section {
-                Toggle("Time-sensitive agent approvals", isOn: $timeSensitiveAgentApprovals)
+                Toggle("Urgent agent approvals", isOn: $timeSensitiveAgentApprovals)
                     .accessibilityIdentifier("TimeSensitiveAgentApprovalsToggle")
                     .onChange(of: timeSensitiveAgentApprovals) { value in
                         environment.settings.set(
@@ -929,7 +932,14 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Agent Approvals")
             } footer: {
-                Text("Marks locally verified approval prompts as Time Sensitive for five minutes. Review opens the exact prompt; Approve once and Deny require authentication. Always approval remains in-app only.")
+                Text("Fresh, locally verified approval prompts use Critical Alerts when this build supports them and you allow them in iOS; otherwise they use Time Sensitive alerts. Use Request Notification Permission to allow Critical Alerts in a supported build. Approve once and Deny require authentication. Always approval remains in-app only.")
+            }
+
+            Section {
+                NavigationLink("Agent Notifications") {
+                    AgentNotificationSettingsView()
+                }
+                .accessibilityIdentifier("AgentNotificationSettingsLink")
             }
 
             Section {
@@ -969,6 +979,16 @@ private struct NotificationSettingsView: View {
                     reloadNotificationDiagnostics()
                 }
                 .accessibilityIdentifier("RefreshNotificationDiagnosticsButton")
+                Button("Copy Diagnostic Report") {
+                    UIPasteboard.general.string = notificationDiagnosticReport
+                }
+                .disabled(notificationDiagnosticReport.isEmpty)
+                .accessibilityIdentifier("CopyNotificationDiagnosticReportButton")
+                ShareLink(item: notificationDiagnosticReport) {
+                    Text("Share Diagnostic Report")
+                }
+                .disabled(notificationDiagnosticReport.isEmpty)
+                .accessibilityIdentifier("ShareNotificationDiagnosticReportButton")
                 if notificationDiagnostics.isEmpty == false {
                     Button("Clear Diagnostics", role: .destructive) {
                         SynaraNotificationDiagnostics.clear()
@@ -979,7 +999,7 @@ private struct NotificationSettingsView: View {
             } header: {
                 Text("Local Delivery Diagnostics")
             } footer: {
-                Text("Stores up to 256 fixed stage codes, timestamps, and random local correlation IDs on this device. It never records message content, Matrix IDs, senders, push payloads, tokens, URLs, or account secrets.")
+                Text("Copy or share a report after reproducing a missing preview. It includes app version, notification settings, push registration and shared-store readiness, plus up to 256 fixed stage codes and timestamps. Reports stay on this device until you share them and exclude message content, Matrix IDs, senders, push payloads, tokens, URLs and account secrets.")
             }
 
             if let pushRules {
@@ -1058,6 +1078,20 @@ private struct NotificationSettingsView: View {
 
     private func reloadNotificationDiagnostics() {
         notificationDiagnostics = SynaraNotificationDiagnostics.entries()
+        notificationDiagnosticReport = ""
+        Task {
+            let settings = await UNUserNotificationCenter.current().notificationSettings()
+            let context = SynaraNotificationDiagnosticReport.Context.capture(
+                settings: settings,
+                pushRegistrationAvailable: environment.push.isRegistrationAvailable,
+                pushRegistered: environment.push.isRegistered,
+                pushGatewayConfigured: environment.push.pushGatewayURL != nil
+            )
+            notificationDiagnosticReport = SynaraNotificationDiagnosticReport.text(
+                context: context,
+                entries: notificationDiagnostics
+            )
+        }
     }
 
     @ViewBuilder

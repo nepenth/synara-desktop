@@ -3,13 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { Box, Icon, Icons, Menu, MenuItem, PopOut, RectCords, Text, config, toRem } from 'folds';
 import FocusTrap from 'focus-trap-react';
 import { useAtomValue } from 'jotai';
-import { useDirects } from '../../../state/hooks/roomList';
 import { useMatrixClient } from '../../../hooks/useMatrixClient';
-import { mDirectAtom } from '../../../state/mDirectList';
-import { allRoomsAtom } from '../../../state/room-list/roomList';
-import { roomToUnreadAtom } from '../../../state/room/roomToUnread';
+import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { getDirectPath, joinPathComponent } from '../../pathUtils';
-import { useRoomsUnread } from '../../../state/hooks/unread';
 import {
   SidebarAvatar,
   SidebarItem,
@@ -20,7 +16,6 @@ import { useDirectSelected } from '../../../hooks/router/useDirectSelected';
 import { UnreadBadge } from '../../../components/unread-badge';
 import { ScreenSize, useScreenSizeContext } from '../../../hooks/useScreenSize';
 import { useNavToActivePathAtom } from '../../../state/hooks/navToActivePath';
-import { useDirectRooms } from '../direct/useDirectRooms';
 import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 
@@ -28,13 +23,12 @@ type DirectMenuProps = {
   requestClose: () => void;
 };
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
-  const orphanRooms = useDirectRooms();
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const { roomIds, unread } = useNativeNavigationScope('direct');
   const mx = useMatrixClient();
 
   const handleMarkAsRead = () => {
     if (!unread) return;
-    orphanRooms.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
+    roomIds.forEach((rId) => markAsReadFromExplicitUserActionInBackground(mx, rId));
     requestClose();
   };
 
@@ -59,13 +53,10 @@ const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }
 
 export function DirectTab() {
   const navigate = useNavigate();
-  const mx = useMatrixClient();
   const screenSize = useScreenSizeContext();
   const navToActivePath = useAtomValue(useNavToActivePathAtom());
 
-  const mDirects = useAtomValue(mDirectAtom);
-  const directs = useDirects(mx, allRoomsAtom, mDirects);
-  const directUnread = useRoomsUnread(directs, roomToUnreadAtom);
+  const { unread: directUnread } = useNativeNavigationScope('direct');
   const [menuAnchor, setMenuAnchor] = useState<RectCords>();
 
   const directSelected = useDirectSelected();
@@ -94,6 +85,7 @@ export function DirectTab() {
         {(triggerRef) => (
           <SidebarAvatar
             as="button"
+            aria-label="Direct Messages"
             ref={triggerRef}
             outlined
             onClick={handleDirectClick}

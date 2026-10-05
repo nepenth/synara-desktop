@@ -1,7 +1,177 @@
 import XCTest
+import UserNotifications
 @testable import Synara
 
 final class NotificationPreviewSupportTests: XCTestCase {
+    func testPreviewReferenceRejectsConflictsWithoutFlatteningThemAway() throws {
+        XCTAssertEqual(
+            try SynaraNotificationPreviewPayloadParser.parse(["room_id": "!Nhcu5BS-UMnFX7hBVfVSoXiD7OgH6iRT-xyIuqDnpYQ", "event_id": "$event"]).get().roomID,
+            "!Nhcu5BS-UMnFX7hBVfVSoXiD7OgH6iRT-xyIuqDnpYQ"
+        )
+        let same: [AnyHashable: Any] = [
+            "room_id": "!room:example.org", "event_id": "$event",
+            "synara.room_id": "!room:example.org",
+            "synara": ["room_id": " !room:example.org ", "event_id": "$event"]
+        ]
+        XCTAssertEqual(try SynaraNotificationPreviewPayloadParser.parse(same).get().roomID, "!room:example.org")
+        for payload: [AnyHashable: Any] in [
+            ["room_id": "!one:example.org", "event_id": "$event", "synara": ["room_id": "!two:example.org"]],
+            ["room_id": "!room:example.org", "synara.event_id": "$one", "synara": ["event_id": "$two"]],
+            ["room_id": "!room:example.org", "event_id": 42, "synara": ["event_id": "$event"]]
+        ] {
+            XCTAssertNil(SynaraNotificationPreviewPayloadParser.payload(from: payload))
+        }
+    }
+
+    func testPayloadFailuresExposeOnlyFixedReasonsAndBoundTraversal() {
+        func stage(_ payload: [AnyHashable: Any]) -> SynaraNotificationDiagnostics.Stage? {
+            guard case .failure(let failure) = SynaraNotificationPreviewPayloadParser.parse(payload) else { return nil }
+            return failure.stage
+        }
+        XCTAssertEqual(stage(["aps": ["badge": 3]]), .payloadNoEventReference)
+        XCTAssertEqual(stage(["event_id": "$event"]), .payloadMissingRoom)
+        XCTAssertEqual(stage(["room_id": "!room:example.org"]), .payloadMissingEvent)
+        XCTAssertEqual(stage(["room_id": "!room:example.org", "event_id": 42]), .payloadIdentifierTypeInvalid)
+        XCTAssertEqual(stage(["room_id": "!room:example.org", "event_id": "event"]), .payloadIdentifiersInvalid)
+        XCTAssertEqual(stage(["room_id": "!room:example.org", "event_id": "$event\u{202e}"]), .payloadIdentifiersInvalid)
+        var nested: [AnyHashable: Any] = ["room_id": "!room:example.org", "event_id": "$event"]
+        for _ in 0..<14 { nested = ["wrapper": nested] }
+        XCTAssertEqual(stage(nested), .payloadComplexityExceeded)
+        var wide: [AnyHashable: Any] = ["room_id": "!room:example.org", "event_id": "$event"]
+        for index in 0..<513 { wide["field\(index)"] = false }
+        XCTAssertEqual(stage(wide), .payloadComplexityExceeded)
+    }
+
+    func testTypedCoreFailureStagesKeepInitializationAndFetchCausesDistinct() {
+        for (code, stage): (String, SynaraNotificationDiagnostics.Stage) in [
+            ("p4-s11-nse-client-init-failed", .coreClientInitFailed),
+            ("p4-s11-nse-event-fetch-failed", .coreFetchFailed),
+            ("p4-s11-nse-session-rejected", .coreSessionRejected),
+            ("p4-s11-nse-network-timeout", .coreNetworkTimeout),
+            ("p4-s11-nse-store-lock-failed", .coreStoreLockFailed),
+            ("p4-s11-nse-sliding-sync-version-missing", .coreSlidingSyncVersionMissing),
+            ("p4-s11-nse-invalid-response", .coreInvalidResponse)
+        ] {
+            XCTAssertEqual(SynaraNotificationDiagnostics.previewFailureStage(coreCode: code), stage)
+        }
+        XCTAssertEqual(SynaraNotificationDiagnostics.previewFailureStage(coreCode: "token-secret"), .coreResolutionFailed)
+    }
+
+    func testSuppressionRequiresExplicitPolicyResultAndSupportedBuild() {
+        XCTAssertNil(SynaraAgentNotificationSuppressionPolicy.content(for: .agentPolicyFiltered, filteringEnabled: false))
+        for stage in [SynaraNotificationDiagnostics.Stage.coreFetchFailed, .coreDecryptionUnavailable, .coreEventFiltered, .resolvedApproval] {
+            XCTAssertNil(SynaraAgentNotificationSuppressionPolicy.content(for: stage, filteringEnabled: true))
+        }
+        let content = SynaraAgentNotificationSuppressionPolicy.content(for: .agentPolicyFiltered, filteringEnabled: true)
+        XCTAssertEqual(content?.title, "")
+        XCTAssertEqual(content?.body, "")
+        XCTAssertNil(content?.sound)
+        XCTAssertEqual(SynaraNotificationDiagnostics.previewFailureStage(coreCode: "p4-s11-nse-agent-policy-filtered"), .agentPolicyFiltered)
+    }
+
+    func testCriticalPermissionIsRequestedOnlyWhenAvailableToTheApp() {
+        let unsupported = SynaraNotificationAuthorizationPolicy.options(criticalAlertsSupported: false)
+        XCTAssertTrue(unsupported.contains([.alert, .badge, .sound]))
+        XCTAssertFalse(unsupported.contains(.criticalAlert))
+        XCTAssertTrue(SynaraNotificationAuthorizationPolicy.options(criticalAlertsSupported: true)
+            .contains(.criticalAlert))
+    }
+
+    func testGatewayHintsCannotGrantActionsUrgencyOrPreviewDisclosure() {
+        let gateway = UNMutableNotificationContent()
+        gateway.title = "Private sender"
+        gateway.body = "Private command"
+        gateway.categoryIdentifier = "synara.agent-approval"
+        gateway.interruptionLevel = .critical
+        gateway.sound = .defaultCritical
+        gateway.userInfo = ["room_id": "!room:example.org", "event_id": "$event"]
+        gateway.badge = 3
+        let fallback = SynaraNotificationPresentationPolicy.fallback(from: gateway)
+        XCTAssertEqual(fallback.title, "Synara")
+        XCTAssertEqual(fallback.body, "New activity")
+        XCTAssertEqual(fallback.categoryIdentifier, "")
+        XCTAssertEqual(fallback.interruptionLevel, .active)
+        XCTAssertEqual(fallback.userInfo["event_id"] as? String, "$event")
+        XCTAssertEqual(fallback.badge, 3)
+    }
+
+    func testVerifiedFreshApprovalUsesCriticalOnlyWithOSAuthorization() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        for authorized in [false, true] {
+            let content = SynaraNotificationPresentationPolicy.fallback(from: UNMutableNotificationContent())
+            let stage = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+                to: content, preview: nil, showPreview: false,
+                approvalAlertsEnabled: true, isAgentApproval: true,
+                originServerTimestampMS: 2_000_000_000,
+                criticalAlertsAuthorized: authorized, now: now
+            )
+            XCTAssertEqual(content.categoryIdentifier, "synara.agent-approval")
+            XCTAssertEqual(content.interruptionLevel, authorized ? .critical : .timeSensitive)
+            XCTAssertEqual(content.title, "Agent approval needed")
+            XCTAssertEqual(stage, authorized ? .resolvedCriticalApproval : .resolvedApproval)
+        }
+    }
+
+    func testSilentEventPreviewAndExpiredApprovalPreserveZeroBadge() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        for (approval, timestamp) in [
+            (false, UInt64(2_000_000_000)),
+            (true, UInt64(1_999_700_000))
+        ] {
+            let gateway = UNMutableNotificationContent()
+            gateway.badge = 0
+            gateway.sound = nil
+            let content = SynaraNotificationPresentationPolicy.fallback(from: gateway)
+            XCTAssertEqual(content.badge, 0)
+            XCTAssertNil(content.sound)
+
+            let stage = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+                to: content, preview: .init(title: "Sender", body: "Message"), showPreview: true,
+                approvalAlertsEnabled: true, isAgentApproval: approval,
+                originServerTimestampMS: timestamp, criticalAlertsAuthorized: true, now: now
+            )
+            XCTAssertEqual(stage, .resolvedPreview)
+            XCTAssertEqual(content.title, "Sender")
+            XCTAssertEqual(content.body, "Message")
+            XCTAssertEqual(content.badge, 0)
+            XCTAssertNil(content.sound)
+            XCTAssertEqual(content.categoryIdentifier, "")
+            XCTAssertEqual(content.interruptionLevel, .active)
+        }
+    }
+
+    func testOrdinaryExpiredAndDisabledApprovalAlertsNeverEscalate() {
+        let now = Date(timeIntervalSince1970: 2_000_000)
+        for (enabled, approval, timestamp) in [
+            (true, false, UInt64(2_000_000_000)),
+            (false, true, UInt64(2_000_000_000)),
+            (true, true, UInt64(1_999_700_000))
+        ] {
+            let content = SynaraNotificationPresentationPolicy.fallback(from: UNMutableNotificationContent())
+            let stage = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+                to: content, preview: .init(title: "Sender", body: "Message"), showPreview: true,
+                approvalAlertsEnabled: enabled, isAgentApproval: approval,
+                originServerTimestampMS: timestamp, criticalAlertsAuthorized: true, now: now
+            )
+            XCTAssertEqual(content.interruptionLevel, .active)
+            XCTAssertEqual(content.categoryIdentifier, "")
+            XCTAssertEqual(content.body, "Message")
+            XCTAssertEqual(stage, .resolvedPreview)
+        }
+    }
+
+    func testPreviewOptOutRetainsGenericContentAfterResolution() {
+        let content = SynaraNotificationPresentationPolicy.fallback(from: UNMutableNotificationContent())
+        let stage = SynaraNotificationPresentationPolicy.applyResolvedEvent(
+            to: content, preview: .init(title: "Sender", body: "Secret message"), showPreview: false,
+            approvalAlertsEnabled: true, isAgentApproval: false,
+            originServerTimestampMS: 0, criticalAlertsAuthorized: true
+        )
+        XCTAssertEqual(content.title, "Synara")
+        XCTAssertEqual(content.body, "New activity")
+        XCTAssertEqual(stage, .resolvedWithoutPreview)
+    }
+
     func testNotificationServiceExtensionDoesNotWriteAppIconBadge() throws {
         let url = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

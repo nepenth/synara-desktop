@@ -48,7 +48,7 @@ import { useNavToActivePathMapper } from '../../../hooks/useNavToActivePathMappe
 import { useDirectRooms } from './useDirectRooms';
 import { PageNav, PageNavContent, PageNavHeader } from '../../../components/page';
 import { useClosedNavCategoriesAtom } from '../../../state/hooks/closedNavCategories';
-import { useRoomsUnread } from '../../../state/hooks/unread';
+import { useNativeNavigationScope } from '../../../state/hooks/navigationUnread';
 import { markAsReadFromExplicitUserActionInBackground } from '../../../utils/notifications';
 import { stopPropagation } from '../../../utils/keyboard';
 import {
@@ -62,8 +62,7 @@ type DirectMenuProps = {
 };
 const DirectMenu = forwardRef<HTMLDivElement, DirectMenuProps>(({ requestClose }, ref) => {
   const mx = useMatrixClient();
-  const orphanRooms = useDirectRooms();
-  const unread = useRoomsUnread(orphanRooms, roomToUnreadAtom);
+  const { roomIds: orphanRooms, unread } = useNativeNavigationScope('direct');
 
   const handleMarkAsRead = () => {
     if (!unread) return;

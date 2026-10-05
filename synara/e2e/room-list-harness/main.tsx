@@ -7,6 +7,7 @@ import 'folds/dist/style.css';
 import { useSharedScrollVirtualizer } from '../../src/app/hooks/useSharedScrollVirtualizer';
 import { NotificationsFixture } from './NotificationsFixture';
 import { LiveCallFixture } from './LiveCallFixture';
+import { NavigationUnreadFixture } from './NavigationUnreadFixture';
 import { VirtualTile } from '../../src/app/components/virtualizer/VirtualTile';
 
 function RoomListFixture() {
@@ -92,7 +93,9 @@ function RoomListFixture() {
 }
 
 createRoot(document.getElementById('root')!).render(
-  new URLSearchParams(window.location.search).has('notifications') ? (
+  new URLSearchParams(window.location.search).has('navigationUnread') ? (
+    <NavigationUnreadFixture />
+  ) : new URLSearchParams(window.location.search).has('notifications') ? (
     <NotificationsFixture />
   ) : new URLSearchParams(window.location.search).has('livecall') ? (
     <LiveCallFixture />

@@ -17,6 +17,7 @@ Configuration:
     APPLE_SIGNING_IDENTITY
     APPLE_ID
     APPLE_APP_SPECIFIC_PASSWORD
+    SYNARA_MACOS_PROVISIONING_PROFILE (path to the matching Developer ID profile)
 
   App Store Connect API key notarization is also supported by setting:
     APPLE_API_KEY
@@ -53,7 +54,7 @@ if [[ -z "${APPLE_PASSWORD:-}" && -n "${APPLE_APP_SPECIFIC_PASSWORD:-}" ]]; then
 fi
 
 missing=()
-for name in APPLE_TEAM_ID APPLE_SIGNING_IDENTITY; do
+for name in APPLE_TEAM_ID APPLE_SIGNING_IDENTITY SYNARA_MACOS_PROVISIONING_PROFILE; do
   if [[ -z "${!name:-}" ]]; then
     missing+=("$name")
   fi
@@ -93,6 +94,13 @@ fi
 
 target="${SYNARA_MACOS_TARGET:-universal-apple-darwin}"
 bundles="${SYNARA_MACOS_BUNDLES:-dmg}"
+signing_dir="$(mktemp -d "${TMPDIR:-/tmp}/synara-macos-signing.XXXXXX")"
+trap 'rm -rf -- "$signing_dir"' EXIT
+export SYNARA_MACOS_PROVISIONING_PROFILE="$(python3 -c 'from pathlib import Path; import sys; print(Path(sys.argv[1]).resolve())' "$SYNARA_MACOS_PROVISIONING_PROFILE")"
+export SYNARA_MACOS_SIGNING_ENTITLEMENTS="$signing_dir/signing.entitlements"
+python3 scripts/check-macos-provisioning-profile.py "$SYNARA_MACOS_PROVISIONING_PROFILE" \
+  --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" \
+  --entitlements src-tauri/Entitlements.plist --entitlements-output "$SYNARA_MACOS_SIGNING_ENTITLEMENTS"
 
 config_json="$(
   node - <<'NODE'
@@ -102,6 +110,8 @@ const config = {
     macOS: {
       signingIdentity: process.env.APPLE_SIGNING_IDENTITY,
       providerShortName: process.env.APPLE_TEAM_ID,
+      entitlements: process.env.SYNARA_MACOS_SIGNING_ENTITLEMENTS,
+      files: { "embedded.provisionprofile": process.env.SYNARA_MACOS_PROVISIONING_PROFILE },
     },
   },
 };
@@ -133,6 +143,8 @@ fi
 dmg_paths=()
 
 codesign --verify --deep --strict --verbose=2 "$app_path"
+python3 scripts/check-macos-provisioning-profile.py "$SYNARA_MACOS_PROVISIONING_PROFILE" \
+  --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" --app "$app_path"
 spctl --assess --type execute --verbose=4 "$app_path"
 xcrun stapler validate "$app_path"
 

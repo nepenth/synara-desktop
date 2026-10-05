@@ -46,7 +46,7 @@
       "exceptionDomain": null,
       "signingIdentity": "-",
       "providerShortName": null,
-      "entitlements": null
+      "entitlements": "Entitlements.plist"
     },
     "createUpdaterArtifacts": false
   },

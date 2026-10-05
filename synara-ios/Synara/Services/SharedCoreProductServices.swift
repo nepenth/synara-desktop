@@ -605,6 +605,64 @@ final class SharedCoreMatrixClientService: MatrixClientServicing {
         )
     }
 
+    func agentNotificationPreferences() async throws -> SynaraAgentNotificationPreferences {
+        try await SharedCoreAgentNotificationPreferences.snapshot(core: host.core)
+    }
+
+    func agentNotificationEventAllowed(
+        roomID: String,
+        eventID: String,
+        session: AuthenticatedSession
+    ) async -> Bool {
+        // Read only the existing foreground owner. Never prepare a session,
+        // reopen a store, or run sync from a presentation callback.
+        func readyOwner() -> Bool {
+            guard applyLock.withLock({ foregroundActive && lastSession == session }) else { return false }
+            switch syncStatus {
+            case .connected, .syncing: return true
+            default: return false
+            }
+        }
+        let accountEpoch = await MainActor.run { host.sessionStore.sessionEpoch }
+        guard readyOwner(),
+              await MainActor.run(body: { host.sessionStore.currentState == .signedIn(session) }),
+              let before = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
+              before.status == "logged_in", before.userId == session.userID,
+              before.deviceId == session.deviceID,
+              URL(string: before.homeserverUrl ?? "") == session.homeserverURL,
+              let generation = before.sessionGeneration,
+              let allowed = try? await host.core.agentNotificationEventAllowed(roomId: roomID, eventId: eventID)
+        else { return true }
+        guard readyOwner(),
+              await MainActor.run(body: {
+                  host.sessionStore.sessionEpoch == accountEpoch && host.sessionStore.currentState == .signedIn(session)
+              }),
+              let after = try? await SharedCoreSessionStatus.sessionSnapshot(core: host.core),
+              after.status == "logged_in", after.sessionGeneration == generation,
+              after.userId == before.userId, after.deviceId == before.deviceId,
+              after.homeserverUrl == before.homeserverUrl
+        else { return true }
+        guard readyOwner(), await MainActor.run(body: {
+            host.sessionStore.sessionEpoch == accountEpoch && host.sessionStore.currentState == .signedIn(session)
+        }) else { return true }
+        return allowed
+    }
+
+    func agentNotificationPreferenceUpdates() -> AsyncStream<Void> {
+        SharedCoreAgentNotificationPreferences.invalidations(
+            host.livePoller.ownerSignals(
+                families: ["agent_notification_preferences"],
+                bufferingPolicy: .bufferingNewest(1)
+            )
+        )
+    }
+
+    func setAgentNotificationPreferences(
+        _ preferences: SynaraAgentNotificationPreferences
+    ) async throws -> SynaraAgentNotificationPreferences {
+        try await SharedCoreAgentNotificationPreferences.set(core: host.core, preferences: preferences)
+    }
+
     func setPushRuleDefault(encrypted: Bool, oneToOne: Bool, mode: String) async -> Bool {
         do {
             try await SharedCoreAccountSettings.pushRulesSetDefault(

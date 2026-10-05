@@ -182,10 +182,25 @@ function shippingFixture(t, options) {
   const app = join(f.root, "Synara.app");
   const extension = join(app, "PlugIns/SynaraNotificationService.appex");
   mkdirSync(extension, { recursive: true });
+  writeFileSync(join(app, "Info.plist"), "fixture app metadata");
   writeFileSync(join(extension, "Info.plist"), "fixture");
   writeFileSync(join(extension, "NSE"), "fixture image");
   const bin = join(f.root, "bin");
-  executable(join(bin, "plutil"), "#!/usr/bin/env bash\necho NSE\n");
+  executable(
+    join(bin, "plutil"),
+    `#!/usr/bin/env bash
+case "$1" in
+  -lint) [[ -s "$2" ]] ;;
+  -extract)
+    case "$2" in
+      CFBundleExecutable) echo NSE ;;
+      SynaraCriticalAlertsEnabled|SynaraNotificationFilteringEnabled) echo NO ;;
+      *) exit 94 ;;
+    esac ;;
+  *) exit 94 ;;
+esac
+`
+  );
   executable(join(bin, "stat"), "#!/usr/bin/env bash\necho 2048\n");
   executable(
     join(bin, "file"),

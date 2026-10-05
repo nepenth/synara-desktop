@@ -585,6 +585,8 @@ pub fn run() {
             matrix::auth::product::matrix_push_rules_set_mention,
             matrix::auth::product::matrix_push_rules_add_keyword,
             matrix::auth::product::matrix_push_rules_remove_keyword,
+            bridge::agent_notification_preferences::matrix_agent_notification_preferences_snapshot,
+            bridge::agent_notification_preferences::matrix_agent_notification_preferences_set,
             matrix::auth::product::matrix_room_notification_snapshot,
             matrix::auth::product::matrix_room_notification_set,
             matrix::auth::product::matrix_room_notifications_snapshot,

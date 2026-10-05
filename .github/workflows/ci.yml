@@ -5,7 +5,13 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
-    branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
+    branches:
+      [
+        main,
+        "feature/matrix-rust-sdk-full-replacement",
+        "feature/shared-native-core",
+        "release/**",
+      ]
   schedule:
     # Nightly full client suite, including the XCUITest lane.
     - cron: "17 11 * * *"
@@ -571,6 +577,10 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: synara
 
+      - name: Install WebKit for macOS timeline and navigation tests
+        run: npx playwright install --with-deps webkit
+        working-directory: synara
+
       - name: Check repository layout
         run: npm run check:repo-layout
 
@@ -623,7 +633,7 @@ jobs:
         run: npm run test:browser:timeline
         working-directory: synara
 
-      - name: Test native timeline navigation in Chromium
+      - name: Test native timeline navigation and macOS layout
         id: browser_native_timeline
         run: npm run test:browser:native-timeline
         working-directory: synara
@@ -633,12 +643,17 @@ jobs:
         run: npm run test:browser:desktop-polish:ci
         working-directory: synara
 
+      - name: macOS navigation unread regression tests
+        id: browser_navigation_unread
+        run: npx playwright test --config e2e/room-list-harness/playwright.config.ts navigation-unread.spec.ts --project=webkit
+        working-directory: synara
+
       - name: Check production dependency advisories
         run: npm run check:security
         working-directory: synara
 
       - name: Upload failed browser diagnostics
-        if: failure() && (steps.browser_timeline.outcome == 'failure' || steps.browser_native_timeline.outcome == 'failure' || steps.browser_desktop_polish.outcome == 'failure')
+        if: failure() && (steps.browser_timeline.outcome == 'failure' || steps.browser_native_timeline.outcome == 'failure' || steps.browser_desktop_polish.outcome == 'failure' || steps.browser_navigation_unread.outcome == 'failure')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: node-browser-failure-diagnostics
@@ -1018,7 +1033,21 @@ jobs:
     # still runs after job failures; skip when this workflow was cancelled so a
     # superseded push run cannot fail the required check on the surviving SHA.
     if: always() && !cancelled()
-    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
+    needs:
+      [
+        changes,
+        validate-rust,
+        validate-frontend,
+        ios-tests,
+        ios-ui-tests,
+        ios-compile,
+        synapse-native-reactions,
+        synapse-native-attachments,
+        synapse-native-polls,
+        synapse-native-rich-messages,
+        synapse-native-threads,
+        synapse-native-receipts,
+      ]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:

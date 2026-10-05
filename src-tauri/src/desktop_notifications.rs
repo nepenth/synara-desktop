@@ -622,9 +622,20 @@ mod macos_delivery {
 
     pub async fn authorization_status(
     ) -> Result<objc2_user_notifications::UNAuthorizationStatus, String> {
+        notification_settings().await.map(|settings| settings.0)
+    }
+
+    pub async fn notification_settings() -> Result<
+        (
+            objc2_user_notifications::UNAuthorizationStatus,
+            objc2_user_notifications::UNNotificationSetting,
+        ),
+        String,
+    > {
         use block2::RcBlock;
         use objc2_user_notifications::{
-            UNAuthorizationStatus, UNNotificationSettings, UNUserNotificationCenter,
+            UNAuthorizationStatus, UNNotificationSetting, UNNotificationSettings,
+            UNUserNotificationCenter,
         };
 
         // UserNotifications raises an ObjC exception outside an app bundle.
@@ -632,7 +643,10 @@ mod macos_delivery {
         // The legacy crate can hook bundleIdentifier; bundlePath remains the
         // actual bundle path even if another caller initialized it first.
         if !is_bundled() {
-            return Ok(UNAuthorizationStatus::Authorized);
+            return Ok((
+                UNAuthorizationStatus::Authorized,
+                UNNotificationSetting::NotSupported,
+            ));
         }
         let (tx, rx) = tokio::sync::oneshot::channel();
         {
@@ -641,7 +655,11 @@ mod macos_delivery {
                 RcBlock::new(move |settings: std::ptr::NonNull<UNNotificationSettings>| {
                     // Apple's completion handler supplies a valid settings object
                     // for the duration of this callback; no reference escapes.
-                    let status = unsafe { settings.as_ref() }.authorizationStatus();
+                    let settings = unsafe { settings.as_ref() };
+                    let status = (
+                        settings.authorizationStatus(),
+                        settings.criticalAlertSetting(),
+                    );
                     if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
                         let _ = tx.send(status);
                     }

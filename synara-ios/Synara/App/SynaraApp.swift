@@ -441,6 +441,29 @@ final class SynaraAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificati
             push?.applyIncomingBadge(from: notification.request.content.userInfo)
         }
 
+        if let target = SynaraForegroundNotificationPolicy.target(from: notification.request.content.userInfo) {
+            let owner = await MainActor.run { () -> (MatrixClientServicing, AuthenticatedSession, Int)? in
+                guard foregroundActive, UIApplication.shared.applicationState == .active,
+                      let matrix, let session, case .signedIn(let signedIn) = session.currentState else { return nil }
+                return (matrix, signedIn, session.sessionEpoch)
+            }
+            if let (ownerMatrix, signedIn, epoch) = owner {
+                let allowed = await ownerMatrix.agentNotificationEventAllowed(
+                    roomID: target.roomID, eventID: target.eventID, session: signedIn
+                )
+                let suppress = await MainActor.run {
+                    SynaraForegroundNotificationPolicy.shouldSuppress(
+                        eventAllowed: allowed,
+                        foregroundActive: foregroundActive && UIApplication.shared.applicationState == .active,
+                        sameSession: matrix === ownerMatrix && session?.currentState == .signedIn(signedIn),
+                        initialAccountEpoch: epoch,
+                        currentAccountEpoch: session?.sessionEpoch ?? -1
+                    )
+                }
+                if suppress { return [] }
+            }
+        }
+
         return [.banner, .sound, .badge, .list]
     }
 

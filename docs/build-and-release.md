@@ -8,11 +8,11 @@ release workflow behavior.
 
 ## Release Lanes
 
-| Lane                | Purpose                                                              |         Client-visible update? |
-| ------------------- | -------------------------------------------------------------------- | -----------------------------: |
-| `main`              | Integration branch. Runs normal CI on push and PR.                   |                             No |
-| `release/vX.Y.Z`    | Version and notes PR. Runs the full client Quality gate, including iOS simulator unit and UI suites. | No |
-| Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.           | Yes, after every client passes |
+| Lane                | Purpose                                                                                              |         Client-visible update? |
+| ------------------- | ---------------------------------------------------------------------------------------------------- | -----------------------------: |
+| `main`              | Integration branch. Runs normal CI on push and PR.                                                   |                             No |
+| `release/vX.Y.Z`    | Version and notes PR. Runs the full client Quality gate, including iOS simulator unit and UI suites. |                             No |
+| Pushed tag `vX.Y.Z` | Coordinated macOS, Linux, and internal TestFlight release.                                           | Yes, after every client passes |
 
 The maintainer merges a green release PR and pushes the matching version tag as
 the single deliberate publication action. The tag workflow builds and checks
@@ -140,8 +140,13 @@ npm run tauri build -- --bundles deb --config '{"bundle":{"createUpdaterArtifact
 macOS unsigned local smoke:
 
 ```bash
-npm run tauri build -- --bundles app
+npm run tauri build -- --bundles app --config '{"bundle":{"macOS":{"entitlements":"Entitlements.adhoc.plist"}}}'
 ```
+
+The ad-hoc smoke lane deliberately claims no restricted notification entitlement.
+It verifies package construction and UI behavior, not Time Sensitive or Critical
+delivery. Shipping Developer ID bundles retain the Time Sensitive entitlement
+and must embed the matching provisioning profile before signing.
 
 macOS workstation tasks requiring `xcodebuild`, Swift, simulator execution, or
 full app launch smoke are tracked in
@@ -162,10 +167,10 @@ full app launch smoke are tracked in
 When a change needs interactive candidate testing, add the `needs-package` PR
 label. It builds disposable smoke artifacts:
 
-   - `synara-macos-app`: unsigned/ad-hoc macOS `.app` release-candidate smoke artifact.
-   - `synara-linux-arch-pkg`: Arch/CachyOS pacman package artifact for
-     `pacman -U` smoke and GitHub Release-backed pacman repo validation.
-   - `synara-linux-deb`: Debian-family package smoke artifact.
+- `synara-macos-app`: unsigned/ad-hoc macOS `.app` release-candidate smoke artifact.
+- `synara-linux-arch-pkg`: Arch/CachyOS pacman package artifact for
+  `pacman -U` smoke and GitHub Release-backed pacman repo validation.
+- `synara-linux-deb`: Debian-family package smoke artifact.
 
 Record any interactive results in
 [production-smoke-checklist.md](production-smoke-checklist.md). Release PRs do
@@ -201,9 +206,7 @@ If an exact build uploads successfully but only its TestFlight promotion job
 fails, repair the cause on `main` and use **TestFlight Promotion Recovery** with
 the existing release tag and exact uploaded build number. This recovery checks
 that the tag is on `main`, reads the release notes from `main`, and promotes the
-already uploaded build. It does not rebuild or republish desktop assets.
-4. Confirm hosted macOS `latest.json`.
-5. Verify the fixed Linux repository URLs:
+already uploaded build. It does not rebuild or republish desktop assets. 4. Confirm hosted macOS `latest.json`. 5. Verify the fixed Linux repository URLs:
 
 ```text
 https://github.com/nepenth/synara-desktop/releases/download/pacman-repo/synara.db
@@ -211,10 +214,11 @@ https://github.com/nepenth/synara-desktop/releases/download/apt-repo/Packages
 ```
 
 For periodic or higher-risk releases, also smoke installed-app update behavior:
-   - iOS updates through TestFlight.
-   - macOS updates through the Tauri updater flow.
-   - Linux updates through `sudo apt upgrade`, `paru -Syu`, or
-     `sudo pacman -Syu`; the app may only notify/instruct.
+
+- iOS updates through TestFlight.
+- macOS updates through the Tauri updater flow.
+- Linux updates through `sudo apt upgrade`, `paru -Syu`, or
+  `sudo pacman -Syu`; the app may only notify/instruct.
 
 Updater secrets, endpoint names, and publication rules live in this runbook.
 Release-branch PRs into `main` from `release/vX.Y.Z` run Quality gate including
@@ -228,6 +232,19 @@ macOS releases require Apple Developer ID and notarization secrets consumed by
 the protected release workflow. The expected variable names and validation
 rules are listed below; values must remain in GitHub Secrets or
 permission-restricted local storage.
+
+macOS signing also requires `MACOS_PROVISIONING_PROFILE_BASE64`, containing a
+current `MAC_APP_DIRECT` profile for `com.whylandcreative.synara.desktop` with
+Time Sensitive Notifications enabled and the same Developer ID Application
+certificate used to sign the app. Store it at the same secret scope as the other
+macOS signing secrets. The signed release and manual signed-build workflows
+validate its team, application identifier, platform, expiry, capability and
+certificate before building. They generate identifier-bound signing entitlements,
+embed `Contents/embedded.provisionprofile`, and inspect the final app signature.
+For local signed builds set `SYNARA_MACOS_PROVISIONING_PROFILE` to that profile's
+absolute path in the local signing environment. Enabling this standard capability
+does not enable Critical Alerts or notification filtering; those require their
+separate Apple approvals and explicit signed configurations.
 
 Updater-enabled releases require:
 
@@ -330,7 +347,6 @@ atomically deployed static repository.
   Release-backed pacman repository; iOS uses TestFlight or the App Store.
 - Production publication is blocked unless the exact-tag workflow validates all
   configured clients and protected credentials.
-
 
 Apple artifact symbol checks require `rustup component add llvm-tools-preview
 --toolchain 1.96` before generating bindings. Apple CI installs this component

@@ -4,6 +4,8 @@
 //! Credentials use dedicated zeroizing arguments; generic command envelopes
 //! never carry recovery secrets. Narrow NSE product builds use synara-nse-core.
 
+mod agent_notification_preferences;
+pub use agent_notification_preferences::*;
 mod approval_inbox;
 pub use approval_inbox::{
     AgentApprovalInboxDto, AgentApprovalInboxError, AgentApprovalInboxItemDto,
@@ -192,10 +194,8 @@ const NSE_FAILED_CODE: &str = "p4-s11-nse-store-failed";
 const NSE_FAILED_DESCRIPTION: &str = "The NSE read-only store request could not be completed.";
 const NSE_RESTORE_FAILED_CODE: &str = "p4-s11-nse-restore-failed";
 const NSE_RESTORE_FAILED_DESCRIPTION: &str = "The NSE session could not be restored.";
-const NSE_CLIENT_INIT_FAILED_CODE: &str = "p4-s11-nse-client-init-failed";
 const NSE_CLIENT_INIT_FAILED_DESCRIPTION: &str =
     "The NSE notification client could not be initialized.";
-const NSE_EVENT_FETCH_FAILED_CODE: &str = "p4-s11-nse-event-fetch-failed";
 const NSE_EVENT_FETCH_FAILED_DESCRIPTION: &str = "The NSE notification event could not be fetched.";
 const NSE_RESOLUTION_TIMEOUT_CODE: &str = "p4-s11-nse-resolution-timeout";
 const NSE_RESOLUTION_TIMEOUT_DESCRIPTION: &str = "The NSE notification resolution timed out.";

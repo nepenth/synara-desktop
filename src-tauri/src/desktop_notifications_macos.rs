@@ -181,37 +181,101 @@ pub(super) async fn permission() -> Result<String, String> {
 }
 
 pub(super) async fn request_permission() -> Result<String, String> {
+    let options = authorization_options(critical_alerts_supported());
     let (tx, rx) = tokio::sync::oneshot::channel();
     {
         let tx = Mutex::new(Some(tx));
-        let completion = RcBlock::new(move |granted: objc2::runtime::Bool, error: *mut NSError| {
-            let result = if error.is_null() {
-                Ok(if granted.as_bool() {
-                    "granted"
+        let completion =
+            RcBlock::new(move |_granted: objc2::runtime::Bool, error: *mut NSError| {
+                let result = if error.is_null() {
+                    Ok(())
                 } else {
-                    "denied"
+                    Err("macOS notification permission request failed".to_owned())
+                };
+                if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
+                    let _ = tx.send(result);
                 }
-                .to_owned())
-            } else {
-                Err("macOS notification permission request failed".to_owned())
-            };
-            if let Some(tx) = tx.lock().unwrap_or_else(|p| p.into_inner()).take() {
-                let _ = tx.send(result);
-            }
-        });
+            });
         UNUserNotificationCenter::currentNotificationCenter()
-            .requestAuthorizationWithOptions_completionHandler(
-                UNAuthorizationOptions::Alert
-                    | UNAuthorizationOptions::Sound
-                    | UNAuthorizationOptions::Badge,
-                &completion,
-            );
+            .requestAuthorizationWithOptions_completionHandler(options, &completion);
     }
     // A user may need time to answer the OS prompt; this is not a delivery retry.
     tokio::time::timeout(std::time::Duration::from_secs(60), rx)
         .await
         .map_err(|_| "macOS notification permission request timed out".to_owned())?
-        .map_err(|_| "macOS notification permission request closed".to_owned())?
+        .map_err(|_| "macOS notification permission request closed".to_owned())??;
+    // Denying the additional Critical capability must not mask ordinary
+    // notification authorization that is already enabled.
+    permission().await
+}
+
+fn authorization_options(critical_alerts_supported: bool) -> UNAuthorizationOptions {
+    let options = UNAuthorizationOptions::Alert
+        | UNAuthorizationOptions::Sound
+        | UNAuthorizationOptions::Badge;
+    if critical_alerts_supported {
+        options | UNAuthorizationOptions::CriticalAlert
+    } else {
+        options
+    }
+}
+
+fn critical_alerts_supported() -> bool {
+    static SUPPORTED: OnceLock<bool> = OnceLock::new();
+    *SUPPORTED.get_or_init(|| {
+        use std::ffi::c_void;
+        // Read the current executable's signed entitlement through the public
+        // macOS Security API. OS settings alone do not establish capability.
+        #[link(name = "Security", kind = "framework")]
+        extern "C" {
+            fn SecTaskCreateFromSelf(allocator: *const c_void) -> *const c_void;
+            fn SecTaskCopyValueForEntitlement(
+                task: *const c_void,
+                entitlement: *const c_void,
+                error: *mut *const c_void,
+            ) -> *const c_void;
+        }
+        #[link(name = "CoreFoundation", kind = "framework")]
+        extern "C" {
+            fn CFRelease(value: *const c_void);
+            fn CFGetTypeID(value: *const c_void) -> usize;
+            fn CFBooleanGetTypeID() -> usize;
+            fn CFBooleanGetValue(value: *const c_void) -> bool;
+        }
+        let key = NSString::from_str("com.apple.developer.usernotifications.critical-alerts");
+        // SAFETY: SecTask returns owned CF objects or null. NSString is
+        // toll-free bridged to CFString. Values are type-checked as CFBoolean
+        // before access, and both owned objects are released exactly once.
+        unsafe {
+            let task = SecTaskCreateFromSelf(std::ptr::null());
+            if task.is_null() {
+                return false;
+            }
+            let value = SecTaskCopyValueForEntitlement(
+                task,
+                (&*key as *const NSString).cast(),
+                std::ptr::null_mut(),
+            );
+            CFRelease(task);
+            if value.is_null() {
+                return false;
+            }
+            let supported = CFGetTypeID(value) == CFBooleanGetTypeID() && CFBooleanGetValue(value);
+            CFRelease(value);
+            supported
+        }
+    })
+}
+
+fn approval_interruption_level(
+    critical_setting: UNNotificationSetting,
+    silent: bool,
+) -> UNNotificationInterruptionLevel {
+    if critical_setting == UNNotificationSetting::Enabled && !silent {
+        UNNotificationInterruptionLevel::Critical
+    } else {
+        UNNotificationInterruptionLevel::TimeSensitive
+    }
 }
 
 fn register_category(actions: &[DesktopNotificationAction]) -> Retained<NSString> {
@@ -297,6 +361,12 @@ pub(super) async fn show<R: Runtime>(
         return Ok(false);
     }
     initialize(app);
+    let (_, critical_setting) = macos_delivery::notification_settings().await?;
+    let critical_setting = if critical_alerts_supported() {
+        critical_setting
+    } else {
+        UNNotificationSetting::NotSupported
+    };
     let (rx, identifier) = {
         let content = UNMutableNotificationContent::new();
         content.setTitle(&NSString::from_str(title));
@@ -304,11 +374,24 @@ pub(super) async fn show<R: Runtime>(
             content.setBody(&NSString::from_str(body));
         }
         if is_time_sensitive_agent_approval(action_context) {
-            content.setSubtitle(&NSString::from_str("Time-sensitive · expires in 5 minutes"));
-            if notification.sound != Some(DesktopNotificationSoundPolicy::Silent) {
-                content.setSound(Some(&UNNotificationSound::defaultSound()));
+            let silent = notification.sound == Some(DesktopNotificationSoundPolicy::Silent);
+            let level = approval_interruption_level(critical_setting, silent);
+            content.setSubtitle(&NSString::from_str(
+                if level == UNNotificationInterruptionLevel::Critical {
+                    "Critical approval · expires in 5 minutes"
+                } else {
+                    "Time-sensitive · expires in 5 minutes"
+                },
+            ));
+            if !silent {
+                let sound = if level == UNNotificationInterruptionLevel::Critical {
+                    UNNotificationSound::defaultCriticalSound()
+                } else {
+                    UNNotificationSound::defaultSound()
+                };
+                content.setSound(Some(&sound));
             }
-            content.setInterruptionLevel(UNNotificationInterruptionLevel::TimeSensitive);
+            content.setInterruptionLevel(level);
         }
         if !actions.is_empty() {
             content.setCategoryIdentifier(&register_category(actions));
@@ -409,6 +492,35 @@ fn settle_submission_receipt(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn critical_permission_requires_os_capability() {
+        use super::*;
+        assert!(!authorization_options(false).contains(UNAuthorizationOptions::CriticalAlert));
+        assert!(authorization_options(true).contains(UNAuthorizationOptions::CriticalAlert));
+    }
+
+    #[test]
+    fn critical_approval_requires_authorization_and_audible_delivery() {
+        use super::*;
+        for setting in [
+            UNNotificationSetting::NotSupported,
+            UNNotificationSetting::Disabled,
+        ] {
+            assert_eq!(
+                approval_interruption_level(setting, false),
+                UNNotificationInterruptionLevel::TimeSensitive
+            );
+        }
+        assert_eq!(
+            approval_interruption_level(UNNotificationSetting::Enabled, false),
+            UNNotificationInterruptionLevel::Critical
+        );
+        assert_eq!(
+            approval_interruption_level(UNNotificationSetting::Enabled, true),
+            UNNotificationInterruptionLevel::TimeSensitive
+        );
+    }
+
     use super::*;
 
     #[test]

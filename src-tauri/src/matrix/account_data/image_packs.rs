@@ -18,6 +18,9 @@ pub(crate) fn event_name_for_account_data_wakeup(
     kind: NativeAccountDataWakeupKind,
 ) -> &'static str {
     match kind {
+        NativeAccountDataWakeupKind::AgentNotificationPreferences => {
+            "matrix-agent-notification-preferences-updated"
+        }
         NativeAccountDataWakeupKind::ImagePacks => IMAGE_PACKS_UPDATED_EVENT,
         NativeAccountDataWakeupKind::AgentApprovalHistory => AGENT_APPROVAL_HISTORY_UPDATED_EVENT,
     }

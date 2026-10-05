@@ -11,6 +11,8 @@ settings:
     CODE_SIGN_STYLE: Automatic
     MARKETING_VERSION: "2.1.43"
     CURRENT_PROJECT_VERSION: "2.1.43"
+    SYNARA_CRITICAL_ALERTS_ENABLED: "NO"
+    SYNARA_NOTIFICATION_FILTERING_ENABLED: "NO"
 packages:
   SynaraCore:
     path: SynaraCore
@@ -55,10 +57,13 @@ targets:
           - remote-notification
         NSCameraUsageDescription: Synara needs camera access to capture photos and videos for messages.
         SynaraPushGatewayURL: "$(SYNARA_PUSH_GATEWAY_URL)"
+        SynaraCriticalAlertsEnabled: "$(SYNARA_CRITICAL_ALERTS_ENABLED)"
+        SynaraNotificationFilteringEnabled: "$(SYNARA_NOTIFICATION_FILTERING_ENABLED)"
         SynaraKeychainAccessGroup: "$(AppIdentifierPrefix)com.whylandcreative.synara.shared"
     settings:
       base:
-        CODE_SIGN_ENTITLEMENTS: Synara/Resources/Synara.entitlements
+        CODE_SIGN_ENTITLEMENTS: "$(SYNARA_APP_ENTITLEMENTS)"
+        SYNARA_APP_ENTITLEMENTS: Synara/Resources/Synara.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara
         PRODUCT_NAME: Synara
         SYNARA_PUSH_GATEWAY_URL: ""
@@ -87,13 +92,16 @@ targets:
         CFBundleVersion: "$(CURRENT_PROJECT_VERSION)"
         ITSAppUsesNonExemptEncryption: false
         SynaraKeychainAccessGroup: "$(AppIdentifierPrefix)com.whylandcreative.synara.shared"
+        SynaraCriticalAlertsEnabled: "$(SYNARA_CRITICAL_ALERTS_ENABLED)"
+        SynaraNotificationFilteringEnabled: "$(SYNARA_NOTIFICATION_FILTERING_ENABLED)"
         NSExtension:
           NSExtensionPointIdentifier: com.apple.usernotifications.service
           NSExtensionPrincipalClass: "$(PRODUCT_MODULE_NAME).NotificationService"
     settings:
       base:
         APPLICATION_EXTENSION_API_ONLY: YES
-        CODE_SIGN_ENTITLEMENTS: SynaraNotificationService/Resources/SynaraNotificationService.entitlements
+        CODE_SIGN_ENTITLEMENTS: "$(SYNARA_NSE_ENTITLEMENTS)"
+        SYNARA_NSE_ENTITLEMENTS: SynaraNotificationService/Resources/SynaraNotificationService.entitlements
         PRODUCT_BUNDLE_IDENTIFIER: com.whylandcreative.synara.NotificationService
         PRODUCT_NAME: SynaraNotificationService
         SKIP_INSTALL: YES

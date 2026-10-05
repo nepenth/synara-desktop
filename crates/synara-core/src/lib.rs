@@ -99,7 +99,8 @@ mod shared_core_ffi;
 pub use shared_core_ffi::{
     AgentApprovalDecisionDto, AgentApprovalHistoryCommandError, AgentApprovalHistoryItemDto,
     AgentApprovalHistorySnapshotDto, AgentApprovalInboxDto, AgentApprovalInboxError,
-    AgentApprovalInboxItemDto, AgentApprovalSendDto, AgentApprovalSendError, BackupStatusDto,
+    AgentApprovalInboxItemDto, AgentApprovalSendDto, AgentApprovalSendError,
+    AgentNotificationPreferencesDto, AgentNotificationPreferencesError, BackupStatusDto,
     ComposerReplyDraftDto, ComposerReplyDraftError, ComposerReplyDraftPreviewDto,
     CrossSigningStatusDto, CryptoStatusDto, DeviceCommandError, DeviceDeleteChallengeDto,
     DeviceDeleteDto, DeviceSnapshotDto, DeviceSummaryDto, DirectorySearchCommandError,

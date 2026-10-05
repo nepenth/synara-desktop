@@ -35,8 +35,12 @@
 	<false/>
 	<key>NSCameraUsageDescription</key>
 	<string>Synara needs camera access to capture photos and videos for messages.</string>
+	<key>SynaraCriticalAlertsEnabled</key>
+	<string>$(SYNARA_CRITICAL_ALERTS_ENABLED)</string>
 	<key>SynaraKeychainAccessGroup</key>
 	<string>$(AppIdentifierPrefix)com.whylandcreative.synara.shared</string>
+	<key>SynaraNotificationFilteringEnabled</key>
+	<string>$(SYNARA_NOTIFICATION_FILTERING_ENABLED)</string>
 	<key>SynaraPushGatewayURL</key>
 	<string>$(SYNARA_PUSH_GATEWAY_URL)</string>
 	<key>UIApplicationSceneManifest</key>

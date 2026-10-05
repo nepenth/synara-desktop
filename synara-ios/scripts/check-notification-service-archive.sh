@@ -23,6 +23,8 @@ if [[ ! -d "$appex" ]]; then
   exit 1
 fi
 
+"$repo_root/synara-ios/scripts/check-notification-capabilities.sh" "$app_path"
+
 executable_name="$(plutil -extract CFBundleExecutable raw "$appex/Info.plist")"
 executable="$appex/$executable_name"
 if [[ ! -f "$executable" ]]; then

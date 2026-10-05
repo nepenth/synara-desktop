@@ -605,6 +605,42 @@ const api = {
       };
     });
   },
+  hermesActivityEdit(updates = 54, eventId = '$1') {
+    emitActiveBatch((current, streamId) => {
+      const index = current.rows.findIndex((row) => 'eventId' in row && row.eventId === eventId);
+      const row = current.rows[index];
+      if (!row || row.kind !== 'message') throw new Error('Hermes edit fixture row missing');
+      const entries = Array.from({ length: updates }, (_, line) =>
+        line % 7 === 3
+          ? `<li>❌ Background task failed: <code>ssh -o BatchMode=yes -o ConnectTimeout=25 agent@example.test</code>. Last output:<pre><code>File &quot;/src/tensorfold/families/glm5_next/cuda/nvfp4_admit.py&quot;, line 180\n  require_reserve(available(), steps[layer], total_reserve)\n  raise NoHostReserve()</code></pre></li>`
+          : `<li>📖 Reading agent notes ${
+              line + 1
+            }. The comparison set is ready and the server is off. Check the available memory before loading weights and running the same questions.</li>`
+      ).join('');
+      return {
+        schemaVersion: 1,
+        sessionGeneration: current.sessionGeneration,
+        roomId: current.roomId,
+        streamId,
+        revision: current.revision + 1,
+        ops: [
+          {
+            op: 'set',
+            index,
+            row: {
+              ...row,
+              edited: true,
+              body: `🛠 Tool activity (${updates} updates)\n${Array.from(
+                { length: updates },
+                (_, line) => `${line + 1}. Reading agent notes.`
+              ).join('\n')}`,
+              formattedBody: `<p><strong>🛠 Tool activity (${updates} updates)</strong></p><ol>${entries}</ol>`,
+            },
+          },
+        ],
+      };
+    });
+  },
   addReaction(eventId = '$50') {
     emitActiveBatch((current, streamId) => {
       const index = current.rows.findIndex(

@@ -12,6 +12,8 @@ pub const REACT_MATRIX_COMMAND_CENSUS: &[&str] = &[
     "matrix_agent_approval_decide",
     "matrix_agent_approval_history_snapshot",
     "matrix_agent_approvals_list",
+    "matrix_agent_notification_preferences_set",
+    "matrix_agent_notification_preferences_snapshot",
     "matrix_backup_repair",
     "matrix_backup_restore",
     "matrix_backup_setup",

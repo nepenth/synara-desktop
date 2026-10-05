@@ -2445,6 +2445,23 @@ export function NativeTimelinePresenter({
     measureElement,
     overscan: 16,
   });
+  useLayoutEffect(() => {
+    const viewport = scrollRef.current;
+    if (!viewport) return;
+    // Edited events keep their keyed DOM node and ref. The body can therefore
+    // grow by thousands of pixels while adjacent absolute rows still use the
+    // previous height until ResizeObserver runs. Remeasure the bounded mounted
+    // window through the React adapter (which guards commit-phase updates).
+    // The adapter may defer reads during scrolling; rerun when scrolling ends.
+    // Async media/font changes still use the same existing observer.
+    for (const element of viewport.querySelectorAll<HTMLDivElement>(
+      '[data-native-timeline-row-key]'
+    )) {
+      const key = element.dataset.nativeTimelineRowKey;
+      const index = key === undefined ? undefined : rowIndexByKey.get(key);
+      if (index !== undefined) virtualizer.measureElement(element);
+    }
+  }, [rows, messageSpacing, rowIndexByKey, virtualizer, virtualizer.isScrolling]);
   const timedRows = useMemo(() => collectTimedTimelineRows(rows), [rows]);
   const railAxis = useMemo(
     () => (rows.length === 0 ? undefined : sevenDayRailAxis(Date.now(), timedRows)),

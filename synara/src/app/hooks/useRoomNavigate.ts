@@ -14,7 +14,7 @@ import {
 import { useMatrixClient } from './useMatrixClient';
 import { getOrphanParents, guessPerfectParent } from '../utils/room';
 import { roomToParentsAtom } from '../state/room/roomToParents';
-import { mDirectAtom } from '../state/mDirectList';
+import { useNativeNavigationScope } from '../state/hooks/navigationUnread';
 import { useSelectedSpace } from './router/useSelectedSpace';
 import { settingsAtom } from '../state/settings';
 import { useSetting } from '../state/hooks/settings';
@@ -26,7 +26,7 @@ export const useRoomNavigate = () => {
   const [, startTransition] = useTransition();
   const mx = useMatrixClient();
   const roomToParents = useAtomValue(roomToParentsAtom);
-  const mDirects = useAtomValue(mDirectAtom);
+  const { roomIds: directRoomIds } = useNativeNavigationScope('direct');
   const selectedSpace = useSelectedSpace();
   const location = useLocation();
   const originSpace =
@@ -73,14 +73,14 @@ export const useRoomNavigate = () => {
         return;
       }
 
-      if (mDirects.has(roomId)) {
+      if (directRoomIds.includes(roomId)) {
         startTransition(() => navigate(getDirectRoomPath(roomIdOrAlias, eventId), opts));
         return;
       }
 
       startTransition(() => navigate(getHomeRoomPath(roomIdOrAlias, eventId), opts));
     },
-    [mx, navigate, startTransition, spaceSelectedId, roomToParents, mDirects, developerTools]
+    [mx, navigate, startTransition, spaceSelectedId, roomToParents, directRoomIds, developerTools]
   );
 
   const navigateThread = useCallback(
@@ -108,13 +108,13 @@ export const useRoomNavigate = () => {
         );
         return;
       }
-      if (mDirects.has(roomId)) {
+      if (directRoomIds.includes(roomId)) {
         startTransition(() => navigate(getDirectRoomThreadPath(roomIdOrAlias, threadRootId), opts));
         return;
       }
       startTransition(() => navigate(getHomeRoomThreadPath(roomIdOrAlias, threadRootId), opts));
     },
-    [mx, navigate, startTransition, spaceSelectedId, roomToParents, mDirects, developerTools]
+    [mx, navigate, startTransition, spaceSelectedId, roomToParents, directRoomIds, developerTools]
   );
 
   return {

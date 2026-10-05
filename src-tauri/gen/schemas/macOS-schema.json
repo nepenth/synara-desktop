@@ -567,6 +567,18 @@
           "markdownDescription": "Enables the matrix_agent_approvals_list command without any pre-configured scope."
         },
         {
+          "description": "Enables the matrix_agent_notification_preferences_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-notification-preferences-set",
+          "markdownDescription": "Enables the matrix_agent_notification_preferences_set command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the matrix_agent_notification_preferences_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-matrix-agent-notification-preferences-snapshot",
+          "markdownDescription": "Enables the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
+        },
+        {
           "description": "Enables the matrix_backup_repair command without any pre-configured scope.",
           "type": "string",
           "const": "allow-matrix-backup-repair",
@@ -1927,6 +1939,18 @@
           "type": "string",
           "const": "deny-matrix-agent-approvals-list",
           "markdownDescription": "Denies the matrix_agent_approvals_list command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_agent_notification_preferences_set command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-notification-preferences-set",
+          "markdownDescription": "Denies the matrix_agent_notification_preferences_set command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the matrix_agent_notification_preferences_snapshot command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-matrix-agent-notification-preferences-snapshot",
+          "markdownDescription": "Denies the matrix_agent_notification_preferences_snapshot command without any pre-configured scope."
         },
         {
           "description": "Denies the matrix_backup_repair command without any pre-configured scope.",

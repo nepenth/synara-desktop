@@ -3,6 +3,26 @@ import UserNotifications
 @testable import Synara
 
 final class NotificationDeliveryCoordinatorTests: XCTestCase {
+    func testDeadlineFallbackCannotRestoreUnverifiedApprovalCategory() {
+        let gateway = UNMutableNotificationContent()
+        gateway.categoryIdentifier = "synara.agent-approval"
+        gateway.interruptionLevel = .critical
+        gateway.body = "Private command"
+        let fallback = SynaraNotificationPresentationPolicy.fallback(from: gateway)
+        let coordinator = NotificationDeliveryCoordinator()
+        var delivered: [UNNotificationContent] = []
+        let requestID = coordinator.begin(content: fallback) { delivered.append($0) }
+        fallback.categoryIdentifier = "synara.agent-approval"
+        fallback.interruptionLevel = .critical
+        fallback.body = "Resolved command"
+        XCTAssertEqual(coordinator.expireAll(), [requestID])
+        XCTAssertEqual(delivered.count, 1)
+        XCTAssertEqual(delivered.first?.categoryIdentifier, "")
+        XCTAssertEqual(delivered.first?.interruptionLevel, .active)
+        XCTAssertEqual(delivered.first?.body, "New activity")
+        XCTAssertFalse(coordinator.deliver(fallback, requestID: requestID))
+    }
+
     func testResolutionGateSerializesMatrixWork() async {
         let gate = NotificationResolutionGate()
         let firstAcquired = await gate.acquire()

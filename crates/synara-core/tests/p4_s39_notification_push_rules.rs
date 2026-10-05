@@ -696,3 +696,219 @@ async fn synced_messages_reach_the_observation_stream_and_then_the_decision_owne
         .await;
     assert_eq!(observed.lock().unwrap().len(), 1);
 }
+
+#[tokio::test]
+async fn agent_policy_uses_sdk_sender_and_synced_account_preferences() {
+    use synara_core::app::notifications::{
+        AgentNotificationPreferences, AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,
+    };
+    let (server, client, f, _) = synced_group_room().await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as u64;
+    let preferences = AgentNotificationPreferences {
+        agent_user_ids: vec![BOB.to_string()],
+        notify_tool_activity: false,
+        notify_commentary: false,
+        ..Default::default()
+    };
+    server.mock_sync().ok_and_run(&client, |builder| {
+        builder.add_custom_global_account_data(serde_json::json!({"type":AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,"content":preferences}));
+        builder.add_joined_room(JoinedRoomBuilder::new(room_id!("!push-rules:example.org"))
+            .add_timeline_event(f.text_msg("**🛠 Tool activity (7 updates)**\n\n1. terminal").sender(*BOB).event_id(event_id!("$agent-tools")))
+            .add_timeline_event(f.text_msg("🛠 Tool activity (1 update)\n💻 terminal").sender(*BOB).event_id(event_id!("$agent-tools-raw")))
+            .add_timeline_event(f.text_msg("**💬 Commentary (1 update)**\n\n1. Checking").sender(*BOB).event_id(event_id!("$agent-commentary")))
+            .add_timeline_event(f.text_msg("**🛠 Tool activity (7 updates)**\n\n1. terminal").sender(*CAROL).event_id(event_id!("$human-tools")))
+            .add_timeline_event(f.text_msg("Yes. The vLLM answers are saved.").sender(*BOB).event_id(event_id!("$agent-final"))));
+    }).await;
+    assert!(!owner
+        .agent_notification_event_allowed(ROOM_ID, "$agent-tools")
+        .await
+        .unwrap());
+    assert!(owner
+        .agent_notification_event_allowed(ROOM_ID, "$human-tools")
+        .await
+        .unwrap());
+    assert_eq!(owner.pending_count().unwrap(), 0);
+    assert_eq!(
+        owner.delivery_ledger().unwrap(),
+        synara_core::app::notifications::NotificationDeliveryLedger::default()
+    );
+    for id in ["$agent-tools", "$agent-tools-raw", "$agent-commentary"] {
+        let result = owner
+            .decide_observed(request(ROOM_ID, Some(id)))
+            .await
+            .unwrap();
+        assert_eq!(result.reason.as_deref(), Some("agent-policy"));
+    }
+    for id in ["$human-tools", "$agent-final"] {
+        assert_eq!(
+            owner
+                .decide_observed(request(ROOM_ID, Some(id)))
+                .await
+                .unwrap()
+                .decision,
+            "show"
+        );
+    }
+
+    let disabled = AgentNotificationPreferences {
+        agent_user_ids: vec![BOB.to_string()],
+        notify_tool_activity: false,
+        notify_commentary: false,
+        notify_final_responses: false,
+        ..Default::default()
+    };
+    server.mock_sync().ok_and_run(&client, |builder| {
+        builder.add_custom_global_account_data(serde_json::json!({"type":AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,"content":disabled}));
+        builder.add_joined_room(JoinedRoomBuilder::new(room_id!("!push-rules:example.org")).add_timeline_event(f.text_msg("Approval Required: Dangerous Command\necho hello").sender(*BOB).server_ts(now).event_id(event_id!("$approval-all-categories-off"))));
+    }).await;
+    assert!(owner
+        .agent_notification_event_allowed(ROOM_ID, "$approval-all-categories-off")
+        .await
+        .unwrap());
+    let approval = owner
+        .decide_observed(request(ROOM_ID, Some("$approval-all-categories-off")))
+        .await
+        .unwrap();
+    assert_eq!(approval.decision, "show");
+    assert_eq!(
+        approval.candidate.unwrap().kind,
+        synara_core::dto::NotificationKind::AgentApproval
+    );
+}
+
+#[tokio::test]
+async fn confirmed_save_applies_before_sync_and_same_value_remote_reset_wins() {
+    use synara_core::app::notifications::{
+        AgentNotificationPreferences, AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,
+    };
+    use wiremock::{
+        matchers::{method, path},
+        Mock, ResponseTemplate,
+    };
+    let (server, client, f, _) = synced_group_room().await;
+    let owner = NativeNotificationDecisionOwner::new(&client, 7).unwrap();
+    let preferences = AgentNotificationPreferences {
+        agent_user_ids: vec![BOB.to_string()],
+        notify_tool_activity: false,
+        ..Default::default()
+    };
+    let account_path = format!(
+        "/_matrix/client/v3/user/{}/account_data/{}",
+        client.user_id().unwrap(),
+        AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE
+    );
+    Mock::given(method("PUT"))
+        .and(path(&account_path))
+        .respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({})))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    Mock::given(method("GET"))
+        .and(path(&account_path))
+        .respond_with(ResponseTemplate::new(200).set_body_json(&preferences))
+        .expect(1)
+        .mount(server.server())
+        .await;
+    let saved = owner
+        .agent_notification_preferences_set(preferences.clone())
+        .await
+        .unwrap();
+    assert_eq!(saved, preferences);
+    server
+        .mock_sync()
+        .ok_and_run(&client, |builder| {
+            builder.add_joined_room(
+                JoinedRoomBuilder::new(room_id!("!push-rules:example.org")).add_timeline_event(
+                    f.text_msg("🛠 Tool activity (1 update)\nterminal")
+                        .sender(*BOB)
+                        .event_id(event_id!("$before-pref-sync")),
+                ),
+            );
+        })
+        .await;
+    assert_eq!(
+        owner
+            .decide_observed(request(ROOM_ID, Some("$before-pref-sync")))
+            .await
+            .unwrap()
+            .reason
+            .as_deref(),
+        Some("agent-policy")
+    );
+    // Another device resets to absent-settings defaults: same as the original cache.
+    server.mock_sync().ok_and_run(&client, |builder| {
+        builder.add_custom_global_account_data(serde_json::json!({"type":AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,"content":AgentNotificationPreferences::default()}));
+        builder.add_joined_room(JoinedRoomBuilder::new(room_id!("!push-rules:example.org")).add_timeline_event(f.text_msg("🛠 Tool activity (1 update)\nterminal").sender(*BOB).event_id(event_id!("$after-remote-reset"))));
+    }).await;
+    assert_eq!(
+        owner
+            .decide_observed(request(ROOM_ID, Some("$after-remote-reset")))
+            .await
+            .unwrap()
+            .decision,
+        "show"
+    );
+}
+
+#[tokio::test]
+async fn snapshot_refetches_when_sync_overlaps_an_older_server_response() {
+    use std::sync::{
+        atomic::{AtomicUsize, Ordering},
+        Arc,
+    };
+    use synara_core::app::notifications::{
+        AgentNotificationPreferences, AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,
+    };
+    use wiremock::{
+        matchers::{method, path},
+        Mock, ResponseTemplate,
+    };
+    let (server, client, _, _) = synced_group_room().await;
+    let owner = Arc::new(NativeNotificationDecisionOwner::new(&client, 7).unwrap());
+    let old = AgentNotificationPreferences {
+        agent_user_ids: vec![BOB.to_string()],
+        notify_tool_activity: false,
+        ..Default::default()
+    };
+    let newer = AgentNotificationPreferences {
+        agent_user_ids: vec![BOB.to_string()],
+        notify_commentary: false,
+        ..Default::default()
+    };
+    let expected = newer.clone();
+    let requests = Arc::new(AtomicUsize::new(0));
+    let seen = requests.clone();
+    let started = Arc::new(tokio::sync::Notify::new());
+    let signal = started.clone();
+    let account_path = format!(
+        "/_matrix/client/v3/user/{}/account_data/{}",
+        client.user_id().unwrap(),
+        AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE
+    );
+    Mock::given(method("GET"))
+        .and(path(account_path))
+        .respond_with(move |_: &wiremock::Request| {
+            if seen.fetch_add(1, Ordering::SeqCst) == 0 {
+                signal.notify_one();
+                ResponseTemplate::new(200)
+                    .set_body_json(&old)
+                    .set_delay(std::time::Duration::from_millis(200))
+            } else {
+                ResponseTemplate::new(200).set_body_json(&newer)
+            }
+        })
+        .expect(2)
+        .mount(server.server())
+        .await;
+    let fetch_owner = owner.clone();
+    let fetch =
+        tokio::spawn(async move { fetch_owner.agent_notification_preferences_snapshot().await });
+    started.notified().await;
+    server.mock_sync().ok_and_run(&client,|builder| {builder.add_custom_global_account_data(serde_json::json!({"type":AGENT_NOTIFICATION_PREFERENCES_EVENT_TYPE,"content":expected}));}).await;
+    assert_eq!(fetch.await.unwrap().unwrap(), expected);
+    assert_eq!(requests.load(Ordering::SeqCst), 2);
+}
