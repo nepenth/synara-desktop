@@ -162,7 +162,7 @@ export const parseTimestampFlag = (input: string): number | undefined => {
   const unit = match[2];
 
   const now = Date.now(); // in milliseconds
-  let delta = 0;
+  let delta: number;
 
   switch (unit) {
     case 'd':

@@ -70,9 +70,7 @@ const WORKFLOW_AGENT_ACTION_KINDS = new Set<AgentActionKind>([
 ]);
 
 export type AgentActionExecutionPlan =
-  | { type: 'open-url'; url: string }
-  | { type: 'copy-text'; text: string }
-  | { type: 'unsupported' };
+  { type: 'open-url'; url: string } | { type: 'copy-text'; text: string } | { type: 'unsupported' };
 
 const copyTextFromAction = (action: NormalizedAgentActionPayload): string | undefined =>
   action.markdown ?? action.prompt ?? action.title;

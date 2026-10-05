@@ -14,10 +14,7 @@ import { invokeDesktopWithAvailability, type DesktopInvokeResult } from '../../u
  */
 
 export type NativeNotificationDecisionKind =
-  | 'message'
-  | 'invite'
-  | 'agent_approval'
-  | 'later_reminder';
+  'message' | 'invite' | 'agent_approval' | 'later_reminder';
 
 export type NativeNotificationDecision = 'show' | 'suppress';
 

@@ -28,7 +28,7 @@ export class MatrixError extends Error {
   constructor(
     data: { error?: unknown; errcode?: string; httpStatus?: number; [k: string]: unknown } = {}
   ) {
-    const message = typeof data.error === 'string' ? data.error : data.errcode ?? 'Unknown error';
+    const message = typeof data.error === 'string' ? data.error : (data.errcode ?? 'Unknown error');
     super(message);
     this.name = 'MatrixError';
     this.errcode = data.errcode;

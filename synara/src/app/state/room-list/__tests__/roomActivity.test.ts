@@ -33,7 +33,7 @@ const createEvent = (
     getRelation: () => relation,
     getRoomId: () => '!room:example.org',
     isRedacted: () => false,
-  } as any);
+  }) as any;
 
 const createRoom = (roomId: string, events: any[], name = roomId) =>
   ({
@@ -43,7 +43,7 @@ const createRoom = (roomId: string, events: any[], name = roomId) =>
     getThreads: () => [],
     getLastActiveTimestamp: () => events.at(-1)?.getTs() ?? 0,
     getBumpStamp: () => undefined,
-  } as any);
+  }) as any;
 
 class MockMatrixClient extends EventEmitter {
   public constructor(public rooms: any[]) {

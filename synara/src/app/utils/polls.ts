@@ -134,8 +134,7 @@ type PollStartPayload = {
 
 export const parsePollStartContent = (content: Record<string, unknown>): ParsedPoll | undefined => {
   const poll = (content[POLL_START_KEY] ?? content[POLL_START_UNSTABLE_KEY]) as
-    | PollStartPayload
-    | undefined;
+    PollStartPayload | undefined;
 
   if (!poll) return undefined;
   const question = poll.question?.[M_TEXT_KEY];
@@ -191,8 +190,7 @@ export const parsePollResponseContent = (
   content: Record<string, unknown>
 ): string[] | undefined => {
   const response = (content[POLL_RESPONSE_KEY] ?? content[POLL_RESPONSE_UNSTABLE_KEY]) as
-    | { answers?: unknown }
-    | undefined;
+    { answers?: unknown } | undefined;
   if (!response) return undefined;
   if (!Array.isArray(response?.answers)) return undefined;
   const answers = response.answers.filter((answer): answer is string => typeof answer === 'string');

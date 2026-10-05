@@ -67,7 +67,7 @@ const makeEvent = (
     isSending: () => false,
     getRelation: () => opts.relation ?? null,
     event: { sender: opts.sender, ...opts.raw },
-  } as MatrixEventReading);
+  }) as MatrixEventReading;
 
 const makeRoom = (
   stateEvents: Record<string, MatrixEventReading | MatrixEventReading[]>,
@@ -106,7 +106,7 @@ const makeRoom = (
     getMxcAvatarUrl: () => opts.avatarUrl ?? null,
     getAvatarFallbackMember: () => undefined,
     getUnreadNotificationCount: (type?: string) =>
-      type === 'highlight' ? opts.unreadHighlight ?? 0 : opts.unreadTotal ?? 0,
+      type === 'highlight' ? (opts.unreadHighlight ?? 0) : (opts.unreadTotal ?? 0),
     getEventReadUpTo: () => opts.readUpTo ?? null,
     accountData: {
       get: () =>
@@ -129,7 +129,7 @@ const makeClient = (overrides: Partial<MatrixClientReading> = {}): MatrixClientR
     getRoom: () => null,
     mxcUrlToHttp: () => null,
     ...overrides,
-  } as MatrixClientReading);
+  }) as MatrixClientReading;
 
 test('getStateEvent reads the indexed state projection and falls back to undefined', () => {
   const topic = makeEvent('m.room.topic', { topic: 'Hello' }, { stateKey: '' });
@@ -364,7 +364,7 @@ test('getNotificationType maps explicit, muted, and default rules', () => {
           ],
         },
       }),
-    } as MatrixEventReading);
+    }) as MatrixEventReading;
   assert.equal(
     getNotificationType(
       makeClient({ getRoomPushRule: () => undefined, getAccountData: mutedOverride }),

@@ -123,7 +123,9 @@ export const renderMatrixMention = (
   if (matrixToRoom) {
     const { roomIdOrAlias, viaServers } = matrixToRoom;
     const mentionRoom = mx.getRoom(
-      isRoomAlias(roomIdOrAlias) ? getCanonicalAliasRoomId(mx, roomIdOrAlias) ?? '' : roomIdOrAlias
+      isRoomAlias(roomIdOrAlias)
+        ? (getCanonicalAliasRoomId(mx, roomIdOrAlias) ?? '')
+        : roomIdOrAlias
     );
 
     const fallbackContent = mentionRoom ? `#${mentionRoom.name}` : roomIdOrAlias;
@@ -147,7 +149,9 @@ export const renderMatrixMention = (
   if (matrixToRoomEvent) {
     const { roomIdOrAlias, eventId, viaServers } = matrixToRoomEvent;
     const mentionRoom = mx.getRoom(
-      isRoomAlias(roomIdOrAlias) ? getCanonicalAliasRoomId(mx, roomIdOrAlias) ?? '' : roomIdOrAlias
+      isRoomAlias(roomIdOrAlias)
+        ? (getCanonicalAliasRoomId(mx, roomIdOrAlias) ?? '')
+        : roomIdOrAlias
     );
 
     return (

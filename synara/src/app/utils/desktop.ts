@@ -85,11 +85,7 @@ export type DesktopIntegrationStatus = {
 };
 
 export type DesktopShortcutApplyState =
-  | 'active'
-  | 'permission-needed'
-  | 'unsupported'
-  | 'unknown'
-  | 'failed';
+  'active' | 'permission-needed' | 'unsupported' | 'unknown' | 'failed';
 
 export type DesktopShortcutApplyResult = {
   success: boolean;
@@ -219,10 +215,7 @@ export type DesktopPerformanceCapabilities = {
 };
 
 export type DesktopNotificationPermission =
-  | 'granted'
-  | 'denied'
-  | 'prompt'
-  | 'prompt-with-rationale';
+  'granted' | 'denied' | 'prompt' | 'prompt-with-rationale';
 
 export type DesktopNotificationAction = {
   id: string;
@@ -317,8 +310,8 @@ const normalizeActionField = (
 const getBridge = (): SynaraDesktopBridge | undefined => window.__SYNARA_DESKTOP__;
 
 const getDesktopInvoke = ():
-  | (<T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>)
-  | undefined => window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
+  (<T = unknown>(command: string, args?: Record<string, unknown>) => Promise<T>) | undefined =>
+  window.__SYNARA_DESKTOP__?.invoke ?? window.__TAURI_INTERNALS__?.invoke;
 
 export const isDesktopBridgeAvailable = (): boolean => typeof getDesktopInvoke() === 'function';
 
@@ -501,8 +494,7 @@ export const isSynaraDesktop = (): boolean =>
   typeof window.__TAURI_INTERNALS__?.invoke === 'function';
 
 export type DesktopInvokeResult<T> =
-  | { available: false }
-  | { available: true; value: T | undefined };
+  { available: false } | { available: true; value: T | undefined };
 
 export type DesktopInvokeOptions = {
   /**

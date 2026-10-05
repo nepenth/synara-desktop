@@ -186,7 +186,7 @@ function LegacyContactInformation() {
   );
   const threePIds =
     threePIdsState.status === AsyncStatus.Success
-      ? threePIdsState.data?.threepids ?? []
+      ? (threePIdsState.data?.threepids ?? [])
       : undefined;
 
   const emailIds = threePIds?.filter((id) => id.medium === 'email');

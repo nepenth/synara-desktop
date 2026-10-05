@@ -20,12 +20,12 @@ export function ApprovalsTab() {
   const coverageDescription = error
     ? 'unavailable'
     : incomplete
-    ? 'partial coverage'
-    : loading
-    ? 'checking rooms'
-    : coverage === 'latest_event'
-    ? 'recent activity'
-    : '';
+      ? 'partial coverage'
+      : loading
+        ? 'checking rooms'
+        : coverage === 'latest_event'
+          ? 'recent activity'
+          : '';
   const label = `Approvals${
     pendingCount ? ` · ${pendingCount}${needsAttention ? '+' : ''} pending` : ''
   }${coverageDescription ? ` · ${coverageDescription}` : ''}`;

@@ -356,7 +356,8 @@ export const getRoomAvatarUrl = (
 ): string | undefined => {
   const mxcUrl = room.getMxcAvatarUrl();
   return mxcUrl
-    ? mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ?? undefined
+    ? (mx.mxcUrlToHttp(mxcUrl, size, size, 'crop', undefined, false, useAuthentication) ??
+        undefined)
     : undefined;
 };
 
@@ -411,7 +412,7 @@ export const getMemberSearchStr = (
   mxIdToName: (mxId: string) => string
 ): string[] => {
   const displayName = !('getMxcAvatarUrl' in member)
-    ? member.displayName ?? member.userId
+    ? (member.displayName ?? member.userId)
     : member.rawDisplayName;
   return [
     displayName === member.userId ? mxIdToName(member.userId) : displayName,

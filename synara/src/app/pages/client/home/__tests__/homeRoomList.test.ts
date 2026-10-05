@@ -30,7 +30,7 @@ const room = (overrides: Partial<RoomSummary> & Pick<RoomSummary, 'roomId'>): Ro
     markedUnread: false,
     lastMessageIsAgentApproval: false,
     ...overrides,
-  } as RoomSummary);
+  }) as RoomSummary;
 
 test('home rooms split favorites from remaining rooms', () => {
   const favoriteIds = favoriteRoomIdSet([

@@ -48,12 +48,7 @@ export type NativeInvoke = (
 
 /** Serialized `SyncReadiness` enum (src-tauri/src/matrix/sync/readiness.rs). */
 export type NativeReadiness =
-  | 'unconfigured'
-  | 'idle'
-  | 'running'
-  | 'offline'
-  | 'failed'
-  | 'terminated';
+  'unconfigured' | 'idle' | 'running' | 'offline' | 'failed' | 'terminated';
 
 /** Structural mirror of the Rust `SyncReadinessSnapshot` DTO. */
 export type NativeSyncStatus = {
@@ -67,12 +62,7 @@ export type NativeSyncStatus = {
 
 /** js-sdk-compatible sync-state strings the app UI already consumes. */
 export type NativeSyncState =
-  | 'PREPARED'
-  | 'SYNCING'
-  | 'CATCHUP'
-  | 'ERROR'
-  | 'RECONNECTING'
-  | 'STOPPED';
+  'PREPARED' | 'SYNCING' | 'CATCHUP' | 'ERROR' | 'RECONNECTING' | 'STOPPED';
 
 export type NativeSyncStateData = {
   readiness: NativeReadiness;
@@ -940,8 +930,8 @@ export const createNativeMatrixClient = (invoke: NativeInvoke) => {
           type === 'm.room.name'
             ? 'matrix_set_room_name'
             : type === 'm.room.topic'
-            ? 'matrix_set_room_topic'
-            : 'matrix_set_room_avatar';
+              ? 'matrix_set_room_topic'
+              : 'matrix_set_room_avatar';
         const result = await invoke(command, {
           roomId,
           name: content.name,

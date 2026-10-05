@@ -171,8 +171,8 @@ export class RoomActivityStore {
     const latestTimestamp = latestEvent ? eventActivityTimestamp(latestEvent) : 0;
     const fallbackTimestamp =
       missingPolicy === 'preserve'
-        ? previous?.activityTs ?? room.getLastActiveTimestamp?.() ?? 0
-        : room.getLastActiveTimestamp?.() ?? 0;
+        ? (previous?.activityTs ?? room.getLastActiveTimestamp?.() ?? 0)
+        : (room.getLastActiveTimestamp?.() ?? 0);
     const candidateTimestamp = latestTimestamp || fallbackTimestamp;
     const activityTs =
       previous && event && candidateTimestamp < previous.activityTs

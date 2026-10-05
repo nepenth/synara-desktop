@@ -44,7 +44,7 @@ import {
 
 type TimelineStub = StubTimeline;
 
-const event = (id: string): StubEvent => ({ getId: () => id } as unknown as StubEvent);
+const event = (id: string): StubEvent => ({ getId: () => id }) as unknown as StubEvent;
 
 const timeline = (id: string, eventIds: string[]): TimelineStub => {
   const stub = {
@@ -56,7 +56,7 @@ const timeline = (id: string, eventIds: string[]): TimelineStub => {
       return stub.stubEvents;
     },
     getNeighbouringTimeline(direction: string): StubTimeline | null {
-      return direction === 'b' ? stub.backward ?? null : stub.forward ?? null;
+      return direction === 'b' ? (stub.backward ?? null) : (stub.forward ?? null);
     },
   };
   return stub as unknown as TimelineStub;

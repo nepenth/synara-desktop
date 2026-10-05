@@ -1,5 +1,52 @@
 # Dependency update dispositions and renderer retirement
 
+## 2026-10-05 tooling migration
+
+The current feature branch uses ESLint **10.11.0**, `@eslint/js` **10.0.1**,
+and Prettier **3.9.9**. The tables and validation below this section preserve
+the earlier consolidation's versions and observations; they are historical
+records, not assertions about the current dependency graph.
+
+React, import, and JSX accessibility plugins still declare ESLint peers through
+9. Their installed versions are wrapped with the official `@eslint/compat`
+**2.1.1** rule bridge, which supports ESLint 10. All configured rules remain
+enabled. Negative fixtures verify that state mutation, undeclared dependencies,
+missing image text, and conditional hooks are still rejected. Remove these
+wrappers once upstream plugins support the new APIs and the same checks pass.
+See [ESLint's compatibility utilities](https://github.com/eslint/rewrite/tree/main/packages/compat)
+and [ESLint 10's migration guide](https://eslint.org/docs/latest/use/migrate-to-10.0.0).
+
+The renderer retains its explicit 100-column width, single quotes, and ES5
+trailing commas. Its files were reformatted with Prettier 3. New recommended
+ESLint rules required four redundant initializers to be removed and the
+replaced-request error in `useAsyncCallback` to retain its caught error as
+`cause`. Existing values, control flow, and error messages remain the same.
+The Matrix SDK inventory generator now awaits Prettier's configuration and
+format APIs throughout generation, snapshot checks, and CLI output. Its
+artifact formatting is still resolved from each artifact's path; the existing
+CLI parity test passes. [Prettier 3's API migration](https://prettier.io/blog/2023/07/05/3.0.0)
+documents the asynchronous API change.
+
+Dependabot no longer defers ESLint, `@eslint/js`, or Prettier major updates.
+`@types/node` remains **24.13.3**, aligned with pinned Node **24.13.1**, and its
+major-update ignore remains. The existing renderer `.npmrc` peer-resolution
+policy was retained; no new force-install or peer bypass option was introduced.
+The bridge addresses removed rule APIs, not upstream peer declarations.
+
+Current validation on pinned Node **24.13.1** passed the full renderer ESLint,
+Prettier, both TypeScript gates, the production build/output guard, all **1,208**
+modernization tests, nine inventory tests, and the four negative plugin fixtures.
+The fifteen traceability-v2 tests also passed. Production npm audit is clean.
+Full renderer audit currently
+reports three development-only high entries from
+`vite-plugin-static-copy -> chokidar -> braces`, all tracing to
+[GHSA-vfj7-8cjw-p6xm](https://github.com/advisories/GHSA-vfj7-8cjw-p6xm).
+The registry's latest `braces` remains affected **3.0.3**. npm's proposed
+`vite-plugin-static-copy` downgrade to **0.2.0** was not applied. These current
+findings supersede the historical zero-findings result recorded below.
+
+## Historical consolidation record (verified 2026-10-02)
+
 This records dependency work incorporated into the Rust consolidation branch.
 GitHub's open dependency PR list and main were rechecked on 2026-10-02; all four
 proposal heads and the main baseline were unchanged.

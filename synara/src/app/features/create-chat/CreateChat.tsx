@@ -149,8 +149,7 @@ export function CreateChat({ defaultUserId }: CreateChatProps) {
               {(error as { name?: string } | null)?.name === ErrorCode.M_LIMIT_EXCEEDED
                 ? `Server rate-limited your request for ${millisecondsToMinutes(
                     ((error as { data?: { retry_after_ms?: unknown } }).data?.retry_after_ms as
-                      | number
-                      | undefined) ?? 0
+                      number | undefined) ?? 0
                   )} minutes!`
                 : error.message}
             </b>

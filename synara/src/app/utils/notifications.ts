@@ -501,7 +501,7 @@ export async function markAsRead(
 
   const timeline =
     mode === 'latest-room'
-      ? (await getLatestRoomTimeline(mx, room))?.getEvents() ?? getLoadedLiveTimelineEvents(room)
+      ? ((await getLatestRoomTimeline(mx, room))?.getEvents() ?? getLoadedLiveTimelineEvents(room))
       : getLoadedLiveTimelineEvents(room);
   const latestEvent = getLatestReceiptEventFromEvents(timeline);
 

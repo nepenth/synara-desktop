@@ -96,11 +96,11 @@ export const isPendingFreshLoginIdentity = (
   const marker = getPendingFreshLoginIdentity(storage, nowMs);
   return Boolean(
     marker &&
-      identity.sessionGeneration &&
-      marker.userId === identity.userId &&
-      marker.deviceId === identity.deviceId &&
-      marker.baseUrl === identity.baseUrl &&
-      marker.sessionGeneration === identity.sessionGeneration
+    identity.sessionGeneration &&
+    marker.userId === identity.userId &&
+    marker.deviceId === identity.deviceId &&
+    marker.baseUrl === identity.baseUrl &&
+    marker.sessionGeneration === identity.sessionGeneration
   );
 };
 

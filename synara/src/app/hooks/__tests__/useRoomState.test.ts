@@ -20,7 +20,7 @@ const makeEvent = (type: string, stateKey: string): MatrixEventReading =>
     isSending: () => false,
     getRelation: () => null,
     event: {},
-  } as MatrixEventReading);
+  }) as MatrixEventReading;
 
 test('collectRoomStateEvents returns empty when currentState has no events map', () => {
   assert.equal(collectRoomStateEvents(undefined).size, 0);

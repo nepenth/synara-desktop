@@ -42,9 +42,9 @@ export const shouldRestoreNativeTimelineViewport = (
   if (hasUnread) {
     return Boolean(
       viewport.atBottom &&
-        viewport.liveTailEventId &&
-        currentLiveTailEventId &&
-        viewport.liveTailEventId === currentLiveTailEventId
+      viewport.liveTailEventId &&
+      currentLiveTailEventId &&
+      viewport.liveTailEventId === currentLiveTailEventId
     );
   }
   if (viewport.atBottom) return true;

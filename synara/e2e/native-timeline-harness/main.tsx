@@ -43,12 +43,12 @@ See ~~strike~~ and \`inline code\`.
 let sequence = polish
   ? 4
   : scenario === 'sparse-missing' || scenario === 'file-md' || scenario === 'file-zip'
-  ? 1
-  : scenario === 'short'
-  ? 2
-  : jank
-  ? 180
-  : 60;
+    ? 1
+    : scenario === 'short'
+      ? 2
+      : jank
+        ? 180
+        : 60;
 let historyIndex = 0;
 let stream = 0;
 let releaseJump: (() => void) | undefined;
@@ -73,13 +73,13 @@ const makeRow = (index: number) => ({
     scenario === 'file-md'
       ? 'notes.md'
       : scenario === 'file-zip'
-      ? 'archive.zip'
-      : jank
-      ? `Message ${index}\n${Array.from(
-          { length: 1 + (index % 6) },
-          (_, line) => `Native jank fixture line ${line + 2}.`
-        ).join('\n')}`
-      : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
+        ? 'archive.zip'
+        : jank
+          ? `Message ${index}\n${Array.from(
+              { length: 1 + (index % 6) },
+              (_, line) => `Native jank fixture line ${line + 2}.`
+            ).join('\n')}`
+          : `Message ${index}\nNative timeline geometry fixture line two.\nLine three.`,
   edited: false,
   forwardTransport: polish ? ('text' as const) : undefined,
   ...(scenario === 'file-md'
@@ -92,15 +92,15 @@ const makeRow = (index: number) => ({
         },
       }
     : scenario === 'file-zip'
-    ? {
-        messageType: 'file' as const,
-        mediaFilename: 'archive.zip',
-        media: {
-          handleId: FILE_ZIP_HANDLE,
-          mimeType: 'application/zip',
-        },
-      }
-    : {}),
+      ? {
+          messageType: 'file' as const,
+          mediaFilename: 'archive.zip',
+          media: {
+            handleId: FILE_ZIP_HANDLE,
+            mimeType: 'application/zip',
+          },
+        }
+      : {}),
   capabilities: {
     react: polish,
     reply: polish,
@@ -118,8 +118,8 @@ let position: NativeTimelinePosition =
   scenario === 'missing' || scenario === 'sparse-missing'
     ? { kind: 'unread', anchor_event_id: '$missing' }
     : scenario === 'unread' || scenario === 'short'
-    ? { kind: 'unread', anchor_event_id: '$2' }
-    : { kind: 'live_bottom' };
+      ? { kind: 'unread', anchor_event_id: '$2' }
+      : { kind: 'live_bottom' };
 let snapshot: NativeTimelineViewSnapshot;
 const snapshots = new Map<string, NativeTimelineViewSnapshot>();
 const emitCandidateUpdate = (body: string, skipRevision = false, remove = false) => {

@@ -331,14 +331,14 @@ const nativeTimelineRowSizeHint = (
     row.kind === 'sticker'
       ? row.media.width
       : row.kind === 'message'
-      ? row.media?.width
-      : undefined,
+        ? row.media?.width
+        : undefined,
   mediaHeight:
     row.kind === 'sticker'
       ? row.media.height
       : row.kind === 'message'
-      ? row.media?.height
-      : undefined,
+        ? row.media?.height
+        : undefined,
   reactionCount: rowReactionCount(row),
 });
 
@@ -1635,7 +1635,11 @@ const NativeTimelineRow = ({
   const runReaction = (key: string) => {
     if (!eventId || !genericReactionCapabilities?.react) return;
     const reactions =
-      row.kind === 'sticker' ? row.reactions ?? [] : 'reactions' in row ? row.reactions ?? [] : [];
+      row.kind === 'sticker'
+        ? (row.reactions ?? [])
+        : 'reactions' in row
+          ? (row.reactions ?? [])
+          : [];
     const projected = reactions.find((reaction) => reaction.key === key);
     if (projected !== undefined && projected.own === undefined) {
       onActionError('Reaction ownership is unavailable.');
@@ -1741,7 +1745,11 @@ const NativeTimelineRow = ({
   useEffect(() => {
     if (!eventId) return;
     const reactions =
-      row.kind === 'sticker' ? row.reactions ?? [] : 'reactions' in row ? row.reactions ?? [] : [];
+      row.kind === 'sticker'
+        ? (row.reactions ?? [])
+        : 'reactions' in row
+          ? (row.reactions ?? [])
+          : [];
     const actionPrefix = nativeTimelineActionFlightKey(
       sessionGeneration,
       roomId,
@@ -2246,15 +2254,15 @@ export function NativeTimelinePresenter({
       position: threadRootId
         ? ({ kind: 'thread', rootEventId: threadRootId } as const)
         : preferLiveBottom
-        ? ({ kind: 'live_bottom' } as const)
-        : focusEventId
-        ? ({ kind: 'focused', eventId: focusEventId } as const)
-        : ({
-            kind: 'normal',
-            restoredAnchorEventId: openingViewport?.atBottom
-              ? undefined
-              : openingViewport?.anchor?.eventId,
-          } as const),
+          ? ({ kind: 'live_bottom' } as const)
+          : focusEventId
+            ? ({ kind: 'focused', eventId: focusEventId } as const)
+            : ({
+                kind: 'normal',
+                restoredAnchorEventId: openingViewport?.atBottom
+                  ? undefined
+                  : openingViewport?.anchor?.eventId,
+              } as const),
     }),
     [focusEventId, openingViewport, preferLiveBottom, roomId, threadRootId]
   );
@@ -2669,9 +2677,9 @@ export function NativeTimelinePresenter({
       : undefined;
   const liveTailAlreadyRead = Boolean(
     readyState &&
-      receiptTailEventId &&
-      readyState.snapshot.readState.ownReadEventId === receiptTailEventId &&
-      !readyState.snapshot.readState.isMarkedUnread
+    receiptTailEventId &&
+    readyState.snapshot.readState.ownReadEventId === receiptTailEventId &&
+    !readyState.snapshot.readState.isMarkedUnread
   );
   useEffect(() => {
     if (!liveTailMarkReadKey) {
@@ -2693,8 +2701,8 @@ export function NativeTimelinePresenter({
       if (!scrollEl) return;
       const paintedAtBottom = Boolean(
         scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 8 &&
-          document.visibilityState === 'visible' &&
-          document.hasFocus()
+        document.visibilityState === 'visible' &&
+        document.hasFocus()
       );
       if (!paintedAtBottom) return;
       submitted = true;
@@ -2759,8 +2767,8 @@ export function NativeTimelinePresenter({
       if (!scrollEl) return;
       const paintedAtBottom = Boolean(
         scrollEl.scrollHeight - scrollEl.scrollTop - scrollEl.clientHeight <= 8 &&
-          document.visibilityState === 'visible' &&
-          document.hasFocus()
+        document.visibilityState === 'visible' &&
+        document.hasFocus()
       );
       if (!paintedAtBottom) return;
       followLiveSubmittedKeyRef.current = followLiveKey;
@@ -2866,15 +2874,15 @@ export function NativeTimelinePresenter({
         snapshot.pagination.backward === 'available'
           ? 'backwards'
           : distanceFromBottom <= 96 &&
-            snapshot.capabilities.paginateForward &&
-            snapshot.pagination.forward === 'available' &&
-            canPaginateTimelineForward({
-              atLiveBottom: atLiveBottomRef.current,
-              positionKind: current.selectedPosition.kind,
-              followingLive: followingLiveRef.current,
-            })
-          ? 'forwards'
-          : undefined;
+              snapshot.capabilities.paginateForward &&
+              snapshot.pagination.forward === 'available' &&
+              canPaginateTimelineForward({
+                atLiveBottom: atLiveBottomRef.current,
+                positionKind: current.selectedPosition.kind,
+                followingLive: followingLiveRef.current,
+              })
+            ? 'forwards'
+            : undefined;
       if (!direction) return;
       requestPaginationRef.current(direction);
     };
@@ -3094,17 +3102,20 @@ export function NativeTimelinePresenter({
       selectedPosition.kind === 'focused'
         ? { eventId: selectedPosition.target_event_id, itemId: selectedPosition.target_event_id }
         : selectedPosition.kind === 'thread'
-        ? threadScrollEventId
-          ? { eventId: threadScrollEventId, itemId: threadScrollEventId }
-          : undefined
-        : selectedPosition.kind === 'unread'
-        ? { eventId: selectedPosition.anchor_event_id, itemId: selectedPosition.anchor_event_id }
-        : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
-        ? {
-            eventId: selectedPosition.anchor_event_id,
-            itemId: selectedPosition.anchor_event_id,
-          }
-        : undefined;
+          ? threadScrollEventId
+            ? { eventId: threadScrollEventId, itemId: threadScrollEventId }
+            : undefined
+          : selectedPosition.kind === 'unread'
+            ? {
+                eventId: selectedPosition.anchor_event_id,
+                itemId: selectedPosition.anchor_event_id,
+              }
+            : selectedPosition.kind === 'restored' && selectedPosition.anchor_event_id
+              ? {
+                  eventId: selectedPosition.anchor_event_id,
+                  itemId: selectedPosition.anchor_event_id,
+                }
+              : undefined;
     const placementKey = `${roomId}:${snapshot.sessionGeneration}:${selectedPosition.kind}:${
       selectedAnchor?.eventId ??
       (selectedPosition.kind === 'thread' ? selectedPosition.root_event_id : '')
@@ -3114,8 +3125,8 @@ export function NativeTimelinePresenter({
       selectedPosition.kind === 'thread'
         ? undefined
         : initialPlacement
-        ? openingViewport ?? nativeTimelineViewports.get(roomId)
-        : nativeTimelineViewports.get(roomId);
+          ? (openingViewport ?? nativeTimelineViewports.get(roomId))
+          : nativeTimelineViewports.get(roomId);
     const parkedIndex = savedViewport?.anchor ? findAnchorIndex(rows, savedViewport.anchor) : -1;
     const explicitLatest = latestPlacementRequest !== appliedLatestPlacementRef.current;
     appliedLatestPlacementRef.current = latestPlacementRequest;
@@ -3136,7 +3147,7 @@ export function NativeTimelinePresenter({
         ? savedViewport?.atBottom
           ? undefined
           : savedViewport?.anchor
-        : selectedAnchor ?? savedViewport?.anchor;
+        : (selectedAnchor ?? savedViewport?.anchor);
       const anchorIndex = anchor ? findAnchorIndex(rows, anchor) : -1;
       if (missingLastRead) setPendingLastRead(selectedPosition.anchor_event_id);
       // Passive live promotion must preserve an unresolved last-read action.
@@ -3155,7 +3166,7 @@ export function NativeTimelinePresenter({
         programmaticScrollUntilRef.current = performance.now() + 250;
         virtualizer.scrollToIndex(anchorIndex, { align: 'start', behavior: 'auto' });
         const offsetPx =
-          selectedAnchor && !missingLastRead ? 0 : savedViewport?.anchor?.offsetPx ?? 0;
+          selectedAnchor && !missingLastRead ? 0 : (savedViewport?.anchor?.offsetPx ?? 0);
         if (selectedAnchor && !missingLastRead) {
           parkedVisualTopRef.current = undefined;
           setPendingLastRead((pending) =>

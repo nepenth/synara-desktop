@@ -25,7 +25,7 @@ export type AsyncSearchHandler = (query: string) => void;
 export type TerminateAsyncSearch = () => void;
 
 export const normalize = (str: string, options?: NormalizeOption) => {
-  let nStr = str.normalize(options?.normalizeUnicode ?? true ? 'NFKC' : 'NFC');
+  let nStr = str.normalize((options?.normalizeUnicode ?? true) ? 'NFKC' : 'NFC');
   if (!options?.caseSensitive) nStr = nStr.toLocaleLowerCase();
   if (options?.ignoreWhitespace ?? true) nStr = nStr.replace(/\s/g, '');
   return nStr;

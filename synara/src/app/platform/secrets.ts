@@ -59,8 +59,8 @@ export const normalizePlatformSecretStoreStatus = (
   const backend = isPlatformSecretStoreBackend(record.backend)
     ? record.backend
     : available
-    ? 'unknown'
-    : 'none';
+      ? 'unknown'
+      : 'none';
   const reason =
     typeof record.reason === 'string' && record.reason.length > 0 ? record.reason : undefined;
 

@@ -36,14 +36,14 @@ export function RoomPublish({ permissions, roomId, isSpace }: RoomPublishProps) 
     joinRuleState.status === 'error'
       ? joinRuleState.error.message
       : visibilityState.status === AsyncStatus.Error
-      ? visibilityState.error instanceof Error
-        ? visibilityState.error.message
-        : 'Native Matrix directory visibility is unavailable.'
-      : toggleState.status === AsyncStatus.Error
-      ? toggleState.error instanceof Error
-        ? toggleState.error.message
-        : 'Native Matrix directory visibility is unavailable.'
-      : undefined;
+        ? visibilityState.error instanceof Error
+          ? visibilityState.error.message
+          : 'Native Matrix directory visibility is unavailable.'
+        : toggleState.status === AsyncStatus.Error
+          ? toggleState.error instanceof Error
+            ? toggleState.error.message
+            : 'Native Matrix directory visibility is unavailable.'
+          : undefined;
 
   return (
     <SequenceCard

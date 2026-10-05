@@ -42,7 +42,7 @@ const createTimelineEvent = (
     isSending: () => sending,
     isRedacted: () => false,
     getRelation: () => undefined,
-  } as any);
+  }) as any;
 
 test('clearUnreadAnchor skips account-data writes when the room has no anchor', async () => {
   let writes = 0;

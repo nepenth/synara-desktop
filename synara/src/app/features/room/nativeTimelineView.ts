@@ -315,10 +315,10 @@ export const isNativeTimelineReadbackStale = (
 ): boolean =>
   Boolean(
     current &&
-      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
-      next.sessionGeneration === current.sessionGeneration &&
-      next.roomId === current.roomId &&
-      next.revision <= current.revision
+    next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+    next.sessionGeneration === current.sessionGeneration &&
+    next.roomId === current.roomId &&
+    next.revision <= current.revision
   );
 
 /** Follow changes placement even when the SDK has emitted no new row revision. */
@@ -328,11 +328,11 @@ export const canAcceptNativeTimelineFollowReadback = (
 ): boolean =>
   Boolean(
     current &&
-      next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
-      next.sessionGeneration === current.sessionGeneration &&
-      next.roomId === current.roomId &&
-      next.revision >= current.revision &&
-      next.position.kind === 'live_bottom'
+    next.schemaVersion === TIMELINE_VIEW_SCHEMA_VERSION &&
+    next.sessionGeneration === current.sessionGeneration &&
+    next.roomId === current.roomId &&
+    next.revision >= current.revision &&
+    next.position.kind === 'live_bottom'
   );
 
 /**
@@ -593,16 +593,16 @@ const toNativeTimelineOpenRequest = (input: NativeTimelineOpenInput) => {
       position.kind === 'focused'
         ? { kind: 'focused' as const, event_id: position.eventId }
         : position.kind === 'thread'
-        ? { kind: 'thread' as const, root_event_id: position.rootEventId }
-        : position.kind === 'normal'
-        ? {
-            kind: 'normal' as const,
-            restored_anchor_event_id: position.restoredAnchorEventId,
-            at_bottom: Boolean(position.atBottom),
-            live_tail_event_id: position.liveTailEventId,
-            updated_at_ms: position.updatedAtMs,
-          }
-        : position,
+          ? { kind: 'thread' as const, root_event_id: position.rootEventId }
+          : position.kind === 'normal'
+            ? {
+                kind: 'normal' as const,
+                restored_anchor_event_id: position.restoredAnchorEventId,
+                at_bottom: Boolean(position.atBottom),
+                live_tail_event_id: position.liveTailEventId,
+                updated_at_ms: position.updatedAtMs,
+              }
+            : position,
   };
 };
 
@@ -707,16 +707,16 @@ export const useNativeTimelineView = (
         positionKind === 'focused' && focusedEventId
           ? { kind: 'focused', eventId: focusedEventId }
           : positionKind === 'thread' && threadRootEventId
-          ? { kind: 'thread', rootEventId: threadRootEventId }
-          : positionKind === 'normal'
-          ? {
-              kind: 'normal',
-              restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
-              atBottom: normalPosition?.atBottom,
-              liveTailEventId: normalPosition?.liveTailEventId,
-              updatedAtMs: normalPosition?.updatedAtMs,
-            }
-          : { kind: positionKind },
+            ? { kind: 'thread', rootEventId: threadRootEventId }
+            : positionKind === 'normal'
+              ? {
+                  kind: 'normal',
+                  restoredAnchorEventId: normalPosition?.restoredAnchorEventId,
+                  atBottom: normalPosition?.atBottom,
+                  liveTailEventId: normalPosition?.liveTailEventId,
+                  updatedAtMs: normalPosition?.updatedAtMs,
+                }
+              : { kind: positionKind },
     } as NativeTimelineOpenInput);
   }, [
     focusedEventId,

@@ -116,7 +116,7 @@ export function SystemNotification() {
   }, [platformNotifications]);
 
   const notifPermission = platformNotifications
-    ? platformNotifPermission ?? 'prompt'
+    ? (platformNotifPermission ?? 'prompt')
     : browserNotifPermission;
 
   const [isRequestingPermission, setIsRequestingPermission] = useState(false);
@@ -164,8 +164,8 @@ export function SystemNotification() {
                 {platformNotifications
                   ? 'Notification permission is blocked. Allow Synara in your system notification settings.'
                   : 'Notification' in window
-                  ? 'Notification permission is blocked. Please allow notification permission from browser address bar.'
-                  : 'Notifications are not supported by the system.'}
+                    ? 'Notification permission is blocked. Please allow notification permission from browser address bar.'
+                    : 'Notifications are not supported by the system.'}
               </Text>
             ) : (
               <span>Show desktop notifications when message arrive.</span>

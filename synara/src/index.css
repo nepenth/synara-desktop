@@ -1,6 +1,7 @@
 @font-face {
   font-family: Twemoji;
-  src: url('../public/font/Twemoji.Mozilla.v15.1.0.woff2'),
+  src:
+    url('../public/font/Twemoji.Mozilla.v15.1.0.woff2'),
     url('../public/font/Twemoji.Mozilla.v15.1.0.ttf');
   font-display: swap;
 }

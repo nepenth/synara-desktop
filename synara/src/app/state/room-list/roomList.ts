@@ -168,9 +168,8 @@ export const useBindAllRoomsAtom = (
       if (inFlight) return;
       inFlight = true;
       try {
-        const sessionResult = await invokeDesktopWithAvailability<unknown>(
-          'matrix_session_snapshot'
-        );
+        const sessionResult =
+          await invokeDesktopWithAvailability<unknown>('matrix_session_snapshot');
         if (disposed || !sessionResult.available) return;
         const session = parseNativeSessionSnapshot(sessionResult.value);
         if (!session) return;

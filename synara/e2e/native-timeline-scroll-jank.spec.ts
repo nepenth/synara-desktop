@@ -76,8 +76,8 @@ const startProbe = (page: Page) =>
             droppedFrames: dropped.length,
             longFrameRatio: sample.length === 0 ? 0 : long.length / sample.length,
             maxFrameMs: sample.length === 0 ? 0 : Math.max(...sample),
-            p95FrameMs: sample.length === 0 ? 0 : sorted[Math.floor(sample.length * 0.95)] ?? 0,
-            medianFrameMs: sample.length === 0 ? 0 : sorted[Math.floor(sample.length * 0.5)] ?? 0,
+            p95FrameMs: sample.length === 0 ? 0 : (sorted[Math.floor(sample.length * 0.95)] ?? 0),
+            medianFrameMs: sample.length === 0 ? 0 : (sorted[Math.floor(sample.length * 0.5)] ?? 0),
           };
         },
       },

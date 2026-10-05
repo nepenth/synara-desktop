@@ -67,7 +67,7 @@ function PdfRenderLifecycle() {
             }),
           }),
         }),
-      } as unknown as PDFDocumentProxy),
+      }) as unknown as PDFDocumentProxy,
     []
   );
   const [state, load] = usePdfPageLoader(doc, 1, 1);

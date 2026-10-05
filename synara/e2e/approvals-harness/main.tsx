@@ -339,15 +339,15 @@ function Fixture() {
               id.includes('book')
                 ? 'Project – Children’s Books'
                 : id.includes('home')
-                ? 'Home Assistants'
-                : 'Research'
+                  ? 'Home Assistants'
+                  : 'Research'
             }
             senderName={(item) =>
               item.sender.includes('publishing')
                 ? 'Publishing assistant'
                 : item.sender.includes('home')
-                ? 'Home assistant'
-                : 'Research assistant'
+                  ? 'Home assistant'
+                  : 'Research assistant'
             }
             openMessage={(item) => setMessage(`Opened ${item.roomId} / ${item.eventId}`)}
           />

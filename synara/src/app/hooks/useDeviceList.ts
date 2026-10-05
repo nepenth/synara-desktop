@@ -30,7 +30,7 @@ const describeDeviceListError = (error: unknown): string => {
 export function useDeviceList(): [
   undefined | NativeDeviceSnapshot,
   RefreshDeviceList,
-  DeviceListLoadState
+  DeviceListLoadState,
 ] {
   const queryClient = useQueryClient();
   // The bootstrap `Session` only carries account identity; the authoritative

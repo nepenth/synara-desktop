@@ -117,8 +117,8 @@ export const shouldSkipMessageUnfurl = (input: {
 }): boolean =>
   Boolean(
     input.skip ||
-      input.hasMedia ||
-      (input.messageType && ATTACHMENT_MESSAGE_TYPES.has(input.messageType))
+    input.hasMedia ||
+    (input.messageType && ATTACHMENT_MESSAGE_TYPES.has(input.messageType))
   );
 
 const requirePreviewSession = async (invoke: NativeInvoke): Promise<number | undefined> => {

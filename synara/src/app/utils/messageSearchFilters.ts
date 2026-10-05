@@ -154,7 +154,7 @@ export const isMessageSearchResultInDateRange = (
 
 export const filterMessageSearchGroups = <
   TItem extends SearchFilterResultItem,
-  TGroup extends SearchFilterResultGroup<TItem>
+  TGroup extends SearchFilterResultGroup<TItem>,
 >(
   groups: TGroup[],
   options: MessageSearchFilterOptions

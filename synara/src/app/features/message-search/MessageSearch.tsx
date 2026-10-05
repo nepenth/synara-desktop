@@ -108,7 +108,7 @@ export function MessageSearch({
 
     return {
       term: requestedTerm,
-      order: nativeSession ? 'rank' : searchPathSearchParams.order ?? 'recent',
+      order: nativeSession ? 'rank' : (searchPathSearchParams.order ?? 'recent'),
       rooms: searchParamRooms ?? defaultRooms,
       senders: searchParamsSenders ?? senders,
     };
@@ -419,8 +419,8 @@ export function MessageSearch({
               {requestedTerm
                 ? `Results for "${requestedTerm}"`
                 : searchPathSearchParams.type === 'files'
-                ? 'Files in this room'
-                : 'Media in this room'}
+                  ? 'Files in this room'
+                  : 'Media in this room'}
             </Text>
             <Line size="300" variant="Surface" />
           </Box>

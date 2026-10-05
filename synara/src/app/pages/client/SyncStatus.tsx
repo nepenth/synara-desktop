@@ -137,7 +137,7 @@ export function SyncStatus({ mx }: SyncStatusProps) {
       {banners.map((banner, idx) => (
         <Box key={idx} direction="Column" shrink="No">
           {banner}
-          <Line variant={idx === 0 ? 'Warning' : bannerVariant ?? 'Warning'} size="300" />
+          <Line variant={idx === 0 ? 'Warning' : (bannerVariant ?? 'Warning')} size="300" />
         </Box>
       ))}
     </Box>

@@ -278,7 +278,7 @@ function MessageNotifications() {
   // suppresses while its window is focused; background windows still notify.
   useEffect(() => {
     const reportFocus = () => {
-      const focused = document.hasFocus() ? selectedRoomId ?? null : null;
+      const focused = document.hasFocus() ? (selectedRoomId ?? null) : null;
       setNotificationFocusWithNativeOwner(focused).catch(() => undefined);
       if (focused) {
         void dismissDesktopNotifications([`room:${focused}`]);

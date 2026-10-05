@@ -76,7 +76,7 @@ export const useAsync = <TData, TError, TArgs extends unknown[]>(
         return data;
       } catch (e) {
         if (currentReqNumber !== reqNumberRef.current) {
-          throw new Error('AsyncCallbackHook: Request replaced!');
+          throw new Error('AsyncCallbackHook: Request replaced!', { cause: e });
         }
 
         if (alive()) {

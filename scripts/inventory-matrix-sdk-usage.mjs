@@ -421,7 +421,7 @@ export function stableStringify(value) {
  * while files under `synara/` pick up `synara/.prettierrc.json`. Do not force
  * the synara config onto root-level artifacts.
  */
-export function formatWithPrettier(
+export async function formatWithPrettier(
   text,
   absolutePath,
   { root = DEFAULT_ROOT } = {}
@@ -431,17 +431,14 @@ export function formatWithPrettier(
     return text;
   }
   const resolvedPath = path.resolve(absolutePath);
-  const config =
-    typeof prettier.resolveConfig.sync === "function"
-      ? prettier.resolveConfig.sync(resolvedPath) ?? {}
-      : {};
+  const config = (await prettier.resolveConfig(resolvedPath)) ?? {};
   return prettier.format(text, {
     ...config,
     filepath: resolvedPath,
   });
 }
 
-export function formatJsonArtifact(
+export async function formatJsonArtifact(
   inventory,
   { root = DEFAULT_ROOT, jsonPath } = {}
 ) {
@@ -449,7 +446,7 @@ export function formatJsonArtifact(
   return formatWithPrettier(stableStringify(inventory), absolutePath, { root });
 }
 
-export function formatMarkdownArtifact(
+export async function formatMarkdownArtifact(
   inventory,
   { root = DEFAULT_ROOT, mdPath } = {}
 ) {
@@ -1552,11 +1549,11 @@ export function getDefaultArtifactPaths(root = DEFAULT_ROOT) {
   };
 }
 
-export function writeSnapshots(inventory, { root = DEFAULT_ROOT } = {}) {
+export async function writeSnapshots(inventory, { root = DEFAULT_ROOT } = {}) {
   const { jsonPath, mdPath, jsonRel, mdRel } = getDefaultArtifactPaths(root);
   mkdirSync(path.dirname(jsonPath), { recursive: true });
-  const jsonText = formatJsonArtifact(inventory, { root, jsonPath });
-  const mdText = formatMarkdownArtifact(inventory, { root, mdPath });
+  const jsonText = await formatJsonArtifact(inventory, { root, jsonPath });
+  const mdText = await formatMarkdownArtifact(inventory, { root, mdPath });
   writeFileSync(jsonPath, jsonText, "utf8");
   writeFileSync(mdPath, mdText, "utf8");
   return { jsonRel, mdRel, jsonText, mdText };
@@ -1566,13 +1563,13 @@ export function writeSnapshots(inventory, { root = DEFAULT_ROOT } = {}) {
  * Check mode: compare generated Prettier-formatted output to committed snapshots.
  * Does not mutate files.
  */
-export function checkSnapshots(
+export async function checkSnapshots(
   inventory,
   { root = DEFAULT_ROOT, readFile = (abs) => readFileSync(abs, "utf8") } = {}
 ) {
   const { jsonPath, mdPath, jsonRel, mdRel } = getDefaultArtifactPaths(root);
-  const expectedJson = formatJsonArtifact(inventory, { root, jsonPath });
-  const expectedMd = formatMarkdownArtifact(inventory, { root, mdPath });
+  const expectedJson = await formatJsonArtifact(inventory, { root, jsonPath });
+  const expectedMd = await formatMarkdownArtifact(inventory, { root, mdPath });
   const errors = [];
 
   if (!existsSync(jsonPath)) {
@@ -1619,7 +1616,7 @@ function printHelp() {
 `);
 }
 
-export function main(argv = process.argv, options = {}) {
+export async function main(argv = process.argv, options = {}) {
   const { mode } = parseArguments(argv);
   if (mode === "help") {
     printHelp();
@@ -1630,12 +1627,12 @@ export function main(argv = process.argv, options = {}) {
   const inventory = buildInventory({ root, ...options });
 
   if (mode === "print") {
-    process.stdout.write(formatJsonArtifact(inventory, { root }));
+    process.stdout.write(await formatJsonArtifact(inventory, { root }));
     return 0;
   }
 
   if (mode === "write") {
-    const { jsonRel, mdRel } = writeSnapshots(inventory, { root });
+    const { jsonRel, mdRel } = await writeSnapshots(inventory, { root });
     const baseline = inventory.summary.desktopRuntimeBaseline;
     const rw = inventory.summary.repositoryWide;
     console.log(
@@ -1646,7 +1643,7 @@ export function main(argv = process.argv, options = {}) {
     return 0;
   }
 
-  const result = checkSnapshots(inventory, { root });
+  const result = await checkSnapshots(inventory, { root });
   if (!result.ok) {
     for (const error of result.errors) {
       console.error(`[inventory-matrix-sdk-usage] ${error}`);
@@ -1671,7 +1668,7 @@ const isDirectRun =
 
 if (isDirectRun) {
   try {
-    process.exitCode = main(process.argv);
+    process.exitCode = await main(process.argv);
   } catch (error) {
     console.error(
       `[inventory-matrix-sdk-usage] ${
