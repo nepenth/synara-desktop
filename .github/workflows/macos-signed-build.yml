@@ -139,6 +139,8 @@ jobs:
           npm run tauri build -- --target universal-apple-darwin --bundles dmg --config "$config_json"
         env:
           NODE_OPTIONS: "--max_old_space_size=4096"
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
 
@@ -158,9 +160,9 @@ jobs:
           trap 'hdiutil detach "$mount_dir"; rmdir "$mount_dir"' EXIT
 
           codesign --verify --deep --strict --verbose=2 "$mount_dir/Synara.app"
-          spctl --assess --type execute --verbose=4 "$mount_dir/Synara.app"
           python3 scripts/check-macos-provisioning-profile.py "$SYNARA_MACOS_PROVISIONING_PROFILE" \
             --team "$APPLE_TEAM_ID" --identity "$APPLE_SIGNING_IDENTITY" --app "$mount_dir/Synara.app"
+          spctl --assess --type execute --verbose=4 "$mount_dir/Synara.app"
 
       - name: Notarize and staple macOS DMG
         env:

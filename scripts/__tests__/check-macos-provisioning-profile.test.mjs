@@ -153,3 +153,71 @@ test("release and manual signed lanes embed the validated profile before signing
     /time-sensitive/
   );
 });
+
+function workflowStep(workflow, name) {
+  const step = workflow
+    .split(/^      - name: /m)
+    .slice(1)
+    .find((entry) => entry.startsWith(`${name}\n`));
+  assert.ok(step, `Missing workflow step: ${name}`);
+  return step;
+}
+
+function assertBuildNotarizationCredentials(workflow, name) {
+  const build = workflowStep(workflow, name);
+  assert.match(build, /npm run tauri build --/);
+  const env = build.match(/^        env:\n((?:          .*\n)+)/m)?.[1] ?? "";
+  assert.match(env, /^          APPLE_ID: \$\{\{ secrets\.APPLE_ID \}\}$/m);
+  assert.match(
+    env,
+    /^          APPLE_PASSWORD: \$\{\{ secrets\.APPLE_APP_SPECIFIC_PASSWORD \}\}$/m
+  );
+  assert.match(
+    env,
+    /^          APPLE_TEAM_ID: \$\{\{ secrets\.APPLE_TEAM_ID \}\}$/m
+  );
+}
+
+for (const [file, name] of [
+  ["release.yml", "Build macOS universal release packages"],
+  ["macos-signed-build.yml", "Build signed macOS DMG"],
+]) {
+  test(`${file} provides notarization credentials to the actual Tauri build`, () => {
+    const workflow = readFileSync(`.github/workflows/${file}`, "utf8");
+    assertBuildNotarizationCredentials(workflow, name);
+    const build = workflowStep(workflow, name);
+    for (const key of ["APPLE_ID", "APPLE_PASSWORD"]) {
+      const strippedBuild = build.replace(
+        new RegExp(`^          ${key}: .*\\n`, "m"),
+        ""
+      );
+      assert.notEqual(strippedBuild, build);
+      const missingBuildCredential = workflow.replace(build, strippedBuild);
+      // Validation and later notarytool steps still contain the secrets. Those
+      // decoys must not satisfy the build-step credential contract.
+      assert.match(missingBuildCredential, /secrets\.APPLE_ID/);
+      assert.match(
+        missingBuildCredential,
+        /secrets\.APPLE_APP_SPECIFIC_PASSWORD/
+      );
+      assert.throws(() =>
+        assertBuildNotarizationCredentials(missingBuildCredential, name)
+      );
+    }
+  });
+}
+
+test("manual signed app verification reads back its profile before mandatory Gatekeeper assessment", () => {
+  const workflow = readFileSync(
+    ".github/workflows/macos-signed-build.yml",
+    "utf8"
+  );
+  const verify = workflowStep(workflow, "Verify macOS app signature");
+  const signature = verify.indexOf("codesign --verify --deep --strict");
+  const profile = verify.indexOf(
+    "python3 scripts/check-macos-provisioning-profile.py"
+  );
+  const assessment = verify.indexOf("spctl --assess --type execute");
+  assert.ok(signature >= 0 && profile > signature && assessment > profile);
+  assert.doesNotMatch(verify, /continue-on-error|\|\| true/);
+});
