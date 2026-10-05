@@ -5,13 +5,7 @@ on:
     branches: [main]
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
-    branches:
-      [
-        main,
-        "feature/matrix-rust-sdk-full-replacement",
-        "feature/shared-native-core",
-        "release/**",
-      ]
+    branches: [main, "feature/matrix-rust-sdk-full-replacement", "feature/shared-native-core", "release/**"]
   schedule:
     # Nightly full client suite, including the XCUITest lane.
     - cron: "17 11 * * *"
@@ -1033,21 +1027,7 @@ jobs:
     # still runs after job failures; skip when this workflow was cancelled so a
     # superseded push run cannot fail the required check on the surviving SHA.
     if: always() && !cancelled()
-    needs:
-      [
-        changes,
-        validate-rust,
-        validate-frontend,
-        ios-tests,
-        ios-ui-tests,
-        ios-compile,
-        synapse-native-reactions,
-        synapse-native-attachments,
-        synapse-native-polls,
-        synapse-native-rich-messages,
-        synapse-native-threads,
-        synapse-native-receipts,
-      ]
+    needs: [changes, validate-rust, validate-frontend, ios-tests, ios-ui-tests, ios-compile, synapse-native-reactions, synapse-native-attachments, synapse-native-polls, synapse-native-rich-messages, synapse-native-threads, synapse-native-receipts]
     runs-on: ubuntu-22.04
     timeout-minutes: 5
     steps:
