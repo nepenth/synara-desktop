@@ -62,7 +62,7 @@ const targetDir = process.env.CARGO_TARGET_DIR;
 const log = (extra = {}) => fs.appendFileSync(process.env.CACHE_LOG,
   JSON.stringify({ command, args, targetDir, wrapper: process.env.RUSTC_WRAPPER, incremental: process.env.CARGO_INCREMENTAL, ...extra }) + "\\n");
 const value = (name) => args[args.indexOf(name) + 1];
-if (command === "kache") console.log("kache 0.28.1");
+if (command === "kache") console.log("kache 1.0.0");
 else if (command === "uname") console.log("Darwin");
 else if (command === "rustup") console.log([
   "aarch64-apple-ios", "aarch64-apple-ios-sim", "x86_64-apple-ios", "aarch64-apple-darwin",

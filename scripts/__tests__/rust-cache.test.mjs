@@ -25,7 +25,7 @@ function fixture(t) {
   writeFileSync(
     binary,
     `#!/bin/sh
-if [ "$1" = --version ]; then printf '%s\\n' "\${FAKE_KACHE_VERSION:-kache 0.28.1}"; else printf '%s\\n' "$*" >> "$CALL_LOG"; fi
+if [ "$1" = --version ]; then printf '%s\\n' "\${FAKE_KACHE_VERSION:-kache 1.0.0}"; else printf '%s\\n' "$*" >> "$CALL_LOG"; fi
 `,
   );
   chmodSync(binary, 0o755);
@@ -173,19 +173,28 @@ test("command wrapper preserves arguments and subprocess exit status", (t) => {
   assert.equal(result.status, 17);
   assert.equal(result.stdout, "argument with spaces");
 });
-test("cleanup previews stale tracked targets unless --yes is explicitly requested", (t) => {
+test("status uses the documented stats and cleanup-preview commands", (t) => {
+  const f = fixture(t);
+  const result = f.run(setup, ["--status"]);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(
+    readFileSync(f.env.CALL_LOG, "utf8"),
+    "stats\nclean --stale 14d --dry-run\n",
+  );
+});
+test("cleanup previews stale targets unless --yes is explicitly requested", (t) => {
   const f = fixture(t);
   const result = f.run(setup, ["--clean"]);
   assert.equal(result.status, 0, result.stderr);
   assert.equal(
     readFileSync(f.env.CALL_LOG, "utf8"),
-    "clean --tracked --stale 14d --dry-run\n",
+    "clean --stale 14d --dry-run\n",
   );
   const applied = f.run(setup, ["--clean", "--yes"]);
   assert.equal(applied.status, 0, applied.stderr);
   assert.match(
     readFileSync(f.env.CALL_LOG, "utf8"),
-    /clean --tracked --stale 14d --yes\n$/,
+    /clean --stale 14d --yes\n$/,
   );
 });
 test("installer checks the pinned SHA256 before extraction or execution", (t) => {

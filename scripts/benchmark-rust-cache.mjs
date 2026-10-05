@@ -241,7 +241,7 @@ export async function benchmark({
       jobs: 2,
     },
     cache: {
-      version: "0.28.1",
+      version: "1.0.0",
       action: "1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
       maxSize: cacheMaxSize,
       remote: false,
@@ -271,8 +271,8 @@ export async function benchmark({
     report.cache.installedVersion = (
       await execute(kache, ["--version"], commandOptions)
     ).stdout.trim();
-    if (report.cache.installedVersion !== "kache 0.28.1")
-      throw new Error("benchmark requires Kache 0.28.1");
+    if (report.cache.installedVersion !== "kache 1.0.0")
+      throw new Error("benchmark requires Kache 1.0.0");
     // Fetch before timing: both strategies use the same available source graph.
     await execute(
       cargo,

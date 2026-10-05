@@ -61,7 +61,7 @@ runs:
     - name: Install pinned Kache compiler wrapper
       uses: kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c # pinned 2026-10-03
       with:
-        version: v0.28.1
+        version: v1.0.0
         # Own persistence so unchanged lockfiles can still publish new source artifacts.
         github-cache: "false"
         save-cache: "false"
@@ -72,3 +72,8 @@ runs:
         pr-comment: "false"
         job-summary: "true"
         strict: "true"
+    - name: Start and verify job compiler cache daemon
+      shell: bash
+      env:
+        SYNARA_CACHE_MAX_SIZE: ${{ inputs.max-size }}
+      run: node scripts/start-ci-rust-cache.mjs

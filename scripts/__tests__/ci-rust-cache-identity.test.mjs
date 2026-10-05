@@ -51,7 +51,7 @@ function withFixture(run) {
       path.join(directory, "scripts/lib/rust-cache.sh"),
       localHelper.replace(
         /^SYNARA_KACHE_VERSION=.*$/m,
-        `SYNARA_KACHE_VERSION=${overrides.FAKE_KACHE_VERSION ?? "0.28.1"}`,
+        `SYNARA_KACHE_VERSION=${overrides.FAKE_KACHE_VERSION ?? "1.0.0"}`,
       ),
     );
     const output = path.join(directory, "output");
@@ -136,7 +136,7 @@ test("compiler cache restore namespaces isolate compiler, platform and graph cha
   withFixture((identify) => {
     const baseline = identify().prefix;
     for (const overrides of [
-      { FAKE_KACHE_VERSION: "0.29.0" },
+      { FAKE_KACHE_VERSION: "1.1.0" },
       { FAKE_RUSTC_VERSION: "rustc 1.97.0" },
       { RUNNER_ARCH: "ARM64" },
       { SYNARA_CACHE_FAMILY: "release-linux-arch" },

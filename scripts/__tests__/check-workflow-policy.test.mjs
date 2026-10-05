@@ -485,8 +485,8 @@ test("Kache setup rejects unsafe publication, stale immutable snapshots and comp
   for (const [property, before, after] of [
     [
       "rustLocalCache",
-      "SYNARA_KACHE_VERSION=0.28.1",
-      "SYNARA_KACHE_VERSION=0.29.0",
+      "SYNARA_KACHE_VERSION=1.0.0",
+      "SYNARA_KACHE_VERSION=1.1.0",
     ],
     [
       "rustCacheIdentity",
@@ -498,7 +498,17 @@ test("Kache setup rejects unsafe publication, stale immutable snapshots and comp
       "kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
       "kunobi-ninja/kache-action@main",
     ],
-    ["rustSetupAction", "version: v0.28.1", "version: latest"],
+    ["rustSetupAction", "version: v1.0.0", "version: latest"],
+    [
+      "rustSetupAction",
+      "node scripts/start-ci-rust-cache.mjs",
+      "echo daemon-skipped",
+    ],
+    [
+      "rustSetupAction",
+      "SYNARA_CACHE_MAX_SIZE: ${{ inputs.max-size }}",
+      "SYNARA_CACHE_MAX_SIZE: 100GiB",
+    ],
     [
       "rustSetupAction",
       "hashFiles('Cargo.lock')",

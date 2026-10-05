@@ -31,7 +31,7 @@ const command = path.basename(process.argv[1]), args = process.argv.slice(2), en
 const log = (extra = {}) => fs.appendFileSync(env.BENCHMARK_CALL_LOG, JSON.stringify({ command, args, ...extra }) + "\\n");
 if (command === "git") console.log(args[0] === "rev-parse" ? "fixture-sha" : "");
 else if (command === "rustc") console.log("rustc 1.96.0\\ncommit-hash: rustc-sha");
-else if (args[0] === "--version") console.log(command === "kache" ? "kache 0.28.1" : "cargo 1.96.0");
+else if (args[0] === "--version") console.log(command === "kache" ? "kache 1.0.0" : "cargo 1.96.0");
 else if (command === "cargo" && args[0] === "fetch") log();
 else if (command === "cargo" && args[0] === "build") {
   if (fs.existsSync(env.CARGO_TARGET_DIR)) throw Error("target was not freshly deleted");
@@ -256,7 +256,7 @@ test("benchmark workflow stays manually invoked, version pinned and outside pers
   ])
     assert.match(workflow, new RegExp(`${input}: "false"`));
   assert.match(workflow, /strict: "true"/);
-  assert.match(workflow, /version: v0\.28\.1/);
+  assert.match(workflow, /version: v1\.0\.0/);
   assert.match(workflow, /max-size: 5GiB/);
   assert.doesNotMatch(workflow, /--max-scratch-mib|512MiB|1\.8GiB/);
   assert.doesNotMatch(workflow, /secrets\.|s3-bucket|pull-requests: write/);

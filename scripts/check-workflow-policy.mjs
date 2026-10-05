@@ -228,7 +228,7 @@ function inspectCompilerCacheAction(action, identity, localCache, errors) {
     !upstream[0].includes(
       "kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c",
     ) ||
-    input(upstream[0], "version") !== "v0.28.1" ||
+    input(upstream[0], "version") !== "v1.0.0" ||
     input(upstream[0], "github-cache") !== "false" ||
     input(upstream[0], "save-cache") !== "false" ||
     input(upstream[0], "cache-executables") !== "true" ||
@@ -240,7 +240,22 @@ function inspectCompilerCacheAction(action, identity, localCache, errors) {
     input(upstream[0], "max-size") !== "${{ inputs.max-size }}"
   ) {
     errors.push(
-      "Shared Rust cache action must install pinned Kache 0.28.1 with executable/native caching and custom persistence, without PR comments.",
+      "Shared Rust cache action must install pinned Kache 1.0.0 with executable/native caching and custom persistence, without PR comments.",
+    );
+  }
+  const lifecycleSteps = steps.filter((step) =>
+    step.includes("run: node scripts/start-ci-rust-cache.mjs"),
+  );
+  if (
+    lifecycleSteps.length !== 1 ||
+    !lifecycleSteps[0].includes(
+      "SYNARA_CACHE_MAX_SIZE: ${{ inputs.max-size }}",
+    ) ||
+    (upstream.length === 1 &&
+      steps.indexOf(lifecycleSteps[0]) <= steps.indexOf(upstream[0]))
+  ) {
+    errors.push(
+      "Kache must start and verify its job daemon after installation before compilation and strict cleanup.",
     );
   }
   const fetchSteps = steps.filter((step) => /run: cargo fetch\b/.test(step));
@@ -336,7 +351,7 @@ function inspectCompilerCacheAction(action, identity, localCache, errors) {
     !identity.includes(
       `identity="kache $SYNARA_KACHE_VERSION"$'\\n'"$(rustc -vV)"`,
     ) ||
-    !/^SYNARA_KACHE_VERSION=0\.28\.1$/m.test(localCache) ||
+    !/^SYNARA_KACHE_VERSION=1\.0\.0$/m.test(localCache) ||
     !identity.includes("xcodebuild -version") ||
     !identity.includes("DEVELOPER_DIR") ||
     !identity.includes("xcrun --sdk macosx --show-sdk-version") ||

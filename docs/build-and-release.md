@@ -141,7 +141,7 @@ and exact-tag fallback validation, without compiling the application first.
 
 ### Cache families and writers
 
-Rust compilation now uses **Kache 0.28.1** through the pinned shared
+Rust compilation now uses **Kache 1.0.0** through the pinned shared
 `.github/actions/setup-rust-cache` action. It caches compiler outputs, including
 executables and supported C/C++ objects, instead of Cargo `target` directories.
 `CARGO_INCREMENTAL=0` keeps compiler invocations cacheable. Cargo registry
@@ -267,7 +267,7 @@ before claiming a whole-job improvement from this migration.
 
 The manual **Rust Cache Benchmark** workflow installs a pinned
 [Kache action](https://github.com/kunobi-ninja/kache-action) and executable
-0.28.1. It compares two fresh host NSE builds without a wrapper, then a cold
+1.0.0. It compares two fresh host NSE builds without a wrapper, then a cold
 and warm Kache build, removing only its private Cargo target between stages.
 The store is local-only with a production 5 GiB eviction target; persistence and automatic
 PR comments are disabled. Source fingerprints reject changes during the
@@ -338,7 +338,20 @@ review evidence and all existing worktrees were retained. Two of the checked
 worktrees contained local changes, and several branch tips were not ancestors
 of the integration branch, so their checkouts were preserved.
 
-Kache is now the production Rust cache backend. The standalone benchmark derives
+Kache 1.0.0 is now the production Rust cache backend. The dated local proofs
+below retain their original 0.28.1 tool version; the hosted benchmark and
+subsequent validation use the current pin. CI explicitly starts and verifies
+its job-owned daemon before compiling, so upstream cleanup stops a live daemon
+and cache settings are checked before publishing snapshots.
+
+An isolated Kache 1.0.0 native fixture verified distinct results for identical
+C sources with different local headers, and that mutating a restored object
+does not corrupt its cached blob. Two cold misses and three warm hits preserved
+the expected linked values and original object hash. The
+[native correctness report](reviews/2026-10-05-kache-1-native-correctness.json)
+records this local correctness scope without claiming application performance.
+
+The standalone benchmark derives
 scratch headroom from actual free space after a 3 GiB filesystem reserve;
 `--max-scratch-mib` is an optional caller budget, not a default pilot ceiling.
 `--max-cache-mib` can select a different eviction target. Hosted measurements

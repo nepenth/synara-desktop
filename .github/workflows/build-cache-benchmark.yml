@@ -33,7 +33,7 @@ jobs:
       - name: Install isolated pinned Kache
         uses: kunobi-ninja/kache-action@1a33fb2ff51be23eb9e87abeae6edb65be78f71c # pinned 2026-10-03
         with:
-          version: v0.28.1
+          version: v1.0.0
           github-cache: "false"
           save-cache: "false"
           pr-comment: "false"
@@ -42,6 +42,13 @@ jobs:
           cache-executables: "true"
           cache-dir: ${{ runner.temp }}/kache-action-trial
           max-size: 5GiB
+
+      - name: Start and verify upstream action daemon
+        run: node scripts/start-ci-rust-cache.mjs
+        env:
+          KACHE_CONFIG: ${{ github.workspace }}/.kache.toml
+          KACHE_HOST_CONFIG: ""
+          SYNARA_CACHE_MAX_SIZE: 5GiB
 
       - name: Compare fresh NSE builds with a local compiler cache
         # Use available disk headroom with the filesystem reserve, without pilot caps.

@@ -132,7 +132,7 @@ npm --prefix synara ci
 npm run cache:setup
 ```
 
-Rust builds use the pinned Kache 0.28.1 compiler cache. Tauri and Apple build
+Rust builds use the pinned Kache 1.0.0 compiler cache. Tauri and Apple build
 scripts configure it automatically after setup. Use `npm run cargo -- <arguments>`
 for Rust commands, or export its environment with
 `eval "$(scripts/setup-rust-cache.sh --env)"` before direct Cargo commands.

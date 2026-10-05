@@ -8,16 +8,16 @@ install_kache() (
   case "$(uname -s)/$(uname -m)" in
     Darwin/arm64|Darwin/aarch64)
       target=aarch64-apple-darwin
-      digest=253096ab5972fe179b86301abbcfb5944bc9807e3fa3d1720b44b129b86fcbff ;;
+      digest=6d1be0079d0689a85fa04b7fed7eaa94f7e08259cafb8bd361a5c25c4c98c4a3 ;;
     Darwin/x86_64)
       target=x86_64-apple-darwin
-      digest=05180b56a4eb8e0600ee47682017a7a81fd4a7cc1e781d481654002af8b082a6 ;;
+      digest=ae0792b17e1c5f2438b39be888896c20aaf006bef5959c44fa3bc5bc66d93b5b ;;
     Linux/aarch64|Linux/arm64)
       target=aarch64-unknown-linux-musl
-      digest=b2110805eb24afe9b408e5b9a1e3d0584b7fdd0b79fe8cbe548ab29fbaf50176 ;;
+      digest=88abd848be7d300d4e30b8510ebdc45990dae3f96b6591e3498209639cf34701 ;;
     Linux/x86_64)
       target=x86_64-unknown-linux-musl
-      digest=68635a9f92ce5015a2c48c98b968d1b3707b6dbee0ca725e51d1671c9346f38f ;;
+      digest=756e9701a6afb8354fd8b1d76164e13272d320354d84f01197e57d8a3b4be397 ;;
     *) synara_rust_cache_fail 'supported hosts: macOS/Linux x86_64 and arm64'; return 1 ;;
   esac
   install_dir="$(synara_rust_cache_tools_dir)/kache-$SYNARA_KACHE_VERSION"
@@ -68,14 +68,14 @@ case "${1:---install}" in
     [[ $# -eq 1 ]] || exit 2
     synara_configure_rust_cache "$repo_root"
     "$RUSTC_WRAPPER" stats
-    "$RUSTC_WRAPPER" targets ;;
+    "$RUSTC_WRAPPER" clean --stale 14d --dry-run ;;
   --clean)
     shift
     synara_configure_rust_cache "$repo_root"
     if [[ $# -eq 0 ]]; then
-      "$RUSTC_WRAPPER" clean --tracked --stale 14d --dry-run
+      "$RUSTC_WRAPPER" clean --stale 14d --dry-run
     elif [[ $# -eq 1 && "$1" == "--yes" ]]; then
-      "$RUSTC_WRAPPER" clean --tracked --stale 14d --yes
+      "$RUSTC_WRAPPER" clean --stale 14d --yes
     else
       printf 'Usage: %s --clean [--yes]\n' "$0" >&2
       exit 2

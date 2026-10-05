@@ -194,6 +194,7 @@ jobs:
               .github/actions/setup-rust-cache \
               .kache.toml \
               scripts/ci-rust-cache-identity.sh \
+              scripts/start-ci-rust-cache.mjs \
               scripts/setup-rust-cache.sh \
               scripts/with-rust-cache.sh \
               scripts/lib/rust-cache.sh \
@@ -297,6 +298,7 @@ jobs:
             .github/actions/setup-rust-cache \
             .kache.toml \
             scripts/ci-rust-cache-identity.sh \
+            scripts/start-ci-rust-cache.mjs \
             scripts/setup-rust-cache.sh \
             scripts/with-rust-cache.sh \
             scripts/lib/rust-cache.sh \

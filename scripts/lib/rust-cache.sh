@@ -2,7 +2,7 @@
 # One environment owner for local Cargo, Tauri, and Apple Rust builds.
 # Source this file and call synara_configure_rust_cache before invoking Cargo.
 
-SYNARA_KACHE_VERSION=0.28.1
+SYNARA_KACHE_VERSION=1.0.0
 
 synara_rust_cache_fail() {
   printf 'synara-rust-cache: %s\n' "$*" >&2
