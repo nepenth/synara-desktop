@@ -89,6 +89,37 @@ with tempfile.TemporaryDirectory() as temporary:
  assert b'tampered-profile' not in result.stderr`);
 });
 
+test("CLI rejects an actual signer outside the profile even when identity names match", () => {
+  python(`import tempfile,pathlib,plistlib,subprocess,os
+with tempfile.TemporaryDirectory() as temporary:
+ root=pathlib.Path(temporary);bin=root/'bin';bin.mkdir()
+ source=root/'profile.provisionprofile';source.write_bytes(plistlib.dumps(profile))
+ unauthorized=b'renewed-public-certificate'
+ unauthorized_fingerprint=hashlib.sha1(unauthorized).hexdigest().upper()
+ leaf=root/'leaf.der';leaf.write_bytes(unauthorized)
+ signed=root/'signed.plist';signed.write_bytes(plistlib.dumps(profile['Entitlements']))
+ app=root/'Synara.app';(app/'Contents').mkdir(parents=True)
+ (app/'Contents/embedded.provisionprofile').write_bytes(source.read_bytes())
+ (app/'Contents/Info.plist').write_bytes(plistlib.dumps({'CFBundleIdentifier':'com.whylandcreative.synara.desktop'}))
+ security=bin/'security'
+ security.write_text('#!/usr/bin/env python3\\nimport os,sys\\nfrom pathlib import Path\\nif sys.argv[1]=="cms":sys.stdout.buffer.write(Path(os.environ["FIXTURE_PROFILE"]).read_bytes())\\nelse:print(os.environ["FIXTURE_IDENTITIES"])\\n');security.chmod(0o700)
+ codesign=bin/'codesign'
+ codesign.write_text('#!/usr/bin/env python3\\nimport os,sys\\nfrom pathlib import Path\\nif "--entitlements" in sys.argv:sys.stdout.buffer.write(Path(os.environ["FIXTURE_SIGNED"]).read_bytes())\\nelse:\\n prefix=next(arg.split("=",1)[1] for arg in sys.argv if arg.startswith("--extract-certificates="))\\n Path(prefix+"0").write_bytes(Path(os.environ["FIXTURE_LEAF"]).read_bytes())\\n');codesign.chmod(0o700)
+ identity='Developer ID Application: Example (TEAM)'
+ env=dict(os.environ,PATH=str(bin)+os.pathsep+os.environ['PATH'],FIXTURE_PROFILE=str(source),FIXTURE_SIGNED=str(signed),FIXTURE_LEAF=str(leaf),FIXTURE_IDENTITIES=f' 1) {fingerprint} "{identity}"\\n 2) {unauthorized_fingerprint} "{identity}"')
+ assert checker.identity_fingerprints(env['FIXTURE_IDENTITIES'],identity)=={fingerprint,unauthorized_fingerprint}
+ checker.validate_profile(profile,'TEAM','com.whylandcreative.synara.desktop',{fingerprint,unauthorized_fingerprint},now)
+ command=['python3','-B','scripts/check-macos-provisioning-profile.py',str(source),'--team','TEAM','--identity',identity,'--app',str(app)]
+ result=subprocess.run(command,capture_output=True,env=env)
+ assert result.returncode==1,result.stdout
+ assert b"does not authorize the final app's signing certificate" in result.stderr
+ assert unauthorized not in result.stderr
+ assert unauthorized_fingerprint.encode() not in result.stderr
+ leaf.write_bytes(certificate)
+ result=subprocess.run(command,capture_output=True,env=env)
+ assert result.returncode==0,result.stderr`);
+});
+
 test("release and manual signed lanes embed the validated profile before signing", () => {
   for (const file of ["release.yml", "macos-signed-build.yml"]) {
     const workflow = readFileSync(`.github/workflows/${file}`, "utf8");

@@ -161,8 +161,17 @@ fn nse_store_surface_is_read_only_and_cannot_start_sync() {
     assert!(nse.contains("get_notification"));
     assert!(nse.contains("NSE_RESOLUTION_TIMEOUT"));
     assert!(ffi.contains("p4-s11-nse-restore-failed"));
-    assert!(ffi.contains("p4-s11-nse-client-init-failed"));
-    assert!(ffi.contains("p4-s11-nse-event-fetch-failed"));
+    // Initialization and fetch now preserve closed typed causes. Verify the
+    // real NSE call sites are wired to that production mapper, rather than
+    // requiring obsolete generic constants in the broad FFI module.
+    let (diagnostics, _) = include_str!("../src/app/notifications/nse_error.rs")
+        .split_once("\n#[cfg(test)]\n")
+        .expect("NSE diagnostic production/test module boundary");
+    assert!(nse.contains("nse_notification_initialization_error_code("));
+    assert!(nse.contains("nse_notification_error_code(&error)"));
+    assert!(diagnostics.contains("p4-s11-nse-client-init-failed"));
+    assert!(diagnostics.contains("p4-s11-nse-event-fetch-failed"));
+    assert!(diagnostics.contains("p4-s11-nse-room-unavailable"));
     assert!(ffi.contains("p4-s11-nse-resolution-timeout"));
     assert!(ffi.contains("p4-s11-nse-close-failed"));
     assert!(nse.contains("nse_resolve_event_preview"));
@@ -292,15 +301,19 @@ fn nse_store_planted_session_cannot_start_product_sync_and_fails_closed() {
     assert!(!status.owners_attached);
     assert!(!status.sync_started);
 
-    let preview_err = preview
+    let preview_error = preview
         .as_ref()
-        .err()
-        .map(error_text)
-        .expect("planted store has no notification event");
-    assert!(
-        preview_err.contains("p4-s11-nse-event-fetch-failed"),
-        "fake homeserver resolution must return the registered fetch diagnostic: {preview_err}"
+        .expect_err("planted store has no notification event");
+    // The pinned SDK cannot resolve the planted room and returns UnknownRoom.
+    // That may mask an earlier notification-sync failure; it must remain an
+    // exact static cause, never a preview or a claim about account membership.
+    let NseStoreError::Failed { code, description } = preview_error;
+    assert_eq!(code, "p4-s11-nse-room-unavailable");
+    assert_eq!(
+        description,
+        "The NSE notification event could not be fetched."
     );
+    let preview_err = error_text(preview_error);
 
     let attach_err = attach.expect_err("NSE read-only store must refuse owner attach");
     let attach_text = format!("{attach_err:?}{attach_err}");

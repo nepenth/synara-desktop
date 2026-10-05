@@ -3446,6 +3446,7 @@ export function NativeTimelinePresenter({
       <Box grow="Yes" style={{ minHeight: 0, position: 'relative' }}>
         <Scroll
           id="native-timeline-history"
+          data-native-timeline-scrolling={virtualizer.isScrolling}
           ref={scrollRef}
           visibility="Hover"
           style={{ height: '100%', overscrollBehavior: 'contain' }}

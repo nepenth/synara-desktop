@@ -16,6 +16,14 @@ APP_IDENTIFIER = "com.apple.application-identifier"
 TEAM_IDENTIFIER = "com.apple.developer.team-identifier"
 
 
+def profile_certificate_fingerprints(profile):
+    return {
+        hashlib.sha1(certificate).hexdigest().upper()
+        for certificate in profile.get("DeveloperCertificates", [])
+        if isinstance(certificate, bytes)
+    }
+
+
 def validate_profile(profile, team, bundle_id, identity_fingerprints, now=None):
     entitlements = profile.get("Entitlements", {})
     if entitlements.get(APP_IDENTIFIER) != f"{team}.{bundle_id}":
@@ -36,11 +44,7 @@ def validate_profile(profile, team, bundle_id, identity_fingerprints, now=None):
     expires = expires.replace(tzinfo=datetime.timezone.utc) if expires.tzinfo is None else expires
     if expires <= (now or datetime.datetime.now(datetime.timezone.utc)):
         raise ValueError("Developer ID profile has expired.")
-    allowed = {
-        hashlib.sha1(certificate).hexdigest().upper()
-        for certificate in profile.get("DeveloperCertificates", [])
-        if isinstance(certificate, bytes)
-    }
+    allowed = profile_certificate_fingerprints(profile)
     if not allowed.intersection(identity_fingerprints):
         raise ValueError("Developer ID profile does not authorize the selected signing certificate.")
     return entitlements
@@ -106,6 +110,8 @@ def main():
             signer = hashlib.sha1(Path(prefix + "0").read_bytes()).hexdigest().upper()
             if signer not in identities:
                 raise ValueError("The final app uses a different Developer ID signing certificate.")
+            if signer not in profile_certificate_fingerprints(profile):
+                raise ValueError("The Developer ID profile does not authorize the final app's signing certificate.")
     print("Developer ID notification profile and selected signing identity are compatible.")
 
 
